@@ -6,6 +6,7 @@
 [workspace]
 default-members = ["crates/cli"]
 members = ["crates/*"]
+exclude = ["front"]
 resolver = "2"
 
 # Updated in the CI with a `sed` command
