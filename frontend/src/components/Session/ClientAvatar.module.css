@@ -1,0 +1,15 @@
+/* Copyright 2024, 2025 New Vector Ltd.
+ * Copyright 2023, 2024 The Matrix.org Foundation C.I.C.
+ *
+ * SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-Element-Commercial
+ * Please see LICENSE files in the repository root for full details.
+ */
+
+.avatar {
+  object-fit: cover;
+  overflow: hidden;
+  aspect-ratio: 1 / 1;
+  width: var(--mas-avatar-size);
+  border-radius: 50%;
+  display: inline-block;
+}

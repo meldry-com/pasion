@@ -1,0 +1,58 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "RegisterInput",
+  "description": "Input for the user registration policy.",
+  "type": "object",
+  "properties": {
+    "registration_method": {
+      "$ref": "#/definitions/RegistrationMethod"
+    },
+    "username": {
+      "type": "string"
+    },
+    "email": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "requester": {
+      "$ref": "#/definitions/Requester"
+    }
+  },
+  "required": [
+    "registration_method",
+    "username",
+    "requester"
+  ],
+  "definitions": {
+    "RegistrationMethod": {
+      "type": "string",
+      "enum": [
+        "password",
+        "upstream-oauth2"
+      ]
+    },
+    "Requester": {
+      "description": "Identity of the requester",
+      "type": "object",
+      "properties": {
+        "ip_address": {
+          "description": "IP address of the entity making the request",
+          "type": [
+            "string",
+            "null"
+          ],
+          "format": "ip"
+        },
+        "user_agent": {
+          "description": "User agent of the entity making the request",
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      }
+    }
+  }
+}

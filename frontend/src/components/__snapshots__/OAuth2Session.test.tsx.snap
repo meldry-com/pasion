@@ -1,0 +1,266 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`<OAuth2Session /> > renders a finished session 1`] = `
+<DocumentFragment>
+  <section
+    class="_sessionCardRoot_6c1027"
+  >
+    <a
+      aria-disabled="true"
+      class="_sessionCard_6c1027 _disabled_6c1027"
+      disabled=""
+      role="link"
+    >
+      <header
+        class="_cardHeader_6c1027"
+      >
+        <svg
+          aria-label="Computer"
+          class="_deviceTypeIcon_261d75"
+          fill="currentColor"
+          height="1em"
+          viewBox="0 0 24 24"
+          width="1em"
+          xmlns="http://www.w3.org/2000/svg"
+        >
+          <path
+            d="M4 18q-.824 0-1.412-.587A1.93 1.93 0 0 1 2 16V5q0-.824.587-1.412A1.93 1.93 0 0 1 4 3h16q.824 0 1.413.587Q22 4.176 22 5v11q0 .824-.587 1.413A1.93 1.93 0 0 1 20 18zm0-2h16V5H4zm-2 5a.97.97 0 0 1-.712-.288A.97.97 0 0 1 1 20q0-.424.288-.712A.97.97 0 0 1 2 19h20q.424 0 .712.288.288.287.288.712 0 .424-.288.712A.97.97 0 0 1 22 21z"
+          />
+        </svg>
+        <div
+          class="_content_6c1027"
+        >
+          <div
+            class="_name_6c1027"
+          >
+            Unknown device
+          </div>
+          <div
+            class="_client_6c1027"
+          >
+            Element
+          </div>
+        </div>
+      </header>
+      <ul
+        class="_metadata_6c1027"
+      >
+        <li>
+          <div
+            class="_key_6c1027"
+          >
+            Signed in
+          </div>
+          <div
+            class="_value_6c1027"
+          >
+            <time
+              datetime="2023-06-29T03:35:17Z"
+            >
+              Thu, 29 Jun 2023, 03:35
+            </time>
+          </div>
+        </li>
+        <li>
+          <div
+            class="_key_6c1027"
+          >
+            Device ID
+          </div>
+          <div
+            class="_value_6c1027"
+          >
+            abcd1234
+          </div>
+        </li>
+      </ul>
+    </a>
+  </section>
+</DocumentFragment>
+`;
+
+exports[`<OAuth2Session /> > renders an active session 1`] = `
+<DocumentFragment>
+  <section
+    class="_sessionCardRoot_6c1027"
+  >
+    <a
+      class="_sessionCard_6c1027"
+      href="/sessions/session-id"
+    >
+      <header
+        class="_cardHeader_6c1027"
+      >
+        <svg
+          aria-label="Computer"
+          class="_deviceTypeIcon_261d75"
+          fill="currentColor"
+          height="1em"
+          viewBox="0 0 24 24"
+          width="1em"
+          xmlns="http://www.w3.org/2000/svg"
+        >
+          <path
+            d="M4 18q-.824 0-1.412-.587A1.93 1.93 0 0 1 2 16V5q0-.824.587-1.412A1.93 1.93 0 0 1 4 3h16q.824 0 1.413.587Q22 4.176 22 5v11q0 .824-.587 1.413A1.93 1.93 0 0 1 20 18zm0-2h16V5H4zm-2 5a.97.97 0 0 1-.712-.288A.97.97 0 0 1 1 20q0-.424.288-.712A.97.97 0 0 1 2 19h20q.424 0 .712.288.288.287.288.712 0 .424-.288.712A.97.97 0 0 1 22 21z"
+          />
+        </svg>
+        <div
+          class="_content_6c1027"
+        >
+          <div
+            class="_name_6c1027"
+          >
+            Unknown device
+          </div>
+          <div
+            class="_client_6c1027"
+          >
+            Element
+          </div>
+        </div>
+      </header>
+      <ul
+        class="_metadata_6c1027"
+      >
+        <li>
+          <div
+            class="_key_6c1027"
+          >
+            Signed in
+          </div>
+          <div
+            class="_value_6c1027"
+          >
+            <time
+              datetime="2023-06-29T03:35:17Z"
+            >
+              Thu, 29 Jun 2023, 03:35
+            </time>
+          </div>
+        </li>
+        <li>
+          <div
+            class="_key_6c1027"
+          >
+            Device ID
+          </div>
+          <div
+            class="_value_6c1027"
+          >
+            abcd1234
+          </div>
+        </li>
+      </ul>
+    </a>
+    <div
+      class="_action_6c1027"
+    >
+      <button
+        aria-controls="radix-_r_0_"
+        aria-expanded="false"
+        aria-haspopup="dialog"
+        class="_button_187yx_8 _has-icon_187yx_57 _destructive_187yx_107"
+        data-kind="secondary"
+        data-size="sm"
+        data-state="closed"
+        role="button"
+        tabindex="0"
+        type="button"
+      >
+        <svg
+          aria-hidden="true"
+          fill="currentColor"
+          height="20"
+          viewBox="0 0 24 24"
+          width="20"
+          xmlns="http://www.w3.org/2000/svg"
+        >
+          <path
+            d="M7 21q-.824 0-1.412-.587A1.93 1.93 0 0 1 5 19V6a.97.97 0 0 1-.713-.287A.97.97 0 0 1 4 5q0-.424.287-.713A.97.97 0 0 1 5 4h4q0-.424.287-.712A.97.97 0 0 1 10 3h4q.424 0 .713.288Q15 3.575 15 4h4q.424 0 .712.287Q20 4.576 20 5t-.288.713A.97.97 0 0 1 19 6v13q0 .824-.587 1.413A1.93 1.93 0 0 1 17 21zM7 6v13h10V6zm2 10q0 .424.287.712Q9.576 17 10 17t.713-.288A.97.97 0 0 0 11 16V9a.97.97 0 0 0-.287-.713A.97.97 0 0 0 10 8a.97.97 0 0 0-.713.287A.97.97 0 0 0 9 9zm4 0q0 .424.287.712.288.288.713.288.424 0 .713-.288A.97.97 0 0 0 15 16V9a.97.97 0 0 0-.287-.713A.97.97 0 0 0 14 8a.97.97 0 0 0-.713.287A.97.97 0 0 0 13 9z"
+          />
+        </svg>
+        Remove device
+      </button>
+    </div>
+  </section>
+</DocumentFragment>
+`;
+
+exports[`<OAuth2Session /> > renders correct icon for a native session 1`] = `
+<DocumentFragment>
+  <section
+    class="_sessionCardRoot_6c1027"
+  >
+    <a
+      aria-disabled="true"
+      class="_sessionCard_6c1027 _disabled_6c1027"
+      disabled=""
+      role="link"
+    >
+      <header
+        class="_cardHeader_6c1027"
+      >
+        <svg
+          aria-label="Mobile"
+          class="_deviceTypeIcon_261d75"
+          fill="currentColor"
+          height="1em"
+          viewBox="0 0 24 24"
+          width="1em"
+          xmlns="http://www.w3.org/2000/svg"
+        >
+          <path
+            d="M7 23q-.824 0-1.412-.587A1.93 1.93 0 0 1 5 21V3q0-.824.588-1.412A1.93 1.93 0 0 1 7 1h10q.824 0 1.413.587Q19 2.176 19 3v18q0 .824-.587 1.413A1.93 1.93 0 0 1 17 23zm0-5h10V6H7z"
+          />
+        </svg>
+        <div
+          class="_content_6c1027"
+        >
+          <div
+            class="_name_6c1027"
+          >
+            Unknown device
+          </div>
+          <div
+            class="_client_6c1027"
+          >
+            Element
+          </div>
+        </div>
+      </header>
+      <ul
+        class="_metadata_6c1027"
+      >
+        <li>
+          <div
+            class="_key_6c1027"
+          >
+            Signed in
+          </div>
+          <div
+            class="_value_6c1027"
+          >
+            <time
+              datetime="2023-06-29T03:35:17Z"
+            >
+              Thu, 29 Jun 2023, 03:35
+            </time>
+          </div>
+        </li>
+        <li>
+          <div
+            class="_key_6c1027"
+          >
+            Device ID
+          </div>
+          <div
+            class="_value_6c1027"
+          >
+            abcd1234
+          </div>
+        </li>
+      </ul>
+    </a>
+  </section>
+</DocumentFragment>
+`;

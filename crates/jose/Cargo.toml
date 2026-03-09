@@ -1,0 +1,47 @@
+# Copyright 2025 New Vector Ltd.
+#
+# SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-Element-Commercial
+# Please see LICENSE files in the repository root for full details.
+
+[package]
+name = "mas-jose"
+description = "JSON Object Signing and Encryption (JWT & co) utilities"
+version.workspace = true
+authors.workspace = true
+edition.workspace = true
+license.workspace = true
+homepage.workspace = true
+repository.workspace = true
+publish.workspace = true
+
+[lints]
+workspace = true
+
+[dependencies]
+base64ct.workspace = true
+chrono.workspace = true
+digest.workspace = true
+ecdsa.workspace = true
+elliptic-curve.workspace = true
+generic-array.workspace = true
+hmac.workspace = true
+k256.workspace = true
+p256.workspace = true
+p384.workspace = true
+rand.workspace = true
+rsa.workspace = true
+schemars.workspace = true
+sec1.workspace = true
+serde_json.workspace = true
+serde_with.workspace = true
+serde.workspace = true
+sha2.workspace = true
+signature.workspace = true
+thiserror.workspace = true
+url.workspace = true
+
+mas-iana.workspace = true
+
+[dev-dependencies]
+insta.workspace = true
+rand_chacha.workspace = true

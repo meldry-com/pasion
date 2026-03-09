@@ -1,0 +1,35 @@
+# Copyright 2025 New Vector Ltd.
+#
+# SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-Element-Commercial
+# Please see LICENSE files in the repository root for full details.
+
+[package]
+name = "mas-i18n"
+version.workspace = true
+authors.workspace = true
+edition.workspace = true
+license.workspace = true
+homepage.workspace = true
+repository.workspace = true
+publish.workspace = true
+
+[lints]
+workspace = true
+
+[dependencies]
+camino.workspace = true
+icu_calendar.workspace = true
+icu_datetime.workspace = true
+icu_experimental.workspace = true
+icu_locid_transform.workspace = true
+icu_locid.workspace = true
+icu_plurals.workspace = true
+icu_provider_adapters.workspace = true
+icu_provider.workspace = true
+pad.workspace = true
+pest_derive.workspace = true
+pest.workspace = true
+serde_json.workspace = true
+serde.workspace = true
+thiserror.workspace = true
+writeable.workspace = true

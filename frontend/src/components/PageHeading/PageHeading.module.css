@@ -1,0 +1,82 @@
+/* Copyright 2024, 2025 New Vector Ltd.
+ * Copyright 2024 The Matrix.org Foundation C.I.C.
+ *
+ * SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-Element-Commercial
+ * Please see LICENSE files in the repository root for full details.
+ */
+
+.page-heading {
+  display: flex;
+  flex-direction: column;
+  gap: var(--cpd-space-4x);
+
+  /* Layout already has 8x/12x padding, and we need 12x/20x */
+  margin-block-start: var(--cpd-space-4x);
+
+  & .icon {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+
+    align-self: center;
+    height: var(--cpd-space-16x);
+    width: var(--cpd-space-16x);
+    padding: var(--cpd-space-2x);
+    background-color: var(--cpd-color-bg-subtle-secondary);
+    border-radius: var(--cpd-space-2x);
+
+    &.invalid {
+      background-color: var(--cpd-color-bg-critical-subtle);
+
+      & svg {
+        color: var(--cpd-color-icon-critical-primary);
+      }
+    }
+
+    &.success {
+      background-color: var(--cpd-color-bg-success-subtle);
+
+      & svg {
+        color: var(--cpd-color-icon-success-primary);
+      }
+    }
+
+    & svg {
+      height: var(--cpd-space-8x);
+      width: var(--cpd-space-8x);
+      color: var(--cpd-color-icon-secondary);
+    }
+  }
+
+  & .header {
+    display: flex;
+    flex-direction: column;
+    gap: var(--cpd-space-2x);
+    text-align: center;
+
+    & .title {
+      font: var(--cpd-font-heading-md-semibold);
+      letter-spacing: var(--cpd-font-letter-spacing-heading-xl);
+      color: var(--cpd-color-text-primary);
+      text-wrap: balance;
+    }
+
+    & .text {
+      font: var(--cpd-font-body-lg-regular);
+      letter-spacing: var(--cpd-font-letter-spacing-body-lg);
+      color: var(--cpd-color-text-secondary);
+      text-wrap: balance;
+
+      & em {
+        font-style: normal;
+        color: var(--cpd-color-text-primary);
+      }
+    }
+  }
+}
+
+@media screen and (min-width: 768px) {
+  .page-heading {
+    margin-block-start: var(--cpd-space-8x);
+  }
+}

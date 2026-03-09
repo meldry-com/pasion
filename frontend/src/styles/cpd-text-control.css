@@ -1,0 +1,53 @@
+/* Copyright 2024, 2025 New Vector Ltd.
+ * Copyright 2023, 2024 The Matrix.org Foundation C.I.C.
+ *
+ * SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-Element-Commercial
+ * Please see LICENSE files in the repository root for full details.
+ */
+
+.cpd-text-control {
+  border: 1px solid var(--cpd-color-border-interactive-primary);
+  background: var(--cpd-color-bg-canvas-default);
+  border-radius: 0.5rem;
+  padding: var(--cpd-space-3x) var(--cpd-space-4x);
+  box-sizing: border-box;
+}
+
+@media (hover) {
+  .cpd-text-control:hover {
+    border-color: var(--cpd-color-border-interactive-hovered);
+
+    /** TODO: have the shadow in the design tokens */
+    box-shadow: 0 1.2px 2.4px 0 rgb(0 0 0 / 15%);
+  }
+}
+
+.cpd-text-control:active {
+  border-color: var(--cpd-color-border-interactive-hovered);
+}
+
+.cpd-text-control:focus,
+/* This is set to auto by tailwind, we need to reset this */
+  .cpd-text-control:focus-visible {
+  outline: 2px solid var(--cpd-color-border-focused);
+  border-color: transparent;
+}
+
+.cpd-text-control[data-invalid] {
+  border-color: var(--cpd-color-text-critical-primary);
+}
+
+.cpd-text-control:disabled {
+  box-shadow: none;
+  background: var(--cpd-color-bg-canvas-disabled);
+  border-color: var(--cpd-color-border-disabled);
+  color: var(--cpd-color-text-disabled);
+  cursor: not-allowed;
+}
+
+.cpd-text-control[readonly] {
+  box-shadow: none;
+  background: var(--cpd-color-bg-subtle-secondary);
+  border-color: var(--cpd-color-bg-subtle-secondary);
+  color: var(--cpd-color-text-secondary);
+}

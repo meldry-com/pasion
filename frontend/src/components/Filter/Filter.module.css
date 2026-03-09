@@ -1,0 +1,51 @@
+/* Copyright 2024, 2025 New Vector Ltd.
+ * Copyright 2024 The Matrix.org Foundation C.I.C.
+ *
+ * SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-Element-Commercial
+ * Please see LICENSE files in the repository root for full details.
+ */
+
+.filter {
+  display: flex;
+  align-items: center;
+  gap: var(--cpd-space-2x);
+  font: var(--cpd-font-body-xs-regular);
+  letter-spacing: var(--cpd-font-letter-spacing-body-xs);
+  padding: var(--cpd-space-2x) var(--cpd-space-3x);
+  border-radius: var(--cpd-radius-pill-effect);
+}
+
+.enabled-filter {
+  background: var(--cpd-color-bg-action-primary-rest);
+  color: var(--cpd-color-text-on-solid-primary);
+
+  & > .close-icon {
+    height: var(--cpd-space-4x);
+    width: var(--cpd-space-4x);
+    opacity: 0.5;
+  }
+
+  &:hover {
+    background: var(--cpd-color-bg-action-primary-hovered);
+    & > .close-icon {
+      opacity: 1;
+    }
+  }
+
+  &:active {
+    background: var(--cpd-color-bg-action-primary-rest);
+    & > .close-icon {
+      opacity: 1;
+    }
+  }
+}
+
+.disabled-filter {
+  color: var(--cpd-color-text-action-primary);
+  background: var(--cpd-color-bg-canvas-default);
+  outline: 1px solid var(--cpd-color-border-interactive-secondary);
+
+  &:hover {
+    background: var(--cpd-color-bg-subtle-secondary);
+  }
+}

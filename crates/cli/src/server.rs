@@ -1,0 +1,581 @@
+// Copyright 2024, 2025 New Vector Ltd.
+// Copyright 2022-2024 The Matrix.org Foundation C.I.C.
+//
+// SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-Element-Commercial
+// Please see LICENSE files in the repository root for full details.
+
+use std::{
+    net::{IpAddr, Ipv4Addr, Ipv6Addr, SocketAddr, TcpListener, ToSocketAddrs},
+    os::unix::net::UnixListener,
+    time::Duration,
+};
+
+use anyhow::Context;
+use headers::{CacheControl, HeaderMapExt as _, UserAgent};
+use http::{Method, StatusCode, Version, header::USER_AGENT};
+use listenfd::ListenFd;
+use mas_config::{HttpBindConfig, HttpResource, HttpTlsConfig, UnixOrTcp};
+use mas_context::LogContext;
+use mas_listener::{ConnectionInfo, unix_or_tcp::UnixOrTcpListener};
+use mas_router::Route;
+use mas_templates::Templates;
+use opentelemetry::{Key, KeyValue};
+use opentelemetry_http::HeaderExtractor;
+use opentelemetry_semantic_conventions::trace::{
+    HTTP_REQUEST_METHOD, HTTP_RESPONSE_STATUS_CODE, HTTP_ROUTE, NETWORK_PROTOCOL_NAME,
+    NETWORK_PROTOCOL_VERSION, URL_PATH, URL_QUERY, URL_SCHEME, USER_AGENT_ORIGINAL,
+};
+use rustls::ServerConfig;
+use salvo::prelude::*;
+use salvo::serve_static::StaticDir;
+use tracing::Span;
+use tracing_opentelemetry::OpenTelemetrySpanExt;
+
+use crate::app_state::{AppState, inject_app_state};
+
+const MAS_LISTENER_NAME: Key = Key::from_static_str("mas.listener.name");
+
+#[inline]
+fn otel_http_method(method: &Method) -> &'static str {
+    match method {
+        &Method::OPTIONS => "OPTIONS",
+        &Method::GET => "GET",
+        &Method::POST => "POST",
+        &Method::PUT => "PUT",
+        &Method::DELETE => "DELETE",
+        &Method::HEAD => "HEAD",
+        &Method::TRACE => "TRACE",
+        &Method::CONNECT => "CONNECT",
+        &Method::PATCH => "PATCH",
+        _other => "_OTHER",
+    }
+}
+
+#[inline]
+fn otel_net_protocol_version(version: Version) -> &'static str {
+    match version {
+        Version::HTTP_09 => "0.9",
+        Version::HTTP_10 => "1.0",
+        Version::HTTP_11 => "1.1",
+        Version::HTTP_2 => "2.0",
+        Version::HTTP_3 => "3.0",
+        _other => "_OTHER",
+    }
+}
+
+fn otel_url_scheme(req: &Request) -> &'static str {
+    // Check if connection info indicates TLS
+    req.extensions()
+        .get::<ConnectionInfo>()
+        .map_or("http", |conn_info| {
+            if conn_info.get_tls_ref().is_some() {
+                "https"
+            } else {
+                "http"
+            }
+        })
+}
+
+/// Middleware for logging responses
+#[handler]
+pub async fn log_response_middleware(
+    req: &mut Request,
+    depot: &mut Depot,
+    res: &mut Response,
+    ctrl: &mut FlowCtrl,
+) {
+    let user_agent: Option<UserAgent> = req.headers().typed_get();
+    let user_agent_str = user_agent.as_ref().map_or("-", |u| u.as_str());
+    let method = otel_http_method(req.method());
+    let path = req.uri().path().to_owned();
+    let version = otel_net_protocol_version(req.version());
+
+    ctrl.call_next(req, depot, res).await;
+
+    let Some(stats) = LogContext::maybe_with(LogContext::stats) else {
+        tracing::error!("Missing log context for request, this is a bug!");
+        return;
+    };
+
+    let status_code = res.status_code.unwrap_or(StatusCode::OK);
+    match status_code.as_u16() {
+        100..=399 => tracing::info!(
+            name: "http.server.response",
+            "\"{method} {path} HTTP/{version}\" {status_code} {user_agent_str:?} [{stats}]",
+        ),
+        400..=499 => tracing::warn!(
+            name: "http.server.response",
+            "\"{method} {path} HTTP/{version}\" {status_code} {user_agent_str:?} [{stats}]",
+        ),
+        500..=599 => tracing::error!(
+            name: "http.server.response",
+            "\"{method} {path} HTTP/{version}\" {status_code} {user_agent_str:?} [{stats}]",
+        ),
+        _ => { /* This shouldn't happen */ }
+    }
+}
+
+/// Middleware for OpenTelemetry tracing
+#[handler]
+pub async fn tracing_middleware(
+    req: &mut Request,
+    depot: &mut Depot,
+    res: &mut Response,
+    ctrl: &mut FlowCtrl,
+) {
+    let method = otel_http_method(req.method());
+    let path = req.uri().path().to_owned();
+    let version = otel_net_protocol_version(req.version());
+    let scheme = otel_url_scheme(req);
+
+    let user_agent = req
+        .headers()
+        .get(USER_AGENT)
+        .and_then(|ua| ua.to_str().ok())
+        .map(String::from);
+
+    let query = req.uri().query().map(String::from);
+
+    let span = tracing::info_span!(
+        "http.server.request",
+        "otel.kind" = "server",
+        "otel.name" = format!("{method} {path}"),
+        "otel.status_code" = tracing::field::Empty,
+        { NETWORK_PROTOCOL_NAME } = "http",
+        { NETWORK_PROTOCOL_VERSION } = version,
+        { HTTP_REQUEST_METHOD } = method,
+        { HTTP_ROUTE } = %path,
+        { HTTP_RESPONSE_STATUS_CODE } = tracing::field::Empty,
+        { URL_PATH } = %path,
+        { URL_QUERY } = tracing::field::Empty,
+        { URL_SCHEME } = scheme,
+        { USER_AGENT_ORIGINAL } = tracing::field::Empty,
+    );
+
+    if let Some(ref q) = query {
+        span.record(URL_QUERY, q.as_str());
+    }
+
+    if let Some(ref ua) = user_agent {
+        span.record(USER_AGENT_ORIGINAL, ua.as_str());
+    }
+
+    // Extract the parent span context from the request headers
+    if !span.is_disabled() {
+        let parent_context = opentelemetry::global::get_text_map_propagator(|propagator| {
+            let extractor = HeaderExtractor(req.headers());
+            let context = opentelemetry::Context::new();
+            propagator.extract_with_context(&context, &extractor)
+        });
+
+        if let Err(err) = span.set_parent(parent_context) {
+            tracing::error!(
+                error = &err as &dyn std::error::Error,
+                "Failed to set parent context on span"
+            );
+        }
+    }
+
+    let _guard = span.enter();
+    ctrl.call_next(req, depot, res).await;
+
+    let status_code = res.status_code.unwrap_or(StatusCode::OK);
+    span.record(HTTP_RESPONSE_STATUS_CODE, status_code.as_u16());
+    span.record("otel.status_code", "OK");
+}
+
+/// Middleware for Sentry integration
+#[handler]
+pub async fn sentry_middleware(
+    req: &mut Request,
+    depot: &mut Depot,
+    res: &mut Response,
+    ctrl: &mut FlowCtrl,
+) {
+    let path = req.uri().path().to_string();
+    let method = otel_http_method(req.method());
+
+    sentry::configure_scope(|scope| {
+        scope.set_transaction(Some(&format!("{method} {path}")));
+    });
+
+    ctrl.call_next(req, depot, res).await;
+}
+
+/// Middleware for LogContext
+#[handler]
+pub async fn log_context_middleware(
+    req: &mut Request,
+    depot: &mut Depot,
+    res: &mut Response,
+    ctrl: &mut FlowCtrl,
+) {
+    let method = otel_http_method(req.method());
+    let _guard = LogContext::enter(method);
+    ctrl.call_next(req, depot, res).await;
+}
+
+/// Cache control middleware for static files
+#[handler]
+pub async fn cache_control_middleware(
+    req: &mut Request,
+    depot: &mut Depot,
+    res: &mut Response,
+    ctrl: &mut FlowCtrl,
+) {
+    ctrl.call_next(req, depot, res).await;
+
+    let status_code = res.status_code.unwrap_or(StatusCode::OK);
+    let cache_control = if status_code == StatusCode::NOT_FOUND {
+        // Cache 404s for 5 minutes
+        CacheControl::new()
+            .with_public()
+            .with_max_age(Duration::from_secs(5 * 60))
+    } else {
+        // Cache assets for 1 year
+        CacheControl::new()
+            .with_public()
+            .with_max_age(Duration::from_secs(365 * 24 * 60 * 60))
+            .with_immutable()
+    };
+    res.headers_mut().typed_insert(cache_control);
+}
+
+pub fn build_router(
+    state: AppState,
+    resources: &[HttpResource],
+    prefix: Option<&str>,
+    _name: Option<&str>,
+) -> Router {
+    let templates = state.templates.clone();
+
+    // Create the base router with the AppState in depot
+    let mut router = Router::new();
+
+    // Add state injection middleware at the top level
+    router = router.hoop_when(true, move |depot: &mut Depot| {
+        depot.insert("app_state", state.clone());
+    });
+
+    // Build sub-routers for each resource
+    for resource in resources {
+        router = match resource {
+            mas_config::HttpResource::Health => {
+                router.push(
+                    Router::with_path(mas_router::Healthcheck::route())
+                        .get(mas_handlers::health::get)
+                )
+            }
+            mas_config::HttpResource::Prometheus => {
+                router.push(
+                    Router::with_path("/metrics")
+                        .get(crate::telemetry::prometheus_handler)
+                )
+            }
+            mas_config::HttpResource::Discovery => {
+                router
+                    .push(Router::with_path(mas_router::OidcConfiguration::route())
+                        .get(mas_handlers::oauth2::discovery::get))
+                    .push(Router::with_path(mas_router::Webfinger::route())
+                        .get(mas_handlers::oauth2::webfinger::get))
+            }
+            mas_config::HttpResource::Human => {
+                build_human_router(router, templates.clone())
+            }
+            mas_config::HttpResource::GraphQL {
+                playground,
+                undocumented_oauth2_access,
+            } => {
+                let mut graphql_router = Router::with_path(mas_router::GraphQL::route())
+                    .get(mas_handlers::graphql::get)
+                    .post(mas_handlers::graphql::post);
+
+                if *playground {
+                    graphql_router = graphql_router.push(
+                        Router::with_path(mas_router::GraphQLPlayground::route())
+                            .get(mas_handlers::graphql::playground)
+                    );
+                }
+
+                router.push(graphql_router)
+            }
+            mas_config::HttpResource::Assets { path } => {
+                router.push(
+                    Router::with_path(&format!("{}/<**path>", mas_router::StaticAsset::route()))
+                        .hoop(cache_control_middleware)
+                        .get(StaticDir::new([path.clone()])
+                            .include_dot_files(false)
+                            .auto_list(false))
+                )
+            }
+            mas_config::HttpResource::OAuth => {
+                build_oauth_router(router)
+            }
+            mas_config::HttpResource::Compat => {
+                build_compat_router(router, templates.clone())
+            }
+            mas_config::HttpResource::AdminApi => {
+                build_admin_router(router)
+            }
+            mas_config::HttpResource::ConnectionInfo => {
+                router.push(
+                    Router::with_path("/connection-info")
+                        .get(connection_info_handler)
+                )
+            }
+        }
+    }
+
+    // Apply prefix if specified
+    let prefix = format!("{}/", prefix.unwrap_or_default().trim_end_matches('/'));
+    if !prefix.is_empty() && prefix != "/" {
+        let prefixed_router = Router::with_path(&prefix);
+        router = prefixed_router.push(router);
+    }
+
+    // Add middleware layers
+    router
+        .hoop(inject_app_state)
+        .hoop(log_response_middleware)
+        .hoop(tracing_middleware)
+        .hoop(log_context_middleware)
+        .hoop(sentry_middleware)
+}
+
+fn build_human_router(router: Router, _templates: Templates) -> Router {
+    router
+        // Account routes
+        .push(Router::with_path("/account").get(account_redirect_handler))
+        .push(Router::with_path(mas_router::Account::route()).get(mas_handlers::views::app::get))
+        .push(Router::with_path(mas_router::AccountWildcard::route()).get(mas_handlers::views::app::get))
+        .push(Router::with_path(mas_router::AccountRecoveryFinish::route()).get(mas_handlers::views::app::get_anonymous))
+        .push(Router::with_path(mas_router::ChangePasswordDiscovery::route()).get(change_password_redirect_handler))
+        // Index
+        .push(Router::with_path(mas_router::Index::route()).get(mas_handlers::views::index::get))
+        // Login/Logout
+        .push(Router::with_path(mas_router::Login::route())
+            .get(mas_handlers::views::login::get)
+            .post(mas_handlers::views::login::post))
+        .push(Router::with_path(mas_router::Logout::route()).post(mas_handlers::views::logout::post))
+        // Registration
+        .push(Router::with_path(mas_router::Register::route()).get(mas_handlers::views::register::get))
+        .push(Router::with_path(mas_router::PasswordRegister::route())
+            .get(mas_handlers::views::register::password::get)
+            .post(mas_handlers::views::register::password::post))
+        .push(Router::with_path(mas_router::RegisterVerifyEmail::route())
+            .get(mas_handlers::views::register::steps::verify_email::get)
+            .post(mas_handlers::views::register::steps::verify_email::post))
+        .push(Router::with_path(mas_router::RegisterToken::route())
+            .get(mas_handlers::views::register::steps::registration_token::get)
+            .post(mas_handlers::views::register::steps::registration_token::post))
+        .push(Router::with_path(mas_router::RegisterDisplayName::route())
+            .get(mas_handlers::views::register::steps::display_name::get)
+            .post(mas_handlers::views::register::steps::display_name::post))
+        .push(Router::with_path(mas_router::RegisterFinish::route())
+            .get(mas_handlers::views::register::steps::finish::get))
+        // Account recovery
+        .push(Router::with_path(mas_router::AccountRecoveryStart::route())
+            .get(mas_handlers::views::recovery::start::get)
+            .post(mas_handlers::views::recovery::start::post))
+        .push(Router::with_path(mas_router::AccountRecoveryProgress::route())
+            .get(mas_handlers::views::recovery::progress::get)
+            .post(mas_handlers::views::recovery::progress::post))
+        // OAuth2 authorization
+        .push(Router::with_path(mas_router::OAuth2AuthorizationEndpoint::route())
+            .get(mas_handlers::oauth2::authorization::get))
+        .push(Router::with_path(mas_router::Consent::route())
+            .get(mas_handlers::oauth2::authorization::consent::get)
+            .post(mas_handlers::oauth2::authorization::consent::post))
+        // SSO complete
+        .push(Router::with_path(mas_router::CompatLoginSsoComplete::route())
+            .get(mas_handlers::compat::login_sso_complete::get)
+            .post(mas_handlers::compat::login_sso_complete::post))
+        // Upstream OAuth2
+        .push(Router::with_path(mas_router::UpstreamOAuth2Authorize::route())
+            .get(mas_handlers::upstream_oauth2::authorize::get))
+        .push(Router::with_path(mas_router::UpstreamOAuth2Callback::route())
+            .get(mas_handlers::upstream_oauth2::callback::handler)
+            .post(mas_handlers::upstream_oauth2::callback::handler))
+        .push(Router::with_path(mas_router::UpstreamOAuth2Link::route())
+            .get(mas_handlers::upstream_oauth2::link::get)
+            .post(mas_handlers::upstream_oauth2::link::post))
+        .push(Router::with_path(mas_router::UpstreamOAuth2BackchannelLogout::route())
+            .post(mas_handlers::upstream_oauth2::backchannel_logout::post))
+        // Device code
+        .push(Router::with_path(mas_router::DeviceCodeLink::route())
+            .get(mas_handlers::oauth2::device::link::get))
+        .push(Router::with_path(mas_router::DeviceCodeConsent::route())
+            .get(mas_handlers::oauth2::device::consent::get)
+            .post(mas_handlers::oauth2::device::consent::post))
+}
+
+fn build_oauth_router(router: Router) -> Router {
+    router
+        .push(Router::with_path(mas_router::OAuth2Keys::route())
+            .get(mas_handlers::oauth2::keys::get))
+        .push(Router::with_path(mas_router::OidcUserinfo::route())
+            .get(mas_handlers::oauth2::userinfo::get)
+            .post(mas_handlers::oauth2::userinfo::get))
+        .push(Router::with_path(mas_router::OAuth2Introspection::route())
+            .post(mas_handlers::oauth2::introspection::post))
+        .push(Router::with_path(mas_router::OAuth2Revocation::route())
+            .post(mas_handlers::oauth2::revoke::post))
+        .push(Router::with_path(mas_router::OAuth2TokenEndpoint::route())
+            .post(mas_handlers::oauth2::token::post))
+        .push(Router::with_path(mas_router::OAuth2RegistrationEndpoint::route())
+            .post(mas_handlers::oauth2::registration::post))
+        .push(Router::with_path(mas_router::OAuth2DeviceAuthorizationEndpoint::route())
+            .post(mas_handlers::oauth2::device::authorize::post))
+}
+
+fn build_compat_router(router: Router, _templates: Templates) -> Router {
+    router
+        .push(Router::with_path(mas_router::CompatLoginSsoRedirect::route())
+            .get(mas_handlers::compat::login_sso_redirect::get))
+        .push(Router::with_path(mas_router::CompatLoginSsoRedirectIdp::route())
+            .get(mas_handlers::compat::login_sso_redirect::get))
+        .push(Router::with_path(mas_router::CompatLoginSsoRedirectSlash::route())
+            .get(mas_handlers::compat::login_sso_redirect::get))
+        .push(Router::with_path(mas_router::CompatLogin::route())
+            .get(mas_handlers::compat::login::get)
+            .post(mas_handlers::compat::login::post))
+        .push(Router::with_path(mas_router::CompatLogout::route())
+            .post(mas_handlers::compat::logout::post))
+        .push(Router::with_path(mas_router::CompatLogoutAll::route())
+            .post(mas_handlers::compat::logout_all::post))
+        .push(Router::with_path(mas_router::CompatRefresh::route())
+            .post(mas_handlers::compat::refresh::post))
+}
+
+fn build_admin_router(router: Router) -> Router {
+    // Admin API routes - these would need OpenAPI integration
+    // For now, we'll set up the basic structure
+    router.push(
+        Router::with_path("/api/admin/v1/<**path>")
+            .get(admin_api_placeholder)
+            .post(admin_api_placeholder)
+            .put(admin_api_placeholder)
+            .delete(admin_api_placeholder)
+    )
+}
+
+#[handler]
+async fn account_redirect_handler(depot: &Depot) -> impl Writer {
+    use crate::app_state::DepotExt;
+
+    let url_builder = depot.get_url_builder().cloned();
+    if let Some(url_builder) = url_builder {
+        let prefix = url_builder.prefix().unwrap_or_default();
+        let route = mas_router::Account::route();
+        Redirect::found(format!("{prefix}{route}"))
+    } else {
+        Redirect::found(mas_router::Account::route())
+    }
+}
+
+#[handler]
+async fn change_password_redirect_handler(depot: &Depot) -> impl Writer {
+    use crate::app_state::DepotExt;
+
+    let url_builder = depot.get_url_builder().cloned();
+    if let Some(url_builder) = url_builder {
+        Redirect::found(url_builder.absolute_url_for(&mas_router::AccountPasswordChange).to_string())
+    } else {
+        Redirect::found("/account/password/change")
+    }
+}
+
+#[handler]
+async fn connection_info_handler(req: &Request) -> String {
+    if let Some(conn_info) = req.extensions().get::<ConnectionInfo>() {
+        format!("{conn_info:?}")
+    } else {
+        "No connection info available".to_string()
+    }
+}
+
+#[handler]
+async fn admin_api_placeholder() -> impl Writer {
+    StatusError::not_implemented().brief("Admin API not yet migrated")
+}
+
+pub fn build_tls_server_config(config: &HttpTlsConfig) -> Result<ServerConfig, anyhow::Error> {
+    let (key, chain) = config.load()?;
+
+    let mut config = rustls::ServerConfig::builder()
+        .with_no_client_auth()
+        .with_single_cert(chain, key)
+        .context("failed to build TLS server config")?;
+    config.alpn_protocols = vec![b"h2".to_vec(), b"http/1.1".to_vec()];
+
+    Ok(config)
+}
+
+pub fn build_listeners(
+    fd_manager: &mut ListenFd,
+    configs: &[HttpBindConfig],
+) -> Result<Vec<UnixOrTcpListener>, anyhow::Error> {
+    let mut listeners = Vec::with_capacity(configs.len());
+
+    for bind in configs {
+        let listener = match bind {
+            HttpBindConfig::Listen { host, port } => {
+                let addrs = match host.as_deref() {
+                    Some(host) => (host, *port)
+                        .to_socket_addrs()
+                        .context("could not parse listener host")?
+                        .collect(),
+
+                    None => vec![
+                        SocketAddr::new(IpAddr::V6(Ipv6Addr::UNSPECIFIED), *port),
+                        SocketAddr::new(IpAddr::V4(Ipv4Addr::UNSPECIFIED), *port),
+                    ],
+                };
+
+                let listener = TcpListener::bind(&addrs[..]).context("could not bind address")?;
+                listener.set_nonblocking(true)?;
+                listener.try_into()?
+            }
+
+            HttpBindConfig::Address { address } => {
+                let addr: SocketAddr = address
+                    .parse()
+                    .context("could not parse listener address")?;
+                let listener = TcpListener::bind(addr).context("could not bind address")?;
+                listener.set_nonblocking(true)?;
+                listener.try_into()?
+            }
+
+            HttpBindConfig::Unix { socket } => {
+                let listener = UnixListener::bind(socket).context("could not bind socket")?;
+                listener.try_into()?
+            }
+
+            HttpBindConfig::FileDescriptor {
+                fd,
+                kind: UnixOrTcp::Tcp,
+            } => {
+                let listener = fd_manager
+                    .take_tcp_listener(*fd)?
+                    .context("no listener found on file descriptor")?;
+                listener.set_nonblocking(true)?;
+                listener.try_into()?
+            }
+
+            HttpBindConfig::FileDescriptor {
+                fd,
+                kind: UnixOrTcp::Unix,
+            } => {
+                let listener = fd_manager
+                    .take_unix_listener(*fd)?
+                    .context("no unix socket found on file descriptor")?;
+                listener.set_nonblocking(true)?;
+                listener.try_into()?
+            }
+        };
+
+        listeners.push(listener);
+    }
+
+    Ok(listeners)
+}

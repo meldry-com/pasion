@@ -1,0 +1,113 @@
+# Copyright 2025 New Vector Ltd.
+#
+# SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-Element-Commercial
+# Please see LICENSE files in the repository root for full details.
+
+version: 2
+updates:
+  - package-ecosystem: "cargo"
+    directory: "/"
+    labels:
+      - "A-Dependencies"
+      - "Z-Deps-Backend"
+    schedule:
+      interval: "daily"
+    ignore:
+      # We plan to remove apalis soon, let's ignore it for now
+      - dependency-name: "apalis"
+      - dependency-name: "apalis-*"
+    groups:
+      axum:
+        patterns:
+          - "axum"
+          - "axum-*"
+      opentelemetry:
+        patterns:
+          - "opentelemetry"
+          - "opentelemetry_sdk"
+          - "opentelemetry-*"
+          - "tracing-opentelemetry"
+      sea-query:
+        patterns:
+          - "sea-query"
+          - "sea-query-*"
+      sentry:
+        patterns:
+          - "sentry"
+          - "sentry-*"
+      tracing:
+        patterns:
+          - "tracing-*"
+        exclude-patterns:
+          - "tracing-opentelemetry"
+      icu:
+        patterns:
+          - "icu"
+          - "icu_*"
+
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    labels:
+      - "A-Dependencies"
+      - "Z-Deps-CI"
+    schedule:
+      interval: "daily"
+
+  - package-ecosystem: "npm"
+    directory: "/frontend/"
+    labels:
+      - "A-Dependencies"
+      - "Z-Deps-Frontend"
+    schedule:
+      interval: "daily"
+    groups:
+      storybook:
+        patterns:
+          - "storybook"
+          - "storybook-*"
+          - "@storybook/*"
+      fontsource:
+        patterns:
+          - "@fontsource/*"
+      vitest:
+        patterns:
+          - "vitest"
+          - "@vitest/*"
+      vite:
+        patterns:
+          - "vite"
+          - "@vitejs/*"
+          - "vite-*"
+      i18next:
+        patterns:
+          - "i18next"
+          - "i18next-*"
+          - "react-i18next"
+      react:
+        patterns:
+          - "react"
+          - "react-*"
+        exclude-patterns:
+          - "react-i18next"
+      jotai:
+        patterns:
+          - "jotai"
+          - "jotai-*"
+      graphql-codegen:
+        patterns:
+          - "@graphql-codegen/*"
+      tanstack-router:
+        patterns:
+          - "@tanstack/react-router"
+          - "@tanstack/react-router-*"
+          - "@tanstack/router-*"
+      tanstack-query:
+        patterns:
+          - "@tanstack/react-query"
+          - "@tanstack/react-query-*"
+      types:
+        patterns:
+          - "@types/*"
+      browser-logos:
+        patterns:
+          - "@browser-logos/*"

@@ -1,0 +1,46 @@
+# Copyright 2025 New Vector Ltd.
+#
+# SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-Element-Commercial
+# Please see LICENSE files in the repository root for full details.
+
+[package]
+name = "mas-tasks"
+version.workspace = true
+authors.workspace = true
+edition.workspace = true
+license.workspace = true
+homepage.workspace = true
+repository.workspace = true
+publish.workspace = true
+
+[lints]
+workspace = true
+
+[dependencies]
+anyhow.workspace = true
+async-trait.workspace = true
+chrono.workspace = true
+cron.workspace = true
+opentelemetry-semantic-conventions.workspace = true
+opentelemetry.workspace = true
+rand_chacha.workspace = true
+rand.workspace = true
+serde_json.workspace = true
+serde.workspace = true
+sqlx.workspace = true
+thiserror.workspace = true
+tokio-util.workspace = true
+tokio.workspace = true
+tracing-opentelemetry.workspace = true
+tracing.workspace = true
+ulid.workspace = true
+
+mas-context.workspace = true
+mas-data-model.workspace = true
+mas-email.workspace = true
+mas-i18n.workspace = true
+mas-matrix.workspace = true
+mas-router.workspace = true
+mas-storage-pg.workspace = true
+mas-storage.workspace = true
+mas-templates.workspace = true

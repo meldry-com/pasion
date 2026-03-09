@@ -1,0 +1,27 @@
+{#
+Copyright 2024, 2025 New Vector Ltd.
+Copyright 2024 The Matrix.org Foundation C.I.C.
+
+SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-Element-Commercial
+Please see LICENSE files in the repository root for full details.
+-#}
+
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>API documentation</title>
+    <script>
+      window.API_CONFIG = {
+        openapiUrl: "{{ openapi_url | add_slashes | safe }}",
+        callbackUrl: "{{ callback_url | add_slashes | safe }}",
+      };
+    </script>
+    {{ include_asset('src/entrypoints/swagger.ts') | indent(4) | safe }}
+  </head>
+
+  <body>
+    <div id="swagger-ui"></div>
+  </body>
+</html>

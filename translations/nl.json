@@ -1,0 +1,84 @@
+{
+  "action": {
+    "back": "Terug",
+    "cancel": "Annuleren",
+    "continue": "Doorgaan",
+    "create_account": "Registreren",
+    "sign_in": "Inloggen",
+    "sign_out": "Uitloggen",
+    "start_over": "Opnieuw beginnen",
+    "submit": "Bevestigen"
+  },
+  "app": {
+    "human_name": "Palpo Authentication Service",
+    "name": "palpo-auth-service"
+  },
+  "branding": {
+    "privacy_policy": {
+      "alt": "Link naar het privacybeleid van de service",
+      "link": "Privacybeleid"
+    },
+    "terms_and_conditions": {
+      "alt": "Link naar de servicevoorwaarden",
+      "link": "Algemene voorwaarden"
+    }
+  },
+  "common": {
+    "display_name": "Weergavenaam",
+    "email_address": "E-mailadres",
+    "loading": "Laden...",
+    "mxid": "Matrix ID",
+    "password": "Wachtwoord",
+    "password_confirm": "Bevestig wachtwoord",
+    "username": "Gebruikersnaam"
+  },
+  "error": {
+    "unexpected": "Onverwachte fout"
+  },
+  "mas": {
+    "change_password": {
+      "change": "Wachtwoord wijzigen",
+      "confirm": "Bevestig wachtwoord",
+      "current": "Huidig wachtwoord"
+    },
+    "device_display_name": {
+      "unknown_device": "Onbekend apparaat"
+    },
+    "errors": {
+      "invalid_credentials": "Ongeldige gegevens"
+    },
+    "login": {
+      "continue_with_provider": "Doorgaan met %(provider)s",
+      "headline": "Inloggen",
+      "separator": "Of"
+    },
+    "navbar": {
+      "my_account": "Mijn account"
+    },
+    "or_separator": "Of",
+    "upstream_oauth2": {
+      "login_link": {
+        "action": "Doorgaan"
+      },
+      "register": {
+        "choose_username": {
+          "heading": "Kies uw gebruikersnaam"
+        },
+        "create_account": "Nieuw account aanmaken",
+        "forced_email": "De volgende e-mailadres zal worden gebruikt",
+        "forced_localpart": "De volgende gebruikersnaam zal worden gebruikt",
+        "import_data": {
+          "heading": "Importeer uw data"
+        },
+        "suggested_display_name": "Weergavenaam importeren",
+        "suggested_email": "E-mailadres importeren",
+        "use": "Gebruiken"
+      }
+    },
+    "verify_email": {
+      "6_digit_code": "6-cijferige code",
+      "description": "Voer de 6-cijferige code in die is verzonden naar: <em>%(email)s</em>",
+      "headline": "Verifieer uw e-mailadres"
+    }
+  }
+}

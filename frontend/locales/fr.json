@@ -1,0 +1,401 @@
+{
+  "action": {
+    "back": "Retour",
+    "cancel": "Annuler",
+    "clear": "Effacer",
+    "close": "Fermer",
+    "collapse": "Réduire",
+    "confirm": "Confirmer",
+    "continue": "Continuer",
+    "edit": "Éditer",
+    "expand": "Développer",
+    "save": "Enregistrer",
+    "save_and_continue": "Sauvegarder et continuer",
+    "sign_out": "Se déconnecter",
+    "start_over": "Recommencer"
+  },
+  "branding": {
+    "privacy_policy": {
+      "alt": "Lien vers la politique de confidentialité",
+      "link": "Politique de confidentialité"
+    },
+    "terms_and_conditions": {
+      "alt": "Lien vers les conditions d'utilisation",
+      "link": "Conditions d'utilisation"
+    }
+  },
+  "common": {
+    "add": "Ajouter",
+    "e2ee": "Chiffrement de bout en bout",
+    "error": "Erreur",
+    "loading": "Chargement…",
+    "next": "Suivant",
+    "password": "Mot de passe",
+    "previous": "Précédent",
+    "saved": "Sauvegardé",
+    "saving": "Enregistrement..."
+  },
+  "frontend": {
+    "account": {
+      "account_password": "Mot de passe du compte",
+      "contact_info": "Coordonnées",
+      "delete_account": {
+        "alert_description": "Ce compte sera définitivement supprimé et vous n'aurez plus accès à aucun de vos messages.",
+        "alert_title": "Vous êtes sur le point de perdre toutes vos données",
+        "button": "Supprimer le compte",
+        "dialog_description": "<text>Confirmez que vous souhaitez supprimer votre compte :</text>\n<profile />\n<list>\n<item>Vous ne pourrez pas réactiver votre compte</item>\n<item>Vous ne pourrez plus vous connecter</item>\n<item>Personne ne pourra réutiliser votre nom d'utilisateur (MXID), y compris vous</item>\n<item>Vous quitterez tous les salons et les messages directs dans lesquels vous vous trouvez</item>\n<item>Vous serez retiré du serveur d'identité et personne ne pourra vous trouver avec votre e-mail ou votre numéro de téléphone</item>\n</list>\n<text>Vos anciens messages seront toujours visibles pour les personnes qui les ont reçus. Souhaitez-vous masquer les messages que vous envoyez aux personnes qui rejoindront des salons à l'avenir ?</text>",
+        "dialog_title": "Supprimer ce compte ?",
+        "erase_checkbox_label": "Oui, masquer tous mes messages aux nouveaux arrivants",
+        "incorrect_password": "Mot de passe incorrect, veuillez réessayer",
+        "mxid_label": "Confirmez votre identifiant Matrix ({{ mxid }})",
+        "mxid_mismatch": "Cela ne correspond pas à votre identifiant Matrix",
+        "password_label": "Saisissez votre mot de passe pour continuer"
+      },
+      "edit_profile": {
+        "display_name_help": "C'est ce que les autres personnes verront là où vous êtes connecté.",
+        "display_name_label": "Pseudonyme",
+        "title": "Editer le profil",
+        "username_label": "Nom d’utilisateur"
+      },
+      "password": {
+        "change": "Changer de mot de passe",
+        "change_disabled": "Le changement de mot de passe a été désactivé par l'administrateur.",
+        "label": "Mot de passe"
+      },
+      "sign_out": {
+        "button": "Se déconnecter du compte",
+        "dialog": "Se déconnecter de ce compte ?"
+      },
+      "title": "Votre compte"
+    },
+    "add_email_form": {
+      "email_denied_alert": {
+        "text": "L’adresse e-mail saisie n’est pas autorisée par la politique du serveur.",
+        "title": "Adresse e-mail refusé par la politique du serveur"
+      },
+      "email_denied_error": "L’adresse e-mail saisie n’est pas conforme à la politique du serveur",
+      "email_exists_alert": {
+        "text": "L’adresse e-mail saisie est déjà ajoutée à ce compte",
+        "title": "Cette adresse e-mail existe déjà"
+      },
+      "email_exists_error": "L’adresse e-mail saisie est déjà ajoutée à ce compte",
+      "email_field_help": "Ajouter une autre adresse e-mail à utiliser pour ce compte.",
+      "email_field_label": "Ajouter une adresse e-mail",
+      "email_in_use_error": "L’adresse e-mail saisie est déjà utilisée",
+      "email_invalid_alert": {
+        "text": "L’adresse e-mail saisie est invalide",
+        "title": "Adresse e-mail invalide"
+      },
+      "email_invalid_error": "L’adresse e-mail saisie est invalide",
+      "incorrect_password_error": "Mot de passe incorrect, veuillez réessayer",
+      "password_confirmation": "Confirmez le mot de passe de votre compte pour ajouter cette adresse e-mail"
+    },
+    "app_sessions_list": {
+      "error": "Impossible de charger les sessions d'application",
+      "heading": "Applications"
+    },
+    "browser_session_details": {
+      "current_badge": "Actuel",
+      "session_details_title": "Session"
+    },
+    "browser_sessions_overview": {
+      "body:one": "{{count}} session active",
+      "body:other": "{{count}} sessions actives",
+      "heading": "Navigateurs",
+      "no_active_sessions": {
+        "default": "Vous n'êtes connecté sur aucun navigateur web.",
+        "inactive_90_days": "Toutes vos sessions ont été actives au cours des 90 derniers jours."
+      },
+      "view_all_button": "Tout voir"
+    },
+    "compat_session_detail": {
+      "client_details_title": "Application",
+      "name": "Nom",
+      "session_details_title": "Session"
+    },
+    "device_type_icon_label": {
+      "desktop": "Ordinateur",
+      "mobile": "Mobile",
+      "pc": "Ordinateur",
+      "tablet": "Tablette",
+      "unknown": "Type d’appareil inconnu",
+      "web": "Web"
+    },
+    "email_in_use": {
+      "heading": "L’adresse e-mail {{email}} est déjà utilisée."
+    },
+    "end_session_button": {
+      "confirmation_modal_title": "Êtes-vous sûr de vouloir terminer cette session ?",
+      "text": "Supprimer l’appareil"
+    },
+    "error": {
+      "hideDetails": "Masquer les détails",
+      "showDetails": "Afficher les détails",
+      "subtitle": "Une erreur inattendue s'est produite. Veuillez réessayer",
+      "title": "Un problème est survenu"
+    },
+    "error_boundary_title": "Un problème est survenu",
+    "errors": {
+      "field_required": "Ce champ est requis",
+      "rate_limit_exceeded": "Vous avez effectué trop de requêtes sur une courte période. Veuillez patienter quelques minutes et réessayer."
+    },
+    "last_active": {
+      "active_date": "Actif {{relativeDate}}",
+      "active_now": "Actif maintenant",
+      "inactive_90_days": "Inactif depuis plus de 90 jours"
+    },
+    "nav": {
+      "devices": "Appareil",
+      "plan": "Forfait",
+      "profile": "Profil",
+      "sessions": "Sessions",
+      "settings": "Paramètres"
+    },
+    "not_found_alert_title": "Introuvable.",
+    "not_logged_in_alert": "Vous n’êtes pas connecté.",
+    "oauth2_client_detail": {
+      "details_title": "Application",
+      "id": "Client ID",
+      "name": "Nom",
+      "policy": "Politique de confidentialité",
+      "terms": "Conditions d’utilisation"
+    },
+    "oauth2_session_detail": {
+      "client_details_name": "Nom",
+      "client_title": "Application",
+      "session_details_title": "Session"
+    },
+    "pagination_controls": {
+      "total": "Total : {{totalCount}}"
+    },
+    "password_change": {
+      "current_password_label": "Mot de passe actuel",
+      "failure": {
+        "description": {
+          "account_locked": "Votre compte est bloqué et ne peut pas être récupéré pour le moment. Si cela n'est pas normal, contactez l'administrateur de votre serveur.",
+          "expired_recovery_ticket": "Le lien de récupération a expiré. Veuillez recommencer le processus de récupération de compte depuis le début.",
+          "invalid_new_password": "Le mot de passe choisi n'est pas valide ; il ne correspond peut-être pas à la politique de sécurité configurée.",
+          "no_current_password": "Vous n'avez pas de mot de passe actuel.",
+          "no_such_recovery_ticket": "Le lien de restauration n'est pas valide. Si vous avez copié le lien depuis l'e-mail de restauration, vérifiez que le lien complet a été copié.",
+          "password_changes_disabled": "Les changements de mot de passe sont désactivés.",
+          "recovery_ticket_already_used": "Le lien de restauration a déjà été utilisé. Il ne peut pas être réutilisé.",
+          "unspecified": "Il s'agit peut-être d'un problème temporaire, veuillez donc réessayer ultérieurement. Si le problème persiste, contactez l'administrateur de votre serveur.",
+          "wrong_password": "Le mot de passe que vous avez fourni comme mot de passe actuel est incorrect. Veuillez réessayer."
+        },
+        "title": "Impossible de mettre à jour le mot de passe"
+      },
+      "new_password_again_label": "Entrez de nouveau votre nouveau mot de passe",
+      "new_password_label": "Nouveau mot de passe",
+      "passwords_match": "Les mots de passe correspondent.",
+      "passwords_no_match": "Les mots de passe ne correspondent pas",
+      "subtitle": "Choisissez un nouveau mot de passe pour votre compte.",
+      "success": {
+        "description": "Votre mot de passe a été mis à jour avec succès.",
+        "title": "Mot de passe mis à jour"
+      },
+      "title": "Modifier votre mot de passe"
+    },
+    "password_reset": {
+      "consumed": {
+        "subtitle": "Pour créer un nouveau mot de passe, recommencez et sélectionnez « Mot de passe oublié ».",
+        "title": "Le lien pour réinitialiser votre mot de passe a déjà été utilisé"
+      },
+      "expired": {
+        "resend_email": "Renvoyer l’e-mail",
+        "subtitle": "Demander un nouvel e-mail qui sera envoyé à : {{email}}",
+        "title": "Le lien pour réinitialiser votre mot de passe a expiré"
+      },
+      "subtitle": "Choisissez un nouveau mot de passe pour votre compte.",
+      "title": "Réinitialiser votre mot de passe"
+    },
+    "password_strength": {
+      "placeholder": "Complexité du mot de passe",
+      "score": {
+        "0": "Mot de passe extrêmement faible",
+        "1": "Mot de passe très faible",
+        "2": "Mot de passe faible",
+        "3": "Mot de passe fort",
+        "4": "Mot de passe très fort"
+      },
+      "suggestion": {
+        "all_uppercase": "Mettez certaines lettres en majuscule, mais pas toutes.",
+        "another_word": "Ajoutez des mots moins courants.",
+        "associated_years": "Évitez les années qui vous sont associées.",
+        "capitalization": "Mettez plus de majuscule que simplement la première lettre.",
+        "dates": "Évitez les dates et les années qui vous sont associées.",
+        "l33t": "Évitez les substitutions de lettres prévisibles telles que « @ » pour « a ».",
+        "longer_keyboard_pattern": "Utilisez des suites de caractères plus longues sur votre clavier, en changeant de direction plusieurs fois.",
+        "no_need": "Vous pouvez créer des mots de passe sécurisés sans utiliser de symboles, de chiffres ou de majuscules.",
+        "pwned": "Si vous utilisez ce mot de passe ailleurs, vous devriez le modifier.",
+        "recent_years": "Évitez les dernières années.",
+        "repeated": "Évitez les répétitions de mots et de caractères.",
+        "reverse_words": "Évitez d'utiliser des mots courants inversés.",
+        "sequences": "Évitez les séquences de caractères courantes.",
+        "use_words": "Utilisez plusieurs mots, mais évitez les expressions courantes."
+      },
+      "too_weak": "Ce mot de passe est trop faible",
+      "warning": {
+        "common": "Il s’agit d’un mot de passe couramment utilisé.",
+        "common_names": "Les noms et prénoms communs sont faciles à deviner.",
+        "dates": "Les dates sont faciles à deviner.",
+        "extended_repeat": "Les caractères répétés comme \"abcabcabc\" sont faciles à deviner.",
+        "key_pattern": "Les suites de touches de clavier courtes sont faciles à deviner.",
+        "names_by_themselves": "Les noms et prénoms seuls sont faciles à deviner.",
+        "pwned": "Votre mot de passe a été exposé lors d'une fuite de données sur Internet.",
+        "recent_years": "Les dernières années sont faciles à deviner.",
+        "sequences": "Les séquences de caractères courantes comme « abc » sont faciles à deviner.",
+        "similar_to_common": "Ce mot de passe est similaire à un mot de passe couramment utilisé.",
+        "simple_repeat": "Les caractères répétés tels que « aaa » sont faciles à deviner.",
+        "straight_row": "Les suites de touches droites de votre clavier sont faciles à deviner.",
+        "top_hundred": "Il s'agit d'un mot de passe fréquemment utilisé.",
+        "top_ten": "Il s'agit d'un mot de passe très utilisé.",
+        "user_inputs": "Votre mot de passe ne dois pas contenir de données personnelles ou relatives à la page.",
+        "word_by_itself": "Les mots seuls sont faciles à deviner."
+      }
+    },
+    "reset_cross_signing": {
+      "button": "Réinitialiser l'identité",
+      "cancelled": {
+        "description_1": "Vous pouvez fermer cette fenêtre et revenir à l'application pour continuer.",
+        "description_2": "Si vous êtes déconnecté partout et que vous ne vous souvenez pas de votre code de récupération, vous devrez tout de même réinitialiser votre identité.",
+        "heading": "La réinitialisation d'identité a été annulée."
+      },
+      "description": "Si vous n'êtes connecté à aucun autre appareil et que vous avez perdu votre clé de récupération, vous devrez réinitialiser votre identité pour continuer à utiliser l'application.",
+      "effect_list": {
+        "negative_1": "Vous perdrez votre historique de messages existant",
+        "negative_2": "Vous devrez vérifier à nouveau tous vos appareils et contacts existants",
+        "neutral_1": "Vous perdrez l’historique de vos messages",
+        "neutral_2": "Vous devrez vérifier à nouveau tous vos appareils et contacts existants",
+        "positive_1": "Les détails de votre compte, vos contacts, vos préférences et votre liste de discussion seront conservés"
+      },
+      "failure": {
+        "description": "Il s'agit peut-être d'un problème temporaire, veuillez donc réessayer ultérieurement. Si le problème persiste, contactez l'administrateur de votre serveur.",
+        "heading": "Impossible d'autoriser la réinitialisation de l'identité cryptographique",
+        "title": "Impossible d'autoriser le remplacement de l'identité cryptographique"
+      },
+      "finish_reset": "Terminer la réinitialisation",
+      "heading": "Réinitialisez votre identité au cas où vous ne pourriez pas la vérifier autrement",
+      "start_reset": "Démarrer la réinitialisation",
+      "success": {
+        "description": "La réinitialisation de l'identité a été approuvée pour les prochaines {{minutes}} minutes. Vous pouvez fermer cette fenêtre et revenir à l'application pour continuer.",
+        "heading": "Réinitialisation de l'identité réussie. Retournez dans l'application pour terminer le processus.",
+        "title": "Réinitialisation de l'identité cryptographique temporairement autorisée"
+      },
+      "warning": "Ne réinitialisez votre identité que si vous n'avez accès à aucun autre appareil connecté et que vous avez perdu votre clé de récupération."
+    },
+    "selectable_session": {
+      "label": "Sélectionner une session"
+    },
+    "session": {
+      "client_id_label": "Client ID",
+      "current": "Actuel",
+      "current_badge": "Actuel",
+      "device_id_label": "ID de l’appareil",
+      "finished_date": "Terminé <datetime/>",
+      "finished_label": "Terminée",
+      "generic_browser_session": "Session de navigateur",
+      "id_label": "ID",
+      "ip_label": "Adresse IP",
+      "last_active_label": "Dernière activité",
+      "last_auth_label": "Dernière authentification",
+      "name_for_platform": "{{name}} pour {{platform}}",
+      "scopes_label": "Scopes",
+      "set_device_name": {
+        "help": "Définissez un nom qui vous aidera à identifier cet appareil.",
+        "label": "Nom de l'appareil",
+        "title": "Modifier le nom de l'appareil"
+      },
+      "signed_in_date": "Connecté <datetime/>",
+      "signed_in_label": "Connecté",
+      "title": "Détails de la session",
+      "unknown_browser": "Navigateur inconnu",
+      "unknown_device": "Appareil inconnu",
+      "uri_label": "Uri",
+      "user_id_label": "Identifiant",
+      "username_label": "Nom d'utilisateur"
+    },
+    "session_detail": {
+      "alert": {
+        "button": "Revenir en arrière",
+        "text": "Cette session n'existe pas ou n'est plus active.",
+        "title": "Impossible de trouver la session : {{deviceId}}"
+      }
+    },
+    "unknown_route": "Route inconnue {{route}}",
+    "unverified_email_alert": {
+      "button": "Examiner et confirmer",
+      "text:one": "Vous avez {{count}} adresse e-mail non vérifiée.",
+      "text:other": "Vous avez {{count}} adresses e-mail non vérifiées.",
+      "title": "Adresse e-mail non vérifiée"
+    },
+    "user_email": {
+      "cant_delete_primary": "Changez d'adresse e-mail principale pour supprimer celle-ci.",
+      "delete_button_confirmation_modal": {
+        "action": "Supprimer l'adresse e-mail",
+        "body": "Supprimer cette adresse e-mail ?",
+        "incorrect_password": "Mot de passe incorrect, veuillez réessayer",
+        "password_confirmation": "Confirmez le mot de passe de votre compte pour supprimer cette adresse e-mail"
+      },
+      "delete_button_title": "Supprimer l’adresse e-mail",
+      "email": "Adresse e-mail",
+      "make_primary_button": "Utiliser comme adresse principale",
+      "not_verified": "Non vérifié",
+      "primary_email": "Adresse e-mail principale",
+      "retry_button": "Renvoyer le code",
+      "unverified": "Non vérifiée"
+    },
+    "user_email_list": {
+      "heading": "Adresses e-mail",
+      "no_primary_email_alert": "Aucune adresse e-mail principale"
+    },
+    "user_greeting": {
+      "error": "Impossible de charger l'utilisateur"
+    },
+    "user_name": {
+      "display_name_field_label": "Pseudonyme"
+    },
+    "user_sessions_overview": {
+      "active_sessions:one": "{{count}} session active",
+      "active_sessions:other": "{{count}} sessions actives",
+      "heading": "Où vous êtes connecté",
+      "no_active_sessions": {
+        "default": "Vous n'êtes connecté à aucune application.",
+        "inactive_90_days": "Toutes vos sessions ont été actives au cours des 90 derniers jours."
+      }
+    },
+    "verify_email": {
+      "code_expired_alert": {
+        "description": "Le code a expiré. Veuillez demander un nouveau code.",
+        "title": "Code expiré"
+      },
+      "code_field_error": "Code non reconnu",
+      "code_field_label": "Code à 6 chiffres",
+      "code_field_wrong_shape": "Le code doit être composé de 6 chiffres",
+      "email_sent_alert": {
+        "description": "Saisissez le nouveau code ci-dessous.",
+        "title": "Nouveau code envoyé"
+      },
+      "enter_code_prompt": "Entrez le code à 6 chiffres envoyé à : <email>{{email}}</email>",
+      "heading": "Vérifiez votre adresse e-mail",
+      "invalid_code_alert": {
+        "description": "Vérifiez le code envoyé à votre adresse e-mail et entrez le dans le champ ci-dessous pour continuer.",
+        "title": "Vous avez saisi un code erroné"
+      },
+      "resend_code": "Renvoyer le code",
+      "resend_email": "Renvoyer l’e-mail",
+      "sent": "Envoyé !",
+      "unknown_email": "Adresse e-mail inconnue"
+    }
+  },
+  "mas": {
+    "scope": {
+      "edit_profile": "Modifier votre profil et vos coordonnées",
+      "manage_sessions": "Gérer vos appareils et vos sessions",
+      "mas_admin": "Administrer les utilisateurs (urn:mas:admin)",
+      "send_messages": "Envoyez de nouveaux messages en votre nom",
+      "synapse_admin": "Administrer le serveur (urn:synapse:admin:*)",
+      "view_messages": "Afficher vos messages et données existants",
+      "view_profile": "Voir les informations de votre profil et vos coordonnées"
+    }
+  }
+}

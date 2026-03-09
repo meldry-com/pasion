@@ -1,0 +1,631 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`<OAuth2SessionDetail> > renders a finished session details 1`] = `
+<DocumentFragment>
+  <div
+    class="flex flex-col gap-10"
+  >
+    <header
+      class="_header_28c6f4"
+    >
+      <a
+        class="_backButton_28c6f4"
+        href="/sessions"
+      >
+        <svg
+          fill="currentColor"
+          height="1em"
+          viewBox="0 0 24 24"
+          width="1em"
+          xmlns="http://www.w3.org/2000/svg"
+        >
+          <path
+            d="m13.3 17.3-4.6-4.6a.9.9 0 0 1-.213-.325A1.1 1.1 0 0 1 8.425 12q0-.2.062-.375A.9.9 0 0 1 8.7 11.3l4.6-4.6a.95.95 0 0 1 .7-.275q.425 0 .7.275a.95.95 0 0 1 .275.7.95.95 0 0 1-.275.7L10.8 12l3.9 3.9a.95.95 0 0 1 .275.7.95.95 0 0 1-.275.7.95.95 0 0 1-.7.275.95.95 0 0 1-.7-.275"
+          />
+        </svg>
+      </a>
+      <h3
+        class="_typography_6v6n8_153 _font-heading-md-semibold_6v6n8_112"
+      >
+        Element: Unknown device
+        <button
+          aria-controls="radix-_r_c_"
+          aria-expanded="false"
+          aria-haspopup="dialog"
+          aria-labelledby="_r_f_"
+          class="_icon-button_1pz9o_8"
+          data-kind="primary"
+          data-state="closed"
+          role="button"
+          style="--cpd-icon-button-size: var(--cpd-space-6x);"
+          tabindex="0"
+          type="button"
+        >
+          <div
+            class="_indicator-icon_147l5_17"
+            style="--cpd-icon-button-size: 100%;"
+          >
+            <svg
+              fill="currentColor"
+              height="1em"
+              viewBox="0 0 24 24"
+              width="1em"
+              xmlns="http://www.w3.org/2000/svg"
+            >
+              <path
+                clip-rule="evenodd"
+                d="M15.706 2.637a2 2 0 0 1 2.829 0l2.828 2.828a2 2 0 0 1 0 2.829L9.605 20.052a1 1 0 0 1-.465.263L3.483 21.73a1 1 0 0 1-1.212-1.213l1.414-5.657a1 1 0 0 1 .263-.465zm1.224 7.262L14.102 7.07l-8.544 8.544-.943 3.771 3.771-.943z"
+                fill-rule="evenodd"
+              />
+            </svg>
+          </div>
+        </button>
+      </h3>
+    </header>
+    <section
+      class="flex flex-col gap-6"
+    >
+      <h4
+        class="_typography_6v6n8_153 _font-heading-sm-semibold_6v6n8_93"
+      >
+        Device details
+      </h4>
+      <div
+        aria-orientation="horizontal"
+        class="_separator_59a6a1 _section_59a6a1 -mt-4"
+        role="separator"
+      />
+      <ul
+        class="flex flex-wrap gap-x-10 gap-y-6"
+      >
+        <li
+          class="flex flex-col min-w-0"
+        >
+          <h5
+            class="_typography_6v6n8_153 _font-body-sm-regular_6v6n8_31 text-secondary"
+          >
+            Last Active
+          </h5>
+          <p
+            class="_typography_6v6n8_153 _font-body-md-regular_6v6n8_50 text-ellipsis overflow-hidden"
+          >
+            <span
+              title="Sat, 29 Jul 2023, 03:35"
+            >
+              Inactive for 90+ days
+            </span>
+          </p>
+        </li>
+        <li
+          class="flex flex-col min-w-0"
+        >
+          <h5
+            class="_typography_6v6n8_153 _font-body-sm-regular_6v6n8_31 text-secondary"
+          >
+            Signed in
+          </h5>
+          <p
+            class="_typography_6v6n8_153 _font-body-md-regular_6v6n8_50 text-ellipsis overflow-hidden"
+          >
+            <time
+              datetime="2023-06-29T03:35:17Z"
+            >
+              Thu, 29 Jun 2023, 03:35
+            </time>
+          </p>
+        </li>
+        <li
+          class="flex flex-col min-w-0"
+        >
+          <h5
+            class="_typography_6v6n8_153 _font-body-sm-regular_6v6n8_31 text-secondary"
+          >
+            Finished
+          </h5>
+          <p
+            class="_typography_6v6n8_153 _font-body-md-regular_6v6n8_50 text-ellipsis overflow-hidden"
+          >
+            <time
+              datetime="2023-07-29T03:35:17Z"
+            >
+              Sat, 29 Jul 2023, 03:35
+            </time>
+          </p>
+        </li>
+        <li
+          class="flex flex-col min-w-0"
+        >
+          <h5
+            class="_typography_6v6n8_153 _font-body-sm-regular_6v6n8_31 text-secondary"
+          >
+            Device ID
+          </h5>
+          <p
+            class="_typography_6v6n8_153 _font-body-md-regular_6v6n8_50 text-ellipsis overflow-hidden"
+          >
+            abcd1234
+          </p>
+        </li>
+        <li
+          class="flex flex-col min-w-0"
+        >
+          <h5
+            class="_typography_6v6n8_153 _font-body-sm-regular_6v6n8_31 text-secondary"
+          >
+            IP Address
+          </h5>
+          <p
+            class="_typography_6v6n8_153 _font-body-md-regular_6v6n8_50 text-ellipsis overflow-hidden"
+          >
+            <code>
+              1.2.3.4
+            </code>
+          </p>
+        </li>
+      </ul>
+      <li
+        class="flex flex-col min-w-0"
+      >
+        <h5
+          class="_typography_6v6n8_153 _font-body-sm-regular_6v6n8_31 text-secondary"
+        >
+          Scopes
+        </h5>
+        <ul
+          class="_visual-list_1mgc1_8 mt-1"
+        >
+          <li
+            class="_visual-list-item_1nc1y_8"
+          >
+            <svg
+              aria-hidden="true"
+              class="_visual-list-item-icon_1nc1y_17"
+              fill="currentColor"
+              height="24px"
+              viewBox="0 0 24 24"
+              width="24px"
+              xmlns="http://www.w3.org/2000/svg"
+            >
+              <path
+                d="M9.175 13.825Q10.35 15 12 15t2.825-1.175T16 11t-1.175-2.825T12 7 9.175 8.175 8 11t1.175 2.825m4.237-1.412A1.93 1.93 0 0 1 12 13q-.825 0-1.412-.588A1.93 1.93 0 0 1 10 11q0-.825.588-1.412A1.93 1.93 0 0 1 12 9q.825 0 1.412.588Q14 10.175 14 11t-.588 1.412"
+              />
+              <path
+                d="M22 12c0 5.523-4.477 10-10 10S2 17.523 2 12 6.477 2 12 2s10 4.477 10 10m-2 0a8 8 0 1 0-16 0 8 8 0 0 0 16 0"
+              />
+              <path
+                d="M16.23 18.792a13 13 0 0 0-1.455-.455 11.6 11.6 0 0 0-5.55 0q-.73.18-1.455.455a8 8 0 0 1-1.729-1.454q1.336-.618 2.709-.95A13.8 13.8 0 0 1 12 16q1.65 0 3.25.387 1.373.333 2.709.95a8 8 0 0 1-1.73 1.455"
+              />
+            </svg>
+            See your profile info and contact details
+          </li>
+          <li
+            class="_visual-list-item_1nc1y_8"
+          >
+            <svg
+              aria-hidden="true"
+              class="_visual-list-item-icon_1nc1y_17"
+              fill="currentColor"
+              height="24px"
+              viewBox="0 0 24 24"
+              width="24px"
+              xmlns="http://www.w3.org/2000/svg"
+            >
+              <path
+                d="m1.5 21.25 1.45-4.95a10.2 10.2 0 0 1-.712-2.1A10.2 10.2 0 0 1 2 12q0-2.075.788-3.9a10.1 10.1 0 0 1 2.137-3.175q1.35-1.35 3.175-2.137A9.7 9.7 0 0 1 12 2q2.075 0 3.9.788a10.1 10.1 0 0 1 3.175 2.137q1.35 1.35 2.137 3.175A9.7 9.7 0 0 1 22 12a9.7 9.7 0 0 1-.788 3.9 10.1 10.1 0 0 1-2.137 3.175q-1.35 1.35-3.175 2.137A9.7 9.7 0 0 1 12 22q-1.125 0-2.2-.238a10.2 10.2 0 0 1-2.1-.712L2.75 22.5a.94.94 0 0 1-1-.25.94.94 0 0 1-.25-1m2.45-1.2 3.2-.95a1 1 0 0 1 .275-.062q.15-.013.275-.013.225 0 .438.038.212.036.412.137a7.4 7.4 0 0 0 1.675.6Q11.1 20 12 20q3.35 0 5.675-2.325T20 12t-2.325-5.675T12 4 6.325 6.325 4 12q0 .9.2 1.775t.6 1.675q.176.325.188.688t-.088.712z"
+              />
+            </svg>
+            View your existing messages and data
+          </li>
+          <li
+            class="_visual-list-item_1nc1y_8"
+          >
+            <svg
+              aria-hidden="true"
+              class="_visual-list-item-icon_1nc1y_17"
+              fill="currentColor"
+              height="24px"
+              viewBox="0 0 24 24"
+              width="24px"
+              xmlns="http://www.w3.org/2000/svg"
+            >
+              <path
+                clip-rule="evenodd"
+                d="m5.07 20.965 16.141-8.07a1 1 0 0 0 0-1.79l-16.14-8.07c-.785-.392-1.658.342-1.406 1.182l2.249 7.496a1 1 0 0 1 0 .574l-2.249 7.496c-.252.84.621 1.574 1.405 1.182M6.246 5.859 18.528 12 6.246 18.141 7.788 13h4.462a1 1 0 1 0 0-2H7.788z"
+                fill-rule="evenodd"
+              />
+            </svg>
+            Send new messages on your behalf
+          </li>
+        </ul>
+      </li>
+    </section>
+    <section
+      class="flex flex-col gap-6"
+    >
+      <h4
+        class="_typography_6v6n8_153 _font-heading-sm-semibold_6v6n8_93"
+      >
+        Client info
+      </h4>
+      <div
+        aria-orientation="horizontal"
+        class="_separator_59a6a1 _section_59a6a1 -mt-4"
+        role="separator"
+      />
+      <ul
+        class="flex flex-wrap gap-x-10 gap-y-6"
+      >
+        <li
+          class="flex flex-col min-w-0"
+        >
+          <h5
+            class="_typography_6v6n8_153 _font-body-sm-regular_6v6n8_31 text-secondary"
+          >
+            Name
+          </h5>
+          <p
+            class="_typography_6v6n8_153 _font-body-md-regular_6v6n8_50 text-ellipsis overflow-hidden"
+          >
+            Element
+          </p>
+        </li>
+        <li
+          class="flex flex-col min-w-0"
+        >
+          <h5
+            class="_typography_6v6n8_153 _font-body-sm-regular_6v6n8_31 text-secondary"
+          >
+            Client ID
+          </h5>
+          <p
+            class="_typography_6v6n8_153 _font-body-md-regular_6v6n8_50 text-ellipsis overflow-hidden"
+          >
+            <code>
+              test-client-id
+            </code>
+          </p>
+        </li>
+        <li
+          class="flex flex-col min-w-0"
+        >
+          <h5
+            class="_typography_6v6n8_153 _font-body-sm-regular_6v6n8_31 text-secondary"
+          >
+            Uri
+          </h5>
+          <p
+            class="_typography_6v6n8_153 _font-body-md-regular_6v6n8_50 text-ellipsis overflow-hidden"
+          >
+            <a
+              href="https://element.io"
+              rel="noreferrer"
+              target="_blank"
+            >
+              https://element.io
+            </a>
+          </p>
+        </li>
+      </ul>
+    </section>
+  </div>
+</DocumentFragment>
+`;
+
+exports[`<OAuth2SessionDetail> > renders session details 1`] = `
+<DocumentFragment>
+  <div
+    class="flex flex-col gap-10"
+  >
+    <header
+      class="_header_28c6f4"
+    >
+      <a
+        class="_backButton_28c6f4"
+        href="/sessions"
+      >
+        <svg
+          fill="currentColor"
+          height="1em"
+          viewBox="0 0 24 24"
+          width="1em"
+          xmlns="http://www.w3.org/2000/svg"
+        >
+          <path
+            d="m13.3 17.3-4.6-4.6a.9.9 0 0 1-.213-.325A1.1 1.1 0 0 1 8.425 12q0-.2.062-.375A.9.9 0 0 1 8.7 11.3l4.6-4.6a.95.95 0 0 1 .7-.275q.425 0 .7.275a.95.95 0 0 1 .275.7.95.95 0 0 1-.275.7L10.8 12l3.9 3.9a.95.95 0 0 1 .275.7.95.95 0 0 1-.275.7.95.95 0 0 1-.7.275.95.95 0 0 1-.7-.275"
+          />
+        </svg>
+      </a>
+      <h3
+        class="_typography_6v6n8_153 _font-heading-md-semibold_6v6n8_112"
+      >
+        Element: Unknown device
+        <button
+          aria-controls="radix-_r_0_"
+          aria-expanded="false"
+          aria-haspopup="dialog"
+          aria-labelledby="_r_3_"
+          class="_icon-button_1pz9o_8"
+          data-kind="primary"
+          data-state="closed"
+          role="button"
+          style="--cpd-icon-button-size: var(--cpd-space-6x);"
+          tabindex="0"
+          type="button"
+        >
+          <div
+            class="_indicator-icon_147l5_17"
+            style="--cpd-icon-button-size: 100%;"
+          >
+            <svg
+              fill="currentColor"
+              height="1em"
+              viewBox="0 0 24 24"
+              width="1em"
+              xmlns="http://www.w3.org/2000/svg"
+            >
+              <path
+                clip-rule="evenodd"
+                d="M15.706 2.637a2 2 0 0 1 2.829 0l2.828 2.828a2 2 0 0 1 0 2.829L9.605 20.052a1 1 0 0 1-.465.263L3.483 21.73a1 1 0 0 1-1.212-1.213l1.414-5.657a1 1 0 0 1 .263-.465zm1.224 7.262L14.102 7.07l-8.544 8.544-.943 3.771 3.771-.943z"
+                fill-rule="evenodd"
+              />
+            </svg>
+          </div>
+        </button>
+      </h3>
+    </header>
+    <section
+      class="flex flex-col gap-6"
+    >
+      <h4
+        class="_typography_6v6n8_153 _font-heading-sm-semibold_6v6n8_93"
+      >
+        Device details
+      </h4>
+      <div
+        aria-orientation="horizontal"
+        class="_separator_59a6a1 _section_59a6a1 -mt-4"
+        role="separator"
+      />
+      <ul
+        class="flex flex-wrap gap-x-10 gap-y-6"
+      >
+        <li
+          class="flex flex-col min-w-0"
+        >
+          <h5
+            class="_typography_6v6n8_153 _font-body-sm-regular_6v6n8_31 text-secondary"
+          >
+            Last Active
+          </h5>
+          <p
+            class="_typography_6v6n8_153 _font-body-md-regular_6v6n8_50 text-ellipsis overflow-hidden"
+          >
+            <span
+              title="Sat, 29 Jul 2023, 03:35"
+            >
+              Inactive for 90+ days
+            </span>
+          </p>
+        </li>
+        <li
+          class="flex flex-col min-w-0"
+        >
+          <h5
+            class="_typography_6v6n8_153 _font-body-sm-regular_6v6n8_31 text-secondary"
+          >
+            Signed in
+          </h5>
+          <p
+            class="_typography_6v6n8_153 _font-body-md-regular_6v6n8_50 text-ellipsis overflow-hidden"
+          >
+            <time
+              datetime="2023-06-29T03:35:17Z"
+            >
+              Thu, 29 Jun 2023, 03:35
+            </time>
+          </p>
+        </li>
+        <li
+          class="flex flex-col min-w-0"
+        >
+          <h5
+            class="_typography_6v6n8_153 _font-body-sm-regular_6v6n8_31 text-secondary"
+          >
+            Device ID
+          </h5>
+          <p
+            class="_typography_6v6n8_153 _font-body-md-regular_6v6n8_50 text-ellipsis overflow-hidden"
+          >
+            abcd1234
+          </p>
+        </li>
+        <li
+          class="flex flex-col min-w-0"
+        >
+          <h5
+            class="_typography_6v6n8_153 _font-body-sm-regular_6v6n8_31 text-secondary"
+          >
+            IP Address
+          </h5>
+          <p
+            class="_typography_6v6n8_153 _font-body-md-regular_6v6n8_50 text-ellipsis overflow-hidden"
+          >
+            <code>
+              1.2.3.4
+            </code>
+          </p>
+        </li>
+      </ul>
+      <li
+        class="flex flex-col min-w-0"
+      >
+        <h5
+          class="_typography_6v6n8_153 _font-body-sm-regular_6v6n8_31 text-secondary"
+        >
+          Scopes
+        </h5>
+        <ul
+          class="_visual-list_1mgc1_8 mt-1"
+        >
+          <li
+            class="_visual-list-item_1nc1y_8"
+          >
+            <svg
+              aria-hidden="true"
+              class="_visual-list-item-icon_1nc1y_17"
+              fill="currentColor"
+              height="24px"
+              viewBox="0 0 24 24"
+              width="24px"
+              xmlns="http://www.w3.org/2000/svg"
+            >
+              <path
+                d="M9.175 13.825Q10.35 15 12 15t2.825-1.175T16 11t-1.175-2.825T12 7 9.175 8.175 8 11t1.175 2.825m4.237-1.412A1.93 1.93 0 0 1 12 13q-.825 0-1.412-.588A1.93 1.93 0 0 1 10 11q0-.825.588-1.412A1.93 1.93 0 0 1 12 9q.825 0 1.412.588Q14 10.175 14 11t-.588 1.412"
+              />
+              <path
+                d="M22 12c0 5.523-4.477 10-10 10S2 17.523 2 12 6.477 2 12 2s10 4.477 10 10m-2 0a8 8 0 1 0-16 0 8 8 0 0 0 16 0"
+              />
+              <path
+                d="M16.23 18.792a13 13 0 0 0-1.455-.455 11.6 11.6 0 0 0-5.55 0q-.73.18-1.455.455a8 8 0 0 1-1.729-1.454q1.336-.618 2.709-.95A13.8 13.8 0 0 1 12 16q1.65 0 3.25.387 1.373.333 2.709.95a8 8 0 0 1-1.73 1.455"
+              />
+            </svg>
+            See your profile info and contact details
+          </li>
+          <li
+            class="_visual-list-item_1nc1y_8"
+          >
+            <svg
+              aria-hidden="true"
+              class="_visual-list-item-icon_1nc1y_17"
+              fill="currentColor"
+              height="24px"
+              viewBox="0 0 24 24"
+              width="24px"
+              xmlns="http://www.w3.org/2000/svg"
+            >
+              <path
+                d="m1.5 21.25 1.45-4.95a10.2 10.2 0 0 1-.712-2.1A10.2 10.2 0 0 1 2 12q0-2.075.788-3.9a10.1 10.1 0 0 1 2.137-3.175q1.35-1.35 3.175-2.137A9.7 9.7 0 0 1 12 2q2.075 0 3.9.788a10.1 10.1 0 0 1 3.175 2.137q1.35 1.35 2.137 3.175A9.7 9.7 0 0 1 22 12a9.7 9.7 0 0 1-.788 3.9 10.1 10.1 0 0 1-2.137 3.175q-1.35 1.35-3.175 2.137A9.7 9.7 0 0 1 12 22q-1.125 0-2.2-.238a10.2 10.2 0 0 1-2.1-.712L2.75 22.5a.94.94 0 0 1-1-.25.94.94 0 0 1-.25-1m2.45-1.2 3.2-.95a1 1 0 0 1 .275-.062q.15-.013.275-.013.225 0 .438.038.212.036.412.137a7.4 7.4 0 0 0 1.675.6Q11.1 20 12 20q3.35 0 5.675-2.325T20 12t-2.325-5.675T12 4 6.325 6.325 4 12q0 .9.2 1.775t.6 1.675q.176.325.188.688t-.088.712z"
+              />
+            </svg>
+            View your existing messages and data
+          </li>
+          <li
+            class="_visual-list-item_1nc1y_8"
+          >
+            <svg
+              aria-hidden="true"
+              class="_visual-list-item-icon_1nc1y_17"
+              fill="currentColor"
+              height="24px"
+              viewBox="0 0 24 24"
+              width="24px"
+              xmlns="http://www.w3.org/2000/svg"
+            >
+              <path
+                clip-rule="evenodd"
+                d="m5.07 20.965 16.141-8.07a1 1 0 0 0 0-1.79l-16.14-8.07c-.785-.392-1.658.342-1.406 1.182l2.249 7.496a1 1 0 0 1 0 .574l-2.249 7.496c-.252.84.621 1.574 1.405 1.182M6.246 5.859 18.528 12 6.246 18.141 7.788 13h4.462a1 1 0 1 0 0-2H7.788z"
+                fill-rule="evenodd"
+              />
+            </svg>
+            Send new messages on your behalf
+          </li>
+        </ul>
+      </li>
+    </section>
+    <section
+      class="flex flex-col gap-6"
+    >
+      <h4
+        class="_typography_6v6n8_153 _font-heading-sm-semibold_6v6n8_93"
+      >
+        Client info
+      </h4>
+      <div
+        aria-orientation="horizontal"
+        class="_separator_59a6a1 _section_59a6a1 -mt-4"
+        role="separator"
+      />
+      <ul
+        class="flex flex-wrap gap-x-10 gap-y-6"
+      >
+        <li
+          class="flex flex-col min-w-0"
+        >
+          <h5
+            class="_typography_6v6n8_153 _font-body-sm-regular_6v6n8_31 text-secondary"
+          >
+            Name
+          </h5>
+          <p
+            class="_typography_6v6n8_153 _font-body-md-regular_6v6n8_50 text-ellipsis overflow-hidden"
+          >
+            Element
+          </p>
+        </li>
+        <li
+          class="flex flex-col min-w-0"
+        >
+          <h5
+            class="_typography_6v6n8_153 _font-body-sm-regular_6v6n8_31 text-secondary"
+          >
+            Client ID
+          </h5>
+          <p
+            class="_typography_6v6n8_153 _font-body-md-regular_6v6n8_50 text-ellipsis overflow-hidden"
+          >
+            <code>
+              test-client-id
+            </code>
+          </p>
+        </li>
+        <li
+          class="flex flex-col min-w-0"
+        >
+          <h5
+            class="_typography_6v6n8_153 _font-body-sm-regular_6v6n8_31 text-secondary"
+          >
+            Uri
+          </h5>
+          <p
+            class="_typography_6v6n8_153 _font-body-md-regular_6v6n8_50 text-ellipsis overflow-hidden"
+          >
+            <a
+              href="https://element.io"
+              rel="noreferrer"
+              target="_blank"
+            >
+              https://element.io
+            </a>
+          </p>
+        </li>
+      </ul>
+    </section>
+    <button
+      aria-controls="radix-_r_8_"
+      aria-expanded="false"
+      aria-haspopup="dialog"
+      class="_button_187yx_8 _has-icon_187yx_57 _destructive_187yx_107"
+      data-kind="secondary"
+      data-size="lg"
+      data-state="closed"
+      role="button"
+      tabindex="0"
+      type="button"
+    >
+      <svg
+        aria-hidden="true"
+        fill="currentColor"
+        height="20"
+        viewBox="0 0 24 24"
+        width="20"
+        xmlns="http://www.w3.org/2000/svg"
+      >
+        <path
+          d="M7 21q-.824 0-1.412-.587A1.93 1.93 0 0 1 5 19V6a.97.97 0 0 1-.713-.287A.97.97 0 0 1 4 5q0-.424.287-.713A.97.97 0 0 1 5 4h4q0-.424.287-.712A.97.97 0 0 1 10 3h4q.424 0 .713.288Q15 3.575 15 4h4q.424 0 .712.287Q20 4.576 20 5t-.288.713A.97.97 0 0 1 19 6v13q0 .824-.587 1.413A1.93 1.93 0 0 1 17 21zM7 6v13h10V6zm2 10q0 .424.287.712Q9.576 17 10 17t.713-.288A.97.97 0 0 0 11 16V9a.97.97 0 0 0-.287-.713A.97.97 0 0 0 10 8a.97.97 0 0 0-.713.287A.97.97 0 0 0 9 9zm4 0q0 .424.287.712.288.288.713.288.424 0 .713-.288A.97.97 0 0 0 15 16V9a.97.97 0 0 0-.287-.713A.97.97 0 0 0 14 8a.97.97 0 0 0-.713.287A.97.97 0 0 0 13 9z"
+        />
+      </svg>
+      Remove device
+    </button>
+  </div>
+</DocumentFragment>
+`;

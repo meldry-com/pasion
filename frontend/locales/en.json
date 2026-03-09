@@ -1,0 +1,329 @@
+{
+  "action": {
+    "back": "Back",
+    "cancel": "Cancel",
+    "clear": "Clear",
+    "close": "Close",
+    "collapse": "Collapse",
+    "confirm": "Confirm",
+    "continue": "Continue",
+    "edit": "Edit",
+    "expand": "Expand",
+    "save": "Save",
+    "save_and_continue": "Save and continue",
+    "sign_out": "Sign out",
+    "start_over": "Start over"
+  },
+  "branding": {
+    "privacy_policy": {
+      "alt": "Link to the service privacy policy",
+      "link": "Privacy Policy"
+    },
+    "terms_and_conditions": {
+      "alt": "Link to the service terms and conditions",
+      "link": "Terms & Conditions"
+    }
+  },
+  "common": {
+    "e2ee": "End-to-end encryption",
+    "loading": "Loading…",
+    "next": "Next",
+    "password": "Password",
+    "previous": "Previous",
+    "saved": "Saved",
+    "saving": "Saving…"
+  },
+  "frontend": {
+    "account": {
+      "account_password": "Account password",
+      "contact_info": "Contact info",
+      "delete_account": {
+        "alert_description": "This account will be permanently erased and you’ll no longer have access to any of your messages.",
+        "alert_title": "You’re about to lose all of your data",
+        "button": "Delete account",
+        "dialog_description": "<text>Confirm that you would like to delete your account:</text>\n<profile />\n<list>\n<item>You will not be able to reactivate your account</item>\n<item>You will no longer be able to sign in</item>\n<item>No one will be able to reuse your username (MXID), including you</item>\n<item>You will leave all rooms and direct messages you are in</item>\n<item>You will be removed from the identity server, and no one will be able to find you with your email or phone number</item>\n</list>\n<text>Your old messages will still be visible to people who received them. Would you like to hide your sent messages from people who join rooms in the future?</text>",
+        "dialog_title": "Delete this account?",
+        "erase_checkbox_label": "Yes, hide all my messages from new joiners",
+        "incorrect_password": "Incorrect password, please try again",
+        "mxid_label": "Confirm your Matrix ID ({{ mxid }})",
+        "mxid_mismatch": "This value does not match your Matrix ID",
+        "password_label": "Enter your password to continue"
+      },
+      "edit_profile": {
+        "display_name_help": "This is what others will see wherever you’re signed in.",
+        "display_name_label": "Display name",
+        "title": "Edit profile",
+        "username_label": "Username"
+      },
+      "password": {
+        "change": "Change password",
+        "change_disabled": "Password changes are disabled by the administrator.",
+        "label": "Password"
+      },
+      "sign_out": {
+        "button": "Sign out of account",
+        "dialog": "Sign out of this account?"
+      },
+      "title": "Your account"
+    },
+    "add_email_form": {
+      "email_denied_error": "The entered email is not allowed by the server policy",
+      "email_field_help": "Add an alternative email you can use to access this account.",
+      "email_field_label": "Add email",
+      "email_in_use_error": "The entered email is already in use",
+      "email_invalid_error": "The entered email is invalid",
+      "incorrect_password_error": "Incorrect password, please try again",
+      "password_confirmation": "Confirm your account password to add this email address"
+    },
+    "browser_session_details": {
+      "current_badge": "Current"
+    },
+    "browser_sessions_overview": {
+      "body:one": "{{count}} active session",
+      "body:other": "{{count}} active sessions",
+      "heading": "Browsers",
+      "no_active_sessions": {
+        "default": "You are not signed in to any web browsers.",
+        "inactive_90_days": "All your sessions have been active in the last 90 days."
+      },
+      "view_all_button": "View all"
+    },
+    "compat_session_detail": {
+      "client_details_title": "Client info",
+      "name": "Name"
+    },
+    "device_type_icon_label": {
+      "mobile": "Mobile",
+      "pc": "Computer",
+      "tablet": "Tablet",
+      "unknown": "Unknown device type"
+    },
+    "email_in_use": {
+      "heading": "The email address {{email}} is already in use."
+    },
+    "end_session_button": {
+      "confirmation_modal_title": "Are you sure you want to end this session?",
+      "text": "Remove device"
+    },
+    "error": {
+      "hideDetails": "Hide details",
+      "showDetails": "Show details",
+      "subtitle": "An unexpected error occurred. Please try again.",
+      "title": "Something went wrong"
+    },
+    "errors": {
+      "field_required": "This field is required",
+      "rate_limit_exceeded": "You've made too many requests in a short period. Please wait a few minutes and try again."
+    },
+    "last_active": {
+      "active_date": "Active {{relativeDate}}",
+      "active_now": "Active now",
+      "inactive_90_days": "Inactive for 90+ days"
+    },
+    "nav": {
+      "devices": "Devices",
+      "plan": "Plan",
+      "settings": "Settings"
+    },
+    "not_found_alert_title": "Not found.",
+    "oauth2_client_detail": {
+      "details_title": "Client info",
+      "name": "Name",
+      "policy": "Policy",
+      "terms": "Terms of service"
+    },
+    "oauth2_session_detail": {
+      "client_details_name": "Name",
+      "client_title": "Client info"
+    },
+    "pagination_controls": {
+      "total": "Total: {{totalCount}}"
+    },
+    "password_change": {
+      "current_password_label": "Current password",
+      "failure": {
+        "description": {
+          "account_locked": "Your account is locked and can not be recovered at this time. If this is not expected, please contact your server administrator.",
+          "expired_recovery_ticket": "The recovery link has expired. Please start the account recovery process again from the start.",
+          "invalid_new_password": "The new password you chose is invalid; it may not meet the configured security policy.",
+          "no_current_password": "You don't have a current password.",
+          "no_such_recovery_ticket": "The recovery link is invalid. If you copied the link from the recovery e-mail, please check the full link was copied.",
+          "password_changes_disabled": "Password changes are disabled.",
+          "recovery_ticket_already_used": "The recovery link has already been used. It cannot be used again.",
+          "unspecified": "This might be a temporary problem, so please try again later. If the problem persists, please contact your server administrator.",
+          "wrong_password": "The password you supplied as your current password is incorrect. Please try again."
+        },
+        "title": "Failed to update password"
+      },
+      "new_password_again_label": "Enter new password again",
+      "new_password_label": "New password",
+      "passwords_match": "Passwords match!",
+      "passwords_no_match": "Passwords don't match",
+      "subtitle": "Choose a new password for your account.",
+      "success": {
+        "description": "Your password has been updated successfully.",
+        "title": "Password updated"
+      },
+      "title": "Change your password"
+    },
+    "password_reset": {
+      "consumed": {
+        "subtitle": "To create a new password, start over and select ”Forgot password“.",
+        "title": "The link to reset your password has already been used"
+      },
+      "expired": {
+        "resend_email": "Resend email",
+        "subtitle": "Request a new email that will be sent to: {{email}}",
+        "title": "The link to reset your password has expired"
+      },
+      "subtitle": "Choose a new password for your account.",
+      "title": "Reset your password"
+    },
+    "password_strength": {
+      "placeholder": "Password strength",
+      "score": {
+        "0": "Extremely weak password",
+        "1": "Very weak password",
+        "2": "Weak password",
+        "3": "Strong password",
+        "4": "Very strong password"
+      },
+      "suggestion": {
+        "all_uppercase": "Capitalise some, but not all letters.",
+        "another_word": "Add more words that are less common.",
+        "associated_years": "Avoid years that are associated with you.",
+        "capitalization": "Capitalise more than the first letter.",
+        "dates": "Avoid dates and years that are associated with you.",
+        "l33t": "Avoid predictable letter substitutions like '@' for 'a'.",
+        "longer_keyboard_pattern": "Use longer keyboard patterns and change typing direction multiple times.",
+        "no_need": "You can create strong passwords without using symbols, numbers, or uppercase letters.",
+        "pwned": "If you use this password elsewhere, you should change it.",
+        "recent_years": "Avoid recent years.",
+        "repeated": "Avoid repeated words and characters.",
+        "reverse_words": "Avoid reversed spellings of common words.",
+        "sequences": "Avoid common character sequences.",
+        "use_words": "Use multiple words, but avoid common phrases."
+      },
+      "too_weak": "This password is too weak",
+      "warning": {
+        "common": "This is a commonly used password.",
+        "common_names": "Common names and surnames are easy to guess.",
+        "dates": "Dates are easy to guess.",
+        "extended_repeat": "Repeated character patterns like \"abcabcabc\" are easy to guess.",
+        "key_pattern": "Short keyboard patterns are easy to guess.",
+        "names_by_themselves": "Single names or surnames are easy to guess.",
+        "pwned": "Your password was exposed by a data breach on the Internet.",
+        "recent_years": "Recent years are easy to guess.",
+        "sequences": "Common character sequences like \"abc\" are easy to guess.",
+        "similar_to_common": "This is similar to a commonly used password.",
+        "simple_repeat": "Repeated characters like \"aaa\" are easy to guess.",
+        "straight_row": "Straight rows of keys on your keyboard are easy to guess.",
+        "top_hundred": "This is a frequently used password.",
+        "top_ten": "This is a heavily used password.",
+        "user_inputs": "There should not be any personal or page related data.",
+        "word_by_itself": "Single words are easy to guess."
+      }
+    },
+    "reset_cross_signing": {
+      "cancelled": {
+        "description_1": "You can close this window and go back to the app to continue.",
+        "description_2": "If you're signed out everywhere and don't remember your recovery code, you'll still need to reset your identity.",
+        "heading": "Identity reset cancelled."
+      },
+      "description": "If you're not signed in to any other devices and you've lost your recovery key, then you'll need to reset your identity to continue using the app.",
+      "effect_list": {
+        "neutral_1": "You will lose any message history that's stored only on the server",
+        "neutral_2": "You will need to verify all your existing devices and contacts again",
+        "positive_1": "Your account details, contacts, preferences, and chat list will be kept"
+      },
+      "failure": {
+        "description": "This might be a temporary problem, so please try again later. If the problem persists, please contact your server administrator.",
+        "heading": "Failed to allow crypto identity reset"
+      },
+      "finish_reset": "Finish reset",
+      "heading": "Reset your identity in case you can't confirm another way",
+      "start_reset": "Start reset",
+      "success": {
+        "description": "The identity reset has been approved for the next {{minutes}} minutes. You can close this window and go back to the app to continue.",
+        "heading": "Identity reset successfully. Go back to the app to finish the process."
+      },
+      "warning": "Only reset your identity if you don't have access to another signed-in device and you've lost your recovery key."
+    },
+    "session": {
+      "client_id_label": "Client ID",
+      "current": "Current",
+      "device_id_label": "Device ID",
+      "finished_label": "Finished",
+      "generic_browser_session": "Browser session",
+      "ip_label": "IP Address",
+      "last_active_label": "Last Active",
+      "name_for_platform": "{{name}} for {{platform}}",
+      "scopes_label": "Scopes",
+      "set_device_name": {
+        "help": "Set a name that will help you identify this device.",
+        "label": "Device name",
+        "title": "Edit device name"
+      },
+      "signed_in_label": "Signed in",
+      "title": "Device details",
+      "unknown_browser": "Unknown browser",
+      "unknown_device": "Unknown device",
+      "uri_label": "Uri"
+    },
+    "session_detail": {
+      "alert": {
+        "button": "Go back",
+        "text": "This session does not exist, or is no longer active.",
+        "title": "Cannot find session: {{deviceId}}"
+      }
+    },
+    "user_email": {
+      "delete_button_confirmation_modal": {
+        "action": "Delete email",
+        "body": "Delete this email?",
+        "incorrect_password": "Incorrect password, please try again",
+        "password_confirmation": "Confirm your account password to delete this email address"
+      },
+      "delete_button_title": "Remove email address",
+      "email": "Email"
+    },
+    "user_sessions_overview": {
+      "heading": "Where you're signed in",
+      "no_active_sessions": {
+        "default": "You are not signed in to any application.",
+        "inactive_90_days": "All your sessions have been active in the last 90 days."
+      }
+    },
+    "verify_email": {
+      "code_expired_alert": {
+        "description": "The code has expired. Please request a new code.",
+        "title": "Code expired"
+      },
+      "code_field_error": "Code not recognised",
+      "code_field_label": "6-digit code",
+      "code_field_wrong_shape": "Code must be 6 digits",
+      "email_sent_alert": {
+        "description": "Enter the new code below.",
+        "title": "New code sent"
+      },
+      "enter_code_prompt": "Enter the 6-digit code sent to: <email>{{email}}</email>",
+      "heading": "Verify your email",
+      "invalid_code_alert": {
+        "description": "Check the code sent to your email and update the fields below to continue.",
+        "title": "You entered the wrong code"
+      },
+      "resend_code": "Resend code"
+    }
+  },
+  "mas": {
+    "scope": {
+      "edit_profile": "Edit your profile and contact details",
+      "manage_sessions": "Manage your devices and sessions",
+      "mas_admin": "Manage users (urn:mas:admin)",
+      "send_messages": "Send new messages on your behalf",
+      "synapse_admin": "Administer the server (urn:synapse:admin:*)",
+      "view_messages": "View your existing messages and data",
+      "view_profile": "See your profile info and contact details"
+    }
+  }
+}

@@ -1,0 +1,338 @@
+# Copyright 2025 New Vector Ltd.
+#
+# SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-Element-Commercial
+# Please see LICENSE files in the repository root for full details.
+
+name: CI
+
+on:
+  push:
+    branches:
+      - main
+      - "release/**"
+    tags:
+      - "v*"
+  pull_request:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  CARGO_TERM_COLOR: always
+  CARGO_NET_GIT_FETCH_WITH_CLI: "true"
+  SCCACHE_GHA_ENABLED: "true"
+  RUSTC_WRAPPER: "sccache"
+
+jobs:
+  opa-lint:
+    name: Lint and test OPA policies
+    runs-on: ubuntu-24.04
+
+    permissions:
+      contents: read
+
+    steps:
+      - name: Checkout the code
+        uses: actions/checkout@v6
+
+      - uses: ./.github/actions/build-policies
+
+      - name: Setup Regal
+        uses: StyraInc/setup-regal@v1
+        with:
+          # Keep in sync with policies/Makefile
+          version: 0.36.1
+
+      - name: Lint policies
+        working-directory: ./policies
+        run: make lint
+
+      - name: Run OPA tests
+        working-directory: ./policies
+        run: make test
+
+  frontend-lint:
+    name: Check frontend style
+    runs-on: ubuntu-24.04
+
+    permissions:
+      contents: read
+
+    steps:
+      - name: Checkout the code
+        uses: actions/checkout@v6
+
+      - name: Install Node
+        uses: actions/setup-node@v6.1.0
+        with:
+          node-version: 24
+
+      - name: Install Node dependencies
+        working-directory: ./frontend
+        run: npm ci
+
+      - name: Lint
+        working-directory: ./frontend
+        run: npm run lint
+
+  frontend-test:
+    name: Run the frontend test suite
+    runs-on: ubuntu-24.04
+
+    permissions:
+      contents: read
+
+    steps:
+      - name: Checkout the code
+        uses: actions/checkout@v6
+
+      - name: Install Node
+        uses: actions/setup-node@v6.1.0
+        with:
+          node-version: 24
+
+      - name: Install Node dependencies
+        working-directory: ./frontend
+        run: npm ci
+
+      - name: Test
+        working-directory: ./frontend
+        run: npm test
+
+  frontend-knip:
+    name: Check the frontend for unused dependencies
+    runs-on: ubuntu-24.04
+
+    permissions:
+      contents: read
+
+    steps:
+      - name: Checkout the code
+        uses: actions/checkout@v6
+
+      - name: Install Node
+        uses: actions/setup-node@v6.1.0
+        with:
+          node-version: 24
+
+      - name: Install Node dependencies
+        working-directory: ./frontend
+        run: npm ci
+
+      - name: Check for unused dependencies
+        working-directory: ./frontend
+        run: npm run knip
+
+  rustfmt:
+    name: Check Rust style
+    runs-on: ubuntu-24.04
+
+    permissions:
+      contents: read
+
+    steps:
+      - name: Checkout the code
+        uses: actions/checkout@v6
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@nightly
+        with:
+          components: rustfmt
+
+      - name: Check style
+        run: cargo fmt --all -- --check
+
+  cargo-deny:
+    name: Run `cargo deny` checks
+    runs-on: ubuntu-24.04
+
+    env:
+      # We need to remove the sccache wrapper because we don't install it in this job
+      RUSTC_WRAPPER: ""
+
+    permissions:
+      contents: read
+
+    steps:
+      - name: Checkout the code
+        uses: actions/checkout@v6
+
+      - name: Run `cargo-deny`
+        uses: EmbarkStudios/cargo-deny-action@v2.0.14
+        with:
+          rust-version: stable
+
+  check-schema:
+    name: Check schema
+    runs-on: ubuntu-24.04
+
+    permissions:
+      contents: read
+
+    steps:
+      - name: Checkout the code
+        uses: actions/checkout@v6
+
+      - name: Install Rust toolchain
+        run: |
+          rustup toolchain install stable
+          rustup default stable
+
+      - name: Setup sccache
+        uses: mozilla-actions/sccache-action@v0.0.9
+
+      - uses: ./.github/actions/build-frontend
+
+      - name: Update the schemas
+        run: sh ./misc/update.sh
+
+      - name: Check that the workspace is clean
+        run: |
+          if ! [[ -z $(git status -s) ]]; then
+            echo "::error title=Workspace is not clean::Please run 'sh ./misc/update.sh' and commit the changes"
+
+            (
+              echo '## Diff after running `sh ./misc/update.sh`:'
+              echo
+              echo '```diff'
+              git diff
+              echo '```'
+            ) >> $GITHUB_STEP_SUMMARY
+
+            exit 1
+          fi
+
+  clippy:
+    name: Run Clippy
+    needs: [rustfmt, opa-lint]
+    runs-on: ubuntu-24.04
+
+    permissions:
+      contents: read
+
+    steps:
+      - name: Checkout the code
+        uses: actions/checkout@v6
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@1.89.0
+        with:
+          components: clippy
+
+      - uses: ./.github/actions/build-policies
+
+      - name: Setup sccache
+        uses: mozilla-actions/sccache-action@v0.0.9
+
+      - name: Run clippy
+        run: |
+          cargo clippy --workspace --tests --bins --lib -- -D warnings
+
+  compile-test-artifacts:
+    name: Compile test artifacts
+    runs-on: ubuntu-24.04
+
+    permissions:
+      contents: read
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Install nextest
+        uses: taiki-e/install-action@v2
+        with:
+          tool: cargo-nextest
+
+      - name: Setup sccache
+        uses: mozilla-actions/sccache-action@v0.0.9
+
+      - name: Build and archive tests
+        run: cargo nextest archive --workspace --archive-file nextest-archive.tar.zst
+        env:
+          SQLX_OFFLINE: "1"
+
+      - name: Upload archive to workflow
+        uses: actions/upload-artifact@v6.0.0
+        with:
+          name: nextest-archive
+          path: nextest-archive.tar.zst
+
+  test:
+    name: Run test suite with Rust stable
+    needs: [rustfmt, opa-lint, compile-test-artifacts]
+    runs-on: ubuntu-24.04
+
+    permissions:
+      contents: read
+
+    strategy:
+      matrix:
+        partition: [1, 2, 3]
+
+    services:
+      postgres:
+        image: docker.io/library/postgres:15.3
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: postgres
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - "5432:5432"
+
+    steps:
+      - name: Checkout the code
+        uses: actions/checkout@v6
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Install nextest
+        uses: taiki-e/install-action@v2
+        with:
+          tool: cargo-nextest
+
+      - uses: ./.github/actions/build-frontend
+      - uses: ./.github/actions/build-policies
+
+      - name: Download archive
+        uses: actions/download-artifact@v7
+        with:
+          name: nextest-archive
+
+      - name: Test
+        env:
+          DATABASE_URL: postgresql://postgres:postgres@localhost/postgres
+        run: |
+          ~/.cargo/bin/cargo-nextest nextest run \
+            --archive-file nextest-archive.tar.zst \
+            --partition count:${{ matrix.partition }}/3
+
+  tests-done:
+    name: Tests done
+    if: ${{ always() }}
+    needs:
+      - opa-lint
+      - frontend-lint
+      - frontend-test
+      - frontend-knip
+      - rustfmt
+      - cargo-deny
+      - clippy
+      - check-schema
+      - test
+    runs-on: ubuntu-24.04
+
+    steps:
+      - uses: matrix-org/done-action@v3
+        with:
+          needs: ${{ toJSON(needs) }}

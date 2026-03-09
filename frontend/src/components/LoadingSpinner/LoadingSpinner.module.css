@@ -1,0 +1,43 @@
+/* Copyright 2024, 2025 New Vector Ltd.
+ * Copyright 2023, 2024 The Matrix.org Foundation C.I.C.
+ *
+ * SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-Element-Commercial
+ * Please see LICENSE files in the repository root for full details.
+ */
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+:root {
+  --size: var(--cpd-space-16x);
+}
+
+.inline {
+  display: inline;
+  margin-right: var(--cpd-space-4x);
+
+  .loading-spinner-inner {
+    height: var(--cpd-space-4x);
+    width: var(--cpd-space-4x);
+  }
+}
+
+.mini {
+  margin-right: var(--cpd-space-4x);
+
+  .loading-spinner-inner {
+    height: var(--cpd-space-8x);
+    width: var(--cpd-space-8x);
+  }
+}
+
+.loading-spinner-inner {
+  height: var(--cpd-space-16x);
+  width: var(--cpd-space-16x);
+  display: inline;
+  animation: spin 1s linear infinite;
+  fill: var(--cpd-color-icon-primary);
+}

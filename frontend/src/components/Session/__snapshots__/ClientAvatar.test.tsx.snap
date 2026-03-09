@@ -1,0 +1,13 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`<ClientAvatar /> > renders client logo 1`] = `
+<div>
+  <img
+    alt="Test Client"
+    class="_avatar_d3cd4c"
+    referrerpolicy="no-referrer"
+    src="https://www.testclient.com/logo.png"
+    style="--mas-avatar-size: 10px;"
+  />
+</div>
+`;

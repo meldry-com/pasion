@@ -1,0 +1,45 @@
+# Copyright 2025 New Vector Ltd.
+#
+# SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-Element-Commercial
+# Please see LICENSE files in the repository root for full details.
+
+changelog:
+  categories:
+    - title: Bug Fixes
+      labels:
+        - T-Defect
+
+    - title: New Features
+      labels:
+        - T-Enhancement
+      exclude:
+        labels:
+          - A-Admin-API
+          - A-Documentation
+
+    - title: Changes to the admin API
+      labels:
+        - A-Admin-API
+
+    - title: Documentation
+      labels:
+        - A-Documentation
+
+    - title: Translations
+      labels:
+        - A-I18n
+
+    - title: Internal Changes
+      labels:
+        - T-Task
+
+    - title: Other Changes
+      labels:
+        - "*"
+      exclude:
+        labels:
+          - A-Dependencies
+
+    - title: Dependency Updates
+      labels:
+        - A-Dependencies

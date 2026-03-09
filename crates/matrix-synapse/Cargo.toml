@@ -1,0 +1,31 @@
+# Copyright 2025 New Vector Ltd.
+#
+# SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-Element-Commercial
+# Please see LICENSE files in the repository root for full details.
+
+[package]
+name = "mas-matrix-synapse"
+version.workspace = true
+authors.workspace = true
+edition.workspace = true
+license.workspace = true
+homepage.workspace = true
+repository.workspace = true
+publish.workspace = true
+
+[lints]
+workspace = true
+
+[dependencies]
+anyhow.workspace = true
+async-trait.workspace = true
+http.workspace = true
+reqwest.workspace = true
+serde.workspace = true
+thiserror.workspace = true
+tracing.workspace = true
+url.workspace = true
+urlencoding.workspace = true
+
+mas-http.workspace = true
+mas-matrix.workspace = true

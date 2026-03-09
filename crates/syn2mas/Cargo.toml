@@ -1,0 +1,55 @@
+# Copyright 2025 New Vector Ltd.
+#
+# SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-Element-Commercial
+# Please see LICENSE files in the repository root for full details.
+
+[package]
+name = "syn2mas"
+version.workspace = true
+license.workspace = true
+authors.workspace = true
+edition.workspace = true
+homepage.workspace = true
+repository.workspace = true
+publish.workspace = true
+
+[lints]
+workspace = true
+
+[dependencies]
+anyhow.workspace = true
+arc-swap.workspace = true
+bitflags.workspace = true
+camino.workspace = true
+chrono.workspace = true
+compact_str.workspace = true
+figment.workspace = true
+futures-util.workspace = true
+mas-config.workspace = true
+mas-iana.workspace = true
+mas-storage.workspace = true
+mas-data-model.workspace = true
+oauth2-types.workspace = true
+opentelemetry-semantic-conventions.workspace = true
+opentelemetry.workspace = true
+rand_chacha.workspace = true
+rand.workspace = true
+rustc-hash.workspace = true
+serde_json.workspace = true
+serde.workspace = true
+sqlx.workspace = true
+thiserror-ext.workspace = true
+thiserror.workspace = true
+tokio-util.workspace = true
+tokio.workspace = true
+tracing.workspace = true
+ulid.workspace = true
+url.workspace = true
+uuid.workspace = true
+
+[dev-dependencies]
+anyhow.workspace = true
+insta.workspace = true
+serde.workspace = true
+
+mas-storage-pg.workspace = true

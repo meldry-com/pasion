@@ -1,0 +1,65 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`BrowserSessionsOverview > renders with no browser sessions 1`] = `
+<div>
+  <div
+    class="_browserSessionsOverview_5c5d1f"
+  >
+    <div
+      class="flex flex-1 flex-col"
+    >
+      <h5
+        class="_typography_6v6n8_153 _font-body-lg-semibold_6v6n8_74"
+      >
+        Browsers
+      </h5>
+      <p
+        class="_typography_6v6n8_153 _font-body-md-regular_6v6n8_50"
+      >
+        0 active sessions
+      </p>
+    </div>
+    <a
+      class="_link_1v5rz_8"
+      data-kind="primary"
+      data-size="medium"
+      href="/sessions/browsers"
+      rel="noreferrer noopener"
+    >
+      View all
+    </a>
+  </div>
+</div>
+`;
+
+exports[`BrowserSessionsOverview > renders with sessions 1`] = `
+<div>
+  <div
+    class="_browserSessionsOverview_5c5d1f"
+  >
+    <div
+      class="flex flex-1 flex-col"
+    >
+      <h5
+        class="_typography_6v6n8_153 _font-body-lg-semibold_6v6n8_74"
+      >
+        Browsers
+      </h5>
+      <p
+        class="_typography_6v6n8_153 _font-body-md-regular_6v6n8_50"
+      >
+        2 active sessions
+      </p>
+    </div>
+    <a
+      class="_link_1v5rz_8"
+      data-kind="primary"
+      data-size="medium"
+      href="/sessions/browsers"
+      rel="noreferrer noopener"
+    >
+      View all
+    </a>
+  </div>
+</div>
+`;

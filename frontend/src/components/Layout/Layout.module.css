@@ -1,0 +1,40 @@
+/* Copyright 2024, 2025 New Vector Ltd.
+ * Copyright 2023, 2024 The Matrix.org Foundation C.I.C.
+ *
+ * SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-Element-Commercial
+ * Please see LICENSE files in the repository root for full details.
+ */
+
+.layout-container {
+  --target-width: 378px;
+  --inline-padding: var(--cpd-space-4x);
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+
+  max-width: calc(var(--target-width) + var(--inline-padding) * 2);
+
+  /* Fallback for browsers that do not support 100svh */
+  min-height: 100vh;
+  /* biome-ignore lint/suspicious/noDuplicateProperties: this isn't a real duplicate */
+  min-height: 100svh;
+
+  margin: 0 auto;
+  padding-inline: var(--inline-padding);
+  padding-block: var(--cpd-space-8x);
+  gap: var(--cpd-space-8x);
+
+  &.consent {
+    --target-width: 460px;
+  }
+
+  &.wide {
+    --target-width: 520px;
+  }
+}
+
+@media screen and (min-width: 768px) {
+  .layout-container {
+    padding-block: var(--cpd-space-12x);
+  }
+}

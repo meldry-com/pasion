@@ -1,0 +1,26 @@
+# Copyright 2025 New Vector Ltd.
+#
+# SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-Element-Commercial
+# Please see LICENSE files in the repository root for full details.
+
+# Documentation for possible options in this file is at
+# https://rust-lang.github.io/mdBook/format/config.html
+[book]
+title = "Palpo Authentication Service"
+authors = ["Element Backend Team"]
+language = "en"
+
+src = "docs"
+
+[build]
+build-dir = "target/book"
+
+[output.html]
+# The URL visitors will be directed to when they try to edit a page
+edit-url-template = "https://github.com/palpo-im/palpo-auth-service/edit/main/{path}"
+
+# The source code URL of the repository
+git-repository-url = "https://github.com/palpo-im/palpo-auth-service"
+
+# The path that the docs are hosted on
+site-url = "/palpo-auth-service/"
