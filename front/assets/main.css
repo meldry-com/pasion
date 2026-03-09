@@ -585,6 +585,12 @@ a:hover {
     color: var(--color-destructive);
 }
 
+.alert-info {
+    background-color: #f0f4ff;
+    border: 1px solid #cce0ff;
+    color: var(--color-primary);
+}
+
 .alert-success {
     background-color: #f0fff0;
     border: 1px solid #ccffcc;
@@ -714,9 +720,12 @@ a:hover {
 /* Pagination */
 .pagination-controls {
     display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding-top: var(--space-2x);
 }
 
-.pagination-controls > * {
+.pagination-controls > div {
     flex: 1;
 }
 
