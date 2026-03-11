@@ -567,7 +567,7 @@ features = ["backtrace", "contexts", "panic", "tower", "reqwest"]
 
 # Sentry tracing integration
 [workspace.dependencies.sentry-tracing]
-version = "0.46.0"
+version = "0.47.0"
 
 # Serialization and deserialization
 [workspace.dependencies.serde]
