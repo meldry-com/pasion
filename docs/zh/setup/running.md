@@ -1,0 +1,108 @@
+# 运行服务
+
+Pasion 由两个主要组件组成：
+
+1. **HTTP 服务器** — 处理所有 Web 请求（登录页面、OAuth 2.0 端点、管理 API 等）
+2. **后台 Worker** — 处理异步任务（发送邮件、用户同步等）
+
+默认情况下，`pasion-cli server` 命令会同时启动这两个组件。
+
+## 基本启动
+
+```bash
+pasion-cli server -c config.yaml
+```
+
+## 运行时依赖
+
+服务启动时需要能够访问以下资源：
+
+- **PostgreSQL 数据库** — 存储用户、会话和配置数据
+- **模板文件** — 渲染登录和注册页面（预编译版本已内置）
+- **前端静态文件** — CSS、JavaScript 等资源
+- **翻译文件** — 多语言界面支持
+
+如果使用预编译二进制文件或 Docker 镜像，模板和前端文件已经内置。
+
+## 启动选项
+
+| 选项 | 说明 |
+|------|------|
+| `--no-migrate` | 启动时不自动执行数据库迁移 |
+| `--no-worker` | 不启动后台任务 Worker |
+| `--no-sync` | 不同步配置文件中的 OAuth 客户端和上游提供商到数据库 |
+
+## 分离部署
+
+在生产环境中，你可能希望将 HTTP 服务器和 Worker 分开部署：
+
+```bash
+# 启动 HTTP 服务器（不启动 Worker）
+pasion-cli server --no-worker -c config.yaml
+
+# 在另一个进程中启动 Worker
+pasion-cli worker -c config.yaml
+```
+
+## systemd 服务配置
+
+```ini
+[Unit]
+Description=Pasion 认证服务
+After=network.target postgresql.service
+
+[Service]
+ExecStart=/usr/local/bin/pasion-cli server -c /etc/pasion/config.yaml
+Restart=on-failure
+User=pasion
+Environment=RUST_LOG=info
+
+[Install]
+WantedBy=multi-user.target
+```
+
+## Docker Compose 示例
+
+```yaml
+services:
+  pasion:
+    image: ghcr.io/taidge/pasion:latest
+    command: server -c /config.yaml
+    volumes:
+      - ./config.yaml:/config.yaml:ro
+    ports:
+      - "8080:8080"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: unless-stopped
+
+  postgres:
+    image: postgres:16
+    environment:
+      POSTGRES_USER: pasion
+      POSTGRES_PASSWORD: your_password
+      POSTGRES_DB: pasion
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U pasion"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+volumes:
+  pgdata:
+```
+
+## 日志配置
+
+通过 `RUST_LOG` 环境变量控制日志级别：
+
+```bash
+# 显示所有 info 级别日志
+RUST_LOG=info pasion-cli server -c config.yaml
+
+# 仅显示 Pasion 相关的 debug 日志
+RUST_LOG=pasion=debug pasion-cli server -c config.yaml
+```

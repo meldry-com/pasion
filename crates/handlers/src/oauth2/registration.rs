@@ -392,7 +392,7 @@ mod tests {
         assert!(!url_is_public_suffix("https://example.com."));
         assert!(!url_is_public_suffix("https://x.com"));
         assert!(!url_is_public_suffix("https://x.com."));
-        assert!(!url_is_public_suffix("https://matrix-org.github.io"));
+        assert!(!url_is_public_suffix("https://palpo-im.github.io"));
         assert!(!url_is_public_suffix("http://localhost"));
         assert!(!url_is_public_suffix("org.matrix:/callback"));
         assert!(!url_is_public_suffix("http://somerandominternaldomain"));
