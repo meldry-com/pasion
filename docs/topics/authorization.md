@@ -78,19 +78,19 @@ It is useful for automated machine-to-machine communication, and is often referr
 
 Palpo doesn't yet support this concept, and as such requesting any Palpo API, even the admin API, requires a user attached to the session.
 
-This isn't the case with Pasion' GraphQL API, which can be accessed with a client-only session:
-the API can be requested by a session which has the [`urn:mas:graphql:*`] and the [`urn:mas:admin`] scope without being backed by a user.
+This isn't the case with Pasion's Admin API, which can be accessed with a client-only session:
+the API can be requested by a session which has the [`urn:mas:admin`] scope without being backed by a user.
 
 ### Supported authorization grants
 
 Pasion supports a few different authorization grants for OAuth 2.0 sessions.
 Whilst this section won't go into the technical details of how those grants work, it's important to understand what they are and what they are used for.
 
-| Grant type                                          | Entity | User interaction | Matrix C-S API | Palpo Admin API | Pasion Admin API | Pasion Internal GraphQL API |
-| --------------------------------------------------- | ------ | ---------------- | -------------- | ----------------- | ------------- | ------------------------ |
-| [Authorization code](#authorization-code-grant)     | User   | Same device      | Yes            | Yes               | Yes           | Yes                      |
-| [Device authorization](#device-authorization-grant) | User   | Other device     | Yes            | Yes               | Yes           | Yes                      |
-| [Client credentials](#client-credentials-grant)     | Client | None             | No             | No[^admin]        | Yes           | Yes                      |
+| Grant type                                          | Entity | User interaction | Matrix C-S API | Palpo Admin API | Pasion Admin API |
+| --------------------------------------------------- | ------ | ---------------- | -------------- | ----------------- | ------------- |
+| [Authorization code](#authorization-code-grant)     | User   | Same device      | Yes            | Yes               | Yes           |
+| [Device authorization](#device-authorization-grant) | User   | Other device     | Yes            | Yes               | Yes           |
+| [Client credentials](#client-credentials-grant)     | Client | None             | No             | No[^admin]        | Yes           |
 
 [^admin]: The Palpo admin API doesn't strictly require a user, but Palpo doesn't support client-only sessions yet. In the future, it will be possible to leverage the client credentials grant to access the Palpo admin API.
 
@@ -123,7 +123,7 @@ This grant isn't meant for automation either, as it still requires user interact
 
 The client credentials grant ([RFC 6749] section 4.4) is a bit special, as it lets a client authenticate as itself, without a user.
 
-This has no meaning yet in the Matrix C-S API, but is useful for other APIs like the Pasion GraphQL API.
+This has no meaning yet in the Matrix C-S API, but is useful for other APIs like the Pasion Admin API.
 It may also be used in the future as a foundation for a new Application Service API, replacing the current `hs_token`/`as_token` mechanism.
 
 This works by presenting the client credentials to get back an access token.
@@ -165,6 +165,5 @@ Personal sessions can be used so long as:
 [`urn:matrix:org.matrix.msc2967.client:api:*`]: ../reference/scopes.md#urnmatrixorgmatrixmsc2967clientapi
 [`urn:matrix:org.matrix.msc2967.client:device:AABBCC`]: ../reference/scopes.md#urnmatrixorgmatrixmsc2967clientdevicedevice-id
 [`urn:palpo:admin:*`]: ../reference/scopes.md#urnpalpoadmin
-[`urn:mas:graphql:*`]: ../reference/scopes.md#urnmasgraphql
 [`urn:mas:admin`]: ../reference/scopes.md#urnmasadmin
 [Admin API]: ./admin-api.md

@@ -8,7 +8,6 @@ The [default policy](../topics/policy.md#authorization-requests) shipped with Pa
  - [`urn:matrix:client:device:[device id]`](#urnmatrixclientdevicedevice-id)
  - [`urn:palpo:admin:*`](#urnpalpoadmin)
  - [`urn:mas:admin`](#urnmasadmin)
- - [`urn:mas:graphql:*`](#urnmasgraphql)
 
 ## OpenID Connect scopes
 
@@ -82,19 +81,8 @@ It allows:
 - for the "client credentials" grant:
   - clients that are listed in the [`policy.data.admin_clients`](../reference/configuration.md#policy) configuration option
 
-### `urn:mas:graphql:*`
-
-This scope grants access to the whole Pasion [Internal GraphQL API].
-What permission the session has on the API is determined by the entity that the session is authorized as.
-When [authorized as a user](../topics/authorization.md#authorized-as-a-user-or-authorized-as-a-client) (and without the `mas:urn:admin` scope), this will usually allow querying and mutating the user's own data.
-
-The default policy allows any client and any user to request this scope.
-
-However, as noted in the [Internal GraphQL API] documentation, access to the Internal GraphQL API from outside of Pasion itself is deprecated in favour of the [Admin API].
-
 [authorization code]: ../topics/authorization.md#authorization-code-grant
 [device authorization]: ../topics/authorization.md#device-authorization-grant
-[Internal GraphQL API]: ../development/graphql.md
 [Admin API]: ../topics/admin-api.md
 [Palpo admin API]: https://palpo-im.github.io/palpo/latest/usage/administration/admin_api/index.html
 [OpenID Connect Core 1.0]: https://openid.net/specs/openid-connect-core-1_0.html

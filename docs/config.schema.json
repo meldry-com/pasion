@@ -820,15 +820,15 @@
           ]
         },
         {
-          "description": "GraphQL endpoint",
+          "description": "REST API endpoint used by the frontend",
           "type": "object",
           "properties": {
             "playground": {
-              "description": "Enabled the GraphQL playground",
+              "description": "Deprecated, no longer used",
               "type": "boolean"
             },
             "undocumented_oauth2_access": {
-              "description": "Allow access for OAuth 2.0 clients (undocumented)",
+              "description": "Deprecated, no longer used",
               "type": "boolean"
             },
             "name": {

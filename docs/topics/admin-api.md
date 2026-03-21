@@ -3,8 +3,6 @@
 Pasion provides a REST-like API for administrators to manage the service.
 This API is intended to build tools on top of Pasion, and is only available to administrators.
 
-> **Note:** This Admin API is now the correct way for external tools to interact with Pasion. External access to the [Internal GraphQL API](../development/graphql.md) is deprecated and will be removed in a future release.
-
 ## Enabling the API
 
 The API isn't exposed by default, and must be added to either a public or a private HTTP listener.
