@@ -51,7 +51,7 @@ pub fn doc(operation: TransformOperation) -> TransformOperation {
     operation
         .id("siteConfig")
         .tag("server")
-        .summary("Get informations about the configuration of this MAS instance")
+        .summary("Get informations about the configuration of this Pasion instance")
         .response_with::<200, Json<SiteConfig>, _>(|t| {
             t.example(SiteConfig {
                 server_name: "example.com".to_owned(),

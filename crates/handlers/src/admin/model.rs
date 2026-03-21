@@ -54,7 +54,7 @@ pub struct User {
     /// Whether the user can request admin privileges.
     admin: bool,
 
-    /// Whether the user was a guest before migrating to MAS,
+    /// Whether the user was a guest before migrating to Pasion,
     legacy_guest: bool,
 }
 

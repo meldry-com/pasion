@@ -6,8 +6,8 @@ Connection to the database is configured in the [`database`](../reference/config
 
 ## A warning about database pooling software
 
-MAS must not be connected to a database pooler (such as pgBouncer or pgCat) when it is configured in transaction pooling mode.
-This is because MAS uses advisory locks, which are not compatible with transaction pooling.
+Pasion must not be connected to a database pooler (such as pgBouncer or pgCat) when it is configured in transaction pooling mode.
+This is because Pasion uses advisory locks, which are not compatible with transaction pooling.
 
 You should instead configure such poolers in session pooling mode.
 

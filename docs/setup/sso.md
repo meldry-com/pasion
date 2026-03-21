@@ -116,11 +116,11 @@ The [`on_backchannel_logout`](../reference/configuration.md#upstream_oauth2) opt
 Possible values are:
 
  - `do_nothing`: Do nothing, other than validating and logging the request
- - `logout_browser_only`: Only log out the MAS 'browser session' started by this OIDC session
- - `logout_all`: Log out all sessions started by this OIDC session, including MAS 'browser sessions' and client sessions
+ - `logout_browser_only`: Only log out the Pasion 'browser session' started by this OIDC session
+ - `logout_all`: Log out all sessions started by this OIDC session, including Pasion 'browser sessions' and client sessions
 
 One important caveat is that `logout_all` will log out all sessions started by this upstream OIDC session, including 'remote' ones done through the Device Code flow.
-Concretely, this means that if QR-code login is used to log in on a phone from a laptop, when MAS receives a backchannel logout request from the upstream provider for the laptop, MAS will also log out the session on the phone.
+Concretely, this means that if QR-code login is used to log in on a phone from a laptop, when Pasion receives a backchannel logout request from the upstream provider for the laptop, Pasion will also log out the session on the phone.
 
 ## Sample configurations
 
@@ -171,7 +171,7 @@ upstream_oauth2:
 
 These instructions assume that you have already enabled the OIDC provider support in [Authelia](https://www.authelia.com/).
 
-Add a client for MAS to Authelia's `configuration.yaml` (see the [Authelia OIDC documentation](https://www.authelia.com/configuration/identity-providers/openid-connect/clients/) for full details):
+Add a client for Pasion to Authelia's `configuration.yaml` (see the [Authelia OIDC documentation](https://www.authelia.com/configuration/identity-providers/openid-connect/clients/) for full details):
 
 ```yaml
 identity_providers:
@@ -610,7 +610,7 @@ It is primarily based on SAML but also supports OIDC via the [OIDC OP Plugin](ht
 
 These instructions assume you have a running Shibboleth instance with the OIDC plugin configured.
 
-Register MAS as a relying party in Shibboleth:
+Register Pasion as a relying party in Shibboleth:
 
 1. Add a metadata file (e.g. `mas-metadata.xml`) to `%{idp.home}/metadata/` with the following content:
 

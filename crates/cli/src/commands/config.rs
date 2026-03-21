@@ -40,7 +40,7 @@ enum Subcommand {
         #[clap(short, long)]
         output: Option<Utf8PathBuf>,
 
-        /// Existing Palpo configuration used to generate the MAS config
+        /// Existing Palpo configuration used to generate the Pasion config
         #[arg(short, long, action = clap::ArgAction::Append)]
         palpo_config: Vec<Utf8PathBuf>,
     },
@@ -97,7 +97,7 @@ impl Options {
                 let mut config = RootConfig::generate(&mut rng).await?;
 
                 if !palpo_config.is_empty() {
-                    info!("Adjusting MAS config to match Palpo config from {palpo_config:?}");
+                    info!("Adjusting Pasion config to match Palpo config from {palpo_config:?}");
                     let palpo_config = syn2mas::palpo_config::Config::load(&palpo_config)
                         .map_err(anyhow::Error::from_boxed)?;
                     config = palpo_config.adjust_pasion_config(config, &mut rng, clock.now());

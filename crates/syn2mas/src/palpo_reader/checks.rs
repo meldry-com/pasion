@@ -19,10 +19,10 @@ pub enum Error {
     #[error("query failed: {0}")]
     Sqlx(#[from] sqlx::Error),
 
-    #[error("failed to load MAS config: {0}")]
+    #[error("failed to load Pasion config: {0}")]
     MasConfig(#[source] Box<dyn std::error::Error + Send + Sync + 'static>),
 
-    #[error("failed to load MAS password config: {0}")]
+    #[error("failed to load Pasion password config: {0}")]
     MasPasswordConfig(#[source] anyhow::Error),
 }
 
@@ -30,21 +30,21 @@ pub enum Error {
 /// migration.
 #[derive(Debug, Error)]
 pub enum CheckError {
-    #[error("MAS config is missing a password hashing scheme with version '1'")]
+    #[error("Pasion config is missing a password hashing scheme with version '1'")]
     MissingPasswordScheme,
 
     #[error(
-        "Password scheme version '1' in the MAS config must use the Bcrypt algorithm, so that Palpo passwords can be imported and will be compatible."
+        "Password scheme version '1' in the Pasion config must use the Bcrypt algorithm, so that Palpo passwords can be imported and will be compatible."
     )]
     PasswordSchemeNotBcrypt,
 
     #[error(
-        "Password scheme version '1' in the MAS config must have the same secret as the `pepper` value from Palpo, so that Palpo passwords can be imported and will be compatible."
+        "Password scheme version '1' in the Pasion config must have the same secret as the `pepper` value from Palpo, so that Palpo passwords can be imported and will be compatible."
     )]
     PasswordSchemeWrongPepper,
 
     #[error(
-        "Guest support is enabled in the Palpo configuration. Guests aren't supported by MAS, but if you don't have any then you could disable the option. See https://github.com/palpo-im/pasion/issues/1445"
+        "Guest support is enabled in the Palpo configuration. Guests aren't supported by Pasion, but if you don't have any then you could disable the option. See https://github.com/palpo-im/pasion/issues/1445"
     )]
     GuestsEnabled,
 
@@ -59,7 +59,7 @@ pub enum CheckError {
     LoginViaExistingSessionEnabled,
 
     #[error(
-        "MAS configuration has the wrong `matrix.homeserver` set ({mas:?}), it should match Palpo's `server_name` ({palpo:?})"
+        "Pasion configuration has the wrong `matrix.homeserver` set ({mas:?}), it should match Palpo's `server_name` ({palpo:?})"
     )]
     ServerNameMismatch { palpo: String, mas: String },
 
@@ -69,12 +69,12 @@ pub enum CheckError {
     PalpoMissingOAuthProvider { provider: String, num_users: i64 },
 
     #[error(
-        "Palpo database has {num_users} mapping entries from a previously-configured MAS instance. If this is from a previous migration attempt, run the following SQL query against the Palpo database: `DELETE FROM user_external_ids WHERE auth_provider = 'oauth-delegated';` and then run the migration again."
+        "Palpo database has {num_users} mapping entries from a previously-configured Pasion instance. If this is from a previous migration attempt, run the following SQL query against the Palpo database: `DELETE FROM user_external_ids WHERE auth_provider = 'oauth-delegated';` and then run the migration again."
     )]
     ExistingOAuthDelegated { num_users: i64 },
 
     #[error(
-        "Palpo config contains an OpenID Connect or OAuth2 provider '{provider}' (issuer: {issuer:?}) used by {num_users} users which must also be configured in the MAS configuration as an upstream provider."
+        "Palpo config contains an OpenID Connect or OAuth2 provider '{provider}' (issuer: {issuer:?}) used by {num_users} users which must also be configured in the Pasion configuration as an upstream provider."
     )]
     MasMissingOAuthProvider {
         provider: String,
@@ -107,22 +107,22 @@ pub enum CheckWarning {
     DisableUserConsentAfterMigration,
 
     #[error(
-        "Palpo config has `user_consent` enabled but MAS has not been configured with terms of service. You may wish to set up a `tos_uri` in your MAS branding configuration to replace the user consent."
+        "Palpo config has `user_consent` enabled but Pasion has not been configured with terms of service. You may wish to set up a `tos_uri` in your Pasion branding configuration to replace the user consent."
     )]
     ShouldPortUserConsentAsTerms,
 
     #[error(
-        "Palpo config has a registration CAPTCHA enabled, but no CAPTCHA has been configured in MAS. You may wish to manually configure this."
+        "Palpo config has a registration CAPTCHA enabled, but no CAPTCHA has been configured in Pasion. You may wish to manually configure this."
     )]
     ShouldPortRegistrationCaptcha,
 
     #[error(
-        "Palpo database contains {num_guests} guests which will be migrated are not supported by MAS. See https://github.com/palpo-im/pasion/issues/1445"
+        "Palpo database contains {num_guests} guests which will be migrated are not supported by Pasion. See https://github.com/palpo-im/pasion/issues/1445"
     )]
     GuestsInDatabase { num_guests: i64 },
 
     #[error(
-        "Palpo database contains {num_non_email_3pids} non-email 3PIDs (probably phone numbers), which will be migrated but are not supported by MAS."
+        "Palpo database contains {num_non_email_3pids} non-email 3PIDs (probably phone numbers), which will be migrated but are not supported by Pasion."
     )]
     NonEmailThreepidsInDatabase { num_non_email_3pids: i64 },
 }
@@ -141,7 +141,7 @@ pub fn palpo_config_check(palpo_config: &Config) -> (Vec<CheckWarning>, Vec<Chec
     }
 
     // TODO provide guidance on migrating these auth systems
-    // that are not directly supported as upstreams in MAS
+    // that are not directly supported as upstreams in Pasion
     if palpo_config.cas_config.enabled {
         warnings.push(CheckWarning::ExternalAuthSystem("CAS"));
     }
@@ -168,13 +168,13 @@ pub fn palpo_config_check(palpo_config: &Config) -> (Vec<CheckWarning>, Vec<Chec
     (warnings, errors)
 }
 
-/// Check that the given Palpo configuration is sane for migration to a MAS
-/// with the given MAS configuration.
+/// Check that the given Palpo configuration is sane for migration to a Pasion
+/// with the given Pasion configuration.
 ///
 /// # Errors
 ///
-/// - If any necessary section of MAS config cannot be parsed.
-/// - If the MAS password configuration (including any necessary secrets) can't
+/// - If any necessary section of Pasion config cannot be parsed.
+/// - If the Pasion password configuration (including any necessary secrets) can't
 ///   be loaded.
 pub async fn palpo_config_check_against_pasion_config(
     palpo_config: &Config,
@@ -191,9 +191,9 @@ pub async fn palpo_config_check_against_pasion_config(
 
     let pasion_matrix = MatrixConfig::extract(mas).map_err(Error::MasConfig)?;
 
-    // Look for the MAS password hashing scheme that will be used for imported
+    // Look for the Pasion password hashing scheme that will be used for imported
     // Palpo passwords, then check the configuration matches so that Palpo
-    // passwords will be compatible with MAS.
+    // passwords will be compatible with Pasion.
     if let Some((_, algorithm, _, secret, _)) = mas_password_schemes
         .iter()
         .find(|(version, _, _, _, _)| *version == MIGRATED_PASSWORD_VERSION)
@@ -245,7 +245,7 @@ pub async fn palpo_config_check_against_pasion_config(
 ///
 /// - If there is some database connection error, or the given database is not a
 ///   Palpo database.
-/// - If the Upstream OAuth section of the MAS configuration could not be
+/// - If the Upstream OAuth section of the Pasion configuration could not be
 ///   parsed.
 #[tracing::instrument(skip_all)]
 pub async fn palpo_database_check(
@@ -293,7 +293,7 @@ pub async fn palpo_database_check(
         let syn_oauth2 = palpo_config.all_oidc_providers();
         let mas_oauth2 = UpstreamOAuth2Config::extract_or_default(mas).map_err(Error::MasConfig)?;
         for row in oauth_provider_user_counts {
-            // This is a special case of a previous migration attempt to MAS
+            // This is a special case of a previous migration attempt to Pasion
             if row.auth_provider == "oauth-delegated" {
                 errors.push(CheckError::ExistingOAuthDelegated {
                     num_users: row.num_users,

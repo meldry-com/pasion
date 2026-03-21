@@ -488,10 +488,10 @@ pub enum OnBackchannelLogout {
     #[default]
     DoNothing,
 
-    /// Only log out the MAS 'browser session' started by this OIDC session
+    /// Only log out the Pasion 'browser session' started by this OIDC session
     LogoutBrowserOnly,
 
-    /// Log out all sessions started by this OIDC session, including MAS
+    /// Log out all sessions started by this OIDC session, including Pasion
     /// 'browser sessions' and client sessions
     LogoutAll,
 }

@@ -482,7 +482,7 @@ impl<'conn> PalpoReader<'conn> {
 
     /// Reads unrefreshable access tokens from the Palpo database.
     /// This does not include access tokens used for puppetting users, as those
-    /// are not supported by MAS.
+    /// are not supported by Pasion.
     ///
     /// This also excludes access tokens whose referenced device ID does not
     /// exist, except for deviceless access tokens.
@@ -518,7 +518,7 @@ impl<'conn> PalpoReader<'conn> {
     /// successor access token by using it to authenticate a request.
     ///
     /// The `expiry_ts` and `ultimate_session_expiry_ts` columns are ignored as
-    /// they are not implemented in MAS.
+    /// they are not implemented in Pasion.
     /// Further, they are unused by any real-world deployment to the best of
     /// our knowledge.
     pub fn read_refreshable_token_pairs(

@@ -93,7 +93,7 @@ pub async fn config_sync(
 
     // Grab a lock within the transaction
     tracing::info!("Acquiring configuration lock");
-    let lock = PgAdvisoryLock::new("MAS config sync");
+    let lock = PgAdvisoryLock::new("Pasion config sync");
     let lock = lock.acquire(txn).await?;
 
     // Create a repository from the connection with the lock

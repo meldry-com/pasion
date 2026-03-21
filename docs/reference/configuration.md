@@ -87,7 +87,7 @@ The following additional resources are available, although it is recommended to 
 
 Configure how to connect to the PostgreSQL database.
 
-MAS must not be connected to a database pooler (such as pgBouncer or pgCat) when it is configured in transaction pooling mode.
+Pasion must not be connected to a database pooler (such as pgBouncer or pgCat) when it is configured in transaction pooling mode.
 See [the relevant section of the database page](database.md#a-warning-about-database-pooling-software) for more information.
 
 ```yaml
@@ -258,12 +258,12 @@ or, alternatively, as an inline configuration list via `secrets.keys`.
 
 #### `secrets.keys_dir`
 
-Path to the directory containing MAS signing key files.
+Path to the directory containing Pasion signing key files.
 Only keys that don’t require a password are supported.
 
 #### `secrets.keys`
 
-Each entry in the list corresponds to one signing key used by MAS.
+Each entry in the list corresponds to one signing key used by Pasion.
 The key can either be specified inline (with the `key` property),
 or loaded from a file (with the `key_file` property).
 
@@ -759,8 +759,8 @@ upstream_oauth2:
       # What to do when receiving an OIDC Backchannel logout request.
       # Possible values are:
       #  - `do_nothing` (default): do nothing, other than validating and logging the request
-      #  - `logout_browser_only`: Only log out the MAS 'browser session' started by this OIDC session
-      #  - `logout_all`: Log out all sessions started by this OIDC session, including MAS 'browser sessions' and client sessions
+      #  - `logout_browser_only`: Only log out the Pasion 'browser session' started by this OIDC session
+      #  - `logout_all`: Log out all sessions started by this OIDC session, including Pasion 'browser sessions' and client sessions
       #on_backchannel_logout: do_nothing
 
       # How user attributes should be mapped

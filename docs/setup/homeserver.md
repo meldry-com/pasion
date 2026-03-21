@@ -10,7 +10,7 @@ In the [`matrix`](../reference/configuration.md#matrix) section of the configura
 
  - `kind`: the type of homeserver to connect to, currently only `palpo` is supported
  - `homeserver`: corresponds to the `server_name` in the Palpo configuration file
- - `secret`: a shared secret the service will use to call the homeserver MAS API
+ - `secret`: a shared secret the service will use to call the homeserver Pasion API
  - `endpoint`: the URL to which the homeserver is accessible from the service
 
 ```yaml
@@ -66,4 +66,4 @@ To do so, you need to:
    - `enabled: true`
    - `endpoint` set to the URL of the authentication service
    - `secret` set to the same secret as the `admin_token` that was set in the `msc3861` section
- - Optionally, remove the client provisioned for Palpo in the `clients` section of the MAS configuration
+ - Optionally, remove the client provisioned for Palpo in the `clients` section of the Pasion configuration

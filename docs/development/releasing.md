@@ -1,10 +1,10 @@
 # Releasing
 
-MAS follows the same release cadence as Palpo, meaning usually one full release cycle every two weeks, with one week of release candidates.
+Pasion follows the same release cadence as Palpo, meaning usually one full release cycle every two weeks, with one week of release candidates.
 
 ## GitHub Action workflows
 
-There are four main GitHub Action workflows involved in releasing MAS:
+There are four main GitHub Action workflows involved in releasing Pasion:
 
 ### [`translations-download` workflow]
 

@@ -1,11 +1,11 @@
 
 
 -- Tracks third-party ID associations that have been verified but are
--- not currently supported by MAS.
+-- not currently supported by Pasion.
 -- This is currently used when importing third-party IDs from Synapse,
 -- which historically could verify at least phone numbers.
 -- E-mail associations will not be stored in this table because those are natively
--- supported by MAS; see the `user_emails` table.
+-- supported by Pasion; see the `user_emails` table.
 
 CREATE TABLE user_unsupported_third_party_ids(
     -- The owner of the third-party ID assocation

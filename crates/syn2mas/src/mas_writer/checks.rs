@@ -1,6 +1,6 @@
-//! # MAS Database Checks
+//! # Pasion Database Checks
 //!
-//! This module provides safety checks to run against a MAS database before
+//! This module provides safety checks to run against a Pasion database before
 //! running the Palpo migration migration.
 
 use thiserror::Error;
@@ -12,11 +12,11 @@ use super::{MAS_TABLES_AFFECTED_BY_MIGRATION, is_syn2mas_in_progress, locking::L
 #[derive(Debug, Error, ContextInto)]
 pub enum Error {
     #[error(
-        "The MAS database is not empty: rows found in at least `{table}`. Please drop and recreate the database, then try again."
+        "The Pasion database is not empty: rows found in at least `{table}`. Please drop and recreate the database, then try again."
     )]
     MasDatabaseNotEmpty { table: &'static str },
 
-    #[error("Query against {table} failed — is this actually a MAS database?")]
+    #[error("Query against {table} failed — is this actually a Pasion database?")]
     MaybeNotMas {
         #[source]
         source: sqlx::Error,
@@ -30,7 +30,7 @@ pub enum Error {
     UnableToCheckInProgress(#[source] super::Error),
 }
 
-/// Check that a MAS database is ready for being migrated to.
+/// Check that a Pasion database is ready for being migrated to.
 ///
 /// Concretely, this checks that the database is empty.
 ///
@@ -41,7 +41,7 @@ pub enum Error {
 /// Errors are returned under the following circumstances:
 ///
 /// - If any database access error occurs.
-/// - If any MAS tables involved in the migration are not empty.
+/// - If any Pasion tables involved in the migration are not empty.
 /// - If we can't check whether syn2mas is already in progress on this database
 ///   or not.
 #[tracing::instrument(name = "syn2mas.mas_pre_migration_checks", skip_all)]
@@ -54,7 +54,7 @@ pub async fn mas_pre_migration_checks(mas_connection: &mut LockedMasDatabase) ->
         return Ok(());
     }
 
-    // Check that the database looks like a MAS database and that it is also an
+    // Check that the database looks like a Pasion database and that it is also an
     // empty database.
 
     for &table in MAS_TABLES_AFFECTED_BY_MIGRATION {

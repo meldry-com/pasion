@@ -15,7 +15,7 @@ pub struct LockedMasDatabase {
 }
 
 impl LockedMasDatabase {
-    /// Attempts to lock the MAS database against concurrent access by other
+    /// Attempts to lock the Pasion database against concurrent access by other
     /// syn2mas instances.
     ///
     /// If the lock can be acquired, returns a `LockedMasDatabase`.
@@ -37,7 +37,7 @@ impl LockedMasDatabase {
             })
     }
 
-    /// Releases the advisory lock on the MAS database, returning the underlying
+    /// Releases the advisory lock on the Pasion database, returning the underlying
     /// connection.
     ///
     /// # Errors

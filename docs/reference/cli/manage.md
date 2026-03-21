@@ -1,7 +1,7 @@
 # `manage`
 
 
-The MAS CLI provides several subcommands for managing users and configurations
+The Pasion CLI provides several subcommands for managing users and configurations
 
 Global options:
 - `--config <config>`: Path to the configuration file.

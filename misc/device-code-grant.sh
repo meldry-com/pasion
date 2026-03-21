@@ -37,7 +37,7 @@ TOKEN_ENDPOINT="$(echo "$METADATA" | jq -r '.token_endpoint')"
 REGISTRATION_ENDPOINT="$(echo "$METADATA" | jq -r '.registration_endpoint')"
 
 echo "Registering the client"
-# Note that the client_uri is only used as an identifier, MAS will not try to contact this URI
+# Note that the client_uri is only used as an identifier, Pasion will not try to contact this URI
 RESP="$(
   req POST "${REGISTRATION_ENDPOINT}" \
     -H 'Content-Type: application/json' \

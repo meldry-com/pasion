@@ -1,6 +1,6 @@
 # OAuth 2.0 scopes
 
-The [default policy](../topics/policy.md#authorization-requests) shipped with MAS supports the following scopes:
+The [default policy](../topics/policy.md#authorization-requests) shipped with Pasion supports the following scopes:
 
  - [`openid`](#openid)
  - [`email`](#email)
@@ -12,7 +12,7 @@ The [default policy](../topics/policy.md#authorization-requests) shipped with MA
 
 ## OpenID Connect scopes
 
-MAS supports the following standard OpenID Connect scopes, as defined in [OpenID Connect Core 1.0]:
+Pasion supports the following standard OpenID Connect scopes, as defined in [OpenID Connect Core 1.0]:
 
 ### `openid`
 
@@ -41,7 +41,7 @@ The default policy allows any client and any user to request this scope.
 ### `urn:matrix:client:device:[device id]`
 
 This scope sets the device ID of the session, where `[device id]` is the device ID of the session.
-Currently, MAS only allows the following characters in the device ID: `a-z`, `A-Z`, `0-9` and `-`.
+Currently, Pasion only allows the following characters in the device ID: `a-z`, `A-Z`, `0-9` and `-`.
 It also needs to be at least 10 characters long.
 
 There can only be one device ID in the scope list of a session.
@@ -50,7 +50,7 @@ The default policy allows any client and any user to request this scope.
 
 ## Palpo-specific scopes
 
-MAS also supports one Palpo-specific scope, which aren't formally defined in any specification.
+Pasion also supports one Palpo-specific scope, which aren't formally defined in any specification.
 
 ### `urn:palpo:admin:*`
 
@@ -65,13 +65,13 @@ It allows:
 - users with the `can_request_admin` attribute set to `true` in the database
 - users listed in the [`policy.data.admin_users`](../reference/configuration.md#policy) configuration option
 
-## MAS-specific scopes
+## Pasion-specific scopes
 
-MAS also has a few scopes that are specific to the MAS implementation.
+Pasion also has a few scopes that are specific to the Pasion implementation.
 
 ### `urn:mas:admin`
 
-This scope grants full access to the MAS [Admin API].
+This scope grants full access to the Pasion [Admin API].
 
 The default policy doesn't allow everyone to request this scope.
 It allows:
@@ -84,13 +84,13 @@ It allows:
 
 ### `urn:mas:graphql:*`
 
-This scope grants access to the whole MAS [Internal GraphQL API].
+This scope grants access to the whole Pasion [Internal GraphQL API].
 What permission the session has on the API is determined by the entity that the session is authorized as.
 When [authorized as a user](../topics/authorization.md#authorized-as-a-user-or-authorized-as-a-client) (and without the `mas:urn:admin` scope), this will usually allow querying and mutating the user's own data.
 
 The default policy allows any client and any user to request this scope.
 
-However, as noted in the [Internal GraphQL API] documentation, access to the Internal GraphQL API from outside of MAS itself is deprecated in favour of the [Admin API].
+However, as noted in the [Internal GraphQL API] documentation, access to the Internal GraphQL API from outside of Pasion itself is deprecated in favour of the [Admin API].
 
 [authorization code]: ../topics/authorization.md#authorization-code-grant
 [device authorization]: ../topics/authorization.md#device-authorization-grant

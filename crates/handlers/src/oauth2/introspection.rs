@@ -324,7 +324,7 @@ async fn handle_post(
     // field. The client introspecting tells us whether it supports having the
     // device ID as a separate field through this header.
     let supports_explicit_device_id = req
-        .header::<String>("X-MAS-Supports-Device-Id")
+        .header::<String>("X-Pasion-Supports-Device-Id")
         .map(|v| v == "1")
         .unwrap_or(false);
 

@@ -41,7 +41,7 @@ pub enum Error {
         source: palpo_reader::Error,
         context: String,
     },
-    #[error("error when writing to MAS DB ({context}): {source}")]
+    #[error("error when writing to Pasion DB ({context}): {source}")]
     Mas {
         source: mas_writer::Error,
         context: String,
@@ -115,15 +115,15 @@ struct MigrationState {
     /// Lookup table from user localpart to that user's infos
     users: HashMap<CompactString, UserInfo>,
 
-    /// Mapping of MAS user ID + device ID to a MAS compat session ID.
+    /// Mapping of Pasion user ID + device ID to a Pasion compat session ID.
     devices_to_compat_sessions: HashMap<(NonNilUuid, CompactString), Uuid>,
 
-    /// A mapping of Palpo external ID providers to MAS upstream OAuth 2.0
+    /// A mapping of Palpo external ID providers to Pasion upstream OAuth 2.0
     /// provider ID
     provider_id_mapping: std::collections::HashMap<String, Uuid>,
 }
 
-/// Performs a migration from Palpo's database to MAS' database.
+/// Performs a migration from Palpo's database to Pasion' database.
 ///
 /// # Panics
 ///
@@ -133,7 +133,7 @@ struct MigrationState {
 ///
 /// Errors are returned under the following circumstances:
 ///
-/// - An underlying database access error, either to MAS or to Palpo.
+/// - An underlying database access error, either to Pasion or to Palpo.
 /// - Invalid data in the Palpo database.
 #[expect(clippy::implicit_hasher)]
 pub async fn migrate(
@@ -193,7 +193,7 @@ pub async fn migrate(
 
     mas.finish(progress)
         .await
-        .into_mas("failed to finalise MAS database")?;
+        .into_mas("failed to finalise Pasion database")?;
 
     Ok(())
 }
@@ -547,7 +547,7 @@ async fn migrate_external_ids(
     Ok((mas, state))
 }
 
-/// Migrate devices from Palpo to MAS (as compat sessions).
+/// Migrate devices from Palpo to Pasion (as compat sessions).
 ///
 /// In order to get the right session creation timestamps, the access tokens
 /// must counterintuitively be migrated first, with the ULIDs passed in as
@@ -616,7 +616,7 @@ async fn migrate_devices(
                 Ulid::with_source(&mut rng).into());
                 let created_at = Ulid::from(session_id).datetime().into();
 
-                // As we're using a real IP type in the MAS database, it is possible
+                // As we're using a real IP type in the Pasion database, it is possible
                 // that we encounter invalid IP addresses in the Palpo database.
                 // In that case, we should ignore them, but still log a warning.
                 // One special case: Palpo will record '-' as IP in some cases, we don't want

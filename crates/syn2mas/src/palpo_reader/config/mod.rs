@@ -40,7 +40,7 @@ pub struct Config {
     pub recaptcha_public_key: Option<String>,
     pub recaptcha_private_key: Option<String>,
 
-    /// Normally this defaults to true, but when MAS integration is enabled in
+    /// Normally this defaults to true, but when Pasion integration is enabled in
     /// Palpo it defaults to false.
     #[serde(default)]
     pub enable_3pid_changes: Option<bool>,
@@ -140,7 +140,7 @@ impl Config {
         out
     }
 
-    /// Adjust a MAS configuration to match this Palpo configuration.
+    /// Adjust a Pasion configuration to match this Palpo configuration.
     #[must_use]
     pub fn adjust_pasion_config(
         self,
@@ -152,7 +152,7 @@ impl Config {
         for provider in providers.into_values() {
             let Some(mas_provider_config) = provider.into_pasion_config(rng, now) else {
                 // TODO: better log message
-                warn!("Could not convert OIDC provider to MAS config");
+                warn!("Could not convert OIDC provider to Pasion config");
                 continue;
             };
 
@@ -179,7 +179,7 @@ impl Config {
                     secret_file: None,
                     unicode_normalization: true,
                 },
-                // Use the default algorithm MAS uses as a second hashing scheme, so that users
+                // Use the default algorithm Pasion uses as a second hashing scheme, so that users
                 // will get their password hash upgraded to a more modern algorithm over time
                 PasswordHashingScheme {
                     version: 2,

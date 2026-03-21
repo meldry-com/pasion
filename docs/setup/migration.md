@@ -1,6 +1,6 @@
 # Migrating an existing homeserver
 
-One of the design goals of MAS has been to allow it to be used to migrate an existing homeserver, specifically without requiring users to re-authenticate and ensuring that all existing clients continue to work.
+One of the design goals of Pasion has been to allow it to be used to migrate an existing homeserver, specifically without requiring users to re-authenticate and ensuring that all existing clients continue to work.
 
 Features that support this include:
 
@@ -19,24 +19,24 @@ The deployment is non-trivial, so it is important to read through and understand
 #### SAML2 and LDAP Single Sign-On Providers are not supported
 
 A deployment that requires SAML or LDAP-based authentication should use a service like [Dex](https://github.com/dexidp/dex) to bridge between the SAML provider and the authentication service.
-MAS differs from Palpo in that it does **not** have built-in support for SAML or LDAP-based providers.
+Pasion differs from Palpo in that it does **not** have built-in support for SAML or LDAP-based providers.
 
 #### Custom password providers are not supported
 
-If your Palpo homeserver currently uses a custom password provider module, please note that MAS does not support these.
+If your Palpo homeserver currently uses a custom password provider module, please note that Pasion does not support these.
 
 #### SQLite databases are not supported
 
-It is worth noting that MAS currently only supports PostgreSQL as a database backend.
+It is worth noting that Pasion currently only supports PostgreSQL as a database backend.
 The migration tool only supports reading from PostgreSQL for the Palpo database as well.
 
-### Install and configure MAS alongside your existing homeserver
+### Install and configure Pasion alongside your existing homeserver
 
-Follow the instructions in the [installation guide](installation.md) to install MAS alongside your existing homeserver.
+Follow the instructions in the [installation guide](installation.md) to install Pasion alongside your existing homeserver.
 
-You'll need a blank PostgreSQL database for MAS to use; it does not share the database with the homeserver.
+You'll need a blank PostgreSQL database for Pasion to use; it does not share the database with the homeserver.
 
-MAS provides a tool to generate a configuration file based on your existing Palpo configuration. This is useful for kickstarting your new configuration.
+Pasion provides a tool to generate a configuration file based on your existing Palpo configuration. This is useful for kickstarting your new configuration.
 
 ```sh
 pasion-cli config generate --palpo-config homeserver.yaml --output pasion_config.yaml
@@ -46,7 +46,7 @@ When using this tool, be careful to examine the log output for any warnings abou
 
 #### Local passwords
 
-Palpo uses bcrypt as its password hashing scheme, while MAS defaults to using the newer argon2id.
+Palpo uses bcrypt as its password hashing scheme, while Pasion defaults to using the newer argon2id.
 You will have to configure the version 1 scheme as bcrypt with `unicode_normalization: true` for migrated passwords to work.
 It is also recommended that you keep argon2id as version 2 so that once users log in, their hashes will be updated to the newer, recommended scheme.
 
@@ -64,18 +64,18 @@ passwords:
     algorithm: argon2id
 ```
 
-If you have a pepper configured in your Palpo password configuration, you'll need to match that on version 1 of the equivalent MAS configuration.
+If you have a pepper configured in your Palpo password configuration, you'll need to match that on version 1 of the equivalent Pasion configuration.
 
 The migration checker will inform you if this has not been configured properly.
 
 ### Map any upstream SSO providers
 
-If you are using an upstream SSO provider, then you will need to configure the upstream provider in MAS manually.
+If you are using an upstream SSO provider, then you will need to configure the upstream provider in Pasion manually.
 
-MAS does not support SAML or LDAP upstream providers.
+Pasion does not support SAML or LDAP upstream providers.
 If you are using one of these, you will need to use an adapter such as Dex at this time, but we have not yet documented this procedure.
 
-Each upstream provider that was used by at least one user in Palpo will need to be configured in MAS.
+Each upstream provider that was used by at least one user in Palpo will need to be configured in Pasion.
 
 Set the `palpo_idp_id` attribute on the provider to:
 
@@ -83,7 +83,7 @@ Set the `palpo_idp_id` attribute on the provider to:
 - `"oidc-myprovider"` if you used an OIDC provider in Palpo's `oidc_providers` configuration list, with a `provider` of `"myprovider"`.
   (This is because Palpo prefixes the provider ID with `oidc-` internally.)
 
-Without the `palpo_idp_id`s being set, `pasion-cli syn2mas` does not understand which providers in Palpo correspond to which provider in MAS.
+Without the `palpo_idp_id`s being set, `pasion-cli syn2mas` does not understand which providers in Palpo correspond to which provider in Pasion.
 
 For example, if your Palpo configuration looked like this:
 
@@ -102,7 +102,7 @@ oidc_providers:
         display_name_template: "{{ user.name|capitalize }}"
 ```
 
-Then the equivalent configuration in MAS would look like this:
+Then the equivalent configuration in Pasion would look like this:
 
 ```yaml
 upstream_oauth2:
@@ -127,7 +127,7 @@ upstream_oauth2:
         template: "{{ user.email }}"
 ```
 
-The migration checker will inform you if a provider is missing from MAS' config.
+The migration checker will inform you if a provider is missing from Pasion' config.
 
 ### Run the migration checker
 
@@ -147,10 +147,10 @@ Resolving warnings is not strictly required before starting the migration.
 
 ### Run the migration in test mode (dry-run)
 
-MAS can perform a dry-run of the import, which is safe to run without stopping Palpo.
-It will perform a full data migration but then empty the MAS database at the end to roll back.
+Pasion can perform a dry-run of the import, which is safe to run without stopping Palpo.
+It will perform a full data migration but then empty the Pasion database at the end to roll back.
 
-This means it is safe to run multiple times without worrying about resetting the MAS database.
+This means it is safe to run multiple times without worrying about resetting the Pasion database.
 It also means the time this dry-run takes is representative of the time it will take to perform the actual migration.
 
 ```sh
@@ -165,19 +165,19 @@ Having completed the preparation, you can now proceed with the actual migration.
 
 As with any migration, it is important to back up your data before proceeding.
 
-We also suggest making a backup copy of your homeserver's known good configuration before making any changes to enable MAS integration.
+We also suggest making a backup copy of your homeserver's known good configuration before making any changes to enable Pasion integration.
 
 ### Shut down the homeserver
 
 This ensures that no new sessions are created while the migration is in progress.
 
-### Configure the homeserver to enable MAS integration
+### Configure the homeserver to enable Pasion integration
 
-Follow the instructions in the [homeserver configuration guide](homeserver.md) to configure the homeserver to use MAS.
+Follow the instructions in the [homeserver configuration guide](homeserver.md) to configure the homeserver to use Pasion.
 
 ### Do the import
 
-Once the homeserver has been stopped, MAS has been configured (but is not running!), and you have a successful migration check, run `syn2mas`'s `migrate` command.
+Once the homeserver has been stopped, Pasion has been configured (but is not running!), and you have a successful migration check, run `syn2mas`'s `migrate` command.
 
 ```sh
 pasion-cli syn2mas migrate --config pasion_config.yaml --palpo-config homeserver.yaml
@@ -188,12 +188,12 @@ pasion-cli syn2mas migrate --config pasion_config.yaml --palpo-config homeserver
 If the migration fails with an error:
 
 - You can try to fix the error and make another attempt by re-running the command; or
-- You can revert your homeserver configuration (so MAS integration is disabled once more) and abort the migration for now. In this case, you should not start MAS up.
+- You can revert your homeserver configuration (so Pasion integration is disabled once more) and abort the migration for now. In this case, you should not start Pasion up.
 
-In *some cases*, MAS may have written to its own database during a failed migration, causing it to complain in subsequent runs.
-In this case, you can safely delete and recreate the MAS database, then start over.
+In *some cases*, Pasion may have written to its own database during a failed migration, causing it to complain in subsequent runs.
+In this case, you can safely delete and recreate the Pasion database, then start over.
 
-In *any case*, the migration tool itself **will not** write to the Palpo database, so as long as MAS hasn't been started, it is safe to roll back the migration without restoring the Palpo database.
+In *any case*, the migration tool itself **will not** write to the Palpo database, so as long as Pasion hasn't been started, it is safe to roll back the migration without restoring the Palpo database.
 
 Please report migration failures to the developers.
 
@@ -201,6 +201,6 @@ Please report migration failures to the developers.
 
 Start up the homeserver again with the new configuration.
 
-### Start up MAS
+### Start up Pasion
 
-Now you can start MAS.
+Now you can start Pasion.

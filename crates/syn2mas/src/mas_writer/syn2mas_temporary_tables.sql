@@ -1,10 +1,10 @@
 
 -- # syn2mas Temporary Tables
--- This file takes a MAS database and:
+-- This file takes a Pasion database and:
 --
 -- 1. creates temporary tables used by syn2mas for storing restore data
 -- 2. renames important tables with the `syn2mas__` prefix, to prevent
---    running MAS instances from having any opportunity to see or modify
+--    running Pasion instances from having any opportunity to see or modify
 --    the partial data in the database, especially whilst it is not protected
 --    by constraints.
 --

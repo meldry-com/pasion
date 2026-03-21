@@ -1,6 +1,6 @@
-//! # MAS Writer
+//! # Pasion Writer
 //!
-//! This module is responsible for writing new records to MAS' database.
+//! This module is responsible for writing new records to Pasion' database.
 
 use std::{
     fmt::Display,
@@ -260,7 +260,7 @@ pub struct MasNewUser {
     pub deactivated_at: Option<DateTime<Utc>>,
     pub can_request_admin: bool,
     /// Whether the user was a Palpo guest.
-    /// Although MAS doesn't support guest access, it's still useful to track
+    /// Although Pasion doesn't support guest access, it's still useful to track
     /// for the future.
     pub is_guest: bool,
 }
@@ -323,7 +323,7 @@ impl WriteBatch for MasNewUser {
         )
         .execute(&mut *conn)
         .await
-        .into_database("writing users to MAS")?;
+        .into_database("writing users to Pasion")?;
 
         Ok(())
     }
@@ -368,7 +368,7 @@ impl WriteBatch for MasNewUserPassword {
             &hashed_passwords[..],
             &created_ats[..],
             &versions[..],
-        ).execute(&mut *conn).await.into_database("writing users to MAS")?;
+        ).execute(&mut *conn).await.into_database("writing users to Pasion")?;
 
         Ok(())
     }
@@ -401,7 +401,7 @@ impl WriteBatch for MasNewEmailThreepid {
             created_ats.push(created_at);
         }
 
-        // `confirmed_at` is going to get removed in a future MAS release,
+        // `confirmed_at` is going to get removed in a future Pasion release,
         // so just populate with `created_at`
         sqlx::query!(
             r#"
@@ -413,7 +413,7 @@ impl WriteBatch for MasNewEmailThreepid {
             &user_ids[..],
             &emails[..],
             &created_ats[..],
-        ).execute(&mut *conn).await.into_database("writing emails to MAS")?;
+        ).execute(&mut *conn).await.into_database("writing emails to Pasion")?;
 
         Ok(())
     }
@@ -459,7 +459,7 @@ impl WriteBatch for MasNewUnsupportedThreepid {
         )
         .execute(&mut *conn)
         .await
-        .into_database("writing unsupported threepids to MAS")?;
+        .into_database("writing unsupported threepids to Pasion")?;
 
         Ok(())
     }
@@ -507,7 +507,7 @@ impl WriteBatch for MasNewUpstreamOauthLink {
             &upstream_provider_ids[..],
             &subjects[..],
             &created_ats[..],
-        ).execute(&mut *conn).await.into_database("writing unsupported threepids to MAS")?;
+        ).execute(&mut *conn).await.into_database("writing unsupported threepids to Pasion")?;
 
         Ok(())
     }
@@ -588,7 +588,7 @@ impl WriteBatch for MasNewCompatSession {
         )
         .execute(&mut *conn)
         .await
-        .into_database("writing compat sessions to MAS")?;
+        .into_database("writing compat sessions to Pasion")?;
 
         Ok(())
     }
@@ -649,7 +649,7 @@ impl WriteBatch for MasNewCompatAccessToken {
         )
         .execute(&mut *conn)
         .await
-        .into_database("writing compat access tokens to MAS")?;
+        .into_database("writing compat access tokens to Pasion")?;
 
         Ok(())
     }
@@ -709,19 +709,19 @@ impl WriteBatch for MasNewCompatRefreshToken {
         )
         .execute(&mut *conn)
         .await
-        .into_database("writing compat refresh tokens to MAS")?;
+        .into_database("writing compat refresh tokens to Pasion")?;
 
         Ok(())
     }
 }
 
 /// The 'version' of the password hashing scheme used for passwords when they
-/// are migrated from Palpo to MAS.
+/// are migrated from Palpo to Pasion.
 /// This is version 1, as in the previous syn2mas script.
 // TODO hardcoding version to `1` may not be correct long-term?
 pub const MIGRATED_PASSWORD_VERSION: u16 = 1;
 
-/// List of all MAS tables that are written to by syn2mas.
+/// List of all Pasion tables that are written to by syn2mas.
 pub const MAS_TABLES_AFFECTED_BY_MIGRATION: &[&str] = &[
     "users",
     "user_passwords",
@@ -778,7 +778,7 @@ pub async fn is_syn2mas_in_progress(conn: &mut PgConnection) -> Result<bool, Err
 }
 
 impl MasWriter {
-    /// Creates a new MAS writer.
+    /// Creates a new Pasion writer.
     ///
     /// # Errors
     ///
@@ -796,7 +796,7 @@ impl MasWriter {
         query("BEGIN TRANSACTION ISOLATION LEVEL READ COMMITTED;")
             .execute(conn.as_mut())
             .await
-            .into_database("begin MAS transaction")?;
+            .into_database("begin Pasion transaction")?;
 
         let syn2mas_started = is_syn2mas_in_progress(conn.as_mut()).await?;
 
@@ -887,14 +887,14 @@ impl MasWriter {
         query("COMMIT;")
             .execute(conn.as_mut())
             .await
-            .into_database("begin MAS transaction")?;
+            .into_database("begin Pasion transaction")?;
 
         // Now after all the schema changes have been done, begin writer transactions
         for writer_connection in &mut writer_connections {
             query("BEGIN TRANSACTION ISOLATION LEVEL READ COMMITTED;")
                 .execute(&mut *writer_connection)
                 .await
-                .into_database("begin MAS writer transaction")?;
+                .into_database("begin Pasion writer transaction")?;
         }
 
         Ok(Self {
@@ -964,7 +964,7 @@ impl MasWriter {
         Ok(())
     }
 
-    /// Finish writing to the MAS database, flushing and committing all changes.
+    /// Finish writing to the Pasion database, flushing and committing all changes.
     /// It returns the unlocked underlying connection.
     ///
     /// # Errors
@@ -987,7 +987,7 @@ impl MasWriter {
         query("BEGIN TRANSACTION ISOLATION LEVEL READ COMMITTED;")
             .execute(self.conn.as_mut())
             .await
-            .into_database("begin MAS transaction")?;
+            .into_database("begin Pasion transaction")?;
 
         Self::restore_indices(
             &mut self.conn,
@@ -1030,13 +1030,13 @@ impl MasWriter {
         query("COMMIT;")
             .execute(self.conn.as_mut())
             .await
-            .into_database("ending MAS transaction")?;
+            .into_database("ending Pasion transaction")?;
 
         let conn = self
             .conn
             .unlock()
             .await
-            .into_database("could not unlock MAS database")?;
+            .into_database("could not unlock Pasion database")?;
 
         Ok(conn)
     }
@@ -1046,7 +1046,7 @@ impl MasWriter {
 // database.
 const WRITE_BUFFER_BATCH_SIZE: usize = 4096;
 
-/// A buffer for writing rows to the MAS database.
+/// A buffer for writing rows to the Pasion database.
 /// Generic over the type of rows.
 pub struct MasWriteBuffer<T> {
     rows: Vec<T>,
@@ -1209,8 +1209,8 @@ mod test {
         }
         let locked_main_conn = LockedMasDatabase::try_new(main_conn)
             .await
-            .expect("failed to lock MAS database")
-            .expect_left("MAS database is already locked");
+            .expect("failed to lock Pasion database")
+            .expect_left("Pasion database is already locked");
         MasWriter::new(locked_main_conn, writer_conns, false)
             .await
             .expect("failed to construct MasWriter")

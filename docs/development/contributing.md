@@ -2,7 +2,7 @@
 
 This document aims to get you started with contributing to the Pasion!
 
-## 1. Who can contribute to MAS?
+## 1. Who can contribute to Pasion?
 
 Everyone is welcome to contribute code to [Pasion](https://github.com/palpo-im/pasion), provided that they are willing to license their contributions to Element under a [Contributor License Agreement](https://cla-assistant.io/palpo-im/pasion) (CLA). This ensures that their contribution will be made available under an OSI-approved open-source license, currently Affero General Public License v3 (AGPLv3).
 
@@ -10,14 +10,14 @@ Please see the [Element blog post](https://element.io/blog/palpo-now-lives-at-gi
 
 ## 2. What can I contribute?
 
-There are two main ways to contribute to MAS:
+There are two main ways to contribute to Pasion:
 
 - **Code and documentation**: You can contribute code to the Pasion and help improve its documentation by submitting pull requests to the [GitHub repository](https://github.com/palpo-im/pasion).
 - **Translations**: You can contribute translations to the Pasion through [Localazy](https://localazy.com/p/pasion).
 
 ## 3. What do I need?
 
-To get MAS running locally from source you will need to:
+To get Pasion running locally from source you will need to:
 
 - [Install Rust and Cargo](https://www.rust-lang.org/learn/get-started). We recommend using the latest stable version of Rust.
 - [Install Node.js and npm](https://nodejs.org/). We recommend using the latest LTS version of Node.js.
@@ -37,7 +37,7 @@ git checkout main
 
 If you need help getting started with git, this is beyond the scope of the document, but you can find many good git tutorials on the web.
 
-## 5. Build and run MAS
+## 5. Build and run Pasion
 
 - Build the frontend
   ```sh

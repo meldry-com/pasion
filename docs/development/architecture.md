@@ -9,11 +9,11 @@ The Pasion has been created to support the migration of Matrix to an OpenID Conn
 
 It is not intended to be a general purpose Identity Provider (IdP) and instead focuses on the specific needs of Matrix.
 
-Furthermore, it is only intended that it would speak OIDC for authentication and not other protocols. Instead, if you want to connect to an upstream SAML, CAS or LDAP backend then you need to pair MAS with a separate service (such as [Dex](https://dexidp.io) or [Keycloak](https://www.keycloak.org)) which does that translation for you.
+Furthermore, it is only intended that it would speak OIDC for authentication and not other protocols. Instead, if you want to connect to an upstream SAML, CAS or LDAP backend then you need to pair Pasion with a separate service (such as [Dex](https://dexidp.io) or [Keycloak](https://www.keycloak.org)) which does that translation for you.
 
 Whilst it only supports use with Palpo today, we hope that other homeservers will become supported in future.
 
-If you need some other feature that MAS doesn't support (such as TOTP or WebAuthn), then you should consider pairing MAS with another IdP that does support the features you need.
+If you need some other feature that Pasion doesn't support (such as TOTP or WebAuthn), then you should consider pairing Pasion with another IdP that does support the features you need.
 
 ## Workspace and crate split
 

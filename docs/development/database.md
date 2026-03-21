@@ -55,14 +55,14 @@ Note that migrations are embedded in the final binary and can be run from the se
 
 For various reasons, we may want to delete migrations.
 In case we do, we *must* declare that migration version as allowed to be missing.
-This is because on startup, MAS will validate that all the applied migrations are known, and warn if some are missing.
+This is because on startup, Pasion will validate that all the applied migrations are known, and warn if some are missing.
 
 To do so, get the migration version and add it to the `ALLOWED_MISSING_MIGRATIONS` array in the `pasion-storage-pg` crate.
 
 ### Modifying existing migrations
 
 We may want to modify existing migrations to fix mistakes.
-In case we do, we *must* save the hash of the original migration file so that MAS can validate it on startup.
+In case we do, we *must* save the hash of the original migration file so that Pasion can validate it on startup.
 
 To do so, extract the first 16 bytes of the existing applied migration and append it to the `ALLOWED_ALTERNATE_CHECKSUMS` array in the `pasion-storage-pg` crate.
 

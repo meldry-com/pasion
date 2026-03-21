@@ -33,7 +33,7 @@ struct AddUserInput {
     /// Skip checking with the homeserver whether the username is valid.
     ///
     /// Use this with caution! The main reason to use this, is when a user used
-    /// by an application service needs to exist in MAS to craft special
+    /// by an application service needs to exist in Pasion to craft special
     /// tokens (like with admin access) for them
     skip_homeserver_check: Option<bool>,
 }

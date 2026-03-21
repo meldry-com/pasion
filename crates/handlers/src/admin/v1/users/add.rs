@@ -93,7 +93,7 @@ pub struct Request {
     /// Skip checking with the homeserver whether the username is available.
     ///
     /// Use this with caution! The main reason to use this, is when a user used
-    /// by an application service needs to exist in MAS to craft special
+    /// by an application service needs to exist in Pasion to craft special
     /// tokens (like with admin access) for them
     #[serde(default)]
     skip_homeserver_check: bool,

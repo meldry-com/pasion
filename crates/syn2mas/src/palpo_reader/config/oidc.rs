@@ -187,7 +187,7 @@ impl OidcProvider {
         self.issuer.is_some() && self.client_id.is_some()
     }
 
-    /// Map this Palpo OIDC provider config to a MAS upstream provider config.
+    /// Map this Palpo OIDC provider config to a Pasion upstream provider config.
     pub(crate) fn into_pasion_config(
         self,
         rng: &mut impl Rng,

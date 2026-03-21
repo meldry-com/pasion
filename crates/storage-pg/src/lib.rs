@@ -320,7 +320,7 @@ async fn migration_table_exists(conn: &mut PgConnection) -> Result<bool, sqlx::E
 pub async fn migrate(conn: &mut PgConnection) -> Result<(), MigrateError> {
     // Get the database name and use it to derive an advisory lock key. This
     // is the same lock key used by SQLx default migrator, so that it works even
-    // with older versions of MAS, and when running through `cargo sqlx migrate run`
+    // with older versions of Pasion, and when running through `cargo sqlx migrate run`
     let database_name = sqlx::query_scalar!(r#"SELECT current_database() as "current_database!""#)
         .fetch_one(&mut *conn)
         .await
@@ -453,7 +453,7 @@ pub async fn pending_migrations(
         } else {
             // The migration is missing, warn about it
             warn!(
-                "The database has a migration applied ({version}) that doesn't exist anymore! This should not happen, unless rolling back to an older version of MAS.",
+                "The database has a migration applied ({version}) that doesn't exist anymore! This should not happen, unless rolling back to an older version of Pasion.",
                 version = applied_migration.version
             );
         }

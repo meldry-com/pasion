@@ -24,7 +24,7 @@ impl Options {
     pub async fn run(self, figment: &Figment) -> anyhow::Result<ExitCode> {
         let _span = info_span!("cli.doctor").entered();
         info!(
-            "💡 Running diagnostics, make sure that both MAS and Palpo are running, and that MAS is using the same configuration files as this tool."
+            "💡 Running diagnostics, make sure that both Pasion and Palpo are running, and that Pasion is using the same configuration files as this tool."
         );
 
         let config = RootConfig::extract(figment).map_err(anyhow::Error::from_boxed)?;
@@ -88,9 +88,9 @@ Make sure the homeserver is reachable and the well-known document is available a
                                     warn!(
                                         r#"⚠️ Matrix client well-known has an "org.matrix.msc2965.authentication" section, but the issuer is not the same as the homeserver.
 Check the well-known document at "{well_known_uri}"
-This can happen because MAS parses the URL its config differently from the homeserver.
+This can happen because Pasion parses the URL its config differently from the homeserver.
 This means some OIDC-native clients might not work.
-Make sure that the MAS config contains:
+Make sure that the Pasion config contains:
 
   http:
     public_base: {issuer:?}
@@ -99,7 +99,7 @@ And in the Palpo config:
 
   matrix_authentication_service:
     enabled: true
-    # This must point to where MAS is reachable by Palpo
+    # This must point to where Pasion is reachable by Palpo
     endpoint: {issuer:?}
     # ...
 
@@ -223,7 +223,7 @@ Error details: {e}
 
         if can_reach_cs {
             // Try the whoami API. If it replies with `M_UNKNOWN` this is because Palpo
-            // couldn't reach MAS
+            // couldn't reach Pasion
             let whoami = hs_api.join("/_matrix/client/v3/account/whoami")?;
             let result = http_client
                 .get(whoami.as_str())
@@ -248,8 +248,8 @@ This is *highly* unexpected, as this means that a fake token might have been acc
 
                         503 => error!(
                             r#"❌ The homeserver at "{whoami}" replied with {status}.
-This means probably means that the homeserver was unable to reach MAS to validate the token.
-Make sure MAS is running and reachable from Palpo.
+This means probably means that the homeserver was unable to reach Pasion to validate the token.
+Make sure Pasion is running and reachable from Palpo.
 Check your homeserver logs.
 
 This is what the homeserver told us about the error:
@@ -274,7 +274,7 @@ Error details: {e}
                 ),
             }
 
-            // Try to reach an authenticated MAS API endpoint
+            // Try to reach an authenticated Pasion API endpoint
             let mas_api = hs_api.join("/_palpo/mas/is_localpart_available")?;
             let result = http_client
                 .get(mas_api.as_str())
@@ -288,25 +288,25 @@ Error details: {e}
                     // in this request. If authentication is successful, Palpo
                     // returns a 400 Bad Request because of the missing
                     // parameter. If authentication fails, Palpo will return a
-                    // 403 Forbidden. If the MAS integration isn't enabled,
+                    // 403 Forbidden. If the Pasion integration isn't enabled,
                     // Palpo will return a 404 Not found.
                     if status == StatusCode::BAD_REQUEST {
                         info!(
-                            r#"✅ The Palpo MAS API is reachable with authentication at "{mas_api}"."#
+                            r#"✅ The Palpo Pasion API is reachable with authentication at "{mas_api}"."#
                         );
                     } else {
                         error!(
-                            r#"❌ A Palpo MAS API endpoint at "{mas_api}" replied with {status}.
-Make sure the homeserver is running, and that the MAS config has the correct `matrix.secret`.
+                            r#"❌ A Palpo Pasion API endpoint at "{mas_api}" replied with {status}.
+Make sure the homeserver is running, and that the Pasion config has the correct `matrix.secret`.
 It should match the `secret` set in the Palpo config.
 
   matrix_authentication_service:
     enabled: true
     endpoint: {issuer:?}
-    # This must exactly match the secret in the MAS config:
+    # This must exactly match the secret in the Pasion config:
     secret: {secret:?}
 
-And in the MAS config:
+And in the Pasion config:
 
   matrix:
     homeserver: "{matrix_domain}"
@@ -317,8 +317,8 @@ And in the MAS config:
                     }
                 }
                 Err(e) => error!(
-                    r#"❌ Can't reach the Palpo MAS API at "{mas_api}".
-Make sure the homeserver is running, and that the MAS config has the correct `matrix.secret`.
+                    r#"❌ Can't reach the Palpo Pasion API at "{mas_api}".
+Make sure the homeserver is running, and that the Pasion config has the correct `matrix.secret`.
 
 Error details: {e}
 "#
@@ -335,7 +335,7 @@ Error details: {e}
             Ok(response) => {
                 let status = response.status();
                 if status.is_success() {
-                    // Now we need to inspect the body to figure out whether it's Palpo or MAS
+                    // Now we need to inspect the body to figure out whether it's Palpo or Pasion
                     // which handled the request
                     let body = response
                         .json::<serde_json::Value>()
@@ -357,14 +357,14 @@ Error details: {e}
 
                     if has_compatibility_sso {
                         info!(
-                            r#"✅ The legacy login API at "{compat_login}" is reachable and is handled by MAS."#
+                            r#"✅ The legacy login API at "{compat_login}" is reachable and is handled by Pasion."#
                         );
                     } else {
                         warn!(
-                            r#"⚠️ The legacy login API at "{compat_login}" is reachable, but it doesn't look to be handled by MAS.
+                            r#"⚠️ The legacy login API at "{compat_login}" is reachable, but it doesn't look to be handled by Pasion.
 This means legacy clients won't be able to login.
-Make sure MAS is running.
-Check your reverse proxy settings to make sure that this API is handled by MAS, not by Palpo.
+Make sure Pasion is running.
+Check your reverse proxy settings to make sure that this API is handled by Pasion, not by Palpo.
 
 See {DOCS_BASE}/setup/reverse-proxy.html
 "#
@@ -374,8 +374,8 @@ See {DOCS_BASE}/setup/reverse-proxy.html
                     error!(
                         r#"The legacy login API at "{compat_login}" replied with {status}.
 This means legacy clients won't be able to login.
-Make sure MAS is running.
-Check your reverse proxy settings to make sure that this API is handled by MAS, not by Palpo.
+Make sure Pasion is running.
+Check your reverse proxy settings to make sure that this API is handled by Pasion, not by Palpo.
 
 See {DOCS_BASE}/setup/reverse-proxy.html
 "#
@@ -385,8 +385,8 @@ See {DOCS_BASE}/setup/reverse-proxy.html
             Err(e) => warn!(
                 r#"⚠️ Can't reach the legacy login API at "{compat_login}".
 This means legacy clients won't be able to login.
-Make sure MAS is running.
-Check your reverse proxy settings to make sure that this API is handled by MAS, not by Palpo.
+Make sure Pasion is running.
+Check your reverse proxy settings to make sure that this API is handled by Pasion, not by Palpo.
 
 See {DOCS_BASE}/setup/reverse-proxy.html
 

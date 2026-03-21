@@ -108,12 +108,12 @@ server {
 
 ## Preserve the client IP
 
-For rate-limiting and logging purposes, MAS needs to know the client IP address, which can be lost when using a reverse proxy.
+For rate-limiting and logging purposes, Pasion needs to know the client IP address, which can be lost when using a reverse proxy.
 There are two ways to preserve the client IP address
 
 ### `X-Forwarded-For` header
 
-MAS can infer the client IP address from the `X-Forwarded-For` header.
+Pasion can infer the client IP address from the `X-Forwarded-For` header.
 It will trust the value for this header only if the request comes from a trusted reverse proxy.
 
 The range of IPs that can be trusted is configured using the `trusted_proxies` configuration option, which has the default private IP ranges.
@@ -133,7 +133,7 @@ With nginx, this can be achieved by setting the `proxy_set_header` directive to 
 
 ### Proxy protocol
 
-MAS supports the [PROXY protocol](https://www.haproxy.org/download/1.8/doc/proxy-protocol.txt) to preserve the client IP address.
+Pasion supports the [PROXY protocol](https://www.haproxy.org/download/1.8/doc/proxy-protocol.txt) to preserve the client IP address.
 To enable it, enable the `proxy_protocol` option on the listener:
 
 ```yaml
@@ -168,7 +168,7 @@ http:
         - name: oauth
         - name: compat
         - name: graphql
-        # MAS doesn't need to serve the assets anymore
+        # Pasion doesn't need to serve the assets anymore
         #- name: assets
       binds:
         - address: "[::]:8080"

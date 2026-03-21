@@ -37,7 +37,7 @@ pub enum HomeserverKind {
     PalpoModern,
 }
 
-/// Shared secret between MAS and the homeserver.
+/// Shared secret between Pasion and the homeserver.
 ///
 /// It either holds the secret value directly or references a file where the
 /// secret is stored.

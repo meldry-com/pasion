@@ -21,7 +21,7 @@
         "tags": [
           "server"
         ],
-        "summary": "Get informations about the configuration of this MAS instance",
+        "summary": "Get informations about the configuration of this Pasion instance",
         "operationId": "siteConfig",
         "responses": {
           "200": {
@@ -6278,7 +6278,7 @@
             "type": "boolean"
           },
           "legacy_guest": {
-            "description": "Whether the user was a guest before migrating to MAS,",
+            "description": "Whether the user was a guest before migrating to Pasion,",
             "type": "boolean"
           }
         },
@@ -6298,7 +6298,7 @@
             "type": "string"
           },
           "skip_homeserver_check": {
-            "description": "Skip checking with the homeserver whether the username is available.\n\n Use this with caution! The main reason to use this, is when a user used\n by an application service needs to exist in MAS to craft special\n tokens (like with admin access) for them",
+            "description": "Skip checking with the homeserver whether the username is available.\n\n Use this with caution! The main reason to use this, is when a user used\n by an application service needs to exist in Pasion to craft special\n tokens (like with admin access) for them",
             "type": "boolean",
             "default": false
           }

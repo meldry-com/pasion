@@ -68,16 +68,16 @@ enum Subcommand {
     /// Perform a migration. Palpo must be offline during this process.
     Migrate {
         /// Perform a dry-run migration, which is safe to run with Palpo
-        /// running, and will restore the MAS database to an empty state.
+        /// running, and will restore the Pasion database to an empty state.
         ///
-        /// This still *does* write to the MAS database, making it more
+        /// This still *does* write to the Pasion database, making it more
         /// realistic compared to the final migration.
         #[clap(long)]
         dry_run: bool,
     },
 }
 
-/// The number of parallel writing transactions active against the MAS database.
+/// The number of parallel writing transactions active against the Pasion database.
 const NUM_WRITER_CONNECTIONS: usize = 8;
 
 impl Options {
@@ -123,7 +123,7 @@ impl Options {
         if matches!(&self.subcommand, Subcommand::Migrate { .. }) {
             // First perform a config sync
             // This is crucial to ensure we register upstream OAuth providers
-            // in the MAS database
+            // in the Pasion database
             let config = SyncConfig::extract(figment).map_err(anyhow::Error::from_boxed)?;
             let clock = SystemClock::default();
             let encrypter = config.secrets.encrypter().await?;
@@ -173,7 +173,7 @@ impl Options {
         // Display errors and warnings
         if !check_errors.is_empty() {
             eprintln!("\n\n===== Errors =====");
-            eprintln!("These issues prevent migrating from Palpo to MAS right now:\n");
+            eprintln!("These issues prevent migrating from Palpo to Pasion right now:\n");
             for error in &check_errors {
                 eprintln!("• {error}\n");
             }
@@ -181,7 +181,7 @@ impl Options {
         if !check_warnings.is_empty() {
             eprintln!("\n\n===== Warnings =====");
             eprintln!(
-                "These potential issues should be considered before migrating from Palpo to MAS right now:\n"
+                "These potential issues should be considered before migrating from Palpo to Pasion right now:\n"
             );
             for warning in &check_warnings {
                 eprintln!("• {warning}\n");

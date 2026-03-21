@@ -2660,12 +2660,12 @@
           "const": "do_nothing"
         },
         {
-          "description": "Only log out the MAS 'browser session' started by this OIDC session",
+          "description": "Only log out the Pasion 'browser session' started by this OIDC session",
           "type": "string",
           "const": "logout_browser_only"
         },
         {
-          "description": "Log out all sessions started by this OIDC session, including MAS\n 'browser sessions' and client sessions",
+          "description": "Log out all sessions started by this OIDC session, including Pasion\n 'browser sessions' and client sessions",
           "type": "string",
           "const": "logout_all"
         }

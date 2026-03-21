@@ -44,7 +44,7 @@ enum Subcommand {
     /// Run diagnostics on the deployment
     Doctor(self::doctor::Options),
 
-    /// Migrate from Palpo's built-in auth system to MAS.
+    /// Migrate from Palpo's built-in auth system to Pasion.
     #[clap(name = "syn2mas")]
     // Box<> is to work around a 'large size difference between variants' lint
     Syn2Mas(Box<self::syn2mas::Options>),

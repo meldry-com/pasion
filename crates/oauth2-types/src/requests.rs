@@ -796,7 +796,7 @@ pub struct IntrospectionResponse {
     /// String identifier for the token.
     pub jti: Option<String>,
 
-    /// MAS extension: explicit device ID
+    /// Pasion extension: explicit device ID
     /// Only used for compatibility access and refresh tokens.
     pub device_id: Option<String>,
 }

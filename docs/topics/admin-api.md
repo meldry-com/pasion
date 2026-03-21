@@ -1,9 +1,9 @@
 # Admin API
 
-MAS provides a REST-like API for administrators to manage the service.
-This API is intended to build tools on top of MAS, and is only available to administrators.
+Pasion provides a REST-like API for administrators to manage the service.
+This API is intended to build tools on top of Pasion, and is only available to administrators.
 
-> **Note:** This Admin API is now the correct way for external tools to interact with MAS. External access to the [Internal GraphQL API](../development/graphql.md) is deprecated and will be removed in a future release.
+> **Note:** This Admin API is now the correct way for external tools to interact with Pasion. External access to the [Internal GraphQL API](../development/graphql.md) is deprecated and will be removed in a future release.
 
 ## Enabling the API
 
@@ -42,7 +42,7 @@ The API is documented using the [OpenAPI specification](https://spec.openapis.or
 The API schema is available [here](../api/spec.json).
 This schema can be viewed in tools like Swagger UI, available [here](../api/).
 
-If admin API is enabled, MAS will also serve the specification at `/api/spec.json`, with a Swagger UI available at `/api/doc/`.
+If admin API is enabled, Pasion will also serve the specification at `/api/spec.json`, with a Swagger UI available at `/api/doc/`.
 
 ## Authentication
 
