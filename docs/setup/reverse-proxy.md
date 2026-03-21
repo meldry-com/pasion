@@ -92,9 +92,9 @@ server {
         #proxy_protocol on;
     }
 
-    # Forward to Synapse
-    # as per https://palpo-im.github.io/synapse/latest/reverse_proxy.html#nginx
-    location ~ ^(/_matrix|/_synapse/client|/_synapse/mas) {
+    # Forward to Palpo
+    # as per https://palpo-im.github.io/palpo/latest/reverse_proxy.html#nginx
+    location ~ ^(/_matrix|/_palpo/client|/_palpo/mas) {
         proxy_pass http://localhost:8008;
         proxy_set_header X-Forwarded-For $remote_addr;
         proxy_set_header X-Forwarded-Proto $scheme;

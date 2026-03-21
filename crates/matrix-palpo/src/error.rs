@@ -26,7 +26,7 @@ struct MatrixError {
 /// Where possible, we capture the Matrix error from the JSON response body.
 #[derive(Debug, Error)]
 pub(crate) struct Error {
-    synapse_error: Option<MatrixError>,
+    palpo_error: Option<MatrixError>,
 
     #[source]
     source: reqwest::Error,
@@ -34,7 +34,7 @@ pub(crate) struct Error {
 
 impl Display for Error {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        if let Some(matrix_error) = &self.synapse_error {
+        if let Some(matrix_error) = &self.palpo_error {
             write!(f, "{}: {}", matrix_error.errcode, matrix_error.error)
         } else {
             write!(f, "(no specific error)")
@@ -45,27 +45,27 @@ impl Display for Error {
 impl Error {
     /// Return the error code (`errcode`)
     pub fn errcode(&self) -> Option<&str> {
-        let me = self.synapse_error.as_ref()?;
+        let me = self.palpo_error.as_ref()?;
         Some(&me.errcode)
     }
 }
 
 /// An extension trait for [`reqwest::Response`] to help working with errors
-/// from Synapse.
+/// from Palpo.
 #[async_trait]
-pub(crate) trait SynapseResponseExt: Sized {
-    async fn error_for_synapse_error(self) -> Result<Self, Error>;
+pub(crate) trait PalpoResponseExt: Sized {
+    async fn error_for_palpo_error(self) -> Result<Self, Error>;
 }
 
 #[async_trait]
-impl SynapseResponseExt for reqwest::Response {
-    async fn error_for_synapse_error(self) -> Result<Self, Error> {
+impl PalpoResponseExt for reqwest::Response {
+    async fn error_for_palpo_error(self) -> Result<Self, Error> {
         match self.error_for_status_ref() {
             Ok(_response) => Ok(self),
             Err(source) => {
-                let synapse_error = self.json().await.ok();
+                let palpo_error = self.json().await.ok();
                 Err(Error {
-                    synapse_error,
+                    palpo_error,
                     source,
                 })
             }

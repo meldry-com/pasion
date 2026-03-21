@@ -236,7 +236,7 @@
       "manage_sessions": "Hallata sinu seadmeid ja sessioone",
       "mas_admin": "Hallata kasutajaid (urn:mas:admin)",
       "send_messages": "Saata sõnumeid sinu nimel",
-      "synapse_admin": "Hallata seda Synapse koduserverit (urn:synapse:admin:*)",
+      "palpo_admin": "Hallata seda Palpo koduserverit (urn:palpo:admin:*)",
       "view_messages": "Vaadata sinu sõnumeid ja andmeid",
       "view_profile": "Vaadata sinu profiili teavet ja kontaktadmeid"
     },

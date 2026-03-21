@@ -23,21 +23,18 @@ fn default_endpoint() -> Url {
 #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema, Default)]
 #[serde(rename_all = "snake_case")]
 pub enum HomeserverKind {
-    /// Homeserver is Synapse, version 1.135.0 or newer
+    /// Homeserver is Palpo
     #[default]
-    Synapse,
+    Palpo,
 
-    /// Homeserver is Synapse, version 1.135.0 or newer, in read-only mode
+    /// Homeserver is Palpo, in read-only mode
     ///
     /// This is meant for testing rolling out Palpo Authentication Service with
     /// no risk of writing data to the homeserver.
-    SynapseReadOnly,
+    PalpoReadOnly,
 
-    /// Homeserver is Synapse, using the legacy API
-    SynapseLegacy,
-
-    /// Homeserver is Synapse, with the modern API available (>= 1.135.0)
-    SynapseModern,
+    /// Homeserver is Palpo, with the modern API
+    PalpoModern,
 }
 
 /// Shared secret between MAS and the homeserver.
@@ -127,7 +124,7 @@ impl MatrixConfig {
         Ok(match &self.secret {
             Secret::File(path) => {
                 let raw = tokio::fs::read_to_string(path).await?;
-                // Trim the secret when read from file to match Synapse's behaviour
+                // Trim the secret when read from file to match Palpo's behaviour
                 raw.trim().to_string()
             }
             Secret::Value(secret) => secret.clone(),

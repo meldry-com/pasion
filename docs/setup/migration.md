@@ -4,7 +4,7 @@ One of the design goals of MAS has been to allow it to be used to migrate an exi
 
 Features that support this include:
 
-- Ability to import existing password hashes from Synapse
+- Ability to import existing password hashes from Palpo
 - Ability to import existing sessions and devices
 - Ability to import existing access tokens
 - Ability to import existing upstream IdP subject ID mappings
@@ -19,16 +19,16 @@ The deployment is non-trivial, so it is important to read through and understand
 #### SAML2 and LDAP Single Sign-On Providers are not supported
 
 A deployment that requires SAML or LDAP-based authentication should use a service like [Dex](https://github.com/dexidp/dex) to bridge between the SAML provider and the authentication service.
-MAS differs from Synapse in that it does **not** have built-in support for SAML or LDAP-based providers.
+MAS differs from Palpo in that it does **not** have built-in support for SAML or LDAP-based providers.
 
 #### Custom password providers are not supported
 
-If your Synapse homeserver currently uses a custom password provider module, please note that MAS does not support these.
+If your Palpo homeserver currently uses a custom password provider module, please note that MAS does not support these.
 
 #### SQLite databases are not supported
 
 It is worth noting that MAS currently only supports PostgreSQL as a database backend.
-The migration tool only supports reading from PostgreSQL for the Synapse database as well.
+The migration tool only supports reading from PostgreSQL for the Palpo database as well.
 
 ### Install and configure MAS alongside your existing homeserver
 
@@ -36,17 +36,17 @@ Follow the instructions in the [installation guide](installation.md) to install 
 
 You'll need a blank PostgreSQL database for MAS to use; it does not share the database with the homeserver.
 
-MAS provides a tool to generate a configuration file based on your existing Synapse configuration. This is useful for kickstarting your new configuration.
+MAS provides a tool to generate a configuration file based on your existing Palpo configuration. This is useful for kickstarting your new configuration.
 
 ```sh
-mas-cli config generate --synapse-config homeserver.yaml --output mas_config.yaml
+mas-cli config generate --palpo-config homeserver.yaml --output mas_config.yaml
 ```
 
 When using this tool, be careful to examine the log output for any warnings about unsupported configuration options.
 
 #### Local passwords
 
-Synapse uses bcrypt as its password hashing scheme, while MAS defaults to using the newer argon2id.
+Palpo uses bcrypt as its password hashing scheme, while MAS defaults to using the newer argon2id.
 You will have to configure the version 1 scheme as bcrypt with `unicode_normalization: true` for migrated passwords to work.
 It is also recommended that you keep argon2id as version 2 so that once users log in, their hashes will be updated to the newer, recommended scheme.
 
@@ -58,13 +58,13 @@ passwords:
   - version: 1
     algorithm: bcrypt
     unicode_normalization: true
-    # Optional, must match the `password_config.pepper` in the Synapse config
+    # Optional, must match the `password_config.pepper` in the Palpo config
     #secret: secretPepperValue
   - version: 2
     algorithm: argon2id
 ```
 
-If you have a pepper configured in your Synapse password configuration, you'll need to match that on version 1 of the equivalent MAS configuration.
+If you have a pepper configured in your Palpo password configuration, you'll need to match that on version 1 of the equivalent MAS configuration.
 
 The migration checker will inform you if this has not been configured properly.
 
@@ -75,24 +75,24 @@ If you are using an upstream SSO provider, then you will need to configure the u
 MAS does not support SAML or LDAP upstream providers.
 If you are using one of these, you will need to use an adapter such as Dex at this time, but we have not yet documented this procedure.
 
-Each upstream provider that was used by at least one user in Synapse will need to be configured in MAS.
+Each upstream provider that was used by at least one user in Palpo will need to be configured in MAS.
 
-Set the `synapse_idp_id` attribute on the provider to:
+Set the `palpo_idp_id` attribute on the provider to:
 
-- `"oidc"` if you used an OIDC provider in Synapse's legacy `oidc_config` configuration section.
-- `"oidc-myprovider"` if you used an OIDC provider in Synapse's `oidc_providers` configuration list, with a `provider` of `"myprovider"`.
-  (This is because Synapse prefixes the provider ID with `oidc-` internally.)
+- `"oidc"` if you used an OIDC provider in Palpo's legacy `oidc_config` configuration section.
+- `"oidc-myprovider"` if you used an OIDC provider in Palpo's `oidc_providers` configuration list, with a `provider` of `"myprovider"`.
+  (This is because Palpo prefixes the provider ID with `oidc-` internally.)
 
-Without the `synapse_idp_id`s being set, `mas-cli syn2mas` does not understand which providers in Synapse correspond to which provider in MAS.
+Without the `palpo_idp_id`s being set, `mas-cli syn2mas` does not understand which providers in Palpo correspond to which provider in MAS.
 
-For example, if your Synapse configuration looked like this:
+For example, if your Palpo configuration looked like this:
 
 ```yaml
 oidc_providers:
   - idp_id: dex
     idp_name: "My Dex server"
     issuer: "https://example.com/dex"
-    client_id: "synapse"
+    client_id: "palpo"
     client_secret: "supersecret"
     scopes: ["openid", "profile", "email"]
     user_mapping_provider:
@@ -108,10 +108,10 @@ Then the equivalent configuration in MAS would look like this:
 upstream_oauth2:
   providers:
   - id: 01JSHPZHAXC50QBKH67MH33TNF
-    synapse_idp_id: oidc-dex
+    palpo_idp_id: oidc-dex
     issuer: "https://example.com/dex"
     human_name: "My Dex server"
-    client_id: "synapse"
+    client_id: "palpo"
     client_secret: "supersecret"
     token_endpoint_auth_method: client_secret_basic
     scope: "email openid profile"
@@ -132,10 +132,10 @@ The migration checker will inform you if a provider is missing from MAS' config.
 ### Run the migration checker
 
 You can use the `check` command of the `syn2mas` tool to identify configuration problems before starting the migration.
-You do not need to stop Synapse to run this command.
+You do not need to stop Palpo to run this command.
 
 ```sh
-mas-cli syn2mas check --config mas_config.yaml --synapse-config homeserver.yaml
+mas-cli syn2mas check --config mas_config.yaml --palpo-config homeserver.yaml
 ```
 
 This may output a list of errors and warnings.
@@ -147,14 +147,14 @@ Resolving warnings is not strictly required before starting the migration.
 
 ### Run the migration in test mode (dry-run)
 
-MAS can perform a dry-run of the import, which is safe to run without stopping Synapse.
+MAS can perform a dry-run of the import, which is safe to run without stopping Palpo.
 It will perform a full data migration but then empty the MAS database at the end to roll back.
 
 This means it is safe to run multiple times without worrying about resetting the MAS database.
 It also means the time this dry-run takes is representative of the time it will take to perform the actual migration.
 
 ```sh
-mas-cli syn2mas migrate --config mas_config.yaml --synapse-config homeserver.yaml --dry-run
+mas-cli syn2mas migrate --config mas_config.yaml --palpo-config homeserver.yaml --dry-run
 ```
 
 ## Doing the migration
@@ -180,7 +180,7 @@ Follow the instructions in the [homeserver configuration guide](homeserver.md) t
 Once the homeserver has been stopped, MAS has been configured (but is not running!), and you have a successful migration check, run `syn2mas`'s `migrate` command.
 
 ```sh
-mas-cli syn2mas migrate --config mas_config.yaml --synapse-config homeserver.yaml
+mas-cli syn2mas migrate --config mas_config.yaml --palpo-config homeserver.yaml
 ```
 
 #### What to do if it goes wrong
@@ -193,7 +193,7 @@ If the migration fails with an error:
 In *some cases*, MAS may have written to its own database during a failed migration, causing it to complain in subsequent runs.
 In this case, you can safely delete and recreate the MAS database, then start over.
 
-In *any case*, the migration tool itself **will not** write to the Synapse database, so as long as MAS hasn't been started, it is safe to roll back the migration without restoring the Synapse database.
+In *any case*, the migration tool itself **will not** write to the Palpo database, so as long as MAS hasn't been started, it is safe to roll back the migration without restoring the Palpo database.
 
 Please report migration failures to the developers.
 

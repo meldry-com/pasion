@@ -228,7 +228,7 @@
       "manage_sessions": "Spravujte svá zařízení a relace",
       "mas_admin": "Spravujte libovolného uživatele ve službě palpo-auth-service",
       "send_messages": "Odesílání nových zpráv vaším jménem",
-      "synapse_admin": "Spravujte domovský server Synapse",
+      "palpo_admin": "Spravujte domovský server Palpo",
       "view_messages": "Zobrazte své stávající zprávy a data",
       "view_profile": "Zobrazení informací o vašem profilu a kontaktních údajů"
     },

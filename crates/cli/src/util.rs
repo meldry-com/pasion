@@ -11,7 +11,7 @@ use mas_data_model::{SessionExpirationConfig, SessionLimitConfig, SiteConfig};
 use mas_email::{MailTransport, Mailer};
 use mas_handlers::passwords::PasswordManager;
 use mas_matrix::{HomeserverConnection, ReadOnlyHomeserverConnection};
-use mas_matrix_synapse::{LegacySynapseConnection, SynapseConnection};
+use mas_matrix_palpo::PalpoConnection;
 use mas_policy::PolicyFactory;
 use mas_router::UrlBuilder;
 use mas_storage::{BoxRepositoryFactory, RepositoryAccess, RepositoryFactory};
@@ -485,22 +485,16 @@ pub async fn homeserver_connection_from_config(
     http_client: reqwest::Client,
 ) -> anyhow::Result<Arc<dyn HomeserverConnection>> {
     Ok(match config.kind {
-        HomeserverKind::Synapse | HomeserverKind::SynapseModern => {
-            Arc::new(SynapseConnection::new(
+        HomeserverKind::Palpo | HomeserverKind::PalpoModern => {
+            Arc::new(PalpoConnection::new(
                 config.homeserver.clone(),
                 config.endpoint.clone(),
                 config.secret().await?,
                 http_client,
             ))
         }
-        HomeserverKind::SynapseLegacy => Arc::new(LegacySynapseConnection::new(
-            config.homeserver.clone(),
-            config.endpoint.clone(),
-            config.secret().await?,
-            http_client,
-        )),
-        HomeserverKind::SynapseReadOnly => {
-            let connection = SynapseConnection::new(
+        HomeserverKind::PalpoReadOnly => {
+            let connection = PalpoConnection::new(
                 config.homeserver.clone(),
                 config.endpoint.clone(),
                 config.secret().await?,

@@ -1,6 +1,6 @@
 # Releasing
 
-MAS follows the same release cadence as Synapse, meaning usually one full release cycle every two weeks, with one week of release candidates.
+MAS follows the same release cadence as Palpo, meaning usually one full release cycle every two weeks, with one week of release candidates.
 
 ## GitHub Action workflows
 

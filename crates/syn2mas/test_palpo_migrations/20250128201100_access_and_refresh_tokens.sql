@@ -1,4 +1,4 @@
--- Brings in the `access_tokens` and `refresh_tokens` tables from Synapse
+-- Brings in the `access_tokens` and `refresh_tokens` tables from Palpo
 
 CREATE TABLE access_tokens (
     id bigint NOT NULL,

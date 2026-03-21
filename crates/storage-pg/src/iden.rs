@@ -55,7 +55,7 @@ pub enum CompatSessions {
     UserSessionId,
     CreatedAt,
     FinishedAt,
-    IsSynapseAdmin,
+    IsPalpoAdmin,
     UserAgent,
     LastActiveAt,
     LastActiveIp,

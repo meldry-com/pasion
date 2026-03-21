@@ -672,10 +672,10 @@
       "@send_messages": {
         "context": "components/scope.html:48:35-63"
       },
-      "synapse_admin": "Administer the server (urn:synapse:admin:*)",
-      "@synapse_admin": {
+      "palpo_admin": "Administer the server (urn:palpo:admin:*)",
+      "@palpo_admin": {
         "context": "components/scope.html:50:53-94",
-        "description": "Displayed when the 'urn:synapse:admin:*' scope is requested"
+        "description": "Displayed when the 'urn:palpo:admin:*' scope is requested"
       },
       "view_messages": "View your existing messages and data",
       "@view_messages": {

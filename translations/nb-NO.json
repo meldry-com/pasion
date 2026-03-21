@@ -228,7 +228,7 @@
       "manage_sessions": "Administrer enhetene og sesjonene dine",
       "mas_admin": "Administrer alle brukere på palpo-auth-service",
       "send_messages": "Send nye meldinger på dine vegne",
-      "synapse_admin": "Administrer Synapse-hjemmeserveren",
+      "palpo_admin": "Administrer Palpo-hjemmeserveren",
       "view_messages": "Se dine eksisterende meldinger og data",
       "view_profile": "Se din profilinformasjon og kontaktdetaljer"
     },

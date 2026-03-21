@@ -217,7 +217,7 @@ impl CompatRefreshTokenRepository for PgCompatRefreshTokenRepository<'_> {
         .await?;
 
         // This can affect multiple rows in case we've imported refresh tokens
-        // from Synapse. What we care about is that it at least affected one,
+        // from Palpo. What we care about is that it at least affected one,
         // which is what we're checking here
         if res.rows_affected() == 0 {
             return Err(DatabaseError::RowsAffected {

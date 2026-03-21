@@ -170,34 +170,34 @@ test_mix_stable_and_unstable_scopes if {
 		with input.scope as "urn:matrix:client:api:* urn:matrix:org.matrix.msc2967.client:api:*"
 }
 
-test_synapse_admin_scopes if {
+test_palpo_admin_scopes if {
 	some grant_type in ["authorization_code", "urn:ietf:params:oauth:grant-type:device_code"]
 
 	authorization_grant.allow with input.user as user
 		with input.client as client
 		with data.admin_users as ["john"]
 		with input.grant_type as grant_type
-		with input.scope as "urn:synapse:admin:*"
+		with input.scope as "urn:palpo:admin:*"
 
 	not authorization_grant.allow with input.user as user
 		with input.client as client
 		with data.admin_users as []
 		with input.grant_type as grant_type
-		with input.scope as "urn:synapse:admin:*"
+		with input.scope as "urn:palpo:admin:*"
 
 	authorization_grant.allow with input.user as user
 		with input.user.can_request_admin as true
 		with input.client as client
 		with data.admin_users as []
 		with input.grant_type as grant_type
-		with input.scope as "urn:synapse:admin:*"
+		with input.scope as "urn:palpo:admin:*"
 
 	not authorization_grant.allow with input.user as user
 		with input.user.can_request_admin as false
 		with input.client as client
 		with data.admin_users as []
 		with input.grant_type as grant_type
-		with input.scope as "urn:synapse:admin:*"
+		with input.scope as "urn:palpo:admin:*"
 }
 
 test_mas_scopes if {

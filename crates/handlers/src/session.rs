@@ -113,7 +113,7 @@ pub async fn load_session_or_fallback(
 /// # Backstory
 ///
 /// Originally, we were only intending to count sessions with devices in this
-/// result, because those are the entries that are expensive for Synapse and
+/// result, because those are the entries that are expensive for Palpo and
 /// also would not hinder use of deviceless clients (like Element Admin, an
 /// admin dashboard).
 ///

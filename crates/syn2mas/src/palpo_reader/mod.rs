@@ -1,7 +1,7 @@
-//! # Synapse Database Reader
+//! # Palpo Database Reader
 //!
 //! This module provides facilities for streaming relevant types of database
-//! records from a Synapse database.
+//! records from a Palpo database.
 
 use std::fmt::Display;
 
@@ -83,35 +83,35 @@ impl FullUserId {
     }
 }
 
-/// A Synapse boolean.
-/// Synapse stores booleans as 0 or 1, due to compatibility with old SQLite
+/// A Palpo boolean.
+/// Palpo stores booleans as 0 or 1, due to compatibility with old SQLite
 /// versions that did not have native boolean support.
 #[derive(Copy, Clone, Debug, PartialEq, Eq, PartialOrd, Ord)]
-pub struct SynapseBool(bool);
+pub struct PalpoBool(bool);
 
-impl<'r> sqlx::Decode<'r, Postgres> for SynapseBool {
+impl<'r> sqlx::Decode<'r, Postgres> for PalpoBool {
     fn decode(
         value: <Postgres as sqlx::Database>::ValueRef<'r>,
     ) -> Result<Self, sqlx::error::BoxDynError> {
         <i16 as sqlx::Decode<Postgres>>::decode(value)
-            .map(|boolean_int| SynapseBool(boolean_int != 0))
+            .map(|boolean_int| PalpoBool(boolean_int != 0))
     }
 }
 
-impl sqlx::Type<Postgres> for SynapseBool {
+impl sqlx::Type<Postgres> for PalpoBool {
     fn type_info() -> <Postgres as sqlx::Database>::TypeInfo {
         <i16 as sqlx::Type<Postgres>>::type_info()
     }
 }
 
-impl From<SynapseBool> for bool {
-    fn from(SynapseBool(value): SynapseBool) -> Self {
+impl From<PalpoBool> for bool {
+    fn from(PalpoBool(value): PalpoBool) -> Self {
         value
     }
 }
 
 /// A timestamp stored as the number of seconds since the Unix epoch.
-/// Note that Synapse stores MOST timestamps as numbers of **milliseconds**
+/// Note that Palpo stores MOST timestamps as numbers of **milliseconds**
 /// since the Unix epoch. But some timestamps are still stored in seconds.
 #[derive(Copy, Clone, Debug, PartialEq, Eq, PartialOrd, Ord)]
 pub struct SecondsTimestamp(DateTime<Utc>);
@@ -141,7 +141,7 @@ impl sqlx::Type<Postgres> for SecondsTimestamp {
 }
 
 /// A timestamp stored as the number of milliseconds since the Unix epoch.
-/// Note that Synapse stores some timestamps in seconds.
+/// Note that Palpo stores some timestamps in seconds.
 #[derive(Copy, Clone, Debug, PartialEq, Eq, PartialOrd, Ord)]
 pub struct MillisecondsTimestamp(DateTime<Utc>);
 
@@ -170,16 +170,16 @@ impl sqlx::Type<Postgres> for MillisecondsTimestamp {
 }
 
 #[derive(Clone, Debug, FromRow, PartialEq, Eq, PartialOrd, Ord)]
-pub struct SynapseUser {
+pub struct PalpoUser {
     /// Full User ID of the user
     pub name: FullUserId,
     /// Password hash string for the user. Optional (null if no password is
     /// set).
     pub password_hash: Option<String>,
-    /// Whether the user is a Synapse Admin
-    pub admin: SynapseBool,
+    /// Whether the user is a Palpo Admin
+    pub admin: PalpoBool,
     /// Whether the user is deactivated
-    pub deactivated: SynapseBool,
+    pub deactivated: PalpoBool,
     /// Whether the user is locked
     pub locked: bool,
     /// When the user was created
@@ -187,31 +187,31 @@ pub struct SynapseUser {
     /// Whether the user is a guest.
     /// Note that not all numeric user IDs are guests; guests can upgrade their
     /// account!
-    pub is_guest: SynapseBool,
+    pub is_guest: PalpoBool,
     /// The ID of the appservice that created this user, if any.
     pub appservice_id: Option<String>,
 }
 
-/// Row of the `user_threepids` table in Synapse.
+/// Row of the `user_threepids` table in Palpo.
 #[derive(Clone, Debug, FromRow, PartialEq, Eq, PartialOrd, Ord)]
-pub struct SynapseThreepid {
+pub struct PalpoThreepid {
     pub user_id: FullUserId,
     pub medium: String,
     pub address: String,
     pub added_at: MillisecondsTimestamp,
 }
 
-/// Row of the `user_external_ids` table in Synapse.
+/// Row of the `user_external_ids` table in Palpo.
 #[derive(Clone, Debug, FromRow, PartialEq, Eq, PartialOrd, Ord)]
-pub struct SynapseExternalId {
+pub struct PalpoExternalId {
     pub user_id: FullUserId,
     pub auth_provider: String,
     pub external_id: String,
 }
 
-/// Row of the `devices` table in Synapse.
+/// Row of the `devices` table in Palpo.
 #[derive(Clone, Debug, FromRow, PartialEq, Eq, PartialOrd, Ord)]
-pub struct SynapseDevice {
+pub struct PalpoDevice {
     pub user_id: FullUserId,
     pub device_id: String,
     pub display_name: Option<String>,
@@ -220,9 +220,9 @@ pub struct SynapseDevice {
     pub user_agent: Option<String>,
 }
 
-/// Row of the `access_tokens` table in Synapse.
+/// Row of the `access_tokens` table in Palpo.
 #[derive(Clone, Debug, FromRow, PartialEq, Eq, PartialOrd, Ord)]
-pub struct SynapseAccessToken {
+pub struct PalpoAccessToken {
     pub user_id: FullUserId,
     pub device_id: Option<String>,
     pub token: String,
@@ -230,9 +230,9 @@ pub struct SynapseAccessToken {
     pub last_validated: Option<MillisecondsTimestamp>,
 }
 
-/// Row of the `refresh_tokens` table in Synapse.
+/// Row of the `refresh_tokens` table in Palpo.
 #[derive(Clone, Debug, FromRow, PartialEq, Eq, PartialOrd, Ord)]
-pub struct SynapseRefreshableTokenPair {
+pub struct PalpoRefreshableTokenPair {
     pub user_id: FullUserId,
     pub device_id: String,
     pub access_token: String,
@@ -241,10 +241,10 @@ pub struct SynapseRefreshableTokenPair {
     pub last_validated: Option<MillisecondsTimestamp>,
 }
 
-/// List of Synapse tables that we should acquire an `EXCLUSIVE` lock on.
+/// List of Palpo tables that we should acquire an `EXCLUSIVE` lock on.
 ///
 /// This is a safety measure against other processes changing the data
-/// underneath our feet. It's still not a good idea to run Synapse at the same
+/// underneath our feet. It's still not a good idea to run Palpo at the same
 /// time as the migration.
 const TABLES_TO_LOCK: &[&str] = &[
     "users",
@@ -255,10 +255,10 @@ const TABLES_TO_LOCK: &[&str] = &[
     "refresh_tokens",
 ];
 
-/// Number of migratable rows in various Synapse tables.
+/// Number of migratable rows in various Palpo tables.
 /// Used to estimate progress.
 #[derive(Clone, Debug)]
-pub struct SynapseRowCounts {
+pub struct PalpoRowCounts {
     pub users: usize,
     pub devices: usize,
     pub threepids: usize,
@@ -267,26 +267,26 @@ pub struct SynapseRowCounts {
     pub refresh_tokens: usize,
 }
 
-pub struct SynapseReader<'c> {
+pub struct PalpoReader<'c> {
     txn: Transaction<'c, Postgres>,
 }
 
-impl<'conn> SynapseReader<'conn> {
-    /// Create a new Synapse reader, which entails creating a transaction and
-    /// locking Synapse tables.
+impl<'conn> PalpoReader<'conn> {
+    /// Create a new Palpo reader, which entails creating a transaction and
+    /// locking Palpo tables.
     ///
     /// # Errors
     ///
     /// Errors are returned under the following circumstances:
     ///
     /// - An underlying database error
-    /// - If we can't lock the Synapse tables (pointing to the fact that Synapse
+    /// - If we can't lock the Palpo tables (pointing to the fact that Palpo
     ///   may still be running)
     pub async fn new(
-        synapse_connection: &'conn mut PgConnection,
+        palpo_connection: &'conn mut PgConnection,
         dry_run: bool,
     ) -> Result<Self, Error> {
-        let mut txn = synapse_connection
+        let mut txn = palpo_connection
             .begin()
             .await
             .into_database("begin transaction")?;
@@ -297,8 +297,8 @@ impl<'conn> SynapseReader<'conn> {
             .into_database("set transaction")?;
 
         let lock_type = if dry_run {
-            // We expect dry runs to be done alongside Synapse running, so we don't want to
-            // interfere with Synapse's database access in that case.
+            // We expect dry runs to be done alongside Palpo running, so we don't want to
+            // interfere with Palpo's database access in that case.
             "ACCESS SHARE"
         } else {
             "EXCLUSIVE"
@@ -307,13 +307,13 @@ impl<'conn> SynapseReader<'conn> {
             query(&format!("LOCK TABLE {table} IN {lock_type} MODE NOWAIT;"))
                 .execute(&mut *txn)
                 .await
-                .into_database_with(|| format!("locking Synapse table `{table}`"))?;
+                .into_database_with(|| format!("locking Palpo table `{table}`"))?;
         }
 
         Ok(Self { txn })
     }
 
-    /// Finishes the Synapse reader, committing the transaction.
+    /// Finishes the Palpo reader, committing the transaction.
     ///
     /// # Errors
     ///
@@ -325,7 +325,7 @@ impl<'conn> SynapseReader<'conn> {
         Ok(())
     }
 
-    /// Counts the rows in the Synapse database to get an estimate of how large
+    /// Counts the rows in the Palpo database to get an estimate of how large
     /// the migration is going to be.
     ///
     /// # Errors
@@ -333,7 +333,7 @@ impl<'conn> SynapseReader<'conn> {
     /// Errors are returned under the following circumstances:
     ///
     /// - An underlying database error
-    pub async fn count_rows(&mut self) -> Result<SynapseRowCounts, Error> {
+    pub async fn count_rows(&mut self) -> Result<PalpoRowCounts, Error> {
         // We don't get to filter out application service users by using this estimate,
         // which is a shame, but on a large database this is way faster.
         // On matrix.org, counting users and devices properly takes around 1m10s,
@@ -411,7 +411,7 @@ impl<'conn> SynapseReader<'conn> {
         .try_into()
         .unwrap_or(usize::MAX);
 
-        Ok(SynapseRowCounts {
+        Ok(PalpoRowCounts {
             users,
             devices,
             threepids,
@@ -421,9 +421,9 @@ impl<'conn> SynapseReader<'conn> {
         })
     }
 
-    /// Reads Synapse users, excluding application service users (which do not
+    /// Reads Palpo users, excluding application service users (which do not
     /// need to be migrated), from the database.
-    pub fn read_users(&mut self) -> impl Stream<Item = Result<SynapseUser, Error>> + '_ {
+    pub fn read_users(&mut self) -> impl Stream<Item = Result<PalpoUser, Error>> + '_ {
         sqlx::query_as(
             "
             SELECT
@@ -432,12 +432,12 @@ impl<'conn> SynapseReader<'conn> {
             ",
         )
         .fetch(&mut *self.txn)
-        .map_err(|err| err.into_database("reading Synapse users"))
+        .map_err(|err| err.into_database("reading Palpo users"))
     }
 
     /// Reads threepids (such as e-mail and phone number associations) from
-    /// Synapse.
-    pub fn read_threepids(&mut self) -> impl Stream<Item = Result<SynapseThreepid, Error>> + '_ {
+    /// Palpo.
+    pub fn read_threepids(&mut self) -> impl Stream<Item = Result<PalpoThreepid, Error>> + '_ {
         sqlx::query_as(
             "
             SELECT
@@ -446,13 +446,13 @@ impl<'conn> SynapseReader<'conn> {
             ",
         )
         .fetch(&mut *self.txn)
-        .map_err(|err| err.into_database("reading Synapse threepids"))
+        .map_err(|err| err.into_database("reading Palpo threepids"))
     }
 
-    /// Read associations between Synapse users and external identity providers
+    /// Read associations between Palpo users and external identity providers
     pub fn read_user_external_ids(
         &mut self,
-    ) -> impl Stream<Item = Result<SynapseExternalId, Error>> + '_ {
+    ) -> impl Stream<Item = Result<PalpoExternalId, Error>> + '_ {
         sqlx::query_as(
             "
             SELECT
@@ -461,13 +461,13 @@ impl<'conn> SynapseReader<'conn> {
             ",
         )
         .fetch(&mut *self.txn)
-        .map_err(|err| err.into_database("reading Synapse user external IDs"))
+        .map_err(|err| err.into_database("reading Palpo user external IDs"))
     }
 
-    /// Reads devices from the Synapse database.
+    /// Reads devices from the Palpo database.
     /// Does not include so-called 'hidden' devices, which are just a mechanism
     /// for storing various signing keys shared between the real devices.
-    pub fn read_devices(&mut self) -> impl Stream<Item = Result<SynapseDevice, Error>> + '_ {
+    pub fn read_devices(&mut self) -> impl Stream<Item = Result<PalpoDevice, Error>> + '_ {
         sqlx::query_as(
             "
             SELECT
@@ -477,21 +477,21 @@ impl<'conn> SynapseReader<'conn> {
             ",
         )
         .fetch(&mut *self.txn)
-        .map_err(|err| err.into_database("reading Synapse devices"))
+        .map_err(|err| err.into_database("reading Palpo devices"))
     }
 
-    /// Reads unrefreshable access tokens from the Synapse database.
+    /// Reads unrefreshable access tokens from the Palpo database.
     /// This does not include access tokens used for puppetting users, as those
     /// are not supported by MAS.
     ///
     /// This also excludes access tokens whose referenced device ID does not
     /// exist, except for deviceless access tokens.
-    /// (It's unclear what mechanism led to these, but since Synapse has no
+    /// (It's unclear what mechanism led to these, but since Palpo has no
     /// foreign key constraints and is not consistently atomic about this,
     /// it should be no surprise really)
     pub fn read_unrefreshable_access_tokens(
         &mut self,
-    ) -> impl Stream<Item = Result<SynapseAccessToken, Error>> + '_ {
+    ) -> impl Stream<Item = Result<PalpoAccessToken, Error>> + '_ {
         sqlx::query_as(
             "
             SELECT
@@ -509,10 +509,10 @@ impl<'conn> SynapseReader<'conn> {
             ",
         )
         .fetch(&mut *self.txn)
-        .map_err(|err| err.into_database("reading Synapse access tokens"))
+        .map_err(|err| err.into_database("reading Palpo access tokens"))
     }
 
-    /// Reads (access token, refresh token) pairs from the Synapse database.
+    /// Reads (access token, refresh token) pairs from the Palpo database.
     /// This does not include token pairs which have been made obsolete
     /// by using the refresh token and then acknowledging the
     /// successor access token by using it to authenticate a request.
@@ -523,7 +523,7 @@ impl<'conn> SynapseReader<'conn> {
     /// our knowledge.
     pub fn read_refreshable_token_pairs(
         &mut self,
-    ) -> impl Stream<Item = Result<SynapseRefreshableTokenPair, Error>> + '_ {
+    ) -> impl Stream<Item = Result<PalpoRefreshableTokenPair, Error>> + '_ {
         sqlx::query_as(
             "
             SELECT
@@ -536,7 +536,7 @@ impl<'conn> SynapseReader<'conn> {
             ",
         )
         .fetch(&mut *self.txn)
-        .map_err(|err| err.into_database("reading Synapse refresh tokens"))
+        .map_err(|err| err.into_database("reading Palpo refresh tokens"))
     }
 }
 
@@ -549,27 +549,27 @@ mod test {
     use sqlx::{PgPool, migrate::Migrator};
 
     use crate::{
-        SynapseReader,
-        synapse_reader::{
-            SynapseAccessToken, SynapseDevice, SynapseExternalId, SynapseRefreshableTokenPair,
-            SynapseThreepid, SynapseUser,
+        PalpoReader,
+        palpo_reader::{
+            PalpoAccessToken, PalpoDevice, PalpoExternalId, PalpoRefreshableTokenPair,
+            PalpoThreepid, PalpoUser,
         },
     };
 
-    static MIGRATOR: Migrator = sqlx::migrate!("./test_synapse_migrations");
+    static MIGRATOR: Migrator = sqlx::migrate!("./test_palpo_migrations");
 
     #[sqlx::test(migrator = "MIGRATOR", fixtures("user_alice"))]
     async fn test_read_users(pool: PgPool) {
         let mut conn = pool.acquire().await.expect("failed to get connection");
-        let mut reader = SynapseReader::new(&mut conn, false)
+        let mut reader = PalpoReader::new(&mut conn, false)
             .await
-            .expect("failed to make SynapseReader");
+            .expect("failed to make PalpoReader");
 
-        let users: BTreeSet<SynapseUser> = reader
+        let users: BTreeSet<PalpoUser> = reader
             .read_users()
             .try_collect()
             .await
-            .expect("failed to read Synapse users");
+            .expect("failed to read Palpo users");
 
         assert_debug_snapshot!(users);
     }
@@ -577,15 +577,15 @@ mod test {
     #[sqlx::test(migrator = "MIGRATOR", fixtures("user_alice", "threepids_alice"))]
     async fn test_read_threepids(pool: PgPool) {
         let mut conn = pool.acquire().await.expect("failed to get connection");
-        let mut reader = SynapseReader::new(&mut conn, false)
+        let mut reader = PalpoReader::new(&mut conn, false)
             .await
-            .expect("failed to make SynapseReader");
+            .expect("failed to make PalpoReader");
 
-        let threepids: BTreeSet<SynapseThreepid> = reader
+        let threepids: BTreeSet<PalpoThreepid> = reader
             .read_threepids()
             .try_collect()
             .await
-            .expect("failed to read Synapse threepids");
+            .expect("failed to read Palpo threepids");
 
         assert_debug_snapshot!(threepids);
     }
@@ -593,15 +593,15 @@ mod test {
     #[sqlx::test(migrator = "MIGRATOR", fixtures("user_alice", "external_ids_alice"))]
     async fn test_read_external_ids(pool: PgPool) {
         let mut conn = pool.acquire().await.expect("failed to get connection");
-        let mut reader = SynapseReader::new(&mut conn, false)
+        let mut reader = PalpoReader::new(&mut conn, false)
             .await
-            .expect("failed to make SynapseReader");
+            .expect("failed to make PalpoReader");
 
-        let external_ids: BTreeSet<SynapseExternalId> = reader
+        let external_ids: BTreeSet<PalpoExternalId> = reader
             .read_user_external_ids()
             .try_collect()
             .await
-            .expect("failed to read Synapse external user IDs");
+            .expect("failed to read Palpo external user IDs");
 
         assert_debug_snapshot!(external_ids);
     }
@@ -609,15 +609,15 @@ mod test {
     #[sqlx::test(migrator = "MIGRATOR", fixtures("user_alice", "devices_alice"))]
     async fn test_read_devices(pool: PgPool) {
         let mut conn = pool.acquire().await.expect("failed to get connection");
-        let mut reader = SynapseReader::new(&mut conn, false)
+        let mut reader = PalpoReader::new(&mut conn, false)
             .await
-            .expect("failed to make SynapseReader");
+            .expect("failed to make PalpoReader");
 
-        let devices: BTreeSet<SynapseDevice> = reader
+        let devices: BTreeSet<PalpoDevice> = reader
             .read_devices()
             .try_collect()
             .await
-            .expect("failed to read Synapse devices");
+            .expect("failed to read Palpo devices");
 
         assert_debug_snapshot!(devices);
     }
@@ -628,15 +628,15 @@ mod test {
     )]
     async fn test_read_access_token(pool: PgPool) {
         let mut conn = pool.acquire().await.expect("failed to get connection");
-        let mut reader = SynapseReader::new(&mut conn, false)
+        let mut reader = PalpoReader::new(&mut conn, false)
             .await
-            .expect("failed to make SynapseReader");
+            .expect("failed to make PalpoReader");
 
-        let access_tokens: BTreeSet<SynapseAccessToken> = reader
+        let access_tokens: BTreeSet<PalpoAccessToken> = reader
             .read_unrefreshable_access_tokens()
             .try_collect()
             .await
-            .expect("failed to read Synapse access tokens");
+            .expect("failed to read Palpo access tokens");
 
         assert_debug_snapshot!(access_tokens);
     }
@@ -648,15 +648,15 @@ mod test {
     )]
     async fn test_read_access_token_puppet(pool: PgPool) {
         let mut conn = pool.acquire().await.expect("failed to get connection");
-        let mut reader = SynapseReader::new(&mut conn, false)
+        let mut reader = PalpoReader::new(&mut conn, false)
             .await
-            .expect("failed to make SynapseReader");
+            .expect("failed to make PalpoReader");
 
-        let access_tokens: BTreeSet<SynapseAccessToken> = reader
+        let access_tokens: BTreeSet<PalpoAccessToken> = reader
             .read_unrefreshable_access_tokens()
             .try_collect()
             .await
-            .expect("failed to read Synapse access tokens");
+            .expect("failed to read Palpo access tokens");
 
         assert!(access_tokens.is_empty());
     }
@@ -667,21 +667,21 @@ mod test {
     )]
     async fn test_read_access_and_refresh_tokens(pool: PgPool) {
         let mut conn = pool.acquire().await.expect("failed to get connection");
-        let mut reader = SynapseReader::new(&mut conn, false)
+        let mut reader = PalpoReader::new(&mut conn, false)
             .await
-            .expect("failed to make SynapseReader");
+            .expect("failed to make PalpoReader");
 
-        let access_tokens: BTreeSet<SynapseAccessToken> = reader
+        let access_tokens: BTreeSet<PalpoAccessToken> = reader
             .read_unrefreshable_access_tokens()
             .try_collect()
             .await
-            .expect("failed to read Synapse access tokens");
+            .expect("failed to read Palpo access tokens");
 
-        let refresh_tokens: BTreeSet<SynapseRefreshableTokenPair> = reader
+        let refresh_tokens: BTreeSet<PalpoRefreshableTokenPair> = reader
             .read_refreshable_token_pairs()
             .try_collect()
             .await
-            .expect("failed to read Synapse refresh tokens");
+            .expect("failed to read Palpo refresh tokens");
 
         assert!(
             access_tokens.is_empty(),
@@ -700,21 +700,21 @@ mod test {
     )]
     async fn test_read_access_and_unused_refresh_tokens(pool: PgPool) {
         let mut conn = pool.acquire().await.expect("failed to get connection");
-        let mut reader = SynapseReader::new(&mut conn, false)
+        let mut reader = PalpoReader::new(&mut conn, false)
             .await
-            .expect("failed to make SynapseReader");
+            .expect("failed to make PalpoReader");
 
-        let access_tokens: BTreeSet<SynapseAccessToken> = reader
+        let access_tokens: BTreeSet<PalpoAccessToken> = reader
             .read_unrefreshable_access_tokens()
             .try_collect()
             .await
-            .expect("failed to read Synapse access tokens");
+            .expect("failed to read Palpo access tokens");
 
-        let refresh_tokens: BTreeSet<SynapseRefreshableTokenPair> = reader
+        let refresh_tokens: BTreeSet<PalpoRefreshableTokenPair> = reader
             .read_refreshable_token_pairs()
             .try_collect()
             .await
-            .expect("failed to read Synapse refresh tokens");
+            .expect("failed to read Palpo refresh tokens");
 
         assert!(
             access_tokens.is_empty(),

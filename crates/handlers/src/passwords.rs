@@ -296,7 +296,7 @@ impl Hasher {
 
     fn normalize_password(&self, password: Zeroizing<String>) -> Zeroizing<String> {
         if self.unicode_normalization {
-            // This is the normalization method used by Synapse
+            // This is the normalization method used by Palpo
             let normalizer = icu_normalizer::ComposingNormalizer::new_nfkc();
             Zeroizing::new(normalizer.normalize(&password))
         } else {
@@ -636,7 +636,7 @@ mod tests {
         let manager = PasswordManager::new(
             0,
             [
-                // Start with one hashing scheme: the one used by synapse, bcrypt + pepper
+                // Start with one hashing scheme: the one used by palpo, bcrypt + pepper
                 (
                     1,
                     Hasher::bcrypt(Some(10), Some(b"a-secret-pepper".to_vec()), false),

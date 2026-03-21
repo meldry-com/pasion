@@ -1,9 +1,9 @@
 ---
-source: crates/syn2mas/src/synapse_reader/mod.rs
+source: crates/syn2mas/src/palpo_reader/mod.rs
 expression: external_ids
 ---
 {
-    SynapseExternalId {
+    PalpoExternalId {
         user_id: FullUserId(
             "@alice:example.com",
         ),

@@ -8,17 +8,17 @@ use serde::{Deserialize, Serialize};
 use tracing::debug;
 use url::Url;
 
-use crate::error::{M_EXCLUSIVE, M_INVALID_USERNAME, M_USER_IN_USE, SynapseResponseExt as _};
+use crate::error::{M_EXCLUSIVE, M_INVALID_USERNAME, M_USER_IN_USE, PalpoResponseExt as _};
 
 #[derive(Clone)]
-pub struct SynapseConnection {
+pub struct PalpoConnection {
     homeserver: String,
     endpoint: Url,
     access_token: String,
     http_client: reqwest::Client,
 }
 
-impl SynapseConnection {
+impl PalpoConnection {
     #[must_use]
     pub fn new(
         homeserver: String,
@@ -56,7 +56,7 @@ impl SynapseConnection {
 }
 
 #[async_trait::async_trait]
-impl HomeserverConnection for SynapseConnection {
+impl HomeserverConnection for PalpoConnection {
     fn homeserver(&self) -> &str {
         &self.homeserver
     }
@@ -87,22 +87,22 @@ impl HomeserverConnection for SynapseConnection {
         }
 
         let encoded_localpart = urlencoding::encode(localpart);
-        let url = format!("_synapse/mas/query_user?localpart={encoded_localpart}");
+        let url = format!("_palpo/mas/query_user?localpart={encoded_localpart}");
         let response = self
             .get(&url)
             .send_traced()
             .await
-            .context("Failed to query user from Synapse")?;
+            .context("Failed to query user from Palpo")?;
 
         let response = response
-            .error_for_synapse_error()
+            .error_for_palpo_error()
             .await
-            .context("Unexpected HTTP response while querying user from Synapse")?;
+            .context("Unexpected HTTP response while querying user from Palpo")?;
 
         let body: Response = response
             .json()
             .await
-            .context("Failed to deserialize response while querying user from Synapse")?;
+            .context("Failed to deserialize response while querying user from Palpo")?;
 
         Ok(MatrixUser {
             displayname: body.display_name,
@@ -164,22 +164,22 @@ impl HomeserverConnection for SynapseConnection {
         });
 
         let response = self
-            .post("_synapse/mas/provision_user")
+            .post("_palpo/mas/provision_user")
             .json(&body)
             .send_traced()
             .await
-            .context("Failed to provision user in Synapse")?;
+            .context("Failed to provision user in Palpo")?;
 
         let response = response
-            .error_for_synapse_error()
+            .error_for_palpo_error()
             .await
-            .context("Unexpected HTTP response while provisioning user in Synapse")?;
+            .context("Unexpected HTTP response while provisioning user in Palpo")?;
 
         match response.status() {
             StatusCode::CREATED => Ok(true),
             StatusCode::OK => Ok(false),
             code => {
-                anyhow::bail!("Unexpected HTTP code while provisioning user in Synapse: {code}")
+                anyhow::bail!("Unexpected HTTP code while provisioning user in Palpo: {code}")
             }
         }
     }
@@ -194,21 +194,21 @@ impl HomeserverConnection for SynapseConnection {
         err(Debug),
     )]
     async fn is_localpart_available(&self, localpart: &str) -> Result<bool, anyhow::Error> {
-        // Synapse will give us an error if the localpart is not ASCII, so we bail out
+        // Palpo will give us an error if the localpart is not ASCII, so we bail out
         // early
         if !localpart.is_ascii() {
             return Ok(false);
         }
 
         let encoded_localpart = urlencoding::encode(localpart);
-        let url = format!("_synapse/mas/is_localpart_available?localpart={encoded_localpart}");
+        let url = format!("_palpo/mas/is_localpart_available?localpart={encoded_localpart}");
         let response = self
             .get(&url)
             .send_traced()
             .await
-            .context("Failed to check localpart availability from Synapse")?;
+            .context("Failed to check localpart availability from Palpo")?;
 
-        match response.error_for_synapse_error().await {
+        match response.error_for_palpo_error().await {
             Ok(_resp) => Ok(true),
             Err(err)
                 if err.errcode() == Some(M_INVALID_USERNAME)
@@ -222,7 +222,7 @@ impl HomeserverConnection for SynapseConnection {
                 Ok(false)
             }
 
-            Err(err) => Err(err).context("Failed to query localpart availability from Synapse"),
+            Err(err) => Err(err).context("Failed to query localpart availability from Palpo"),
         }
     }
 
@@ -257,16 +257,16 @@ impl HomeserverConnection for SynapseConnection {
         };
 
         let response = self
-            .post("_synapse/mas/upsert_device")
+            .post("_palpo/mas/upsert_device")
             .json(&body)
             .send_traced()
             .await
-            .context("Failed to create device in Synapse")?;
+            .context("Failed to create device in Palpo")?;
 
         response
-            .error_for_synapse_error()
+            .error_for_palpo_error()
             .await
-            .context("Unexpected HTTP response while creating device in Synapse")?;
+            .context("Unexpected HTTP response while creating device in Palpo")?;
 
         Ok(())
     }
@@ -301,16 +301,16 @@ impl HomeserverConnection for SynapseConnection {
         };
 
         let response = self
-            .post("_synapse/mas/update_device_display_name")
+            .post("_palpo/mas/update_device_display_name")
             .json(&body)
             .send_traced()
             .await
-            .context("Failed to update device display name in Synapse")?;
+            .context("Failed to update device display name in Palpo")?;
 
         response
-            .error_for_synapse_error()
+            .error_for_palpo_error()
             .await
-            .context("Unexpected HTTP response while updating device display name in Synapse")?;
+            .context("Unexpected HTTP response while updating device display name in Palpo")?;
 
         Ok(())
     }
@@ -338,16 +338,16 @@ impl HomeserverConnection for SynapseConnection {
         };
 
         let response = self
-            .post("_synapse/mas/delete_device")
+            .post("_palpo/mas/delete_device")
             .json(&body)
             .send_traced()
             .await
-            .context("Failed to delete device in Synapse")?;
+            .context("Failed to delete device in Palpo")?;
 
         response
-            .error_for_synapse_error()
+            .error_for_palpo_error()
             .await
-            .context("Unexpected HTTP response while deleting device in Synapse")?;
+            .context("Unexpected HTTP response while deleting device in Palpo")?;
 
         Ok(())
     }
@@ -376,16 +376,16 @@ impl HomeserverConnection for SynapseConnection {
         let body = Request { localpart, devices };
 
         let response = self
-            .post("_synapse/mas/sync_devices")
+            .post("_palpo/mas/sync_devices")
             .json(&body)
             .send_traced()
             .await
-            .context("Failed to sync devices in Synapse")?;
+            .context("Failed to sync devices in Palpo")?;
 
         response
-            .error_for_synapse_error()
+            .error_for_palpo_error()
             .await
-            .context("Unexpected HTTP response while syncing devices in Synapse")?;
+            .context("Unexpected HTTP response while syncing devices in Palpo")?;
 
         Ok(())
     }
@@ -410,16 +410,16 @@ impl HomeserverConnection for SynapseConnection {
         let body = Request { localpart, erase };
 
         let response = self
-            .post("_synapse/mas/delete_user")
+            .post("_palpo/mas/delete_user")
             .json(&body)
             .send_traced()
             .await
-            .context("Failed to delete user in Synapse")?;
+            .context("Failed to delete user in Palpo")?;
 
         response
-            .error_for_synapse_error()
+            .error_for_palpo_error()
             .await
-            .context("Unexpected HTTP response while deleting user in Synapse")?;
+            .context("Unexpected HTTP response while deleting user in Palpo")?;
 
         Ok(())
     }
@@ -442,16 +442,16 @@ impl HomeserverConnection for SynapseConnection {
         let body = Request { localpart };
 
         let response = self
-            .post("_synapse/mas/reactivate_user")
+            .post("_palpo/mas/reactivate_user")
             .json(&body)
             .send_traced()
             .await
-            .context("Failed to reactivate user in Synapse")?;
+            .context("Failed to reactivate user in Palpo")?;
 
         response
-            .error_for_synapse_error()
+            .error_for_palpo_error()
             .await
-            .context("Unexpected HTTP response while reactivating user in Synapse")?;
+            .context("Unexpected HTTP response while reactivating user in Palpo")?;
 
         Ok(())
     }
@@ -482,16 +482,16 @@ impl HomeserverConnection for SynapseConnection {
         };
 
         let response = self
-            .post("_synapse/mas/set_displayname")
+            .post("_palpo/mas/set_displayname")
             .json(&body)
             .send_traced()
             .await
-            .context("Failed to set displayname in Synapse")?;
+            .context("Failed to set displayname in Palpo")?;
 
         response
-            .error_for_synapse_error()
+            .error_for_palpo_error()
             .await
-            .context("Unexpected HTTP response while setting displayname in Synapse")?;
+            .context("Unexpected HTTP response while setting displayname in Palpo")?;
 
         Ok(())
     }
@@ -514,16 +514,16 @@ impl HomeserverConnection for SynapseConnection {
         let body = Request { localpart };
 
         let response = self
-            .post("_synapse/mas/unset_displayname")
+            .post("_palpo/mas/unset_displayname")
             .json(&body)
             .send_traced()
             .await
-            .context("Failed to unset displayname in Synapse")?;
+            .context("Failed to unset displayname in Palpo")?;
 
         response
-            .error_for_synapse_error()
+            .error_for_palpo_error()
             .await
-            .context("Unexpected HTTP response while unsetting displayname in Synapse")?;
+            .context("Unexpected HTTP response while unsetting displayname in Palpo")?;
 
         Ok(())
     }
@@ -546,16 +546,16 @@ impl HomeserverConnection for SynapseConnection {
         let body = Request { localpart };
 
         let response = self
-            .post("_synapse/mas/allow_cross_signing_reset")
+            .post("_palpo/mas/allow_cross_signing_reset")
             .json(&body)
             .send_traced()
             .await
-            .context("Failed to allow cross-signing reset in Synapse")?;
+            .context("Failed to allow cross-signing reset in Palpo")?;
 
         response
-            .error_for_synapse_error()
+            .error_for_palpo_error()
             .await
-            .context("Unexpected HTTP response while allowing cross-signing reset in Synapse")?;
+            .context("Unexpected HTTP response while allowing cross-signing reset in Palpo")?;
 
         Ok(())
     }

@@ -387,8 +387,8 @@ pub struct DeactivateUserInput {
     /// `/_matrix/client/v3/account/deactivate` C-S API, which is
     /// implementation-specific.
     ///
-    /// What Synapse does is documented here:
-    /// <https://palpo-im.github.io/synapse/latest/admin_api/user_admin_api.html#deactivate-account>
+    /// What Palpo does is documented here:
+    /// <https://palpo-im.github.io/palpo/latest/admin_api/user_admin_api.html#deactivate-account>
     hs_erase: bool,
 
     /// The password of the user to deactivate.

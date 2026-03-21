@@ -101,7 +101,7 @@ enum Subcommand {
         device_id: Option<String>,
 
         /// Whether that token should be admin
-        #[arg(long = "yes-i-want-to-grant-synapse-admin-privileges")]
+        #[arg(long = "yes-i-want-to-grant-admin-privileges")]
         admin: bool,
     },
 

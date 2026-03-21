@@ -212,7 +212,7 @@ const INACTIVE: IntrospectionResponse = IntrospectionResponse {
 const UNSTABLE_API_SCOPE: ScopeToken =
     ScopeToken::from_static("urn:matrix:org.matrix.msc2967.client:api:*");
 const STABLE_API_SCOPE: ScopeToken = ScopeToken::from_static("urn:matrix:client:api:*");
-const SYNAPSE_ADMIN_SCOPE: ScopeToken = ScopeToken::from_static("urn:synapse:admin:*");
+const PALPO_ADMIN_SCOPE: ScopeToken = ScopeToken::from_static("urn:palpo:admin:*");
 
 /// Normalize a scope by adding the stable and unstable API scopes equivalents
 /// if missing
@@ -515,8 +515,8 @@ async fn handle_post(
                 return Err(RouteError::InvalidUser(user.id))?;
             }
 
-            // Grant the synapse admin scope if the session has the admin flag set.
-            let synapse_admin_scope_opt = session.is_synapse_admin.then_some(SYNAPSE_ADMIN_SCOPE);
+            // Grant the palpo admin scope if the session has the admin flag set.
+            let palpo_admin_scope_opt = session.is_palpo_admin.then_some(PALPO_ADMIN_SCOPE);
 
             // If the client supports explicitly giving the device ID in the response, skip
             // encoding it in the scope
@@ -533,7 +533,7 @@ async fn handle_post(
             let scope = [STABLE_API_SCOPE, UNSTABLE_API_SCOPE]
                 .into_iter()
                 .chain(device_scope_opt.into_iter().flatten())
-                .chain(synapse_admin_scope_opt)
+                .chain(palpo_admin_scope_opt)
                 .collect();
 
             activity_tracker
@@ -599,8 +599,8 @@ async fn handle_post(
                 return Err(RouteError::InvalidUser(user.id))?;
             }
 
-            // Grant the synapse admin scope if the session has the admin flag set.
-            let synapse_admin_scope_opt = session.is_synapse_admin.then_some(SYNAPSE_ADMIN_SCOPE);
+            // Grant the palpo admin scope if the session has the admin flag set.
+            let palpo_admin_scope_opt = session.is_palpo_admin.then_some(PALPO_ADMIN_SCOPE);
 
             // If the client supports explicitly giving the device ID in the response, skip
             // encoding it in the scope
@@ -617,7 +617,7 @@ async fn handle_post(
             let scope = [STABLE_API_SCOPE, UNSTABLE_API_SCOPE]
                 .into_iter()
                 .chain(device_scope_opt.into_iter().flatten())
-                .chain(synapse_admin_scope_opt)
+                .chain(palpo_admin_scope_opt)
                 .collect();
 
             activity_tracker

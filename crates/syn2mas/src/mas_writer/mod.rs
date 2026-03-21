@@ -259,7 +259,7 @@ pub struct MasNewUser {
     pub locked_at: Option<DateTime<Utc>>,
     pub deactivated_at: Option<DateTime<Utc>>,
     pub can_request_admin: bool,
-    /// Whether the user was a Synapse guest.
+    /// Whether the user was a Palpo guest.
     /// Although MAS doesn't support guest access, it's still useful to track
     /// for the future.
     pub is_guest: bool,
@@ -519,7 +519,7 @@ pub struct MasNewCompatSession {
     pub device_id: Option<String>,
     pub human_name: Option<String>,
     pub created_at: DateTime<Utc>,
-    pub is_synapse_admin: bool,
+    pub is_palpo_admin: bool,
     pub last_active_at: Option<DateTime<Utc>>,
     pub last_active_ip: Option<IpAddr>,
     pub user_agent: Option<String>,
@@ -532,7 +532,7 @@ impl WriteBatch for MasNewCompatSession {
         let mut device_ids: Vec<Option<String>> = Vec::with_capacity(batch.len());
         let mut human_names: Vec<Option<String>> = Vec::with_capacity(batch.len());
         let mut created_ats: Vec<DateTime<Utc>> = Vec::with_capacity(batch.len());
-        let mut is_synapse_admins: Vec<bool> = Vec::with_capacity(batch.len());
+        let mut is_palpo_admins: Vec<bool> = Vec::with_capacity(batch.len());
         let mut last_active_ats: Vec<Option<DateTime<Utc>>> = Vec::with_capacity(batch.len());
         let mut last_active_ips: Vec<Option<IpAddr>> = Vec::with_capacity(batch.len());
         let mut user_agents: Vec<Option<String>> = Vec::with_capacity(batch.len());
@@ -543,7 +543,7 @@ impl WriteBatch for MasNewCompatSession {
             device_id,
             human_name,
             created_at,
-            is_synapse_admin,
+            is_palpo_admin,
             last_active_at,
             last_active_ip,
             user_agent,
@@ -554,7 +554,7 @@ impl WriteBatch for MasNewCompatSession {
             device_ids.push(device_id);
             human_names.push(human_name);
             created_ats.push(created_at);
-            is_synapse_admins.push(is_synapse_admin);
+            is_palpo_admins.push(is_palpo_admin);
             last_active_ats.push(last_active_at);
             last_active_ips.push(last_active_ip);
             user_agents.push(user_agent);
@@ -565,7 +565,7 @@ impl WriteBatch for MasNewCompatSession {
             INSERT INTO syn2mas__compat_sessions (
               compat_session_id, user_id,
               device_id, human_name,
-              created_at, is_synapse_admin,
+              created_at, is_palpo_admin,
               last_active_at, last_active_ip,
               user_agent)
             SELECT * FROM UNNEST(
@@ -580,7 +580,7 @@ impl WriteBatch for MasNewCompatSession {
             &device_ids[..] as &[Option<String>],
             &human_names[..] as &[Option<String>],
             &created_ats[..],
-            &is_synapse_admins[..],
+            &is_palpo_admins[..],
             // We need to override the typing for arrays of optionals (sqlx limitation)
             &last_active_ats[..] as &[Option<DateTime<Utc>>],
             &last_active_ips[..] as &[Option<IpAddr>],
@@ -716,7 +716,7 @@ impl WriteBatch for MasNewCompatRefreshToken {
 }
 
 /// The 'version' of the password hashing scheme used for passwords when they
-/// are migrated from Synapse to MAS.
+/// are migrated from Palpo to MAS.
 /// This is version 1, as in the previous syn2mas script.
 // TODO hardcoding version to `1` may not be correct long-term?
 pub const MIGRATED_PASSWORD_VERSION: u16 = 1;
@@ -1506,7 +1506,7 @@ mod test {
                     created_at: DateTime::default(),
                     device_id: Some("ADEVICE".to_owned()),
                     human_name: Some("alice's pinephone".to_owned()),
-                    is_synapse_admin: true,
+                    is_palpo_admin: true,
                     last_active_at: Some(DateTime::default()),
                     last_active_ip: Some("203.0.113.1".parse().unwrap()),
                     user_agent: Some("Browser/5.0".to_owned()),
@@ -1566,7 +1566,7 @@ mod test {
                     created_at: DateTime::default(),
                     device_id: Some("ADEVICE".to_owned()),
                     human_name: None,
-                    is_synapse_admin: false,
+                    is_palpo_admin: false,
                     last_active_at: None,
                     last_active_ip: None,
                     user_agent: None,
@@ -1581,7 +1581,7 @@ mod test {
                 MasNewCompatAccessToken {
                     token_id: Uuid::from_u128(6u128),
                     session_id: Uuid::from_u128(5u128),
-                    access_token: "syt_zxcvzxcvzxcvzxcv_zxcv".to_owned(),
+                    access_token: "pst_zxcvzxcvzxcvzxcv_zxcv".to_owned(),
                     created_at: DateTime::default(),
                     expires_at: None,
                 },
@@ -1646,7 +1646,7 @@ mod test {
                     created_at: DateTime::default(),
                     device_id: Some("ADEVICE".to_owned()),
                     human_name: None,
-                    is_synapse_admin: false,
+                    is_palpo_admin: false,
                     last_active_at: None,
                     last_active_ip: None,
                     user_agent: None,
@@ -1661,7 +1661,7 @@ mod test {
                 MasNewCompatAccessToken {
                     token_id: Uuid::from_u128(6u128),
                     session_id: Uuid::from_u128(5u128),
-                    access_token: "syt_zxcvzxcvzxcvzxcv_zxcv".to_owned(),
+                    access_token: "pst_zxcvzxcvzxcvzxcv_zxcv".to_owned(),
                     created_at: DateTime::default(),
                     expires_at: None,
                 },

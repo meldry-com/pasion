@@ -69,7 +69,7 @@ pub struct CompatSession {
     pub human_name: Option<String>,
     pub user_session_id: Option<Ulid>,
     pub created_at: DateTime<Utc>,
-    pub is_synapse_admin: bool,
+    pub is_palpo_admin: bool,
     pub user_agent: Option<String>,
     pub last_active_at: Option<DateTime<Utc>>,
     pub last_active_ip: Option<IpAddr>,

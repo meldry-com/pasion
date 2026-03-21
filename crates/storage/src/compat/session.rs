@@ -225,7 +225,7 @@ pub trait CompatSessionRepository: Send + Sync {
     /// * `user`: The user to create the compat session for
     /// * `device`: The device ID of this session
     /// * `browser_session`: The browser session which created this session
-    /// * `is_synapse_admin`: Whether the session is a synapse admin session
+    /// * `is_palpo_admin`: Whether the session is a palpo admin session
     /// * `human_name`: The human-readable name of the session provided by the
     ///   client or the user
     ///
@@ -240,7 +240,7 @@ pub trait CompatSessionRepository: Send + Sync {
         user: &User,
         device: Device,
         browser_session: Option<&BrowserSession>,
-        is_synapse_admin: bool,
+        is_palpo_admin: bool,
         human_name: Option<String>,
     ) -> Result<CompatSession, Self::Error>;
 
@@ -415,7 +415,7 @@ repository_impl!(CompatSessionRepository:
         user: &User,
         device: Device,
         browser_session: Option<&BrowserSession>,
-        is_synapse_admin: bool,
+        is_palpo_admin: bool,
         human_name: Option<String>,
     ) -> Result<CompatSession, Self::Error>;
 

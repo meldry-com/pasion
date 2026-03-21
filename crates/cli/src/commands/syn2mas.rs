@@ -12,7 +12,7 @@ use mas_data_model::SystemClock;
 use rand::thread_rng;
 use sqlx::{Connection, Either, PgConnection, postgres::PgConnectOptions, types::Uuid};
 use syn2mas::{
-    LockedMasDatabase, MasWriter, Progress, ProgressStage, SynapseReader, synapse_config,
+    LockedMasDatabase, MasWriter, Progress, ProgressStage, PalpoReader, palpo_config,
 };
 use tracing::{Instrument, error, info};
 
@@ -31,15 +31,15 @@ pub(super) struct Options {
     #[command(subcommand)]
     subcommand: Subcommand,
 
-    /// Path to the Synapse configuration (in YAML format).
-    /// May be specified multiple times if multiple Synapse configuration files
+    /// Path to the Palpo configuration (in YAML format).
+    /// May be specified multiple times if multiple Palpo configuration files
     /// are in use.
-    #[clap(long = "synapse-config", global = true)]
-    synapse_configuration_files: Vec<Utf8PathBuf>,
+    #[clap(long = "palpo-config", global = true)]
+    palpo_configuration_files: Vec<Utf8PathBuf>,
 
-    /// Override the Synapse database URI.
-    /// syn2mas normally loads the Synapse database connection details from the
-    /// Synapse configuration. However, it may sometimes be necessary to
+    /// Override the Palpo database URI.
+    /// syn2mas normally loads the Palpo database connection details from the
+    /// Palpo configuration. However, it may sometimes be necessary to
     /// override the database URI and in that case this flag can be used.
     ///
     /// Should be a connection URI of the following general form:
@@ -54,20 +54,20 @@ pub(super) struct Options {
     /// environment variables `PGHOST`, `PGPORT`, `PGUSER`, `PGDATABASE`,
     /// `PGPASSWORD`, etc. It is valid to specify the URL `postgresql:` and
     /// configure all values through those environment variables.
-    #[clap(long = "synapse-database-uri", global = true)]
-    synapse_database_uri: Option<PgConnectOptions>,
+    #[clap(long = "palpo-database-uri", global = true)]
+    palpo_database_uri: Option<PgConnectOptions>,
 }
 
 #[derive(Parser, Debug)]
 enum Subcommand {
     /// Check the setup for potential problems before running a migration.
     ///
-    /// It is OK for Synapse to be online during these checks.
+    /// It is OK for Palpo to be online during these checks.
     Check,
 
-    /// Perform a migration. Synapse must be offline during this process.
+    /// Perform a migration. Palpo must be offline during this process.
     Migrate {
-        /// Perform a dry-run migration, which is safe to run with Synapse
+        /// Perform a dry-run migration, which is safe to run with Palpo
         /// running, and will restore the MAS database to an empty state.
         ///
         /// This still *does* write to the MAS database, making it more
@@ -83,27 +83,27 @@ const NUM_WRITER_CONNECTIONS: usize = 8;
 impl Options {
     #[tracing::instrument("cli.syn2mas.run", skip_all)]
     pub async fn run(self, figment: &Figment) -> anyhow::Result<ExitCode> {
-        if self.synapse_configuration_files.is_empty() {
-            error!("Please specify the path to the Synapse configuration file(s).");
+        if self.palpo_configuration_files.is_empty() {
+            error!("Please specify the path to the Palpo configuration file(s).");
             return Ok(ExitCode::FAILURE);
         }
 
-        let synapse_config = synapse_config::Config::load(&self.synapse_configuration_files)
+        let palpo_config = palpo_config::Config::load(&self.palpo_configuration_files)
             .map_err(anyhow::Error::from_boxed)
-            .context("Failed to load Synapse configuration")?;
+            .context("Failed to load Palpo configuration")?;
 
-        // Establish a connection to Synapse's Postgres database
-        let syn_connection_options = if let Some(db_override) = self.synapse_database_uri {
+        // Establish a connection to Palpo's Postgres database
+        let syn_connection_options = if let Some(db_override) = self.palpo_database_uri {
             db_override
         } else {
-            synapse_config
+            palpo_config
                 .database
                 .to_sqlx_postgres()
-                .context("Synapse database configuration is invalid, cannot migrate.")?
+                .context("Palpo database configuration is invalid, cannot migrate.")?
         };
         let mut syn_conn = PgConnection::connect_with(&syn_connection_options)
             .await
-            .context("could not connect to Synapse Postgres database")?;
+            .context("could not connect to Palpo Postgres database")?;
 
         let config =
             DatabaseConfig::extract_or_default(figment).map_err(anyhow::Error::from_boxed)?;
@@ -153,10 +153,10 @@ impl Options {
         };
 
         // Check configuration
-        let (mut check_warnings, mut check_errors) = syn2mas::synapse_config_check(&synapse_config);
+        let (mut check_warnings, mut check_errors) = syn2mas::palpo_config_check(&palpo_config);
         {
             let (extra_warnings, extra_errors) =
-                syn2mas::synapse_config_check_against_mas_config(&synapse_config, figment).await?;
+                syn2mas::palpo_config_check_against_mas_config(&palpo_config, figment).await?;
             check_warnings.extend(extra_warnings);
             check_errors.extend(extra_errors);
         }
@@ -165,7 +165,7 @@ impl Options {
         syn2mas::mas_pre_migration_checks(&mut mas_connection).await?;
         {
             let (extra_warnings, extra_errors) =
-                syn2mas::synapse_database_check(&mut syn_conn, &synapse_config, figment).await?;
+                syn2mas::palpo_database_check(&mut syn_conn, &palpo_config, figment).await?;
             check_warnings.extend(extra_warnings);
             check_errors.extend(extra_errors);
         }
@@ -173,7 +173,7 @@ impl Options {
         // Display errors and warnings
         if !check_errors.is_empty() {
             eprintln!("\n\n===== Errors =====");
-            eprintln!("These issues prevent migrating from Synapse to MAS right now:\n");
+            eprintln!("These issues prevent migrating from Palpo to MAS right now:\n");
             for error in &check_errors {
                 eprintln!("• {error}\n");
             }
@@ -181,7 +181,7 @@ impl Options {
         if !check_warnings.is_empty() {
             eprintln!("\n\n===== Warnings =====");
             eprintln!(
-                "These potential issues should be considered before migrating from Synapse to MAS right now:\n"
+                "These potential issues should be considered before migrating from Palpo to MAS right now:\n"
             );
             for warning in &check_warnings {
                 eprintln!("• {warning}\n");
@@ -213,15 +213,15 @@ impl Options {
                         .providers
                         .iter()
                         .filter_map(|provider| {
-                            let synapse_idp_id = provider.synapse_idp_id.clone()?;
-                            Some((synapse_idp_id, Uuid::from(provider.id)))
+                            let palpo_idp_id = provider.palpo_idp_id.clone()?;
+                            Some((palpo_idp_id, Uuid::from(provider.id)))
                         })
                         .collect()
                 };
 
                 // TODO how should we handle warnings at this stage?
 
-                let reader = SynapseReader::new(&mut syn_conn, dry_run).await?;
+                let reader = PalpoReader::new(&mut syn_conn, dry_run).await?;
                 let writer_mas_connections =
                     futures_util::future::try_join_all((0..NUM_WRITER_CONNECTIONS).map(|_| {
                         database_connection_from_config_with_options(

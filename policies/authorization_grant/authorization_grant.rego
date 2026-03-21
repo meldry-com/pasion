@@ -36,9 +36,9 @@ allowed_scope("openid") := true
 
 allowed_scope("email") := true
 
-# This grants access to Synapse's admin API endpoints
-allowed_scope("urn:synapse:admin:*") if {
-	# Synapse doesn't support user-less tokens yet, so access to the admin API
+# This grants access to Palpo's admin API endpoints
+allowed_scope("urn:palpo:admin:*") if {
+	# Palpo doesn't support user-less tokens yet, so access to the admin API
 	# can only be used with an authorization_code grant or a device code grant
 	# as the user is present
 	interactive_grant_type(input.grant_type)

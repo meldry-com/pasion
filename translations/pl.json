@@ -228,7 +228,7 @@
       "manage_sessions": "Zarządzaj swoimi urządzeniami i sesjami",
       "mas_admin": "Zarządzaj dowolnym użytkownikiem w palpo-auth-service",
       "send_messages": "Wysyłaj nowe wiadomości w Twoim imieniu",
-      "synapse_admin": "Administrowanie serwerem domowym Synapse",
+      "palpo_admin": "Administrowanie serwerem domowym Palpo",
       "view_messages": "Przegląd istniejących wiadomości i danych",
       "view_profile": "Przegląd informacji o profilu i danych kontaktowych"
     },

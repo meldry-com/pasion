@@ -187,7 +187,7 @@ impl OidcProvider {
         self.issuer.is_some() && self.client_id.is_some()
     }
 
-    /// Map this Synapse OIDC provider config to a MAS upstream provider config.
+    /// Map this Palpo OIDC provider config to a MAS upstream provider config.
     pub(crate) fn into_mas_config(
         self,
         rng: &mut impl Rng,
@@ -220,7 +220,7 @@ impl OidcProvider {
         }
 
         let scope: Scope = match self.scopes {
-            None => [OPENID].into_iter().collect(), // Synapse defaults to the 'openid' scope
+            None => [OPENID].into_iter().collect(), // Palpo defaults to the 'openid' scope
             Some(scopes) => scopes
                 .into_iter()
                 .filter_map(|scope| match ScopeToken::from_str(&scope) {
@@ -318,7 +318,7 @@ impl OidcProvider {
         Some(mas_config::UpstreamOAuth2Provider {
             enabled: true,
             id,
-            synapse_idp_id: self.idp_id,
+            palpo_idp_id: self.idp_id,
             issuer: self.issuer,
             human_name: self.idp_name,
             brand_name: self.idp_brand,

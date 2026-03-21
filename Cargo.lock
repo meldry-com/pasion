@@ -3210,7 +3210,7 @@ dependencies = [
  "mas-keystore",
  "mas-listener",
  "mas-matrix",
- "mas-matrix-synapse",
+ "mas-matrix-palpo",
  "mas-policy",
  "mas-router",
  "mas-storage",
@@ -3585,7 +3585,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "mas-matrix-synapse"
+name = "mas-matrix-palpo"
 version = "1.8.0"
 dependencies = [
  "anyhow",

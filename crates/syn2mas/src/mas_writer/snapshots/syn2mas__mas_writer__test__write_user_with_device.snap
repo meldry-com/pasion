@@ -8,7 +8,7 @@ compat_sessions:
     device_id: ADEVICE
     finished_at: ~
     human_name: "alice's pinephone"
-    is_synapse_admin: "true"
+    is_palpo_admin: "true"
     last_active_at: "1970-01-01 00:00:00+00"
     last_active_ip: 203.0.113.1/32
     user_agent: Browser/5.0

@@ -542,7 +542,7 @@ async fn test_oauth2_client_credentials(pool: PgPool) {
             ",
             "variables": {
                 "userId": user_id,
-                "scope": "urn:matrix:org.matrix.msc2967.client:device:AABBCCDDEE urn:matrix:org.matrix.msc2967.client:api:* urn:synapse:admin:*"
+                "scope": "urn:matrix:org.matrix.msc2967.client:device:AABBCCDDEE urn:matrix:org.matrix.msc2967.client:api:* urn:palpo:admin:*"
             },
         }));
     let response = state.request(request).await;

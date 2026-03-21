@@ -1,7 +1,7 @@
 //! # MAS Database Checks
 //!
 //! This module provides safety checks to run against a MAS database before
-//! running the Synapse-to-MAS migration.
+//! running the Palpo migration migration.
 
 use thiserror::Error;
 use thiserror_ext::ContextInto;

@@ -1,5 +1,5 @@
 [package]
-name = "mas-matrix-synapse"
+name = "mas-matrix-palpo"
 version.workspace = true
 authors.workspace = true
 edition.workspace = true

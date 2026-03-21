@@ -182,7 +182,7 @@ pub struct HashingScheme {
     /// Whether to apply Unicode normalization to the password before hashing
     ///
     /// Defaults to `false`, and generally recommended to stay false. This is
-    /// although recommended when importing password hashs from Synapse, as it
+    /// although recommended when importing password hashs from Palpo, as it
     /// applies an NFKC normalization to the password before hashing it.
     #[serde(default, skip_serializing_if = "is_default_false")]
     pub unicode_normalization: bool,

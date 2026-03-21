@@ -1,26 +1,26 @@
 ---
-source: crates/syn2mas/src/synapse_reader/mod.rs
+source: crates/syn2mas/src/palpo_reader/mod.rs
 expression: users
 ---
 {
-    SynapseUser {
+    PalpoUser {
         name: FullUserId(
             "@alice:example.com",
         ),
         password_hash: Some(
             "$2b$12$aaa/aaaaaaaaaa.aaaaaaaaaaaaaaa./aaaaaaaaaaaaaaaaaaa/A",
         ),
-        admin: SynapseBool(
+        admin: PalpoBool(
             false,
         ),
-        deactivated: SynapseBool(
+        deactivated: PalpoBool(
             false,
         ),
         locked: false,
         creation_ts: SecondsTimestamp(
             2018-06-30T21:26:02Z,
         ),
-        is_guest: SynapseBool(
+        is_guest: PalpoBool(
             false,
         ),
         appservice_id: None,

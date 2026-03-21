@@ -160,7 +160,7 @@ pub(crate) async fn post(
             display_name.to_owned()
         }
         FormAction::Skip => {
-            // If the user chose to skip, we do the same as Synapse and use the localpart as
+            // If the user chose to skip, we do the same as Palpo and use the localpart as
             // default display name
             registration.username.clone()
         }

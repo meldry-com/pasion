@@ -228,7 +228,7 @@
       "manage_sessions": "管理设备和会话",
       "mas_admin": "管理 palpo-auth-service 上的用户",
       "send_messages": "以你的名义发送新消息",
-      "synapse_admin": "管理 Synapse 服务器",
+      "palpo_admin": "管理 Palpo 服务器",
       "view_messages": "查看现有信息和数据",
       "view_profile": "查看个人资料信息和联系方式"
     },

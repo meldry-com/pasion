@@ -236,7 +236,7 @@
       "manage_sessions": "Gérer vos appareils et vos sessions",
       "mas_admin": "Administrer les utilisateurs (urn:mas:admin)",
       "send_messages": "Envoyez de nouveaux messages en votre nom",
-      "synapse_admin": "Administrer le serveur (urn:synapse:admin:*)",
+      "palpo_admin": "Administrer le serveur (urn:palpo:admin:*)",
       "view_messages": "Afficher vos messages et données existants",
       "view_profile": "Voir les informations de votre profil et vos coordonnées"
     },

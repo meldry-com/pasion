@@ -40,9 +40,9 @@ enum Subcommand {
         #[clap(short, long)]
         output: Option<Utf8PathBuf>,
 
-        /// Existing Synapse configuration used to generate the MAS config
+        /// Existing Palpo configuration used to generate the MAS config
         #[arg(short, long, action = clap::ArgAction::Append)]
-        synapse_config: Vec<Utf8PathBuf>,
+        palpo_config: Vec<Utf8PathBuf>,
     },
 
     /// Sync the clients and providers from the config file to the database
@@ -87,7 +87,7 @@ impl Options {
 
             SC::Generate {
                 output,
-                synapse_config,
+                palpo_config,
             } => {
                 let _span = info_span!("cli.config.generate").entered();
                 let clock = SystemClock::default();
@@ -96,11 +96,11 @@ impl Options {
                 let mut rng = rand_chacha::ChaChaRng::from_entropy();
                 let mut config = RootConfig::generate(&mut rng).await?;
 
-                if !synapse_config.is_empty() {
-                    info!("Adjusting MAS config to match Synapse config from {synapse_config:?}");
-                    let synapse_config = syn2mas::synapse_config::Config::load(&synapse_config)
+                if !palpo_config.is_empty() {
+                    info!("Adjusting MAS config to match Palpo config from {palpo_config:?}");
+                    let palpo_config = syn2mas::palpo_config::Config::load(&palpo_config)
                         .map_err(anyhow::Error::from_boxed)?;
-                    config = synapse_config.adjust_mas_config(config, &mut rng, clock.now());
+                    config = palpo_config.adjust_mas_config(config, &mut rng, clock.now());
                 }
 
                 let config = serde_yaml::to_string(&config)?;

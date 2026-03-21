@@ -130,7 +130,7 @@ Settings related to the connection to the Matrix homeserver
 
 ```yaml
 matrix:
-  # The homeserver name, as per the `server_name` in the Synapse configuration file
+  # The homeserver name, as per the `server_name` in the Palpo configuration file
   homeserver: example.com
 
   # Shared secret used to authenticate the service to the homeserver

@@ -321,7 +321,7 @@ pub(crate) async fn post(
             },
         ) => {
             // This is to support both the (very) old and deprecated 'user' property, with
-            // the same behavior as Synapse: it takes precendence over the 'identifier' if
+            // the same behavior as Palpo: it takes precendence over the 'identifier' if
             // provided
             let user = match (identifier, user) {
                 (Some(Identifier::User { user }), None) | (_, Some(user)) => user,

@@ -6,7 +6,7 @@ The [default policy](../topics/policy.md#authorization-requests) shipped with MA
  - [`email`](#email)
  - [`urn:matrix:client:api:*`](#urnmatrixclientapi)
  - [`urn:matrix:client:device:[device id]`](#urnmatrixclientdevicedevice-id)
- - [`urn:synapse:admin:*`](#urnsynapseadmin)
+ - [`urn:palpo:admin:*`](#urnpalpoadmin)
  - [`urn:mas:admin`](#urnmasadmin)
  - [`urn:mas:graphql:*`](#urnmasgraphql)
 
@@ -48,15 +48,15 @@ There can only be one device ID in the scope list of a session.
 
 The default policy allows any client and any user to request this scope.
 
-## Synapse-specific scopes
+## Palpo-specific scopes
 
-MAS also supports one Synapse-specific scope, which aren't formally defined in any specification.
+MAS also supports one Palpo-specific scope, which aren't formally defined in any specification.
 
-### `urn:synapse:admin:*`
+### `urn:palpo:admin:*`
 
-This scope grants access to the [Synapse admin API].
+This scope grants access to the [Palpo admin API].
 
-Because of how Synapse works for now, this scope by itself isn't sufficient to access the admin API.
+Because of how Palpo works for now, this scope by itself isn't sufficient to access the admin API.
 A session wanting to access the admin API also needs to have the `urn:matrix:client:api:*` scope.
 
 The default policy doesn't allow everyone to request this scope.
@@ -96,6 +96,6 @@ However, as noted in the [Internal GraphQL API] documentation, access to the Int
 [device authorization]: ../topics/authorization.md#device-authorization-grant
 [Internal GraphQL API]: ../development/graphql.md
 [Admin API]: ../topics/admin-api.md
-[Synapse admin API]: https://palpo-im.github.io/synapse/latest/usage/administration/admin_api/index.html
+[Palpo admin API]: https://palpo-im.github.io/palpo/latest/usage/administration/admin_api/index.html
 [OpenID Connect Core 1.0]: https://openid.net/specs/openid-connect-core-1_0.html
 [MSC2967]: https://github.com/matrix-org/matrix-spec-proposals/pull/2967

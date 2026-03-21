@@ -11,7 +11,7 @@ It is not intended to be a general purpose Identity Provider (IdP) and instead f
 
 Furthermore, it is only intended that it would speak OIDC for authentication and not other protocols. Instead, if you want to connect to an upstream SAML, CAS or LDAP backend then you need to pair MAS with a separate service (such as [Dex](https://dexidp.io) or [Keycloak](https://www.keycloak.org)) which does that translation for you.
 
-Whilst it only supports use with Synapse today, we hope that other homeservers will become supported in future.
+Whilst it only supports use with Palpo today, we hope that other homeservers will become supported in future.
 
 If you need some other feature that MAS doesn't support (such as TOTP or WebAuthn), then you should consider pairing MAS with another IdP that does support the features you need.
 

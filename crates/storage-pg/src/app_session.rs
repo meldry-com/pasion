@@ -68,7 +68,7 @@ mod priv_ {
         pub(super) human_name: Option<String>,
         pub(super) created_at: DateTime<Utc>,
         pub(super) finished_at: Option<DateTime<Utc>>,
-        pub(super) is_synapse_admin: Option<bool>,
+        pub(super) is_palpo_admin: Option<bool>,
         pub(super) user_agent: Option<String>,
         pub(super) last_active_at: Option<DateTime<Utc>>,
         pub(super) last_active_ip: Option<IpAddr>,
@@ -101,7 +101,7 @@ impl TryFrom<AppSessionLookup> for AppSession {
             human_name,
             created_at,
             finished_at,
-            is_synapse_admin,
+            is_palpo_admin,
             user_agent,
             last_active_at,
             last_active_ip,
@@ -116,7 +116,7 @@ impl TryFrom<AppSessionLookup> for AppSession {
             user_id,
             scope_list,
             device_id,
-            is_synapse_admin,
+            is_palpo_admin,
         ) {
             (
                 Some(compat_session_id),
@@ -125,7 +125,7 @@ impl TryFrom<AppSessionLookup> for AppSession {
                 Some(user_id),
                 None,
                 device_id_opt,
-                Some(is_synapse_admin),
+                Some(is_palpo_admin),
             ) => {
                 let id = compat_session_id.into();
                 let device = device_id_opt
@@ -151,7 +151,7 @@ impl TryFrom<AppSessionLookup> for AppSession {
                     human_name,
                     user_session_id,
                     created_at,
-                    is_synapse_admin,
+                    is_palpo_admin,
                     user_agent,
                     last_active_at,
                     last_active_ip,
@@ -314,7 +314,7 @@ impl AppSessionRepository for PgAppSessionRepository<'_> {
                 Expr::col((OAuth2Sessions::Table, OAuth2Sessions::FinishedAt)),
                 AppSessionLookupIden::FinishedAt,
             )
-            .expr_as(Expr::cust("NULL"), AppSessionLookupIden::IsSynapseAdmin)
+            .expr_as(Expr::cust("NULL"), AppSessionLookupIden::IsPalpoAdmin)
             .expr_as(
                 Expr::col((OAuth2Sessions::Table, OAuth2Sessions::UserAgent)),
                 AppSessionLookupIden::UserAgent,
@@ -368,8 +368,8 @@ impl AppSessionRepository for PgAppSessionRepository<'_> {
                 AppSessionLookupIden::FinishedAt,
             )
             .expr_as(
-                Expr::col((CompatSessions::Table, CompatSessions::IsSynapseAdmin)),
-                AppSessionLookupIden::IsSynapseAdmin,
+                Expr::col((CompatSessions::Table, CompatSessions::IsPalpoAdmin)),
+                AppSessionLookupIden::IsPalpoAdmin,
             )
             .expr_as(
                 Expr::col((CompatSessions::Table, CompatSessions::UserAgent)),

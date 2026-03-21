@@ -228,7 +228,7 @@
       "manage_sessions": "Eszközök és munkamenetek kezelése",
       "mas_admin": "Bármely felhasználó kezelése a palpo-auth-service szolgáltatásban",
       "send_messages": "Új üzenetek küldése az Ön nevében",
-      "synapse_admin": "A Synapse Matrix-kiszolgáló kezelése",
+      "palpo_admin": "A Palpo Matrix-kiszolgáló kezelése",
       "view_messages": "Meglévő üzenetek és adatok megtekintése",
       "view_profile": "Saját profilinformációk és kapcsolati részletek megtekintése"
     },

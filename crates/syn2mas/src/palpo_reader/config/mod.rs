@@ -14,11 +14,11 @@ use url::Url;
 
 pub use self::oidc::OidcProvider;
 
-/// The root of a Synapse configuration.
-/// This struct only includes fields which the Synapse-to-MAS migration is
+/// The root of a Palpo configuration.
+/// This struct only includes fields which the Palpo migration migration is
 /// interested in.
 ///
-/// See: <https://palpo-im.github.io/synapse/latest/usage/configuration/config_documentation.html>
+/// See: <https://palpo-im.github.io/palpo/latest/usage/configuration/config_documentation.html>
 #[derive(Deserialize)]
 #[expect(clippy::struct_excessive_bools)]
 pub struct Config {
@@ -41,7 +41,7 @@ pub struct Config {
     pub recaptcha_private_key: Option<String>,
 
     /// Normally this defaults to true, but when MAS integration is enabled in
-    /// Synapse it defaults to false.
+    /// Palpo it defaults to false.
     #[serde(default)]
     pub enable_3pid_changes: Option<bool>,
 
@@ -83,7 +83,7 @@ pub struct Config {
 }
 
 impl Config {
-    /// Load a Synapse configuration from the given list of configuration files.
+    /// Load a Palpo configuration from the given list of configuration files.
     ///
     /// # Errors
     ///
@@ -94,7 +94,7 @@ impl Config {
     ) -> Result<Config, Box<dyn std::error::Error + Send + Sync + 'static>> {
         let mut figment = figment::Figment::new();
         for file in files {
-            // TODO this is not exactly correct behaviour — Synapse does not merge anything
+            // TODO this is not exactly correct behaviour — Palpo does not merge anything
             // other than the top level dict.
             // https://github.com/palpo-im/palpo-auth-service/pull/3805#discussion_r1922680825
             // https://github.com/palpo-im/synapse/blob/develop/synapse/config/_base.py?rgh-link-date=2025-01-20T17%3A02%3A56Z#L870
@@ -104,12 +104,12 @@ impl Config {
         Ok(config)
     }
 
-    /// Returns a map of all OIDC providers from the Synapse configuration.
+    /// Returns a map of all OIDC providers from the Palpo configuration.
     ///
     /// The keys are the `auth_provider` IDs as they would have been stored in
-    /// Synapse's database.
+    /// Palpo's database.
     ///
-    /// These are compatible with the `synapse_idp_id` field of
+    /// These are compatible with the `palpo_idp_id` field of
     /// [`mas_config::UpstreamOAuth2Provider`].
     #[must_use]
     pub fn all_oidc_providers(&self) -> BTreeMap<String, OidcProvider> {
@@ -130,7 +130,7 @@ impl Config {
             let idp_id = match provider.idp_id.take() {
                 None => "oidc".to_owned(),
                 Some(idp_id) if idp_id == "oidc" => idp_id,
-                // Synapse internally prefixes the IdP IDs with `oidc-`.
+                // Palpo internally prefixes the IdP IDs with `oidc-`.
                 Some(idp_id) => format!("oidc-{idp_id}"),
             };
             provider.idp_id = Some(idp_id.clone());
@@ -140,7 +140,7 @@ impl Config {
         out
     }
 
-    /// Adjust a MAS configuration to match this Synapse configuration.
+    /// Adjust a MAS configuration to match this Palpo configuration.
     #[must_use]
     pub fn adjust_mas_config(
         self,
@@ -170,7 +170,7 @@ impl Config {
         if self.password_config.enabled {
             mas_config.passwords.enabled = true;
             mas_config.passwords.schemes = vec![
-                // This is the password hashing scheme synapse uses
+                // This is the password hashing scheme palpo uses
                 PasswordHashingScheme {
                     version: 1,
                     algorithm: PasswordAlgorithm::Bcrypt,
@@ -211,31 +211,31 @@ impl Config {
     }
 }
 
-/// The `database` section of the Synapse configuration.
+/// The `database` section of the Palpo configuration.
 ///
-/// See: <https://palpo-im.github.io/synapse/latest/usage/configuration/config_documentation.html#database>
+/// See: <https://palpo-im.github.io/palpo/latest/usage/configuration/config_documentation.html#database>
 #[derive(Deserialize)]
 pub struct DatabaseSection {
     /// Expecting `psycopg2` for Postgres or `sqlite3` for `SQLite3`, but may be
-    /// an arbitrary string and future versions of Synapse may support other
+    /// an arbitrary string and future versions of Palpo may support other
     /// database drivers, e.g. psycopg3.
     pub name: String,
     #[serde(default)]
     pub args: DatabaseArgsSuboption,
 }
 
-/// The database driver name for Synapse when it is using Postgres via psycopg2.
-pub const SYNAPSE_DATABASE_DRIVER_NAME_PSYCOPG2: &str = "psycopg2";
-/// The database driver name for Synapse when it is using SQLite 3.
-pub const SYNAPSE_DATABASE_DRIVER_NAME_SQLITE3: &str = "sqlite3";
+/// The database driver name for Palpo when it is using Postgres via psycopg2.
+pub const PALPO_DATABASE_DRIVER_NAME_PSYCOPG2: &str = "psycopg2";
+/// The database driver name for Palpo when it is using SQLite 3.
+pub const PALPO_DATABASE_DRIVER_NAME_SQLITE3: &str = "sqlite3";
 
 impl DatabaseSection {
     /// Process the configuration into Postgres connection options.
     ///
     /// Environment variables and libpq defaults will be used as fallback for
-    /// any missing values; this should match what Synapse does.
+    /// any missing values; this should match what Palpo does.
     /// But note that if syn2mas is not run in the same context (host, user,
-    /// environment variables) as Synapse normally runs, then the connection
+    /// environment variables) as Palpo normally runs, then the connection
     /// options may not be valid.
     ///
     /// # Errors
@@ -243,17 +243,17 @@ impl DatabaseSection {
     /// Returns an error if this database configuration is invalid or
     /// unsupported.
     pub fn to_sqlx_postgres(&self) -> Result<PgConnectOptions, anyhow::Error> {
-        if self.name != SYNAPSE_DATABASE_DRIVER_NAME_PSYCOPG2 {
+        if self.name != PALPO_DATABASE_DRIVER_NAME_PSYCOPG2 {
             anyhow::bail!("syn2mas does not support the {} database driver", self.name);
         }
 
         if self.args.database.is_some() && self.args.dbname.is_some() {
             anyhow::bail!(
-                "Only one of `database` and `dbname` may be specified in the Synapse database configuration, not both."
+                "Only one of `database` and `dbname` may be specified in the Palpo database configuration, not both."
             );
         }
 
-        let mut opts = PgConnectOptions::new().application_name("syn2mas-synapse");
+        let mut opts = PgConnectOptions::new().application_name("syn2mas-palpo");
 
         if let Some(host) = &self.args.host {
             opts = opts.host(host);
@@ -278,7 +278,7 @@ impl DatabaseSection {
     }
 }
 
-/// The `args` suboption of the `database` section of the Synapse configuration.
+/// The `args` suboption of the `database` section of the Palpo configuration.
 /// This struct assumes Postgres is in use and does not represent fields used by
 /// SQLite.
 #[derive(Deserialize, Default)]
@@ -292,9 +292,9 @@ pub struct DatabaseArgsSuboption {
     pub port: Option<u16>,
 }
 
-/// The `password_config` section of the Synapse configuration.
+/// The `password_config` section of the Palpo configuration.
 ///
-/// See: <https://palpo-im.github.io/synapse/latest/usage/configuration/config_documentation.html#password_config>
+/// See: <https://palpo-im.github.io/palpo/latest/usage/configuration/config_documentation.html#password_config>
 #[derive(Deserialize)]
 pub struct PasswordSection {
     #[serde(default = "default_true")]
@@ -378,11 +378,11 @@ mod test {
             DatabaseSection {
                 name: "psycopg2".to_owned(),
                 args: DatabaseArgsSuboption {
-                    user: Some("synapse_user".to_owned()),
+                    user: Some("palpo_user".to_owned()),
                     password: Some("verysecret".to_owned()),
-                    dbname: Some("synapse_db".to_owned()),
-                    database: Some("synapse_db".to_owned()),
-                    host: Some("synapse-db.example.com".to_owned()),
+                    dbname: Some("palpo_db".to_owned()),
+                    database: Some("palpo_db".to_owned()),
+                    host: Some("palpo-db.example.com".to_owned()),
                     port: Some(42),
                 },
             }
@@ -401,15 +401,15 @@ mod test {
             DatabaseSection {
                 name: "psycopg2".to_owned(),
                 args: DatabaseArgsSuboption {
-                    user: Some("synapse_user".to_owned()),
+                    user: Some("palpo_user".to_owned()),
                     password: Some("verysecret".to_owned()),
-                    dbname: Some("synapse_db".to_owned()),
+                    dbname: Some("palpo_db".to_owned()),
                     database: None,
-                    host: Some("synapse-db.example.com".to_owned()),
+                    host: Some("palpo-db.example.com".to_owned()),
                     port: Some(42),
                 },
             },
-            "postgresql://synapse_user:verysecret@synapse-db.example.com:42/synapse_db",
+            "postgresql://palpo_user:verysecret@palpo-db.example.com:42/palpo_db",
         );
     }
 }

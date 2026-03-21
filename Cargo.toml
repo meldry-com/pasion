@@ -46,7 +46,7 @@ mas-jose = { path = "./crates/jose/", version = "=1.8.0" }
 mas-keystore = { path = "./crates/keystore/", version = "=1.8.0" }
 mas-listener = { path = "./crates/listener/", version = "=1.8.0" }
 mas-matrix = { path = "./crates/matrix/", version = "=1.8.0" }
-mas-matrix-synapse = { path = "./crates/matrix-synapse/", version = "=1.8.0" }
+mas-matrix-palpo = { path = "./crates/matrix-palpo/", version = "=1.8.0" }
 mas-oidc-client = { path = "./crates/oidc-client/", version = "=1.8.0" }
 mas-policy = { path = "./crates/policy/", version = "=1.8.0" }
 mas-router = { path = "./crates/router/", version = "=1.8.0" }

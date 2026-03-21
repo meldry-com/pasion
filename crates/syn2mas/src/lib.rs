@@ -1,5 +1,5 @@
 mod mas_writer;
-mod synapse_reader;
+mod palpo_reader;
 
 mod migration;
 mod progress;
@@ -12,11 +12,11 @@ pub use self::{
     mas_writer::{MasWriter, checks::mas_pre_migration_checks, locking::LockedMasDatabase},
     migration::migrate,
     progress::{Progress, ProgressCounter, ProgressStage},
-    synapse_reader::{
-        SynapseReader,
+    palpo_reader::{
+        PalpoReader,
         checks::{
-            synapse_config_check, synapse_config_check_against_mas_config, synapse_database_check,
+            palpo_config_check, palpo_config_check_against_mas_config, palpo_database_check,
         },
-        config as synapse_config,
+        config as palpo_config,
     },
 };

@@ -228,7 +228,7 @@
       "manage_sessions": "Verwalte deine Geräte und Sitzungen",
       "mas_admin": "Beliebige Benutzer verwalten",
       "send_messages": "Neue Nachrichten in deinem Namen senden",
-      "synapse_admin": "Den Synapse-Homeserver verwalten",
+      "palpo_admin": "Den Palpo-Homeserver verwalten",
       "view_messages": "Zeig deine vorhandenen Nachrichten und Daten an",
       "view_profile": "Deine Profilinfos und Kontaktdaten anzeigen"
     },

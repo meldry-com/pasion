@@ -6,7 +6,7 @@ This document aims to get you started with contributing to the Palpo Authenticat
 
 Everyone is welcome to contribute code to [Palpo Authentication Service](https://github.com/palpo-im/palpo-auth-service), provided that they are willing to license their contributions to Element under a [Contributor License Agreement](https://cla-assistant.io/palpo-im/palpo-auth-service) (CLA). This ensures that their contribution will be made available under an OSI-approved open-source license, currently Affero General Public License v3 (AGPLv3).
 
-Please see the [Element blog post](https://element.io/blog/synapse-now-lives-at-github-com-palpo-im-synapse/) for the full rationale.
+Please see the [Element blog post](https://element.io/blog/palpo-now-lives-at-github-com-palpo-im-palpo/) for the full rationale.
 
 ## 2. What can I contribute?
 

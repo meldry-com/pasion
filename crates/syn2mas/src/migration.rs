@@ -1,6 +1,6 @@
 //! # Migration
 //!
-//! This module provides the high-level logic for performing the Synapse-to-MAS
+//! This module provides the high-level logic for performing the Palpo migration
 //! database migration.
 //!
 //! This module does not implement any of the safety checks that should be run
@@ -21,24 +21,24 @@ use ulid::Ulid;
 use uuid::{NonNilUuid, Uuid};
 
 use crate::{
-    HashMap, ProgressCounter, RandomState, SynapseReader,
+    HashMap, ProgressCounter, RandomState, PalpoReader,
     mas_writer::{
         self, MasNewCompatAccessToken, MasNewCompatRefreshToken, MasNewCompatSession,
         MasNewEmailThreepid, MasNewUnsupportedThreepid, MasNewUpstreamOauthLink, MasNewUser,
         MasNewUserPassword, MasWriteBuffer, MasWriter,
     },
     progress::{EntityType, Progress},
-    synapse_reader::{
-        self, ExtractLocalpartError, FullUserId, SynapseAccessToken, SynapseDevice,
-        SynapseExternalId, SynapseRefreshableTokenPair, SynapseThreepid, SynapseUser,
+    palpo_reader::{
+        self, ExtractLocalpartError, FullUserId, PalpoAccessToken, PalpoDevice,
+        PalpoExternalId, PalpoRefreshableTokenPair, PalpoThreepid, PalpoUser,
     },
 };
 
 #[derive(Debug, Error, ContextInto)]
 pub enum Error {
-    #[error("error when reading synapse DB ({context}): {source}")]
-    Synapse {
-        source: synapse_reader::Error,
+    #[error("error when reading palpo DB ({context}): {source}")]
+    Palpo {
+        source: palpo_reader::Error,
         context: String,
     },
     #[error("error when writing to MAS DB ({context}): {source}")]
@@ -63,12 +63,12 @@ pub enum Error {
     #[error("user {user} was not found for migration but a row in {table} was found for them")]
     MissingUserFromDependentTable { table: String, user: FullUserId },
     #[error(
-        "missing a mapping for the auth provider with ID {synapse_id:?} (used by {user} and maybe other users)"
+        "missing a mapping for the auth provider with ID {palpo_id:?} (used by {user} and maybe other users)"
     )]
     MissingAuthProviderMapping {
-        /// `auth_provider` ID of the provider in Synapse, for which we have no
+        /// `auth_provider` ID of the provider in Palpo, for which we have no
         /// mapping
-        synapse_id: String,
+        palpo_id: String,
         /// a user that is using this auth provider
         user: FullUserId,
     },
@@ -77,7 +77,7 @@ pub enum Error {
 bitflags::bitflags! {
     #[derive(Debug, Clone, Copy)]
     struct UserFlags: u8 {
-        const IS_SYNAPSE_ADMIN = 0b0000_0001;
+        const IS_PALPO_ADMIN = 0b0000_0001;
         const IS_DEACTIVATED = 0b0000_0010;
         const IS_GUEST = 0b0000_0100;
         const IS_APPSERVICE = 0b0000_1000;
@@ -93,8 +93,8 @@ impl UserFlags {
         self.contains(UserFlags::IS_GUEST)
     }
 
-    const fn is_synapse_admin(self) -> bool {
-        self.contains(UserFlags::IS_SYNAPSE_ADMIN)
+    const fn is_palpo_admin(self) -> bool {
+        self.contains(UserFlags::IS_PALPO_ADMIN)
     }
 
     const fn is_appservice(self) -> bool {
@@ -118,12 +118,12 @@ struct MigrationState {
     /// Mapping of MAS user ID + device ID to a MAS compat session ID.
     devices_to_compat_sessions: HashMap<(NonNilUuid, CompactString), Uuid>,
 
-    /// A mapping of Synapse external ID providers to MAS upstream OAuth 2.0
+    /// A mapping of Palpo external ID providers to MAS upstream OAuth 2.0
     /// provider ID
     provider_id_mapping: std::collections::HashMap<String, Uuid>,
 }
 
-/// Performs a migration from Synapse's database to MAS' database.
+/// Performs a migration from Palpo's database to MAS' database.
 ///
 /// # Panics
 ///
@@ -133,11 +133,11 @@ struct MigrationState {
 ///
 /// Errors are returned under the following circumstances:
 ///
-/// - An underlying database access error, either to MAS or to Synapse.
-/// - Invalid data in the Synapse database.
+/// - An underlying database access error, either to MAS or to Palpo.
+/// - Invalid data in the Palpo database.
 #[expect(clippy::implicit_hasher)]
 pub async fn migrate(
-    mut synapse: SynapseReader<'_>,
+    mut palpo: PalpoReader<'_>,
     mas: MasWriter,
     server_name: String,
     clock: &dyn Clock,
@@ -145,7 +145,7 @@ pub async fn migrate(
     provider_id_mapping: std::collections::HashMap<String, Uuid>,
     progress: &Progress,
 ) -> Result<(), Error> {
-    let counts = synapse.count_rows().await.into_synapse("counting users")?;
+    let counts = palpo.count_rows().await.into_palpo("counting users")?;
 
     let state = MigrationState {
         server_name,
@@ -160,36 +160,36 @@ pub async fn migrate(
     };
 
     let progress_counter = progress.migrating_data(EntityType::Users, counts.users);
-    let (mas, state) = migrate_users(&mut synapse, mas, state, rng, progress_counter).await?;
+    let (mas, state) = migrate_users(&mut palpo, mas, state, rng, progress_counter).await?;
 
     let progress_counter = progress.migrating_data(EntityType::ThreePids, counts.threepids);
-    let (mas, state) = migrate_threepids(&mut synapse, mas, rng, state, progress_counter).await?;
+    let (mas, state) = migrate_threepids(&mut palpo, mas, rng, state, progress_counter).await?;
 
     let progress_counter = progress.migrating_data(EntityType::ExternalIds, counts.external_ids);
     let (mas, state) =
-        migrate_external_ids(&mut synapse, mas, rng, state, progress_counter).await?;
+        migrate_external_ids(&mut palpo, mas, rng, state, progress_counter).await?;
 
     let progress_counter = progress.migrating_data(
         EntityType::NonRefreshableAccessTokens,
         counts.access_tokens - counts.refresh_tokens,
     );
     let (mas, state) =
-        migrate_unrefreshable_access_tokens(&mut synapse, mas, clock, rng, state, progress_counter)
+        migrate_unrefreshable_access_tokens(&mut palpo, mas, clock, rng, state, progress_counter)
             .await?;
 
     let progress_counter =
         progress.migrating_data(EntityType::RefreshableTokens, counts.refresh_tokens);
     let (mas, state) =
-        migrate_refreshable_token_pairs(&mut synapse, mas, clock, rng, state, progress_counter)
+        migrate_refreshable_token_pairs(&mut palpo, mas, clock, rng, state, progress_counter)
             .await?;
 
     let progress_counter = progress.migrating_data(EntityType::Devices, counts.devices);
-    let (mas, _state) = migrate_devices(&mut synapse, mas, rng, state, progress_counter).await?;
+    let (mas, _state) = migrate_devices(&mut palpo, mas, rng, state, progress_counter).await?;
 
-    synapse
+    palpo
         .finish()
         .await
-        .into_synapse("failed to close Synapse reader")?;
+        .into_palpo("failed to close Palpo reader")?;
 
     mas.finish(progress)
         .await
@@ -200,7 +200,7 @@ pub async fn migrate(
 
 #[tracing::instrument(skip_all, level = Level::INFO)]
 async fn migrate_users(
-    synapse: &mut SynapseReader<'_>,
+    palpo: &mut PalpoReader<'_>,
     mut mas: MasWriter,
     mut state: MigrationState,
     rng: &mut impl RngCore,
@@ -209,7 +209,7 @@ async fn migrate_users(
     let start = Instant::now();
     let progress_counter_ = progress_counter.clone();
 
-    let (tx, mut rx) = tokio::sync::mpsc::channel::<SynapseUser>(100 * 1024);
+    let (tx, mut rx) = tokio::sync::mpsc::channel::<PalpoUser>(100 * 1024);
 
     // create a new RNG seeded from the passed RNG so that we can move it into the
     // spawned task
@@ -238,7 +238,7 @@ async fn migrate_users(
 
                 let mut flags = UserFlags::empty();
                 if bool::from(user.admin) {
-                    flags |= UserFlags::IS_SYNAPSE_ADMIN;
+                    flags |= UserFlags::IS_PALPO_ADMIN;
                 }
                 if bool::from(user.deactivated) {
                     flags |= UserFlags::IS_DEACTIVATED;
@@ -302,9 +302,9 @@ async fn migrate_users(
 
     // In case this has an error, we still want to join the task, so we look at the
     // error later
-    let res = synapse
+    let res = palpo
         .read_users()
-        .map_err(|e| e.into_synapse("reading users"))
+        .map_err(|e| e.into_palpo("reading users"))
         .forward(PollSender::new(tx).sink_map_err(|_| Error::ChannelClosed))
         .inspect_err(|e| tracing::error!(error = e as &dyn std::error::Error))
         .await;
@@ -325,7 +325,7 @@ async fn migrate_users(
 
 #[tracing::instrument(skip_all, level = Level::INFO)]
 async fn migrate_threepids(
-    synapse: &mut SynapseReader<'_>,
+    palpo: &mut PalpoReader<'_>,
     mut mas: MasWriter,
     rng: &mut impl RngCore,
     state: MigrationState,
@@ -334,7 +334,7 @@ async fn migrate_threepids(
     let start = Instant::now();
     let progress_counter_ = progress_counter.clone();
 
-    let (tx, mut rx) = tokio::sync::mpsc::channel::<SynapseThreepid>(100 * 1024);
+    let (tx, mut rx) = tokio::sync::mpsc::channel::<PalpoThreepid>(100 * 1024);
 
     // create a new RNG seeded from the passed RNG so that we can move it into the
     // spawned task
@@ -345,22 +345,22 @@ async fn migrate_threepids(
             let mut unsupported_buffer = MasWriteBuffer::new(&mas);
 
             while let Some(threepid) = rx.recv().await {
-                let SynapseThreepid {
-                    user_id: synapse_user_id,
+                let PalpoThreepid {
+                    user_id: palpo_user_id,
                     medium,
                     address,
                     added_at,
                 } = threepid;
                 let created_at: DateTime<Utc> = added_at.into();
 
-                let username = synapse_user_id
+                let username = palpo_user_id
                     .extract_localpart(&state.server_name)
-                    .into_extract_localpart(synapse_user_id.clone())?
+                    .into_extract_localpart(palpo_user_id.clone())?
                     .to_owned();
                 let Some(user_infos) = state.users.get(username.as_str()).copied() else {
                     return Err(Error::MissingUserFromDependentTable {
                         table: "user_threepids".to_owned(),
-                        user: synapse_user_id,
+                        user: palpo_user_id,
                     });
                 };
 
@@ -419,9 +419,9 @@ async fn migrate_threepids(
 
     // In case this has an error, we still want to join the task, so we look at the
     // error later
-    let res = synapse
+    let res = palpo
         .read_threepids()
-        .map_err(|e| e.into_synapse("reading threepids"))
+        .map_err(|e| e.into_palpo("reading threepids"))
         .forward(PollSender::new(tx).sink_map_err(|_| Error::ChannelClosed))
         .inspect_err(|e| tracing::error!(error = e as &dyn std::error::Error))
         .await;
@@ -442,7 +442,7 @@ async fn migrate_threepids(
 
 #[tracing::instrument(skip_all, level = Level::INFO)]
 async fn migrate_external_ids(
-    synapse: &mut SynapseReader<'_>,
+    palpo: &mut PalpoReader<'_>,
     mut mas: MasWriter,
     rng: &mut impl RngCore,
     state: MigrationState,
@@ -451,7 +451,7 @@ async fn migrate_external_ids(
     let start = Instant::now();
     let progress_counter_ = progress_counter.clone();
 
-    let (tx, mut rx) = tokio::sync::mpsc::channel::<SynapseExternalId>(100 * 1024);
+    let (tx, mut rx) = tokio::sync::mpsc::channel::<PalpoExternalId>(100 * 1024);
 
     // create a new RNG seeded from the passed RNG so that we can move it into the
     // spawned task
@@ -461,19 +461,19 @@ async fn migrate_external_ids(
             let mut write_buffer = MasWriteBuffer::new(&mas);
 
             while let Some(extid) = rx.recv().await {
-                let SynapseExternalId {
-                    user_id: synapse_user_id,
+                let PalpoExternalId {
+                    user_id: palpo_user_id,
                     auth_provider,
                     external_id: subject,
                 } = extid;
-                let username = synapse_user_id
+                let username = palpo_user_id
                     .extract_localpart(&state.server_name)
-                    .into_extract_localpart(synapse_user_id.clone())?
+                    .into_extract_localpart(palpo_user_id.clone())?
                     .to_owned();
                 let Some(user_infos) = state.users.get(username.as_str()).copied() else {
                     return Err(Error::MissingUserFromDependentTable {
                         table: "user_external_ids".to_owned(),
-                        user: synapse_user_id,
+                        user: palpo_user_id,
                     });
                 };
 
@@ -485,8 +485,8 @@ async fn migrate_external_ids(
                 let Some(&upstream_provider_id) = state.provider_id_mapping.get(&auth_provider)
                 else {
                     return Err(Error::MissingAuthProviderMapping {
-                        synapse_id: auth_provider,
-                        user: synapse_user_id,
+                        palpo_id: auth_provider,
+                        user: palpo_user_id,
                     });
                 };
 
@@ -526,9 +526,9 @@ async fn migrate_external_ids(
 
     // In case this has an error, we still want to join the task, so we look at the
     // error later
-    let res = synapse
+    let res = palpo
         .read_user_external_ids()
-        .map_err(|e| e.into_synapse("reading external ID"))
+        .map_err(|e| e.into_palpo("reading external ID"))
         .forward(PollSender::new(tx).sink_map_err(|_| Error::ChannelClosed))
         .inspect_err(|e| tracing::error!(error = e as &dyn std::error::Error))
         .await;
@@ -547,7 +547,7 @@ async fn migrate_external_ids(
     Ok((mas, state))
 }
 
-/// Migrate devices from Synapse to MAS (as compat sessions).
+/// Migrate devices from Palpo to MAS (as compat sessions).
 ///
 /// In order to get the right session creation timestamps, the access tokens
 /// must counterintuitively be migrated first, with the ULIDs passed in as
@@ -557,7 +557,7 @@ async fn migrate_external_ids(
 /// resembles a creation timestamp.
 #[tracing::instrument(skip_all, level = Level::INFO)]
 async fn migrate_devices(
-    synapse: &mut SynapseReader<'_>,
+    palpo: &mut PalpoReader<'_>,
     mut mas: MasWriter,
     rng: &mut impl RngCore,
     mut state: MigrationState,
@@ -576,22 +576,22 @@ async fn migrate_devices(
             let mut write_buffer = MasWriteBuffer::new(&mas);
 
             while let Some(device) = rx.recv().await {
-                let SynapseDevice {
-                    user_id: synapse_user_id,
+                let PalpoDevice {
+                    user_id: palpo_user_id,
                     device_id,
                     display_name,
                     last_seen,
                     ip,
                     user_agent,
                 } = device;
-                let username = synapse_user_id
+                let username = palpo_user_id
                     .extract_localpart(&state.server_name)
-                    .into_extract_localpart(synapse_user_id.clone())?
+                    .into_extract_localpart(palpo_user_id.clone())?
                     .to_owned();
                 let Some(user_infos) = state.users.get(username.as_str()).copied() else {
                     return Err(Error::MissingUserFromDependentTable {
                         table: "devices".to_owned(),
-                        user: synapse_user_id,
+                        user: palpo_user_id,
                     });
                 };
 
@@ -617,16 +617,16 @@ async fn migrate_devices(
                 let created_at = Ulid::from(session_id).datetime().into();
 
                 // As we're using a real IP type in the MAS database, it is possible
-                // that we encounter invalid IP addresses in the Synapse database.
+                // that we encounter invalid IP addresses in the Palpo database.
                 // In that case, we should ignore them, but still log a warning.
-                // One special case: Synapse will record '-' as IP in some cases, we don't want
+                // One special case: Palpo will record '-' as IP in some cases, we don't want
                 // to log about those
                 let last_active_ip = ip.filter(|ip| ip != "-").and_then(|ip| {
                     ip.parse()
                         .map_err(|e| {
                             tracing::warn!(
                                 error = &e as &dyn std::error::Error,
-                                mxid = %synapse_user_id,
+                                mxid = %palpo_user_id,
                                 %device_id,
                                 %ip,
                                 "Failed to parse device IP, ignoring"
@@ -644,7 +644,7 @@ async fn migrate_devices(
                             device_id: Some(device_id),
                             human_name: display_name,
                             created_at,
-                            is_synapse_admin: user_infos.flags.is_synapse_admin(),
+                            is_palpo_admin: user_infos.flags.is_palpo_admin(),
                             last_active_at: last_seen.map(DateTime::from),
                             last_active_ip,
                             user_agent,
@@ -668,9 +668,9 @@ async fn migrate_devices(
 
     // In case this has an error, we still want to join the task, so we look at the
     // error later
-    let res = synapse
+    let res = palpo
         .read_devices()
-        .map_err(|e| e.into_synapse("reading devices"))
+        .map_err(|e| e.into_palpo("reading devices"))
         .forward(PollSender::new(tx).sink_map_err(|_| Error::ChannelClosed))
         .inspect_err(|e| tracing::error!(error = e as &dyn std::error::Error))
         .await;
@@ -693,7 +693,7 @@ async fn migrate_devices(
 /// token). Some of these may be deviceless.
 #[tracing::instrument(skip_all, level = Level::INFO)]
 async fn migrate_unrefreshable_access_tokens(
-    synapse: &mut SynapseReader<'_>,
+    palpo: &mut PalpoReader<'_>,
     mut mas: MasWriter,
     clock: &dyn Clock,
     rng: &mut impl RngCore,
@@ -715,21 +715,21 @@ async fn migrate_unrefreshable_access_tokens(
             let mut deviceless_session_write_buffer = MasWriteBuffer::new(&mas);
 
             while let Some(token) = rx.recv().await {
-                let SynapseAccessToken {
-                    user_id: synapse_user_id,
+                let PalpoAccessToken {
+                    user_id: palpo_user_id,
                     device_id,
                     token,
                     valid_until_ms,
                     last_validated,
                 } = token;
-                let username = synapse_user_id
+                let username = palpo_user_id
                     .extract_localpart(&state.server_name)
-                    .into_extract_localpart(synapse_user_id.clone())?
+                    .into_extract_localpart(palpo_user_id.clone())?
                     .to_owned();
                 let Some(user_infos) = state.users.get(username.as_str()).copied() else {
                     return Err(Error::MissingUserFromDependentTable {
                         table: "access_tokens".to_owned(),
-                        user: synapse_user_id,
+                        user: palpo_user_id,
                     });
                 };
 
@@ -774,7 +774,7 @@ async fn migrate_unrefreshable_access_tokens(
                                 device_id: None,
                                 human_name: None,
                                 created_at,
-                                is_synapse_admin: false,
+                                is_palpo_admin: false,
                                 last_active_at: None,
                                 last_active_ip: None,
                                 user_agent: None,
@@ -821,9 +821,9 @@ async fn migrate_unrefreshable_access_tokens(
 
     // In case this has an error, we still want to join the task, so we look at the
     // error later
-    let res = synapse
+    let res = palpo
         .read_unrefreshable_access_tokens()
-        .map_err(|e| e.into_synapse("reading tokens"))
+        .map_err(|e| e.into_palpo("reading tokens"))
         .forward(PollSender::new(tx).sink_map_err(|_| Error::ChannelClosed))
         .inspect_err(|e| tracing::error!(error = e as &dyn std::error::Error))
         .await;
@@ -846,7 +846,7 @@ async fn migrate_unrefreshable_access_tokens(
 /// Does not migrate non-refreshable access tokens.
 #[tracing::instrument(skip_all, level = Level::INFO)]
 async fn migrate_refreshable_token_pairs(
-    synapse: &mut SynapseReader<'_>,
+    palpo: &mut PalpoReader<'_>,
     mut mas: MasWriter,
     clock: &dyn Clock,
     rng: &mut impl RngCore,
@@ -856,7 +856,7 @@ async fn migrate_refreshable_token_pairs(
     let start = Instant::now();
     let progress_counter_ = progress_counter.clone();
 
-    let (tx, mut rx) = tokio::sync::mpsc::channel::<SynapseRefreshableTokenPair>(100 * 1024);
+    let (tx, mut rx) = tokio::sync::mpsc::channel::<PalpoRefreshableTokenPair>(100 * 1024);
 
     // create a new RNG seeded from the passed RNG so that we can move it into the
     // spawned task
@@ -868,8 +868,8 @@ async fn migrate_refreshable_token_pairs(
             let mut refresh_token_write_buffer = MasWriteBuffer::new(&mas);
 
             while let Some(token) = rx.recv().await {
-                let SynapseRefreshableTokenPair {
-                    user_id: synapse_user_id,
+                let PalpoRefreshableTokenPair {
+                    user_id: palpo_user_id,
                     device_id,
                     access_token,
                     refresh_token,
@@ -877,14 +877,14 @@ async fn migrate_refreshable_token_pairs(
                     last_validated,
                 } = token;
 
-                let username = synapse_user_id
+                let username = palpo_user_id
                     .extract_localpart(&state.server_name)
-                    .into_extract_localpart(synapse_user_id.clone())?
+                    .into_extract_localpart(palpo_user_id.clone())?
                     .to_owned();
                 let Some(user_infos) = state.users.get(username.as_str()).copied() else {
                     return Err(Error::MissingUserFromDependentTable {
                         table: "refresh_tokens".to_owned(),
-                        user: synapse_user_id,
+                        user: palpo_user_id,
                     });
                 };
 
@@ -965,9 +965,9 @@ async fn migrate_refreshable_token_pairs(
 
     // In case this has an error, we still want to join the task, so we look at the
     // error later
-    let res = synapse
+    let res = palpo
         .read_refreshable_token_pairs()
-        .map_err(|e| e.into_synapse("reading refresh token pairs"))
+        .map_err(|e| e.into_palpo("reading refresh token pairs"))
         .forward(PollSender::new(tx).sink_map_err(|_| Error::ChannelClosed))
         .inspect_err(|e| tracing::error!(error = e as &dyn std::error::Error))
         .await;
@@ -987,7 +987,7 @@ async fn migrate_refreshable_token_pairs(
 }
 
 fn transform_user(
-    user: &SynapseUser,
+    user: &PalpoUser,
     server_name: &str,
     rng: &mut impl RngCore,
 ) -> Result<(MasNewUser, Option<MasNewUserPassword>), Error> {

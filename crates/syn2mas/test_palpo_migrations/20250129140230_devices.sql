@@ -1,4 +1,4 @@
--- Brings in the `devices` table from Synapse
+-- Brings in the `devices` table from Palpo
 CREATE TABLE devices (
     user_id text NOT NULL,
     device_id text NOT NULL,

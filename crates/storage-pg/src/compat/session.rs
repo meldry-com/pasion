@@ -48,7 +48,7 @@ struct CompatSessionLookup {
     user_session_id: Option<Uuid>,
     created_at: DateTime<Utc>,
     finished_at: Option<DateTime<Utc>>,
-    is_synapse_admin: bool,
+    is_palpo_admin: bool,
     user_agent: Option<String>,
     last_active_at: Option<DateTime<Utc>>,
     last_active_ip: Option<IpAddr>,
@@ -77,7 +77,7 @@ impl From<CompatSessionLookup> for CompatSession {
             device: value.device_id.map(Device::from),
             human_name: value.human_name,
             created_at: value.created_at,
-            is_synapse_admin: value.is_synapse_admin,
+            is_palpo_admin: value.is_palpo_admin,
             user_agent: value.user_agent,
             last_active_at: value.last_active_at,
             last_active_ip: value.last_active_ip,
@@ -95,7 +95,7 @@ struct CompatSessionAndSsoLoginLookup {
     user_session_id: Option<Uuid>,
     created_at: DateTime<Utc>,
     finished_at: Option<DateTime<Utc>>,
-    is_synapse_admin: bool,
+    is_palpo_admin: bool,
     user_agent: Option<String>,
     last_active_at: Option<DateTime<Utc>>,
     last_active_ip: Option<IpAddr>,
@@ -132,7 +132,7 @@ impl TryFrom<CompatSessionAndSsoLoginLookup> for (CompatSession, Option<CompatSs
             human_name: value.human_name,
             user_session_id: value.user_session_id.map(Ulid::from),
             created_at: value.created_at,
-            is_synapse_admin: value.is_synapse_admin,
+            is_palpo_admin: value.is_palpo_admin,
             user_agent: value.user_agent,
             last_active_at: value.last_active_at,
             last_active_ip: value.last_active_ip,
@@ -286,7 +286,7 @@ impl CompatSessionRepository for PgCompatSessionRepository<'_> {
                      , user_session_id
                      , created_at
                      , finished_at
-                     , is_synapse_admin
+                     , is_palpo_admin
                      , user_agent
                      , last_active_at
                      , last_active_ip as "last_active_ip: IpAddr"
@@ -323,7 +323,7 @@ impl CompatSessionRepository for PgCompatSessionRepository<'_> {
         user: &User,
         device: Device,
         browser_session: Option<&BrowserSession>,
-        is_synapse_admin: bool,
+        is_palpo_admin: bool,
         human_name: Option<String>,
     ) -> Result<CompatSession, Self::Error> {
         let created_at = clock.now();
@@ -334,7 +334,7 @@ impl CompatSessionRepository for PgCompatSessionRepository<'_> {
             r#"
                 INSERT INTO compat_sessions
                     (compat_session_id, user_id, device_id,
-                     user_session_id, created_at, is_synapse_admin,
+                     user_session_id, created_at, is_palpo_admin,
                      human_name)
                 VALUES ($1, $2, $3, $4, $5, $6, $7)
             "#,
@@ -343,7 +343,7 @@ impl CompatSessionRepository for PgCompatSessionRepository<'_> {
             device.as_str(),
             browser_session.map(|s| Uuid::from(s.id)),
             created_at,
-            is_synapse_admin,
+            is_palpo_admin,
             human_name.as_deref(),
         )
         .traced()
@@ -358,7 +358,7 @@ impl CompatSessionRepository for PgCompatSessionRepository<'_> {
             human_name,
             user_session_id: browser_session.map(|s| s.id),
             created_at,
-            is_synapse_admin,
+            is_palpo_admin,
             user_agent: None,
             last_active_at: None,
             last_active_ip: None,
@@ -474,8 +474,8 @@ impl CompatSessionRepository for PgCompatSessionRepository<'_> {
                 CompatSessionAndSsoLoginLookupIden::FinishedAt,
             )
             .expr_as(
-                Expr::col((CompatSessions::Table, CompatSessions::IsSynapseAdmin)),
-                CompatSessionAndSsoLoginLookupIden::IsSynapseAdmin,
+                Expr::col((CompatSessions::Table, CompatSessions::IsPalpoAdmin)),
+                CompatSessionAndSsoLoginLookupIden::IsPalpoAdmin,
             )
             .expr_as(
                 Expr::col((CompatSessions::Table, CompatSessions::UserAgent)),

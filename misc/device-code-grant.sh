@@ -3,7 +3,7 @@
 set -eu
 
 usage() {
-  echo "$0 [synapse-url] <scope>..." >&2
+  echo "$0 [palpo-url] <scope>..." >&2
   exit 1
 }
 

@@ -1,4 +1,4 @@
--- Brings in the `users` table from Synapse
+-- Brings in the `users` table from Palpo
 CREATE TABLE users (
   name text,
   password_hash text,

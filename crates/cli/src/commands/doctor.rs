@@ -24,7 +24,7 @@ impl Options {
     pub async fn run(self, figment: &Figment) -> anyhow::Result<ExitCode> {
         let _span = info_span!("cli.doctor").entered();
         info!(
-            "💡 Running diagnostics, make sure that both MAS and Synapse are running, and that MAS is using the same configuration files as this tool."
+            "💡 Running diagnostics, make sure that both MAS and Palpo are running, and that MAS is using the same configuration files as this tool."
         );
 
         let config = RootConfig::extract(figment).map_err(anyhow::Error::from_boxed)?;
@@ -95,11 +95,11 @@ Make sure that the MAS config contains:
   http:
     public_base: {issuer:?}
 
-And in the Synapse config:
+And in the Palpo config:
 
   matrix_authentication_service:
     enabled: true
-    # This must point to where MAS is reachable by Synapse
+    # This must point to where MAS is reachable by Palpo
     endpoint: {issuer:?}
     # ...
 
@@ -118,14 +118,14 @@ Check the well-known document at "{well_known_uri}"
                             warn!(
                                 r#"Matrix client well-known is missing the "org.matrix.msc2965.authentication" section.
 Check the well-known document at "{well_known_uri}"
-Make sure Synapse has delegated auth enabled:
+Make sure Palpo has delegated auth enabled:
 
   matrix_authentication_service:
     enabled: true
     endpoint: {issuer:?}
     # ...
 
-If it is not Synapse handling the well-known document, update it to include the following:
+If it is not Palpo handling the well-known document, update it to include the following:
 
 {expected_well_known:#}
 
@@ -222,7 +222,7 @@ Error details: {e}
         };
 
         if can_reach_cs {
-            // Try the whoami API. If it replies with `M_UNKNOWN` this is because Synapse
+            // Try the whoami API. If it replies with `M_UNKNOWN` this is because Palpo
             // couldn't reach MAS
             let whoami = hs_api.join("/_matrix/client/v3/account/whoami")?;
             let result = http_client
@@ -249,7 +249,7 @@ This is *highly* unexpected, as this means that a fake token might have been acc
                         503 => error!(
                             r#"❌ The homeserver at "{whoami}" replied with {status}.
 This means probably means that the homeserver was unable to reach MAS to validate the token.
-Make sure MAS is running and reachable from Synapse.
+Make sure MAS is running and reachable from Palpo.
 Check your homeserver logs.
 
 This is what the homeserver told us about the error:
@@ -275,7 +275,7 @@ Error details: {e}
             }
 
             // Try to reach an authenticated MAS API endpoint
-            let mas_api = hs_api.join("/_synapse/mas/is_localpart_available")?;
+            let mas_api = hs_api.join("/_palpo/mas/is_localpart_available")?;
             let result = http_client
                 .get(mas_api.as_str())
                 .bearer_auth(&secret)
@@ -285,20 +285,20 @@ Error details: {e}
                 Ok(response) => {
                     let status = response.status();
                     // We intentionally omit the required 'localpart' parameter
-                    // in this request. If authentication is successful, Synapse
+                    // in this request. If authentication is successful, Palpo
                     // returns a 400 Bad Request because of the missing
-                    // parameter. If authentication fails, Synapse will return a
+                    // parameter. If authentication fails, Palpo will return a
                     // 403 Forbidden. If the MAS integration isn't enabled,
-                    // Synapse will return a 404 Not found.
+                    // Palpo will return a 404 Not found.
                     if status == StatusCode::BAD_REQUEST {
                         info!(
-                            r#"✅ The Synapse MAS API is reachable with authentication at "{mas_api}"."#
+                            r#"✅ The Palpo MAS API is reachable with authentication at "{mas_api}"."#
                         );
                     } else {
                         error!(
-                            r#"❌ A Synapse MAS API endpoint at "{mas_api}" replied with {status}.
+                            r#"❌ A Palpo MAS API endpoint at "{mas_api}" replied with {status}.
 Make sure the homeserver is running, and that the MAS config has the correct `matrix.secret`.
-It should match the `secret` set in the Synapse config.
+It should match the `secret` set in the Palpo config.
 
   matrix_authentication_service:
     enabled: true
@@ -317,7 +317,7 @@ And in the MAS config:
                     }
                 }
                 Err(e) => error!(
-                    r#"❌ Can't reach the Synapse MAS API at "{mas_api}".
+                    r#"❌ Can't reach the Palpo MAS API at "{mas_api}".
 Make sure the homeserver is running, and that the MAS config has the correct `matrix.secret`.
 
 Error details: {e}
@@ -335,7 +335,7 @@ Error details: {e}
             Ok(response) => {
                 let status = response.status();
                 if status.is_success() {
-                    // Now we need to inspect the body to figure out whether it's Synapse or MAS
+                    // Now we need to inspect the body to figure out whether it's Palpo or MAS
                     // which handled the request
                     let body = response
                         .json::<serde_json::Value>()
@@ -364,7 +364,7 @@ Error details: {e}
                             r#"⚠️ The legacy login API at "{compat_login}" is reachable, but it doesn't look to be handled by MAS.
 This means legacy clients won't be able to login.
 Make sure MAS is running.
-Check your reverse proxy settings to make sure that this API is handled by MAS, not by Synapse.
+Check your reverse proxy settings to make sure that this API is handled by MAS, not by Palpo.
 
 See {DOCS_BASE}/setup/reverse-proxy.html
 "#
@@ -375,7 +375,7 @@ See {DOCS_BASE}/setup/reverse-proxy.html
                         r#"The legacy login API at "{compat_login}" replied with {status}.
 This means legacy clients won't be able to login.
 Make sure MAS is running.
-Check your reverse proxy settings to make sure that this API is handled by MAS, not by Synapse.
+Check your reverse proxy settings to make sure that this API is handled by MAS, not by Palpo.
 
 See {DOCS_BASE}/setup/reverse-proxy.html
 "#
@@ -386,7 +386,7 @@ See {DOCS_BASE}/setup/reverse-proxy.html
                 r#"⚠️ Can't reach the legacy login API at "{compat_login}".
 This means legacy clients won't be able to login.
 Make sure MAS is running.
-Check your reverse proxy settings to make sure that this API is handled by MAS, not by Synapse.
+Check your reverse proxy settings to make sure that this API is handled by MAS, not by Palpo.
 
 See {DOCS_BASE}/setup/reverse-proxy.html
 

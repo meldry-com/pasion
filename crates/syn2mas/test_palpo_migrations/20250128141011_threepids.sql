@@ -1,4 +1,4 @@
--- Brings in the `user_threepids` table from Synapse
+-- Brings in the `user_threepids` table from Palpo
 
 CREATE TABLE user_threepids (
     user_id text NOT NULL,
