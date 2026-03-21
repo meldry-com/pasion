@@ -159,6 +159,7 @@ impl Scribe for RouteError {
             Self::UserNotFound(_) | Self::ClientNotFound(_) | Self::UserSessionNotFound(_) => {
                 StatusCode::NOT_FOUND
             }
+            Self::InvalidScope(_) => StatusCode::BAD_REQUEST,
         };
         res.status_code(status);
         if let Some(event_id) = sentry_event_id {

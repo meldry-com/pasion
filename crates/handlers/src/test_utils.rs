@@ -1,26 +1,13 @@
-use std::{
-    convert::Infallible,
-    sync::{Arc, Mutex, RwLock},
-    task::{Context, Poll},
-};
+use std::sync::{Arc, Mutex, RwLock};
 
-use axum::{
-    body::{Bytes, HttpBody},
-    extract::{FromRef, FromRequestParts},
-    response::{IntoResponse, IntoResponseParts},
-};
 use chrono::Duration;
 use cookie_store::{CookieStore, RawCookie};
-use futures_util::future::BoxFuture;
 use headers::{Authorization, ContentType, HeaderMapExt, HeaderName, HeaderValue};
 use hyper::{
     Request, Response, StatusCode,
     header::{CONTENT_TYPE, COOKIE, SET_COOKIE},
 };
-use mas_axum_utils::{
-    ErrorWrapper,
-    cookies::{CookieJar, CookieManager},
-};
+use pasion_salvo_utils::cookies::{CookieJar, CookieManager};
 use pasion_config::RateLimitingConfig;
 use pasion_data_model::{AppVersion, BoxClock, BoxRng, SiteConfig, clock::MockClock};
 use pasion_email::{MailTransport, Mailer};
@@ -36,13 +23,14 @@ use pasion_templates::{SiteConfigExt, Templates};
 use oauth2_types::{registration::ClientRegistrationResponse, requests::AccessTokenResponse};
 use rand::SeedableRng;
 use rand_chacha::ChaChaRng;
+use salvo::prelude::*;
+use salvo::test::TestClient;
 use serde::{Serialize, de::DeserializeOwned};
 use sqlx::PgPool;
 use tokio_util::{
     sync::{CancellationToken, DropGuard},
     task::TaskTracker,
 };
-use tower::{Layer, Service, ServiceExt};
 use url::Url;
 
 use crate::{
@@ -143,6 +131,44 @@ pub fn test_site_config() -> SiteConfig {
         login_with_email_allowed: true,
         plan_management_iframe_uri: None,
         session_limit: None,
+    }
+}
+
+/// Salvo handler that injects TestState components into the Depot.
+#[derive(Clone)]
+struct InjectTestState(TestState);
+
+#[salvo::async_trait]
+impl Handler for InjectTestState {
+    async fn handle(
+        &self,
+        req: &mut salvo::Request,
+        depot: &mut Depot,
+        res: &mut salvo::Response,
+        ctrl: &mut FlowCtrl,
+    ) {
+        let state = &self.0;
+        depot.insert("box_repository_factory", state.repository_factory.clone().boxed());
+        depot.insert("templates", state.templates.clone());
+        depot.insert("translator", state.templates.translator());
+        depot.insert("key_store", state.key_store.clone());
+        depot.insert("encrypter", state.encrypter.clone());
+        depot.insert("url_builder", state.url_builder.clone());
+        depot.insert("http_client", state.http_client.clone());
+        depot.insert("password_manager", state.password_manager.clone());
+        depot.insert("cookie_manager", state.cookie_manager.clone());
+        depot.insert("metadata_cache", state.metadata_cache.clone());
+        depot.insert("site_config", state.site_config.clone());
+        depot.insert("limiter", state.limiter.clone());
+        depot.insert("policy_factory", state.policy_factory.clone());
+        depot.insert(
+            "homeserver_connection",
+            Arc::clone(&state.homeserver_connection) as Arc<dyn HomeserverConnection>,
+        );
+        depot.insert("app_version", AppVersion("v0.0.0-test"));
+        depot.insert("activity_tracker", state.activity_tracker.clone());
+        depot.insert("trusted_proxies", Vec::<ipnetwork::IpNetwork>::new());
+        ctrl.call_next(req, depot, res).await;
     }
 }
 
@@ -288,36 +314,188 @@ impl TestState {
             .unwrap()
     }
 
-    pub async fn request<B>(&self, request: Request<B>) -> Response<String>
-    where
-        B: HttpBody<Data = Bytes> + Send + 'static,
-        <B as HttpBody>::Error: std::error::Error + Send + Sync,
-        B::Error: std::error::Error + Send + Sync,
-        B::Data: Send,
-    {
-        let app = crate::healthcheck_router()
-            .merge(crate::discovery_router())
-            .merge(crate::api_router())
-            .merge(crate::compat_router(self.templates.clone()))
-            .merge(crate::human_router(self.templates.clone()))
-            .merge(crate::admin_api_router().1)
-            .with_state(self.clone())
-            .into_service();
+    /// Build a Salvo router with all test routes and state injection.
+    fn build_test_router(&self) -> Router {
+        Router::new()
+            .hoop(InjectTestState(self.clone()))
+            // Health
+            .push(Router::with_path(pasion_router::Healthcheck::route())
+                .get(crate::health::get))
+            // OAuth2 discovery
+            .push(Router::with_path(pasion_router::OidcConfiguration::route())
+                .get(crate::oauth2::discovery::get))
+            .push(Router::with_path(pasion_router::Webfinger::route())
+                .get(crate::oauth2::webfinger::get))
+            // OAuth2 endpoints
+            .push(Router::with_path(pasion_router::OAuth2Keys::route())
+                .get(crate::oauth2::keys::get))
+            .push(Router::with_path(pasion_router::OidcUserinfo::route())
+                .get(crate::oauth2::userinfo::get)
+                .post(crate::oauth2::userinfo::get))
+            .push(Router::with_path(pasion_router::OAuth2Introspection::route())
+                .post(crate::oauth2::introspection::post))
+            .push(Router::with_path(pasion_router::OAuth2Revocation::route())
+                .post(crate::oauth2::revoke::post))
+            .push(Router::with_path(pasion_router::OAuth2TokenEndpoint::route())
+                .post(crate::oauth2::token::post))
+            .push(Router::with_path(pasion_router::OAuth2RegistrationEndpoint::route())
+                .post(crate::oauth2::registration::post))
+            .push(Router::with_path(pasion_router::OAuth2DeviceAuthorizationEndpoint::route())
+                .post(crate::oauth2::device::authorize::post))
+            // REST API
+            .push(Router::with_path("/api/v1/viewer")
+                .get(crate::rest::viewer::get_viewer))
+            .push(Router::with_path("/api/v1/site-config")
+                .get(crate::rest::site_config::get))
+            .push(Router::with_path("/api/v1/sessions/<id>")
+                .get(crate::rest::sessions::get_session))
+            .push(Router::with_path("/api/v1/browser-sessions/<id>")
+                .delete(crate::rest::sessions::end_browser_session))
+            .push(Router::with_path("/api/v1/oauth2-sessions/<id>")
+                .delete(crate::rest::sessions::end_oauth2_session))
+            .push(Router::with_path("/api/v1/oauth2-sessions/<id>/name")
+                .put(crate::rest::sessions::set_oauth2_session_name))
+            .push(Router::with_path("/api/v1/compat-sessions/<id>")
+                .delete(crate::rest::sessions::end_compat_session))
+            .push(Router::with_path("/api/v1/compat-sessions/<id>/name")
+                .put(crate::rest::sessions::set_compat_session_name))
+            .push(Router::with_path("/api/v1/oauth2-clients/<id>")
+                .get(crate::rest::oauth2_clients::get_client))
+            .push(Router::with_path("/api/v1/viewer/password")
+                .post(crate::rest::password::set_password))
+            .push(Router::with_path("/api/v1/password-recovery/set")
+                .post(crate::rest::password::set_password_by_recovery))
+            .push(Router::with_path("/api/v1/password-recovery/resend")
+                .post(crate::rest::password::resend_recovery_email))
+            .push(Router::with_path("/api/v1/viewer/display-name")
+                .post(crate::rest::users::set_display_name))
+            .push(Router::with_path("/api/v1/viewer/cross-signing-reset")
+                .post(crate::rest::users::allow_cross_signing_reset))
+            .push(Router::with_path("/api/v1/viewer/deactivate")
+                .post(crate::rest::users::deactivate_user))
+            .push(Router::with_path("/api/v1/email-auth/start")
+                .post(crate::rest::emails::start_email_auth))
+            .push(Router::with_path("/api/v1/email-auth/<id>")
+                .get(crate::rest::emails::get_email_auth))
+            .push(Router::with_path("/api/v1/email-auth/<id>/complete")
+                .post(crate::rest::emails::complete_email_auth))
+            .push(Router::with_path("/api/v1/email-auth/<id>/resend")
+                .post(crate::rest::emails::resend_email_auth_code))
+            .push(Router::with_path("/api/v1/user-emails/<id>")
+                .delete(crate::rest::emails::remove_email))
+            // Compat
+            .push(Router::with_path(pasion_router::CompatLogin::route())
+                .get(crate::compat::login::get)
+                .post(crate::compat::login::post))
+            .push(Router::with_path(pasion_router::CompatLogout::route())
+                .post(crate::compat::logout::post))
+            .push(Router::with_path(pasion_router::CompatLogoutAll::route())
+                .post(crate::compat::logout_all::post))
+            .push(Router::with_path(pasion_router::CompatRefresh::route())
+                .post(crate::compat::refresh::post))
+            .push(Router::with_path(pasion_router::CompatLoginSsoRedirect::route())
+                .get(crate::compat::login_sso_redirect::get))
+            .push(Router::with_path(pasion_router::CompatLoginSsoComplete::route())
+                .get(crate::compat::login_sso_complete::get)
+                .post(crate::compat::login_sso_complete::post))
+            // Human/Views
+            .push(Router::with_path(pasion_router::Login::route())
+                .get(crate::views::login::get)
+                .post(crate::views::login::post))
+            .push(Router::with_path(pasion_router::Register::route())
+                .get(crate::views::register::get))
+            .push(Router::with_path(pasion_router::PasswordRegister::route())
+                .get(crate::views::register::password::get)
+                .post(crate::views::register::password::post))
+            .push(Router::with_path(pasion_router::RegisterVerifyEmail::route())
+                .get(crate::views::register::steps::verify_email::get)
+                .post(crate::views::register::steps::verify_email::post))
+            .push(Router::with_path(pasion_router::RegisterToken::route())
+                .get(crate::views::register::steps::registration_token::get)
+                .post(crate::views::register::steps::registration_token::post))
+            .push(Router::with_path(pasion_router::RegisterDisplayName::route())
+                .get(crate::views::register::steps::display_name::get)
+                .post(crate::views::register::steps::display_name::post))
+            .push(Router::with_path(pasion_router::RegisterFinish::route())
+                .get(crate::views::register::steps::finish::get))
+            // OAuth2 authorization
+            .push(Router::with_path(pasion_router::OAuth2AuthorizationEndpoint::route())
+                .get(crate::oauth2::authorization::get))
+            .push(Router::with_path(pasion_router::Consent::route())
+                .get(crate::oauth2::authorization::consent::get)
+                .post(crate::oauth2::authorization::consent::post))
+            // Upstream OAuth2
+            .push(Router::with_path(pasion_router::UpstreamOAuth2Authorize::route())
+                .get(crate::upstream_oauth2::authorize::get))
+            .push(Router::with_path(pasion_router::UpstreamOAuth2Callback::route())
+                .get(crate::upstream_oauth2::callback::handler)
+                .post(crate::upstream_oauth2::callback::handler))
+            .push(Router::with_path(pasion_router::UpstreamOAuth2Link::route())
+                .get(crate::upstream_oauth2::link::get)
+                .post(crate::upstream_oauth2::link::post))
+            .push(Router::with_path(pasion_router::UpstreamOAuth2BackchannelLogout::route())
+                .post(crate::upstream_oauth2::backchannel_logout::post))
+            // Device code
+            .push(Router::with_path(pasion_router::DeviceCodeLink::route())
+                .get(crate::oauth2::device::link::get))
+            .push(Router::with_path(pasion_router::DeviceCodeConsent::route())
+                .get(crate::oauth2::device::consent::get)
+                .post(crate::oauth2::device::consent::post))
+            // Account recovery
+            .push(Router::with_path(pasion_router::AccountRecoveryStart::route())
+                .get(crate::views::recovery::start::get)
+                .post(crate::views::recovery::start::post))
+            .push(Router::with_path(pasion_router::AccountRecoveryProgress::route())
+                .get(crate::views::recovery::progress::get)
+                .post(crate::views::recovery::progress::post))
+            // Admin API (catch-all for admin routes)
+            .push(Router::with_path("/api/admin/v1/<**path>")
+                .get(crate::admin::v1::handler)
+                .post(crate::admin::v1::handler)
+                .put(crate::admin::v1::handler)
+                .delete(crate::admin::v1::handler))
+    }
 
-        let Ok(mut service) = app.ready_oneshot().await;
-        let Ok(response) = service.call(request).await;
+    pub async fn request(&self, request: Request<String>) -> Response<String> {
+        let router = self.build_test_router();
+        let service = salvo::Service::new(router);
 
-        let (parts, body) = response.into_parts();
+        let (parts, body) = request.into_parts();
+        let uri = parts.uri;
+        let url = format!(
+            "https://example.com{}",
+            uri.path_and_query()
+                .map(|p| p.as_str())
+                .unwrap_or("/")
+        );
 
-        // This could actually fail, but do we really care about that?
-        let body = axum::body::to_bytes(body, usize::MAX)
-            .await
-            .expect("Failed to read response body");
-        let body = std::str::from_utf8(&body)
-            .expect("Response body is not valid UTF-8")
-            .to_owned();
+        let mut test_req = match parts.method {
+            hyper::Method::GET => TestClient::get(&url),
+            hyper::Method::POST => TestClient::post(&url),
+            hyper::Method::PUT => TestClient::put(&url),
+            hyper::Method::DELETE => TestClient::delete(&url),
+            hyper::Method::PATCH => TestClient::patch(&url),
+            hyper::Method::HEAD => TestClient::head(&url),
+            hyper::Method::OPTIONS => TestClient::options(&url),
+            other => panic!("Unsupported HTTP method: {other}"),
+        };
 
-        Response::from_parts(parts, body)
+        for (name, value) in &parts.headers {
+            test_req = test_req.add_header(name, value, true);
+        }
+
+        if !body.is_empty() {
+            test_req = test_req.bytes(body.into_bytes());
+        }
+
+        let mut salvo_res = test_req.send(&service).await;
+        let status = salvo_res.status_code.unwrap_or(StatusCode::OK);
+        let response_headers = salvo_res.headers().clone();
+        let body_str = salvo_res.take_string().await.unwrap_or_default();
+
+        let mut builder = Response::builder().status(status);
+        *builder.headers_mut().unwrap() = response_headers;
+        builder.body(body_str).unwrap()
     }
 
     /// Get a token with the given scope
@@ -402,184 +580,6 @@ impl TestState {
     /// Get an empty cookie jar
     pub fn cookie_jar(&self) -> CookieJar {
         self.cookie_manager.cookie_jar()
-    }
-}
-
-impl FromRef<TestState> for PgPool {
-    fn from_ref(input: &TestState) -> Self {
-        input.repository_factory.pool()
-    }
-}
-
-impl FromRef<TestState> for BoxRepositoryFactory {
-    fn from_ref(input: &TestState) -> Self {
-        input.repository_factory.clone().boxed()
-    }
-}
-
-impl FromRef<TestState> for Templates {
-    fn from_ref(input: &TestState) -> Self {
-        input.templates.clone()
-    }
-}
-
-impl FromRef<TestState> for Arc<Translator> {
-    fn from_ref(input: &TestState) -> Self {
-        input.templates.translator()
-    }
-}
-
-impl FromRef<TestState> for Keystore {
-    fn from_ref(input: &TestState) -> Self {
-        input.key_store.clone()
-    }
-}
-
-impl FromRef<TestState> for Encrypter {
-    fn from_ref(input: &TestState) -> Self {
-        input.encrypter.clone()
-    }
-}
-
-impl FromRef<TestState> for UrlBuilder {
-    fn from_ref(input: &TestState) -> Self {
-        input.url_builder.clone()
-    }
-}
-
-impl FromRef<TestState> for PasswordManager {
-    fn from_ref(input: &TestState) -> Self {
-        input.password_manager.clone()
-    }
-}
-
-impl FromRef<TestState> for CookieManager {
-    fn from_ref(input: &TestState) -> Self {
-        input.cookie_manager.clone()
-    }
-}
-
-impl FromRef<TestState> for MetadataCache {
-    fn from_ref(input: &TestState) -> Self {
-        input.metadata_cache.clone()
-    }
-}
-
-impl FromRef<TestState> for SiteConfig {
-    fn from_ref(input: &TestState) -> Self {
-        input.site_config.clone()
-    }
-}
-
-impl FromRef<TestState> for Arc<PolicyFactory> {
-    fn from_ref(input: &TestState) -> Self {
-        input.policy_factory.clone()
-    }
-}
-
-impl FromRef<TestState> for Arc<dyn HomeserverConnection> {
-    fn from_ref(input: &TestState) -> Self {
-        input.homeserver_connection.clone()
-    }
-}
-
-impl FromRef<TestState> for Limiter {
-    fn from_ref(input: &TestState) -> Self {
-        input.limiter.clone()
-    }
-}
-
-impl FromRef<TestState> for reqwest::Client {
-    fn from_ref(input: &TestState) -> Self {
-        input.http_client.clone()
-    }
-}
-
-impl FromRef<TestState> for AppVersion {
-    fn from_ref(_input: &TestState) -> Self {
-        AppVersion("v0.0.0-test")
-    }
-}
-
-impl FromRequestParts<TestState> for ActivityTracker {
-    type Rejection = Infallible;
-
-    async fn from_request_parts(
-        _parts: &mut axum::http::request::Parts,
-        state: &TestState,
-    ) -> Result<Self, Self::Rejection> {
-        Ok(state.activity_tracker.clone())
-    }
-}
-
-impl FromRequestParts<TestState> for BoundActivityTracker {
-    type Rejection = Infallible;
-
-    async fn from_request_parts(
-        _parts: &mut axum::http::request::Parts,
-        state: &TestState,
-    ) -> Result<Self, Self::Rejection> {
-        let ip = None;
-        Ok(state.activity_tracker.clone().bind(ip))
-    }
-}
-
-impl FromRequestParts<TestState> for RequesterFingerprint {
-    type Rejection = Infallible;
-
-    async fn from_request_parts(
-        _parts: &mut axum::http::request::Parts,
-        _state: &TestState,
-    ) -> Result<Self, Self::Rejection> {
-        Ok(RequesterFingerprint::EMPTY)
-    }
-}
-
-impl FromRequestParts<TestState> for BoxClock {
-    type Rejection = Infallible;
-
-    async fn from_request_parts(
-        _parts: &mut axum::http::request::Parts,
-        state: &TestState,
-    ) -> Result<Self, Self::Rejection> {
-        Ok(Box::new(state.clock.clone()))
-    }
-}
-
-impl FromRequestParts<TestState> for BoxRng {
-    type Rejection = Infallible;
-
-    async fn from_request_parts(
-        _parts: &mut axum::http::request::Parts,
-        state: &TestState,
-    ) -> Result<Self, Self::Rejection> {
-        let mut parent_rng = state.rng.lock().expect("Failed to lock RNG");
-        let rng = ChaChaRng::from_rng(&mut *parent_rng).expect("Failed to seed RNG");
-        Ok(Box::new(rng))
-    }
-}
-
-impl FromRequestParts<TestState> for BoxRepository {
-    type Rejection = ErrorWrapper<RepositoryError>;
-
-    async fn from_request_parts(
-        _parts: &mut axum::http::request::Parts,
-        state: &TestState,
-    ) -> Result<Self, Self::Rejection> {
-        let repo = state.repository_factory.create().await?;
-        Ok(repo)
-    }
-}
-
-impl FromRequestParts<TestState> for Policy {
-    type Rejection = ErrorWrapper<pasion_policy::InstantiateError>;
-
-    async fn from_request_parts(
-        _parts: &mut axum::http::request::Parts,
-        state: &TestState,
-    ) -> Result<Self, Self::Rejection> {
-        let policy = state.policy_factory.instantiate().await?;
-        Ok(policy)
     }
 }
 
@@ -753,50 +753,15 @@ impl CookieHelper {
         );
     }
 
-    pub fn import(&self, res: impl IntoResponseParts) {
-        let response = (res, "").into_response();
-        self.save_cookies(&response);
-    }
-}
-
-impl<S> Layer<S> for CookieHelper {
-    type Service = CookieStoreService<S>;
-
-    fn layer(&self, inner: S) -> Self::Service {
-        CookieStoreService {
-            helper: self.clone(),
-            inner,
-        }
-    }
-}
-
-/// A middleware that stores and retrieves cookies.
-pub struct CookieStoreService<S> {
-    helper: CookieHelper,
-    inner: S,
-}
-
-impl<S, ReqBody, ResBody> Service<Request<ReqBody>> for CookieStoreService<S>
-where
-    S: Service<Request<ReqBody>, Response = Response<ResBody>> + Send,
-    S::Future: Send + 'static,
-{
-    type Response = S::Response;
-    type Error = S::Error;
-    type Future = BoxFuture<'static, Result<S::Response, S::Error>>;
-
-    fn poll_ready(&mut self, cx: &mut Context<'_>) -> Poll<Result<(), Self::Error>> {
-        self.inner.poll_ready(cx)
-    }
-
-    fn call(&mut self, request: Request<ReqBody>) -> Self::Future {
-        let req = self.helper.with_cookies(request);
-        let inner = self.inner.call(req);
-        let helper = self.helper.clone();
-        Box::pin(async move {
-            let response: Response<_> = inner.await?;
-            helper.save_cookies(&response);
-            Ok(response)
-        })
+    /// Import cookies from a CookieJar into the store.
+    pub fn import(&self, cookie_jar: CookieJar) {
+        let url = "https://example.com/".parse().unwrap();
+        let mut store = self.store.write().unwrap();
+        store.store_response_cookies(
+            cookie_jar.pending_cookies().iter().map(|c| {
+                RawCookie::parse(c.to_string()).expect("Invalid cookie from CookieJar")
+            }),
+            &url,
+        );
     }
 }

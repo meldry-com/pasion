@@ -122,6 +122,7 @@ impl_from_error_for_route!(crate::rest::RouteError);
 impl_from_error_for_route!(pasion_policy::EvaluationError);
 impl_from_error_for_route!(pasion_policy::InstantiateError);
 impl_from_error_for_route!(pasion_jose::jwt::JwtDecodeError);
+impl_from_error_for_route!(salvo::http::ParseError);
 
 impl Scribe for RouteError {
     fn render(self, res: &mut Response) {
@@ -485,7 +486,7 @@ pub async fn get(req: &mut Request, depot: &mut Depot, res: &mut Response) -> Re
                 // We've got a localpart from the template. Let's run the policy
                 // engine on this registration and react early to a problem on
                 // the username
-                let res = policy
+                let eval_result = policy
                     .evaluate_register(pasion_policy::RegisterInput {
                         registration_method: pasion_policy::RegistrationMethod::UpstreamOAuth2,
                         username: &localpart,
@@ -499,7 +500,7 @@ pub async fn get(req: &mut Request, depot: &mut Depot, res: &mut Response) -> Re
 
                 // We don't do a full policy check at this point, only look for violations on
                 // the username
-                if res
+                if eval_result
                     .violations
                     .iter()
                     .any(|violation| violation.field.as_deref() == Some("username"))
@@ -508,7 +509,7 @@ pub async fn get(req: &mut Request, depot: &mut Depot, res: &mut Response) -> Re
                         tracing::warn!(
                             upstream_oauth_provider.id = %provider.id,
                             upstream_oauth_link.id = %link.id,
-                            "Upstream provider returned a localpart {localpart:?} which was denied by the policy ({res}). As the username is just a suggestion, it was ignored."
+                            "Upstream provider returned a localpart {localpart:?} which was denied by the policy ({eval_result}). As the username is just a suggestion, it was ignored."
                         );
                         break 'localpart None;
                     }
@@ -519,7 +520,7 @@ pub async fn get(req: &mut Request, depot: &mut Depot, res: &mut Response) -> Re
                         .with_code("Policy error")
                         .with_description(format!(
                             r"Upstream account provider returned {localpart:?} as username,
-                            which does not pass the policy check: {res}"
+                            which does not pass the policy check: {eval_result}"
                         ))
                         .with_language(&locale);
 
@@ -1099,7 +1100,7 @@ pub async fn post(req: &mut Request, depot: &mut Depot, res: &mut Response) -> R
                 }
 
                 // Policy check
-                let res = policy
+                let eval_result = policy
                     .evaluate_register(pasion_policy::RegisterInput {
                         registration_method: pasion_policy::RegistrationMethod::UpstreamOAuth2,
                         username: &username,
@@ -1111,7 +1112,7 @@ pub async fn post(req: &mut Request, depot: &mut Depot, res: &mut Response) -> R
                     })
                     .await?;
 
-                for violation in res.violations {
+                for violation in eval_result.violations {
                     match violation.field.as_deref() {
                         Some("username") => {
                             // If the homeserver denied the username, but we also had an error on

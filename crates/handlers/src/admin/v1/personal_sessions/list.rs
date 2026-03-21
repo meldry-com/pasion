@@ -153,6 +153,7 @@ impl Scribe for RouteError {
         let status = match self {
             Self::Internal(_) => StatusCode::INTERNAL_SERVER_ERROR,
             Self::UserNotFound(_) | Self::ClientNotFound(_) => StatusCode::NOT_FOUND,
+            Self::InvalidScope(_) => StatusCode::BAD_REQUEST,
         };
         res.status_code(status);
         if let Some(event_id) = sentry_event_id {

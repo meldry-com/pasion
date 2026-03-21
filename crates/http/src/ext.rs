@@ -1,7 +1,6 @@
 use std::sync::OnceLock;
 
 use http::header::HeaderName;
-use tower_http::cors::CorsLayer;
 
 static PROPAGATOR_HEADERS: OnceLock<Vec<HeaderName>> = OnceLock::new();
 
@@ -26,20 +25,8 @@ pub fn set_propagator(propagator: &dyn opentelemetry::propagation::TextMapPropag
         .expect(concat!(module_path!(), "::set_propagator was called twice"));
 }
 
-pub trait CorsLayerExt {
-    #[must_use]
-    fn allow_otel_headers<H>(self, headers: H) -> Self
-    where
-        H: IntoIterator<Item = HeaderName>;
-}
-
-impl CorsLayerExt for CorsLayer {
-    fn allow_otel_headers<H>(self, headers: H) -> Self
-    where
-        H: IntoIterator<Item = HeaderName>,
-    {
-        let base = PROPAGATOR_HEADERS.get().cloned().unwrap_or_default();
-        let headers: Vec<_> = headers.into_iter().chain(base).collect();
-        self.allow_headers(headers)
-    }
+/// Returns the list of propagator header names that should be allowed in CORS
+/// requests, if any were set via [`set_propagator`].
+pub fn propagator_headers() -> Option<&'static [HeaderName]> {
+    PROPAGATOR_HEADERS.get().map(Vec::as_slice)
 }

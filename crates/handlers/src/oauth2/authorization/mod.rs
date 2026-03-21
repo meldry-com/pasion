@@ -112,10 +112,10 @@ fn resolve_response_mode(
 #[tracing::instrument(name = "handlers.oauth2.authorization.get", skip_all)]
 pub async fn get(req: &mut Request, depot: &Depot, res: &mut Response) {
     match handle_get(req, depot).await {
-        Ok((html, cookie_jar)) => {
+        Ok((response, cookie_jar)) => {
             // Set cookies
-            cookie_jar.set_cookies(res);
-            res.render(html);
+            cookie_jar.write_to_response(res);
+            *res = response;
         }
         Err(e) => e.render(res),
     }
@@ -124,7 +124,7 @@ pub async fn get(req: &mut Request, depot: &Depot, res: &mut Response) {
 async fn handle_get(
     req: &mut Request,
     depot: &Depot,
-) -> Result<(impl Scribe, CookieJar), RouteError> {
+) -> Result<(Response, CookieJar), RouteError> {
     let templates = depot
         .get::<Templates>("templates")
         .expect("Templates not found in depot");
@@ -300,7 +300,7 @@ async fn handle_get(
                 .await?;
             let continue_grant = PostAuthAction::continue_grant(grant.id);
 
-            let res = match maybe_session {
+            let redirect = match maybe_session {
                 None if prompt.contains(&Prompt::Create) => {
                     // Client asked for a registration, show the registration prompt
                     repo.save().await?;
@@ -326,7 +326,9 @@ async fn handle_get(
                 }
             };
 
-            Ok(res)
+            let mut response = Response::new();
+            redirect.render(&mut response);
+            Ok(response)
         }
     })
     .await;

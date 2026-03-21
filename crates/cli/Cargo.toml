@@ -40,7 +40,6 @@ sqlx.workspace = true
 tokio.workspace = true
 tokio-util.workspace = true
 salvo.workspace = true
-tower.workspace = true
 url.workspace = true
 zeroize.workspace = true
 

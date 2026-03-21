@@ -13,6 +13,7 @@ use pasion_handlers::{ActivityTracker, CookieManager, Limiter, MetadataCache};
 use pasion_listener::server::Server;
 use pasion_router::UrlBuilder;
 use pasion_storage_pg::PgRepositoryFactory;
+use salvo::prelude::*;
 use tracing::{info, info_span, warn};
 
 use crate::{
@@ -264,6 +265,20 @@ impl Options {
                     config.name.as_deref(),
                 );
 
+                // Create a Salvo service and hyper handler from the router
+                let salvo_service = salvo::Service::new(router);
+                let hyper_handler = salvo_service.hyper_handler(
+                    salvo::conn::SocketAddr::Unknown,
+                    salvo::conn::SocketAddr::Unknown,
+                    http::uri::Scheme::HTTP,
+                    None,
+                    None,
+                );
+                let handler = move |req: hyper::Request<hyper::body::Incoming>| {
+                    use hyper::service::Service;
+                    hyper_handler.call(req)
+                };
+
 
                 // Display some informations about where we'll be serving connections
                 let proto = if config.tls.is_some() { "https" } else { "http" };
@@ -292,7 +307,7 @@ impl Options {
                 );
 
                 anyhow::Ok(listeners.into_iter().map(move |listener| {
-                    let mut server = Server::new(listener, router.clone());
+                    let mut server = Server::new(listener, handler.clone());
                     if let Some(tls_config) = &tls_config {
                         server = server.with_tls(tls_config.clone());
                     }

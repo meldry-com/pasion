@@ -549,7 +549,7 @@ features = [
 [workspace.dependencies.sentry]
 version = "0.47.0"
 default-features = false
-features = ["backtrace", "contexts", "panic", "tower", "reqwest"]
+features = ["backtrace", "contexts", "panic", "reqwest"]
 
 
 # Sentry tracing integration
@@ -639,23 +639,9 @@ version = "0.4.5"
 version = "0.7.18"
 features = ["rt"]
 
-# Tower services
-[workspace.dependencies.tower]
-version = "0.5.3"
-features = ["util"]
-
-# Tower service trait
+# Tower service trait (used by hyper-util for DNS resolution)
 [workspace.dependencies.tower-service]
 version = "0.3.3"
-
-# Tower layer trait
-[workspace.dependencies.tower-layer]
-version = "0.3.3"
-
-# Tower HTTP layers
-[workspace.dependencies.tower-http]
-version = "0.6.8"
-features = ["cors", "fs", "add-extension", "set-header"]
 
 # Logging and tracing
 [workspace.dependencies.tracing]

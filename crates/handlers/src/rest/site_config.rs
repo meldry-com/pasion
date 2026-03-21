@@ -29,7 +29,7 @@ pub async fn get(depot: &Depot) -> Result<Json<SiteConfigResponse>, RouteError> 
         email_change_allowed: config.email_change_allowed,
         password_login_enabled: config.password_login_enabled,
         account_deactivation_allowed: config.account_deactivation_allowed,
-        display_name_change_allowed: config.display_name_change_allowed,
+        display_name_change_allowed: config.displayname_change_allowed,
         password_registration_enabled: config.password_registration_enabled,
         minimum_password_complexity: config.minimum_password_complexity,
         imprint: config.imprint,

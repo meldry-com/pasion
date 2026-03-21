@@ -141,7 +141,7 @@ pub async fn start_email_auth(
     }
 
     // Rate limit check
-    if let Err(_e) = limiter.check_email_authentication(requester.fingerprint()) {
+    if let Err(_e) = limiter.check_email_authentication_email(requester.fingerprint(), &input.email) {
         return Ok(Json(StartEmailAuthResponse {
             status: "RATE_LIMITED",
             authentication: None,
@@ -245,7 +245,7 @@ pub async fn complete_email_auth(
     }
 
     // Rate limit check
-    if let Err(_e) = limiter.check_email_authentication(requester.fingerprint()) {
+    if let Err(_e) = limiter.check_email_authentication_attempt(&auth) {
         return Ok(Json(CompleteEmailAuthResponse { status: "RATE_LIMITED" }));
     }
 
@@ -333,7 +333,7 @@ pub async fn resend_email_auth_code(
         return Ok(Json(ResendEmailAuthCodeResponse { status: "COMPLETED" }));
     }
 
-    if let Err(_e) = limiter.check_email_authentication(requester.fingerprint()) {
+    if let Err(_e) = limiter.check_email_authentication_send_code(requester.fingerprint(), &auth) {
         return Ok(Json(ResendEmailAuthCodeResponse { status: "RATE_LIMITED" }));
     }
 

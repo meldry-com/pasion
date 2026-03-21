@@ -9,7 +9,7 @@ mod ext;
 mod reqwest;
 
 pub use self::{
-    ext::{CorsLayerExt, set_propagator},
+    ext::{propagator_headers, set_propagator},
     reqwest::{RequestBuilderExt, client as reqwest_client},
 };
 

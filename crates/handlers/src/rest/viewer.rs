@@ -108,7 +108,7 @@ fn site_config_data(config: &SiteConfig) -> SiteConfigData {
         email_change_allowed: config.email_change_allowed,
         password_login_enabled: config.password_login_enabled,
         account_deactivation_allowed: config.account_deactivation_allowed,
-        display_name_change_allowed: config.display_name_change_allowed,
+        display_name_change_allowed: config.displayname_change_allowed,
         password_registration_enabled: config.password_registration_enabled,
         minimum_password_complexity: config.minimum_password_complexity,
         imprint: config.imprint.clone(),
@@ -145,11 +145,11 @@ pub async fn get_viewer(
             // Fetch matrix info
             let matrix = match homeserver.query_user(&user.username).await {
                 Ok(info) => Some(MatrixUserData {
-                    mxid: info.mxid,
+                    mxid: homeserver.mxid(&user.username),
                     display_name: info.displayname,
                 }),
                 Err(_) => Some(MatrixUserData {
-                    mxid: format!("@{}:{}", user.username, homeserver.server_name()),
+                    mxid: homeserver.mxid(&user.username),
                     display_name: None,
                 }),
             };

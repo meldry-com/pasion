@@ -182,14 +182,11 @@ impl Scribe for RouteError {
 
 // ── Depot helpers ──────────────────────────────────────────────
 
-fn depot_get<T: Send + Sync + 'static>(depot: &Depot, key: &str) -> Result<T, RouteError>
-where
-    T: Clone,
-{
+fn depot_get<T: Send + Sync + Clone + 'static>(depot: &Depot, key: &str) -> Result<T, RouteError> {
     depot
         .get::<T>(key)
         .cloned()
-        .ok_or_else(|| {
+        .map_err(|_| {
             RouteError::Internal(Box::new(std::io::Error::new(
                 std::io::ErrorKind::Other,
                 format!("{key} not found in depot"),
@@ -197,8 +194,15 @@ where
         })
 }
 
-pub fn get_repo_factory(depot: &Depot) -> Result<BoxRepositoryFactory, RouteError> {
-    depot_get(depot, "box_repository_factory")
+pub fn get_repo_factory(depot: &Depot) -> Result<&BoxRepositoryFactory, RouteError> {
+    depot
+        .get::<BoxRepositoryFactory>("box_repository_factory")
+        .map_err(|_| {
+            RouteError::Internal(Box::new(std::io::Error::new(
+                std::io::ErrorKind::Other,
+                "box_repository_factory not found in depot",
+            )))
+        })
 }
 
 pub fn get_site_config(depot: &Depot) -> Result<SiteConfig, RouteError> {

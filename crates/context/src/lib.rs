@@ -1,7 +1,5 @@
 mod fmt;
 mod future;
-mod layer;
-mod service;
 
 use std::{
     borrow::Cow,
@@ -18,8 +16,6 @@ use tokio::task_local;
 pub use self::{
     fmt::EventFormatter,
     future::{LogContextFuture, PollRecordingFuture},
-    layer::LogContextLayer,
-    service::LogContextService,
 };
 
 /// A counter which increments each time we create a new log context

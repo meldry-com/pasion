@@ -14,7 +14,6 @@ use tokio_rustls::rustls::{
     server::WebPkiClientVerifier,
 };
 use tokio_util::sync::CancellationToken;
-use tower::service_fn;
 
 static CA_CERT_PEM: &[u8] = include_bytes!("./certs/ca.pem");
 static SERVER_CERT_PEM: &[u8] = include_bytes!("./certs/server.pem");
@@ -40,10 +39,10 @@ async fn main() -> Result<(), anyhow::Error> {
     let tls_proxy_protocol_listener = TcpListener::bind((Ipv4Addr::LOCALHOST, 3003))?;
 
     let servers = vec![
-        Server::try_new(listener, service_fn(handler))?,
-        Server::try_new(proxy_protocol_listener, service_fn(handler))?.with_proxy(),
-        Server::try_new(tls_listener, service_fn(handler))?.with_tls(tls_config.clone()),
-        Server::try_new(tls_proxy_protocol_listener, service_fn(handler))?
+        Server::try_new(listener, handler)?,
+        Server::try_new(proxy_protocol_listener, handler)?.with_proxy(),
+        Server::try_new(tls_listener, handler)?.with_tls(tls_config.clone()),
+        Server::try_new(tls_proxy_protocol_listener, handler)?
             .with_proxy()
             .with_tls(tls_config.clone()),
     ];

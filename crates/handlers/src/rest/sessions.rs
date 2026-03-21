@@ -115,7 +115,7 @@ pub async fn get_session(
 
             SessionDetailResponse::BrowserSession(BrowserSessionDetail {
                 id: NodeType::BrowserSession.serialize(session.id),
-                display_name: session.human_name.clone(),
+                display_name: None,
                 user_agent: session.user_agent.as_deref().map(parse_user_agent),
                 last_active_ip: session.last_active_ip.map(|ip| ip.to_string()),
                 last_active_at: session.last_active_at.map(|t| t.to_rfc3339()),
@@ -142,7 +142,7 @@ pub async fn get_session(
             SessionDetailResponse::Oauth2Session(Oauth2SessionDetail {
                 id: NodeType::OAuth2Session.serialize(session.id),
                 scope: Some(session.scope.to_string()),
-                display_name: session.human_name.clone(),
+                display_name: None,
                 client: client.map(|c| Oauth2ClientBrief {
                     id: NodeType::OAuth2Client.serialize(c.id),
                     client_id: c.client_id.to_string(),
@@ -167,19 +167,15 @@ pub async fn get_session(
                 return Err(RouteError::Unauthorized);
             }
 
-            let sso_login = if let Some(sso_login_id) = session.compat_sso_login_id {
-                repo.compat_sso_login().lookup(sso_login_id).await?.map(|l| SsoLoginData {
-                    id: NodeType::CompatSsoLogin.serialize(l.id),
-                    redirect_uri: l.redirect_uri.to_string(),
-                })
-            } else {
-                None
-            };
+            let sso_login = repo.compat_sso_login().find_for_session(&session).await?.map(|l| SsoLoginData {
+                id: NodeType::CompatSsoLogin.serialize(l.id),
+                redirect_uri: l.redirect_uri.to_string(),
+            });
 
             SessionDetailResponse::CompatSession(CompatSessionDetail {
                 id: NodeType::CompatSession.serialize(session.id),
                 device_id: session.device.as_ref().map(|d| d.to_string()),
-                display_name: session.human_name.clone(),
+                display_name: None,
                 user_agent: session.user_agent.as_deref().map(parse_user_agent),
                 last_active_ip: session.last_active_ip.map(|ip| ip.to_string()),
                 last_active_at: session.last_active_at.map(|t| t.to_rfc3339()),

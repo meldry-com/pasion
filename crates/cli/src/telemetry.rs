@@ -1,9 +1,7 @@
 use std::sync::{LazyLock, OnceLock};
 
 use anyhow::Context as _;
-use bytes::Bytes;
-use http_body_util::Full;
-use hyper::{Response, header::CONTENT_TYPE};
+use hyper::header::CONTENT_TYPE;
 use pasion_config::{
     MetricsConfig, MetricsExporterKind, Propagator, TelemetryConfig, TracingConfig,
     TracingExporterKind,
@@ -182,13 +180,10 @@ fn stdout_metric_reader() -> PeriodicReader<opentelemetry_stdout::MetricExporter
     PeriodicReader::builder(exporter, opentelemetry_sdk::runtime::Tokio).build()
 }
 
-type PromServiceFuture =
-    std::future::Ready<Result<Response<Full<Bytes>>, std::convert::Infallible>>;
-
-#[allow(clippy::needless_pass_by_value)]
-fn prometheus_service_fn<T>(_req: T) -> PromServiceFuture {
-    let response = if let Some(exporter) = PROMETHEUS_EXPORTER.get() {
-        // We'll need some space for this, so we preallocate a bit
+/// Salvo handler for serving Prometheus metrics.
+#[salvo::handler]
+pub async fn prometheus_handler(res: &mut salvo::Response) {
+    if let Some(exporter) = PROMETHEUS_EXPORTER.get() {
         let mut buffer = Vec::with_capacity(1024);
 
         if let Err(err) = exporter.export(&mut buffer) {
@@ -197,41 +192,19 @@ fn prometheus_service_fn<T>(_req: T) -> PromServiceFuture {
                 "Failed to export Prometheus metrics"
             );
 
-            Response::builder()
-                .status(500)
-                .header(CONTENT_TYPE, "text/plain")
-                .body(Full::new(Bytes::from_static(
-                    b"Failed to export Prometheus metrics, see logs for details",
-                )))
-                .unwrap()
+            res.status_code(salvo::http::StatusCode::INTERNAL_SERVER_ERROR);
+            res.headers_mut().insert(CONTENT_TYPE, "text/plain".parse().unwrap());
+            res.render(salvo::writing::Text::Plain("Failed to export Prometheus metrics, see logs for details"));
         } else {
-            Response::builder()
-                .status(200)
-                .header(CONTENT_TYPE, "text/plain;version=1.0.0")
-                .body(Full::new(Bytes::from(buffer)))
-                .unwrap()
+            res.status_code(salvo::http::StatusCode::OK);
+            res.headers_mut().insert(CONTENT_TYPE, "text/plain;version=1.0.0".parse().unwrap());
+            res.render(salvo::writing::Text::Plain(String::from_utf8_lossy(&buffer).into_owned()));
         }
     } else {
-        Response::builder()
-            .status(500)
-            .header(CONTENT_TYPE, "text/plain")
-            .body(Full::new(Bytes::from_static(
-                b"Prometheus exporter was not enabled in config",
-            )))
-            .unwrap()
-    };
-
-    std::future::ready(Ok(response))
-}
-
-pub fn prometheus_service<T>() -> tower::util::ServiceFn<fn(T) -> PromServiceFuture> {
-    if PROMETHEUS_EXPORTER.get().is_none() {
-        tracing::warn!(
-            "A Prometheus resource was mounted on a listener, but the Prometheus exporter was not setup in the config"
-        );
+        res.status_code(salvo::http::StatusCode::INTERNAL_SERVER_ERROR);
+        res.headers_mut().insert(CONTENT_TYPE, "text/plain".parse().unwrap());
+        res.render(salvo::writing::Text::Plain("Prometheus exporter was not enabled in config"));
     }
-
-    tower::service_fn(prometheus_service_fn as _)
 }
 
 fn prometheus_metric_reader() -> anyhow::Result<PrometheusExporter> {

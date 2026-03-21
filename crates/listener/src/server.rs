@@ -1,24 +1,17 @@
 use std::{
     pin::Pin,
     sync::Arc,
-    task::{Context, Poll},
+    task::Poll,
     time::Duration,
 };
 
 use futures_util::{StreamExt, stream::SelectAll};
 use hyper::{Request, Response};
-use hyper_util::{
-    rt::{TokioExecutor, TokioIo},
-    server::conn::auto::Connection,
-    service::TowerToHyperService,
-};
+use hyper_util::rt::{TokioExecutor, TokioIo};
 use pasion_context::LogContext;
-use pin_project_lite::pin_project;
 use thiserror::Error;
 use tokio_rustls::rustls::ServerConfig;
-use tokio_util::sync::{CancellationToken, WaitForCancellationFutureOwned};
-use tower::Service;
-use tower_http::add_extension::AddExtension;
+use tokio_util::sync::CancellationToken;
 use tracing::Instrument;
 
 use crate::{
@@ -32,18 +25,18 @@ use crate::{
 /// The timeout for the handshake to complete
 const HANDSHAKE_TIMEOUT: Duration = Duration::from_secs(5);
 
-pub struct Server<S> {
+pub struct Server<F> {
     tls: Option<Arc<ServerConfig>>,
     proxy: bool,
     listener: UnixOrTcpListener,
-    service: S,
+    handler: F,
 }
 
-impl<S> Server<S> {
+impl<F> Server<F> {
     /// # Errors
     ///
     /// Returns an error if the listener couldn't be converted via [`TryInto`]
-    pub fn try_new<L>(listener: L, service: S) -> Result<Self, L::Error>
+    pub fn try_new<L>(listener: L, handler: F) -> Result<Self, L::Error>
     where
         L: TryInto<UnixOrTcpListener>,
     {
@@ -51,17 +44,17 @@ impl<S> Server<S> {
             tls: None,
             proxy: false,
             listener: listener.try_into()?,
-            service,
+            handler,
         })
     }
 
     #[must_use]
-    pub fn new(listener: impl Into<UnixOrTcpListener>, service: S) -> Self {
+    pub fn new(listener: impl Into<UnixOrTcpListener>, handler: F) -> Self {
         Self {
             tls: None,
             proxy: false,
             listener: listener.into(),
-            service,
+            handler,
         }
     }
 
@@ -78,14 +71,14 @@ impl<S> Server<S> {
     }
 
     /// Run a single server
-    pub async fn run<B>(
+    pub async fn run<Fut, B, E>(
         self,
         soft_shutdown_token: CancellationToken,
         hard_shutdown_token: CancellationToken,
     ) where
-        S: Service<Request<hyper::body::Incoming>, Response = Response<B>> + Clone + Send + 'static,
-        S::Future: Send + 'static,
-        S::Error: std::error::Error + Send + Sync + 'static,
+        F: Fn(Request<hyper::body::Incoming>) -> Fut + Clone + Send + Sync + 'static,
+        Fut: Future<Output = Result<Response<B>, E>> + Send + 'static,
+        E: Into<Box<dyn std::error::Error + Send + Sync>> + 'static,
         B: http_body::Body + Send + 'static,
         B::Data: Send,
         B::Error: std::error::Error + Send + Sync + 'static,
@@ -135,12 +128,10 @@ impl AcceptError {
     }
 }
 
-/// Accept a connection and do the proxy protocol and TLS handshake
+/// Accept a connection and do the proxy protocol and TLS handshake.
 ///
-/// Returns an error if the proxy protocol or TLS handshake failed.
-/// Returns the connection, which should be used to spawn a task to serve the
-/// connection.
-#[allow(clippy::type_complexity)]
+/// Returns a boxed future that serves the connection with graceful shutdown
+/// support. Returns an error if the proxy protocol or TLS handshake failed.
 #[tracing::instrument(
     name = "accept",
     skip_all,
@@ -150,25 +141,18 @@ impl AcceptError {
         network.peer.port,
     ),
 )]
-async fn accept<S, B>(
+async fn accept<F, Fut, B, E>(
     maybe_proxy_acceptor: &MaybeProxyAcceptor,
     maybe_tls_acceptor: &MaybeTlsAcceptor,
     peer_addr: SocketAddr,
     stream: UnixOrTcpConnection,
-    service: S,
-) -> Result<
-    Connection<
-        'static,
-        TokioIo<MaybeTlsStream<Rewind<UnixOrTcpConnection>>>,
-        TowerToHyperService<AddExtension<S, ConnectionInfo>>,
-        TokioExecutor,
-    >,
-    AcceptError,
->
+    handler: F,
+    shutdown_token: CancellationToken,
+) -> Result<Pin<Box<dyn Future<Output = ()> + Send>>, AcceptError>
 where
-    S: Service<Request<hyper::body::Incoming>, Response = Response<B>> + Send + Clone + 'static,
-    S::Error: std::error::Error + Send + Sync + 'static,
-    S::Future: Send + 'static,
+    F: Fn(Request<hyper::body::Incoming>) -> Fut + Clone + Send + Sync + 'static,
+    Fut: Future<Output = Result<Response<B>, E>> + Send + 'static,
+        E: Into<Box<dyn std::error::Error + Send + Sync>> + 'static,
     B: http_body::Body + Send + 'static,
     B::Data: Send,
     B::Error: std::error::Error + Send + Sync + 'static,
@@ -214,84 +198,56 @@ where
         }
         builder.http1().keep_alive(true);
 
-        let service = TowerToHyperService::new(AddExtension::new(service, info));
+        // Create a hyper service that injects ConnectionInfo into the request
+        // extensions and delegates to the handler
+        let service = hyper::service::service_fn(move |mut req: Request<hyper::body::Incoming>| {
+            req.extensions_mut().insert(info.clone());
+            handler(req)
+        });
 
         let conn = builder
             .serve_connection(TokioIo::new(stream), service)
             .into_owned();
 
-        Ok(conn)
+        // Return a future that serves the connection with graceful shutdown
+        let serve_future: Pin<Box<dyn Future<Output = ()> + Send>> = Box::pin(async move {
+            let mut conn = std::pin::pin!(conn);
+            let mut shutdown_started = false;
+
+            loop {
+                tokio::select! {
+                    biased;
+
+                    () = shutdown_token.cancelled(), if !shutdown_started => {
+                        shutdown_started = true;
+                        conn.as_mut().graceful_shutdown();
+                    }
+
+                    result = conn.as_mut() => {
+                        if let Err(e) = result {
+                            tracing::warn!(error = &*e as &dyn std::error::Error, "Failed to serve connection");
+                        }
+                        break;
+                    }
+                }
+            }
+        });
+
+        Ok(serve_future)
     })
     .instrument(span)
     .await
     .map_err(AcceptError::handshake_timeout)?
 }
 
-pin_project! {
-    /// A wrapper around a connection that can be aborted when a shutdown signal is received.
-    ///
-    /// This works by sharing an atomic boolean between all connections, and when a shutdown
-    /// signal is received, the boolean is set to true. The connection will then check the
-    /// boolean before polling the underlying connection, and if it's true, it will start a
-    /// graceful shutdown.
-    ///
-    /// We also use an event listener to wake up the connection when the shutdown signal is
-    /// received, because the connection needs to be polled again to start the graceful shutdown.
-    struct AbortableConnection<C> {
-        #[pin]
-        connection: C,
-        #[pin]
-        cancellation_future: WaitForCancellationFutureOwned,
-        did_start_shutdown: bool,
-    }
-}
-
-impl<C> AbortableConnection<C> {
-    fn new(connection: C, cancellation_token: CancellationToken) -> Self {
-        Self {
-            connection,
-            cancellation_future: cancellation_token.cancelled_owned(),
-            did_start_shutdown: false,
-        }
-    }
-}
-
-impl<T, S, B> Future
-    for AbortableConnection<Connection<'static, T, TowerToHyperService<S>, TokioExecutor>>
-where
-    Connection<'static, T, TowerToHyperService<S>, TokioExecutor>: Future,
-    S: Service<Request<hyper::body::Incoming>, Response = Response<B>> + Send + Clone + 'static,
-    S::Future: Send + 'static,
-    S::Error: std::error::Error + Send + Sync,
-    T: hyper::rt::Read + hyper::rt::Write + Unpin,
-    B: http_body::Body + Send + 'static,
-    B::Data: Send,
-    B::Error: std::error::Error + Send + Sync + 'static,
-{
-    type Output = <Connection<'static, T, TowerToHyperService<S>, TokioExecutor> as Future>::Output;
-
-    fn poll(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
-        let mut this = self.project();
-
-        if let Poll::Ready(()) = this.cancellation_future.poll(cx)
-            && !*this.did_start_shutdown
-        {
-            *this.did_start_shutdown = true;
-            this.connection.as_mut().graceful_shutdown();
-        }
-
-        this.connection.poll(cx)
-    }
-}
-
-pub async fn run_servers<S, B>(
-    listeners: impl IntoIterator<Item = Server<S>>,
+pub async fn run_servers<F, Fut, B, E>(
+    listeners: impl IntoIterator<Item = Server<F>>,
     soft_shutdown_token: CancellationToken,
     hard_shutdown_token: CancellationToken,
 ) where
-    S: Service<Request<hyper::body::Incoming>, Response = Response<B>> + Clone + Send + 'static,
-    S::Future: Send + 'static,
-    S::Error: std::error::Error + Send + Sync + 'static,
+    F: Fn(Request<hyper::body::Incoming>) -> Fut + Clone + Send + Sync + 'static,
+    Fut: Future<Output = Result<Response<B>, E>> + Send + 'static,
+        E: Into<Box<dyn std::error::Error + Send + Sync>> + 'static,
     B: http_body::Body + Send + 'static,
     B::Data: Send,
     B::Error: std::error::Error + Send + Sync + 'static,
@@ -312,7 +268,7 @@ pub async fn run_servers<S, B>(
                         (
                             maybe_proxy_acceptor,
                             maybe_tls_acceptor.clone(),
-                            server.service.clone(),
+                            server.handler.clone(),
                             addr,
                             stream,
                         )
@@ -340,13 +296,10 @@ pub async fn run_servers<S, B>(
             // Poll on the JoinSet to collect connections to serve
             res = accept_tasks.join_next(), if !accept_tasks.is_empty() => {
                 match res {
-                    Some(Ok(Some(connection))) => {
-                        let token = soft_shutdown_token.child_token();
+                    Some(Ok(Some(serve_future))) => {
                         connection_tasks.spawn(LogContext::new("http-serve").run(async move || {
                             tracing::debug!("Accepted connection");
-                            if let Err(e) = AbortableConnection::new(connection, token).await {
-                                tracing::warn!(error = &*e as &dyn std::error::Error, "Failed to serve connection");
-                            }
+                            serve_future.await;
                         }));
                     },
                     Some(Ok(None)) => { /* Connection did not finish handshake, error should be logged in `accept` */ },
@@ -368,11 +321,13 @@ pub async fn run_servers<S, B>(
             res = accept_stream.next() => {
                 let Some(res) = res else { continue };
 
+                let shutdown_token = soft_shutdown_token.child_token();
+
                 // Spawn the connection in the set, so we don't have to wait for the handshake to
                 // accept the next connection. This allows us to keep track of active connections
                 // and waiting on them for a graceful shutdown
                 accept_tasks.spawn(LogContext::new("http-accept").run(async move || {
-                    let (maybe_proxy_acceptor, maybe_tls_acceptor, service, peer_addr, stream) = match res {
+                    let (maybe_proxy_acceptor, maybe_tls_acceptor, handler, peer_addr, stream) = match res {
                         Ok(res) => res,
                         Err(e) => {
                             tracing::warn!(error = &e as &dyn std::error::Error, "Failed to accept connection from the underlying socket");
@@ -380,8 +335,8 @@ pub async fn run_servers<S, B>(
                         }
                     };
 
-                    match accept(&maybe_proxy_acceptor, &maybe_tls_acceptor, peer_addr, stream, service).await {
-                        Ok(connection) => Some(connection),
+                    match accept(&maybe_proxy_acceptor, &maybe_tls_acceptor, peer_addr, stream, handler, shutdown_token).await {
+                        Ok(serve_future) => Some(serve_future),
                         Err(e) => {
                             tracing::warn!(error = &e as &dyn std::error::Error, "Failed to accept connection");
                             None
@@ -407,13 +362,10 @@ pub async fn run_servers<S, B>(
                 // Poll on the JoinSet to collect connections to serve
                 res = accept_tasks.join_next(), if !accept_tasks.is_empty() => {
                     match res {
-                        Some(Ok(Some(connection))) => {
-                            let token = soft_shutdown_token.child_token();
+                        Some(Ok(Some(serve_future))) => {
                             connection_tasks.spawn(LogContext::new("http-serve").run(async || {
                                 tracing::debug!("Accepted connection");
-                                if let Err(e) = AbortableConnection::new(connection, token).await {
-                                    tracing::warn!(error = &*e as &dyn std::error::Error, "Failed to serve connection");
-                                }
+                                serve_future.await;
                             }));
                         }
                         Some(Ok(None)) => { /* Connection did not finish handshake, error should be logged in `accept` */ },

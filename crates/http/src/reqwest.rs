@@ -26,7 +26,7 @@ use opentelemetry_semantic_conventions::{
 };
 use rustls_platform_verifier::ConfigVerifierExt;
 use tokio::time::Instant;
-use tower::{BoxError, Service as _};
+use tower_service::Service as _;
 use tracing::Instrument;
 use tracing_opentelemetry::OpenTelemetrySpanExt;
 
@@ -71,7 +71,7 @@ impl reqwest::dns::Resolve for TracingResolver {
                 .map(|result| {
                     result
                         .map(|addrs| -> reqwest::dns::Addrs { Box::new(addrs) })
-                        .map_err(|err| -> BoxError { Box::new(err) })
+                        .map_err(|err| -> Box<dyn std::error::Error + Send + Sync> { Box::new(err) })
                 })
                 .instrument(span),
         )
