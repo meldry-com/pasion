@@ -54,7 +54,6 @@ pasion-storage = { path = "./crates/storage/", version = "=1.8.0" }
 pasion-storage-pg = { path = "./crates/storage-pg/", version = "=1.8.0" }
 pasion-tasks = { path = "./crates/tasks/", version = "=1.8.0" }
 pasion-templates = { path = "./crates/templates/", version = "=1.8.0" }
-pasion-tower = { path = "./crates/tower/", version = "=1.8.0" }
 oauth2-types = { path = "./crates/oauth2-types/", version = "=1.8.0" }
 syn2mas = { path = "./crates/syn2mas", version = "=1.8.0" }
 

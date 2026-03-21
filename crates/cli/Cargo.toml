@@ -79,7 +79,6 @@ pasion-storage.workspace = true
 pasion-storage-pg.workspace = true
 pasion-tasks.workspace = true
 pasion-templates.workspace = true
-pasion-tower.workspace = true
 
 syn2mas.workspace = true
 
