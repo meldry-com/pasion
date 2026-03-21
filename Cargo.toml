@@ -521,7 +521,7 @@ version = "0.5.0"
 
 # JSON Schema generation
 [workspace.dependencies.schemars]
-version = "0.9.0"
+version = "1.2.1"
 features = ["url2", "chrono04", "preserve_order"]
 
 # SEC1 encoding format

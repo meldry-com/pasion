@@ -4222,7 +4222,7 @@ dependencies = [
  "rand 0.8.5",
  "rand_chacha 0.3.1",
  "rustls-pki-types",
- "schemars 0.9.0",
+ "schemars 1.2.1",
  "serde",
  "serde_json",
  "serde_with",
@@ -4336,7 +4336,7 @@ dependencies = [
  "reqwest 0.13.2",
  "rustls",
  "salvo",
- "schemars 0.9.0",
+ "schemars 1.2.1",
  "sentry",
  "serde",
  "serde_json",
@@ -4417,7 +4417,7 @@ dependencies = [
 name = "pasion-iana"
 version = "1.8.0"
 dependencies = [
- "schemars 0.9.0",
+ "schemars 1.2.1",
  "serde",
 ]
 
@@ -4457,7 +4457,7 @@ dependencies = [
  "rand 0.8.5",
  "rand_chacha 0.3.1",
  "rsa",
- "schemars 0.9.0",
+ "schemars 1.2.1",
  "sec1",
  "serde",
  "serde_json",
@@ -4590,7 +4590,7 @@ dependencies = [
  "oauth2-types",
  "opa-wasm",
  "pasion-data-model",
- "schemars 0.9.0",
+ "schemars 1.2.1",
  "serde",
  "serde_json",
  "thiserror 2.0.18",
@@ -6255,6 +6255,18 @@ version = "0.9.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "4cd191f9397d57d581cddd31014772520aa448f65ef991055d7f61582c65165f"
 dependencies = [
+ "dyn-clone",
+ "ref-cast",
+ "serde",
+ "serde_json",
+]
+
+[[package]]
+name = "schemars"
+version = "1.2.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "a2b42f36aa1cd011945615b92222f6bf73c599a102a300334cd7f8dbeec726cc"
+dependencies = [
  "chrono",
  "dyn-clone",
  "ref-cast",
@@ -6265,22 +6277,10 @@ dependencies = [
 ]
 
 [[package]]
-name = "schemars"
+name = "schemars_derive"
 version = "1.2.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a2b42f36aa1cd011945615b92222f6bf73c599a102a300334cd7f8dbeec726cc"
-dependencies = [
- "dyn-clone",
- "ref-cast",
- "serde",
- "serde_json",
-]
-
-[[package]]
-name = "schemars_derive"
-version = "0.9.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "5016d94c77c6d32f0b8e08b781f7dc8a90c2007d4e77472cc2807bc10a8438fe"
+checksum = "7d115b50f4aaeea07e79c1912f645c7513d81715d0420f8bc77a18c6260b307f"
 dependencies = [
  "proc-macro2",
  "quote",
