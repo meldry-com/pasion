@@ -1,3 +1,18 @@
+//! OAuth 2.0 and OpenID Connect protocol endpoint handlers.
+//!
+//! This module implements the server-side of the OAuth 2.0 / OIDC flows:
+//!
+//! - [`authorization`] — Authorization endpoint (authorization code grant)
+//! - [`token`] — Token endpoint (exchange codes / credentials for tokens)
+//! - [`registration`] — Dynamic client registration (RFC 7591)
+//! - [`discovery`] — OpenID Connect Discovery (`/.well-known/openid-configuration`)
+//! - [`keys`] — JSON Web Key Set (`/.well-known/jwks.json`)
+//! - [`userinfo`] — UserInfo endpoint (returns claims about the authenticated user)
+//! - [`introspection`] — Token introspection (RFC 7662)
+//! - [`revoke`] — Token revocation (RFC 7009)
+//! - [`device`] — Device authorization grant (RFC 8628)
+//! - [`webfinger`] — WebFinger discovery
+
 use std::collections::HashMap;
 
 use chrono::Duration;
@@ -16,15 +31,25 @@ use pasion_router::UrlBuilder;
 use pasion_storage::RepositoryAccess;
 use thiserror::Error;
 
+/// Authorization endpoint (user consent and code issuance).
 pub mod authorization;
+/// Device authorization grant (RFC 8628).
 pub mod device;
+/// OpenID Connect Discovery metadata.
 pub mod discovery;
+/// Token introspection (RFC 7662).
 pub mod introspection;
+/// JWK Set endpoint.
 pub mod keys;
+/// Dynamic client registration (RFC 7591).
 pub mod registration;
+/// Token revocation (RFC 7009).
 pub mod revoke;
+/// Token endpoint (code exchange, client credentials, refresh).
 pub mod token;
+/// UserInfo endpoint.
 pub mod userinfo;
+/// WebFinger discovery.
 pub mod webfinger;
 
 #[derive(Debug, Error)]
@@ -38,6 +63,11 @@ pub(crate) enum IdTokenSignatureError {
     TokenHash(#[from] pasion_jose::claims::TokenHashError),
 }
 
+/// Generate a signed OpenID Connect ID Token for the given session.
+///
+/// The token includes standard claims (`iss`, `sub`, `aud`, `iat`, `exp`)
+/// and optional claims (`nonce`, `auth_time`, `at_hash`, `c_hash`) depending
+/// on the grant context.
 pub(crate) fn generate_id_token(
     rng: &mut (impl rand::RngCore + rand::CryptoRng),
     clock: &impl Clock,
@@ -89,6 +119,8 @@ pub(crate) fn generate_id_token(
     Ok(id_token.into_string())
 }
 
+/// Generate a new access-token / refresh-token pair for an OAuth 2.0 session
+/// and persist them in the repository.
 pub(crate) async fn generate_token_pair<R: RepositoryAccess>(
     rng: &mut (impl rand::RngCore + Send),
     clock: &impl Clock,

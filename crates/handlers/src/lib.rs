@@ -1,3 +1,18 @@
+//! HTTP request handlers for the Pasion authentication service.
+//!
+//! This crate contains all the HTTP handler logic, organized by protocol and
+//! concern area:
+//!
+//! - [`admin`] — Admin API handlers for managing users, sessions, and clients
+//! - [`compat`] — Legacy Matrix `/_matrix/client/*/login` compatibility layer
+//! - [`health`] — Health-check endpoint
+//! - [`oauth2`] — OAuth 2.0 / OpenID Connect endpoints (token, authorization,
+//!   discovery, userinfo, etc.)
+//! - [`rest`] — REST API endpoints for the account management frontend
+//! - [`upstream_oauth2`] — Upstream SSO / federated identity provider flows
+//! - [`views`] — Server-rendered HTML pages (login, registration, consent, etc.)
+//! - [`passwords`] — Password hashing and verification utilities
+
 #![deny(clippy::future_not_send)]
 #![allow(
     // Some salvo handlers need that
@@ -13,13 +28,21 @@ use std::sync::LazyLock;
 
 use opentelemetry::metrics::Meter;
 
+/// Admin API handlers (JSON API, cursor-paginated).
 pub mod admin;
+/// Legacy Matrix login/logout/refresh compatibility endpoints.
 pub mod compat;
+/// Health-check endpoint (`/health`).
 pub mod health;
+/// REST API endpoints consumed by the account-management frontend.
 pub mod rest;
+/// OAuth 2.0 and OpenID Connect protocol endpoints.
 pub mod oauth2;
+/// Password hashing, verification, and complexity checking.
 pub mod passwords;
+/// Upstream (federated) OAuth 2.0 / OIDC provider integration.
 pub mod upstream_oauth2;
+/// Server-rendered HTML views (login, registration, consent pages).
 pub mod views;
 
 mod activity_tracker;

@@ -1,3 +1,22 @@
+//! Background task queue and worker for the Pasion authentication service.
+//!
+//! This crate implements an asynchronous job queue backed by PostgreSQL. Tasks
+//! are enqueued during HTTP request handling and processed by a background
+//! worker. Task types include:
+//!
+//! - **Email delivery** — sending verification codes, password-reset links, etc.
+//! - **Homeserver provisioning** — creating / deactivating Matrix users via the
+//!   homeserver admin API
+//! - **Session cleanup** — expiring old sessions and tokens
+//! - **Account recovery** — processing recovery ticket workflows
+//!
+//! # Entry points
+//!
+//! - [`init`] — Register all task handlers and return a [`QueueWorker`] (does
+//!   **not** start processing).
+//! - [`init_and_run`] — Same as [`init`], but immediately spawns the worker
+//!   onto the provided [`TaskTracker`].
+
 use std::sync::{Arc, LazyLock};
 
 use pasion_data_model::{Clock, SiteConfig};

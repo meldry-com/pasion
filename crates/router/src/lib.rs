@@ -1,3 +1,23 @@
+//! URL routing definitions for the Pasion authentication service.
+//!
+//! This crate defines every named route in the application (e.g.
+//! [`OAuth2TokenEndpoint`], [`Login`], [`OidcConfiguration`]) along with the
+//! [`UrlBuilder`] utility for generating absolute URLs from a base.
+//!
+//! Each route type implements the [`Route`] trait, which provides:
+//! - `route()` — the path template used by the Salvo router
+//! - `path_and_query()` — the concrete path (with query parameters if needed)
+//!
+//! # Example
+//!
+//! ```ignore
+//! use pasion_router::{UrlBuilder, OidcConfiguration, Route};
+//!
+//! let builder = UrlBuilder::new("https://auth.example.com/".parse().unwrap(), None, None);
+//! let url = builder.absolute_url_for(&OidcConfiguration);
+//! assert_eq!(url.as_str(), "https://auth.example.com/.well-known/openid-configuration");
+//! ```
+
 pub(crate) mod endpoints;
 pub(crate) mod traits;
 mod url_builder;

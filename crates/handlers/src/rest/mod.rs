@@ -1,3 +1,20 @@
+//! REST API endpoints for the account-management frontend.
+//!
+//! These endpoints are consumed by the SPA (single-page application) that lets
+//! users manage their sessions, emails, passwords, and profile. All responses
+//! use JSON and authentication is via browser session cookies or OAuth 2.0
+//! bearer tokens.
+//!
+//! # Sub-modules
+//!
+//! - [`emails`] — Email verification and management
+//! - [`sessions`] — List / terminate browser, OAuth 2.0, and compat sessions
+//! - [`viewer`] — Current-user ("viewer") profile information
+//! - [`site_config`] — Public site configuration
+//! - [`password`] — Password change and recovery
+//! - [`users`] — Display name, cross-signing reset, account deactivation
+//! - [`oauth2_clients`] — OAuth 2.0 client details
+
 #![allow(clippy::module_name_repetitions)]
 
 use std::{net::IpAddr, ops::Deref, sync::Arc};
@@ -33,9 +50,14 @@ pub mod viewer;
 
 // ── Requester / Auth ───────────────────────────────────────────
 
+/// The authenticated entity making a REST API request, together with
+/// connection metadata (IP address, user-agent).
 pub struct Requester {
+    /// Who is making the request (anonymous, browser session, or OAuth 2.0 session).
     pub entity: RequestingEntity,
+    /// Client IP address (after trusted-proxy unwrapping).
     pub ip_address: Option<IpAddr>,
+    /// Raw `User-Agent` header value.
     pub user_agent: Option<String>,
 }
 
@@ -57,11 +79,15 @@ impl Deref for Requester {
     }
 }
 
+/// Describes who is making a request to the REST API.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub enum RequestingEntity {
+    /// No authenticated session (public/anonymous access).
     #[default]
     Anonymous,
+    /// A logged-in user via a browser session cookie.
     BrowserSession(Box<BrowserSession>),
+    /// An OAuth 2.0 client acting on behalf of (optionally) a user.
     OAuth2Session(Box<(Session, Option<User>)>),
 }
 

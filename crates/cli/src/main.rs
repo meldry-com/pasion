@@ -1,3 +1,19 @@
+//! Pasion CLI — the main entry point for the authentication service.
+//!
+//! This binary provides sub-commands for running the HTTP server, the
+//! background worker, managing users, and performing database operations.
+//! See `pasion-cli --help` for the full list.
+//!
+//! # Architecture
+//!
+//! - [`app_state`] — Shared application state injected into every HTTP request
+//! - [`commands`] — CLI sub-command implementations (`server`, `config`, `manage`, …)
+//! - [`server`] — Salvo router construction, middleware, and listener setup
+//! - [`telemetry`] — OpenTelemetry tracing + Prometheus metrics
+//! - [`lifecycle`] — Graceful shutdown and signal handling
+//! - [`sync`] — Sync configuration (clients, providers) to the database
+//! - [`util`] — Shared helpers for building service dependencies
+
 #![allow(clippy::module_name_repetitions)]
 
 use std::{io::IsTerminal, process::ExitCode, sync::Arc};

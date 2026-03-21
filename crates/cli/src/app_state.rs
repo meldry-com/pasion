@@ -23,6 +23,9 @@ use tracing::Instrument;
 
 use crate::{VERSION, telemetry::METER};
 
+/// Shared application state that is cloned into the Salvo [`Depot`] for every
+/// incoming request. Holds all the service-level dependencies (database pool,
+/// templates, keys, policy engine, etc.).
 #[derive(Clone)]
 pub struct AppState {
     pub repository_factory: PgRepositoryFactory,
@@ -109,7 +112,9 @@ impl AppState {
     }
 }
 
-/// Middleware to inject AppState components into Depot
+/// Salvo middleware that extracts [`AppState`] from the depot and fans it out
+/// into individual typed depot entries (one per component). This allows
+/// handler functions to pull only the specific dependency they need.
 #[handler]
 pub async fn inject_app_state(
     req: &mut Request,
@@ -151,7 +156,9 @@ pub async fn inject_app_state(
     ctrl.call_next(req, depot, res).await;
 }
 
-/// Helper trait to extract components from Depot
+/// Convenience accessors for pulling typed components out of a Salvo [`Depot`].
+/// Each getter returns `Option<&T>`, returning `None` if the component was not
+/// injected (e.g. if [`inject_app_state`] middleware did not run).
 pub trait DepotExt {
     fn get_pg_pool(&self) -> Option<&PgPool>;
     fn get_box_repository_factory(&self) -> Option<&BoxRepositoryFactory>;

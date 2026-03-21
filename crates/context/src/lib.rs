@@ -1,3 +1,20 @@
+//! Task-local logging context with CPU-time and poll-count tracking.
+//!
+//! [`LogContext`] is attached to each async task (via a Tokio `task_local!`)
+//! and records how long the task has been alive, how many times it has been
+//! polled, and an approximate CPU time. This information is emitted in
+//! structured log lines for every HTTP response.
+//!
+//! # Usage
+//!
+//! ```ignore
+//! let ctx = LogContext::new("http-request");
+//! ctx.run(|| async { /* handler code */ }).await;
+//! ```
+//!
+//! The context is automatically available inside the future via
+//! [`LogContext::maybe_with`].
+
 mod fmt;
 mod future;
 

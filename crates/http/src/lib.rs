@@ -1,4 +1,9 @@
-//! Utilities to do HTTP requests
+//! HTTP client utilities for the Pasion authentication service.
+//!
+//! Provides a pre-configured `reqwest::Client` (via [`reqwest_client`]) with
+//! OpenTelemetry tracing, platform TLS verification, and DNS resolution
+//! instrumentation. Also manages CORS propagator headers via
+//! [`set_propagator`] / [`propagator_headers`].
 
 #![deny(rustdoc::missing_crate_level_docs)]
 #![allow(clippy::module_name_repetitions)]

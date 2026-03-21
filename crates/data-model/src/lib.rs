@@ -1,10 +1,32 @@
+//! Core data model types for the Pasion authentication service.
+//!
+//! This crate defines the domain objects that are persisted in the database
+//! and shared across the application. Types here are storage-backend agnostic —
+//! they describe *what* is stored, not *how*.
+//!
+//! # Main type categories
+//!
+//! - **Users** — [`User`], [`BrowserSession`], [`Password`], [`UserEmail`],
+//!   [`UserRegistration`], [`UserRecoveryTicket`]
+//! - **OAuth 2.0** — [`Client`], [`Session`], [`AuthorizationGrant`],
+//!   [`AccessToken`], [`RefreshToken`], [`DeviceCodeGrant`]
+//! - **Compatibility** — [`CompatSession`], [`CompatAccessToken`],
+//!   [`CompatSsoLogin`] (legacy Matrix login support)
+//! - **Upstream SSO** — [`UpstreamOAuthProvider`], [`UpstreamOAuthLink`],
+//!   [`UpstreamOAuthAuthorizationSession`]
+//! - **Configuration** — [`SiteConfig`], [`PolicyData`], [`AppVersion`]
+//! - **Utilities** — [`Clock`], [`BoxClock`], [`BoxRng`]
+
 #![allow(clippy::module_name_repetitions)]
 
 use thiserror::Error;
 
+/// Clock abstraction for testability (`SystemClock` in production, mock clock in tests).
 pub mod clock;
 pub(crate) mod compat;
+/// OAuth 2.0 client and session models.
 pub mod oauth2;
+/// Personal access token types.
 pub mod personal;
 pub(crate) mod policy_data;
 mod site_config;
