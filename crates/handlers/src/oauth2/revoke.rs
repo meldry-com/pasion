@@ -1,9 +1,3 @@
-// Copyright 2024, 2025 New Vector Ltd.
-// Copyright 2023, 2024 The Matrix.org Foundation C.I.C.
-//
-// SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-Element-Commercial
-// Please see LICENSE files in the repository root for full details.
-
 use mas_data_model::{BoxClock, BoxRng, SystemClock, TokenType};
 use mas_iana::oauth::OAuthTokenTypeHint;
 use mas_keystore::Encrypter;

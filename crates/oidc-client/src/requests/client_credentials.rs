@@ -1,9 +1,3 @@
-// Copyright 2024, 2025 New Vector Ltd.
-// Copyright 2022-2024 Kévin Commaille.
-//
-// SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-Element-Commercial
-// Please see LICENSE files in the repository root for full details.
-
 //! Requests for the [Client Credentials flow].
 //!
 //! [Client Credentials flow]: https://www.rfc-editor.org/rfc/rfc6749#section-4.4

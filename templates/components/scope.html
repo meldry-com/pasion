@@ -1,11 +1,3 @@
-{#
-Copyright 2024, 2025 New Vector Ltd.
-Copyright 2023, 2024 The Matrix.org Foundation C.I.C.
-
-SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-Element-Commercial
-Please see LICENSE files in the repository root for full details.
--#}
-
 {# Macro to remove 'safe' scope from a scope list. Usage:
 
     {% call(scopes) scope.unsafe_scopes(scopes=["openid", "urn:matrix:client:api:*", "urn:synapse:admin:*", "urn:mas:admin"]) %}

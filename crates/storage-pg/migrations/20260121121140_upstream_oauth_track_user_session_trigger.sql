@@ -1,8 +1,3 @@
--- Copyright 2024, 2025 New Vector Ltd.
---
--- SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-Element-Commercial
--- Please see LICENSE files in the repository root for full details.
-
 -- Adds a trigger which will backfill the user_session_id column when inserting
 -- a new user_session_authentications row.
 CREATE OR REPLACE FUNCTION upstream_oauth_authorization_sessions_insert_trigger()

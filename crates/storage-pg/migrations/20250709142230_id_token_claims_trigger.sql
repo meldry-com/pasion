@@ -1,8 +1,3 @@
--- Copyright 2025 New Vector Ltd.
---
--- SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-Element-Commercial
--- Please see LICENSE in the repository root for full details.
-
 -- We may be running an older version of the app that doesn't fill in the
 -- id_token_claims column when the id_token column is populated. So we add a
 -- trigger to fill in the id_token_claims column if it's NULL.

@@ -1,8 +1,3 @@
--- Copyright 2025 New Vector Ltd.
---
--- SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-Element-Commercial
--- Please see LICENSE in the repository root for full details.
-
 -- A family of personal access tokens. This is a long-lived wrapper around the personal access tokens
 -- themselves, allowing tokens to be regenerated whilst still retaining a persistent identifier for them.
 CREATE TABLE personal_sessions (

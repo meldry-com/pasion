@@ -1,8 +1,3 @@
--- Copyright 2024, 2025 New Vector Ltd.
---
--- SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-Element-Commercial
--- Please see LICENSE files in the repository root for full details.
-
 -- Change the FK constraint on next_attempt_id to SET NULL on delete
 ALTER TABLE queue_jobs
   DROP CONSTRAINT queue_jobs_next_attempt_id_fkey,

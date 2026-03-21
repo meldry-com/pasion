@@ -1,9 +1,3 @@
-// Copyright 2024, 2025 New Vector Ltd.
-// Copyright 2021-2024 The Matrix.org Foundation C.I.C.
-//
-// SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-Element-Commercial
-// Please see LICENSE files in the repository root for full details.
-
 use mas_data_model::{AuthorizationCode, BoxClock, BoxRng, Pkce, SystemClock};
 use mas_router::{PostAuthAction, UrlBuilder};
 use mas_salvo_utils::{

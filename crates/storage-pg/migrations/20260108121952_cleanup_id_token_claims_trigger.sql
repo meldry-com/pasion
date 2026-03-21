@@ -1,8 +1,3 @@
--- Copyright 2024, 2025 New Vector Ltd.
---
--- SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-Element-Commercial
--- Please see LICENSE in the repository root for full details.
-
 -- When we introduced an id_token_claims column on upstream OAuth 2.0 logins, we
 -- added a trigger to make sure that when rolling back the new columns gets
 -- automatically filled correctly. It's been a while, it's safe to remove them.

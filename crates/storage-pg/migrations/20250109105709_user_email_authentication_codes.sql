@@ -1,8 +1,3 @@
--- Copyright 2025 New Vector Ltd.
---
--- SPDX-License-Identifier: AGPL-3.0-only
--- Please see LICENSE in the repository root for full details.
-
 -- Add a table for storing email authentication sessions
 CREATE TABLE "user_email_authentications" (
   "user_email_authentication_id" UUID PRIMARY KEY,

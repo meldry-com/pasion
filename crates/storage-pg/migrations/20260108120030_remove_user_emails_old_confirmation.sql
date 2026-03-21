@@ -1,8 +1,3 @@
--- Copyright 2024, 2025 New Vector Ltd.
---
--- SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-Element-Commercial
--- Please see LICENSE in the repository root for full details.
-
 -- We reworked how email verification works but kept some old schema around
 -- to allow rolling back. We're safe to drop those now
 

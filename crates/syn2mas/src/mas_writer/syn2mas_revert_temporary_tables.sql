@@ -1,8 +1,3 @@
--- Copyright 2024 New Vector Ltd.
---
--- SPDX-License-Identifier: AGPL-3.0-only
--- Please see LICENSE files in the repository root for full details.
-
 -- This script should revert what `syn2mas_temporary_tables.sql` does.
 
 DROP TABLE syn2mas_restore_constraints;

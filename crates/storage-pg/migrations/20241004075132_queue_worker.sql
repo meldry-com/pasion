@@ -1,8 +1,3 @@
--- Copyright 2024 New Vector Ltd.
---
--- SPDX-License-Identifier: AGPL-3.0-only
--- Please see LICENSE in the repository root for full details.
-
 -- This table stores informations about worker, mostly to track their health
 CREATE TABLE queue_workers (
   queue_worker_id UUID NOT NULL PRIMARY KEY,

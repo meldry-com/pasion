@@ -1,8 +1,3 @@
--- Copyright 2024, 2025 New Vector Ltd.
---
--- SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-Element-Commercial
--- Please see LICENSE in the repository root for full details.
-
 -- We replaced apalis a while back but did not clean the database. This removes
 -- everything related to apalis
 DROP TRIGGER IF EXISTS notify_workers ON apalis.jobs;

@@ -1,8 +1,3 @@
--- Copyright 2024 New Vector Ltd.
---
--- SPDX-License-Identifier: AGPL-3.0-only
--- Please see LICENSE in the repository root for full details.
-
 -- Add a table to track the state of scheduled recurring jobs.
 CREATE TABLE queue_schedules (
     -- A unique name for the schedule

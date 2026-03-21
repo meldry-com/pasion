@@ -1,8 +1,3 @@
-# Copyright 2025 New Vector Ltd.
-#
-# SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-Element-Commercial
-# Please see LICENSE files in the repository root for full details.
-
 [workspace]
 default-members = ["crates/cli"]
 members = ["crates/*"]
@@ -11,7 +6,6 @@ resolver = "2"
 
 # Updated in the CI with a `sed` command
 package.version = "1.8.0"
-package.license = "AGPL-3.0-only OR LicenseRef-Element-Commercial"
 package.authors = ["Element Backend Team"]
 package.edition = "2024"
 package.homepage = "https://palpo-im.github.io/palpo-auth-service/"

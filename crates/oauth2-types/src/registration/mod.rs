@@ -1,9 +1,3 @@
-// Copyright 2024, 2025 New Vector Ltd.
-// Copyright 2022-2024 The Matrix.org Foundation C.I.C.
-//
-// SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-Element-Commercial
-// Please see LICENSE files in the repository root for full details.
-
 //! Types for [Dynamic Client Registration].
 //!
 //! [Dynamic Client Registration]: https://openid.net/specs/openid-connect-registration-1_0.html
