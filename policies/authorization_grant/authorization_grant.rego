@@ -45,10 +45,7 @@ allowed_scope("urn:palpo:admin:*") if {
 	can_request_admin(input.user)
 }
 
-# This grants access to the /graphql API endpoint
-allowed_scope("urn:mas:graphql:*") := true
-
-# This makes it possible to query and do anything in the GraphQL API as an admin
+# This makes it possible to query and do anything in the admin API
 allowed_scope("urn:mas:admin") if {
 	interactive_grant_type(input.grant_type)
 	can_request_admin(input.user)

@@ -259,13 +259,14 @@ pub enum Resource {
     /// Pages destined to be viewed by humans
     Human,
 
-    /// GraphQL endpoint
-    GraphQL {
-        /// Enabled the GraphQL playground
+    /// REST API endpoint used by the frontend
+    #[serde(alias = "graphql")]
+    RestApi {
+        /// Deprecated, no longer used
         #[serde(default, skip_serializing_if = "std::ops::Not::not")]
         playground: bool,
 
-        /// Allow access for OAuth 2.0 clients (undocumented)
+        /// Deprecated, no longer used
         #[serde(default, skip_serializing_if = "std::ops::Not::not")]
         undocumented_oauth2_access: bool,
     },
@@ -355,7 +356,7 @@ impl Default for HttpConfig {
                         Resource::Human,
                         Resource::OAuth,
                         Resource::Compat,
-                        Resource::GraphQL {
+                        Resource::RestApi {
                             playground: false,
                             undocumented_oauth2_access: false,
                         },

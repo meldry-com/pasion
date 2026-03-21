@@ -1,6 +1,6 @@
 use dioxus::prelude::*;
 
-use crate::graphql::types::{BrowserSession as BrowserSessionData, DeviceType};
+use crate::api::types::{BrowserSession as BrowserSessionData, DeviceType};
 use crate::pages::Route;
 
 use super::session_card::*;

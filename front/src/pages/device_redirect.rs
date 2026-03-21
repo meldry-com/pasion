@@ -2,7 +2,7 @@ use dioxus::prelude::*;
 
 use crate::components::layout::Layout;
 use crate::components::loading::LoadingScreen;
-use crate::graphql::types::{AppSession, ViewerResponse};
+use crate::api::types::{AppSession, ViewerResponse};
 use crate::pages::Route;
 
 #[component]
@@ -14,7 +14,7 @@ pub fn DeviceRedirect(route: Vec<String>) -> Element {
         let _device_id = device_id.clone();
         async move {
             // Get the combined viewer data (includes app sessions)
-            crate::graphql::api_get::<ViewerResponse>("/viewer").await
+            crate::api::api_get::<ViewerResponse>("/viewer").await
         }
     });
 

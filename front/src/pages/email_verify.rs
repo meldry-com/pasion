@@ -3,7 +3,7 @@ use dioxus::prelude::*;
 use crate::components::layout::Layout;
 use crate::components::loading::{LoadingScreen, LoadingSpinner};
 use crate::components::page_heading::PageHeading;
-use crate::graphql::types::{
+use crate::api::types::{
     CompleteEmailAuthStatus, UserEmailAuthentication, ResendEmailAuthCodePayload,
 };
 use crate::pages::Route;
@@ -23,7 +23,7 @@ pub fn EmailVerify(id: String) -> Element {
     let auth_data = use_resource(move || {
         let qid = id_for_query.clone();
         async move {
-            crate::graphql::api_get::<UserEmailAuthentication>(
+            crate::api::api_get::<UserEmailAuthentication>(
                 &format!("/email-auth/{}", qid),
             )
             .await
@@ -94,7 +94,7 @@ pub fn EmailVerify(id: String) -> Element {
                                     error.set(None);
 
                                     spawn(async move {
-                                        let result = crate::graphql::api_post::<crate::graphql::types::CompleteEmailAuthPayload>(
+                                        let result = crate::api::api_post::<crate::api::types::CompleteEmailAuthPayload>(
                                             &format!("/email-auth/{}/complete", eid),
                                             serde_json::json!({
                                                 "code": code_val,
@@ -163,7 +163,7 @@ pub fn EmailVerify(id: String) -> Element {
                                             resending.set(true);
                                             resend_message.set(None);
                                             spawn(async move {
-                                                let result = crate::graphql::api_post::<ResendEmailAuthCodePayload>(
+                                                let result = crate::api::api_post::<ResendEmailAuthCodePayload>(
                                                     &format!("/email-auth/{}/resend", rid),
                                                     serde_json::json!({
                                                         "language": "en",

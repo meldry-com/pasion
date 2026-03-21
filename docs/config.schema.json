@@ -31,7 +31,7 @@
                 "name": "compat"
               },
               {
-                "name": "graphql"
+                "name": "restapi"
               },
               {
                 "name": "assets"
@@ -833,7 +833,7 @@
             },
             "name": {
               "type": "string",
-              "const": "graphql"
+              "const": "restapi"
             }
           },
           "required": [

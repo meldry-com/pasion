@@ -7,7 +7,7 @@ use uuid::Uuid;
 /// An extension trait to the `sqlx` [`QueryBuilder`], to help adding pagination
 /// to a query
 pub trait QueryBuilderExt {
-    /// Add cursor-based pagination to a query, as used in paginated GraphQL
+    /// Add cursor-based pagination to a query, as used in paginated API
     /// connections
     fn generate_pagination<C: IntoColumnRef>(
         &mut self,
@@ -24,7 +24,7 @@ impl QueryBuilderExt for sea_query::SelectStatement {
     ) -> &mut Self {
         let id_field = column.into_column_ref();
 
-        // ref: https://github.com/graphql/graphql-relay-js/issues/94#issuecomment-232410564
+        // Relay-style cursor pagination algorithm
         // 1. Start from the greedy query: SELECT * FROM table
 
         // 2. If the after argument is provided, add `id > parsed_cursor` to the `WHERE`

@@ -1,13 +1,13 @@
 use dioxus::prelude::*;
 
 use crate::components::loading::LoadingScreen;
-use crate::graphql::types::SiteConfig;
+use crate::api::types::SiteConfig;
 use crate::pages::Route;
 
 #[component]
 pub fn Plan() -> Element {
     let data = use_resource(|| async {
-        crate::graphql::api_get::<SiteConfig>("/site-config").await
+        crate::api::api_get::<SiteConfig>("/site-config").await
     });
     let nav = navigator();
     let binding = data.read();

@@ -5,13 +5,13 @@ use crate::components::loading::{LoadingScreen, LoadingSpinner};
 use crate::components::page_heading::PageHeading;
 use crate::components::password_input::PasswordCreationDoubleInput;
 use crate::components::separator::Separator;
-use crate::graphql::types::{ViewerResponse, SetPasswordStatus};
+use crate::api::types::{ViewerResponse, SetPasswordStatus};
 use crate::pages::Route;
 
 #[component]
 pub fn PasswordChange() -> Element {
     let data = use_resource(|| async {
-        crate::graphql::api_get::<ViewerResponse>("/viewer").await
+        crate::api::api_get::<ViewerResponse>("/viewer").await
     });
     let binding = data.read();
 
@@ -79,7 +79,7 @@ fn PasswordChangeForm(user_id: String) -> Element {
                     let nav = nav.clone();
 
                     spawn(async move {
-                        let result = crate::graphql::api_post::<crate::graphql::types::SetPasswordPayload>(
+                        let result = crate::api::api_post::<crate::api::types::SetPasswordPayload>(
                             "/viewer/password",
                             serde_json::json!({
                                 "userId": uid,

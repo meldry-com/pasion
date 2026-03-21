@@ -23,7 +23,7 @@ pub fn AddEmailForm(user_id: String, on_add: Option<EventHandler<String>>) -> El
                 error.set(None);
                 let on_add = on_add;
                 spawn(async move {
-                    let result = crate::graphql::api_post::<crate::graphql::types::AddEmailPayload>(
+                    let result = crate::api::api_post::<crate::api::types::AddEmailPayload>(
                         "/email-auth/start",
                         serde_json::json!({
                             "email": email,
@@ -35,19 +35,19 @@ pub fn AddEmailForm(user_id: String, on_add: Option<EventHandler<String>>) -> El
                     match result {
                         Ok(data) => {
                             match data.status {
-                                crate::graphql::types::AddEmailStatus::Added => {
+                                crate::api::types::AddEmailStatus::Added => {
                                     email_value.set(String::new());
                                     if let (Some(handler), Some(ref email_obj)) = (on_add, &data.email) {
                                         handler.call(email_obj.id.clone());
                                     }
                                 }
-                                crate::graphql::types::AddEmailStatus::Exists => {
+                                crate::api::types::AddEmailStatus::Exists => {
                                     error.set(Some("This email address is already in use.".to_string()));
                                 }
-                                crate::graphql::types::AddEmailStatus::Invalid => {
+                                crate::api::types::AddEmailStatus::Invalid => {
                                     error.set(Some("Invalid email address.".to_string()));
                                 }
-                                crate::graphql::types::AddEmailStatus::Denied => {
+                                crate::api::types::AddEmailStatus::Denied => {
                                     let violations = data.violations.unwrap_or_default().join(", ");
                                     error.set(Some(format!("Email denied: {violations}")));
                                 }

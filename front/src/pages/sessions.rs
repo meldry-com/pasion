@@ -6,7 +6,7 @@ use crate::components::loading::LoadingScreen;
 use crate::components::oauth2_session::OAuth2SessionCard;
 use crate::components::pagination::{PaginationControls, PaginationDirection, PaginationState};
 use crate::components::separator::{Separator, SeparatorKind};
-use crate::graphql::types::{AppSession, ViewerResponse};
+use crate::api::types::{AppSession, ViewerResponse};
 use crate::pages::Route;
 
 #[component]
@@ -21,7 +21,7 @@ pub fn Sessions() -> Element {
     });
 
     let overview = use_resource(|| async {
-        crate::graphql::api_get::<ViewerResponse>("/viewer").await
+        crate::api::api_get::<ViewerResponse>("/viewer").await
     });
 
     let sessions = use_resource(move || {
@@ -29,7 +29,7 @@ pub fn Sessions() -> Element {
         let _pag = pagination.read().clone();
         async move {
             // REST /viewer returns all session data combined
-            crate::graphql::api_get::<ViewerResponse>("/viewer").await
+            crate::api::api_get::<ViewerResponse>("/viewer").await
         }
     });
 

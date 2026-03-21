@@ -38,7 +38,7 @@ http:
         # Serves the Matrix C-S API compatibility endpoints
         - name: compat
         # Serve the REST API used by the frontend
-        - name: graphql
+        - name: restapi
         # Serve the given folder on the /assets/ path
         - name: assets
           path: ./share/assets/

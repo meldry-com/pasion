@@ -653,16 +653,6 @@
       }
     },
     "scope": {
-      "edit_profile": "Edit your profile and contact details",
-      "@edit_profile": {
-        "context": "components/scope.html:44:35-62",
-        "description": "Displayed when the 'urn:mas:graphql:*' scope is requested"
-      },
-      "manage_sessions": "Manage your devices and sessions",
-      "@manage_sessions": {
-        "context": "components/scope.html:45:39-69",
-        "description": "Displayed when the 'urn:mas:graphql:*' scope is requested"
-      },
       "mas_admin": "Manage users (urn:mas:admin)",
       "@mas_admin": {
         "context": "components/scope.html:52:54-91",

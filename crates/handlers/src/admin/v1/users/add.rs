@@ -30,7 +30,7 @@ fn valid_username_character(c: char) -> bool {
         || c == '+'
 }
 
-// XXX: this should be shared with the graphql handler
+// XXX: this should be shared with the rest handler
 fn username_valid(username: &str) -> bool {
     if username.is_empty() || username.len() > 255 {
         return false;

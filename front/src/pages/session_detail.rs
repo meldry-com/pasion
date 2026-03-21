@@ -4,7 +4,7 @@ use crate::components::last_active::LastActive;
 use crate::components::layout::Layout;
 use crate::components::loading::LoadingScreen;
 use crate::components::session_card::*;
-use crate::graphql::types::{DeviceType, SessionNode};
+use crate::api::types::{DeviceType, SessionNode};
 use crate::utils::format_date;
 
 #[component]
@@ -13,7 +13,7 @@ pub fn SessionDetail(id: String) -> Element {
     let data = use_resource(move || {
         let id = id_clone.clone();
         async move {
-            crate::graphql::api_get::<SessionNode>(
+            crate::api::api_get::<SessionNode>(
                 &format!("/sessions/{}", id),
             )
             .await
@@ -307,7 +307,7 @@ fn EditSessionName(
                                         EditableSessionType::Oauth2 => format!("/oauth2-sessions/{}/name", sid),
                                         EditableSessionType::Compat => format!("/compat-sessions/{}/name", sid),
                                     };
-                                    let result = crate::graphql::api_put::<serde_json::Value>(
+                                    let result = crate::api::api_put::<serde_json::Value>(
                                         &path,
                                         serde_json::json!({
                                             "humanName": name_param,
@@ -386,7 +386,7 @@ fn EndSessionButton(session_id: String, session_type: SessionType) -> Element {
                         SessionType::Oauth2 => format!("/oauth2-sessions/{}", sid),
                         SessionType::Compat => format!("/compat-sessions/{}", sid),
                     };
-                    let _ = crate::graphql::api_delete::<serde_json::Value>(
+                    let _ = crate::api::api_delete::<serde_json::Value>(
                         &path,
                     ).await;
                     ending.set(false);

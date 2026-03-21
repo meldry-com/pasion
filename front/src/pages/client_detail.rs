@@ -2,7 +2,7 @@ use dioxus::prelude::*;
 
 use crate::components::layout::Layout;
 use crate::components::loading::LoadingScreen;
-use crate::graphql::types::Oauth2ClientDetail;
+use crate::api::types::Oauth2ClientDetail;
 use crate::pages::Route;
 
 #[component]
@@ -11,7 +11,7 @@ pub fn ClientDetail(id: String) -> Element {
     let data = use_resource(move || {
         let id = id_clone.clone();
         async move {
-            crate::graphql::api_get::<Oauth2ClientDetail>(
+            crate::api::api_get::<Oauth2ClientDetail>(
                 &format!("/oauth2-clients/{}", id),
             )
             .await

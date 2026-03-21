@@ -1,7 +1,7 @@
 use dioxus::prelude::*;
 
 use super::footer::Footer;
-use crate::graphql::types::SiteConfig;
+use crate::api::types::SiteConfig;
 
 #[component]
 pub fn Layout(wide: Option<bool>, children: Element) -> Element {
@@ -29,5 +29,5 @@ fn FooterSection() -> Element {
 }
 
 async fn fetch_footer_config() -> Result<SiteConfig, String> {
-    crate::graphql::api_get::<SiteConfig>("/site-config").await
+    crate::api::api_get::<SiteConfig>("/site-config").await
 }

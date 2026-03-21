@@ -1,6 +1,6 @@
 use dioxus::prelude::*;
 
-use crate::graphql::types::SiteConfig;
+use crate::api::types::SiteConfig;
 
 #[component]
 pub fn Footer(site_config: SiteConfig) -> Element {

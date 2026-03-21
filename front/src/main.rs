@@ -1,6 +1,6 @@
 mod components;
 mod config;
-mod graphql;
+mod api;
 mod pages;
 mod utils;
 

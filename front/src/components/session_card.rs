@@ -1,6 +1,6 @@
 use dioxus::prelude::*;
 
-use crate::graphql::types::DeviceType;
+use crate::api::types::DeviceType;
 use crate::pages::Route;
 
 #[component]

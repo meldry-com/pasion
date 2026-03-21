@@ -88,9 +88,6 @@ updates:
         patterns:
           - "jotai"
           - "jotai-*"
-      graphql-codegen:
-        patterns:
-          - "@graphql-codegen/*"
       tanstack-router:
         patterns:
           - "@tanstack/react-router"

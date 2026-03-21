@@ -3,7 +3,7 @@ use dioxus::prelude::*;
 use crate::components::layout::Layout;
 use crate::components::loading::LoadingScreen;
 use crate::components::page_heading::PageHeading;
-use crate::graphql::types::{AllowCrossSigningResetPayload, ViewerResponse};
+use crate::api::types::{AllowCrossSigningResetPayload, ViewerResponse};
 use crate::pages::Route;
 
 #[derive(Debug, Clone, PartialEq)]
@@ -45,7 +45,7 @@ pub fn ResetCrossSigning() -> Element {
     // Fetch current user
     let _data = use_resource(move || async move {
         let result =
-            crate::graphql::api_get::<ViewerResponse>("/viewer").await;
+            crate::api::api_get::<ViewerResponse>("/viewer").await;
         match result {
             Ok(data) => {
                 if let Some(user) = data.viewer.as_user() {
@@ -98,7 +98,7 @@ pub fn ResetCrossSigning() -> Element {
                                     state.set(ResetState::InProgress);
                                     error.set(None);
                                     spawn(async move {
-                                        let result = crate::graphql::api_post::<AllowCrossSigningResetPayload>(
+                                        let result = crate::api::api_post::<AllowCrossSigningResetPayload>(
                                             "/viewer/cross-signing-reset",
                                             serde_json::json!({ "userId": uid }),
                                         ).await;

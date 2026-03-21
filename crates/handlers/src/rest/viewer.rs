@@ -121,8 +121,7 @@ fn site_config_data(config: &SiteConfig) -> SiteConfigData {
 // ── GET /api/v1/viewer ─────────────────────────────────────────
 
 /// Returns the current viewer (user or anonymous), viewer session, and site
-/// config in a single response. This replaces multiple GraphQL queries that
-/// the front-end was using.
+/// config in a single response.
 #[handler]
 pub async fn get_viewer(
     req: &mut Request,

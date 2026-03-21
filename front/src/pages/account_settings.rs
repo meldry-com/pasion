@@ -6,13 +6,13 @@ use crate::components::password_input::AccountManagementPasswordPreview;
 use crate::components::separator::{Separator, SeparatorKind};
 use crate::components::user_email::UserEmailList;
 use crate::components::user_profile::AddEmailForm;
-use crate::graphql::types::ViewerResponse;
+use crate::api::types::ViewerResponse;
 use crate::pages::Route;
 
 #[component]
 pub fn AccountSettings() -> Element {
     let data = use_resource(|| async {
-        crate::graphql::api_get::<ViewerResponse>("/viewer").await
+        crate::api::api_get::<ViewerResponse>("/viewer").await
     });
     let nav = navigator();
     let binding = data.read();
@@ -154,7 +154,7 @@ fn SignOutButton(session_id: String) -> Element {
                                 let sid = sid.clone();
                                 signing_out.set(true);
                                 spawn(async move {
-                                    let _ = crate::graphql::api_delete::<crate::graphql::types::EndSessionPayload>(
+                                    let _ = crate::api::api_delete::<crate::api::types::EndSessionPayload>(
                                         &format!("/browser-sessions/{}", sid),
                                     ).await;
                                     #[cfg(target_arch = "wasm32")]
@@ -330,14 +330,14 @@ fn AccountDeleteButton(
                                             serde_json::Value::String(pw_val.clone()),
                                         );
                                     }
-                                    let result = crate::graphql::api_post::<crate::graphql::types::DeactivateUserPayload>(
+                                    let result = crate::api::api_post::<crate::api::types::DeactivateUserPayload>(
                                         "/viewer/deactivate",
                                         body,
                                     ).await;
                                     deactivating.set(false);
                                     match result {
                                         Ok(data) => match data.status {
-                                            crate::graphql::types::DeactivateUserStatus::Deactivated => {
+                                            crate::api::types::DeactivateUserStatus::Deactivated => {
                                                 #[cfg(target_arch = "wasm32")]
                                                 {
                                                     if let Some(win) = web_sys::window() {
@@ -345,10 +345,10 @@ fn AccountDeleteButton(
                                                     }
                                                 }
                                             }
-                                            crate::graphql::types::DeactivateUserStatus::NotFound => {
+                                            crate::api::types::DeactivateUserStatus::NotFound => {
                                                 error.set(Some("Account not found.".to_string()));
                                             }
-                                            crate::graphql::types::DeactivateUserStatus::IncorrectPassword => {
+                                            crate::api::types::DeactivateUserStatus::IncorrectPassword => {
                                                 error.set(Some("Incorrect password.".to_string()));
                                             }
                                         },

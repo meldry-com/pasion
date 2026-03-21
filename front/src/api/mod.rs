@@ -127,18 +127,3 @@ pub async fn api_delete_with_body<T: for<'de> Deserialize<'de>>(
         .await
         .map_err(|e| format!("Failed to parse API response: {e}"))
 }
-
-// Keep backward-compatible aliases for gradual migration
-pub async fn graphql_request<T: for<'de> Deserialize<'de>>(
-    _query: &'static str,
-    _variables: Option<Value>,
-) -> Result<T, String> {
-    Err("GraphQL has been replaced by REST API".into())
-}
-
-pub async fn graphql_mutation<T: for<'de> Deserialize<'de>>(
-    _query: &'static str,
-    _variables: Value,
-) -> Result<T, String> {
-    Err("GraphQL has been replaced by REST API".into())
-}

@@ -4,7 +4,7 @@ use crate::components::layout::Layout;
 use crate::components::loading::{LoadingScreen, LoadingSpinner};
 use crate::components::page_heading::PageHeading;
 use crate::components::password_input::PasswordCreationDoubleInput;
-use crate::graphql::types::{
+use crate::api::types::{
     ResendRecoveryEmailPayload, SetPasswordPayload, SetPasswordStatus, SiteConfig,
 };
 
@@ -62,7 +62,7 @@ pub fn PasswordRecovery() -> Element {
                     ));
                     return;
                 }
-                let result = crate::graphql::api_get::<SiteConfig>(
+                let result = crate::api::api_get::<SiteConfig>(
                     "/site-config",
                 )
                 .await;
@@ -148,7 +148,7 @@ pub fn PasswordRecovery() -> Element {
                                     resending.set(true);
                                     error.set(None);
                                     spawn(async move {
-                                        let result = crate::graphql::api_post::<ResendRecoveryEmailPayload>(
+                                        let result = crate::api::api_post::<ResendRecoveryEmailPayload>(
                                             "/password-recovery/resend",
                                             serde_json::json!({ "ticket": ticket_val }),
                                         ).await;
@@ -227,7 +227,7 @@ pub fn PasswordRecovery() -> Element {
                             invalid_new.set(false);
 
                             spawn(async move {
-                                let result = crate::graphql::api_post::<SetPasswordPayload>(
+                                let result = crate::api::api_post::<SetPasswordPayload>(
                                     "/password-recovery/set",
                                     serde_json::json!({
                                         "ticket": ticket_val,

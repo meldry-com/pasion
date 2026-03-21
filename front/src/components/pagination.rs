@@ -1,6 +1,6 @@
 use dioxus::prelude::*;
 
-/// Pagination state for cursor-based GraphQL pagination.
+/// Pagination state for cursor-based API pagination.
 #[derive(Debug, Clone, PartialEq)]
 pub struct PaginationState {
     /// Number of items per page.
@@ -27,7 +27,7 @@ impl PaginationState {
         }
     }
 
-    /// Build the GraphQL variables for this pagination state.
+    /// Build the query parameters for this pagination state.
     pub fn to_variables(&self) -> serde_json::Value {
         match &self.direction {
             PaginationDirection::LastPage => {

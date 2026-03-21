@@ -276,11 +276,10 @@ pub fn build_router(
             pasion_config::HttpResource::Human => {
                 build_human_router(router, templates.clone())
             }
-            pasion_config::HttpResource::GraphQL {
+            pasion_config::HttpResource::RestApi {
                 playground: _,
                 undocumented_oauth2_access: _,
             } => {
-                // GraphQL has been replaced by REST API
                 build_rest_api_router(router)
             }
             pasion_config::HttpResource::Assets { path } => {

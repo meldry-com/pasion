@@ -1,6 +1,6 @@
 use dioxus::prelude::*;
 
-use crate::graphql::types::{RemoveEmailStatus, UserEmail};
+use crate::api::types::{RemoveEmailStatus, UserEmail};
 
 #[component]
 pub fn UserEmailItem(email: UserEmail) -> Element {
@@ -39,7 +39,7 @@ pub fn UserEmailItem(email: UserEmail) -> Element {
                                 removing.set(true);
                                 error.set(None);
                                 spawn(async move {
-                                    let result = crate::graphql::api_delete::<crate::graphql::types::RemoveEmailPayload>(
+                                    let result = crate::api::api_delete::<crate::api::types::RemoveEmailPayload>(
                                         &format!("/user-emails/{}", eid),
                                     ).await;
                                     removing.set(false);

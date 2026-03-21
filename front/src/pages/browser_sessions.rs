@@ -4,7 +4,7 @@ use crate::components::browser_session::BrowserSessionCard;
 use crate::components::empty_state::EmptyState;
 use crate::components::loading::LoadingScreen;
 use crate::components::pagination::{PaginationControls, PaginationDirection, PaginationState};
-use crate::graphql::types::ViewerResponse;
+use crate::api::types::ViewerResponse;
 
 #[component]
 pub fn BrowserSessions() -> Element {
@@ -22,7 +22,7 @@ pub fn BrowserSessions() -> Element {
         let _pag = pagination.read().clone();
         async move {
             // REST /viewer returns all session data combined
-            crate::graphql::api_get::<ViewerResponse>("/viewer").await
+            crate::api::api_get::<ViewerResponse>("/viewer").await
         }
     });
     let binding = data.read();

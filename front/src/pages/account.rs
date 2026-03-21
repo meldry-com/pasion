@@ -4,13 +4,13 @@ use crate::components::layout::Layout;
 use crate::components::loading::LoadingScreen;
 use crate::components::nav_bar::{NavBar, NavItem};
 use crate::components::user_greeting::UserGreeting;
-use crate::graphql::types::ViewerResponse;
+use crate::api::types::ViewerResponse;
 use crate::pages::Route;
 
 #[component]
 pub fn AccountPage() -> Element {
     let data = use_resource(|| async {
-        crate::graphql::api_get::<ViewerResponse>("/viewer").await
+        crate::api::api_get::<ViewerResponse>("/viewer").await
     });
     let binding = data.read();
 

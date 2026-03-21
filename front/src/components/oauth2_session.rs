@@ -1,6 +1,6 @@
 use dioxus::prelude::*;
 
-use crate::graphql::types::{DeviceType, Oauth2Session as Oauth2SessionData};
+use crate::api::types::{DeviceType, Oauth2Session as Oauth2SessionData};
 use crate::pages::Route;
 
 use super::session_card::*;

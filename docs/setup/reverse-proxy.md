@@ -16,7 +16,7 @@ http:
         - name: human
         - name: oauth
         - name: compat
-        - name: graphql
+        - name: restapi
         - name: assets
 
       binds:
@@ -145,7 +145,7 @@ http:
         - name: human
         - name: oauth
         - name: compat
-        - name: graphql
+        - name: restapi
         - name: assets
       binds:
         - address: "[::]:8080"
@@ -167,7 +167,7 @@ http:
         - name: human
         - name: oauth
         - name: compat
-        - name: graphql
+        - name: restapi
         # Pasion doesn't need to serve the assets anymore
         #- name: assets
       binds:
