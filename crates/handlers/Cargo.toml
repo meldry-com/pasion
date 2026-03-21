@@ -13,7 +13,6 @@ workspace = true
 [dependencies]
 anyhow.workspace = true
 argon2.workspace = true
-async-graphql.workspace = true
 async-trait.workspace = true
 base64ct.workspace = true
 bcrypt.workspace = true
@@ -27,6 +26,7 @@ hex.workspace = true
 hyper.workspace = true
 icu_normalizer.workspace = true
 indexmap.workspace = true
+ipnetwork.workspace = true
 lettre.workspace = true
 mime.workspace = true
 minijinja-contrib.workspace = true
@@ -77,6 +77,7 @@ pasion-storage-pg.workspace = true
 pasion-tasks.workspace = true
 pasion-templates.workspace = true
 oauth2-types.workspace = true
+woothee.workspace = true
 zxcvbn.workspace = true
 
 [dev-dependencies]

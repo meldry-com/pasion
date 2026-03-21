@@ -4,7 +4,7 @@
 //!
 //! [OAuth 2.0]: https://oauth.net/2/
 //! [OpenID Connect]: https://openid.net/connect/
-//! [Pasion]: https://github.com/palpo-im/pasion
+//! [Pasion]: https://github.com/taidge/pasion
 
 #![deny(missing_docs)]
 #![allow(clippy::module_name_repetitions)]

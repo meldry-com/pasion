@@ -3,28 +3,8 @@ use dioxus::prelude::*;
 use crate::components::layout::Layout;
 use crate::components::loading::LoadingScreen;
 use crate::components::page_heading::PageHeading;
-use crate::graphql::types::{AllowCrossSigningResetResult, CurrentViewerData};
+use crate::graphql::types::{AllowCrossSigningResetPayload, ViewerResponse};
 use crate::pages::Route;
-
-const CURRENT_VIEWER_QUERY: &str = r#"
-    query CurrentViewer {
-        viewer {
-            __typename
-            ... on User {
-                id
-                matrix { mxid }
-            }
-        }
-    }
-"#;
-
-const ALLOW_CROSS_SIGNING_RESET_MUTATION: &str = r#"
-    mutation AllowCrossSigningReset($userId: ID!) {
-        allowUserCrossSigningReset(input: { userId: $userId }) {
-            user { id }
-        }
-    }
-"#;
 
 #[derive(Debug, Clone, PartialEq)]
 enum ResetState {
@@ -65,7 +45,7 @@ pub fn ResetCrossSigning() -> Element {
     // Fetch current user
     let _data = use_resource(move || async move {
         let result =
-            crate::graphql::graphql_request::<CurrentViewerData>(CURRENT_VIEWER_QUERY, None).await;
+            crate::graphql::api_get::<ViewerResponse>("/viewer").await;
         match result {
             Ok(data) => {
                 if let Some(user) = data.viewer.as_user() {
@@ -118,8 +98,8 @@ pub fn ResetCrossSigning() -> Element {
                                     state.set(ResetState::InProgress);
                                     error.set(None);
                                     spawn(async move {
-                                        let result = crate::graphql::graphql_mutation::<AllowCrossSigningResetResult>(
-                                            ALLOW_CROSS_SIGNING_RESET_MUTATION,
+                                        let result = crate::graphql::api_post::<AllowCrossSigningResetPayload>(
+                                            "/viewer/cross-signing-reset",
                                             serde_json::json!({ "userId": uid }),
                                         ).await;
                                         match result {

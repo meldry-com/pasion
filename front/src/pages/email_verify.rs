@@ -4,30 +4,9 @@ use crate::components::layout::Layout;
 use crate::components::loading::{LoadingScreen, LoadingSpinner};
 use crate::components::page_heading::PageHeading;
 use crate::graphql::types::{
-    CompleteEmailAuthStatus, EmailAuthNode, ResendEmailAuthCodeResult, VerifyEmailData,
+    CompleteEmailAuthStatus, UserEmailAuthentication, ResendEmailAuthCodePayload,
 };
 use crate::pages::Route;
-
-const VERIFY_EMAIL_QUERY: &str = r#"
-    query VerifyEmail($id: ID!) {
-        node(id: $id) {
-            __typename
-            ... on UserEmailAuthentication {
-                id
-                email
-                completedAt
-            }
-        }
-    }
-"#;
-
-const RESEND_CODE_MUTATION: &str = r#"
-    mutation ResendEmailAuthenticationCode($id: ID!, $language: String!) {
-        resendEmailAuthenticationCode(input: { userEmailAuthenticationId: $id, language: $language }) {
-            status
-        }
-    }
-"#;
 
 #[component]
 pub fn EmailVerify(id: String) -> Element {
@@ -44,9 +23,8 @@ pub fn EmailVerify(id: String) -> Element {
     let auth_data = use_resource(move || {
         let qid = id_for_query.clone();
         async move {
-            crate::graphql::graphql_request::<VerifyEmailData>(
-                VERIFY_EMAIL_QUERY,
-                Some(serde_json::json!({ "id": qid })),
+            crate::graphql::api_get::<UserEmailAuthentication>(
+                &format!("/email-auth/{}", qid),
             )
             .await
         }
@@ -71,9 +49,9 @@ pub fn EmailVerify(id: String) -> Element {
 
     let auth_binding = auth_data.read();
     match &*auth_binding {
-        Some(Ok(data)) => {
+        Some(Ok(auth)) => {
             // Check if already completed
-            if let Some(EmailAuthNode::UserEmailAuthentication(ref auth)) = data.node {
+            {
                 if auth.completed_at.is_some() {
                     return rsx! {
                         Layout {
@@ -116,20 +94,15 @@ pub fn EmailVerify(id: String) -> Element {
                                     error.set(None);
 
                                     spawn(async move {
-                                        let result = crate::graphql::graphql_mutation::<crate::graphql::types::CompleteEmailAuthResult>(
-                                            r#"mutation CompleteEmailAuthentication($id: ID!, $code: String!) {
-                                                completeEmailAuthentication(input: { userEmailAuthenticationId: $id, code: $code }) {
-                                                    status
-                                                }
-                                            }"#,
+                                        let result = crate::graphql::api_post::<crate::graphql::types::CompleteEmailAuthPayload>(
+                                            &format!("/email-auth/{}/complete", eid),
                                             serde_json::json!({
-                                                "id": eid,
                                                 "code": code_val,
                                             }),
                                         ).await;
                                         submitting.set(false);
                                         match result {
-                                            Ok(data) => match data.complete_email_authentication.status {
+                                            Ok(data) => match data.status {
                                                 CompleteEmailAuthStatus::Completed => {
                                                     success.set(true);
                                                 }
@@ -190,10 +163,9 @@ pub fn EmailVerify(id: String) -> Element {
                                             resending.set(true);
                                             resend_message.set(None);
                                             spawn(async move {
-                                                let result = crate::graphql::graphql_mutation::<ResendEmailAuthCodeResult>(
-                                                    RESEND_CODE_MUTATION,
+                                                let result = crate::graphql::api_post::<ResendEmailAuthCodePayload>(
+                                                    &format!("/email-auth/{}/resend", rid),
                                                     serde_json::json!({
-                                                        "id": rid,
                                                         "language": "en",
                                                     }),
                                                 ).await;
@@ -218,21 +190,6 @@ pub fn EmailVerify(id: String) -> Element {
                                 Link { class: "btn btn-tertiary", to: Route::AccountSettings {},
                                     "Cancel"
                                 }
-                            }
-                        }
-                    }
-                }
-            } else {
-                rsx! {
-                    Layout {
-                        div { class: "flex flex-col gap-10",
-                            PageHeading {
-                                icon: "✉".to_string(),
-                                title: "Verification not found".to_string(),
-                                subtitle: "The email verification request could not be found.".to_string(),
-                            }
-                            Link { class: "btn btn-primary", to: Route::AccountSettings {},
-                                "Back to settings"
                             }
                         }
                     }

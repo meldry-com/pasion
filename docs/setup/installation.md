@@ -4,8 +4,8 @@
 
 Pre-built binaries can be found attached on each release, for Linux on both `x86_64` and `aarch64` architectures.
 
-- [`pasion-cli-aarch64-linux.tar.gz`](https://github.com/palpo-im/pasion/releases/latest/download/pasion-cli-aarch64-linux.tar.gz)
-- [`pasion-cli-x86_64-linux.tar.gz`](https://github.com/palpo-im/pasion/releases/latest/download/pasion-cli-x86_64-linux.tar.gz)
+- [`pasion-cli-aarch64-linux.tar.gz`](https://github.com/taidge/pasion/releases/latest/download/pasion-cli-aarch64-linux.tar.gz)
+- [`pasion-cli-x86_64-linux.tar.gz`](https://github.com/taidge/pasion/releases/latest/download/pasion-cli-x86_64-linux.tar.gz)
 
 Each archive contains:
 
@@ -29,7 +29,7 @@ OS=linux
 VERSION=latest # or a specific version, like "v0.1.0"
 
 # URL to the right archive
-URL="https://github.com/palpo-im/pasion/releases/${VERSION}/download/pasion-cli-${ARCH}-${OS}.tar.gz"
+URL="https://github.com/taidge/pasion/releases/${VERSION}/download/pasion-cli-${ARCH}-${OS}.tar.gz"
 
 # Create a directory and extract the archive in it
 mkdir -p /path/to/mas
@@ -51,7 +51,7 @@ The image can also be built from the source:
 
 1. Get the source
    ```sh
-   git clone https://github.com/palpo-im/pasion.git
+   git clone https://github.com/taidge/pasion.git
    cd pasion
    ```
 1. Build the image
@@ -69,7 +69,7 @@ Building from the source requires:
 
 1. Get the source
    ```sh
-   git clone https://github.com/palpo-im/pasion.git
+   git clone https://github.com/taidge/pasion.git
    cd pasion
    ```
 1. Build the frontend

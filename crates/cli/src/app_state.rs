@@ -4,7 +4,7 @@ use ipnetwork::IpNetwork;
 use pasion_context::LogContext;
 use pasion_data_model::{AppVersion, BoxClock, BoxRng, SiteConfig, SystemClock};
 use pasion_handlers::{
-    ActivityTracker, BoundActivityTracker, CookieManager, GraphQLSchema, Limiter,
+    ActivityTracker, BoundActivityTracker, CookieManager, Limiter,
     MetadataCache, RequesterFingerprint, passwords::PasswordManager,
 };
 use pasion_i18n::Translator;
@@ -33,7 +33,6 @@ pub struct AppState {
     pub url_builder: UrlBuilder,
     pub homeserver_connection: Arc<dyn HomeserverConnection>,
     pub policy_factory: Arc<PolicyFactory>,
-    pub graphql_schema: GraphQLSchema,
     pub http_client: reqwest::Client,
     pub password_manager: PasswordManager,
     pub metadata_cache: MetadataCache,
@@ -132,7 +131,6 @@ pub async fn inject_app_state(
     // Inject all components into depot with their type names as keys
     depot.insert("pg_pool", state.repository_factory.pool());
     depot.insert("box_repository_factory", state.repository_factory.clone().boxed());
-    depot.insert("graphql_schema", state.graphql_schema.clone());
     depot.insert("templates", state.templates.clone());
     depot.insert("translator", state.templates.translator());
     depot.insert("keystore", state.key_store.clone());
@@ -157,7 +155,6 @@ pub async fn inject_app_state(
 pub trait DepotExt {
     fn get_pg_pool(&self) -> Option<&PgPool>;
     fn get_box_repository_factory(&self) -> Option<&BoxRepositoryFactory>;
-    fn get_graphql_schema(&self) -> Option<&GraphQLSchema>;
     fn get_templates(&self) -> Option<&Templates>;
     fn get_translator(&self) -> Option<&Arc<Translator>>;
     fn get_keystore(&self) -> Option<&Keystore>;
@@ -183,10 +180,6 @@ impl DepotExt for Depot {
 
     fn get_box_repository_factory(&self) -> Option<&BoxRepositoryFactory> {
         self.get::<BoxRepositoryFactory>("box_repository_factory")
-    }
-
-    fn get_graphql_schema(&self) -> Option<&GraphQLSchema> {
-        self.get::<GraphQLSchema>("graphql_schema")
     }
 
     fn get_templates(&self) -> Option<&Templates> {

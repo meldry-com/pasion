@@ -928,20 +928,6 @@ impl Route for StaticAsset {
     }
 }
 
-/// `GET|POST /graphql`
-pub struct GraphQL;
-
-impl SimpleRoute for GraphQL {
-    const PATH: &'static str = "/graphql";
-}
-
-/// `GET /graphql/playground`
-pub struct GraphQLPlayground;
-
-impl SimpleRoute for GraphQLPlayground {
-    const PATH: &'static str = "/graphql/playground";
-}
-
 /// `GET /api/spec.json`
 pub struct ApiSpec;
 

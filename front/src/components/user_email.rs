@@ -2,12 +2,6 @@ use dioxus::prelude::*;
 
 use crate::graphql::types::{RemoveEmailStatus, UserEmail};
 
-const REMOVE_EMAIL_MUTATION: &str = r#"
-    mutation RemoveEmail($id: ID!) {
-        removeEmail(input: { userEmailId: $id }) { status }
-    }
-"#;
-
 #[component]
 pub fn UserEmailItem(email: UserEmail) -> Element {
     let is_confirmed = email.confirmed_at.is_some();
@@ -45,13 +39,12 @@ pub fn UserEmailItem(email: UserEmail) -> Element {
                                 removing.set(true);
                                 error.set(None);
                                 spawn(async move {
-                                    let result = crate::graphql::graphql_mutation::<crate::graphql::types::RemoveEmailResult>(
-                                        REMOVE_EMAIL_MUTATION,
-                                        serde_json::json!({ "id": eid }),
+                                    let result = crate::graphql::api_delete::<crate::graphql::types::RemoveEmailPayload>(
+                                        &format!("/user-emails/{}", eid),
                                     ).await;
                                     removing.set(false);
                                     match result {
-                                        Ok(data) => match data.remove_email.status {
+                                        Ok(data) => match data.status {
                                             RemoveEmailStatus::Removed => {
                                                 // Reload the page to reflect the change
                                                 let nav = navigator();

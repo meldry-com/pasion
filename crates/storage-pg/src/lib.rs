@@ -215,7 +215,7 @@ fn allowed_missing_migrations() -> BTreeSet<i64> {
 /// be completely unreadable, we only store the upper 16 bytes of that hash.
 #[allow(clippy::inconsistent_digit_grouping)]
 const ALLOWED_ALTERNATE_CHECKSUMS: &[(i64, u128)] = &[
-    // https://github.com/palpo-im/pasion/pull/5300
+    // https://github.com/taidge/pasion/pull/5300
     (20250410_000000, 0x8811_c3ef_dbee_8c00_5b49_25da_5d55_9c3f),
     (20250410_000001, 0x7990_37b3_2193_8a5d_c72f_bccd_95fd_82e5),
     (20250410_000002, 0xf2b8_f120_deae_27e7_60d0_79a3_0b77_eea3),

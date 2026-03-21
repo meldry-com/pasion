@@ -15,8 +15,8 @@ use opentelemetry::metrics::Meter;
 
 pub mod admin;
 pub mod compat;
-pub mod graphql;
 pub mod health;
+pub mod rest;
 pub mod oauth2;
 pub mod passwords;
 pub mod upstream_oauth2;
@@ -59,9 +59,6 @@ pub use pasion_salvo_utils::{ErrorWrapper, cookies::CookieManager};
 
 pub use self::{
     activity_tracker::{ActivityTracker, Bound as BoundActivityTracker},
-    graphql::{
-        Schema as GraphQLSchema, schema as graphql_schema, schema_builder as graphql_schema_builder,
-    },
     preferred_language::PreferredLanguage,
     rate_limit::{Limiter, RequesterFingerprint},
     upstream_oauth2::cache::MetadataCache,

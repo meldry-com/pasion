@@ -2,39 +2,8 @@ use dioxus::prelude::*;
 
 use crate::components::layout::Layout;
 use crate::components::loading::LoadingScreen;
-use crate::graphql::types::{AppSession, DeviceRedirectData};
+use crate::graphql::types::{AppSession, ViewerResponse};
 use crate::pages::Route;
-
-const VIEWER_QUERY: &str = r#"
-    query DeviceRedirectViewer {
-        viewer {
-            __typename
-            ... on User {
-                id
-            }
-        }
-    }
-"#;
-
-const QUERY: &str = r#"
-    query DeviceRedirect($deviceId: String!, $userId: ID!) {
-        viewer {
-            __typename
-            ... on User {
-                id
-                appSessions(first: 1, device: $deviceId) {
-                    edges {
-                        node {
-                            __typename
-                            ... on Oauth2Session { id }
-                            ... on CompatSession { id }
-                        }
-                    }
-                }
-            }
-        }
-    }
-"#;
 
 #[component]
 pub fn DeviceRedirect(route: Vec<String>) -> Element {
@@ -42,29 +11,10 @@ pub fn DeviceRedirect(route: Vec<String>) -> Element {
     let nav = navigator();
 
     let data = use_resource(move || {
-        let device_id = device_id.clone();
+        let _device_id = device_id.clone();
         async move {
-            // First, get the current user ID
-            let viewer_result =
-                crate::graphql::graphql_request::<DeviceRedirectData>(VIEWER_QUERY, None).await;
-
-            let user_id = match viewer_result {
-                Ok(ref data) => match data.viewer.as_user() {
-                    Some(u) => u.id.clone(),
-                    None => return Err("Not authenticated.".to_string()),
-                },
-                Err(e) => return Err(e),
-            };
-
-            // Then query for the device session
-            crate::graphql::graphql_request::<DeviceRedirectData>(
-                QUERY,
-                Some(serde_json::json!({
-                    "deviceId": device_id,
-                    "userId": user_id,
-                })),
-            )
-            .await
+            // Get the combined viewer data (includes app sessions)
+            crate::graphql::api_get::<ViewerResponse>("/viewer").await
         }
     });
 

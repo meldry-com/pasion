@@ -24,7 +24,7 @@ use pasion_data_model::{
 use pasion_i18n::DataLocale;
 use pasion_iana::jose::JsonWebSignatureAlg;
 use pasion_policy::{Violation, ViolationCode};
-use pasion_router::{Account, GraphQL, PostAuthAction, UrlBuilder};
+use pasion_router::{Account, PostAuthAction, UrlBuilder};
 use oauth2_types::scope::{OPENID, Scope};
 use rand::{
     Rng, SeedableRng,
@@ -388,7 +388,7 @@ impl TemplateContext for IndexContext {
 #[serde(rename_all = "camelCase")]
 pub struct AppConfig {
     root: String,
-    graphql_endpoint: String,
+    api_endpoint: String,
 }
 
 /// Context used by the `app.html` template
@@ -402,11 +402,12 @@ impl AppContext {
     #[must_use]
     pub fn from_url_builder(url_builder: &UrlBuilder) -> Self {
         let root = url_builder.relative_url_for(&Account::default());
-        let graphql_endpoint = url_builder.relative_url_for(&GraphQL);
+        let prefix = url_builder.prefix().unwrap_or_default();
+        let api_endpoint = format!("{prefix}/api/v1");
         Self {
             app_config: AppConfig {
                 root,
-                graphql_endpoint,
+                api_endpoint,
             },
         }
     }

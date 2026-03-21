@@ -4,7 +4,7 @@ This document aims to get you started with contributing to the Pasion!
 
 ## 1. Who can contribute to Pasion?
 
-Everyone is welcome to contribute code to [Pasion](https://github.com/palpo-im/pasion), provided that they are willing to license their contributions to Element under a [Contributor License Agreement](https://cla-assistant.io/palpo-im/pasion) (CLA). This ensures that their contribution will be made available under an OSI-approved open-source license, currently Affero General Public License v3 (AGPLv3).
+Everyone is welcome to contribute code to [Pasion](https://github.com/taidge/pasion), provided that they are willing to license their contributions to Element under a [Contributor License Agreement](https://cla-assistant.io/palpo-im/pasion) (CLA). This ensures that their contribution will be made available under an OSI-approved open-source license, currently Affero General Public License v3 (AGPLv3).
 
 Please see the [Element blog post](https://element.io/blog/palpo-now-lives-at-github-com-palpo-im-palpo/) for the full rationale.
 
@@ -12,7 +12,7 @@ Please see the [Element blog post](https://element.io/blog/palpo-now-lives-at-gi
 
 There are two main ways to contribute to Pasion:
 
-- **Code and documentation**: You can contribute code to the Pasion and help improve its documentation by submitting pull requests to the [GitHub repository](https://github.com/palpo-im/pasion).
+- **Code and documentation**: You can contribute code to the Pasion and help improve its documentation by submitting pull requests to the [GitHub repository](https://github.com/taidge/pasion).
 - **Translations**: You can contribute translations to the Pasion through [Localazy](https://localazy.com/p/pasion).
 
 ## 3. What do I need?

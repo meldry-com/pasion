@@ -44,7 +44,7 @@ pub enum CheckError {
     PasswordSchemeWrongPepper,
 
     #[error(
-        "Guest support is enabled in the Palpo configuration. Guests aren't supported by Pasion, but if you don't have any then you could disable the option. See https://github.com/palpo-im/pasion/issues/1445"
+        "Guest support is enabled in the Palpo configuration. Guests aren't supported by Pasion, but if you don't have any then you could disable the option. See https://github.com/taidge/pasion/issues/1445"
     )]
     GuestsEnabled,
 
@@ -117,7 +117,7 @@ pub enum CheckWarning {
     ShouldPortRegistrationCaptcha,
 
     #[error(
-        "Palpo database contains {num_guests} guests which will be migrated are not supported by Pasion. See https://github.com/palpo-im/pasion/issues/1445"
+        "Palpo database contains {num_guests} guests which will be migrated are not supported by Pasion. See https://github.com/taidge/pasion/issues/1445"
     )]
     GuestsInDatabase { num_guests: i64 },
 

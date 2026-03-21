@@ -2,19 +2,8 @@ use dioxus::prelude::*;
 
 use crate::components::layout::Layout;
 use crate::components::loading::LoadingScreen;
-use crate::graphql::types::{ClientDetailData, ClientNode};
+use crate::graphql::types::Oauth2ClientDetail;
 use crate::pages::Route;
-
-const QUERY: &str = r#"
-    query OAuth2Client($id: ID!) {
-        node(id: $id) {
-            __typename
-            ... on Oauth2Client {
-                id clientId clientName clientUri tosUri policyUri logoUri
-            }
-        }
-    }
-"#;
 
 #[component]
 pub fn ClientDetail(id: String) -> Element {
@@ -22,9 +11,8 @@ pub fn ClientDetail(id: String) -> Element {
     let data = use_resource(move || {
         let id = id_clone.clone();
         async move {
-            crate::graphql::graphql_request::<ClientDetailData>(
-                QUERY,
-                Some(serde_json::json!({ "id": id })),
+            crate::graphql::api_get::<Oauth2ClientDetail>(
+                &format!("/oauth2-clients/{}", id),
             )
             .await
         }
@@ -32,24 +20,17 @@ pub fn ClientDetail(id: String) -> Element {
     let binding = data.read();
 
     match &*binding {
-        Some(Ok(result)) => match &result.node {
-            Some(ClientNode::Oauth2Client(client)) => rsx! {
-                Layout {
-                    ClientDetailView {
-                        client_id: client.client_id.clone(),
-                        client_name: client.client_name.clone(),
-                        client_uri: client.client_uri.clone(),
-                        tos_uri: client.tos_uri.clone(),
-                        policy_uri: client.policy_uri.clone(),
-                        logo_uri: client.logo_uri.clone(),
-                    }
+        Some(Ok(client)) => rsx! {
+            Layout {
+                ClientDetailView {
+                    client_id: client.client_id.clone(),
+                    client_name: client.client_name.clone(),
+                    client_uri: client.client_uri.clone(),
+                    tos_uri: client.tos_uri.clone(),
+                    policy_uri: client.policy_uri.clone(),
+                    logo_uri: client.logo_uri.clone(),
                 }
-            },
-            None => rsx! {
-                Layout {
-                    p { "Client not found." }
-                }
-            },
+            }
         },
         Some(Err(e)) => rsx! {
             Layout {

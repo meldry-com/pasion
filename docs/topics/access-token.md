@@ -1,6 +1,6 @@
 # Get an access token
 
-The [Pasion repository contains a simple shell script](https://github.com/palpo-im/pasion/blob/main/misc/device-code-grant.sh) to interactively get an access token with arbitrary scopes.
+The [Pasion repository contains a simple shell script](https://github.com/taidge/pasion/blob/main/misc/device-code-grant.sh) to interactively get an access token with arbitrary scopes.
 It requires `sh`, `jq` and `curl` to be installed.
 This can be run from anywhere, not necessarily from the host where Pasion is running.
 

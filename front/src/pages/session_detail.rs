@@ -4,46 +4,8 @@ use crate::components::last_active::LastActive;
 use crate::components::layout::Layout;
 use crate::components::loading::LoadingScreen;
 use crate::components::session_card::*;
-use crate::graphql::types::{DeviceType, SessionDetailData, SessionNode};
+use crate::graphql::types::{DeviceType, SessionNode};
 use crate::utils::format_date;
-
-const QUERY: &str = r#"
-    query SessionDetail($id: ID!) {
-        node(id: $id) {
-            __typename
-            ... on BrowserSession {
-                id displayName
-                userAgent { name model os deviceType }
-                lastActiveIp lastActiveAt createdAt
-                lastAuthentication { id createdAt }
-            }
-            ... on Oauth2Session {
-                id scope displayName
-                client { id clientId clientName clientUri logoUri }
-                userAgent { name model os deviceType }
-                lastActiveIp lastActiveAt createdAt
-            }
-            ... on CompatSession {
-                id deviceId displayName
-                userAgent { name model os deviceType }
-                lastActiveIp lastActiveAt createdAt
-                ssoLogin { id redirectUri }
-            }
-        }
-    }
-"#;
-
-const SET_OAUTH2_SESSION_NAME_MUTATION: &str = r#"
-    mutation SetOAuth2SessionName($sessionId: ID!, $displayName: String) {
-        setOauth2SessionDisplayName(input: { oauth2SessionId: $sessionId, humanName: $displayName }) { status }
-    }
-"#;
-
-const SET_COMPAT_SESSION_NAME_MUTATION: &str = r#"
-    mutation SetCompatSessionName($sessionId: ID!, $displayName: String) {
-        setCompatSessionDisplayName(input: { compatSessionId: $sessionId, humanName: $displayName }) { status }
-    }
-"#;
 
 #[component]
 pub fn SessionDetail(id: String) -> Element {
@@ -51,9 +13,8 @@ pub fn SessionDetail(id: String) -> Element {
     let data = use_resource(move || {
         let id = id_clone.clone();
         async move {
-            crate::graphql::graphql_request::<SessionDetailData>(
-                QUERY,
-                Some(serde_json::json!({ "id": id })),
+            crate::graphql::api_get::<SessionNode>(
+                &format!("/sessions/{}", id),
             )
             .await
         }
@@ -61,17 +22,10 @@ pub fn SessionDetail(id: String) -> Element {
     let binding = data.read();
 
     match &*binding {
-        Some(Ok(result)) => match &result.node {
-            Some(node) => rsx! {
-                Layout {
-                    SessionDetailView { node: node.clone() }
-                }
-            },
-            None => rsx! {
-                Layout {
-                    p { "Session not found." }
-                }
-            },
+        Some(Ok(result)) => rsx! {
+            Layout {
+                SessionDetailView { node: result.clone() }
+            }
         },
         Some(Err(e)) => rsx! {
             Layout {
@@ -349,15 +303,14 @@ fn EditSessionName(
                                 saving.set(true);
                                 error_msg.set(None);
                                 spawn(async move {
-                                    let query = match st {
-                                        EditableSessionType::Oauth2 => SET_OAUTH2_SESSION_NAME_MUTATION,
-                                        EditableSessionType::Compat => SET_COMPAT_SESSION_NAME_MUTATION,
+                                    let path = match st {
+                                        EditableSessionType::Oauth2 => format!("/oauth2-sessions/{}/name", sid),
+                                        EditableSessionType::Compat => format!("/compat-sessions/{}/name", sid),
                                     };
-                                    let result = crate::graphql::graphql_mutation::<serde_json::Value>(
-                                        query,
+                                    let result = crate::graphql::api_put::<serde_json::Value>(
+                                        &path,
                                         serde_json::json!({
-                                            "sessionId": sid,
-                                            "displayName": name_param,
+                                            "humanName": name_param,
                                         }),
                                     ).await;
                                     saving.set(false);
@@ -428,29 +381,13 @@ fn EndSessionButton(session_id: String, session_type: SessionType) -> Element {
                 ending.set(true);
                 let nav = nav.clone();
                 spawn(async move {
-                    let (query, var_name) = match st {
-                        SessionType::Browser => (
-                            r#"mutation EndBrowserSession($id: ID!) {
-                                endBrowserSession(input: { browserSessionId: $id }) { status }
-                            }"#,
-                            "id",
-                        ),
-                        SessionType::Oauth2 => (
-                            r#"mutation EndOAuth2Session($id: ID!) {
-                                endOauth2Session(input: { oauth2SessionId: $id }) { status }
-                            }"#,
-                            "id",
-                        ),
-                        SessionType::Compat => (
-                            r#"mutation EndCompatSession($id: ID!) {
-                                endCompatSession(input: { compatSessionId: $id }) { status }
-                            }"#,
-                            "id",
-                        ),
+                    let path = match st {
+                        SessionType::Browser => format!("/browser-sessions/{}", sid),
+                        SessionType::Oauth2 => format!("/oauth2-sessions/{}", sid),
+                        SessionType::Compat => format!("/compat-sessions/{}", sid),
                     };
-                    let _ = crate::graphql::graphql_mutation::<serde_json::Value>(
-                        query,
-                        serde_json::json!({ var_name: sid }),
+                    let _ = crate::graphql::api_delete::<serde_json::Value>(
+                        &path,
                     ).await;
                     ending.set(false);
                     nav.push(crate::pages::Route::Sessions {});

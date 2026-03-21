@@ -19,8 +19,8 @@ struct DiscoveryResponse {
     #[serde(flatten)]
     standard: ProviderMetadata,
 
-    #[serde(rename = "org.matrix.pasion.graphql_endpoint")]
-    graphql_endpoint: url::Url,
+    #[serde(rename = "org.matrix.pasion.api_endpoint")]
+    api_endpoint: String,
 
     // As per MSC2965
     account_management_uri: url::Url,
@@ -177,7 +177,7 @@ pub async fn get(depot: &Depot) -> Json<DiscoveryResponse> {
 
     Json(DiscoveryResponse {
         standard,
-        graphql_endpoint: url_builder.graphql_endpoint(),
+        api_endpoint: format!("{}/api/v1", url_builder.prefix().unwrap_or_default()),
         account_management_uri: url_builder.account_management_uri(),
         // This needs to be kept in sync with what is supported in the frontend,
         // see frontend/src/routes/__root.tsx

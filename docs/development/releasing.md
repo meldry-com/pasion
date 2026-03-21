@@ -58,7 +58,7 @@ For `v*` tags:
 On the main branch:
 
  - It will push the container image with the `sha-HASH` and `main` tags.
- - It will update the [`unstable`](https://github.com/palpo-im/pasion/releases/tag/unstable) GitHub release with the built container image and pre-built binaries.
+ - It will update the [`unstable`](https://github.com/taidge/pasion/releases/tag/unstable) GitHub release with the built container image and pre-built binaries.
 
 When a PR is tagged with the `Z-Build-Workflow` label:
 
@@ -114,10 +114,10 @@ At this point, the releaser should check the changelog and ensure the "Set as pr
    1. Check the "Set as latest release" checkbox and publish the release.
 
 [Localazy]: https://localazy.com/p/pasion
-[`translations-download` workflow]: https://github.com/palpo-im/pasion/actions/workflows/translations-download.yaml
-[`release-branch` workflow]: https://github.com/palpo-im/pasion/actions/workflows/release-branch.yaml
-[`release-bump` workflow]: https://github.com/palpo-im/pasion/actions/workflows/release-bump.yaml
-[`build` workflow]: https://github.com/palpo-im/pasion/actions/workflows/build.yaml
-[translation download PR]: https://github.com/palpo-im/pasion/pulls?q=is%3Apr+label%3AA-I18n
-[CI to churn]: https://github.com/palpo-im/pasion/actions/workflows/build.yaml?query=event%3Apush+actor%3Amatrixbot
-[draft release to appear]: https://github.com/palpo-im/pasion/releases
+[`translations-download` workflow]: https://github.com/taidge/pasion/actions/workflows/translations-download.yaml
+[`release-branch` workflow]: https://github.com/taidge/pasion/actions/workflows/release-branch.yaml
+[`release-bump` workflow]: https://github.com/taidge/pasion/actions/workflows/release-bump.yaml
+[`build` workflow]: https://github.com/taidge/pasion/actions/workflows/build.yaml
+[translation download PR]: https://github.com/taidge/pasion/pulls?q=is%3Apr+label%3AA-I18n
+[CI to churn]: https://github.com/taidge/pasion/actions/workflows/build.yaml?query=event%3Apush+actor%3Amatrixbot
+[draft release to appear]: https://github.com/taidge/pasion/releases

@@ -277,21 +277,11 @@ pub fn build_router(
                 build_human_router(router, templates.clone())
             }
             pasion_config::HttpResource::GraphQL {
-                playground,
-                undocumented_oauth2_access,
+                playground: _,
+                undocumented_oauth2_access: _,
             } => {
-                let mut graphql_router = Router::with_path(pasion_router::GraphQL::route())
-                    .get(pasion_handlers::graphql::get)
-                    .post(pasion_handlers::graphql::post);
-
-                if *playground {
-                    graphql_router = graphql_router.push(
-                        Router::with_path(pasion_router::GraphQLPlayground::route())
-                            .get(pasion_handlers::graphql::playground)
-                    );
-                }
-
-                router.push(graphql_router)
+                // GraphQL has been replaced by REST API
+                build_rest_api_router(router)
             }
             pasion_config::HttpResource::Assets { path } => {
                 router.push(
@@ -439,6 +429,58 @@ fn build_compat_router(router: Router, _templates: Templates) -> Router {
             .post(pasion_handlers::compat::logout_all::post))
         .push(Router::with_path(pasion_router::CompatRefresh::route())
             .post(pasion_handlers::compat::refresh::post))
+}
+
+fn build_rest_api_router(router: Router) -> Router {
+    router
+        // Viewer (combined viewer + session + site config)
+        .push(Router::with_path("/api/v1/viewer")
+            .get(pasion_handlers::rest::viewer::get_viewer))
+        // Site config
+        .push(Router::with_path("/api/v1/site-config")
+            .get(pasion_handlers::rest::site_config::get))
+        // Sessions
+        .push(Router::with_path("/api/v1/sessions/<id>")
+            .get(pasion_handlers::rest::sessions::get_session))
+        .push(Router::with_path("/api/v1/browser-sessions/<id>")
+            .delete(pasion_handlers::rest::sessions::end_browser_session))
+        .push(Router::with_path("/api/v1/oauth2-sessions/<id>")
+            .delete(pasion_handlers::rest::sessions::end_oauth2_session))
+        .push(Router::with_path("/api/v1/oauth2-sessions/<id>/name")
+            .put(pasion_handlers::rest::sessions::set_oauth2_session_name))
+        .push(Router::with_path("/api/v1/compat-sessions/<id>")
+            .delete(pasion_handlers::rest::sessions::end_compat_session))
+        .push(Router::with_path("/api/v1/compat-sessions/<id>/name")
+            .put(pasion_handlers::rest::sessions::set_compat_session_name))
+        // OAuth2 clients
+        .push(Router::with_path("/api/v1/oauth2-clients/<id>")
+            .get(pasion_handlers::rest::oauth2_clients::get_client))
+        // Password
+        .push(Router::with_path("/api/v1/viewer/password")
+            .post(pasion_handlers::rest::password::set_password))
+        .push(Router::with_path("/api/v1/password-recovery/set")
+            .post(pasion_handlers::rest::password::set_password_by_recovery))
+        .push(Router::with_path("/api/v1/password-recovery/resend")
+            .post(pasion_handlers::rest::password::resend_recovery_email))
+        // Users (display name, cross-signing, deactivation)
+        .push(Router::with_path("/api/v1/viewer/display-name")
+            .post(pasion_handlers::rest::users::set_display_name))
+        .push(Router::with_path("/api/v1/viewer/cross-signing-reset")
+            .post(pasion_handlers::rest::users::allow_cross_signing_reset))
+        .push(Router::with_path("/api/v1/viewer/deactivate")
+            .post(pasion_handlers::rest::users::deactivate_user))
+        // Email authentication
+        .push(Router::with_path("/api/v1/email-auth/start")
+            .post(pasion_handlers::rest::emails::start_email_auth))
+        .push(Router::with_path("/api/v1/email-auth/<id>")
+            .get(pasion_handlers::rest::emails::get_email_auth))
+        .push(Router::with_path("/api/v1/email-auth/<id>/complete")
+            .post(pasion_handlers::rest::emails::complete_email_auth))
+        .push(Router::with_path("/api/v1/email-auth/<id>/resend")
+            .post(pasion_handlers::rest::emails::resend_email_auth_code))
+        // User emails
+        .push(Router::with_path("/api/v1/user-emails/<id>")
+            .delete(pasion_handlers::rest::emails::remove_email))
 }
 
 fn build_admin_router(router: Router) -> Router {

@@ -4,29 +4,13 @@ use crate::components::layout::Layout;
 use crate::components::loading::LoadingScreen;
 use crate::components::nav_bar::{NavBar, NavItem};
 use crate::components::user_greeting::UserGreeting;
-use crate::graphql::types::CurrentUserGreetingData;
+use crate::graphql::types::ViewerResponse;
 use crate::pages::Route;
-
-const QUERY: &str = r#"
-    query CurrentUserGreeting {
-        viewer {
-            __typename
-            ... on User {
-                id
-                matrix { mxid displayName }
-            }
-        }
-        siteConfig {
-            displayNameChangeAllowed
-            planManagementIframeUri
-        }
-    }
-"#;
 
 #[component]
 pub fn AccountPage() -> Element {
     let data = use_resource(|| async {
-        crate::graphql::graphql_request::<CurrentUserGreetingData>(QUERY, None).await
+        crate::graphql::api_get::<ViewerResponse>("/viewer").await
     });
     let binding = data.read();
 

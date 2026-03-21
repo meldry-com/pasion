@@ -96,12 +96,8 @@ fn EditDisplayNameDialog(open: Signal<bool>, user_id: String, matrix: MatrixUser
                         error.set(None);
                         spawn(async move {
                             let display_name = if name.is_empty() { serde_json::Value::Null } else { serde_json::Value::String(name) };
-                            let result = crate::graphql::graphql_mutation::<crate::graphql::types::SetDisplayNameResult>(
-                                r#"mutation SetDisplayName($userId: ID!, $displayName: String) {
-                                    setDisplayName(input: { userId: $userId, displayName: $displayName }) {
-                                        status
-                                    }
-                                }"#,
+                            let result = crate::graphql::api_post::<crate::graphql::types::SetDisplayNamePayload>(
+                                "/viewer/display-name",
                                 serde_json::json!({
                                     "userId": uid,
                                     "displayName": display_name,
@@ -109,7 +105,7 @@ fn EditDisplayNameDialog(open: Signal<bool>, user_id: String, matrix: MatrixUser
                             ).await;
                             saving.set(false);
                             match result {
-                                Ok(data) if data.set_display_name.status == crate::graphql::types::SetDisplayNameStatus::Set => {
+                                Ok(data) if data.status == crate::graphql::types::SetDisplayNameStatus::Set => {
                                     open.set(false);
                                 }
                                 Ok(_) => {

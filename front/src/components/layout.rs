@@ -29,17 +29,5 @@ fn FooterSection() -> Element {
 }
 
 async fn fetch_footer_config() -> Result<SiteConfig, String> {
-    let data: crate::graphql::types::FooterData = crate::graphql::graphql_request(
-        r#"query Footer {
-            siteConfig {
-                id
-                imprint
-                tosUri
-                policyUri
-            }
-        }"#,
-        None,
-    )
-    .await?;
-    Ok(data.site_config)
+    crate::graphql::api_get::<SiteConfig>("/site-config").await
 }

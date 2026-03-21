@@ -46,7 +46,7 @@ use tower::{Layer, Service, ServiceExt};
 use url::Url;
 
 use crate::{
-    ActivityTracker, BoundActivityTracker, Limiter, RequesterFingerprint, graphql,
+    ActivityTracker, BoundActivityTracker, Limiter, RequesterFingerprint,
     passwords::{Hasher, PasswordManager},
     upstream_oauth2::cache::MetadataCache,
 };
@@ -98,7 +98,6 @@ pub(crate) struct TestState {
     pub url_builder: UrlBuilder,
     pub homeserver_connection: Arc<MockHomeserverConnection>,
     pub policy_factory: Arc<PolicyFactory>,
-    pub graphql_schema: graphql::Schema,
     pub password_manager: PasswordManager,
     pub site_config: SiteConfig,
     pub activity_tracker: ActivityTracker,
@@ -212,21 +211,6 @@ impl TestState {
 
         let limiter = Limiter::new(&RateLimitingConfig::default()).unwrap();
 
-        let graphql_state = TestGraphQLState {
-            repository_factory: PgRepositoryFactory::new(pool.clone()).boxed(),
-            policy_factory: Arc::clone(&policy_factory),
-            homeserver_connection: Arc::clone(&homeserver_connection),
-            site_config: site_config.clone(),
-            rng: Arc::clone(&rng),
-            clock: Arc::clone(&clock),
-            password_manager: password_manager.clone(),
-            url_builder: url_builder.clone(),
-            limiter: limiter.clone(),
-        };
-        let state: crate::graphql::BoxState = Box::new(graphql_state);
-
-        let graphql_schema = graphql::schema_builder().data(state).finish();
-
         let activity_tracker = ActivityTracker::new(
             PgRepositoryFactory::new(pool.clone()).boxed(),
             std::time::Duration::from_secs(60),
@@ -265,7 +249,6 @@ impl TestState {
             url_builder,
             homeserver_connection,
             policy_factory,
-            graphql_schema,
             password_manager,
             site_config,
             activity_tracker,
@@ -317,9 +300,6 @@ impl TestState {
             .merge(crate::api_router())
             .merge(crate::compat_router(self.templates.clone()))
             .merge(crate::human_router(self.templates.clone()))
-            // We enable undocumented_oauth2_access for the tests, as it is easier to query the API
-            // with it
-            .merge(crate::graphql_router(false, true))
             .merge(crate::admin_api_router().1)
             .with_state(self.clone())
             .into_service();
@@ -425,59 +405,6 @@ impl TestState {
     }
 }
 
-struct TestGraphQLState {
-    repository_factory: BoxRepositoryFactory,
-    homeserver_connection: Arc<MockHomeserverConnection>,
-    site_config: SiteConfig,
-    policy_factory: Arc<PolicyFactory>,
-    clock: Arc<MockClock>,
-    rng: Arc<Mutex<ChaChaRng>>,
-    password_manager: PasswordManager,
-    url_builder: UrlBuilder,
-    limiter: Limiter,
-}
-
-#[async_trait::async_trait]
-impl graphql::State for TestGraphQLState {
-    async fn repository(&self) -> Result<BoxRepository, pasion_storage::RepositoryError> {
-        self.repository_factory.create().await
-    }
-
-    async fn policy(&self) -> Result<Policy, InstantiateError> {
-        self.policy_factory.instantiate().await
-    }
-
-    fn password_manager(&self) -> PasswordManager {
-        self.password_manager.clone()
-    }
-
-    fn homeserver_connection(&self) -> &dyn HomeserverConnection {
-        &self.homeserver_connection
-    }
-
-    fn url_builder(&self) -> &UrlBuilder {
-        &self.url_builder
-    }
-
-    fn clock(&self) -> BoxClock {
-        Box::new(self.clock.clone())
-    }
-
-    fn site_config(&self) -> &SiteConfig {
-        &self.site_config
-    }
-
-    fn limiter(&self) -> &Limiter {
-        &self.limiter
-    }
-
-    fn rng(&self) -> BoxRng {
-        let mut parent_rng = self.rng.lock().expect("Failed to lock RNG");
-        let rng = ChaChaRng::from_rng(&mut *parent_rng).expect("Failed to seed RNG");
-        Box::new(rng)
-    }
-}
-
 impl FromRef<TestState> for PgPool {
     fn from_ref(input: &TestState) -> Self {
         input.repository_factory.pool()
@@ -487,12 +414,6 @@ impl FromRef<TestState> for PgPool {
 impl FromRef<TestState> for BoxRepositoryFactory {
     fn from_ref(input: &TestState) -> Self {
         input.repository_factory.clone().boxed()
-    }
-}
-
-impl FromRef<TestState> for graphql::Schema {
-    fn from_ref(input: &TestState) -> Self {
-        input.graphql_schema.clone()
     }
 }
 

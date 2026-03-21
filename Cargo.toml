@@ -9,7 +9,7 @@ package.version = "1.8.0"
 package.authors = ["Element Backend Team"]
 package.edition = "2024"
 package.homepage = "https://palpo-im.github.io/pasion/"
-package.repository = "https://github.com/palpo-im/pasion/"
+package.repository = "https://github.com/taidge/pasion/"
 package.publish = false
 
 [workspace.lints.rust]
@@ -35,7 +35,6 @@ pasion-config = { path = "./crates/config/", version = "=1.8.0" }
 pasion-context = { path = "./crates/context/", version = "=1.8.0" }
 pasion-data-model = { path = "./crates/data-model/", version = "=1.8.0" }
 pasion-email = { path = "./crates/email/", version = "=1.8.0" }
-pasion-graphql = { path = "./crates/graphql/", version = "=1.8.0" }
 pasion-handlers = { path = "./crates/handlers/", version = "=1.8.0" }
 pasion-http = { path = "./crates/http/", version = "=1.8.0" }
 pasion-i18n = { path = "./crates/i18n/", version = "=1.8.0" }
@@ -67,12 +66,6 @@ features = ["oapi", "cors", "cookie", "serve-static", "logging", "test"]
 # An `Arc` that can be atomically updated
 [workspace.dependencies.arc-swap]
 version = "1.7.1"
-
-# GraphQL server
-[workspace.dependencies.async-graphql]
-version = "7.0.17"
-default-features = false
-features = ["chrono", "url", "tracing", "playground"]
 
 [workspace.dependencies.async-stream]
 version = "0.3.6"

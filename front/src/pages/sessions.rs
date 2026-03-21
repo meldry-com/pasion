@@ -6,54 +6,8 @@ use crate::components::loading::LoadingScreen;
 use crate::components::oauth2_session::OAuth2SessionCard;
 use crate::components::pagination::{PaginationControls, PaginationDirection, PaginationState};
 use crate::components::separator::{Separator, SeparatorKind};
-use crate::graphql::types::{AppSession, AppSessionsListData, SessionsOverviewData};
+use crate::graphql::types::{AppSession, ViewerResponse};
 use crate::pages::Route;
-
-const OVERVIEW_QUERY: &str = r#"
-    query SessionsOverview {
-        viewer {
-            __typename
-            ... on User {
-                id
-                browserSessions(first: 0, state: ACTIVE) {
-                    totalCount
-                }
-            }
-        }
-    }
-"#;
-
-const LIST_QUERY: &str = r#"
-    query AppSessionsList($first: Int, $after: String, $last: Int, $before: String, $lastActive: DateFilter) {
-        viewer {
-            __typename
-            ... on User {
-                id
-                appSessions(last: $last, before: $before, first: $first, after: $after, state: ACTIVE, lastActive: $lastActive) {
-                    edges {
-                        cursor
-                        node {
-                            __typename
-                            ... on CompatSession {
-                                id deviceId displayName
-                                userAgent { name model os deviceType }
-                                lastActiveIp lastActiveAt createdAt
-                            }
-                            ... on Oauth2Session {
-                                id scope displayName
-                                client { id clientId clientName clientUri logoUri }
-                                userAgent { name model os deviceType }
-                                lastActiveIp lastActiveAt createdAt
-                            }
-                        }
-                    }
-                    totalCount
-                    pageInfo { startCursor endCursor hasNextPage hasPreviousPage }
-                }
-            }
-        }
-    }
-"#;
 
 #[component]
 pub fn Sessions() -> Element {
@@ -67,26 +21,15 @@ pub fn Sessions() -> Element {
     });
 
     let overview = use_resource(|| async {
-        crate::graphql::graphql_request::<SessionsOverviewData>(OVERVIEW_QUERY, None).await
+        crate::graphql::api_get::<ViewerResponse>("/viewer").await
     });
 
     let sessions = use_resource(move || {
-        let inactive = show_inactive();
-        let pag = pagination.read().clone();
+        let _inactive = show_inactive();
+        let _pag = pagination.read().clone();
         async move {
-            let mut vars = pag.to_variables();
-            if inactive {
-                let cutoff = crate::utils::get_ninety_days_ago();
-                vars.as_object_mut().unwrap().insert(
-                    "lastActive".to_string(),
-                    serde_json::json!({ "before": cutoff }),
-                );
-            }
-            crate::graphql::graphql_request::<AppSessionsListData>(
-                LIST_QUERY,
-                Some(vars),
-            )
-            .await
+            // REST /viewer returns all session data combined
+            crate::graphql::api_get::<ViewerResponse>("/viewer").await
         }
     });
 

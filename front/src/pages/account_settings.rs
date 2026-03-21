@@ -6,41 +6,13 @@ use crate::components::password_input::AccountManagementPasswordPreview;
 use crate::components::separator::{Separator, SeparatorKind};
 use crate::components::user_email::UserEmailList;
 use crate::components::user_profile::AddEmailForm;
-use crate::graphql::types::UserProfileData;
+use crate::graphql::types::ViewerResponse;
 use crate::pages::Route;
-
-const QUERY: &str = r#"
-    query UserProfile {
-        viewerSession {
-            __typename
-            ... on BrowserSession {
-                id
-                user {
-                    id
-                    hasPassword
-                    matrix { mxid }
-                    emails(first: 100) {
-                        totalCount
-                        edges {
-                            cursor
-                            node { id email confirmedAt }
-                        }
-                    }
-                }
-            }
-        }
-        siteConfig {
-            emailChangeAllowed
-            passwordLoginEnabled
-            accountDeactivationAllowed
-        }
-    }
-"#;
 
 #[component]
 pub fn AccountSettings() -> Element {
     let data = use_resource(|| async {
-        crate::graphql::graphql_request::<UserProfileData>(QUERY, None).await
+        crate::graphql::api_get::<ViewerResponse>("/viewer").await
     });
     let nav = navigator();
     let binding = data.read();
@@ -182,13 +154,8 @@ fn SignOutButton(session_id: String) -> Element {
                                 let sid = sid.clone();
                                 signing_out.set(true);
                                 spawn(async move {
-                                    let _ = crate::graphql::graphql_mutation::<crate::graphql::types::EndBrowserSessionResult>(
-                                        r#"mutation EndBrowserSession($id: ID!) {
-                                            endBrowserSession(input: { browserSessionId: $id }) {
-                                                status
-                                            }
-                                        }"#,
-                                        serde_json::json!({ "id": sid }),
+                                    let _ = crate::graphql::api_delete::<crate::graphql::types::EndSessionPayload>(
+                                        &format!("/browser-sessions/{}", sid),
                                     ).await;
                                     #[cfg(target_arch = "wasm32")]
                                     {
@@ -354,26 +321,22 @@ fn AccountDeleteButton(
                                 deactivating.set(true);
                                 error.set(None);
                                 spawn(async move {
-                                    let mut vars = serde_json::json!({
+                                    let mut body = serde_json::json!({
                                         "hsErase": hs_erase,
                                     });
                                     if let Some(ref pw_val) = pw {
-                                        vars.as_object_mut().unwrap().insert(
+                                        body.as_object_mut().unwrap().insert(
                                             "password".to_string(),
                                             serde_json::Value::String(pw_val.clone()),
                                         );
                                     }
-                                    let result = crate::graphql::graphql_mutation::<crate::graphql::types::DeactivateUserResult>(
-                                        r#"mutation DeactivateUser($hsErase: Boolean!, $password: String) {
-                                            deactivateUser(input: { hsErase: $hsErase, password: $password }) {
-                                                status
-                                            }
-                                        }"#,
-                                        vars,
+                                    let result = crate::graphql::api_post::<crate::graphql::types::DeactivateUserPayload>(
+                                        "/viewer/deactivate",
+                                        body,
                                     ).await;
                                     deactivating.set(false);
                                     match result {
-                                        Ok(data) => match data.deactivate_user.status {
+                                        Ok(data) => match data.status {
                                             crate::graphql::types::DeactivateUserStatus::Deactivated => {
                                                 #[cfg(target_arch = "wasm32")]
                                                 {

@@ -5,25 +5,13 @@ use crate::components::loading::{LoadingScreen, LoadingSpinner};
 use crate::components::page_heading::PageHeading;
 use crate::components::password_input::PasswordCreationDoubleInput;
 use crate::components::separator::Separator;
-use crate::graphql::types::{PasswordChangeData, SetPasswordStatus};
+use crate::graphql::types::{ViewerResponse, SetPasswordStatus};
 use crate::pages::Route;
-
-const QUERY: &str = r#"
-    query PasswordChange {
-        viewer {
-            __typename
-            ... on User { id }
-        }
-        siteConfig {
-            minimumPasswordComplexity
-        }
-    }
-"#;
 
 #[component]
 pub fn PasswordChange() -> Element {
     let data = use_resource(|| async {
-        crate::graphql::graphql_request::<PasswordChangeData>(QUERY, None).await
+        crate::graphql::api_get::<ViewerResponse>("/viewer").await
     });
     let binding = data.read();
 
@@ -91,21 +79,17 @@ fn PasswordChangeForm(user_id: String) -> Element {
                     let nav = nav.clone();
 
                     spawn(async move {
-                        let result = crate::graphql::graphql_mutation::<crate::graphql::types::SetPasswordResult>(
-                            r#"mutation ChangePassword($userId: ID!, $oldPassword: String!, $newPassword: String!) {
-                                setPassword(input: { userId: $userId, currentPassword: $oldPassword, newPassword: $newPassword }) {
-                                    status
-                                }
-                            }"#,
+                        let result = crate::graphql::api_post::<crate::graphql::types::SetPasswordPayload>(
+                            "/viewer/password",
                             serde_json::json!({
                                 "userId": uid,
-                                "oldPassword": current,
+                                "currentPassword": current,
                                 "newPassword": new_pw,
                             }),
                         ).await;
                         submitting.set(false);
                         match result {
-                            Ok(data) => match data.set_password.status {
+                            Ok(data) => match data.status {
                                 SetPasswordStatus::Allowed => {
                                     nav.push(Route::PasswordChangeSuccess {});
                                 }

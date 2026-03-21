@@ -368,21 +368,24 @@ pub enum DeactivateUserStatus {
     IncorrectPassword,
 }
 
-// ── Query response wrappers ────────────────────────────────────
+// ── Combined viewer response from REST /api/v1/viewer ──────────
 
-#[derive(Debug, Clone, PartialEq, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]
-pub struct CurrentUserGreetingData {
+pub struct ViewerResponse {
     pub viewer: Viewer,
-    pub site_config: SiteConfig,
-}
-
-#[derive(Debug, Clone, PartialEq, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct UserProfileData {
     pub viewer_session: ViewerSession,
     pub site_config: SiteConfig,
 }
+
+// ── Backward-compatible aliases for page data ──────────────────
+
+pub type CurrentUserGreetingData = ViewerResponse;
+pub type UserProfileData = ViewerResponse;
+pub type SessionsOverviewData = ViewerResponse;
+pub type AppSessionsListData = ViewerResponse;
+pub type BrowserSessionListData = ViewerResponse;
+pub type PasswordChangeData = ViewerResponse;
 
 #[derive(Debug, Clone, PartialEq, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -390,64 +393,13 @@ pub struct FooterData {
     pub site_config: SiteConfig,
 }
 
-#[derive(Debug, Clone, PartialEq, Deserialize)]
-pub struct SessionsOverviewData {
-    pub viewer: Viewer,
-}
-
-#[derive(Debug, Clone, PartialEq, Deserialize)]
-pub struct AppSessionsListData {
-    pub viewer: Viewer,
-}
-
-#[derive(Debug, Clone, PartialEq, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct BrowserSessionListData {
-    pub viewer_session: ViewerSession,
-}
-
-#[derive(Debug, Clone, PartialEq, Deserialize)]
-pub struct PasswordChangeData {
-    pub viewer: Viewer,
-    #[serde(rename = "siteConfig")]
-    pub site_config: SiteConfig,
-}
-
-#[derive(Debug, Clone, PartialEq, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct SetPasswordResult {
-    pub set_password: SetPasswordPayload,
-}
-
-#[derive(Debug, Clone, PartialEq, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct SetDisplayNameResult {
-    pub set_display_name: SetDisplayNamePayload,
-}
-
-#[derive(Debug, Clone, PartialEq, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct AddEmailResult {
-    pub add_email: AddEmailPayload,
-}
-
-#[derive(Debug, Clone, PartialEq, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct EndBrowserSessionResult {
-    pub end_browser_session: EndSessionPayload,
-}
-
-#[derive(Debug, Clone, PartialEq, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct EndOauth2SessionResult {
-    pub end_oauth2_session: EndSessionPayload,
-}
-
-#[derive(Debug, Clone, PartialEq, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct EndCompatSessionResult {
-    pub end_compat_session: EndSessionPayload,
-}
+// REST API returns payloads directly, but keep wrapper types for compat
+pub type SetPasswordResult = SetPasswordPayload;
+pub type SetDisplayNameResult = SetDisplayNamePayload;
+pub type AddEmailResult = AddEmailPayload;
+pub type EndBrowserSessionResult = EndSessionPayload;
+pub type EndOauth2SessionResult = EndSessionPayload;
+pub type EndCompatSessionResult = EndSessionPayload;
 
 #[derive(Debug, Clone, PartialEq, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -455,11 +407,8 @@ pub struct PlanManagementData {
     pub site_config: SiteConfig,
 }
 
-#[derive(Debug, Clone, PartialEq, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct SessionDetailData {
-    pub node: Option<SessionNode>,
-}
+// REST API returns session directly (it IS the node)
+pub type SessionDetailData = SessionNode;
 
 #[derive(Debug, Clone, PartialEq, Deserialize)]
 #[serde(tag = "__typename")]
@@ -475,25 +424,13 @@ pub struct UserEmailListData {
     pub viewer_session: ViewerSession,
 }
 
-#[derive(Debug, Clone, PartialEq, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct CompleteEmailAuthResult {
-    pub complete_email_authentication: CompleteEmailAuthPayload,
-}
-
-#[derive(Debug, Clone, PartialEq, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct DeactivateUserResult {
-    pub deactivate_user: DeactivateUserPayload,
-}
+pub type CompleteEmailAuthResult = CompleteEmailAuthPayload;
+pub type DeactivateUserResult = DeactivateUserPayload;
 
 // ── Client detail ──────────────────────────────────────────────
 
-#[derive(Debug, Clone, PartialEq, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct ClientDetailData {
-    pub node: Option<ClientNode>,
-}
+// REST returns client directly
+pub type ClientDetailData = Oauth2ClientDetail;
 
 #[derive(Debug, Clone, PartialEq, Deserialize)]
 #[serde(tag = "__typename")]
@@ -522,25 +459,12 @@ pub struct DeviceRedirectData {
 
 // ── Password recovery ─────────────────────────────────────────
 
-#[derive(Debug, Clone, PartialEq, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct PasswordRecoveryData {
-    pub site_config: SiteConfig,
-}
+pub type PasswordRecoveryData = ViewerResponse;
 
 // ── Cross-signing reset ───────────────────────────────────────
 
-#[derive(Debug, Clone, PartialEq, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct CurrentViewerData {
-    pub viewer: Viewer,
-}
-
-#[derive(Debug, Clone, PartialEq, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct AllowCrossSigningResetResult {
-    pub allow_user_cross_signing_reset: AllowCrossSigningResetPayload,
-}
+pub type CurrentViewerData = ViewerResponse;
+pub type AllowCrossSigningResetResult = AllowCrossSigningResetPayload;
 
 #[derive(Debug, Clone, PartialEq, Deserialize)]
 pub struct AllowCrossSigningResetPayload {
@@ -549,11 +473,7 @@ pub struct AllowCrossSigningResetPayload {
 
 // ── Resend recovery email ─────────────────────────────────────
 
-#[derive(Debug, Clone, PartialEq, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct ResendRecoveryEmailResult {
-    pub resend_recovery_email: ResendRecoveryEmailPayload,
-}
+pub type ResendRecoveryEmailResult = ResendRecoveryEmailPayload;
 
 #[derive(Debug, Clone, PartialEq, Deserialize)]
 pub struct ResendRecoveryEmailPayload {
@@ -562,11 +482,7 @@ pub struct ResendRecoveryEmailPayload {
 
 // ── Remove email result ───────────────────────────────────────
 
-#[derive(Debug, Clone, PartialEq, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct RemoveEmailResult {
-    pub remove_email: RemoveEmailPayload,
-}
+pub type RemoveEmailResult = RemoveEmailPayload;
 
 // ── Session name mutation results ─────────────────────────────
 
@@ -576,17 +492,8 @@ pub struct SetSessionNamePayload {
     pub status: String,
 }
 
-#[derive(Debug, Clone, PartialEq, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct SetOauth2SessionNameResult {
-    pub set_oauth2_session_display_name: SetSessionNamePayload,
-}
-
-#[derive(Debug, Clone, PartialEq, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct SetCompatSessionNameResult {
-    pub set_compat_session_display_name: SetSessionNamePayload,
-}
+pub type SetOauth2SessionNameResult = SetSessionNamePayload;
+pub type SetCompatSessionNameResult = SetSessionNamePayload;
 
 // ── Email verification query/mutation types ───────────────────
 
@@ -604,10 +511,8 @@ pub enum EmailAuthNode {
     UserEmailAuthentication(UserEmailAuthentication),
 }
 
-#[derive(Debug, Clone, PartialEq, Deserialize)]
-pub struct VerifyEmailData {
-    pub node: Option<EmailAuthNode>,
-}
+// REST returns the email auth directly
+pub type VerifyEmailData = UserEmailAuthentication;
 
 #[derive(Debug, Clone, PartialEq, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -615,8 +520,4 @@ pub struct ResendEmailAuthCodePayload {
     pub status: String,
 }
 
-#[derive(Debug, Clone, PartialEq, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct ResendEmailAuthCodeResult {
-    pub resend_email_authentication_code: ResendEmailAuthCodePayload,
-}
+pub type ResendEmailAuthCodeResult = ResendEmailAuthCodePayload;

@@ -5,26 +5,8 @@ use crate::components::loading::{LoadingScreen, LoadingSpinner};
 use crate::components::page_heading::PageHeading;
 use crate::components::password_input::PasswordCreationDoubleInput;
 use crate::graphql::types::{
-    PasswordRecoveryData, ResendRecoveryEmailResult, SetPasswordResult, SetPasswordStatus,
+    ResendRecoveryEmailPayload, SetPasswordPayload, SetPasswordStatus, SiteConfig,
 };
-
-const RECOVERY_QUERY: &str = r#"
-    query PasswordRecovery($ticket: String!) {
-        siteConfig { minimumPasswordComplexity }
-    }
-"#;
-
-const RECOVER_PASSWORD_MUTATION: &str = r#"
-    mutation RecoverPassword($ticket: String!, $newPassword: String!) {
-        setPassword(input: { recoveryTicket: $ticket, newPassword: $newPassword }) { status }
-    }
-"#;
-
-const RESEND_RECOVERY_EMAIL_MUTATION: &str = r#"
-    mutation ResendRecoveryEmail($ticket: String!) {
-        resendRecoveryEmail(input: { recoveryTicket: $ticket }) { status }
-    }
-"#;
 
 /// Recovery ticket state based on query/mutation responses.
 #[derive(Debug, Clone, PartialEq)]
@@ -80,9 +62,8 @@ pub fn PasswordRecovery() -> Element {
                     ));
                     return;
                 }
-                let result = crate::graphql::graphql_request::<PasswordRecoveryData>(
-                    RECOVERY_QUERY,
-                    Some(serde_json::json!({ "ticket": ticket_val })),
+                let result = crate::graphql::api_get::<SiteConfig>(
+                    "/site-config",
                 )
                 .await;
                 match result {
@@ -167,8 +148,8 @@ pub fn PasswordRecovery() -> Element {
                                     resending.set(true);
                                     error.set(None);
                                     spawn(async move {
-                                        let result = crate::graphql::graphql_mutation::<ResendRecoveryEmailResult>(
-                                            RESEND_RECOVERY_EMAIL_MUTATION,
+                                        let result = crate::graphql::api_post::<ResendRecoveryEmailPayload>(
+                                            "/password-recovery/resend",
                                             serde_json::json!({ "ticket": ticket_val }),
                                         ).await;
                                         resending.set(false);
@@ -246,8 +227,8 @@ pub fn PasswordRecovery() -> Element {
                             invalid_new.set(false);
 
                             spawn(async move {
-                                let result = crate::graphql::graphql_mutation::<SetPasswordResult>(
-                                    RECOVER_PASSWORD_MUTATION,
+                                let result = crate::graphql::api_post::<SetPasswordPayload>(
+                                    "/password-recovery/set",
                                     serde_json::json!({
                                         "ticket": ticket_val,
                                         "newPassword": new_pw,
@@ -255,7 +236,7 @@ pub fn PasswordRecovery() -> Element {
                                 ).await;
                                 submitting.set(false);
                                 match result {
-                                    Ok(data) => match data.set_password.status {
+                                    Ok(data) => match data.status {
                                         SetPasswordStatus::Allowed => {
                                             recovery_state.set(RecoveryState::Success);
                                         }

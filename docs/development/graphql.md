@@ -7,7 +7,7 @@ Pasion uses an internal GraphQL API which is used by the self-service user inter
 The endpoint for this API can be discovered through the OpenID Connect discovery document, under the `org.matrix.pasion.graphql_endpoint` key.
 Though it is usually hosted at `https://<mas-host>/graphql`.
 
-GraphQL uses [a self-describing schema](https://github.com/palpo-im/pasion/blob/main/frontend/schema.graphql), which means that the API can be explored in tools like the GraphQL Playground.
+GraphQL uses [a self-describing schema](https://github.com/taidge/pasion/blob/main/frontend/schema.graphql), which means that the API can be explored in tools like the GraphQL Playground.
 If enabled, Pasion hosts an instance of the playground at `https://<mas-host>/graphql/playground`.
 
 ## Authorization

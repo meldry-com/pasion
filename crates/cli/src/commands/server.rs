@@ -217,16 +217,6 @@ impl Options {
 
         limiter.start();
 
-        let graphql_schema = pasion_handlers::graphql_schema(
-            PgRepositoryFactory::new(pool.clone()).boxed(),
-            &policy_factory,
-            homeserver_connection.clone(),
-            site_config.clone(),
-            password_manager.clone(),
-            url_builder.clone(),
-            limiter.clone(),
-        );
-
         let state = {
             let mut s = AppState {
                 repository_factory: PgRepositoryFactory::new(pool),
@@ -237,7 +227,6 @@ impl Options {
                 url_builder,
                 homeserver_connection,
                 policy_factory,
-                graphql_schema,
                 http_client,
                 password_manager,
                 metadata_cache,

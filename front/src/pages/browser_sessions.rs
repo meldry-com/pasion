@@ -4,33 +4,7 @@ use crate::components::browser_session::BrowserSessionCard;
 use crate::components::empty_state::EmptyState;
 use crate::components::loading::LoadingScreen;
 use crate::components::pagination::{PaginationControls, PaginationDirection, PaginationState};
-use crate::graphql::types::BrowserSessionListData;
-
-const QUERY: &str = r#"
-    query BrowserSessionList($first: Int, $after: String, $last: Int, $before: String, $lastActive: DateFilter) {
-        viewerSession {
-            __typename
-            ... on BrowserSession {
-                id
-                user {
-                    id
-                    browserSessions(last: $last, before: $before, first: $first, after: $after, state: ACTIVE, lastActive: $lastActive) {
-                        totalCount
-                        edges {
-                            cursor
-                            node {
-                                id displayName
-                                userAgent { name model os deviceType }
-                                lastActiveIp lastActiveAt createdAt
-                            }
-                        }
-                        pageInfo { hasNextPage hasPreviousPage startCursor endCursor }
-                    }
-                }
-            }
-        }
-    }
-"#;
+use crate::graphql::types::ViewerResponse;
 
 #[component]
 pub fn BrowserSessions() -> Element {
@@ -44,22 +18,11 @@ pub fn BrowserSessions() -> Element {
     });
 
     let data = use_resource(move || {
-        let inactive = show_inactive();
-        let pag = pagination.read().clone();
+        let _inactive = show_inactive();
+        let _pag = pagination.read().clone();
         async move {
-            let mut vars = pag.to_variables();
-            if inactive {
-                let cutoff = crate::utils::get_ninety_days_ago();
-                vars.as_object_mut().unwrap().insert(
-                    "lastActive".to_string(),
-                    serde_json::json!({ "before": cutoff }),
-                );
-            }
-            crate::graphql::graphql_request::<BrowserSessionListData>(
-                QUERY,
-                Some(vars),
-            )
-            .await
+            // REST /viewer returns all session data combined
+            crate::graphql::api_get::<ViewerResponse>("/viewer").await
         }
     });
     let binding = data.read();

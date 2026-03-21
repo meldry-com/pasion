@@ -23,26 +23,21 @@ pub fn AddEmailForm(user_id: String, on_add: Option<EventHandler<String>>) -> El
                 error.set(None);
                 let on_add = on_add;
                 spawn(async move {
-                    let result = crate::graphql::graphql_mutation::<crate::graphql::types::AddEmailResult>(
-                        r#"mutation AddEmail($userId: ID!, $email: String!) {
-                            addEmail(input: { userId: $userId, email: $email }) {
-                                status
-                                email { id email confirmedAt }
-                                violations
-                            }
-                        }"#,
+                    let result = crate::graphql::api_post::<crate::graphql::types::AddEmailPayload>(
+                        "/email-auth/start",
                         serde_json::json!({
-                            "userId": uid,
                             "email": email,
+                            "password": serde_json::Value::Null,
+                            "language": "en",
                         }),
                     ).await;
                     submitting.set(false);
                     match result {
                         Ok(data) => {
-                            match data.add_email.status {
+                            match data.status {
                                 crate::graphql::types::AddEmailStatus::Added => {
                                     email_value.set(String::new());
-                                    if let (Some(handler), Some(ref email_obj)) = (on_add, &data.add_email.email) {
+                                    if let (Some(handler), Some(ref email_obj)) = (on_add, &data.email) {
                                         handler.call(email_obj.id.clone());
                                     }
                                 }
@@ -53,7 +48,7 @@ pub fn AddEmailForm(user_id: String, on_add: Option<EventHandler<String>>) -> El
                                     error.set(Some("Invalid email address.".to_string()));
                                 }
                                 crate::graphql::types::AddEmailStatus::Denied => {
-                                    let violations = data.add_email.violations.unwrap_or_default().join(", ");
+                                    let violations = data.violations.unwrap_or_default().join(", ");
                                     error.set(Some(format!("Email denied: {violations}")));
                                 }
                             }
