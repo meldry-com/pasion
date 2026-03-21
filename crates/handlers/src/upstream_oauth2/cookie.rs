@@ -1,7 +1,7 @@
 // TODO: move that to a standalone cookie manager
 
 use chrono::{DateTime, Duration, Utc};
-use mas_axum_utils::cookies::CookieJar;
+use pasion_salvo_utils::cookies::CookieJar;
 use pasion_data_model::Clock;
 use pasion_router::PostAuthAction;
 use serde::{Deserialize, Serialize};

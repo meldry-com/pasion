@@ -1,82 +1,8 @@
-#![forbid(unsafe_code)]
-#![deny(
-    clippy::all,
-    clippy::str_to_string,
-    rustdoc::broken_intra_doc_links,
-    clippy::future_not_send
-)]
-#![warn(clippy::pedantic)]
+// TODO: Reimplement OpenAPI schema generation using Salvo's oapi feature
+// The previous implementation used aide which has been removed during the Salvo migration.
 
-use std::{io::Write, sync::Arc};
-
-use aide::openapi::{Server, ServerVariable};
-use indexmap::IndexMap;
-
-/// This is a dummy state, it should never be used.
-///
-/// We use it to generate the API schema, which doesn't execute any request.
-#[derive(Clone)]
-struct DummyState;
-
-macro_rules! impl_from_request_parts {
-    ($type:ty) => {
-        impl axum::extract::FromRequestParts<DummyState> for $type {
-            type Rejection = std::convert::Infallible;
-
-            async fn from_request_parts(
-                _parts: &mut axum::http::request::Parts,
-                _state: &DummyState,
-            ) -> Result<Self, Self::Rejection> {
-                unimplemented!("This is a dummy state, it should never be used")
-            }
-        }
-    };
-}
-
-macro_rules! impl_from_ref {
-    ($type:ty) => {
-        impl axum::extract::FromRef<DummyState> for $type {
-            fn from_ref(_input: &DummyState) -> Self {
-                unimplemented!("This is a dummy state, it should never be used")
-            }
-        }
-    };
-}
-
-impl_from_request_parts!(pasion_storage::BoxRepository);
-impl_from_request_parts!(pasion_data_model::BoxClock);
-impl_from_request_parts!(pasion_data_model::BoxRng);
-impl_from_request_parts!(pasion_handlers::BoundActivityTracker);
-impl_from_ref!(pasion_router::UrlBuilder);
-impl_from_ref!(pasion_templates::Templates);
-impl_from_ref!(Arc<dyn pasion_matrix::HomeserverConnection>);
-impl_from_ref!(pasion_keystore::Keystore);
-impl_from_ref!(pasion_handlers::passwords::PasswordManager);
-impl_from_ref!(Arc<pasion_policy::PolicyFactory>);
-impl_from_ref!(pasion_data_model::SiteConfig);
-impl_from_ref!(pasion_data_model::AppVersion);
-
-fn main() -> Result<(), Box<dyn std::error::Error>> {
-    let (mut api, _) = pasion_handlers::admin_api_router::<DummyState>();
-
-    // Set the server list to a configurable base URL
-    api.servers = vec![Server {
-        url: "{base}".to_owned(),
-        variables: IndexMap::from([(
-            "base".to_owned(),
-            ServerVariable {
-                default: "/".to_owned(),
-                ..ServerVariable::default()
-            },
-        )]),
-        ..Server::default()
-    }];
-
-    let mut stdout = std::io::stdout();
-    serde_json::to_writer_pretty(&mut stdout, &api)?;
-
-    // Make sure we end with a newline
-    stdout.write_all(b"\n")?;
-
-    Ok(())
+fn main() {
+    eprintln!("OpenAPI schema generation is not yet implemented for the Salvo-based admin API.");
+    eprintln!("This will be reintroduced using Salvo's oapi feature in a future update.");
+    std::process::exit(1);
 }

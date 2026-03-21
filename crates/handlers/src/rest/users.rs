@@ -60,13 +60,13 @@ pub async fn set_display_name(
             homeserver
                 .set_displayname(&user.username, name)
                 .await
-                .map_err(|e| RouteError::Internal(Box::new(e)))?;
+                .map_err(|e| RouteError::Internal(e.into()))?;
         }
         None => {
             homeserver
                 .unset_displayname(&user.username)
                 .await
-                .map_err(|e| RouteError::Internal(Box::new(e)))?;
+                .map_err(|e| RouteError::Internal(e.into()))?;
         }
     }
 
@@ -124,7 +124,7 @@ pub async fn allow_cross_signing_reset(
         .allow_cross_signing_reset(&user.username)
         .await
         .context("Failed to allow cross-signing reset")
-        .map_err(|e| RouteError::Internal(Box::new(e)))?;
+        .map_err(|e| RouteError::Internal(e.into()))?;
 
     Ok(Json(AllowCrossSigningResetResponse {
         user: Some(UserBrief {

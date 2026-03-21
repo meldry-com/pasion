@@ -1,9 +1,8 @@
+use salvo::prelude::*;
 use std::sync::Arc;
 
-use aide::{NoApi, OperationIo, transform::TransformOperation};
-use axum::{Json, extract::State, response::IntoResponse};
-use hyper::StatusCode;
-use mas_axum_utils::record_error;
+use salvo::http::StatusCode;
+use pasion_salvo_utils::record_error;
 use pasion_data_model::BoxRng;
 use pasion_policy::PolicyFactory;
 use schemars::JsonSchema;
@@ -11,15 +10,14 @@ use serde::Deserialize;
 
 use crate::{
     admin::{
-        call_context::CallContext,
+        call_context::extract_call_context,
         model::PolicyData,
         response::{ErrorResponse, SingleResponse},
     },
     impl_from_error_for_route,
 };
 
-#[derive(Debug, thiserror::Error, OperationIo)]
-#[aide(output_with = "Json<ErrorResponse>")]
+#[derive(Debug, thiserror::Error)]
 pub enum RouteError {
     #[error("Failed to instanciate policy with the provided data")]
     InvalidPolicyData(#[from] pasion_policy::LoadError),
@@ -29,16 +27,24 @@ pub enum RouteError {
 }
 
 impl_from_error_for_route!(pasion_storage::RepositoryError);
+impl_from_error_for_route!(crate::rest::RouteError);
+impl_from_error_for_route!(crate::admin::call_context::Rejection);
 
-impl IntoResponse for RouteError {
-    fn into_response(self) -> axum::response::Response {
+impl Scribe for RouteError {
+    fn render(self, res: &mut Response) {
         let error = ErrorResponse::from_error(&self);
         let sentry_event_id = record_error!(self, Self::Internal(_));
         let status = match self {
             RouteError::InvalidPolicyData(_) => StatusCode::BAD_REQUEST,
             RouteError::Internal(_) => StatusCode::INTERNAL_SERVER_ERROR,
         };
-        (status, sentry_event_id, Json(error)).into_response()
+        res.status_code(status);
+        if let Some(event_id) = sentry_event_id {
+            if let Ok(value) = http::HeaderValue::from_str(&event_id.to_string()) {
+                res.headers_mut().insert("x-sentry-event-id", value);
+            }
+        }
+        res.render(Json(error));
     }
 }
 
@@ -58,34 +64,17 @@ pub struct SetPolicyDataRequest {
     pub data: serde_json::Value,
 }
 
-pub fn doc(operation: TransformOperation) -> TransformOperation {
-    operation
-        .id("setPolicyData")
-        .summary("Set the current policy data")
-        .tag("policy-data")
-        .response_with::<201, Json<SingleResponse<PolicyData>>, _>(|t| {
-            let [sample, ..] = PolicyData::samples();
-            let response = SingleResponse::new_canonical(sample);
-            t.description("Policy data was successfully set")
-                .example(response)
-        })
-        .response_with::<400, Json<ErrorResponse>, _>(|t| {
-            let error = ErrorResponse::from_error(&RouteError::InvalidPolicyData(
-                pasion_policy::LoadError::invalid_data_example(),
-            ));
-            t.description("Invalid policy data").example(error)
-        })
-}
-
+#[handler]
 #[tracing::instrument(name = "handler.admin.v1.policy_data.set", skip_all)]
 pub async fn handler(
-    CallContext {
-        mut repo, clock, ..
-    }: CallContext,
-    NoApi(mut rng): NoApi<BoxRng>,
-    State(policy_factory): State<Arc<PolicyFactory>>,
-    Json(request): Json<SetPolicyDataRequest>,
-) -> Result<(StatusCode, Json<SingleResponse<PolicyData>>), RouteError> {
+    req: &mut Request,
+    depot: &Depot) -> Result<(StatusCode, Json<SingleResponse<PolicyData>>), RouteError> {
+    let call_context = extract_call_context(req, depot).await?;
+    let crate::admin::call_context::CallContext { mut repo, clock, .. } = call_context;
+    let mut rng = crate::rest::make_rng();
+    let policy_factory = crate::rest::get_policy_factory(depot)?;
+    let request: SetPolicyDataRequest = req.parse_json().await.map_err(|e| RouteError::Internal(Box::new(e)))?;
+
     let policy_data = repo
         .policy_data()
         .set(&mut rng, &clock, request.data)

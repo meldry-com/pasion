@@ -3,31 +3,24 @@ use std::{
     sync::{Arc, LazyLock},
 };
 
-use axum::{
-    Form,
-    extract::{Path, State},
-    response::{Html, IntoResponse, Response},
-};
-use axum_extra::typed_header::TypedHeader;
-use hyper::StatusCode;
-use mas_axum_utils::{
-    GenericError, SessionInfoExt,
+use pasion_salvo_utils::{
+    GenericError,
     cookies::CookieJar,
     csrf::{CsrfExt, ProtectedForm},
     record_error,
+    SessionInfoExt,
 };
 use pasion_data_model::{
-    BoxClock, BoxRng, UpstreamOAuthAuthorizationSession, UpstreamOAuthProviderOnConflict,
+    UpstreamOAuthAuthorizationSession, UpstreamOAuthProviderOnConflict,
     UserRegistration,
 };
 use pasion_jose::jwt::Jwt;
 use pasion_matrix::HomeserverConnection;
-use pasion_policy::Policy;
-use pasion_router::UrlBuilder;
 use pasion_storage::{
-    BoxRepository, Pagination, RepositoryAccess,
+    Pagination, RepositoryAccess,
     upstream_oauth2::{
-        UpstreamOAuthLinkFilter, UpstreamOAuthLinkRepository, UpstreamOAuthSessionRepository,
+        UpstreamOAuthLinkFilter, UpstreamOAuthLinkRepository, UpstreamOAuthProviderRepository,
+        UpstreamOAuthSessionRepository,
     },
     user::{BrowserSessionRepository, UserEmailRepository, UserRepository},
 };
@@ -37,6 +30,7 @@ use pasion_templates::{
 };
 use minijinja::Environment;
 use opentelemetry::{Key, KeyValue, metrics::Counter};
+use salvo::prelude::*;
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 use ulid::Ulid;
@@ -46,7 +40,7 @@ use super::{
     template::{AttributeMappingContext, environment},
 };
 use crate::{
-    BoundActivityTracker, METER, PreferredLanguage, SiteConfig, impl_from_error_for_route,
+    BoundActivityTracker, METER, SiteConfig, impl_from_error_for_route,
     views::{register::UserRegistrationSessionsCookie, shared::OptionalPostAuthAction},
 };
 
@@ -71,7 +65,7 @@ const DEFAULT_DISPLAYNAME_TEMPLATE: &str = "{{ user.name }}";
 const DEFAULT_EMAIL_TEMPLATE: &str = "{{ user.email }}";
 
 #[derive(Debug, Error)]
-pub(crate) enum RouteError {
+pub enum RouteError {
     /// Couldn't find the link specified in the URL
     #[error("Link not found")]
     LinkNotFound,
@@ -121,14 +115,16 @@ pub(crate) enum RouteError {
 }
 
 impl_from_error_for_route!(pasion_templates::TemplateError);
-impl_from_error_for_route!(mas_axum_utils::csrf::CsrfError);
+impl_from_error_for_route!(pasion_salvo_utils::csrf::CsrfError);
 impl_from_error_for_route!(super::cookie::UpstreamSessionNotFound);
 impl_from_error_for_route!(pasion_storage::RepositoryError);
+impl_from_error_for_route!(crate::rest::RouteError);
 impl_from_error_for_route!(pasion_policy::EvaluationError);
+impl_from_error_for_route!(pasion_policy::InstantiateError);
 impl_from_error_for_route!(pasion_jose::jwt::JwtDecodeError);
 
-impl IntoResponse for RouteError {
-    fn into_response(self) -> axum::response::Response {
+impl Scribe for RouteError {
+    fn render(self, res: &mut Response) {
         let sentry_event_id = record_error!(
             self,
             Self::Internal(_)
@@ -145,8 +141,11 @@ impl IntoResponse for RouteError {
             _ => StatusCode::INTERNAL_SERVER_ERROR,
         };
 
-        let response = GenericError::new(status_code, self);
-        (sentry_event_id, response).into_response()
+        GenericError::new(status_code, self).render(res);
+
+        if let Some(event_id) = sentry_event_id {
+            event_id.write_to_response(res);
+        }
     }
 }
 
@@ -197,7 +196,7 @@ fn render_attribute_template(
 
 #[derive(Deserialize, Serialize)]
 #[serde(rename_all = "lowercase", tag = "action")]
-pub(crate) enum FormData {
+pub enum FormData {
     Register {
         #[serde(default)]
         username: Option<String>,
@@ -215,26 +214,31 @@ impl ToFormState for FormData {
     type Field = pasion_templates::UpstreamRegisterFormField;
 }
 
+#[handler]
 #[tracing::instrument(
     name = "handlers.upstream_oauth2.link.get",
-    fields(upstream_oauth_link.id = %link_id),
     skip_all,
 )]
-pub(crate) async fn get(
-    mut rng: BoxRng,
-    clock: BoxClock,
-    mut repo: BoxRepository,
-    mut policy: Policy,
-    PreferredLanguage(locale): PreferredLanguage,
-    State(templates): State<Templates>,
-    State(url_builder): State<UrlBuilder>,
-    State(homeserver): State<Arc<dyn HomeserverConnection>>,
-    cookie_jar: CookieJar,
-    activity_tracker: BoundActivityTracker,
-    user_agent: Option<TypedHeader<headers::UserAgent>>,
-    Path(link_id): Path<Ulid>,
-) -> Result<impl IntoResponse, RouteError> {
-    let user_agent = user_agent.map(|ua| ua.as_str().to_owned());
+pub async fn get(req: &mut Request, depot: &mut Depot, res: &mut Response) -> Result<(), RouteError> {
+    let link_id: Ulid = req.param("id").ok_or(RouteError::LinkNotFound)?;
+    let mut rng = crate::rest::make_rng();
+    let clock = crate::rest::make_clock();
+    let mut repo = crate::rest::get_repo_factory(depot)?.create().await?;
+    let locale = crate::preferred_language(req, depot);
+    let templates = crate::rest::get_templates(depot)?;
+    let url_builder = crate::rest::get_url_builder(depot)?;
+    let homeserver = crate::rest::get_homeserver(depot)?;
+    let cookie_jar = crate::rest::extract_cookie_jar(req, depot)?;
+    let activity_tracker = crate::rest::extract_bound_activity_tracker(req, depot);
+    let user_agent = req
+        .headers()
+        .get(http::header::USER_AGENT)
+        .and_then(|v| v.to_str().ok())
+        .map(|s| s.to_owned());
+
+    let policy_factory = crate::rest::get_policy_factory(depot)?;
+    let mut policy = policy_factory.instantiate().await?;
+
     let sessions_cookie = UpstreamSessionsCookie::load(&cookie_jar);
     let (session_id, post_auth_action) = sessions_cookie
         .lookup_link(link_id)
@@ -287,7 +291,9 @@ pub(crate) async fn get(
                 post_auth_action: post_auth_action.cloned(),
             };
 
-            post_auth_action.go_next(&url_builder).into_response()
+            cookie_jar.write_to_response(res);
+            res.render(post_auth_action.go_next(&url_builder));
+            return Ok(());
         }
 
         (Some(user_session), Some(user_id)) => {
@@ -305,7 +311,7 @@ pub(crate) async fn get(
                 .with_csrf(csrf_token.form_value())
                 .with_language(locale);
 
-            Html(templates.render_upstream_oauth2_link_mismatch(&ctx)?).into_response()
+            templates.render_upstream_oauth2_link_mismatch(&ctx)?
         }
 
         (Some(user_session), None) => {
@@ -315,7 +321,7 @@ pub(crate) async fn get(
                 .with_csrf(csrf_token.form_value())
                 .with_language(locale);
 
-            Html(templates.render_upstream_oauth2_suggest_link(&ctx)?).into_response()
+            templates.render_upstream_oauth2_suggest_link(&ctx)?
         }
 
         (None, Some(user_id)) => {
@@ -333,7 +339,9 @@ pub(crate) async fn get(
                     .with_csrf(csrf_token.form_value())
                     .with_language(locale);
                 let fallback = templates.render_account_deactivated(&ctx)?;
-                return Ok((cookie_jar, Html(fallback).into_response()));
+                cookie_jar.write_to_response(res);
+                res.render(Text::Html(fallback));
+                return Ok(());
             }
 
             if user.locked_at.is_some() {
@@ -342,12 +350,14 @@ pub(crate) async fn get(
                     .with_csrf(csrf_token.form_value())
                     .with_language(locale);
                 let fallback = templates.render_account_locked(&ctx)?;
-                return Ok((cookie_jar, Html(fallback).into_response()));
+                cookie_jar.write_to_response(res);
+                res.render(Text::Html(fallback));
+                return Ok(());
             }
 
             let session = repo
                 .browser_session()
-                .add(&mut rng, &clock, &user, user_agent)
+                .add(&mut rng, &clock, &user, user_agent.clone())
                 .await?;
 
             let upstream_session = repo
@@ -378,7 +388,9 @@ pub(crate) async fn get(
                 )],
             );
 
-            post_auth_action.go_next(&url_builder).into_response()
+            cookie_jar.write_to_response(res);
+            res.render(post_auth_action.go_next(&url_builder));
+            return Ok(());
         }
 
         (None, None) => {
@@ -511,10 +523,9 @@ pub(crate) async fn get(
                         ))
                         .with_language(&locale);
 
-                    return Ok((
-                        cookie_jar,
-                        Html(templates.render_error(&ctx)?).into_response(),
-                    ));
+                    cookie_jar.write_to_response(&mut *res);
+                    res.render(Text::Html(templates.render_error(&ctx)?));
+                    return Ok(());
                 }
 
                 // We got a localpart from the template. We need to check if it's
@@ -553,10 +564,9 @@ pub(crate) async fn get(
                                 ))
                                 .with_language(&locale);
 
-                            return Ok((
-                                cookie_jar,
-                                Html(templates.render_error(&ctx)?).into_response(),
-                            ));
+                            cookie_jar.write_to_response(&mut *res);
+                            res.render(Text::Html(templates.render_error(&ctx)?));
+                            return Ok(());
                         }
 
                         // We matched an existing user and the conflict resolution is to add the
@@ -650,10 +660,9 @@ pub(crate) async fn get(
                                     ))
                                     .with_language(&locale);
 
-                                return Ok((
-                                    cookie_jar,
-                                    Html(templates.render_error(&ctx)?).into_response(),
-                                ));
+                                cookie_jar.write_to_response(&mut *res);
+                                res.render(Text::Html(templates.render_error(&ctx)?));
+                                return Ok(());
                             }
 
                             // Add link to the user
@@ -672,7 +681,9 @@ pub(crate) async fn get(
                             .with_csrf(csrf_token.form_value())
                             .with_language(locale);
                         let fallback = templates.render_account_deactivated(&ctx)?;
-                        return Ok((cookie_jar, Html(fallback).into_response()));
+                        cookie_jar.write_to_response(res);
+                        res.render(Text::Html(fallback));
+                        return Ok(());
                     }
 
                     if existing_user.locked_at.is_some() {
@@ -681,12 +692,14 @@ pub(crate) async fn get(
                             .with_csrf(csrf_token.form_value())
                             .with_language(locale);
                         let fallback = templates.render_account_locked(&ctx)?;
-                        return Ok((cookie_jar, Html(fallback).into_response()));
+                        cookie_jar.write_to_response(res);
+                        res.render(Text::Html(fallback));
+                        return Ok(());
                     }
 
                     let session = repo
                         .browser_session()
-                        .add(&mut rng, &clock, &existing_user, user_agent)
+                        .add(&mut rng, &clock, &existing_user, user_agent.clone())
                         .await?;
 
                     let upstream_session = repo
@@ -718,10 +731,9 @@ pub(crate) async fn get(
                         )],
                     );
 
-                    return Ok((
-                        cookie_jar,
-                        post_auth_action.go_next(&url_builder).into_response(),
-                    ));
+                    cookie_jar.write_to_response(res);
+                    res.render(post_auth_action.go_next(&url_builder));
+                    return Ok(());
                 }
 
                 // Now let's check if the localpart is allowed by the homeserver. It's possible
@@ -750,10 +762,9 @@ pub(crate) async fn get(
                         ))
                         .with_language(&locale);
 
-                    return Ok((
-                        cookie_jar,
-                        Html(templates.render_error(&ctx)?).into_response(),
-                    ));
+                    cookie_jar.write_to_response(&mut *res);
+                    res.render(Text::Html(templates.render_error(&ctx)?));
+                    return Ok(());
                 }
 
                 Some(localpart)
@@ -795,12 +806,12 @@ pub(crate) async fn get(
 
                 // Redirect to the user registration flow, in case we have any other step to
                 // finish
-                return Ok((
-                    cookie_jar,
+                cookie_jar.write_to_response(&mut *res);
+                res.render(
                     url_builder
-                        .redirect(&pasion_router::RegisterFinish::new(registration.id))
-                        .into_response(),
-                ));
+                        .redirect(&pasion_router::RegisterFinish::new(registration.id)),
+                );
+                return Ok(());
             }
 
             // Else we show the upstream registration screen
@@ -826,35 +837,41 @@ pub(crate) async fn get(
 
             let ctx = ctx.with_csrf(csrf_token.form_value()).with_language(locale);
 
-            Html(templates.render_upstream_oauth2_do_register(&ctx)?).into_response()
+            templates.render_upstream_oauth2_do_register(&ctx)?
         }
     };
 
-    Ok((cookie_jar, response))
+    cookie_jar.write_to_response(res);
+    res.render(Text::Html(response));
+    Ok(())
 }
 
+#[handler]
 #[tracing::instrument(
     name = "handlers.upstream_oauth2.link.post",
-    fields(upstream_oauth_link.id = %link_id),
     skip_all,
 )]
-pub(crate) async fn post(
-    mut rng: BoxRng,
-    clock: BoxClock,
-    mut repo: BoxRepository,
-    cookie_jar: CookieJar,
-    user_agent: Option<TypedHeader<headers::UserAgent>>,
-    mut policy: Policy,
-    PreferredLanguage(locale): PreferredLanguage,
-    activity_tracker: BoundActivityTracker,
-    State(templates): State<Templates>,
-    State(homeserver): State<Arc<dyn HomeserverConnection>>,
-    State(url_builder): State<UrlBuilder>,
-    State(site_config): State<SiteConfig>,
-    Path(link_id): Path<Ulid>,
-    Form(form): Form<ProtectedForm<FormData>>,
-) -> Result<Response, RouteError> {
-    let user_agent = user_agent.map(|ua| ua.as_str().to_owned());
+pub async fn post(req: &mut Request, depot: &mut Depot, res: &mut Response) -> Result<(), RouteError> {
+    let link_id: Ulid = req.param("id").ok_or(RouteError::LinkNotFound)?;
+    let mut rng = crate::rest::make_rng();
+    let clock = crate::rest::make_clock();
+    let mut repo = crate::rest::get_repo_factory(depot)?.create().await?;
+    let cookie_jar = crate::rest::extract_cookie_jar(req, depot)?;
+    let user_agent = req
+        .headers()
+        .get(http::header::USER_AGENT)
+        .and_then(|v| v.to_str().ok())
+        .map(|s| s.to_owned());
+    let policy_factory = crate::rest::get_policy_factory(depot)?;
+    let mut policy = policy_factory.instantiate().await?;
+    let locale = crate::preferred_language(req, depot);
+    let activity_tracker = crate::rest::extract_bound_activity_tracker(req, depot);
+    let templates = crate::rest::get_templates(depot)?;
+    let homeserver = crate::rest::get_homeserver(depot)?;
+    let url_builder = crate::rest::get_url_builder(depot)?;
+    let site_config = crate::rest::get_site_config(depot)?;
+
+    let form: ProtectedForm<FormData> = req.parse_form().await?;
     let form = cookie_jar.verify_form(&clock, form)?;
 
     let sessions_cookie = UpstreamSessionsCookie::load(&cookie_jar);
@@ -917,7 +934,9 @@ pub(crate) async fn post(
 
             repo.save().await?;
 
-            Ok((cookie_jar, post_auth_action.go_next(&url_builder)).into_response())
+            cookie_jar.write_to_response(res);
+            res.render(post_auth_action.go_next(&url_builder));
+            Ok(())
         }
 
         (
@@ -1131,11 +1150,11 @@ pub(crate) async fn post(
                     .with_csrf(csrf_token.form_value())
                     .with_language(locale);
 
-                return Ok((
-                    cookie_jar,
-                    Html(templates.render_upstream_oauth2_do_register(&ctx)?),
-                )
-                    .into_response());
+                cookie_jar.write_to_response(res);
+                res.render(Text::Html(
+                    templates.render_upstream_oauth2_do_register(&ctx)?,
+                ));
+                return Ok(());
             }
 
             REGISTRATION_COUNTER.add(1, &[KeyValue::new(PROVIDER, provider.id.to_string())]);
@@ -1173,11 +1192,11 @@ pub(crate) async fn post(
 
             // Redirect to the user registration flow, in case we have any other step to
             // finish
-            Ok((
-                cookie_jar,
+            cookie_jar.write_to_response(res);
+            res.render(
                 url_builder.redirect(&pasion_router::RegisterFinish::new(registration.id)),
-            )
-                .into_response())
+            );
+            Ok(())
         }
 
         _ => Err(RouteError::InvalidFormAction),
@@ -1187,9 +1206,9 @@ pub(crate) async fn post(
 /// Create a user registration using attributes got from the upstream
 /// authorization session
 async fn prepare_user_registration(
-    rng: &mut BoxRng,
-    clock: &BoxClock,
-    repo: &mut BoxRepository,
+    rng: &mut pasion_data_model::BoxRng,
+    clock: &pasion_data_model::BoxClock,
+    repo: &mut pasion_storage::BoxRepository,
     upstream_session: UpstreamOAuthAuthorizationSession,
     localpart: String,
     displayname: Option<String>,
@@ -1263,6 +1282,7 @@ mod tests {
     use ulid::Ulid;
 
     use super::UpstreamSessionsCookie;
+    #[cfg(test)]
     use crate::test_utils::{CookieHelper, RequestBuilderExt, ResponseExt, TestState, setup};
 
     #[sqlx::test(migrator = "pasion_storage_pg::MIGRATOR")]

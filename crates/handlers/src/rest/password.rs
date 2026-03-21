@@ -62,7 +62,7 @@ pub async fn set_password(
 
     if !password_manager
         .is_password_complex_enough(&input.new_password)
-        .map_err(|e| RouteError::Internal(Box::new(e)))?
+        .map_err(|e| RouteError::Internal(e.into()))?
     {
         return Ok(Json(SetPasswordResponse { status: "INVALID_NEW_PASSWORD" }));
     }
@@ -93,7 +93,7 @@ pub async fn set_password(
                 active_password.hashed_password,
             )
             .await
-            .map_err(|e| RouteError::Internal(Box::new(e)))?
+            .map_err(|e| RouteError::Internal(e.into()))?
             .is_success()
         {
             return Ok(Json(SetPasswordResponse { status: "WRONG_PASSWORD" }));
@@ -103,7 +103,7 @@ pub async fn set_password(
     let (version, hash) = password_manager
         .hash(make_rng(), Zeroizing::new(input.new_password))
         .await
-        .map_err(|e| RouteError::Internal(Box::new(e)))?;
+        .map_err(|e| RouteError::Internal(e.into()))?;
 
     repo.user_password()
         .add(&mut rng, &clock, &user, version, hash, None)
@@ -145,7 +145,7 @@ pub async fn set_password_by_recovery(
 
     if !password_manager
         .is_password_complex_enough(&input.new_password)
-        .map_err(|e| RouteError::Internal(Box::new(e)))?
+        .map_err(|e| RouteError::Internal(e.into()))?
     {
         return Ok(Json(SetPasswordResponse { status: "INVALID_NEW_PASSWORD" }));
     }
@@ -161,7 +161,7 @@ pub async fn set_password_by_recovery(
         .lookup_session(ticket.user_recovery_session_id)
         .await?
         .context("Unknown session")
-        .map_err(|e| RouteError::Internal(Box::new(e)))?;
+        .map_err(|e| RouteError::Internal(e.into()))?;
 
     if session.consumed_at.is_some() {
         return Ok(Json(SetPasswordResponse { status: "RECOVERY_TICKET_ALREADY_USED" }));
@@ -176,14 +176,14 @@ pub async fn set_password_by_recovery(
         .lookup(ticket.user_email_id)
         .await?
         .context("Unknown email")
-        .map_err(|e| RouteError::Internal(Box::new(e)))?;
+        .map_err(|e| RouteError::Internal(e.into()))?;
 
     let user = repo
         .user()
         .lookup(user_email.user_id)
         .await?
         .context("Invalid user")
-        .map_err(|e| RouteError::Internal(Box::new(e)))?;
+        .map_err(|e| RouteError::Internal(e.into()))?;
 
     if !user.is_valid() {
         return Ok(Json(SetPasswordResponse { status: "ACCOUNT_LOCKED" }));
@@ -192,7 +192,7 @@ pub async fn set_password_by_recovery(
     let (version, hash) = password_manager
         .hash(make_rng(), Zeroizing::new(input.new_password))
         .await
-        .map_err(|e| RouteError::Internal(Box::new(e)))?;
+        .map_err(|e| RouteError::Internal(e.into()))?;
 
     repo.user_password()
         .add(&mut rng, &clock, &user, version, hash, None)
@@ -249,7 +249,7 @@ pub async fn resend_recovery_email(
         .lookup_session(ticket.user_recovery_session_id)
         .await?
         .context("Could not load recovery session")
-        .map_err(|e| RouteError::Internal(Box::new(e)))?;
+        .map_err(|e| RouteError::Internal(e.into()))?;
 
     if let Err(_e) = limiter.check_account_recovery(requester.fingerprint(), &session.email) {
         return Ok(Json(ResendRecoveryResponse { status: "RATE_LIMITED" }));

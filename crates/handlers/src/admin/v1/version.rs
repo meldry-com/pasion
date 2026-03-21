@@ -1,10 +1,10 @@
-use aide::transform::TransformOperation;
-use axum::{Json, extract::State};
+use salvo::prelude::*;
 use pasion_data_model::AppVersion;
+use pasion_salvo_utils::InternalError;
 use schemars::JsonSchema;
 use serde::Serialize;
 
-use crate::admin::call_context::CallContext;
+use crate::admin::call_context::extract_call_context;
 
 #[derive(Serialize, JsonSchema)]
 pub struct Version {
@@ -12,20 +12,13 @@ pub struct Version {
     pub version: &'static str,
 }
 
-pub fn doc(operation: TransformOperation) -> TransformOperation {
-    operation
-        .id("version")
-        .tag("server")
-        .summary("Get the version currently running")
-        .response_with::<200, Json<Version>, _>(|t| t.example(Version { version: "v1.0.0" }))
-}
-
+#[handler]
 #[tracing::instrument(name = "handler.admin.v1.version", skip_all)]
-pub async fn handler(
-    _: CallContext,
-    State(AppVersion(version)): State<pasion_data_model::AppVersion>,
-) -> Json<Version> {
-    Json(Version { version })
+pub async fn handler(req: &mut Request, depot: &Depot) -> Result<Json<Version>, InternalError> {
+    let _call_context = extract_call_context(req, depot).await?;
+    let pasion_data_model::AppVersion(version) = crate::rest::get_app_version(depot)?;
+
+    Ok(Json(Version { version }))
 }
 
 #[cfg(test)]

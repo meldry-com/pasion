@@ -1,31 +1,20 @@
-use std::{sync::Arc, time::Duration};
+use std::time::Duration;
 
 use anyhow::Context;
-use axum::{
-    Form,
-    extract::{Path, State},
-    response::{Html, IntoResponse, Response},
-};
-use axum_extra::TypedHeader;
-use mas_axum_utils::{
+use pasion_salvo_utils::{
     InternalError,
-    cookies::CookieJar,
     csrf::{CsrfExt, ProtectedForm},
 };
-use pasion_data_model::{BoxClock, BoxRng, MatrixUser};
-use pasion_matrix::HomeserverConnection;
+use pasion_data_model::{Clock, MatrixUser};
 use pasion_policy::Policy;
-use pasion_router::UrlBuilder;
-use pasion_storage::BoxRepository;
-use pasion_templates::{DeviceConsentContext, PolicyViolationContext, TemplateContext, Templates};
+use pasion_templates::{DeviceConsentContext, PolicyViolationContext, TemplateContext};
+use salvo::prelude::*;
+use salvo::writing::Text;
 use serde::Deserialize;
 use tracing::warn;
 use ulid::Ulid;
 
-use crate::{
-    BoundActivityTracker, PreferredLanguage,
-    session::{SessionOrFallback, count_user_sessions_for_limiting, load_session_or_fallback},
-};
+use crate::session::{SessionOrFallback, count_user_sessions_for_limiting, load_session_or_fallback};
 
 #[derive(Deserialize, Debug)]
 #[serde(rename_all = "lowercase")]
@@ -35,25 +24,40 @@ enum Action {
 }
 
 #[derive(Deserialize, Debug)]
-pub(crate) struct ConsentForm {
+pub struct ConsentForm {
     action: Action,
 }
 
+#[handler]
 #[tracing::instrument(name = "handlers.oauth2.device.consent.get", skip_all)]
-pub(crate) async fn get(
-    mut rng: BoxRng,
-    clock: BoxClock,
-    PreferredLanguage(locale): PreferredLanguage,
-    State(templates): State<Templates>,
-    State(url_builder): State<UrlBuilder>,
-    State(homeserver): State<Arc<dyn HomeserverConnection>>,
-    mut repo: BoxRepository,
-    mut policy: Policy,
-    activity_tracker: BoundActivityTracker,
-    user_agent: Option<TypedHeader<headers::UserAgent>>,
-    cookie_jar: CookieJar,
-    Path(grant_id): Path<Ulid>,
-) -> Result<Response, InternalError> {
+pub async fn get(req: &mut Request, depot: &Depot, res: &mut Response) {
+    match handle_get(req, depot, res).await {
+        Ok(()) => {}
+        Err(e) => e.render(res),
+    }
+}
+
+async fn handle_get(
+    req: &mut Request,
+    depot: &Depot,
+    res: &mut Response,
+) -> Result<(), InternalError> {
+    let mut rng = crate::rest::make_rng();
+    let clock = crate::rest::make_clock();
+    let locale = crate::preferred_language(req, depot);
+    let templates = crate::rest::get_templates(depot)?;
+    let url_builder = crate::rest::get_url_builder(depot)?;
+    let homeserver = crate::rest::get_homeserver(depot)?;
+    let mut repo = crate::rest::get_repo_factory(depot)?.create().await?;
+    let policy_factory = crate::rest::get_policy_factory(depot)?;
+    let mut policy: Policy = policy_factory.instantiate().await
+        .map_err(|e| InternalError::new(Box::new(e)))?;
+    let activity_tracker = crate::rest::extract_bound_activity_tracker(req, depot);
+    let user_agent: Option<String> = req.header("user-agent");
+    let cookie_jar = crate::rest::extract_cookie_jar(req, depot)?;
+    let grant_id: Ulid = req.param("device_code_id")
+        .ok_or_else(|| InternalError::from_anyhow(anyhow::anyhow!("Missing device_code_id path parameter")))?;
+
     let (cookie_jar, maybe_session) = match load_session_or_fallback(
         cookie_jar, &clock, &mut rng, &templates, &locale, &mut repo,
     )
@@ -64,16 +68,17 @@ pub(crate) async fn get(
             maybe_session,
             ..
         } => (cookie_jar, maybe_session),
-        SessionOrFallback::Fallback { response } => return Ok(response),
+        SessionOrFallback::Fallback { response } => { *res = response; return Ok(()); }
     };
 
     let (csrf_token, cookie_jar) = cookie_jar.csrf_token(&clock, &mut rng);
 
-    let user_agent = user_agent.map(|ua| ua.to_string());
-
     let Some(session) = maybe_session else {
         let login = pasion_router::Login::and_continue_device_code_grant(grant_id);
-        return Ok((cookie_jar, url_builder.redirect(&login)).into_response());
+        let redirect = url_builder.redirect(&login);
+            cookie_jar.write_to_response(res);
+        res.render(redirect);
+        return Ok(());
     };
 
     activity_tracker
@@ -107,7 +112,7 @@ pub(crate) async fn get(
     repo.save().await?;
 
     // Evaluate the policy
-    let res = policy
+    let res_policy = policy
         .evaluate_authorization_grant(pasion_policy::AuthorizationGrantInput {
             grant_type: pasion_policy::GrantType::DeviceCode,
             client: &client,
@@ -120,8 +125,8 @@ pub(crate) async fn get(
             },
         })
         .await?;
-    if !res.valid() {
-        warn!(violation = ?res, "Device code grant for client {} denied by policy", client.id);
+    if !res_policy.valid() {
+        warn!(violation = ?res_policy, "Device code grant for client {} denied by policy", client.id);
 
         let (csrf_token, cookie_jar) = cookie_jar.csrf_token(&clock, &mut rng);
         let ctx = PolicyViolationContext::for_device_code_grant(grant, client)
@@ -131,7 +136,9 @@ pub(crate) async fn get(
 
         let content = templates.render_policy_violation(&ctx)?;
 
-        return Ok((cookie_jar, Html(content)).into_response());
+            cookie_jar.write_to_response(res);
+        res.render(Text::Html(content));
+        return Ok(());
     }
 
     // Fetch informations about the user. This is purely cosmetic, so we let it
@@ -174,26 +181,46 @@ pub(crate) async fn get(
         .context("Failed to render template")
         .map_err(InternalError::from_anyhow)?;
 
-    Ok((cookie_jar, Html(rendered)).into_response())
+    cookie_jar.write_to_response(res);
+    res.render(Text::Html(rendered));
+    Ok(())
 }
 
+#[handler]
 #[tracing::instrument(name = "handlers.oauth2.device.consent.post", skip_all)]
-pub(crate) async fn post(
-    mut rng: BoxRng,
-    clock: BoxClock,
-    PreferredLanguage(locale): PreferredLanguage,
-    State(templates): State<Templates>,
-    State(url_builder): State<UrlBuilder>,
-    State(homeserver): State<Arc<dyn HomeserverConnection>>,
-    mut repo: BoxRepository,
-    mut policy: Policy,
-    activity_tracker: BoundActivityTracker,
-    user_agent: Option<TypedHeader<headers::UserAgent>>,
-    cookie_jar: CookieJar,
-    Path(grant_id): Path<Ulid>,
-    Form(form): Form<ProtectedForm<ConsentForm>>,
-) -> Result<Response, InternalError> {
-    let form = cookie_jar.verify_form(&clock, form)?;
+pub async fn post(req: &mut Request, depot: &Depot, res: &mut Response) {
+    match handle_post(req, depot, res).await {
+        Ok(()) => {}
+        Err(e) => e.render(res),
+    }
+}
+
+async fn handle_post(
+    req: &mut Request,
+    depot: &Depot,
+    res: &mut Response,
+) -> Result<(), InternalError> {
+    let mut rng = crate::rest::make_rng();
+    let clock = crate::rest::make_clock();
+    let locale = crate::preferred_language(req, depot);
+    let templates = crate::rest::get_templates(depot)?;
+    let url_builder = crate::rest::get_url_builder(depot)?;
+    let homeserver = crate::rest::get_homeserver(depot)?;
+    let mut repo = crate::rest::get_repo_factory(depot)?.create().await?;
+    let policy_factory = crate::rest::get_policy_factory(depot)?;
+    let mut policy: Policy = policy_factory.instantiate().await
+        .map_err(|e| InternalError::new(Box::new(e)))?;
+    let activity_tracker = crate::rest::extract_bound_activity_tracker(req, depot);
+    let user_agent: Option<String> = req.header("user-agent");
+    let cookie_jar = crate::rest::extract_cookie_jar(req, depot)?;
+    let grant_id: Ulid = req.param("device_code_id")
+        .ok_or_else(|| InternalError::from_anyhow(anyhow::anyhow!("Missing device_code_id path parameter")))?;
+
+    let form: ProtectedForm<ConsentForm> = req.parse_form().await
+        .map_err(|e| InternalError::new(Box::new(e)))?;
+    let form = cookie_jar.verify_form(&clock, form)
+        .map_err(|e| InternalError::new(Box::new(e)))?;
+
     let (cookie_jar, maybe_session) = match load_session_or_fallback(
         cookie_jar, &clock, &mut rng, &templates, &locale, &mut repo,
     )
@@ -204,15 +231,16 @@ pub(crate) async fn post(
             maybe_session,
             ..
         } => (cookie_jar, maybe_session),
-        SessionOrFallback::Fallback { response } => return Ok(response),
+        SessionOrFallback::Fallback { response } => { *res = response; return Ok(()); }
     };
     let (csrf_token, cookie_jar) = cookie_jar.csrf_token(&clock, &mut rng);
 
-    let user_agent = user_agent.map(|TypedHeader(ua)| ua.to_string());
-
     let Some(session) = maybe_session else {
         let login = pasion_router::Login::and_continue_device_code_grant(grant_id);
-        return Ok((cookie_jar, url_builder.redirect(&login)).into_response());
+        let redirect = url_builder.redirect(&login);
+            cookie_jar.write_to_response(res);
+        res.render(redirect);
+        return Ok(());
     };
 
     activity_tracker
@@ -243,7 +271,7 @@ pub(crate) async fn post(
     let session_counts = count_user_sessions_for_limiting(&mut repo, &session.user).await?;
 
     // Evaluate the policy
-    let res = policy
+    let res_policy = policy
         .evaluate_authorization_grant(pasion_policy::AuthorizationGrantInput {
             grant_type: pasion_policy::GrantType::DeviceCode,
             client: &client,
@@ -256,8 +284,8 @@ pub(crate) async fn post(
             },
         })
         .await?;
-    if !res.valid() {
-        warn!(violation = ?res, "Device code grant for client {} denied by policy", client.id);
+    if !res_policy.valid() {
+        warn!(violation = ?res_policy, "Device code grant for client {} denied by policy", client.id);
 
         let (csrf_token, cookie_jar) = cookie_jar.csrf_token(&clock, &mut rng);
         let ctx = PolicyViolationContext::for_device_code_grant(grant, client)
@@ -267,7 +295,9 @@ pub(crate) async fn post(
 
         let content = templates.render_policy_violation(&ctx)?;
 
-        return Ok((cookie_jar, Html(content)).into_response());
+            cookie_jar.write_to_response(res);
+        res.render(Text::Html(content));
+        return Ok(());
     }
 
     let grant = if grant.is_pending() {
@@ -337,5 +367,7 @@ pub(crate) async fn post(
         .context("Failed to render template")
         .map_err(InternalError::from_anyhow)?;
 
-    Ok((cookie_jar, Html(rendered)).into_response())
+    cookie_jar.write_to_response(res);
+    res.render(Text::Html(rendered));
+    Ok(())
 }

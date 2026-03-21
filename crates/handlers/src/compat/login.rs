@@ -1,16 +1,14 @@
 use std::sync::{Arc, LazyLock};
 
-use axum::{Json, extract::State, response::IntoResponse};
-use axum_extra::typed_header::TypedHeader;
 use chrono::Duration;
 use hyper::StatusCode;
-use mas_axum_utils::record_error;
 use pasion_data_model::{
     BoxClock, BoxRng, Clock, CompatSession, CompatSsoLoginState, Device, SiteConfig, TokenType,
     User,
 };
 use pasion_matrix::HomeserverConnection;
 use pasion_policy::{Policy, Requester, ViolationCode, model::CompatLogin};
+use pasion_salvo_utils::record_error;
 use pasion_storage::{
     BoxRepository, BoxRepositoryFactory, RepositoryAccess,
     compat::{
@@ -22,12 +20,13 @@ use pasion_storage::{
 };
 use opentelemetry::{Key, KeyValue, metrics::Counter};
 use rand::{CryptoRng, RngCore};
+use salvo::prelude::*;
 use serde::{Deserialize, Serialize};
 use serde_with::{DurationMilliSeconds, serde_as, skip_serializing_none};
 use thiserror::Error;
 use zeroize::Zeroizing;
 
-use super::{MatrixError, MatrixJsonBody};
+use super::{MatrixError, parse_matrix_json};
 use crate::{
     BoundActivityTracker, Limiter, METER, RequesterFingerprint, impl_from_error_for_route,
     passwords::{PasswordManager, PasswordVerificationResult},
@@ -76,8 +75,11 @@ struct LoginTypes {
     flows: Vec<LoginType>,
 }
 
+#[handler]
 #[tracing::instrument(name = "handlers.compat.login.get", skip_all)]
-pub(crate) async fn get(State(password_manager): State<PasswordManager>) -> impl IntoResponse {
+pub async fn get(depot: &Depot) -> Result<Json<LoginTypes>, RouteError> {
+    let password_manager = crate::rest::get_password_manager(depot)?;
+
     let flows = if password_manager.is_enabled() {
         vec![
             LoginType::Password,
@@ -99,7 +101,7 @@ pub(crate) async fn get(State(password_manager): State<PasswordManager>) -> impl
 
     let res = LoginTypes { flows };
 
-    Json(res)
+    Ok(Json(res))
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -219,6 +221,8 @@ pub enum RouteError {
 
 impl_from_error_for_route!(pasion_storage::RepositoryError);
 impl_from_error_for_route!(pasion_policy::EvaluationError);
+impl_from_error_for_route!(pasion_policy::InstantiateError);
+impl_from_error_for_route!(crate::rest::RouteError);
 
 impl From<anyhow::Error> for RouteError {
     fn from(err: anyhow::Error) -> Self {
@@ -226,8 +230,8 @@ impl From<anyhow::Error> for RouteError {
     }
 }
 
-impl IntoResponse for RouteError {
-    fn into_response(self) -> axum::response::Response {
+impl Scribe for RouteError {
+    fn render(self, res: &mut Response) {
         let sentry_event_id =
             record_error!(self, Self::Internal(_) | Self::ProvisionDeviceFailed(_));
         LOGIN_COUNTER.add(1, &[KeyValue::new(RESULT, "error")]);
@@ -289,26 +293,60 @@ impl IntoResponse for RouteError {
             },
         };
 
-        (sentry_event_id, response).into_response()
+        response.render(res);
+
+        // Add Sentry event ID header if available
+        if let Some(event_id) = sentry_event_id {
+            event_id.write_to_response(res);
+        }
+    }
+}
+
+#[handler]
+pub async fn post(req: &mut Request, depot: &Depot, res: &mut Response) {
+    let input: RequestBody = match parse_matrix_json(req).await {
+        Ok(v) => v,
+        Err(rejection) => {
+            rejection.render(res);
+            return;
+        }
+    };
+
+    match handle_post(req, depot, input).await {
+        Ok(body) => {
+            res.render(Json(body));
+        }
+        Err(e) => {
+            e.render(res);
+        }
     }
 }
 
 #[tracing::instrument(name = "handlers.compat.login.post", skip_all)]
-pub(crate) async fn post(
-    mut rng: BoxRng,
-    clock: BoxClock,
-    State(password_manager): State<PasswordManager>,
-    State(repository_factory): State<BoxRepositoryFactory>,
-    activity_tracker: BoundActivityTracker,
-    State(homeserver): State<Arc<dyn HomeserverConnection>>,
-    State(site_config): State<SiteConfig>,
-    State(limiter): State<Limiter>,
-    mut policy: Policy,
-    requester: RequesterFingerprint,
-    user_agent: Option<TypedHeader<headers::UserAgent>>,
-    MatrixJsonBody(input): MatrixJsonBody<RequestBody>,
-) -> Result<impl IntoResponse, RouteError> {
-    let user_agent = user_agent.map(|ua| ua.as_str().to_owned());
+async fn handle_post(
+    req: &mut Request,
+    depot: &Depot,
+    input: RequestBody,
+) -> Result<ResponseBody, RouteError> {
+    let mut rng = crate::rest::make_rng();
+    let clock = crate::rest::make_clock();
+    let password_manager = crate::rest::get_password_manager(depot)?;
+    let repository_factory = crate::rest::get_repo_factory(depot)?;
+    let activity_tracker = crate::rest::extract_bound_activity_tracker(req, depot);
+    let homeserver = crate::rest::get_homeserver(depot)?;
+    let site_config = crate::rest::get_site_config(depot)?;
+    let limiter = crate::rest::get_limiter(depot)?;
+    let policy_factory = crate::rest::get_policy_factory(depot)?;
+    let mut policy = policy_factory.instantiate().await?;
+
+    let requester = activity_tracker.ip().map(RequesterFingerprint::new).unwrap_or(RequesterFingerprint::EMPTY);
+
+    let user_agent = req
+        .headers()
+        .get("user-agent")
+        .and_then(|h| h.to_str().ok())
+        .map(String::from);
+
     let login_type = input.credentials.login_type();
     let mut repo = repository_factory.create().await?;
     let (mut session, user) = match (password_manager.is_enabled(), input.credentials) {
@@ -470,13 +508,13 @@ pub(crate) async fn post(
         ],
     );
 
-    Ok(Json(ResponseBody {
+    Ok(ResponseBody {
         access_token: access_token.token,
         device_id: session.device,
         user_id,
         refresh_token,
         expires_in_ms: expires_in,
-    }))
+    })
 }
 
 async fn token_login(

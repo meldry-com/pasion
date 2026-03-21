@@ -1,21 +1,19 @@
-use aide::{OperationIo, transform::TransformOperation};
-use axum::{Json, extract::Path, response::IntoResponse};
-use hyper::StatusCode;
-use mas_axum_utils::record_error;
+use salvo::prelude::*;
+use salvo::http::StatusCode;
+use pasion_salvo_utils::record_error;
 use schemars::JsonSchema;
 use serde::Deserialize;
 
 use crate::{
     admin::{
-        call_context::CallContext,
+        call_context::extract_call_context,
         model::User,
         response::{ErrorResponse, SingleResponse},
     },
     impl_from_error_for_route,
 };
 
-#[derive(Debug, thiserror::Error, OperationIo)]
-#[aide(output_with = "Json<ErrorResponse>")]
+#[derive(Debug, thiserror::Error)]
 pub enum RouteError {
     #[error(transparent)]
     Internal(Box<dyn std::error::Error + Send + Sync + 'static>),
@@ -25,16 +23,23 @@ pub enum RouteError {
 }
 
 impl_from_error_for_route!(pasion_storage::RepositoryError);
+impl_from_error_for_route!(crate::admin::call_context::Rejection);
 
-impl IntoResponse for RouteError {
-    fn into_response(self) -> axum::response::Response {
+impl Scribe for RouteError {
+    fn render(self, res: &mut Response) {
         let error = ErrorResponse::from_error(&self);
         let sentry_event_id = record_error!(self, Self::Internal(_));
         let status = match self {
             Self::Internal(_) => StatusCode::INTERNAL_SERVER_ERROR,
             Self::NotFound(_) => StatusCode::NOT_FOUND,
         };
-        (status, sentry_event_id, Json(error)).into_response()
+        res.status_code(status);
+        if let Some(event_id) = sentry_event_id {
+            if let Ok(value) = http::HeaderValue::from_str(&event_id.to_string()) {
+                res.headers_mut().insert("x-sentry-event-id", value);
+            }
+        }
+        res.render(Json(error));
     }
 }
 
@@ -44,28 +49,15 @@ pub struct UsernamePathParam {
     username: String,
 }
 
-pub fn doc(operation: TransformOperation) -> TransformOperation {
-    operation
-        .id("getUserByUsername")
-        .summary("Get a user by its username (localpart)")
-        .tag("user")
-        .response_with::<200, Json<SingleResponse<User>>, _>(|t| {
-            let [sample, ..] = User::samples();
-            let response =
-                SingleResponse::new(sample, "/api/admin/v1/users/by-username/alice".to_owned());
-            t.description("User was found").example(response)
-        })
-        .response_with::<404, RouteError, _>(|t| {
-            let response = ErrorResponse::from_error(&RouteError::NotFound("alice".to_owned()));
-            t.description("User was not found").example(response)
-        })
-}
-
+#[handler]
 #[tracing::instrument(name = "handler.admin.v1.users.by_username", skip_all)]
 pub async fn handler(
-    CallContext { mut repo, .. }: CallContext,
-    Path(UsernamePathParam { username }): Path<UsernamePathParam>,
-) -> Result<Json<SingleResponse<User>>, RouteError> {
+    req: &mut Request,
+    depot: &Depot) -> Result<Json<SingleResponse<User>>, RouteError> {
+    let call_context = extract_call_context(req, depot).await?;
+    let crate::admin::call_context::CallContext { mut repo, .. } = call_context;
+    let username: String = req.param::<String>("username").ok_or_else(|| RouteError::NotFound("unknown".to_owned()))?;
+
     let self_path = format!("/api/admin/v1/users/by-username/{username}");
     let user = repo
         .user()

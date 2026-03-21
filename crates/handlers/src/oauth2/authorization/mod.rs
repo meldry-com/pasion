@@ -23,7 +23,7 @@ use serde::Deserialize;
 use thiserror::Error;
 
 use self::callback::CallbackDestination;
-use crate::{BoundActivityTracker, PreferredLanguage, impl_from_error_for_route};
+use crate::{BoundActivityTracker, impl_from_error_for_route};
 
 mod callback;
 pub(crate) mod consent;
@@ -64,10 +64,8 @@ impl Scribe for RouteError {
             }
         }
 
-        // Add Sentry event ID if available
-        if let Ok(value) = http::HeaderValue::from_str(&event_id.to_string()) {
-            res.headers_mut().insert(SentryEventID::name(), value);
-        }
+        let sentry_event_id = pasion_salvo_utils::sentry::SentryEventID::from(event_id);
+        sentry_event_id.write_to_response(res);
     }
 }
 
@@ -150,7 +148,7 @@ async fn handle_get(
     let mut repo: BoxRepository = repo_factory.create().await?;
 
     // Extract preferred language
-    let locale = PreferredLanguage::extract_from_request(req);
+    let locale = crate::preferred_language(req, depot);
 
     // Parse form parameters
     let params: Params = req.parse_queries().map_err(|e| RouteError::Internal(Box::new(e)))?;

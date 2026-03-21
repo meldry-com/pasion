@@ -1,17 +1,12 @@
 use anyhow::Context as _;
-use axum::{
-    Form,
-    extract::{Path, State},
-    response::{Html, IntoResponse, Response},
-};
-use mas_axum_utils::{
+use salvo::prelude::*;
+use salvo::writing::Text;
+use pasion_salvo_utils::{
     InternalError,
     cookies::CookieJar,
     csrf::{CsrfExt as _, ProtectedForm},
 };
-use pasion_data_model::{BoxClock, BoxRng};
-use pasion_router::{PostAuthAction, UrlBuilder};
-use pasion_storage::BoxRepository;
+use pasion_router::PostAuthAction;
 use pasion_templates::{
     FieldError, RegisterStepsRegistrationTokenContext, RegisterStepsRegistrationTokenFormField,
     TemplateContext as _, Templates, ToFormState,
@@ -19,7 +14,7 @@ use pasion_templates::{
 use serde::{Deserialize, Serialize};
 use ulid::Ulid;
 
-use crate::{PreferredLanguage, views::shared::OptionalPostAuthAction};
+use crate::{rest, views::shared::OptionalPostAuthAction};
 
 #[derive(Deserialize, Serialize)]
 pub(crate) struct RegistrationTokenForm {
@@ -31,21 +26,17 @@ impl ToFormState for RegistrationTokenForm {
     type Field = pasion_templates::RegisterStepsRegistrationTokenFormField;
 }
 
-#[tracing::instrument(
-    name = "handlers.views.register.steps.registration_token.get",
-    fields(user_registration.id = %id),
-    skip_all,
-)]
-pub(crate) async fn get(
-    mut rng: BoxRng,
-    clock: BoxClock,
-    PreferredLanguage(locale): PreferredLanguage,
-    State(templates): State<Templates>,
-    State(url_builder): State<UrlBuilder>,
-    mut repo: BoxRepository,
-    Path(id): Path<Ulid>,
-    cookie_jar: CookieJar,
-) -> Result<Response, InternalError> {
+#[handler]
+pub async fn get(req: &mut Request, depot: &Depot, res: &mut Response) -> Result<(), InternalError> {
+    let mut rng = rest::make_rng();
+    let clock = rest::make_clock();
+    let locale = crate::preferred_language(req, depot);
+    let templates = rest::get_templates(depot)?;
+    let url_builder = rest::get_url_builder(depot)?;
+    let mut repo = rest::get_repo_factory(depot)?.create().await?;
+    let id: Ulid = req.param("id").unwrap_or_default();
+    let cookie_jar = rest::extract_cookie_jar(req, depot)?;
+
     let (csrf_token, cookie_jar) = cookie_jar.csrf_token(&clock, &mut rng);
 
     let registration = repo
@@ -62,19 +53,17 @@ pub(crate) async fn get(
             .map(serde_json::from_value)
             .transpose()?;
 
-        return Ok((
-            cookie_jar,
-            OptionalPostAuthAction::from(post_auth_action)
-                .go_next(&url_builder)
-                .into_response(),
-        )
-            .into_response());
+            cookie_jar.write_to_response(res);
+        res.render(OptionalPostAuthAction::from(post_auth_action).go_next(&url_builder));
+        return Ok(());
     }
 
     // If the registration already has a token, skip this step
     if registration.user_registration_token_id.is_some() {
         let destination = pasion_router::RegisterDisplayName::new(registration.id);
-        return Ok((cookie_jar, url_builder.redirect(&destination)).into_response());
+            cookie_jar.write_to_response(res);
+        res.render(url_builder.redirect(&destination));
+        return Ok(());
     }
 
     let ctx = RegisterStepsRegistrationTokenContext::new()
@@ -83,25 +72,24 @@ pub(crate) async fn get(
 
     let content = templates.render_register_steps_registration_token(&ctx)?;
 
-    Ok((cookie_jar, Html(content)).into_response())
+    cookie_jar.write_to_response(res);
+    res.render(Text::Html(content));
+    Ok(())
 }
 
-#[tracing::instrument(
-    name = "handlers.views.register.steps.registration_token.post",
-    fields(user_registration.id = %id),
-    skip_all,
-)]
-pub(crate) async fn post(
-    mut rng: BoxRng,
-    clock: BoxClock,
-    PreferredLanguage(locale): PreferredLanguage,
-    State(templates): State<Templates>,
-    State(url_builder): State<UrlBuilder>,
-    mut repo: BoxRepository,
-    Path(id): Path<Ulid>,
-    cookie_jar: CookieJar,
-    Form(form): Form<ProtectedForm<RegistrationTokenForm>>,
-) -> Result<Response, InternalError> {
+#[handler]
+pub async fn post(req: &mut Request, depot: &Depot, res: &mut Response) -> Result<(), InternalError> {
+    let mut rng = rest::make_rng();
+    let clock = rest::make_clock();
+    let locale = crate::preferred_language(req, depot);
+    let templates = rest::get_templates(depot)?;
+    let url_builder = rest::get_url_builder(depot)?;
+    let mut repo = rest::get_repo_factory(depot)?.create().await?;
+    let id: Ulid = req.param("id").unwrap_or_default();
+    let cookie_jar = rest::extract_cookie_jar(req, depot)?;
+    let form: ProtectedForm<RegistrationTokenForm> = req.parse_form().await
+        .map_err(|e| InternalError::from_anyhow(e.into()))?;
+
     let registration = repo
         .user_registration()
         .lookup(id)
@@ -116,13 +104,9 @@ pub(crate) async fn post(
             .map(serde_json::from_value)
             .transpose()?;
 
-        return Ok((
-            cookie_jar,
-            OptionalPostAuthAction::from(post_auth_action)
-                .go_next(&url_builder)
-                .into_response(),
-        )
-            .into_response());
+            cookie_jar.write_to_response(res);
+        res.render(OptionalPostAuthAction::from(post_auth_action).go_next(&url_builder));
+        return Ok(());
     }
 
     let form = cookie_jar.verify_form(&clock, form)?;
@@ -140,11 +124,9 @@ pub(crate) async fn post(
             .with_csrf(csrf_token.form_value())
             .with_language(locale);
 
-        return Ok((
-            cookie_jar,
-            Html(templates.render_register_steps_registration_token(&ctx)?),
-        )
-            .into_response());
+            cookie_jar.write_to_response(res);
+        res.render(Text::Html(templates.render_register_steps_registration_token(&ctx)?));
+        return Ok(());
     }
 
     // Look up the token
@@ -158,11 +140,9 @@ pub(crate) async fn post(
             .with_csrf(csrf_token.form_value())
             .with_language(locale);
 
-        return Ok((
-            cookie_jar,
-            Html(templates.render_register_steps_registration_token(&ctx)?),
-        )
-            .into_response());
+            cookie_jar.write_to_response(res);
+        res.render(Text::Html(templates.render_register_steps_registration_token(&ctx)?));
+        return Ok(());
     };
 
     // Check if the token is still valid
@@ -176,11 +156,9 @@ pub(crate) async fn post(
             .with_csrf(csrf_token.form_value())
             .with_language(locale);
 
-        return Ok((
-            cookie_jar,
-            Html(templates.render_register_steps_registration_token(&ctx)?),
-        )
-            .into_response());
+            cookie_jar.write_to_response(res);
+        res.render(Text::Html(templates.render_register_steps_registration_token(&ctx)?));
+        return Ok(());
     }
 
     // Associate the token with the registration
@@ -193,5 +171,7 @@ pub(crate) async fn post(
 
     // Continue to the next step
     let destination = pasion_router::RegisterFinish::new(registration.id);
-    Ok((cookie_jar, url_builder.redirect(&destination)).into_response())
+    cookie_jar.write_to_response(res);
+    res.render(url_builder.redirect(&destination));
+    Ok(())
 }

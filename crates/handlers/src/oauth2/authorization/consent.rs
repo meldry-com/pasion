@@ -1,33 +1,23 @@
-use std::{sync::Arc, time::Duration};
+use std::time::Duration;
 
-use axum::{
-    extract::{Form, Path, State},
-    response::{Html, IntoResponse, Response},
-};
-use axum_extra::TypedHeader;
-use hyper::StatusCode;
-use mas_axum_utils::{
+use pasion_salvo_utils::{
     GenericError, InternalError,
-    cookies::CookieJar,
     csrf::{CsrfExt, ProtectedForm},
 };
-use pasion_data_model::{AuthorizationGrantStage, BoxClock, BoxRng, MatrixUser};
-use pasion_keystore::Keystore;
-use pasion_matrix::HomeserverConnection;
+use pasion_data_model::{AuthorizationGrantStage, Clock, MatrixUser};
 use pasion_policy::Policy;
-use pasion_router::{PostAuthAction, UrlBuilder};
-use pasion_storage::{
-    BoxRepository,
-    oauth2::{OAuth2AuthorizationGrantRepository, OAuth2ClientRepository},
-};
-use pasion_templates::{ConsentContext, PolicyViolationContext, TemplateContext, Templates};
+use pasion_router::PostAuthAction;
+use pasion_storage::oauth2::{OAuth2AuthorizationGrantRepository, OAuth2ClientRepository};
+use pasion_templates::{ConsentContext, PolicyViolationContext, TemplateContext};
 use oauth2_types::requests::AuthorizationResponse;
+use salvo::prelude::*;
+use salvo::writing::Text;
 use thiserror::Error;
 use ulid::Ulid;
 
 use super::callback::CallbackDestination;
 use crate::{
-    BoundActivityTracker, PreferredLanguage, impl_from_error_for_route,
+    impl_from_error_for_route,
     oauth2::generate_id_token,
     session::{SessionOrFallback, count_user_sessions_for_limiting, load_session_or_fallback},
 };
@@ -38,7 +28,7 @@ pub enum RouteError {
     Internal(Box<dyn std::error::Error + Send + Sync>),
 
     #[error(transparent)]
-    Csrf(#[from] mas_axum_utils::csrf::CsrfError),
+    Csrf(#[from] pasion_salvo_utils::csrf::CsrfError),
 
     #[error("Authorization grant not found")]
     GrantNotFound,
@@ -58,40 +48,55 @@ impl_from_error_for_route!(crate::session::SessionLoadError);
 impl_from_error_for_route!(crate::oauth2::IdTokenSignatureError);
 impl_from_error_for_route!(super::callback::IntoCallbackDestinationError);
 impl_from_error_for_route!(super::callback::CallbackDestinationError);
+impl_from_error_for_route!(crate::rest::RouteError);
 
-impl IntoResponse for RouteError {
-    fn into_response(self) -> axum::response::Response {
+impl Scribe for RouteError {
+    fn render(self, res: &mut Response) {
         match self {
-            Self::Internal(e) => InternalError::new(e).into_response(),
-            e @ Self::NoSuchClient(_) => InternalError::new(Box::new(e)).into_response(),
-            e @ Self::GrantNotFound => GenericError::new(StatusCode::NOT_FOUND, e).into_response(),
+            Self::Internal(e) => InternalError::new(e).render(res),
+            e @ Self::NoSuchClient(_) => InternalError::new(Box::new(e)).render(res),
+            e @ Self::GrantNotFound => GenericError::new(StatusCode::NOT_FOUND, e).render(res),
             e @ Self::GrantNotPending(_) => {
-                GenericError::new(StatusCode::CONFLICT, e).into_response()
+                GenericError::new(StatusCode::CONFLICT, e).render(res)
             }
-            e @ Self::Csrf(_) => GenericError::new(StatusCode::BAD_REQUEST, e).into_response(),
+            e @ Self::Csrf(_) => GenericError::new(StatusCode::BAD_REQUEST, e).render(res),
         }
     }
 }
 
+#[handler]
 #[tracing::instrument(
     name = "handlers.oauth2.authorization.consent.get",
-    fields(grant.id = %grant_id),
     skip_all,
 )]
-pub(crate) async fn get(
-    mut rng: BoxRng,
-    clock: BoxClock,
-    PreferredLanguage(locale): PreferredLanguage,
-    State(templates): State<Templates>,
-    State(url_builder): State<UrlBuilder>,
-    State(homeserver): State<Arc<dyn HomeserverConnection>>,
-    mut policy: Policy,
-    mut repo: BoxRepository,
-    activity_tracker: BoundActivityTracker,
-    user_agent: Option<TypedHeader<headers::UserAgent>>,
-    cookie_jar: CookieJar,
-    Path(grant_id): Path<Ulid>,
-) -> Result<Response, RouteError> {
+pub async fn get(req: &mut Request, depot: &Depot, res: &mut Response) {
+    match handle_get(req, depot, res).await {
+        Ok(()) => {}
+        Err(e) => e.render(res),
+    }
+}
+
+async fn handle_get(
+    req: &mut Request,
+    depot: &Depot,
+    res: &mut Response,
+) -> Result<(), RouteError> {
+    let mut rng = crate::rest::make_rng();
+    let clock = crate::rest::make_clock();
+    let locale = crate::preferred_language(req, depot);
+    let templates = crate::rest::get_templates(depot)?;
+    let url_builder = crate::rest::get_url_builder(depot)?;
+    let homeserver = crate::rest::get_homeserver(depot)?;
+    let policy_factory = crate::rest::get_policy_factory(depot)?;
+    let mut policy: Policy = policy_factory.instantiate().await
+        .map_err(|e| RouteError::Internal(Box::new(e)))?;
+    let mut repo = crate::rest::get_repo_factory(depot)?.create().await?;
+    let activity_tracker = crate::rest::extract_bound_activity_tracker(req, depot);
+    let user_agent: Option<String> = req.header("user-agent");
+    let cookie_jar = crate::rest::extract_cookie_jar(req, depot)?;
+    let grant_id: Ulid = req.param("grant_id")
+        .ok_or(RouteError::GrantNotFound)?;
+
     let (cookie_jar, maybe_session) = match load_session_or_fallback(
         cookie_jar, &clock, &mut rng, &templates, &locale, &mut repo,
     )
@@ -102,10 +107,8 @@ pub(crate) async fn get(
             maybe_session,
             ..
         } => (cookie_jar, maybe_session),
-        SessionOrFallback::Fallback { response } => return Ok(response),
+        SessionOrFallback::Fallback { response } => { *res = response; return Ok(()); }
     };
-
-    let user_agent = user_agent.map(|ua| ua.to_string());
 
     let grant = repo
         .oauth2_authorization_grant()
@@ -125,7 +128,10 @@ pub(crate) async fn get(
 
     let Some(session) = maybe_session else {
         let login = pasion_router::Login::and_continue_grant(grant_id);
-        return Ok((cookie_jar, url_builder.redirect(&login)).into_response());
+        let redirect = url_builder.redirect(&login);
+        cookie_jar.write_to_response(res);
+        res.render(redirect);
+        return Ok(());
     };
 
     activity_tracker
@@ -139,7 +145,7 @@ pub(crate) async fn get(
     // We can close the repository early, we don't need it at this point
     repo.save().await?;
 
-    let res = policy
+    let eval_result = policy
         .evaluate_authorization_grant(pasion_policy::AuthorizationGrantInput {
             user: Some(&session.user),
             client: &client,
@@ -152,7 +158,7 @@ pub(crate) async fn get(
             },
         })
         .await?;
-    if !res.valid() {
+    if !eval_result.valid() {
         let ctx = PolicyViolationContext::for_authorization_grant(grant, client)
             .with_session(session)
             .with_csrf(csrf_token.form_value())
@@ -160,7 +166,9 @@ pub(crate) async fn get(
 
         let content = templates.render_policy_violation(&ctx)?;
 
-        return Ok((cookie_jar, Html(content)).into_response());
+        cookie_jar.write_to_response(res);
+        res.render(Text::Html(content));
+        return Ok(());
     }
 
     // Fetch informations about the user. This is purely cosmetic, so we let it
@@ -200,29 +208,46 @@ pub(crate) async fn get(
 
     let content = templates.render_consent(&ctx)?;
 
-    Ok((cookie_jar, Html(content)).into_response())
+    cookie_jar.write_to_response(res);
+    res.render(Text::Html(content));
+    Ok(())
 }
 
+#[handler]
 #[tracing::instrument(
     name = "handlers.oauth2.authorization.consent.post",
-    fields(grant.id = %grant_id),
     skip_all,
 )]
-pub(crate) async fn post(
-    mut rng: BoxRng,
-    clock: BoxClock,
-    PreferredLanguage(locale): PreferredLanguage,
-    State(templates): State<Templates>,
-    State(key_store): State<Keystore>,
-    mut policy: Policy,
-    mut repo: BoxRepository,
-    activity_tracker: BoundActivityTracker,
-    user_agent: Option<TypedHeader<headers::UserAgent>>,
-    cookie_jar: CookieJar,
-    State(url_builder): State<UrlBuilder>,
-    Path(grant_id): Path<Ulid>,
-    Form(form): Form<ProtectedForm<()>>,
-) -> Result<Response, RouteError> {
+pub async fn post(req: &mut Request, depot: &Depot, res: &mut Response) {
+    match handle_post(req, depot, res).await {
+        Ok(()) => {}
+        Err(e) => e.render(res),
+    }
+}
+
+async fn handle_post(
+    req: &mut Request,
+    depot: &Depot,
+    res: &mut Response,
+) -> Result<(), RouteError> {
+    let mut rng = crate::rest::make_rng();
+    let clock = crate::rest::make_clock();
+    let locale = crate::preferred_language(req, depot);
+    let templates = crate::rest::get_templates(depot)?;
+    let key_store = crate::rest::get_key_store(depot)?;
+    let policy_factory = crate::rest::get_policy_factory(depot)?;
+    let mut policy: Policy = policy_factory.instantiate().await
+        .map_err(|e| RouteError::Internal(Box::new(e)))?;
+    let mut repo = crate::rest::get_repo_factory(depot)?.create().await?;
+    let activity_tracker = crate::rest::extract_bound_activity_tracker(req, depot);
+    let user_agent: Option<String> = req.header("user-agent");
+    let cookie_jar = crate::rest::extract_cookie_jar(req, depot)?;
+    let url_builder = crate::rest::get_url_builder(depot)?;
+    let grant_id: Ulid = req.param("grant_id")
+        .ok_or(RouteError::GrantNotFound)?;
+
+    let form: ProtectedForm<()> = req.parse_form().await
+        .map_err(|e| RouteError::Internal(Box::new(e)))?;
     cookie_jar.verify_form(&clock, form)?;
 
     let (cookie_jar, maybe_session) = match load_session_or_fallback(
@@ -235,12 +260,10 @@ pub(crate) async fn post(
             maybe_session,
             ..
         } => (cookie_jar, maybe_session),
-        SessionOrFallback::Fallback { response } => return Ok(response),
+        SessionOrFallback::Fallback { response } => { *res = response; return Ok(()); }
     };
 
     let (csrf_token, cookie_jar) = cookie_jar.csrf_token(&clock, &mut rng);
-
-    let user_agent = user_agent.map(|ua| ua.to_string());
 
     let grant = repo
         .oauth2_authorization_grant()
@@ -252,7 +275,10 @@ pub(crate) async fn post(
     let Some(browser_session) = maybe_session else {
         let next = PostAuthAction::continue_grant(grant_id);
         let login = pasion_router::Login::and_then(next);
-        return Ok((cookie_jar, url_builder.redirect(&login)).into_response());
+        let redirect = url_builder.redirect(&login);
+        cookie_jar.write_to_response(res);
+        res.render(redirect);
+        return Ok(());
     };
 
     activity_tracker
@@ -271,7 +297,7 @@ pub(crate) async fn post(
 
     let session_counts = count_user_sessions_for_limiting(&mut repo, &browser_session.user).await?;
 
-    let res = policy
+    let eval_result = policy
         .evaluate_authorization_grant(pasion_policy::AuthorizationGrantInput {
             user: Some(&browser_session.user),
             client: &client,
@@ -285,7 +311,7 @@ pub(crate) async fn post(
         })
         .await?;
 
-    if !res.valid() {
+    if !eval_result.valid() {
         let ctx = PolicyViolationContext::for_authorization_grant(grant, client)
             .with_session(browser_session)
             .with_csrf(csrf_token.form_value())
@@ -293,7 +319,9 @@ pub(crate) async fn post(
 
         let content = templates.render_policy_violation(&ctx)?;
 
-        return Ok((cookie_jar, Html(content)).into_response());
+        cookie_jar.write_to_response(res);
+        res.render(Text::Html(content));
+        return Ok(());
     }
 
     // All good, let's start the session
@@ -347,9 +375,9 @@ pub(crate) async fn post(
         .record_oauth2_session(&clock, &session)
         .await;
 
-    Ok((
-        cookie_jar,
-        callback_destination.go(&templates, &locale, params)?,
-    )
-        .into_response())
+    let callback_response = callback_destination.go(&templates, &locale, params)?;
+
+    *res = callback_response;
+    cookie_jar.write_to_response(res);
+    Ok(())
 }

@@ -3,15 +3,8 @@
 
 use std::{borrow::Cow, num::NonZeroUsize};
 
-use aide::OperationIo;
-use axum::{
-    Json,
-    extract::{FromRequestParts, Path, rejection::PathRejection},
-    response::IntoResponse,
-};
-use axum_extra::extract::{Query, QueryRejection};
-use axum_macros::FromRequestParts;
-use hyper::StatusCode;
+use salvo::prelude::*;
+use salvo::http::StatusCode;
 use pasion_storage::pagination::PaginationDirection;
 use schemars::JsonSchema;
 use serde::Deserialize;
@@ -21,36 +14,22 @@ use super::response::ErrorResponse;
 
 #[derive(Debug, thiserror::Error)]
 #[error("Invalid ULID in path")]
-pub struct UlidPathParamRejection(#[from] PathRejection);
+pub struct UlidPathParamRejection(pub String);
 
-impl IntoResponse for UlidPathParamRejection {
-    fn into_response(self) -> axum::response::Response {
-        (
-            StatusCode::BAD_REQUEST,
-            Json(ErrorResponse::from_error(&self)),
-        )
-            .into_response()
+impl Scribe for UlidPathParamRejection {
+    fn render(self, res: &mut Response) {
+        res.status_code(StatusCode::BAD_REQUEST);
+        res.render(Json(ErrorResponse::from_error(&self)));
     }
 }
 
-#[derive(JsonSchema, Debug, Clone, Copy, Deserialize)]
-struct UlidInPath {
-    /// # The ID of the resource
-    #[schemars(with = "super::schema::Ulid")]
-    id: Ulid,
-}
-
-#[derive(FromRequestParts, OperationIo, Debug, Clone, Copy)]
-#[from_request(rejection(UlidPathParamRejection))]
-#[aide(input_with = "Path<UlidInPath>")]
-pub struct UlidPathParam(#[from_request(via(Path))] UlidInPath);
-
-impl std::ops::Deref for UlidPathParam {
-    type Target = Ulid;
-
-    fn deref(&self) -> &Self::Target {
-        &self.0.id
-    }
+pub fn extract_ulid_param(req: &Request) -> Result<Ulid, UlidPathParamRejection> {
+    let id_str: String = req
+        .param::<String>("id")
+        .ok_or_else(|| UlidPathParamRejection("Missing id parameter".to_owned()))?;
+    id_str
+        .parse::<Ulid>()
+        .map_err(|e| UlidPathParamRejection(e.to_string()))
 }
 
 /// The default page size if not specified
@@ -111,57 +90,52 @@ struct PaginationParams {
 
 #[derive(Debug, thiserror::Error)]
 pub enum PaginationRejection {
-    #[error("Invalid pagination parameters")]
-    Invalid(#[from] QueryRejection),
+    #[error("Invalid pagination parameters: {0}")]
+    Invalid(String),
 
     #[error("Cannot specify both `page[first]` and `page[last]` parameters")]
     FirstAndLast,
 }
 
-impl IntoResponse for PaginationRejection {
-    fn into_response(self) -> axum::response::Response {
-        (
-            StatusCode::BAD_REQUEST,
-            Json(ErrorResponse::from_error(&self)),
-        )
-            .into_response()
+impl Scribe for PaginationRejection {
+    fn render(self, res: &mut Response) {
+        res.status_code(StatusCode::BAD_REQUEST);
+        res.render(Json(ErrorResponse::from_error(&self)));
     }
 }
 
-/// An extractor for pagination parameters in the query string
-#[derive(OperationIo, Debug, Clone, Copy)]
-#[aide(input_with = "Query<PaginationParams>")]
-pub struct Pagination(pub pasion_storage::Pagination, pub IncludeCount);
+pub fn extract_pagination(
+    req: &Request,
+) -> Result<(pasion_storage::Pagination, IncludeCount), PaginationRejection> {
+    let params: PaginationParams = req
+        .parse_queries()
+        .unwrap_or(PaginationParams {
+            before: None,
+            after: None,
+            first: None,
+            last: None,
+            include_count: None,
+        });
 
-impl<S: Send + Sync> FromRequestParts<S> for Pagination {
-    type Rejection = PaginationRejection;
+    // Figure out the direction and the count out of the first and last parameters
+    let (direction, count) = match (params.first, params.last) {
+        // Make sure we don't specify both first and last
+        (Some(_), Some(_)) => return Err(PaginationRejection::FirstAndLast),
 
-    async fn from_request_parts(
-        parts: &mut axum::http::request::Parts,
-        state: &S,
-    ) -> Result<Self, Self::Rejection> {
-        let params = Query::<PaginationParams>::from_request_parts(parts, state).await?;
+        // Default to forward pagination with a default page size
+        (None, None) => (PaginationDirection::Forward, DEFAULT_PAGE_SIZE),
 
-        // Figure out the direction and the count out of the first and last parameters
-        let (direction, count) = match (params.first, params.last) {
-            // Make sure we don't specify both first and last
-            (Some(_), Some(_)) => return Err(PaginationRejection::FirstAndLast),
+        (Some(first), None) => (PaginationDirection::Forward, first.into()),
+        (None, Some(last)) => (PaginationDirection::Backward, last.into()),
+    };
 
-            // Default to forward pagination with a default page size
-            (None, None) => (PaginationDirection::Forward, DEFAULT_PAGE_SIZE),
-
-            (Some(first), None) => (PaginationDirection::Forward, first.into()),
-            (None, Some(last)) => (PaginationDirection::Backward, last.into()),
-        };
-
-        Ok(Self(
-            pasion_storage::Pagination {
-                before: params.before,
-                after: params.after,
-                direction,
-                count,
-            },
-            params.include_count.unwrap_or_default(),
-        ))
-    }
+    Ok((
+        pasion_storage::Pagination {
+            before: params.before,
+            after: params.after,
+            direction,
+            count,
+        },
+        params.include_count.unwrap_or_default(),
+    ))
 }

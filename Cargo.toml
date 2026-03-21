@@ -59,12 +59,12 @@ syn2mas = { path = "./crates/syn2mas", version = "=1.8.0" }
 
 # Salvo web framework
 [workspace.dependencies.salvo]
-version = "0.77"
+version = "0.89"
 features = ["oapi", "cors", "cookie", "serve-static", "logging", "test"]
 
 # An `Arc` that can be atomically updated
 [workspace.dependencies.arc-swap]
-version = "1.7.1"
+version = "1.8.2"
 
 [workspace.dependencies.async-stream]
 version = "0.3.6"
@@ -75,7 +75,7 @@ version = "0.1.89"
 
 # High-level error handling
 [workspace.dependencies.anyhow]
-version = "1.0.100"
+version = "1.0.102"
 
 # Assert that a value matches a pattern
 [workspace.dependencies.assert_matches]
@@ -98,25 +98,25 @@ features = ["password-hash", "std"]
 
 # Constant-time base64
 [workspace.dependencies.base64ct]
-version = "1.8.0"
+version = "1.8.3"
 features = ["std"]
 
 # Bcrypt password hashing
 [workspace.dependencies.bcrypt]
-version = "0.17.1"
+version = "0.19.0"
 default-features = true
 
 # Packed bitfields
 [workspace.dependencies.bitflags]
-version = "2.10.0"
+version = "2.11.0"
 
 # Bytes
 [workspace.dependencies.bytes]
-version = "1.10.1"
+version = "1.11.1"
 
 # UTF-8 paths
 [workspace.dependencies.camino]
-version = "1.2.1"
+version = "1.2.2"
 features = ["serde1"]
 
 # ChaCha20Poly1305 AEAD
@@ -130,23 +130,23 @@ version = "0.9.0"
 
 # Terminal formatting
 [workspace.dependencies.console]
-version = "0.15.11"
+version = "0.16.3"
 
 # Cookie store
 [workspace.dependencies.cookie_store]
-version = "0.22.0"
+version = "0.22.1"
 default-features = false
 features = ["serde_json"]
 
 # Time utilities
 [workspace.dependencies.chrono]
-version = "0.4.42"
+version = "0.4.44"
 default-features = false
 features = ["serde", "clock"]
 
 # CLI argument parsing
 [workspace.dependencies.clap]
-version = "4.5.50"
+version = "4.6.0"
 features = ["derive"]
 
 # Object Identifiers (OIDs) as constants
@@ -156,11 +156,11 @@ features = ["std"]
 
 # Utility for converting between different cases
 [workspace.dependencies.convert_case]
-version = "0.9.0"
+version = "0.11.0"
 
 # CRC calculation
 [workspace.dependencies.crc]
-version = "3.3.0"
+version = "3.4.0"
 
 # Cron expressions
 [workspace.dependencies.cron]
@@ -177,7 +177,7 @@ features = ["std"]
 
 # Interactive CLI dialogs
 [workspace.dependencies.dialoguer]
-version = "0.11.0"
+version = "0.12.0"
 default-features = false
 features = ["fuzzy-select", "password"]
 
@@ -210,15 +210,15 @@ version = "1.2.2"
 
 # Utilities for dealing with futures
 [workspace.dependencies.futures-util]
-version = "0.3.31"
+version = "0.3.32"
 
 # Fixed-size arrays with trait implementations
 [workspace.dependencies.generic-array]
-version = "0.14.7"
+version = "0.14.9"
 
 # Rate-limiting
 [workspace.dependencies.governor]
-version = "0.10.1"
+version = "0.10.4"
 default-features = false
 features = ["std", "dashmap", "quanta"]
 
@@ -236,7 +236,7 @@ version = "0.4.3"
 
 # HTTP request/response
 [workspace.dependencies.http]
-version = "1.3.1"
+version = "1.4.0"
 
 # HTTP body trait
 [workspace.dependencies.http-body]
@@ -248,12 +248,12 @@ version = "0.1.3"
 
 # HTTP client and server
 [workspace.dependencies.hyper]
-version = "1.7.0"
+version = "1.8.1"
 features = ["client", "server", "http1", "http2"]
 
 # Additional Hyper utilties
 [workspace.dependencies.hyper-util]
-version = "0.1.18"
+version = "0.1.20"
 features = [
     "client",
     "server",
@@ -300,21 +300,21 @@ features = ["std"]
 
 # HashMap which preserves insertion order
 [workspace.dependencies.indexmap]
-version = "2.11.4"
+version = "2.13.0"
 features = ["serde"]
 
 # Indented string literals
 [workspace.dependencies.indoc]
-version = "2.0.6"
+version = "2.0.7"
 
 # Snapshot testing
 [workspace.dependencies.insta]
-version = "1.43.2"
+version = "1.46.3"
 features = ["yaml", "json"]
 
 # IP network address types
 [workspace.dependencies.ipnetwork]
-version = "0.20.0"
+version = "0.21.1"
 features = ["serde"]
 
 # Iterator utilities
@@ -357,12 +357,12 @@ version = "0.3.17"
 
 # Templates
 [workspace.dependencies.minijinja]
-version = "2.12.0"
+version = "2.18.0"
 features = ["urlencode", "loader", "json", "speedups", "unstable_machinery"]
 
 # Additional filters for minijinja
 [workspace.dependencies.minijinja-contrib]
-version = "2.12.0"
+version = "2.18.0"
 features = ["pycompat"]
 
 # Utilities to deal with non-zero values
@@ -371,7 +371,7 @@ version = "0.3.0"
 
 # Open Policy Agent support through WASM
 [workspace.dependencies.opa-wasm]
-version = "0.1.8"
+version = "0.1.9"
 
 # OpenTelemetry
 [workspace.dependencies.opentelemetry]
@@ -387,7 +387,7 @@ version = "0.1.2"
 [workspace.dependencies.opentelemetry-jaeger-propagator]
 version = "0.31.0"
 [workspace.dependencies.opentelemetry-otlp]
-version = "0.31.0"
+version = "0.31.1"
 default-features = false
 features = ["trace", "metrics", "http-proto"]
 [workspace.dependencies.opentelemetry-prometheus-text-exporter]
@@ -408,7 +408,7 @@ features = [
     "rt-tokio",
 ]
 [workspace.dependencies.tracing-opentelemetry]
-version = "0.32.0"
+version = "0.32.1"
 default-features = false
 
 # P256 elliptic curve
@@ -437,15 +437,15 @@ features = ["std"]
 
 # Parser generator
 [workspace.dependencies.pest]
-version = "2.8.3"
+version = "2.8.6"
 
 # Pest derive macros
 [workspace.dependencies.pest_derive]
-version = "2.8.3"
+version = "2.8.6"
 
 # Pin projection
 [workspace.dependencies.pin-project-lite]
-version = "0.2.16"
+version = "0.2.17"
 
 # PKCS#1 encoding
 [workspace.dependencies.pkcs1]
@@ -459,7 +459,7 @@ features = ["std", "pkcs5", "encryption"]
 
 # Public Suffix List
 [workspace.dependencies.psl]
-version = "2.1.162"
+version = "2.1.199"
 
 # High-precision clock
 [workspace.dependencies.quanta]
@@ -475,23 +475,24 @@ version = "0.6.4"
 
 # Regular expressions
 [workspace.dependencies.regex]
-version = "1.12.2"
+version = "1.12.3"
 
 # High-level HTTP client
 [workspace.dependencies.reqwest]
-version = "0.12.24"
+version = "0.13.2"
 default-features = false
 features = [
     "http2",
-    "rustls-tls-manual-roots-no-provider",
+    "rustls-no-provider",
     "charset",
     "json",
+    "form",
     "socks",
 ]
 
 # RSA cryptography
 [workspace.dependencies.rsa]
-version = "0.9.8"
+version = "0.9.10"
 features = ["std", "pem"]
 
 # Fast hash algorithm for HashMap
@@ -504,19 +505,19 @@ version = "0.16.0"
 
 # TLS stack
 [workspace.dependencies.rustls]
-version = "0.23.35"
+version = "0.23.37"
 
 # PKI types for rustls
 [workspace.dependencies.rustls-pki-types]
-version = "1.13.0"
+version = "1.14.0"
 
 # Use platform-specific verifier for TLS
 [workspace.dependencies.rustls-platform-verifier]
-version = "0.6.1"
+version = "0.6.2"
 
 # systemd service status notification
 [workspace.dependencies.sd-notify]
-version = "0.4.5"
+version = "0.5.0"
 
 # JSON Schema generation
 [workspace.dependencies.schemars]
@@ -546,14 +547,14 @@ features = [
 
 # Sentry error tracking
 [workspace.dependencies.sentry]
-version = "0.46.0"
+version = "0.47.0"
 default-features = false
 features = ["backtrace", "contexts", "panic", "tower", "reqwest"]
 
 
 # Sentry tracing integration
 [workspace.dependencies.sentry-tracing]
-version = "0.46.0"
+version = "0.47.0"
 
 # Serialization and deserialization
 [workspace.dependencies.serde]
@@ -562,7 +563,7 @@ features = ["derive"] # Most of the time, if we need serde, we need derive
 
 # JSON serialization and deserialization
 [workspace.dependencies.serde_json]
-version = "1.0.145"
+version = "1.0.149"
 features = ["preserve_order"]
 
 # URL encoded form serialization
@@ -571,7 +572,7 @@ version = "0.7.1"
 
 # Custom serialization helpers
 [workspace.dependencies.serde_with]
-version = "3.14.0"
+version = "3.18.0"
 features = ["hex", "chrono"]
 
 # YAML serialization
@@ -589,7 +590,7 @@ version = "2.2.0"
 
 # Low-level socket manipulation
 [workspace.dependencies.socket2]
-version = "0.6.1"
+version = "0.6.3"
 
 # Subject Public Key Info
 [workspace.dependencies.spki]
@@ -612,18 +613,18 @@ features = [
 
 # Custom error types
 [workspace.dependencies.thiserror]
-version = "2.0.17"
+version = "2.0.18"
 
 [workspace.dependencies.thiserror-ext]
 version = "0.3.0"
 
 # Async runtime
 [workspace.dependencies.tokio]
-version = "1.48.0"
+version = "1.50.0"
 features = ["full"]
 
 [workspace.dependencies.tokio-stream]
-version = "0.1.17"
+version = "0.1.18"
 
 # Tokio rustls integration
 [workspace.dependencies.tokio-rustls]
@@ -631,16 +632,16 @@ version = "0.26.4"
 
 # Tokio test utilities
 [workspace.dependencies.tokio-test]
-version = "0.4.4"
+version = "0.4.5"
 
 # Useful async utilities
 [workspace.dependencies.tokio-util]
-version = "0.7.16"
+version = "0.7.18"
 features = ["rt"]
 
 # Tower services
 [workspace.dependencies.tower]
-version = "0.5.2"
+version = "0.5.3"
 features = ["util"]
 
 # Tower service trait
@@ -653,21 +654,21 @@ version = "0.3.3"
 
 # Tower HTTP layers
 [workspace.dependencies.tower-http]
-version = "0.6.6"
+version = "0.6.8"
 features = ["cors", "fs", "add-extension", "set-header"]
 
 # Logging and tracing
 [workspace.dependencies.tracing]
-version = "0.1.41"
+version = "0.1.44"
 [workspace.dependencies.tracing-subscriber]
-version = "0.3.20"
+version = "0.3.23"
 features = ["env-filter"]
 [workspace.dependencies.tracing-appender]
 version = "0.2.4"
 
 # URL manipulation
 [workspace.dependencies.url]
-version = "2.5.7"
+version = "2.5.8"
 features = ["serde"]
 
 # URL encoding
@@ -681,7 +682,7 @@ features = ["serde", "uuid"]
 
 # UUID support
 [workspace.dependencies.uuid]
-version = "1.18.1"
+version = "1.22.0"
 
 # HTML escaping
 [workspace.dependencies.v_htmlescape]

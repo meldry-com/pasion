@@ -9,12 +9,12 @@ use serde::Deserialize;
 use thiserror::Error;
 use url::Url;
 
-pub(crate) mod authorize;
-pub(crate) mod backchannel_logout;
-pub(crate) mod cache;
-pub(crate) mod callback;
+pub mod authorize;
+pub mod backchannel_logout;
+pub mod cache;
+pub mod callback;
 mod cookie;
-pub(crate) mod link;
+pub mod link;
 mod template;
 
 use self::cookie::UpstreamSessions as UpstreamSessionsCookie;

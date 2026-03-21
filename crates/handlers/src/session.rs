@@ -3,6 +3,7 @@
 
 use pasion_salvo_utils::{SessionInfoExt, cookies::CookieJar, csrf::CsrfExt};
 use salvo::prelude::*;
+use salvo::writing::Text;
 use pasion_data_model::{BrowserSession, Clock, User};
 use pasion_i18n::DataLocale;
 use pasion_policy::model::SessionCounts;
@@ -67,7 +68,12 @@ pub async fn load_session_or_fallback(
             .with_csrf(csrf_token.form_value())
             .with_language(locale.clone());
         let fallback = templates.render_account_deactivated(&ctx)?;
-        let response = (cookie_jar, Html(fallback)).into_response();
+        let response = {
+            let mut response = Response::new();
+            cookie_jar.write_to_response(&mut response);
+            response.render(Text::Html(fallback));
+            response
+        };
         return Ok(SessionOrFallback::Fallback { response });
     }
 
@@ -78,7 +84,12 @@ pub async fn load_session_or_fallback(
             .with_csrf(csrf_token.form_value())
             .with_language(locale.clone());
         let fallback = templates.render_account_locked(&ctx)?;
-        let response = (cookie_jar, Html(fallback)).into_response();
+        let response = {
+            let mut response = Response::new();
+            cookie_jar.write_to_response(&mut response);
+            response.render(Text::Html(fallback));
+            response
+        };
         return Ok(SessionOrFallback::Fallback { response });
     }
 
@@ -92,7 +103,12 @@ pub async fn load_session_or_fallback(
             .with_csrf(csrf_token.form_value())
             .with_language(locale.clone());
         let fallback = templates.render_account_logged_out(&ctx)?;
-        let response = (cookie_jar, Html(fallback)).into_response();
+        let response = {
+            let mut response = Response::new();
+            cookie_jar.write_to_response(&mut response);
+            response.render(Text::Html(fallback));
+            response
+        };
         return Ok(SessionOrFallback::Fallback { response });
     }
 

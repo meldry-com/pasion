@@ -1,36 +1,31 @@
-use axum::{
-    extract::State,
-    response::{Html, IntoResponse, Response},
-};
-use axum_extra::extract::Query;
-use mas_axum_utils::{InternalError, SessionInfoExt, cookies::CookieJar, csrf::CsrfExt as _};
-use pasion_data_model::{BoxClock, BoxRng, SiteConfig};
-use pasion_router::{PasswordRegister, UpstreamOAuth2Authorize, UrlBuilder};
-use pasion_storage::BoxRepository;
+use salvo::prelude::*;
+use salvo::writing::Text;
+use pasion_salvo_utils::{InternalError, SessionInfoExt, cookies::CookieJar, csrf::CsrfExt as _};
+use pasion_router::{PasswordRegister, UpstreamOAuth2Authorize};
 use pasion_templates::{RegisterContext, TemplateContext, Templates};
 
 use super::shared::OptionalPostAuthAction;
-use crate::{BoundActivityTracker, PreferredLanguage};
+use crate::rest;
 
 mod cookie;
-pub(crate) mod password;
-pub(crate) mod steps;
+pub mod password;
+pub mod steps;
 
 pub use self::cookie::UserRegistrationSessions as UserRegistrationSessionsCookie;
 
-#[tracing::instrument(name = "handlers.views.register.get", skip_all)]
-pub(crate) async fn get(
-    mut rng: BoxRng,
-    clock: BoxClock,
-    PreferredLanguage(locale): PreferredLanguage,
-    State(templates): State<Templates>,
-    State(url_builder): State<UrlBuilder>,
-    State(site_config): State<SiteConfig>,
-    mut repo: BoxRepository,
-    activity_tracker: BoundActivityTracker,
-    Query(query): Query<OptionalPostAuthAction>,
-    cookie_jar: CookieJar,
-) -> Result<Response, InternalError> {
+#[handler]
+pub async fn get(req: &mut Request, depot: &Depot, res: &mut Response) -> Result<(), InternalError> {
+    let mut rng = rest::make_rng();
+    let clock = rest::make_clock();
+    let locale = crate::preferred_language(req, depot);
+    let templates = rest::get_templates(depot)?;
+    let url_builder = rest::get_url_builder(depot)?;
+    let site_config = rest::get_site_config(depot)?;
+    let mut repo = rest::get_repo_factory(depot)?.create().await?;
+    let activity_tracker = rest::extract_bound_activity_tracker(req, depot);
+    let query: OptionalPostAuthAction = req.parse_queries().unwrap_or_default();
+    let cookie_jar = rest::extract_cookie_jar(req, depot)?;
+
     let (csrf_token, cookie_jar) = cookie_jar.csrf_token(&clock, &mut rng);
     let (session_info, cookie_jar) = cookie_jar.session_info();
 
@@ -42,7 +37,9 @@ pub(crate) async fn get(
             .await;
 
         let reply = query.go_next(&url_builder);
-        return Ok((cookie_jar, reply).into_response());
+            cookie_jar.write_to_response(res);
+        res.render(reply);
+        return Ok(());
     }
 
     let providers = repo.upstream_oauth_provider().all_enabled().await?;
@@ -58,7 +55,9 @@ pub(crate) async fn get(
             destination = destination.and_then(action);
         }
 
-        return Ok((cookie_jar, url_builder.redirect(&destination)).into_response());
+            cookie_jar.write_to_response(res);
+        res.render(url_builder.redirect(&destination));
+        return Ok(());
     }
 
     // If password-based registration is enabled and there are no upstream
@@ -70,7 +69,9 @@ pub(crate) async fn get(
             destination = destination.and_then(action);
         }
 
-        return Ok((cookie_jar, url_builder.redirect(&destination)).into_response());
+            cookie_jar.write_to_response(res);
+        res.render(url_builder.redirect(&destination));
+        return Ok(());
     }
 
     let mut ctx = RegisterContext::new(providers);
@@ -86,5 +87,7 @@ pub(crate) async fn get(
 
     let content = templates.render_register(&ctx)?;
 
-    Ok((cookie_jar, Html(content)).into_response())
+    cookie_jar.write_to_response(res);
+    res.render(Text::Html(content));
+    Ok(())
 }

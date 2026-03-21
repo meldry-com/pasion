@@ -1,35 +1,41 @@
-use axum::{
-    extract::State,
-    response::{Html, IntoResponse},
-};
-use axum_extra::extract::Query;
-use mas_axum_utils::{InternalError, cookies::CookieJar};
-use pasion_data_model::BoxClock;
-use pasion_router::UrlBuilder;
-use pasion_storage::BoxRepository;
+use pasion_data_model::Clock;
+use pasion_salvo_utils::InternalError;
 use pasion_templates::{
-    DeviceLinkContext, DeviceLinkFormField, FieldError, FormState, TemplateContext, Templates,
+    DeviceLinkContext, DeviceLinkFormField, FieldError, FormState, TemplateContext,
 };
+use salvo::prelude::*;
+use salvo::writing::Text;
 use serde::{Deserialize, Serialize};
 
-use crate::PreferredLanguage;
-
-#[derive(Serialize, Deserialize)]
+#[derive(Default, Serialize, Deserialize)]
 pub struct Params {
     #[serde(default)]
     code: Option<String>,
 }
 
+#[handler]
 #[tracing::instrument(name = "handlers.oauth2.device.link.get", skip_all)]
-pub(crate) async fn get(
-    clock: BoxClock,
-    mut repo: BoxRepository,
-    PreferredLanguage(locale): PreferredLanguage,
-    State(templates): State<Templates>,
-    State(url_builder): State<UrlBuilder>,
-    cookie_jar: CookieJar,
-    Query(query): Query<Params>,
-) -> Result<impl IntoResponse, InternalError> {
+pub async fn get(req: &mut Request, depot: &Depot, res: &mut Response) {
+    match handle_get(req, depot, res).await {
+        Ok(()) => {}
+        Err(e) => e.render(res),
+    }
+}
+
+async fn handle_get(
+    req: &mut Request,
+    depot: &Depot,
+    res: &mut Response,
+) -> Result<(), InternalError> {
+    let clock = crate::rest::make_clock();
+    let templates = crate::rest::get_templates(depot)?;
+    let url_builder = crate::rest::get_url_builder(depot)?;
+    let mut repo = crate::rest::get_repo_factory(depot)?.create().await?;
+    let cookie_jar = crate::rest::extract_cookie_jar(req, depot)?;
+    let locale = crate::preferred_language(req, depot);
+
+    let query: Params = req.parse_queries().unwrap_or_default();
+
     let mut form_state = FormState::from_form(&query);
 
     // If we have a code in query, find it in the database
@@ -47,21 +53,25 @@ pub(crate) async fn get(
         if let Some(grant) = grant {
             // This is a valid code, redirect to the consent page
             // This will in turn redirect to the login page if the user is not logged in
-            let destination = url_builder.redirect(&pasion_router::DeviceCodeConsent::new(grant.id));
+            let redirect = url_builder.redirect(&pasion_router::DeviceCodeConsent::new(grant.id));
 
-            return Ok((cookie_jar, destination).into_response());
+                    cookie_jar.write_to_response(res);
+            res.render(redirect);
+            return Ok(());
         }
 
         // The code isn't valid, set an error on the form
         form_state = form_state.with_error_on_field(DeviceLinkFormField::Code, FieldError::Invalid);
     }
 
-    // Rendre the form
+    // Render the form
     let ctx = DeviceLinkContext::new()
         .with_form_state(form_state)
         .with_language(locale);
 
     let content = templates.render_device_link(&ctx)?;
 
-    Ok((cookie_jar, Html(content)).into_response())
+    cookie_jar.write_to_response(res);
+    res.render(Text::Html(content));
+    Ok(())
 }

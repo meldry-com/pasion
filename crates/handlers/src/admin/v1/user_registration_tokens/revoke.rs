@@ -1,21 +1,19 @@
-use aide::{OperationIo, transform::TransformOperation};
-use axum::{Json, response::IntoResponse};
-use hyper::StatusCode;
-use mas_axum_utils::record_error;
+use salvo::prelude::*;
+use salvo::http::StatusCode;
+use pasion_salvo_utils::record_error;
 use ulid::Ulid;
 
 use crate::{
     admin::{
-        call_context::CallContext,
+        call_context::extract_call_context,
         model::{Resource, UserRegistrationToken},
-        params::UlidPathParam,
+        params::extract_ulid_param,
         response::{ErrorResponse, SingleResponse},
     },
     impl_from_error_for_route,
 };
 
-#[derive(Debug, thiserror::Error, OperationIo)]
-#[aide(output_with = "Json<ErrorResponse>")]
+#[derive(Debug, thiserror::Error)]
 pub enum RouteError {
     #[error(transparent)]
     Internal(Box<dyn std::error::Error + Send + Sync + 'static>),
@@ -28,9 +26,11 @@ pub enum RouteError {
 }
 
 impl_from_error_for_route!(pasion_storage::RepositoryError);
+impl_from_error_for_route!(crate::admin::params::UlidPathParamRejection);
+impl_from_error_for_route!(crate::admin::call_context::Rejection);
 
-impl IntoResponse for RouteError {
-    fn into_response(self) -> axum::response::Response {
+impl Scribe for RouteError {
+    fn render(self, res: &mut Response) {
         let error = ErrorResponse::from_error(&self);
         let sentry_event_id = record_error!(self, Self::Internal(_));
         let status = match self {
@@ -38,41 +38,26 @@ impl IntoResponse for RouteError {
             Self::NotFound(_) => StatusCode::NOT_FOUND,
             Self::AlreadyRevoked(_) => StatusCode::BAD_REQUEST,
         };
-        (status, sentry_event_id, Json(error)).into_response()
+        res.status_code(status);
+        if let Some(event_id) = sentry_event_id {
+            if let Ok(value) = http::HeaderValue::from_str(&event_id.to_string()) {
+                res.headers_mut().insert("x-sentry-event-id", value);
+            }
+        }
+        res.render(Json(error));
     }
 }
 
-pub fn doc(operation: TransformOperation) -> TransformOperation {
-    operation
-        .id("revokeUserRegistrationToken")
-        .summary("Revoke a user registration token")
-        .description("Calling this endpoint will revoke the user registration token, preventing it from being used for new registrations.")
-        .tag("user-registration-token")
-        .response_with::<200, Json<SingleResponse<UserRegistrationToken>>, _>(|t| {
-            // Get the revoked token sample
-            let [_, revoked_token] = UserRegistrationToken::samples();
-            let id = revoked_token.id();
-            let response = SingleResponse::new(revoked_token, format!("/api/admin/v1/user-registration-tokens/{id}/revoke"));
-            t.description("Registration token was revoked").example(response)
-        })
-        .response_with::<400, RouteError, _>(|t| {
-            let response = ErrorResponse::from_error(&RouteError::AlreadyRevoked(Ulid::nil()));
-            t.description("Token is already revoked").example(response)
-        })
-        .response_with::<404, RouteError, _>(|t| {
-            let response = ErrorResponse::from_error(&RouteError::NotFound(Ulid::nil()));
-            t.description("Registration token was not found").example(response)
-        })
-}
-
+#[handler]
 #[tracing::instrument(name = "handler.admin.v1.user_registration_tokens.revoke", skip_all)]
 pub async fn handler(
-    CallContext {
-        mut repo, clock, ..
-    }: CallContext,
-    id: UlidPathParam,
-) -> Result<Json<SingleResponse<UserRegistrationToken>>, RouteError> {
-    let id = *id;
+    req: &mut Request,
+    depot: &Depot) -> Result<Json<SingleResponse<UserRegistrationToken>>, RouteError> {
+    let call_context = extract_call_context(req, depot).await?;
+    let crate::admin::call_context::CallContext { mut repo, clock, .. } = call_context;
+    let id = extract_ulid_param(req)?;
+
+    // id already extracted above
     let token = repo
         .user_registration_token()
         .lookup(id)

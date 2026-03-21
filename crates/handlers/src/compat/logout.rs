@@ -1,21 +1,19 @@
 use std::sync::LazyLock;
 
-use axum::{Json, response::IntoResponse};
-use axum_extra::typed_header::TypedHeader;
-use headers::{Authorization, authorization::Bearer};
 use hyper::StatusCode;
-use mas_axum_utils::record_error;
-use pasion_data_model::{BoxClock, BoxRng, Clock, TokenType};
+use pasion_data_model::{Clock, TokenType};
+use pasion_salvo_utils::record_error;
 use pasion_storage::{
-    BoxRepository, RepositoryAccess,
+    RepositoryAccess,
     compat::{CompatAccessTokenRepository, CompatSessionRepository},
     queue::{QueueJobRepositoryExt as _, SyncDevicesJob},
 };
 use opentelemetry::{Key, KeyValue, metrics::Counter};
+use salvo::prelude::*;
 use thiserror::Error;
 
 use super::MatrixError;
-use crate::{BoundActivityTracker, METER, impl_from_error_for_route};
+use crate::{METER, impl_from_error_for_route};
 
 static LOGOUT_COUNTER: LazyLock<Counter<u64>> = LazyLock::new(|| {
     METER
@@ -42,9 +40,10 @@ pub enum RouteError {
 }
 
 impl_from_error_for_route!(pasion_storage::RepositoryError);
+impl_from_error_for_route!(crate::rest::RouteError);
 
-impl IntoResponse for RouteError {
-    fn into_response(self) -> axum::response::Response {
+impl Scribe for RouteError {
+    fn render(self, res: &mut Response) {
         let sentry_event_id = record_error!(self, Self::Internal(_));
         LOGOUT_COUNTER.add(1, &[KeyValue::new(RESULT, "error")]);
         let response = match self {
@@ -65,21 +64,30 @@ impl IntoResponse for RouteError {
             },
         };
 
-        (sentry_event_id, response).into_response()
+        response.render(res);
+
+        // Add Sentry event ID header if available
+        if let Some(event_id) = sentry_event_id {
+            event_id.write_to_response(res);
+        }
     }
 }
 
+#[handler]
 #[tracing::instrument(name = "handlers.compat.logout.post", skip_all)]
-pub(crate) async fn post(
-    clock: BoxClock,
-    mut rng: BoxRng,
-    mut repo: BoxRepository,
-    activity_tracker: BoundActivityTracker,
-    maybe_authorization: Option<TypedHeader<Authorization<Bearer>>>,
-) -> Result<impl IntoResponse, RouteError> {
-    let TypedHeader(authorization) = maybe_authorization.ok_or(RouteError::MissingAuthorization)?;
+pub async fn post(req: &mut Request, depot: &Depot) -> Result<Json<serde_json::Value>, RouteError> {
+    let clock = crate::rest::make_clock();
+    let mut rng = crate::rest::make_rng();
+    let mut repo = crate::rest::get_repo_factory(depot)?.create().await?;
+    let activity_tracker = crate::rest::extract_bound_activity_tracker(req, depot);
 
-    let token = authorization.token();
+    let token = req
+        .headers()
+        .get("authorization")
+        .and_then(|h| h.to_str().ok())
+        .and_then(|s| s.strip_prefix("Bearer "))
+        .ok_or(RouteError::MissingAuthorization)?;
+
     let token_type = TokenType::check(token)?;
 
     if token_type != TokenType::CompatAccessToken {

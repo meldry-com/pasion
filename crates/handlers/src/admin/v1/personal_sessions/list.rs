@@ -1,12 +1,9 @@
+use salvo::prelude::*;
 use std::str::FromStr as _;
 
-use aide::{OperationIo, transform::TransformOperation};
-use axum::{Json, response::IntoResponse};
-use axum_extra::extract::{Query, QueryRejection};
-use axum_macros::FromRequestParts;
 use chrono::{DateTime, Utc};
-use hyper::StatusCode;
-use mas_axum_utils::record_error;
+use salvo::http::StatusCode;
+use pasion_salvo_utils::record_error;
 use pasion_storage::personal::PersonalSessionFilter;
 use oauth2_types::scope::{Scope, ScopeToken};
 use schemars::JsonSchema;
@@ -15,9 +12,9 @@ use ulid::Ulid;
 
 use crate::{
     admin::{
-        call_context::CallContext,
+        call_context::extract_call_context,
         model::{InconsistentPersonalSession, PersonalSession, Resource},
-        params::{IncludeCount, Pagination},
+        params::{IncludeCount, extract_pagination},
         response::{ErrorResponse, PaginatedResponse},
     },
     impl_from_error_for_route,
@@ -39,10 +36,8 @@ impl std::fmt::Display for PersonalSessionStatus {
     }
 }
 
-#[derive(FromRequestParts, Deserialize, JsonSchema, OperationIo)]
+#[derive(Deserialize, JsonSchema, Default)]
 #[serde(rename = "PersonalSessionFilter")]
-#[aide(input_with = "Query<FilterParams>")]
-#[from_request(via(Query), rejection(RouteError))]
 pub struct FilterParams {
     /// Filter by owner user ID
     #[serde(rename = "filter[owner_user]")]
@@ -130,8 +125,7 @@ impl std::fmt::Display for FilterParams {
     }
 }
 
-#[derive(Debug, thiserror::Error, OperationIo)]
-#[aide(output_with = "Json<ErrorResponse>")]
+#[derive(Debug, thiserror::Error)]
 pub enum RouteError {
     #[error(transparent)]
     Internal(Box<dyn std::error::Error + Send + Sync + 'static>),
@@ -142,76 +136,44 @@ pub enum RouteError {
     #[error("Client ID {0} not found")]
     ClientNotFound(Ulid),
 
-    #[error("Invalid filter parameters")]
-    InvalidFilter(#[from] QueryRejection),
 
     #[error("Invalid scope {0:?} in filter parameters")]
     InvalidScope(String),
 }
 
 impl_from_error_for_route!(pasion_storage::RepositoryError);
+impl_from_error_for_route!(crate::admin::params::PaginationRejection);
+impl_from_error_for_route!(crate::admin::call_context::Rejection);
 impl_from_error_for_route!(InconsistentPersonalSession);
 
-impl IntoResponse for RouteError {
-    fn into_response(self) -> axum::response::Response {
+impl Scribe for RouteError {
+    fn render(self, res: &mut Response) {
         let error = ErrorResponse::from_error(&self);
         let sentry_event_id = record_error!(self, Self::Internal(_));
         let status = match self {
             Self::Internal(_) => StatusCode::INTERNAL_SERVER_ERROR,
             Self::UserNotFound(_) | Self::ClientNotFound(_) => StatusCode::NOT_FOUND,
-            Self::InvalidScope(_) | Self::InvalidFilter(_) => StatusCode::BAD_REQUEST,
         };
-        (status, sentry_event_id, Json(error)).into_response()
+        res.status_code(status);
+        if let Some(event_id) = sentry_event_id {
+            if let Ok(value) = http::HeaderValue::from_str(&event_id.to_string()) {
+                res.headers_mut().insert("x-sentry-event-id", value);
+            }
+        }
+        res.render(Json(error));
     }
 }
 
-pub fn doc(operation: TransformOperation) -> TransformOperation {
-    operation
-        .id("listPersonalSessions")
-        .summary("List personal sessions")
-        .description("Retrieve a list of personal sessions.
-Note that by default, all sessions, including revoked ones are returned, with the oldest first.
-Use the `filter[status]` parameter to filter the sessions by their status and `page[last]` parameter to retrieve the last N sessions.")
-        .tag("personal-session")
-        .response_with::<200, Json<PaginatedResponse<PersonalSession>>, _>(|t| {
-            let sessions = PersonalSession::samples();
-            let pagination = pasion_storage::Pagination::first(sessions.len());
-            let page = pasion_storage::Page {
-                edges: sessions
-                    .into_iter()
-                    .map(|node| pasion_storage::pagination::Edge {
-                        cursor: node.id(),
-                        node,
-                    })
-                    .collect(),
-                has_next_page: true,
-                has_previous_page: false,
-            };
-
-            t.description("Paginated response of personal sessions")
-                .example(PaginatedResponse::for_page(
-                    page,
-                    pagination,
-                    Some(3),
-                    PersonalSession::PATH,
-                ))
-        })
-        .response_with::<404, RouteError, _>(|t| {
-            let response = ErrorResponse::from_error(&RouteError::UserNotFound(Ulid::nil()));
-            t.description("User was not found").example(response)
-        })
-        .response_with::<404, RouteError, _>(|t| {
-            let response = ErrorResponse::from_error(&RouteError::ClientNotFound(Ulid::nil()));
-            t.description("Client was not found").example(response)
-        })
-}
-
+#[handler]
 #[tracing::instrument(name = "handler.admin.v1.personal_sessions.list", skip_all)]
 pub async fn handler(
-    CallContext { mut repo, .. }: CallContext,
-    Pagination(pagination, include_count): Pagination,
-    params: FilterParams,
-) -> Result<Json<PaginatedResponse<PersonalSession>>, RouteError> {
+    req: &mut Request,
+    depot: &Depot) -> Result<Json<PaginatedResponse<PersonalSession>>, RouteError> {
+    let call_context = extract_call_context(req, depot).await?;
+    let crate::admin::call_context::CallContext { mut repo, .. } = call_context;
+    let (pagination, include_count) = extract_pagination(req)?;
+    let params: FilterParams = req.parse_queries().unwrap_or_default();
+
     let base = format!("{path}{params}", path = PersonalSession::PATH);
     let base = include_count.add_to_base(&base);
 

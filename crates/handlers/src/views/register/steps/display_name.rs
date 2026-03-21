@@ -1,17 +1,12 @@
 use anyhow::Context as _;
-use axum::{
-    Form,
-    extract::{Path, State},
-    response::{Html, IntoResponse, Response},
-};
-use mas_axum_utils::{
+use salvo::prelude::*;
+use salvo::writing::Text;
+use pasion_salvo_utils::{
     InternalError,
     cookies::CookieJar,
     csrf::{CsrfExt as _, ProtectedForm},
 };
-use pasion_data_model::{BoxClock, BoxRng};
-use pasion_router::{PostAuthAction, UrlBuilder};
-use pasion_storage::BoxRepository;
+use pasion_router::PostAuthAction;
 use pasion_templates::{
     FieldError, RegisterStepsDisplayNameContext, RegisterStepsDisplayNameFormField,
     TemplateContext as _, Templates, ToFormState,
@@ -19,7 +14,7 @@ use pasion_templates::{
 use serde::{Deserialize, Serialize};
 use ulid::Ulid;
 
-use crate::{PreferredLanguage, views::shared::OptionalPostAuthAction};
+use crate::{rest, views::shared::OptionalPostAuthAction};
 
 #[derive(Deserialize, Default)]
 #[serde(rename_all = "snake_case")]
@@ -41,21 +36,17 @@ impl ToFormState for DisplayNameForm {
     type Field = pasion_templates::RegisterStepsDisplayNameFormField;
 }
 
-#[tracing::instrument(
-    name = "handlers.views.register.steps.display_name.get",
-    fields(user_registration.id = %id),
-    skip_all,
-)]
-pub(crate) async fn get(
-    mut rng: BoxRng,
-    clock: BoxClock,
-    PreferredLanguage(locale): PreferredLanguage,
-    State(templates): State<Templates>,
-    State(url_builder): State<UrlBuilder>,
-    mut repo: BoxRepository,
-    Path(id): Path<Ulid>,
-    cookie_jar: CookieJar,
-) -> Result<Response, InternalError> {
+#[handler]
+pub async fn get(req: &mut Request, depot: &Depot, res: &mut Response) -> Result<(), InternalError> {
+    let mut rng = rest::make_rng();
+    let clock = rest::make_clock();
+    let locale = crate::preferred_language(req, depot);
+    let templates = rest::get_templates(depot)?;
+    let url_builder = rest::get_url_builder(depot)?;
+    let mut repo = rest::get_repo_factory(depot)?.create().await?;
+    let id: Ulid = req.param("id").unwrap_or_default();
+    let cookie_jar = rest::extract_cookie_jar(req, depot)?;
+
     let (csrf_token, cookie_jar) = cookie_jar.csrf_token(&clock, &mut rng);
 
     let registration = repo
@@ -74,13 +65,9 @@ pub(crate) async fn get(
             .map(serde_json::from_value)
             .transpose()?;
 
-        return Ok((
-            cookie_jar,
-            OptionalPostAuthAction::from(post_auth_action)
-                .go_next(&url_builder)
-                .into_response(),
-        )
-            .into_response());
+            cookie_jar.write_to_response(res);
+        res.render(OptionalPostAuthAction::from(post_auth_action).go_next(&url_builder));
+        return Ok(());
     }
 
     let ctx = RegisterStepsDisplayNameContext::new()
@@ -89,25 +76,24 @@ pub(crate) async fn get(
 
     let content = templates.render_register_steps_display_name(&ctx)?;
 
-    Ok((cookie_jar, Html(content)).into_response())
+    cookie_jar.write_to_response(res);
+    res.render(Text::Html(content));
+    Ok(())
 }
 
-#[tracing::instrument(
-    name = "handlers.views.register.steps.display_name.post",
-    fields(user_registration.id = %id),
-    skip_all,
-)]
-pub(crate) async fn post(
-    mut rng: BoxRng,
-    clock: BoxClock,
-    PreferredLanguage(locale): PreferredLanguage,
-    State(templates): State<Templates>,
-    State(url_builder): State<UrlBuilder>,
-    mut repo: BoxRepository,
-    Path(id): Path<Ulid>,
-    cookie_jar: CookieJar,
-    Form(form): Form<ProtectedForm<DisplayNameForm>>,
-) -> Result<Response, InternalError> {
+#[handler]
+pub async fn post(req: &mut Request, depot: &Depot, res: &mut Response) -> Result<(), InternalError> {
+    let mut rng = rest::make_rng();
+    let clock = rest::make_clock();
+    let locale = crate::preferred_language(req, depot);
+    let templates = rest::get_templates(depot)?;
+    let url_builder = rest::get_url_builder(depot)?;
+    let mut repo = rest::get_repo_factory(depot)?.create().await?;
+    let id: Ulid = req.param("id").unwrap_or_default();
+    let cookie_jar = rest::extract_cookie_jar(req, depot)?;
+    let form: ProtectedForm<DisplayNameForm> = req.parse_form().await
+        .map_err(|e| InternalError::from_anyhow(e.into()))?;
+
     let registration = repo
         .user_registration()
         .lookup(id)
@@ -124,13 +110,9 @@ pub(crate) async fn post(
             .map(serde_json::from_value)
             .transpose()?;
 
-        return Ok((
-            cookie_jar,
-            OptionalPostAuthAction::from(post_auth_action)
-                .go_next(&url_builder)
-                .into_response(),
-        )
-            .into_response());
+            cookie_jar.write_to_response(res);
+        res.render(OptionalPostAuthAction::from(post_auth_action).go_next(&url_builder));
+        return Ok(());
     }
 
     let form = cookie_jar.verify_form(&clock, form)?;
@@ -150,11 +132,9 @@ pub(crate) async fn post(
                     .with_csrf(csrf_token.form_value())
                     .with_language(locale);
 
-                return Ok((
-                    cookie_jar,
-                    Html(templates.render_register_steps_display_name(&ctx)?),
-                )
-                    .into_response());
+                            cookie_jar.write_to_response(res);
+                res.render(Text::Html(templates.render_register_steps_display_name(&ctx)?));
+                return Ok(());
             }
 
             display_name.to_owned()
@@ -174,5 +154,7 @@ pub(crate) async fn post(
     repo.save().await?;
 
     let destination = pasion_router::RegisterFinish::new(registration.id);
-    return Ok((cookie_jar, url_builder.redirect(&destination)).into_response());
+    cookie_jar.write_to_response(res);
+    res.render(url_builder.redirect(&destination));
+    Ok(())
 }

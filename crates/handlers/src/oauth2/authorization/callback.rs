@@ -2,11 +2,12 @@
 
 use std::collections::HashMap;
 
-use axum::response::{Html, IntoResponse, Redirect, Response};
 use pasion_data_model::AuthorizationGrant;
 use pasion_i18n::DataLocale;
 use pasion_templates::{FormPostContext, Templates};
 use oauth2_types::requests::ResponseMode;
+use salvo::prelude::*;
+use salvo::writing::{Redirect, Text};
 use serde::Serialize;
 use thiserror::Error;
 use url::Url;
@@ -128,7 +129,9 @@ impl CallbackDestination {
 
                 redirect_uri.set_query(Some(&new_qs));
 
-                Ok(Redirect::to(redirect_uri.as_str()).into_response())
+                let mut res = Response::new();
+                res.render(Redirect::other(redirect_uri.as_str()));
+                Ok(res)
             }
 
             CallbackDestinationMode::Fragment => {
@@ -142,7 +145,9 @@ impl CallbackDestination {
 
                 redirect_uri.set_fragment(Some(&new_qs));
 
-                Ok(Redirect::to(redirect_uri.as_str()).into_response())
+                let mut res = Response::new();
+                res.render(Redirect::other(redirect_uri.as_str()));
+                Ok(res)
             }
 
             CallbackDestinationMode::FormPost => {
@@ -153,7 +158,9 @@ impl CallbackDestination {
                 };
                 let ctx = FormPostContext::new_for_url(redirect_uri, merged).with_language(locale);
                 let rendered = templates.render_form_post(&ctx)?;
-                Ok(Html(rendered).into_response())
+                let mut res = Response::new();
+                res.render(Text::Html(rendered));
+                Ok(res)
             }
         }
     }

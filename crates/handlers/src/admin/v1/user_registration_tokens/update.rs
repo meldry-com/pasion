@@ -1,17 +1,16 @@
-use aide::{OperationIo, transform::TransformOperation};
-use axum::{Json, response::IntoResponse};
+use salvo::prelude::*;
 use chrono::{DateTime, Utc};
-use hyper::StatusCode;
-use mas_axum_utils::record_error;
+use salvo::http::StatusCode;
+use pasion_salvo_utils::record_error;
 use schemars::JsonSchema;
 use serde::{Deserialize, Deserializer};
 use ulid::Ulid;
 
 use crate::{
     admin::{
-        call_context::CallContext,
+        call_context::extract_call_context,
         model::{Resource, UserRegistrationToken},
-        params::UlidPathParam,
+        params::extract_ulid_param,
         response::{ErrorResponse, SingleResponse},
     },
     impl_from_error_for_route,
@@ -29,7 +28,7 @@ where
 /// # JSON payload for the `PUT /api/admin/v1/user-registration-tokens/{id}` endpoint
 #[derive(Deserialize, JsonSchema)]
 #[serde(rename = "EditUserRegistrationTokenRequest")]
-pub struct Request {
+pub struct RequestBody {
     /// New expiration date for the token, or null to remove expiration
     #[serde(
         skip_serializing_if = "Option::is_none",
@@ -49,8 +48,7 @@ pub struct Request {
     usage_limit: Option<Option<u32>>,
 }
 
-#[derive(Debug, thiserror::Error, OperationIo)]
-#[aide(output_with = "Json<ErrorResponse>")]
+#[derive(Debug, thiserror::Error)]
 pub enum RouteError {
     #[error(transparent)]
     Internal(Box<dyn std::error::Error + Send + Sync + 'static>),
@@ -60,47 +58,38 @@ pub enum RouteError {
 }
 
 impl_from_error_for_route!(pasion_storage::RepositoryError);
+impl_from_error_for_route!(crate::admin::params::UlidPathParamRejection);
+impl_from_error_for_route!(crate::admin::call_context::Rejection);
 
-impl IntoResponse for RouteError {
-    fn into_response(self) -> axum::response::Response {
+impl Scribe for RouteError {
+    fn render(self, res: &mut Response) {
         let error = ErrorResponse::from_error(&self);
         let sentry_event_id = record_error!(self, Self::Internal(_));
         let status = match self {
             Self::Internal(_) => StatusCode::INTERNAL_SERVER_ERROR,
             Self::NotFound(_) => StatusCode::NOT_FOUND,
         };
-        (status, sentry_event_id, Json(error)).into_response()
+        res.status_code(status);
+        if let Some(event_id) = sentry_event_id {
+            if let Ok(value) = http::HeaderValue::from_str(&event_id.to_string()) {
+                res.headers_mut().insert("x-sentry-event-id", value);
+            }
+        }
+        res.render(Json(error));
     }
 }
 
-pub fn doc(operation: TransformOperation) -> TransformOperation {
-    operation
-        .id("updateUserRegistrationToken")
-        .summary("Update a user registration token")
-        .description("Update properties of a user registration token such as expiration and usage limit. To set a field to null (removing the limit/expiration), include the field with a null value. To leave a field unchanged, omit it from the request body.")
-        .tag("user-registration-token")
-        .response_with::<200, Json<SingleResponse<UserRegistrationToken>>, _>(|t| {
-            // Get the valid token sample
-            let [valid_token, _] = UserRegistrationToken::samples();
-            let id = valid_token.id();
-            let response = SingleResponse::new(valid_token, format!("/api/admin/v1/user-registration-tokens/{id}"));
-            t.description("Registration token was updated").example(response)
-        })
-        .response_with::<404, RouteError, _>(|t| {
-            let response = ErrorResponse::from_error(&RouteError::NotFound(Ulid::nil()));
-            t.description("Registration token was not found").example(response)
-        })
-}
-
+#[handler]
 #[tracing::instrument(name = "handler.admin.v1.user_registration_tokens.update", skip_all)]
 pub async fn handler(
-    CallContext {
-        mut repo, clock, ..
-    }: CallContext,
-    id: UlidPathParam,
-    Json(request): Json<Request>,
-) -> Result<Json<SingleResponse<UserRegistrationToken>>, RouteError> {
-    let id = *id;
+    req: &mut Request,
+    depot: &Depot) -> Result<Json<SingleResponse<UserRegistrationToken>>, RouteError> {
+    let call_context = extract_call_context(req, depot).await?;
+    let crate::admin::call_context::CallContext { mut repo, clock, .. } = call_context;
+    let id = extract_ulid_param(req)?;
+    let request: RequestBody = req.parse_json().await.map_err(|e| RouteError::Internal(Box::new(e)))?;
+
+    // id already extracted above
 
     // Get the token
     let mut token = repo

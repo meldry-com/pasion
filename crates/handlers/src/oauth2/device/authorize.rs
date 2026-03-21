@@ -1,29 +1,24 @@
-use axum::{Json, extract::State, response::IntoResponse};
-use axum_extra::typed_header::TypedHeader;
 use chrono::Duration;
-use headers::{CacheControl, Pragma};
-use hyper::StatusCode;
-use mas_axum_utils::{
+use pasion_salvo_utils::{
     client_authorization::{ClientAuthorization, CredentialsVerificationError},
     record_error,
+    sentry::SentryEventID,
 };
-use pasion_data_model::{BoxClock, BoxRng};
-use pasion_keystore::Encrypter;
-use pasion_router::UrlBuilder;
-use pasion_storage::{BoxRepository, oauth2::OAuth2DeviceCodeGrantParams};
+use pasion_storage::oauth2::OAuth2DeviceCodeGrantParams;
 use oauth2_types::{
     errors::{ClientError, ClientErrorCode},
     requests::{DeviceAuthorizationRequest, DeviceAuthorizationResponse, GrantType},
     scope::ScopeToken,
 };
 use rand::distributions::{Alphanumeric, DistString};
+use salvo::prelude::*;
 use thiserror::Error;
 use ulid::Ulid;
 
-use crate::{BoundActivityTracker, impl_from_error_for_route};
+use crate::impl_from_error_for_route;
 
 #[derive(Debug, Error)]
-pub(crate) enum RouteError {
+pub enum RouteError {
     #[error(transparent)]
     Internal(Box<dyn std::error::Error + Send + Sync + 'static>),
 
@@ -49,46 +44,77 @@ pub(crate) enum RouteError {
 }
 
 impl_from_error_for_route!(pasion_storage::RepositoryError);
+impl_from_error_for_route!(crate::rest::RouteError);
+impl_from_error_for_route!(pasion_salvo_utils::client_authorization::ClientAuthorizationError);
 
-impl IntoResponse for RouteError {
-    fn into_response(self) -> axum::response::Response {
+impl Scribe for RouteError {
+    fn render(self, res: &mut Response) {
         let sentry_event_id = record_error!(self, Self::Internal(_));
 
-        let response = match self {
+        let (status, body) = match self {
             Self::Internal(_) | Self::ClientCredentialsVerification { .. } => (
                 StatusCode::INTERNAL_SERVER_ERROR,
-                Json(ClientError::from(ClientErrorCode::ServerError)),
+                ClientError::from(ClientErrorCode::ServerError),
             ),
             Self::ClientNotFound | Self::InvalidClientCredentials { .. } => (
                 StatusCode::UNAUTHORIZED,
-                Json(ClientError::from(ClientErrorCode::InvalidClient)),
+                ClientError::from(ClientErrorCode::InvalidClient),
             ),
             Self::ClientNotAllowed(_) => (
                 StatusCode::UNAUTHORIZED,
-                Json(ClientError::from(ClientErrorCode::UnauthorizedClient)),
+                ClientError::from(ClientErrorCode::UnauthorizedClient),
             ),
         };
 
-        (sentry_event_id, response).into_response()
+        res.status_code(status);
+        res.render(Json(body));
+
+        if let Some(event_id) = sentry_event_id {
+            event_id.write_to_response(res);
+        }
     }
 }
 
+#[handler]
 #[tracing::instrument(
     name = "handlers.oauth2.device.request.post",
-    fields(client.id = client_authorization.client_id()),
     skip_all,
 )]
-pub(crate) async fn post(
-    mut rng: BoxRng,
-    clock: BoxClock,
-    mut repo: BoxRepository,
-    user_agent: Option<TypedHeader<headers::UserAgent>>,
-    activity_tracker: BoundActivityTracker,
-    State(url_builder): State<UrlBuilder>,
-    State(http_client): State<reqwest::Client>,
-    State(encrypter): State<Encrypter>,
-    client_authorization: ClientAuthorization<DeviceAuthorizationRequest>,
-) -> Result<impl IntoResponse, RouteError> {
+pub async fn post(req: &mut Request, depot: &Depot, res: &mut Response) {
+    match handle_post(req, depot).await {
+        Ok(response) => {
+            res.headers_mut().insert(
+                http::header::CACHE_CONTROL,
+                http::HeaderValue::from_static("no-store"),
+            );
+            res.headers_mut().insert(
+                http::header::PRAGMA,
+                http::HeaderValue::from_static("no-cache"),
+            );
+            res.render(Json(response));
+        }
+        Err(e) => e.render(res),
+    }
+}
+
+async fn handle_post(
+    req: &mut Request,
+    depot: &Depot,
+) -> Result<DeviceAuthorizationResponse, RouteError> {
+    let url_builder = crate::rest::get_url_builder(depot)?;
+    let http_client = crate::rest::get_http_client(depot)?;
+    let encrypter = crate::rest::get_encrypter(depot)?;
+    let mut repo = crate::rest::get_repo_factory(depot)?.create().await?;
+    let activity_tracker = crate::rest::extract_bound_activity_tracker(req, depot);
+
+    let mut rng = crate::rest::make_rng();
+    let clock = crate::rest::make_clock();
+
+    let user_agent: Option<String> = req.header("user-agent");
+
+    let client_authorization: ClientAuthorization<DeviceAuthorizationRequest> =
+        ClientAuthorization::extract_from_request(req).await?;
+
     let client = client_authorization
         .credentials
         .fetch(&mut repo)
@@ -131,7 +157,6 @@ pub(crate) async fn post(
 
     let expires_in = Duration::microseconds(20 * 60 * 1000 * 1000);
 
-    let user_agent = user_agent.map(|ua| ua.as_str().to_owned());
     let ip_address = activity_tracker.ip();
 
     let device_code = Alphanumeric.sample_string(&mut rng, 32);
@@ -165,12 +190,7 @@ pub(crate) async fn post(
         interval: Some(Duration::microseconds(5 * 1000 * 1000)),
     };
 
-    Ok((
-        StatusCode::OK,
-        TypedHeader(CacheControl::new().with_no_store()),
-        TypedHeader(Pragma::no_cache()),
-        Json(response),
-    ))
+    Ok(response)
 }
 
 #[cfg(test)]

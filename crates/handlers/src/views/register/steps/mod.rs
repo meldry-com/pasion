@@ -1,4 +1,4 @@
-pub(crate) mod display_name;
-pub(crate) mod finish;
-pub(crate) mod registration_token;
-pub(crate) mod verify_email;
+pub mod display_name;
+pub mod finish;
+pub mod registration_token;
+pub mod verify_email;

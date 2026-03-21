@@ -1,31 +1,26 @@
-use std::{collections::HashMap, sync::Arc};
+use std::collections::HashMap;
 
 use anyhow::Context;
-use axum::{
-    extract::{Form, Path, State},
-    response::{Html, IntoResponse, Redirect, Response},
-};
-use axum_extra::{TypedHeader, extract::Query};
 use chrono::Duration;
 use hyper::StatusCode;
-use mas_axum_utils::{
+use pasion_data_model::{Clock, MatrixUser};
+use pasion_matrix::HomeserverConnection;
+use pasion_salvo_utils::{
     InternalError,
     cookies::CookieJar,
     csrf::{CsrfExt, ProtectedForm},
 };
-use pasion_data_model::{BoxClock, BoxRng, Clock, MatrixUser};
-use pasion_matrix::HomeserverConnection;
-use pasion_policy::{Policy, model::CompatLogin};
-use pasion_router::{CompatLoginSsoAction, UrlBuilder};
-use pasion_storage::{BoxRepository, RepositoryAccess, compat::CompatSsoLoginRepository};
+use pasion_router::CompatLoginSsoAction;
+use pasion_storage::{RepositoryAccess, compat::CompatSsoLoginRepository};
 use pasion_templates::{
-    CompatLoginPolicyViolationContext, CompatSsoContext, ErrorContext, TemplateContext, Templates,
+    CompatLoginPolicyViolationContext, CompatSsoContext, ErrorContext, TemplateContext,
 };
+use salvo::prelude::*;
+use salvo::writing::Text;
 use serde::{Deserialize, Serialize};
 use ulid::Ulid;
 
 use crate::{
-    BoundActivityTracker, PreferredLanguage,
     session::{SessionOrFallback, count_user_sessions_for_limiting, load_session_or_fallback},
 };
 
@@ -43,27 +38,56 @@ pub struct Params {
     action: Option<CompatLoginSsoAction>,
 }
 
+#[handler]
+pub async fn get(req: &mut Request, depot: &Depot, res: &mut Response) {
+    let id: Ulid = match req.param("id") {
+        Some(id) => id,
+        None => {
+            res.status_code(StatusCode::BAD_REQUEST);
+            res.render(Text::Plain("Missing path parameter 'id'"));
+            return;
+        }
+    };
+
+    match handle_get(req, depot, id, res).await {
+        Ok(()) => {}
+        Err(e) => {
+            e.render(res);
+        }
+    }
+}
+
 #[tracing::instrument(
     name = "handlers.compat.login_sso_complete.get",
     fields(compat_sso_login.id = %id),
     skip_all,
 )]
-pub async fn get(
-    PreferredLanguage(locale): PreferredLanguage,
-    mut rng: BoxRng,
-    clock: BoxClock,
-    mut repo: BoxRepository,
-    State(templates): State<Templates>,
-    State(url_builder): State<UrlBuilder>,
-    State(homeserver): State<Arc<dyn HomeserverConnection>>,
-    mut policy: Policy,
-    activity_tracker: BoundActivityTracker,
-    user_agent: Option<TypedHeader<headers::UserAgent>>,
-    cookie_jar: CookieJar,
-    Path(id): Path<Ulid>,
-    Query(params): Query<Params>,
-) -> Result<Response, InternalError> {
-    let user_agent = user_agent.map(|ua| ua.to_string());
+async fn handle_get(
+    req: &Request,
+    depot: &Depot,
+    id: Ulid,
+    res: &mut Response,
+) -> Result<(), InternalError> {
+    let locale = crate::preferred_language(req, depot);
+    let mut rng = crate::rest::make_rng();
+    let clock = crate::rest::make_clock();
+    let mut repo = crate::rest::get_repo_factory(depot)?
+        .create()
+        .await?;
+    let templates = crate::rest::get_templates(depot)?;
+    let url_builder = crate::rest::get_url_builder(depot)?;
+    let homeserver = crate::rest::get_homeserver(depot)?;
+    let policy_factory = crate::rest::get_policy_factory(depot)?;
+    let mut policy = policy_factory.instantiate().await.map_err(InternalError::from_anyhow)?;
+    let activity_tracker = crate::rest::extract_bound_activity_tracker(req, depot);
+    let user_agent = req
+        .headers()
+        .get("user-agent")
+        .and_then(|h| h.to_str().ok())
+        .map(String::from);
+    let cookie_jar = crate::rest::extract_cookie_jar(req, depot)?;
+
+    let params: Params = req.parse_queries().unwrap_or(Params { action: None });
 
     let (cookie_jar, maybe_session) = match load_session_or_fallback(
         cookie_jar, &clock, &mut rng, &templates, &locale, &mut repo,
@@ -75,7 +99,7 @@ pub async fn get(
             maybe_session,
             ..
         } => (cookie_jar, maybe_session),
-        SessionOrFallback::Fallback { response } => return Ok(response),
+        SessionOrFallback::Fallback { response } => { *res = response; return Ok(()); }
     };
 
     let (csrf_token, cookie_jar) = cookie_jar.csrf_token(&clock, &mut rng);
@@ -91,7 +115,9 @@ pub async fn get(
             }
         };
 
-        return Ok((cookie_jar, url).into_response());
+        cookie_jar.write_to_response(res);
+        res.render(url);
+        return Ok(());
     };
 
     let login = repo
@@ -109,7 +135,9 @@ pub async fn get(
             .with_language(&locale);
 
         let content = templates.render_error(&ctx)?;
-        return Ok((cookie_jar, Html(content)).into_response());
+        cookie_jar.write_to_response(res);
+        res.render(Text::Html(content));
+        return Ok(());
     }
 
     let session_counts = count_user_sessions_for_limiting(&mut repo, &session.user).await?;
@@ -117,10 +145,10 @@ pub async fn get(
     // We can close the repository early, we don't need it at this point
     repo.save().await?;
 
-    let res = policy
+    let eval_result = policy
         .evaluate_compat_login(pasion_policy::CompatLoginInput {
             user: &session.user,
-            login: CompatLogin::Sso {
+            login: pasion_policy::model::CompatLogin::Sso {
                 redirect_uri: login.redirect_uri.to_string(),
             },
             // We don't know if there's going to be a replacement until we received the device ID,
@@ -133,15 +161,18 @@ pub async fn get(
             },
         })
         .await?;
-    if !res.valid() {
-        let ctx = CompatLoginPolicyViolationContext::for_violations(res.violations)
+    if !eval_result.valid() {
+        let ctx = CompatLoginPolicyViolationContext::for_violations(eval_result.violations)
             .with_session(session)
             .with_csrf(csrf_token.form_value())
             .with_language(locale);
 
         let content = templates.render_compat_login_policy_violation(&ctx)?;
 
-        return Ok((StatusCode::FORBIDDEN, cookie_jar, Html(content)).into_response());
+        res.status_code(StatusCode::FORBIDDEN);
+        cookie_jar.write_to_response(res);
+        res.render(Text::Html(content));
+        return Ok(());
     }
 
     // Fetch informations about the user. This is purely cosmetic, so we let it
@@ -181,7 +212,28 @@ pub async fn get(
 
     let content = templates.render_sso_login(&ctx)?;
 
-    Ok((cookie_jar, Html(content)).into_response())
+    cookie_jar.write_to_response(res);
+    res.render(Text::Html(content));
+    Ok(())
+}
+
+#[handler]
+pub async fn post(req: &mut Request, depot: &Depot, res: &mut Response) {
+    let id: Ulid = match req.param("id") {
+        Some(id) => id,
+        None => {
+            res.status_code(StatusCode::BAD_REQUEST);
+            res.render(Text::Plain("Missing path parameter 'id'"));
+            return;
+        }
+    };
+
+    match handle_post(req, depot, id, res).await {
+        Ok(()) => {}
+        Err(e) => {
+            e.render(res);
+        }
+    }
 }
 
 #[tracing::instrument(
@@ -189,22 +241,36 @@ pub async fn get(
     fields(compat_sso_login.id = %id),
     skip_all,
 )]
-pub async fn post(
-    mut rng: BoxRng,
-    clock: BoxClock,
-    mut repo: BoxRepository,
-    PreferredLanguage(locale): PreferredLanguage,
-    State(templates): State<Templates>,
-    State(url_builder): State<UrlBuilder>,
-    mut policy: Policy,
-    activity_tracker: BoundActivityTracker,
-    user_agent: Option<TypedHeader<headers::UserAgent>>,
-    cookie_jar: CookieJar,
-    Path(id): Path<Ulid>,
-    Query(params): Query<Params>,
-    Form(form): Form<ProtectedForm<()>>,
-) -> Result<Response, InternalError> {
-    let user_agent = user_agent.map(|ua| ua.to_string());
+async fn handle_post(
+    req: &mut Request,
+    depot: &Depot,
+    id: Ulid,
+    res: &mut Response,
+) -> Result<(), InternalError> {
+    let mut rng = crate::rest::make_rng();
+    let clock = crate::rest::make_clock();
+    let mut repo = crate::rest::get_repo_factory(depot)?
+        .create()
+        .await?;
+    let locale = crate::preferred_language(req, depot);
+    let templates = crate::rest::get_templates(depot)?;
+    let url_builder = crate::rest::get_url_builder(depot)?;
+    let policy_factory = crate::rest::get_policy_factory(depot)?;
+    let mut policy = policy_factory.instantiate().await.map_err(InternalError::from_anyhow)?;
+    let activity_tracker = crate::rest::extract_bound_activity_tracker(req, depot);
+    let user_agent = req
+        .headers()
+        .get("user-agent")
+        .and_then(|h| h.to_str().ok())
+        .map(String::from);
+    let cookie_jar = crate::rest::extract_cookie_jar(req, depot)?;
+
+    let params: Params = req.parse_queries().unwrap_or(Params { action: None });
+
+    let form: ProtectedForm<()> = req
+        .parse_form()
+        .await
+        .map_err(|e| InternalError::from_anyhow(e.into()))?;
 
     let (cookie_jar, maybe_session) = match load_session_or_fallback(
         cookie_jar, &clock, &mut rng, &templates, &locale, &mut repo,
@@ -216,7 +282,7 @@ pub async fn post(
             maybe_session,
             ..
         } => (cookie_jar, maybe_session),
-        SessionOrFallback::Fallback { response } => return Ok(response),
+        SessionOrFallback::Fallback { response } => { *res = response; return Ok(()); }
     };
 
     cookie_jar.verify_form(&clock, form)?;
@@ -232,7 +298,9 @@ pub async fn post(
             }
         };
 
-        return Ok((cookie_jar, url).into_response());
+        cookie_jar.write_to_response(res);
+        res.render(url);
+        return Ok(());
     };
 
     let login = repo
@@ -252,7 +320,9 @@ pub async fn post(
             .with_language(&locale);
 
         let content = templates.render_error(&ctx)?;
-        return Ok((cookie_jar, Html(content)).into_response());
+        cookie_jar.write_to_response(res);
+        res.render(Text::Html(content));
+        return Ok(());
     }
 
     let redirect_uri = {
@@ -274,10 +344,10 @@ pub async fn post(
 
     let session_counts = count_user_sessions_for_limiting(&mut repo, &session.user).await?;
 
-    let res = policy
+    let eval_result = policy
         .evaluate_compat_login(pasion_policy::CompatLoginInput {
             user: &session.user,
-            login: CompatLogin::Sso {
+            login: pasion_policy::model::CompatLogin::Sso {
                 redirect_uri: login.redirect_uri.to_string(),
             },
             session_counts,
@@ -291,16 +361,19 @@ pub async fn post(
         })
         .await?;
 
-    if !res.valid() {
+    if !eval_result.valid() {
         let (csrf_token, cookie_jar) = cookie_jar.csrf_token(&clock, &mut rng);
-        let ctx = CompatLoginPolicyViolationContext::for_violations(res.violations)
+        let ctx = CompatLoginPolicyViolationContext::for_violations(eval_result.violations)
             .with_session(session)
             .with_csrf(csrf_token.form_value())
             .with_language(locale);
 
         let content = templates.render_compat_login_policy_violation(&ctx)?;
 
-        return Ok((StatusCode::FORBIDDEN, cookie_jar, Html(content)).into_response());
+        res.status_code(StatusCode::FORBIDDEN);
+        cookie_jar.write_to_response(res);
+        res.render(Text::Html(content));
+        return Ok(());
     }
 
     // Note that if the login is not Pending,
@@ -311,5 +384,7 @@ pub async fn post(
 
     repo.save().await?;
 
-    Ok((cookie_jar, Redirect::to(redirect_uri.as_str())).into_response())
+    cookie_jar.write_to_response(res);
+    res.render(Redirect::other(redirect_uri.as_str()));
+    Ok(())
 }

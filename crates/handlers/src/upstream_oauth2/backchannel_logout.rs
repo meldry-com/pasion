@@ -1,14 +1,8 @@
 use std::collections::{HashMap, HashSet};
 
-use axum::{
-    Form, Json,
-    extract::{Path, State, rejection::FormRejection},
-    response::IntoResponse,
-};
-use hyper::StatusCode;
-use mas_axum_utils::record_error;
+use pasion_salvo_utils::record_error;
 use pasion_data_model::{
-    BoxClock, BoxRng, UpstreamOAuthProvider, UpstreamOAuthProviderOnBackchannelLogout,
+    UpstreamOAuthProvider, UpstreamOAuthProviderOnBackchannelLogout,
 };
 use pasion_jose::{
     claims::{self, Claim, TimeOptions},
@@ -19,7 +13,7 @@ use pasion_oidc_client::{
     requests::jose::{JwtVerificationData, verify_signed_jwt},
 };
 use pasion_storage::{
-    BoxRepository, Pagination,
+    Pagination,
     compat::CompatSessionFilter,
     oauth2::OAuth2SessionFilter,
     queue::{QueueJobRepositoryExt as _, SyncDevicesJob},
@@ -27,12 +21,13 @@ use pasion_storage::{
     user::BrowserSessionFilter,
 };
 use oauth2_types::errors::{ClientError, ClientErrorCode};
+use salvo::prelude::*;
 use serde::Deserialize;
 use serde_json::Value;
 use thiserror::Error;
 use ulid::Ulid;
 
-use crate::{MetadataCache, impl_from_error_for_route, upstream_oauth2::cache::LazyProviderInfos};
+use crate::{impl_from_error_for_route, upstream_oauth2::cache::LazyProviderInfos};
 
 #[derive(Debug, Error)]
 pub enum RouteError {
@@ -41,8 +36,8 @@ pub enum RouteError {
     Internal(Box<dyn std::error::Error + Send + Sync + 'static>),
 
     /// Invalid request body
-    #[error(transparent)]
-    InvalidRequestBody(#[from] FormRejection),
+    #[error("invalid request body: {0}")]
+    InvalidRequestBody(String),
 
     /// Logout token is not a JWT
     #[error("failed to decode logout token")]
@@ -65,54 +60,54 @@ pub enum RouteError {
     ProviderNotFound,
 }
 
-impl IntoResponse for RouteError {
-    fn into_response(self) -> axum::response::Response {
+impl Scribe for RouteError {
+    fn render(self, res: &mut Response) {
         let sentry_event_id = record_error!(self, Self::Internal(_));
 
-        let response = match self {
-            e @ Self::Internal(_) => (
-                StatusCode::INTERNAL_SERVER_ERROR,
-                Json(
+        match self {
+            Self::Internal(e) => {
+                res.status_code(StatusCode::INTERNAL_SERVER_ERROR);
+                res.render(Json(
                     ClientError::from(ClientErrorCode::ServerError).with_description(e.to_string()),
-                ),
-            )
-                .into_response(),
+                ));
+            }
 
             e @ (Self::InvalidLogoutToken(_)
             | Self::LogoutTokenVerification(_)
             | Self::InvalidRequestBody(_)
             | Self::InvalidLogoutTokenClaims(_)
-            | Self::NoSubOrSidClaim) => (
-                StatusCode::BAD_REQUEST,
-                Json(
+            | Self::NoSubOrSidClaim) => {
+                res.status_code(StatusCode::BAD_REQUEST);
+                res.render(Json(
                     ClientError::from(ClientErrorCode::InvalidRequest)
                         .with_description(e.to_string()),
-                ),
-            )
-                .into_response(),
+                ));
+            }
 
-            Self::ProviderNotFound => (
-                StatusCode::NOT_FOUND,
-                Json(
+            Self::ProviderNotFound => {
+                res.status_code(StatusCode::NOT_FOUND);
+                res.render(Json(
                     ClientError::from(ClientErrorCode::InvalidRequest).with_description(
                         "Upstream OAuth provider not found, is the backchannel logout URI right?"
                             .to_owned(),
                     ),
-                ),
-            )
-                .into_response(),
-        };
+                ));
+            }
+        }
 
-        (sentry_event_id, response).into_response()
+        if let Some(event_id) = sentry_event_id {
+            event_id.write_to_response(res);
+        }
     }
 }
 
 impl_from_error_for_route!(pasion_storage::RepositoryError);
+impl_from_error_for_route!(crate::rest::RouteError);
 impl_from_error_for_route!(pasion_oidc_client::error::DiscoveryError);
 impl_from_error_for_route!(pasion_oidc_client::error::JwksError);
 
 #[derive(Deserialize)]
-pub(crate) struct BackchannelLogoutRequest {
+pub struct BackchannelLogoutRequest {
     logout_token: String,
 }
 
@@ -125,21 +120,24 @@ struct LogoutTokenEvents {
 
 const EVENTS: Claim<LogoutTokenEvents> = Claim::new("events");
 
+#[handler]
 #[tracing::instrument(
     name = "handlers.upstream_oauth2.backchannel_logout.post",
-    fields(upstream_oauth_provider.id = %provider_id),
     skip_all,
 )]
-pub(crate) async fn post(
-    clock: BoxClock,
-    mut rng: BoxRng,
-    mut repo: BoxRepository,
-    State(metadata_cache): State<MetadataCache>,
-    State(client): State<reqwest::Client>,
-    Path(provider_id): Path<Ulid>,
-    request: Result<Form<BackchannelLogoutRequest>, FormRejection>,
-) -> Result<impl IntoResponse, RouteError> {
-    let Form(request) = request?;
+pub async fn post(req: &mut Request, depot: &mut Depot) -> Result<(), RouteError> {
+    let provider_id: Ulid = req.param("id").ok_or(RouteError::ProviderNotFound)?;
+    let clock = crate::rest::make_clock();
+    let mut rng = crate::rest::make_rng();
+    let mut repo = crate::rest::get_repo_factory(depot)?.create().await?;
+    let metadata_cache = crate::rest::get_metadata_cache(depot)?;
+    let client = crate::rest::get_http_client(depot)?;
+
+    let request: BackchannelLogoutRequest = req
+        .parse_form()
+        .await
+        .map_err(|e| RouteError::InvalidRequestBody(e.to_string()))?;
+
     let provider = repo
         .upstream_oauth_provider()
         .lookup(provider_id)

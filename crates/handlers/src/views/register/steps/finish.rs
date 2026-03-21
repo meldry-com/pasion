@@ -1,18 +1,13 @@
 use std::sync::{Arc, LazyLock};
 
 use anyhow::Context as _;
-use axum::{
-    extract::{Path, State},
-    response::{Html, IntoResponse, Response},
-};
-use axum_extra::TypedHeader;
+use salvo::prelude::*;
+use salvo::writing::Text;
 use chrono::Duration;
-use mas_axum_utils::{InternalError, SessionInfoExt as _, cookies::CookieJar};
-use pasion_data_model::{BoxClock, BoxRng, SiteConfig};
+use pasion_salvo_utils::{InternalError, SessionInfoExt as _, cookies::CookieJar};
 use pasion_matrix::HomeserverConnection;
-use pasion_router::{PostAuthAction, UrlBuilder};
+use pasion_router::PostAuthAction;
 use pasion_storage::{
-    BoxRepository,
     queue::{ProvisionUserJob, QueueJobRepositoryExt as _},
     user::UserEmailFilter,
 };
@@ -22,7 +17,7 @@ use ulid::Ulid;
 
 use super::super::cookie::UserRegistrationSessions;
 use crate::{
-    BoundActivityTracker, METER, PreferredLanguage, views::shared::OptionalPostAuthAction,
+    METER, rest, views::shared::OptionalPostAuthAction,
 };
 
 static PASSWORD_REGISTER_COUNTER: LazyLock<Counter<u64>> = LazyLock::new(|| {
@@ -33,26 +28,20 @@ static PASSWORD_REGISTER_COUNTER: LazyLock<Counter<u64>> = LazyLock::new(|| {
         .build()
 });
 
-#[tracing::instrument(
-    name = "handlers.views.register.steps.finish.get",
-    fields(user_registration.id = %id),
-    skip_all,
-)]
-pub(crate) async fn get(
-    mut rng: BoxRng,
-    clock: BoxClock,
-    mut repo: BoxRepository,
-    activity_tracker: BoundActivityTracker,
-    user_agent: Option<TypedHeader<headers::UserAgent>>,
-    State(url_builder): State<UrlBuilder>,
-    State(homeserver): State<Arc<dyn HomeserverConnection>>,
-    State(templates): State<Templates>,
-    State(site_config): State<SiteConfig>,
-    PreferredLanguage(lang): PreferredLanguage,
-    cookie_jar: CookieJar,
-    Path(id): Path<Ulid>,
-) -> Result<Response, InternalError> {
-    let user_agent = user_agent.map(|ua| ua.as_str().to_owned());
+#[handler]
+pub async fn get(req: &mut Request, depot: &Depot, res: &mut Response) -> Result<(), InternalError> {
+    let mut rng = rest::make_rng();
+    let clock = rest::make_clock();
+    let lang = crate::preferred_language(req, depot);
+    let url_builder = rest::get_url_builder(depot)?;
+    let homeserver = rest::get_homeserver(depot)?;
+    let templates = rest::get_templates(depot)?;
+    let site_config = rest::get_site_config(depot)?;
+    let mut repo = rest::get_repo_factory(depot)?.create().await?;
+    let activity_tracker = rest::extract_bound_activity_tracker(req, depot);
+    let user_agent = req.headers().get("user-agent").and_then(|h| h.to_str().ok()).map(|s| s.to_owned());
+    let cookie_jar = rest::extract_cookie_jar(req, depot)?;
+    let id: Ulid = req.param("id").unwrap_or_default();
     let registration = repo
         .user_registration()
         .lookup(id)
@@ -69,11 +58,9 @@ pub(crate) async fn get(
             .map(serde_json::from_value)
             .transpose()?;
 
-        return Ok((
-            cookie_jar,
-            OptionalPostAuthAction::from(post_auth_action).go_next(&url_builder),
-        )
-            .into_response());
+            cookie_jar.write_to_response(res);
+        res.render(OptionalPostAuthAction::from(post_auth_action).go_next(&url_builder));
+        return Ok(());
     }
 
     // Make sure the registration session hasn't expired
@@ -136,11 +123,9 @@ pub(crate) async fn get(
             Some(registration_token)
         } else {
             // Else redirect to the registration token page
-            return Ok((
-                cookie_jar,
-                url_builder.redirect(&pasion_router::RegisterToken::new(registration.id)),
-            )
-                .into_response());
+                    cookie_jar.write_to_response(res);
+            res.render(url_builder.redirect(&pasion_router::RegisterToken::new(registration.id)));
+            return Ok(());
         }
     } else {
         None
@@ -160,11 +145,9 @@ pub(crate) async fn get(
 
             // Check that the email authentication has been completed
             if email_authentication.completed_at.is_none() {
-                return Ok((
-                    cookie_jar,
-                    url_builder.redirect(&pasion_router::RegisterVerifyEmail::new(id)),
-                )
-                    .into_response());
+                            cookie_jar.write_to_response(res);
+                res.render(url_builder.redirect(&pasion_router::RegisterVerifyEmail::new(id)));
+                return Ok(());
             }
 
             // Check that the email address isn't already used
@@ -185,11 +168,9 @@ pub(crate) async fn get(
                 let ctx = RegisterStepsEmailInUseContext::new(email_authentication.email, action)
                     .with_language(lang);
 
-                return Ok((
-                    cookie_jar,
-                    Html(templates.render_register_steps_email_in_use(&ctx)?),
-                )
-                    .into_response());
+                            cookie_jar.write_to_response(res);
+                res.render(Text::Html(templates.render_register_steps_email_in_use(&ctx)?));
+                return Ok(());
             }
 
             Some(email_authentication)
@@ -239,11 +220,9 @@ pub(crate) async fn get(
 
     // Check that the display name is set
     if registration.display_name.is_none() {
-        return Ok((
-            cookie_jar,
-            url_builder.redirect(&pasion_router::RegisterDisplayName::new(registration.id)),
-        )
-            .into_response());
+            cookie_jar.write_to_response(res);
+        res.render(url_builder.redirect(&pasion_router::RegisterDisplayName::new(registration.id)));
+        return Ok(());
     }
 
     // Everything is good, let's complete the registration
@@ -342,9 +321,7 @@ pub(crate) async fn get(
     // Login the user with the session we just created
     let cookie_jar = cookie_jar.set_session(&user_session);
 
-    return Ok((
-        cookie_jar,
-        OptionalPostAuthAction::from(post_auth_action).go_next(&url_builder),
-    )
-        .into_response());
+    cookie_jar.write_to_response(res);
+    res.render(OptionalPostAuthAction::from(post_auth_action).go_next(&url_builder));
+    Ok(())
 }

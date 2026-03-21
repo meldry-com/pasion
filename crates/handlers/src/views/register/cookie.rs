@@ -3,7 +3,7 @@
 use std::collections::BTreeSet;
 
 use chrono::{DateTime, Duration, Utc};
-use mas_axum_utils::cookies::CookieJar;
+use pasion_salvo_utils::cookies::CookieJar;
 use pasion_data_model::{Clock, UserRegistration};
 use serde::{Deserialize, Serialize};
 use thiserror::Error;

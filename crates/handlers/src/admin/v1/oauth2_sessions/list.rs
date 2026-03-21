@@ -1,11 +1,8 @@
+use salvo::prelude::*;
 use std::str::FromStr;
 
-use aide::{OperationIo, transform::TransformOperation};
-use axum::{Json, response::IntoResponse};
-use axum_extra::extract::{Query, QueryRejection};
-use axum_macros::FromRequestParts;
-use hyper::StatusCode;
-use mas_axum_utils::record_error;
+use salvo::http::StatusCode;
+use pasion_salvo_utils::record_error;
 use pasion_storage::{Page, oauth2::OAuth2SessionFilter};
 use oauth2_types::scope::{Scope, ScopeToken};
 use schemars::JsonSchema;
@@ -14,9 +11,9 @@ use ulid::Ulid;
 
 use crate::{
     admin::{
-        call_context::CallContext,
+        call_context::extract_call_context,
         model::{OAuth2Session, Resource},
-        params::{IncludeCount, Pagination},
+        params::{IncludeCount, extract_pagination},
         response::{ErrorResponse, PaginatedResponse},
     },
     impl_from_error_for_route,
@@ -54,10 +51,8 @@ impl std::fmt::Display for OAuth2ClientKind {
     }
 }
 
-#[derive(FromRequestParts, Deserialize, JsonSchema, OperationIo)]
+#[derive(Deserialize, JsonSchema, Default)]
 #[serde(rename = "OAuth2SessionFilter")]
-#[aide(input_with = "Query<FilterParams>")]
-#[from_request(via(Query), rejection(RouteError))]
 pub struct FilterParams {
     /// Retrieve the items for the given user
     #[serde(rename = "filter[user]")]
@@ -132,8 +127,7 @@ impl std::fmt::Display for FilterParams {
     }
 }
 
-#[derive(Debug, thiserror::Error, OperationIo)]
-#[aide(output_with = "Json<ErrorResponse>")]
+#[derive(Debug, thiserror::Error)]
 pub enum RouteError {
     #[error(transparent)]
     Internal(Box<dyn std::error::Error + Send + Sync + 'static>),
@@ -147,17 +141,17 @@ pub enum RouteError {
     #[error("User session ID {0} not found")]
     UserSessionNotFound(Ulid),
 
-    #[error("Invalid filter parameters")]
-    InvalidFilter(#[from] QueryRejection),
 
     #[error("Invalid scope {0:?} in filter parameters")]
     InvalidScope(String),
 }
 
 impl_from_error_for_route!(pasion_storage::RepositoryError);
+impl_from_error_for_route!(crate::admin::params::PaginationRejection);
+impl_from_error_for_route!(crate::admin::call_context::Rejection);
 
-impl IntoResponse for RouteError {
-    fn into_response(self) -> axum::response::Response {
+impl Scribe for RouteError {
+    fn render(self, res: &mut Response) {
         let error = ErrorResponse::from_error(&self);
         let sentry_event_id = record_error!(self, RouteError::Internal(_));
         let status = match self {
@@ -165,59 +159,27 @@ impl IntoResponse for RouteError {
             Self::UserNotFound(_) | Self::ClientNotFound(_) | Self::UserSessionNotFound(_) => {
                 StatusCode::NOT_FOUND
             }
-            Self::InvalidScope(_) | Self::InvalidFilter(_) => StatusCode::BAD_REQUEST,
         };
-        (status, sentry_event_id, Json(error)).into_response()
+        res.status_code(status);
+        if let Some(event_id) = sentry_event_id {
+            if let Ok(value) = http::HeaderValue::from_str(&event_id.to_string()) {
+                res.headers_mut().insert("x-sentry-event-id", value);
+            }
+        }
+        res.render(Json(error));
     }
 }
 
-pub fn doc(operation: TransformOperation) -> TransformOperation {
-    operation
-        .id("listOAuth2Sessions")
-        .summary("List OAuth 2.0 sessions")
-        .description("Retrieve a list of OAuth 2.0 sessions.
-Note that by default, all sessions, including finished ones are returned, with the oldest first.
-Use the `filter[status]` parameter to filter the sessions by their status and `page[last]` parameter to retrieve the last N sessions.")
-        .tag("oauth2-session")
-        .response_with::<200, Json<PaginatedResponse<OAuth2Session>>, _>(|t| {
-            let sessions = OAuth2Session::samples();
-            let pagination = pasion_storage::Pagination::first(sessions.len());
-            let page = Page {
-                edges: sessions
-                    .into_iter()
-                    .map(|node| pasion_storage::pagination::Edge {
-                        cursor: node.id(),
-                        node,
-                    })
-                    .collect(),
-                has_next_page: true,
-                has_previous_page: false,
-            };
-
-            t.description("Paginated response of OAuth 2.0 sessions")
-                .example(PaginatedResponse::for_page(
-                    page,
-                    pagination,
-                    Some(42),
-                    OAuth2Session::PATH,
-                ))
-        })
-        .response_with::<404, RouteError, _>(|t| {
-            let response = ErrorResponse::from_error(&RouteError::UserNotFound(Ulid::nil()));
-            t.description("User was not found").example(response)
-        })
-        .response_with::<400, RouteError, _>(|t| {
-            let response = ErrorResponse::from_error(&RouteError::InvalidScope("not a valid scope".to_owned()));
-            t.description("Invalid scope").example(response)
-        })
-}
-
+#[handler]
 #[tracing::instrument(name = "handler.admin.v1.oauth2_sessions.list", skip_all)]
 pub async fn handler(
-    CallContext { mut repo, .. }: CallContext,
-    Pagination(pagination, include_count): Pagination,
-    params: FilterParams,
-) -> Result<Json<PaginatedResponse<OAuth2Session>>, RouteError> {
+    req: &mut Request,
+    depot: &Depot) -> Result<Json<PaginatedResponse<OAuth2Session>>, RouteError> {
+    let call_context = extract_call_context(req, depot).await?;
+    let crate::admin::call_context::CallContext { mut repo, .. } = call_context;
+    let (pagination, include_count) = extract_pagination(req)?;
+    let params: FilterParams = req.parse_queries().unwrap_or_default();
+
     let base = format!("{path}{params}", path = OAuth2Session::PATH);
     let base = include_count.add_to_base(&base);
     let filter = OAuth2SessionFilter::default();

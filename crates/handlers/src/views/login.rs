@@ -1,22 +1,18 @@
 use std::sync::{Arc, LazyLock};
 
-use axum::{
-    extract::{Form, State},
-    response::{Html, IntoResponse, Response},
-};
-use axum_extra::{extract::Query, typed_header::TypedHeader};
-use hyper::StatusCode;
-use mas_axum_utils::{
+use salvo::prelude::*;
+use salvo::writing::Text;
+use pasion_salvo_utils::{
     InternalError, SessionInfoExt,
     cookies::CookieJar,
     csrf::{CsrfExt, ProtectedForm},
 };
-use pasion_data_model::{BoxClock, BoxRng, Clock, oauth2::LoginHint};
+use pasion_data_model::{Clock, oauth2::LoginHint};
 use pasion_i18n::DataLocale;
 use pasion_matrix::HomeserverConnection;
-use pasion_router::{UpstreamOAuth2Authorize, UrlBuilder};
+use pasion_router::UpstreamOAuth2Authorize;
 use pasion_storage::{
-    BoxRepository, RepositoryAccess,
+    RepositoryAccess,
     upstream_oauth2::UpstreamOAuthProviderRepository,
     user::{BrowserSessionRepository, UserPasswordRepository, UserRepository},
 };
@@ -31,8 +27,9 @@ use zeroize::Zeroizing;
 
 use super::shared::OptionalPostAuthAction;
 use crate::{
-    BoundActivityTracker, Limiter, METER, PreferredLanguage, RequesterFingerprint, SiteConfig,
+    METER, RequesterFingerprint, SiteConfig,
     passwords::{PasswordManager, PasswordVerificationResult},
+    rest,
     session::{SessionOrFallback, load_session_or_fallback},
 };
 
@@ -55,20 +52,20 @@ impl ToFormState for LoginForm {
     type Field = LoginFormField;
 }
 
-#[tracing::instrument(name = "handlers.views.login.get", skip_all)]
-pub(crate) async fn get(
-    mut rng: BoxRng,
-    clock: BoxClock,
-    PreferredLanguage(locale): PreferredLanguage,
-    State(templates): State<Templates>,
-    State(url_builder): State<UrlBuilder>,
-    State(site_config): State<SiteConfig>,
-    State(homeserver): State<Arc<dyn HomeserverConnection>>,
-    mut repo: BoxRepository,
-    activity_tracker: BoundActivityTracker,
-    Query(query): Query<OptionalPostAuthAction>,
-    cookie_jar: CookieJar,
-) -> Result<Response, InternalError> {
+#[handler]
+pub async fn get(req: &mut Request, depot: &Depot, res: &mut Response) -> Result<(), InternalError> {
+    let mut rng = rest::make_rng();
+    let clock = rest::make_clock();
+    let locale = crate::preferred_language(req, depot);
+    let templates = rest::get_templates(depot)?;
+    let url_builder = rest::get_url_builder(depot)?;
+    let site_config = rest::get_site_config(depot)?;
+    let homeserver = rest::get_homeserver(depot)?;
+    let mut repo = rest::get_repo_factory(depot)?.create().await?;
+    let activity_tracker = rest::extract_bound_activity_tracker(req, depot);
+    let query: OptionalPostAuthAction = req.parse_queries().unwrap_or_default();
+    let cookie_jar = rest::extract_cookie_jar(req, depot)?;
+
     let (cookie_jar, maybe_session) = match load_session_or_fallback(
         cookie_jar, &clock, &mut rng, &templates, &locale, &mut repo,
     )
@@ -79,7 +76,7 @@ pub(crate) async fn get(
             maybe_session,
             ..
         } => (cookie_jar, maybe_session),
-        SessionOrFallback::Fallback { response } => return Ok(response),
+        SessionOrFallback::Fallback { response } => { *res = response; return Ok(()); }
     };
 
     if let Some(session) = maybe_session {
@@ -88,7 +85,9 @@ pub(crate) async fn get(
             .await;
 
         let reply = query.go_next(&url_builder);
-        return Ok((cookie_jar, reply).into_response());
+            cookie_jar.write_to_response(res);
+        res.render(reply);
+        return Ok(());
     }
 
     let providers = repo.upstream_oauth_provider().all_enabled().await?;
@@ -104,7 +103,9 @@ pub(crate) async fn get(
             destination = destination.and_then(action);
         }
 
-        return Ok((cookie_jar, url_builder.redirect(&destination)).into_response());
+            cookie_jar.write_to_response(res);
+        res.render(url_builder.redirect(&destination));
+        return Ok(());
     }
 
     render(
@@ -118,33 +119,35 @@ pub(crate) async fn get(
         &templates,
         &homeserver,
         &site_config,
+        res,
     )
     .await
 }
 
-#[tracing::instrument(name = "handlers.views.login.post", skip_all)]
-pub(crate) async fn post(
-    mut rng: BoxRng,
-    clock: BoxClock,
-    PreferredLanguage(locale): PreferredLanguage,
-    State(password_manager): State<PasswordManager>,
-    State(site_config): State<SiteConfig>,
-    State(templates): State<Templates>,
-    State(url_builder): State<UrlBuilder>,
-    State(limiter): State<Limiter>,
-    State(homeserver): State<Arc<dyn HomeserverConnection>>,
-    mut repo: BoxRepository,
-    activity_tracker: BoundActivityTracker,
-    requester: RequesterFingerprint,
-    Query(query): Query<OptionalPostAuthAction>,
-    cookie_jar: CookieJar,
-    user_agent: Option<TypedHeader<headers::UserAgent>>,
-    Form(form): Form<ProtectedForm<LoginForm>>,
-) -> Result<Response, InternalError> {
-    let user_agent = user_agent.map(|ua| ua.as_str().to_owned());
+#[handler]
+pub async fn post(req: &mut Request, depot: &Depot, res: &mut Response) -> Result<(), InternalError> {
+    let mut rng = rest::make_rng();
+    let clock = rest::make_clock();
+    let locale = crate::preferred_language(req, depot);
+    let password_manager = rest::get_password_manager(depot)?;
+    let site_config = rest::get_site_config(depot)?;
+    let templates = rest::get_templates(depot)?;
+    let url_builder = rest::get_url_builder(depot)?;
+    let limiter = rest::get_limiter(depot)?;
+    let homeserver = rest::get_homeserver(depot)?;
+    let mut repo = rest::get_repo_factory(depot)?.create().await?;
+    let activity_tracker = rest::extract_bound_activity_tracker(req, depot);
+    let requester = activity_tracker.ip().map(RequesterFingerprint::new).unwrap_or(RequesterFingerprint::EMPTY);
+    let query: OptionalPostAuthAction = req.parse_queries().unwrap_or_default();
+    let cookie_jar = rest::extract_cookie_jar(req, depot)?;
+    let user_agent = req.headers().get("user-agent").and_then(|h| h.to_str().ok()).map(|s| s.to_owned());
+    let form: ProtectedForm<LoginForm> = req.parse_form().await
+        .map_err(|e| InternalError::from_anyhow(e.into()))?;
+
     if !site_config.password_login_enabled {
         // XXX: is it necessary to have better errors here?
-        return Ok(StatusCode::METHOD_NOT_ALLOWED.into_response());
+            res.status_code(StatusCode::METHOD_NOT_ALLOWED);
+        return Ok(());
     }
 
     let form = cookie_jar.verify_form(&clock, form)?;
@@ -174,6 +177,7 @@ pub(crate) async fn post(
             &templates,
             &homeserver,
             &site_config,
+            res,
         )
         .await;
     }
@@ -200,6 +204,7 @@ pub(crate) async fn post(
             &templates,
             &homeserver,
             &site_config,
+            res,
         )
         .await;
     };
@@ -220,6 +225,7 @@ pub(crate) async fn post(
             &templates,
             &homeserver,
             &site_config,
+            res,
         )
         .await;
     }
@@ -242,6 +248,7 @@ pub(crate) async fn post(
             &templates,
             &homeserver,
             &site_config,
+            res,
         )
         .await;
     };
@@ -303,7 +310,9 @@ pub(crate) async fn post(
             .with_csrf(csrf_token.form_value())
             .with_language(locale);
         let content = templates.render_account_deactivated(&ctx)?;
-        return Ok((cookie_jar, Html(content)).into_response());
+            cookie_jar.write_to_response(res);
+        res.render(Text::Html(content));
+        return Ok(());
     }
 
     if user.locked_at.is_some() {
@@ -314,7 +323,9 @@ pub(crate) async fn post(
             .with_csrf(csrf_token.form_value())
             .with_language(locale);
         let content = templates.render_account_locked(&ctx)?;
-        return Ok((cookie_jar, Html(content)).into_response());
+            cookie_jar.write_to_response(res);
+        res.render(Text::Html(content));
+        return Ok(());
     }
 
     // At this point, we should have a 'valid' user. In case we missed something, we
@@ -342,7 +353,9 @@ pub(crate) async fn post(
 
     let cookie_jar = cookie_jar.set_session(&user_session);
     let reply = query.go_next(&url_builder);
-    Ok((cookie_jar, reply).into_response())
+    cookie_jar.write_to_response(res);
+    res.render(reply);
+    Ok(())
 }
 
 async fn get_user_by_email_or_by_username<R: RepositoryAccess>(
@@ -405,7 +418,8 @@ async fn render(
     templates: &Templates,
     homeserver: &dyn HomeserverConnection,
     site_config: &SiteConfig,
-) -> Result<Response, InternalError> {
+    res: &mut Response,
+) -> Result<(), InternalError> {
     let (csrf_token, cookie_jar) = cookie_jar.csrf_token(clock, rng);
     let providers = repo.upstream_oauth_provider().all_enabled().await?;
 
@@ -426,7 +440,9 @@ async fn render(
     let ctx = ctx.with_csrf(csrf_token.form_value()).with_language(locale);
 
     let content = templates.render_login(&ctx)?;
-    Ok((cookie_jar, Html(content)).into_response())
+    cookie_jar.write_to_response(res);
+    res.render(Text::Html(content));
+    Ok(())
 }
 
 #[cfg(test)]

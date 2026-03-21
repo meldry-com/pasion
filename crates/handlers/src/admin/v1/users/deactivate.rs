@@ -1,7 +1,6 @@
-use aide::{NoApi, OperationIo, transform::TransformOperation};
-use axum::{Json, response::IntoResponse};
-use hyper::StatusCode;
-use mas_axum_utils::record_error;
+use salvo::prelude::*;
+use salvo::http::StatusCode;
+use pasion_salvo_utils::record_error;
 use pasion_data_model::BoxRng;
 use pasion_storage::queue::{DeactivateUserJob, QueueJobRepositoryExt as _};
 use schemars::JsonSchema;
@@ -11,16 +10,15 @@ use ulid::Ulid;
 
 use crate::{
     admin::{
-        call_context::CallContext,
+        call_context::extract_call_context,
         model::{Resource, User},
-        params::UlidPathParam,
+        params::extract_ulid_param,
         response::{ErrorResponse, SingleResponse},
     },
     impl_from_error_for_route,
 };
 
-#[derive(Debug, thiserror::Error, OperationIo)]
-#[aide(output_with = "Json<ErrorResponse>")]
+#[derive(Debug, thiserror::Error)]
 pub enum RouteError {
     #[error(transparent)]
     Internal(Box<dyn std::error::Error + Send + Sync + 'static>),
@@ -30,72 +28,50 @@ pub enum RouteError {
 }
 
 impl_from_error_for_route!(pasion_storage::RepositoryError);
+impl_from_error_for_route!(crate::admin::params::UlidPathParamRejection);
+impl_from_error_for_route!(crate::admin::call_context::Rejection);
 
-impl IntoResponse for RouteError {
-    fn into_response(self) -> axum::response::Response {
+impl Scribe for RouteError {
+    fn render(self, res: &mut Response) {
         let error = ErrorResponse::from_error(&self);
         let sentry_event_id = record_error!(self, Self::Internal(_));
         let status = match self {
             Self::Internal(_) => StatusCode::INTERNAL_SERVER_ERROR,
             Self::NotFound(_) => StatusCode::NOT_FOUND,
         };
-        (status, sentry_event_id, Json(error)).into_response()
+        res.status_code(status);
+        if let Some(event_id) = sentry_event_id {
+            if let Ok(value) = http::HeaderValue::from_str(&event_id.to_string()) {
+                res.headers_mut().insert("x-sentry-event-id", value);
+            }
+        }
+        res.render(Json(error));
     }
 }
 
 /// # JSON payload for the `POST /api/admin/v1/users/:id/deactivate` endpoint
 #[derive(Default, Deserialize, JsonSchema)]
 #[serde(rename = "DeactivateUserRequest")]
-pub struct Request {
+pub struct RequestBody {
     /// Whether to skip requesting the homeserver to GDPR-erase the user upon
     /// deactivation.
     #[serde(default)]
     skip_erase: bool,
 }
 
-pub fn doc(mut operation: TransformOperation) -> TransformOperation {
-    operation
-        .inner_mut()
-        .request_body
-        .as_mut()
-        .unwrap()
-        .as_item_mut()
-        .unwrap()
-        .required = false;
-
-    operation
-        .id("deactivateUser")
-        .summary("Deactivate a user")
-        .description(
-            "Calling this endpoint will deactivate the user, preventing them from doing any action.
-This invalidates any existing session, and will ask the homeserver to make them leave all rooms.",
-        )
-        .tag("user")
-        .response_with::<200, Json<SingleResponse<User>>, _>(|t| {
-            // In the samples, the third user is the one locked
-            let [_alice, _bob, charlie, ..] = User::samples();
-            let id = charlie.id();
-            let response =
-                SingleResponse::new(charlie, format!("/api/admin/v1/users/{id}/deactivate"));
-            t.description("User was deactivated").example(response)
-        })
-        .response_with::<404, RouteError, _>(|t| {
-            let response = ErrorResponse::from_error(&RouteError::NotFound(Ulid::nil()));
-            t.description("User ID not found").example(response)
-        })
-}
-
+#[handler]
 #[tracing::instrument(name = "handler.admin.v1.users.deactivate", skip_all)]
 pub async fn handler(
-    CallContext {
-        mut repo, clock, ..
-    }: CallContext,
-    NoApi(mut rng): NoApi<BoxRng>,
-    id: UlidPathParam,
-    body: Option<Json<Request>>,
-) -> Result<Json<SingleResponse<User>>, RouteError> {
-    let Json(params) = body.unwrap_or_default();
-    let id = *id;
+    req: &mut Request,
+    depot: &Depot) -> Result<Json<SingleResponse<User>>, RouteError> {
+    let call_context = extract_call_context(req, depot).await?;
+    let crate::admin::call_context::CallContext { mut repo, clock, .. } = call_context;
+    let id = extract_ulid_param(req)?;
+    let mut rng = crate::rest::make_rng();
+    let body: Option<RequestBody> = req.parse_json().await.ok();
+
+    let params = body.unwrap_or_default();
+    // id already extracted above
     let user = repo
         .user()
         .lookup(id)

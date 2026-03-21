@@ -1,18 +1,15 @@
-use aide::{OperationIo, transform::TransformOperation};
-use axum::{Json, response::IntoResponse};
-use axum_extra::extract::{Query, QueryRejection};
-use axum_macros::FromRequestParts;
-use hyper::StatusCode;
-use mas_axum_utils::record_error;
+use salvo::prelude::*;
+use salvo::http::StatusCode;
+use pasion_salvo_utils::record_error;
 use pasion_storage::{Page, user::UserFilter};
 use schemars::JsonSchema;
 use serde::Deserialize;
 
 use crate::{
     admin::{
-        call_context::CallContext,
+        call_context::extract_call_context,
         model::{Resource, User},
-        params::{IncludeCount, Pagination},
+        params::{IncludeCount, extract_pagination},
         response::{ErrorResponse, PaginatedResponse},
     },
     impl_from_error_for_route,
@@ -36,10 +33,8 @@ impl std::fmt::Display for UserStatus {
     }
 }
 
-#[derive(FromRequestParts, Deserialize, JsonSchema, OperationIo)]
+#[derive(Deserialize, JsonSchema, Default)]
 #[serde(rename = "UserFilter")]
-#[aide(input_with = "Query<FilterParams>")]
-#[from_request(via(Query), rejection(RouteError))]
 pub struct FilterParams {
     /// Retrieve users with (or without) the `admin` flag set
     #[serde(rename = "filter[admin]")]
@@ -95,66 +90,44 @@ impl std::fmt::Display for FilterParams {
     }
 }
 
-#[derive(Debug, thiserror::Error, OperationIo)]
-#[aide(output_with = "Json<ErrorResponse>")]
+#[derive(Debug, thiserror::Error)]
 pub enum RouteError {
     #[error(transparent)]
     Internal(Box<dyn std::error::Error + Send + Sync + 'static>),
 
-    #[error("Invalid filter parameters")]
-    InvalidFilter(#[from] QueryRejection),
 }
 
 impl_from_error_for_route!(pasion_storage::RepositoryError);
+impl_from_error_for_route!(crate::admin::params::PaginationRejection);
+impl_from_error_for_route!(crate::admin::call_context::Rejection);
 
-impl IntoResponse for RouteError {
-    fn into_response(self) -> axum::response::Response {
+impl Scribe for RouteError {
+    fn render(self, res: &mut Response) {
         let error = ErrorResponse::from_error(&self);
         let sentry_event_id = record_error!(self, Self::Internal(_));
         let status = match self {
             Self::Internal(_) => StatusCode::INTERNAL_SERVER_ERROR,
-            Self::InvalidFilter(_) => StatusCode::BAD_REQUEST,
         };
-        (status, sentry_event_id, Json(error)).into_response()
+        res.status_code(status);
+        if let Some(event_id) = sentry_event_id {
+            if let Ok(value) = http::HeaderValue::from_str(&event_id.to_string()) {
+                res.headers_mut().insert("x-sentry-event-id", value);
+            }
+        }
+        res.render(Json(error));
     }
 }
 
-pub fn doc(operation: TransformOperation) -> TransformOperation {
-    operation
-        .id("listUsers")
-        .summary("List users")
-        .tag("user")
-        .response_with::<200, Json<PaginatedResponse<User>>, _>(|t| {
-            let users = User::samples();
-            let pagination = pasion_storage::Pagination::first(users.len());
-            let page = Page {
-                edges: users
-                    .into_iter()
-                    .map(|node| pasion_storage::pagination::Edge {
-                        cursor: node.id(),
-                        node,
-                    })
-                    .collect(),
-                has_next_page: true,
-                has_previous_page: false,
-            };
-
-            t.description("Paginated response of users")
-                .example(PaginatedResponse::for_page(
-                    page,
-                    pagination,
-                    Some(42),
-                    User::PATH,
-                ))
-        })
-}
-
+#[handler]
 #[tracing::instrument(name = "handler.admin.v1.users.list", skip_all)]
 pub async fn handler(
-    CallContext { mut repo, .. }: CallContext,
-    Pagination(pagination, include_count): Pagination,
-    params: FilterParams,
-) -> Result<Json<PaginatedResponse<User>>, RouteError> {
+    req: &mut Request,
+    depot: &Depot) -> Result<Json<PaginatedResponse<User>>, RouteError> {
+    let call_context = extract_call_context(req, depot).await?;
+    let crate::admin::call_context::CallContext { mut repo, .. } = call_context;
+    let (pagination, include_count) = extract_pagination(req)?;
+    let params: FilterParams = req.parse_queries().unwrap_or_default();
+
     let base = format!("{path}{params}", path = User::PATH);
     let base = include_count.add_to_base(&base);
     let filter = UserFilter::default();

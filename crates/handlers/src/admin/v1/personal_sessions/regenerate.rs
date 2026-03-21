@@ -1,8 +1,7 @@
-use aide::{NoApi, OperationIo, transform::TransformOperation};
-use axum::{Json, response::IntoResponse};
+use salvo::prelude::*;
 use chrono::Duration;
-use hyper::StatusCode;
-use mas_axum_utils::record_error;
+use salvo::http::StatusCode;
+use pasion_salvo_utils::record_error;
 use pasion_data_model::{BoxRng, TokenType};
 use schemars::JsonSchema;
 use serde::Deserialize;
@@ -10,17 +9,16 @@ use tracing::error;
 
 use crate::{
     admin::{
-        call_context::CallContext,
+        call_context::extract_call_context,
         model::{InconsistentPersonalSession, PersonalSession},
-        params::UlidPathParam,
+        params::extract_ulid_param,
         response::{ErrorResponse, SingleResponse},
         v1::personal_sessions::personal_session_owner_from_caller,
     },
     impl_from_error_for_route,
 };
 
-#[derive(Debug, thiserror::Error, OperationIo)]
-#[aide(output_with = "Json<ErrorResponse>")]
+#[derive(Debug, thiserror::Error)]
 pub enum RouteError {
     #[error(transparent)]
     Internal(Box<dyn std::error::Error + Send + Sync + 'static>),
@@ -39,10 +37,12 @@ pub enum RouteError {
 }
 
 impl_from_error_for_route!(pasion_storage::RepositoryError);
+impl_from_error_for_route!(crate::admin::params::UlidPathParamRejection);
+impl_from_error_for_route!(crate::admin::call_context::Rejection);
 impl_from_error_for_route!(InconsistentPersonalSession);
 
-impl IntoResponse for RouteError {
-    fn into_response(self) -> axum::response::Response {
+impl Scribe for RouteError {
+    fn render(self, res: &mut Response) {
         let error = ErrorResponse::from_error(&self);
         let sentry_event_id = record_error!(self, Self::Internal(_));
         let status = match self {
@@ -51,48 +51,37 @@ impl IntoResponse for RouteError {
             Self::SessionNotValid => StatusCode::UNPROCESSABLE_ENTITY,
             Self::SessionNotYours => StatusCode::FORBIDDEN,
         };
-        (status, sentry_event_id, Json(error)).into_response()
+        res.status_code(status);
+        if let Some(event_id) = sentry_event_id {
+            if let Ok(value) = http::HeaderValue::from_str(&event_id.to_string()) {
+                res.headers_mut().insert("x-sentry-event-id", value);
+            }
+        }
+        res.render(Json(error));
     }
 }
 
 /// # JSON payload for the `POST /api/admin/v1/personal-sessions/{id}/regenerate` endpoint
 #[derive(Deserialize, JsonSchema)]
 #[serde(rename = "RegeneratePersonalSessionRequest")]
-pub struct Request {
+pub struct RequestBody {
     /// Token expiry time in seconds.
     /// If not set, the token won't expire.
     expires_in: Option<u32>,
 }
 
-pub fn doc(operation: TransformOperation) -> TransformOperation {
-    operation
-        .id("regeneratePersonalSession")
-        .summary("Regenerate a personal session by replacing its personal access token")
-        .tag("personal-session")
-        .response_with::<201, Json<SingleResponse<PersonalSession>>, _>(|t| {
-            t.description(
-                "Personal session was regenerated and a personal access token was created",
-            )
-        })
-        .response_with::<404, RouteError, _>(|t| {
-            let response = ErrorResponse::from_error(&RouteError::UserNotFound);
-            t.description("User was not found").example(response)
-        })
-}
-
+#[handler]
 #[tracing::instrument(name = "handler.admin.v1.personal_sessions.add", skip_all)]
 pub async fn handler(
-    CallContext {
-        mut repo,
-        clock,
-        session: caller_session,
-        ..
-    }: CallContext,
-    NoApi(mut rng): NoApi<BoxRng>,
-    id: UlidPathParam,
-    Json(params): Json<Request>,
-) -> Result<(StatusCode, Json<SingleResponse<PersonalSession>>), RouteError> {
-    let session_id = *id;
+    req: &mut Request,
+    depot: &Depot) -> Result<(StatusCode, Json<SingleResponse<PersonalSession>>), RouteError> {
+    let call_context = extract_call_context(req, depot).await?;
+    let crate::admin::call_context::CallContext { mut repo, clock, session: caller_session, .. } = call_context;
+    let id = extract_ulid_param(req)?;
+    let mut rng = crate::rest::make_rng();
+    let params: RequestBody = req.parse_json().await.unwrap_or(RequestBody { expires_in: None });
+
+    let session_id = id;
 
     let session = repo
         .personal_session()

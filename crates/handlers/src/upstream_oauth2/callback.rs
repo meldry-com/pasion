@@ -1,30 +1,19 @@
 use std::sync::LazyLock;
 
-use axum::{
-    Form,
-    extract::{Path, State},
-    http::Method,
-    response::{Html, IntoResponse, Response},
-};
-use hyper::StatusCode;
-use mas_axum_utils::{GenericError, InternalError, cookies::CookieJar};
+use pasion_salvo_utils::{GenericError, InternalError, cookies::CookieJar};
 use pasion_data_model::{
-    BoxClock, BoxRng, Clock, UpstreamOAuthProvider, UpstreamOAuthProviderResponseMode,
+    Clock, UpstreamOAuthProvider, UpstreamOAuthProviderResponseMode,
 };
 use pasion_jose::claims::TokenHash;
-use pasion_keystore::{Encrypter, Keystore};
 use pasion_oidc_client::requests::jose::JwtVerificationData;
-use pasion_router::UrlBuilder;
-use pasion_storage::{
-    BoxRepository,
-    upstream_oauth2::{
-        UpstreamOAuthLinkRepository, UpstreamOAuthProviderRepository,
-        UpstreamOAuthSessionRepository,
-    },
+use pasion_storage::upstream_oauth2::{
+    UpstreamOAuthLinkRepository, UpstreamOAuthProviderRepository,
+    UpstreamOAuthSessionRepository,
 };
-use pasion_templates::{FormPostContext, Templates};
+use pasion_templates::FormPostContext;
 use oauth2_types::{errors::ClientErrorCode, requests::AccessTokenRequest};
 use opentelemetry::{Key, KeyValue, metrics::Counter};
+use salvo::prelude::*;
 use serde::{Deserialize, Serialize};
 use serde_json::json;
 use thiserror::Error;
@@ -37,7 +26,7 @@ use super::{
     template::{AttributeMappingContext, environment},
 };
 use crate::{
-    METER, PreferredLanguage, impl_from_error_for_route, upstream_oauth2::cache::MetadataCache,
+    METER, impl_from_error_for_route,
 };
 
 static CALLBACK_COUNTER: LazyLock<Counter<u64>> = LazyLock::new(|| {
@@ -85,7 +74,7 @@ impl Params {
 }
 
 #[derive(Debug, Error)]
-pub(crate) enum RouteError {
+pub enum RouteError {
     #[error("Session not found")]
     SessionNotFound,
 
@@ -139,6 +128,7 @@ pub(crate) enum RouteError {
 
 impl_from_error_for_route!(pasion_templates::TemplateError);
 impl_from_error_for_route!(pasion_storage::RepositoryError);
+impl_from_error_for_route!(crate::rest::RouteError);
 impl_from_error_for_route!(pasion_oidc_client::error::DiscoveryError);
 impl_from_error_for_route!(pasion_oidc_client::error::JwksError);
 impl_from_error_for_route!(pasion_oidc_client::error::TokenRequestError);
@@ -147,40 +137,62 @@ impl_from_error_for_route!(pasion_oidc_client::error::UserInfoError);
 impl_from_error_for_route!(super::ProviderCredentialsError);
 impl_from_error_for_route!(super::cookie::UpstreamSessionNotFound);
 
-impl IntoResponse for RouteError {
-    fn into_response(self) -> axum::response::Response {
+impl Scribe for RouteError {
+    fn render(self, res: &mut Response) {
         match self {
-            Self::Internal(e) => InternalError::new(e).into_response(),
+            Self::Internal(e) => InternalError::new(e).render(res),
             e @ (Self::ProviderNotFound | Self::SessionNotFound) => {
-                GenericError::new(StatusCode::NOT_FOUND, e).into_response()
+                GenericError::new(StatusCode::NOT_FOUND, e).render(res);
             }
-            e => GenericError::new(StatusCode::BAD_REQUEST, e).into_response(),
+            e => GenericError::new(StatusCode::BAD_REQUEST, e).render(res),
         }
     }
 }
 
+#[handler]
 #[tracing::instrument(
     name = "handlers.upstream_oauth2.callback.handler",
-    fields(upstream_oauth_provider.id = %provider_id),
     skip_all,
 )]
 #[allow(clippy::too_many_arguments)]
-pub(crate) async fn handler(
-    mut rng: BoxRng,
-    clock: BoxClock,
-    State(metadata_cache): State<MetadataCache>,
-    mut repo: BoxRepository,
-    State(url_builder): State<UrlBuilder>,
-    State(encrypter): State<Encrypter>,
-    State(keystore): State<Keystore>,
-    State(client): State<reqwest::Client>,
-    State(templates): State<Templates>,
-    method: Method,
-    PreferredLanguage(locale): PreferredLanguage,
-    cookie_jar: CookieJar,
-    Path(provider_id): Path<Ulid>,
-    Form(params): Form<Params>,
-) -> Result<Response, RouteError> {
+pub async fn handler(req: &mut Request, depot: &mut Depot, res: &mut Response) -> Result<(), RouteError> {
+    let provider_id: Ulid = req.param("id").ok_or(RouteError::ProviderNotFound)?;
+    let mut rng = crate::rest::make_rng();
+    let clock = crate::rest::make_clock();
+    let metadata_cache = crate::rest::get_metadata_cache(depot)?;
+    let mut repo = crate::rest::get_repo_factory(depot)?.create().await?;
+    let url_builder = crate::rest::get_url_builder(depot)?;
+    let encrypter = crate::rest::get_encrypter(depot)?;
+    let keystore = crate::rest::get_key_store(depot)?;
+    let client = crate::rest::get_http_client(depot)?;
+    let templates = crate::rest::get_templates(depot)?;
+    let locale = crate::preferred_language(req, depot);
+    let cookie_jar = crate::rest::extract_cookie_jar(req, depot)?;
+    let method = req.method().clone();
+
+    // For POST requests, parse from form body; for GET requests, parse from query
+    let params: Params = if method == http::Method::POST {
+        req.parse_form().await.unwrap_or_else(|_| Params {
+            state: None,
+            did_mas_repost_to_itself: false,
+            code: None,
+            error: None,
+            error_description: None,
+            error_uri: None,
+            extra_callback_parameters: None,
+        })
+    } else {
+        req.parse_queries().unwrap_or_else(|_| Params {
+            state: None,
+            did_mas_repost_to_itself: false,
+            code: None,
+            error: None,
+            error_description: None,
+            error_uri: None,
+            extra_callback_parameters: None,
+        })
+    };
+
     let provider = repo
         .upstream_oauth_provider()
         .lookup(provider_id)
@@ -191,7 +203,7 @@ pub(crate) async fn handler(
     let sessions_cookie = UpstreamSessionsCookie::load(&cookie_jar);
 
     if params.is_empty() {
-        if let Method::GET = method {
+        if method == http::Method::GET {
             return Err(RouteError::MissingQueryParams);
         }
 
@@ -201,8 +213,8 @@ pub(crate) async fn handler(
     // The `Form` extractor will use the body of the request for POST requests and
     // the query parameters for GET requests. We need to then look at the method do
     // make sure it matches the expected `response_mode`
-    match (provider.response_mode, method) {
-        (Some(UpstreamOAuthProviderResponseMode::FormPost) | None, Method::POST) => {
+    match (provider.response_mode, &method) {
+        (Some(UpstreamOAuthProviderResponseMode::FormPost) | None, &http::Method::POST) => {
             // We set the cookies with a `Same-Site` policy set to `Lax`, so because this is
             // usually a cross-site form POST, we need to render a form with the
             // same values, which posts back to the same URL. However, there are
@@ -215,10 +227,11 @@ pub(crate) async fn handler(
                 };
                 let context = FormPostContext::new_for_current_url(params).with_language(&locale);
                 let html = templates.render_form_post(&context)?;
-                return Ok(Html(html).into_response());
+                res.render(Text::Html(html));
+                return Ok(());
             }
         }
-        (None, _) | (Some(UpstreamOAuthProviderResponseMode::Query), Method::GET) => {}
+        (None, _) | (Some(UpstreamOAuthProviderResponseMode::Query), &http::Method::GET) => {}
         (Some(expected), _) => return Err(RouteError::InvalidResponseMode { expected }),
     }
 
@@ -487,9 +500,9 @@ pub(crate) async fn handler(
 
     repo.save().await?;
 
-    Ok((
-        cookie_jar,
+    cookie_jar.write_to_response(res);
+    res.render(
         url_builder.redirect(&pasion_router::UpstreamOAuth2Link::new(link.id)),
-    )
-        .into_response())
+    );
+    Ok(())
 }

@@ -1,66 +1,61 @@
-use axum::{
-    extract::{Path, State},
-    response::{IntoResponse, Redirect},
-};
-use axum_extra::extract::Query;
-use hyper::StatusCode;
-use mas_axum_utils::{GenericError, InternalError, cookies::CookieJar};
-use pasion_data_model::{BoxClock, BoxRng, UpstreamOAuthProvider};
+use pasion_salvo_utils::{GenericError, InternalError, cookies::CookieJar};
+use pasion_data_model::UpstreamOAuthProvider;
 use pasion_oidc_client::requests::authorization_code::AuthorizationRequestData;
-use pasion_router::{PostAuthAction, UrlBuilder};
-use pasion_storage::{
-    BoxRepository,
-    upstream_oauth2::{UpstreamOAuthProviderRepository, UpstreamOAuthSessionRepository},
-};
+use pasion_router::PostAuthAction;
+use pasion_storage::upstream_oauth2::{UpstreamOAuthProviderRepository, UpstreamOAuthSessionRepository};
+use salvo::prelude::*;
 use thiserror::Error;
 use ulid::Ulid;
 
 use super::{UpstreamSessionsCookie, cache::LazyProviderInfos};
 use crate::{
-    impl_from_error_for_route, upstream_oauth2::cache::MetadataCache,
+    impl_from_error_for_route,
     views::shared::OptionalPostAuthAction,
 };
 
 #[derive(Debug, Error)]
-pub(crate) enum RouteError {
+pub enum RouteError {
     #[error("Provider not found")]
     ProviderNotFound,
 
     #[error(transparent)]
-    Internal(Box<dyn std::error::Error>),
+    Internal(Box<dyn std::error::Error + Send + Sync + 'static>),
 }
 
 impl_from_error_for_route!(pasion_oidc_client::error::DiscoveryError);
 impl_from_error_for_route!(pasion_oidc_client::error::AuthorizationError);
 impl_from_error_for_route!(pasion_storage::RepositoryError);
+impl_from_error_for_route!(crate::rest::RouteError);
 
-impl IntoResponse for RouteError {
-    fn into_response(self) -> axum::response::Response {
+impl Scribe for RouteError {
+    fn render(self, res: &mut Response) {
         match self {
             e @ Self::ProviderNotFound => {
-                GenericError::new(StatusCode::NOT_FOUND, e).into_response()
+                GenericError::new(StatusCode::NOT_FOUND, e).render(res);
             }
-            Self::Internal(e) => InternalError::new(e).into_response(),
+            Self::Internal(e) => {
+                InternalError::new(e).render(res);
+            }
         }
     }
 }
 
+#[handler]
 #[tracing::instrument(
     name = "handlers.upstream_oauth2.authorize.get",
-    fields(upstream_oauth_provider.id = %provider_id),
     skip_all,
 )]
-pub(crate) async fn get(
-    mut rng: BoxRng,
-    clock: BoxClock,
-    State(metadata_cache): State<MetadataCache>,
-    mut repo: BoxRepository,
-    State(url_builder): State<UrlBuilder>,
-    State(http_client): State<reqwest::Client>,
-    cookie_jar: CookieJar,
-    Path(provider_id): Path<Ulid>,
-    Query(query): Query<OptionalPostAuthAction>,
-) -> Result<impl IntoResponse, RouteError> {
+pub async fn get(req: &mut Request, depot: &mut Depot, res: &mut Response) -> Result<(), RouteError> {
+    let provider_id: Ulid = req.param("id").ok_or(RouteError::ProviderNotFound)?;
+    let mut rng = crate::rest::make_rng();
+    let clock = crate::rest::make_clock();
+    let metadata_cache = crate::rest::get_metadata_cache(depot)?;
+    let mut repo = crate::rest::get_repo_factory(depot)?.create().await?;
+    let url_builder = crate::rest::get_url_builder(depot)?;
+    let http_client = crate::rest::get_http_client(depot)?;
+    let cookie_jar = crate::rest::extract_cookie_jar(req, depot)?;
+    let query: OptionalPostAuthAction = req.parse_queries().unwrap_or_default();
+
     let provider = repo
         .upstream_oauth_provider()
         .lookup(provider_id)
@@ -139,5 +134,7 @@ pub(crate) async fn get(
 
     repo.save().await?;
 
-    Ok((cookie_jar, Redirect::temporary(url.as_str())))
+    cookie_jar.write_to_response(res);
+    res.render(Redirect::temporary(url.as_str()));
+    Ok(())
 }

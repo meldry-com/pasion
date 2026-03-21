@@ -1,40 +1,34 @@
-use axum::{
-    Form,
-    extract::{Path, State},
-    response::{Html, IntoResponse, Response},
-};
-use hyper::StatusCode;
-use mas_axum_utils::{
+use salvo::prelude::*;
+use salvo::writing::Text;
+use pasion_salvo_utils::{
     InternalError, SessionInfoExt,
     cookies::CookieJar,
     csrf::{CsrfExt, ProtectedForm},
 };
-use pasion_data_model::{BoxClock, BoxRng, SiteConfig};
-use pasion_router::UrlBuilder;
-use pasion_storage::{
-    BoxRepository,
-    queue::{QueueJobRepositoryExt as _, SendAccountRecoveryEmailsJob},
-};
+use pasion_storage::queue::{QueueJobRepositoryExt as _, SendAccountRecoveryEmailsJob};
 use pasion_templates::{EmptyContext, RecoveryProgressContext, TemplateContext, Templates};
 use ulid::Ulid;
 
-use crate::{Limiter, PreferredLanguage, RequesterFingerprint};
+use crate::{RequesterFingerprint, rest};
 
-pub(crate) async fn get(
-    mut rng: BoxRng,
-    clock: BoxClock,
-    mut repo: BoxRepository,
-    State(site_config): State<SiteConfig>,
-    State(templates): State<Templates>,
-    State(url_builder): State<UrlBuilder>,
-    PreferredLanguage(locale): PreferredLanguage,
-    cookie_jar: CookieJar,
-    Path(id): Path<Ulid>,
-) -> Result<Response, InternalError> {
+#[handler]
+pub async fn get(req: &mut Request, depot: &Depot, res: &mut Response) -> Result<(), InternalError> {
+    let mut rng = rest::make_rng();
+    let clock = rest::make_clock();
+    let locale = crate::preferred_language(req, depot);
+    let site_config = rest::get_site_config(depot)?;
+    let templates = rest::get_templates(depot)?;
+    let url_builder = rest::get_url_builder(depot)?;
+    let mut repo = rest::get_repo_factory(depot)?.create().await?;
+    let cookie_jar = rest::extract_cookie_jar(req, depot)?;
+    let id: Ulid = req.param("id").unwrap_or_default();
+
     if !site_config.account_recovery_allowed {
         let context = EmptyContext.with_language(locale);
         let rendered = templates.render_recovery_disabled(&context)?;
-        return Ok((cookie_jar, Html(rendered)).into_response());
+            cookie_jar.write_to_response(res);
+        res.render(Text::Html(rendered));
+        return Ok(());
     }
 
     let (session_info, cookie_jar) = cookie_jar.session_info();
@@ -43,22 +37,24 @@ pub(crate) async fn get(
     let maybe_session = session_info.load_active_session(&mut repo).await?;
     if maybe_session.is_some() {
         // TODO: redirect to continue whatever action was going on
-        return Ok((cookie_jar, url_builder.redirect(&pasion_router::Index)).into_response());
+            cookie_jar.write_to_response(res);
+        res.render(url_builder.redirect(&pasion_router::Index));
+        return Ok(());
     }
 
     let Some(recovery_session) = repo.user_recovery().lookup_session(id).await? else {
         // XXX: is that the right thing to do?
-        return Ok((
-            cookie_jar,
-            url_builder.redirect(&pasion_router::AccountRecoveryStart),
-        )
-            .into_response());
+            cookie_jar.write_to_response(res);
+        res.render(url_builder.redirect(&pasion_router::AccountRecoveryStart));
+        return Ok(());
     };
 
     if recovery_session.consumed_at.is_some() {
         let context = EmptyContext.with_language(locale);
         let rendered = templates.render_recovery_consumed(&context)?;
-        return Ok((cookie_jar, Html(rendered)).into_response());
+            cookie_jar.write_to_response(res);
+        res.render(Text::Html(rendered));
+        return Ok(());
     }
 
     let context = RecoveryProgressContext::new(recovery_session, false)
@@ -69,26 +65,34 @@ pub(crate) async fn get(
 
     let rendered = templates.render_recovery_progress(&context)?;
 
-    Ok((cookie_jar, Html(rendered)).into_response())
+    cookie_jar.write_to_response(res);
+    res.render(Text::Html(rendered));
+    Ok(())
 }
 
-pub(crate) async fn post(
-    mut rng: BoxRng,
-    clock: BoxClock,
-    mut repo: BoxRepository,
-    State(site_config): State<SiteConfig>,
-    State(templates): State<Templates>,
-    State(url_builder): State<UrlBuilder>,
-    (State(limiter), requester): (State<Limiter>, RequesterFingerprint),
-    PreferredLanguage(locale): PreferredLanguage,
-    cookie_jar: CookieJar,
-    Path(id): Path<Ulid>,
-    Form(form): Form<ProtectedForm<()>>,
-) -> Result<Response, InternalError> {
+#[handler]
+pub async fn post(req: &mut Request, depot: &Depot, res: &mut Response) -> Result<(), InternalError> {
+    let mut rng = rest::make_rng();
+    let clock = rest::make_clock();
+    let locale = crate::preferred_language(req, depot);
+    let site_config = rest::get_site_config(depot)?;
+    let templates = rest::get_templates(depot)?;
+    let url_builder = rest::get_url_builder(depot)?;
+    let limiter = rest::get_limiter(depot)?;
+    let mut repo = rest::get_repo_factory(depot)?.create().await?;
+    let activity_tracker = rest::extract_bound_activity_tracker(req, depot);
+    let requester = activity_tracker.ip().map(RequesterFingerprint::new).unwrap_or(RequesterFingerprint::EMPTY);
+    let cookie_jar = rest::extract_cookie_jar(req, depot)?;
+    let id: Ulid = req.param("id").unwrap_or_default();
+    let form: ProtectedForm<()> = req.parse_form().await
+        .map_err(|e| InternalError::from_anyhow(e.into()))?;
+
     if !site_config.account_recovery_allowed {
         let context = EmptyContext.with_language(locale);
         let rendered = templates.render_recovery_disabled(&context)?;
-        return Ok((cookie_jar, Html(rendered)).into_response());
+            cookie_jar.write_to_response(res);
+        res.render(Text::Html(rendered));
+        return Ok(());
     }
 
     let (session_info, cookie_jar) = cookie_jar.session_info();
@@ -97,22 +101,24 @@ pub(crate) async fn post(
     let maybe_session = session_info.load_active_session(&mut repo).await?;
     if maybe_session.is_some() {
         // TODO: redirect to continue whatever action was going on
-        return Ok((cookie_jar, url_builder.redirect(&pasion_router::Index)).into_response());
+            cookie_jar.write_to_response(res);
+        res.render(url_builder.redirect(&pasion_router::Index));
+        return Ok(());
     }
 
     let Some(recovery_session) = repo.user_recovery().lookup_session(id).await? else {
         // XXX: is that the right thing to do?
-        return Ok((
-            cookie_jar,
-            url_builder.redirect(&pasion_router::AccountRecoveryStart),
-        )
-            .into_response());
+            cookie_jar.write_to_response(res);
+        res.render(url_builder.redirect(&pasion_router::AccountRecoveryStart));
+        return Ok(());
     };
 
     if recovery_session.consumed_at.is_some() {
         let context = EmptyContext.with_language(locale);
         let rendered = templates.render_recovery_consumed(&context)?;
-        return Ok((cookie_jar, Html(rendered)).into_response());
+            cookie_jar.write_to_response(res);
+        res.render(Text::Html(rendered));
+        return Ok(());
     }
 
     // Verify the CSRF token
@@ -126,7 +132,10 @@ pub(crate) async fn post(
             .with_language(locale);
         let rendered = templates.render_recovery_progress(&context)?;
 
-        return Ok((StatusCode::TOO_MANY_REQUESTS, (cookie_jar, Html(rendered))).into_response());
+            res.status_code(StatusCode::TOO_MANY_REQUESTS);
+        cookie_jar.write_to_response(res);
+        res.render(Text::Html(rendered));
+        return Ok(());
     }
 
     // Schedule a new batch of emails
@@ -146,5 +155,7 @@ pub(crate) async fn post(
 
     let rendered = templates.render_recovery_progress(&context)?;
 
-    Ok((cookie_jar, Html(rendered)).into_response())
+    cookie_jar.write_to_response(res);
+    res.render(Text::Html(rendered));
+    Ok(())
 }

@@ -19,6 +19,12 @@ impl SentryEventID {
     }
 }
 
+impl std::fmt::Display for SentryEventID {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.0)
+    }
+}
+
 impl From<Uuid> for SentryEventID {
     fn from(uuid: Uuid) -> Self {
         Self(uuid)

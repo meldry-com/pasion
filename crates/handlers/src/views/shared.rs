@@ -26,14 +26,14 @@ impl OptionalPostAuthAction {
         &self,
         url_builder: &UrlBuilder,
         default: &T,
-    ) -> axum::response::Redirect {
+    ) -> salvo::writing::Redirect {
         self.post_auth_action.as_ref().map_or_else(
             || url_builder.redirect(default),
             |action| action.go_next(url_builder),
         )
     }
 
-    pub fn go_next(&self, url_builder: &UrlBuilder) -> axum::response::Redirect {
+    pub fn go_next(&self, url_builder: &UrlBuilder) -> salvo::writing::Redirect {
         self.go_next_or_default(url_builder, &pasion_router::Index)
     }
 

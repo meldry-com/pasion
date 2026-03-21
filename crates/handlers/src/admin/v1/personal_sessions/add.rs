@@ -1,11 +1,10 @@
+use salvo::prelude::*;
 use std::sync::Arc;
 
-use aide::{NoApi, OperationIo, transform::TransformOperation};
 use anyhow::Context;
-use axum::{Json, extract::State, response::IntoResponse};
 use chrono::Duration;
-use hyper::StatusCode;
-use mas_axum_utils::record_error;
+use salvo::http::StatusCode;
+use pasion_salvo_utils::record_error;
 use pasion_data_model::{BoxRng, Device, TokenType};
 use pasion_matrix::HomeserverConnection;
 use oauth2_types::scope::Scope;
@@ -15,7 +14,7 @@ use ulid::Ulid;
 
 use crate::{
     admin::{
-        call_context::CallContext,
+        call_context::extract_call_context,
         model::{InconsistentPersonalSession, PersonalSession},
         response::{ErrorResponse, SingleResponse},
         v1::personal_sessions::personal_session_owner_from_caller,
@@ -23,8 +22,7 @@ use crate::{
     impl_from_error_for_route,
 };
 
-#[derive(Debug, thiserror::Error, OperationIo)]
-#[aide(output_with = "Json<ErrorResponse>")]
+#[derive(Debug, thiserror::Error)]
 pub enum RouteError {
     #[error(transparent)]
     Internal(Box<dyn std::error::Error + Send + Sync + 'static>),
@@ -40,10 +38,12 @@ pub enum RouteError {
 }
 
 impl_from_error_for_route!(pasion_storage::RepositoryError);
+impl_from_error_for_route!(crate::rest::RouteError);
+impl_from_error_for_route!(crate::admin::call_context::Rejection);
 impl_from_error_for_route!(InconsistentPersonalSession);
 
-impl IntoResponse for RouteError {
-    fn into_response(self) -> axum::response::Response {
+impl Scribe for RouteError {
+    fn render(self, res: &mut Response) {
         let error = ErrorResponse::from_error(&self);
         let sentry_event_id = record_error!(self, Self::Internal(_));
         let status = match self {
@@ -52,14 +52,20 @@ impl IntoResponse for RouteError {
             Self::UserDeactivated => StatusCode::GONE,
             Self::InvalidScope => StatusCode::BAD_REQUEST,
         };
-        (status, sentry_event_id, Json(error)).into_response()
+        res.status_code(status);
+        if let Some(event_id) = sentry_event_id {
+            if let Ok(value) = http::HeaderValue::from_str(&event_id.to_string()) {
+                res.headers_mut().insert("x-sentry-event-id", value);
+            }
+        }
+        res.render(Json(error));
     }
 }
 
 /// # JSON payload for the `POST /api/admin/v1/personal-sessions` endpoint
 #[derive(Deserialize, JsonSchema)]
 #[serde(rename = "CreatePersonalSessionRequest")]
-pub struct Request {
+pub struct RequestBody {
     /// The user this session will act on behalf of
     #[schemars(with = "crate::admin::schema::Ulid")]
     actor_user_id: Ulid,
@@ -75,36 +81,14 @@ pub struct Request {
     expires_in: Option<u32>,
 }
 
-pub fn doc(operation: TransformOperation) -> TransformOperation {
-    operation
-        .id("createPersonalSession")
-        .summary("Create a new personal session with personal access token")
-        .tag("personal-session")
-        .response_with::<201, Json<SingleResponse<PersonalSession>>, _>(|t| {
-            t.description("Personal session and personal access token were created")
-        })
-        .response_with::<400, RouteError, _>(|t| {
-            let response = ErrorResponse::from_error(&RouteError::InvalidScope);
-            t.description("Invalid scope provided").example(response)
-        })
-        .response_with::<404, RouteError, _>(|t| {
-            let response = ErrorResponse::from_error(&RouteError::UserNotFound);
-            t.description("User was not found").example(response)
-        })
-}
-
+#[handler]
 #[tracing::instrument(name = "handler.admin.v1.personal_sessions.add", skip_all)]
-pub async fn handler(
-    CallContext {
-        mut repo,
-        clock,
-        session,
-        ..
-    }: CallContext,
-    NoApi(mut rng): NoApi<BoxRng>,
-    NoApi(State(homeserver)): NoApi<State<Arc<dyn HomeserverConnection>>>,
-    Json(params): Json<Request>,
-) -> Result<(StatusCode, Json<SingleResponse<PersonalSession>>), RouteError> {
+pub async fn handler(req: &mut Request, depot: &Depot) -> Result<(StatusCode, Json<SingleResponse<PersonalSession>>), RouteError> {
+    let call_context = extract_call_context(req, depot).await?;
+    let crate::admin::call_context::CallContext { mut repo, clock, session, .. } = call_context;
+    let mut rng = crate::rest::make_rng();
+    let homeserver = crate::rest::get_homeserver(depot)?;
+    let params: RequestBody = req.parse_json().await.map_err(|e| RouteError::Internal(Box::new(e)))?;
     let owner = personal_session_owner_from_caller(&session);
 
     let actor_user = repo

@@ -1,9 +1,9 @@
-use aide::transform::TransformOperation;
-use axum::{Json, extract::State};
+use salvo::prelude::*;
+use pasion_salvo_utils::InternalError;
 use schemars::JsonSchema;
 use serde::Serialize;
 
-use crate::admin::call_context::CallContext;
+use crate::admin::call_context::extract_call_context;
 
 #[allow(clippy::struct_excessive_bools)]
 #[derive(Serialize, JsonSchema)]
@@ -47,35 +47,13 @@ pub struct SiteConfig {
     pub minimum_password_complexity: u8,
 }
 
-pub fn doc(operation: TransformOperation) -> TransformOperation {
-    operation
-        .id("siteConfig")
-        .tag("server")
-        .summary("Get informations about the configuration of this Pasion instance")
-        .response_with::<200, Json<SiteConfig>, _>(|t| {
-            t.example(SiteConfig {
-                server_name: "example.com".to_owned(),
-                password_login_enabled: true,
-                password_registration_enabled: true,
-                password_registration_email_required: true,
-                registration_token_required: true,
-                email_change_allowed: true,
-                displayname_change_allowed: true,
-                password_change_allowed: true,
-                account_recovery_allowed: true,
-                account_deactivation_allowed: true,
-                captcha_enabled: true,
-                minimum_password_complexity: 3,
-            })
-        })
-}
-
+#[handler]
 #[tracing::instrument(name = "handler.admin.v1.site_config", skip_all)]
-pub async fn handler(
-    _: CallContext,
-    State(site_config): State<pasion_data_model::SiteConfig>,
-) -> Json<SiteConfig> {
-    Json(SiteConfig {
+pub async fn handler(req: &mut Request, depot: &Depot) -> Result<Json<SiteConfig>, InternalError> {
+    let _call_context = extract_call_context(req, depot).await?;
+    let site_config = crate::rest::get_site_config(depot)?;
+
+    Ok(Json(SiteConfig {
         server_name: site_config.server_name,
         password_login_enabled: site_config.password_login_enabled,
         password_registration_enabled: site_config.password_registration_enabled,
@@ -88,5 +66,5 @@ pub async fn handler(
         account_deactivation_allowed: site_config.account_deactivation_allowed,
         captcha_enabled: site_config.captcha.is_some(),
         minimum_password_complexity: site_config.minimum_password_complexity,
-    })
+    }))
 }

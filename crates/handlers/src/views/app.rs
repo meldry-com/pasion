@@ -1,38 +1,33 @@
-use axum::{
-    extract::State,
-    response::{Html, IntoResponse},
-};
-use axum_extra::extract::Query;
-use mas_axum_utils::{InternalError, cookies::CookieJar};
-use pasion_data_model::{BoxClock, BoxRng};
-use pasion_router::{PostAuthAction, UrlBuilder};
-use pasion_storage::BoxRepository;
+use salvo::prelude::*;
+use salvo::writing::Text;
+use pasion_salvo_utils::{InternalError, cookies::CookieJar};
+use pasion_router::PostAuthAction;
 use pasion_templates::{AppContext, TemplateContext, Templates};
 use serde::Deserialize;
 
 use crate::{
-    BoundActivityTracker, PreferredLanguage,
+    rest,
     session::{SessionOrFallback, load_session_or_fallback},
 };
 
-#[derive(Deserialize)]
+#[derive(Deserialize, Default)]
 pub struct Params {
     #[serde(default, flatten)]
     action: Option<pasion_router::AccountAction>,
 }
 
-#[tracing::instrument(name = "handlers.views.app.get", skip_all)]
-pub async fn get(
-    PreferredLanguage(locale): PreferredLanguage,
-    State(templates): State<Templates>,
-    activity_tracker: BoundActivityTracker,
-    State(url_builder): State<UrlBuilder>,
-    Query(Params { action }): Query<Params>,
-    mut repo: BoxRepository,
-    clock: BoxClock,
-    mut rng: BoxRng,
-    cookie_jar: CookieJar,
-) -> Result<impl IntoResponse, InternalError> {
+#[handler]
+pub async fn get(req: &mut Request, depot: &Depot, res: &mut Response) -> Result<(), InternalError> {
+    let mut rng = rest::make_rng();
+    let clock = rest::make_clock();
+    let locale = crate::preferred_language(req, depot);
+    let templates = rest::get_templates(depot)?;
+    let url_builder = rest::get_url_builder(depot)?;
+    let mut repo = rest::get_repo_factory(depot)?.create().await?;
+    let activity_tracker = rest::extract_bound_activity_tracker(req, depot);
+    let cookie_jar = rest::extract_cookie_jar(req, depot)?;
+    let Params { action } = req.parse_queries().unwrap_or_default();
+
     let (cookie_jar, maybe_session) = match load_session_or_fallback(
         cookie_jar, &clock, &mut rng, &templates, &locale, &mut repo,
     )
@@ -43,18 +38,16 @@ pub async fn get(
             maybe_session,
             ..
         } => (cookie_jar, maybe_session),
-        SessionOrFallback::Fallback { response } => return Ok(response),
+        SessionOrFallback::Fallback { response } => { *res = response; return Ok(()); }
     };
 
     // TODO: keep the full path, not just the action
     let Some(session) = maybe_session else {
-        return Ok((
-            cookie_jar,
-            url_builder.redirect(&pasion_router::Login::and_then(
-                PostAuthAction::manage_account(action),
-            )),
-        )
-            .into_response());
+            cookie_jar.write_to_response(res);
+        res.render(url_builder.redirect(&pasion_router::Login::and_then(
+            PostAuthAction::manage_account(action),
+        )));
+        return Ok(());
     };
 
     activity_tracker
@@ -64,20 +57,23 @@ pub async fn get(
     let ctx = AppContext::from_url_builder(&url_builder).with_language(locale);
     let content = templates.render_app(&ctx)?;
 
-    Ok((cookie_jar, Html(content)).into_response())
+    cookie_jar.write_to_response(res);
+    res.render(Text::Html(content));
+    Ok(())
 }
 
 /// Like `get`, but allow anonymous access.
 /// Used for a subset of the account management paths.
 /// Needed for e.g. account recovery.
-#[tracing::instrument(name = "handlers.views.app.get_anonymous", skip_all)]
-pub async fn get_anonymous(
-    PreferredLanguage(locale): PreferredLanguage,
-    State(templates): State<Templates>,
-    State(url_builder): State<UrlBuilder>,
-) -> Result<impl IntoResponse, InternalError> {
+#[handler]
+pub async fn get_anonymous(req: &mut Request, depot: &Depot, res: &mut Response) -> Result<(), InternalError> {
+    let locale = crate::preferred_language(req, depot);
+    let templates = rest::get_templates(depot)?;
+    let url_builder = rest::get_url_builder(depot)?;
+
     let ctx = AppContext::from_url_builder(&url_builder).with_language(locale);
     let content = templates.render_app(&ctx)?;
 
-    Ok(Html(content).into_response())
+    res.render(Text::Html(content));
+    Ok(())
 }

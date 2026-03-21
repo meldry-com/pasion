@@ -1,13 +1,10 @@
-use axum::{extract::State, response::IntoResponse};
-use axum_extra::extract::Query;
 use hyper::StatusCode;
-use mas_axum_utils::{GenericError, InternalError};
-use pasion_data_model::{BoxClock, BoxRng};
+use pasion_salvo_utils::{GenericError, InternalError};
 use pasion_router::{CompatLoginSsoAction, CompatLoginSsoComplete, UrlBuilder};
-use pasion_storage::{BoxRepository, compat::CompatSsoLoginRepository};
+use pasion_storage::compat::CompatSsoLoginRepository;
 use rand::distributions::{Alphanumeric, DistString};
+use salvo::prelude::*;
 use serde::Deserialize;
-use serde_with::serde;
 use thiserror::Error;
 use url::Url;
 
@@ -33,26 +30,32 @@ pub enum RouteError {
 }
 
 impl_from_error_for_route!(pasion_storage::RepositoryError);
+impl_from_error_for_route!(crate::rest::RouteError);
 
-impl IntoResponse for RouteError {
-    fn into_response(self) -> axum::response::Response {
+impl Scribe for RouteError {
+    fn render(self, res: &mut Response) {
         match self {
-            Self::Internal(e) => InternalError::new(e).into_response(),
+            Self::Internal(e) => InternalError::new(e).render(res),
             Self::MissingRedirectUrl | Self::InvalidRedirectUrl => {
-                GenericError::new(StatusCode::BAD_REQUEST, self).into_response()
+                GenericError::new(StatusCode::BAD_REQUEST, self).render(res);
             }
         }
     }
 }
 
+#[handler]
 #[tracing::instrument(name = "handlers.compat.login_sso_redirect.get", skip_all)]
-pub async fn get(
-    mut rng: BoxRng,
-    clock: BoxClock,
-    mut repo: BoxRepository,
-    State(url_builder): State<UrlBuilder>,
-    Query(params): Query<Params>,
-) -> Result<impl IntoResponse, RouteError> {
+pub async fn get(req: &mut Request, depot: &Depot) -> Result<Redirect, RouteError> {
+    let mut rng = crate::rest::make_rng();
+    let clock = crate::rest::make_clock();
+    let mut repo = crate::rest::get_repo_factory(depot)?.create().await?;
+    let url_builder = crate::rest::get_url_builder(depot)?;
+
+    let params: Params = req.parse_queries().unwrap_or(Params {
+        redirect_url: None,
+        action: None,
+    });
+
     // Check the redirectUrl parameter
     let redirect_url = params.redirect_url.ok_or(RouteError::MissingRedirectUrl)?;
     let redirect_url = Url::parse(&redirect_url).map_err(|_| RouteError::InvalidRedirectUrl)?;

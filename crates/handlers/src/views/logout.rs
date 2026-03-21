@@ -1,27 +1,24 @@
-use axum::{
-    extract::{Form, State},
-    response::IntoResponse,
-};
-use mas_axum_utils::{
+use salvo::prelude::*;
+use pasion_salvo_utils::{
     InternalError, SessionInfoExt,
     cookies::CookieJar,
     csrf::{CsrfExt, ProtectedForm},
 };
-use pasion_data_model::BoxClock;
-use pasion_router::{PostAuthAction, UrlBuilder};
-use pasion_storage::{BoxRepository, user::BrowserSessionRepository};
+use pasion_router::PostAuthAction;
+use pasion_storage::user::BrowserSessionRepository;
 
-use crate::BoundActivityTracker;
+use crate::rest;
 
-#[tracing::instrument(name = "handlers.views.logout.post", skip_all)]
-pub(crate) async fn post(
-    clock: BoxClock,
-    mut repo: BoxRepository,
-    cookie_jar: CookieJar,
-    State(url_builder): State<UrlBuilder>,
-    activity_tracker: BoundActivityTracker,
-    Form(form): Form<ProtectedForm<Option<PostAuthAction>>>,
-) -> Result<impl IntoResponse, InternalError> {
+#[handler]
+pub async fn post(req: &mut Request, depot: &Depot, res: &mut Response) -> Result<(), InternalError> {
+    let clock = rest::make_clock();
+    let mut repo = rest::get_repo_factory(depot)?.create().await?;
+    let cookie_jar = rest::extract_cookie_jar(req, depot)?;
+    let url_builder = rest::get_url_builder(depot)?;
+    let activity_tracker = rest::extract_bound_activity_tracker(req, depot);
+    let form: ProtectedForm<Option<PostAuthAction>> = req.parse_form().await
+        .map_err(|e| InternalError::from_anyhow(e.into()))?;
+
     let form = cookie_jar.verify_form(&clock, form)?;
 
     let (session_info, cookie_jar) = cookie_jar.session_info();
@@ -51,5 +48,7 @@ pub(crate) async fn post(
         url_builder.redirect(&pasion_router::Login::default())
     };
 
-    Ok((cookie_jar, destination))
+    cookie_jar.write_to_response(res);
+    res.render(destination);
+    Ok(())
 }

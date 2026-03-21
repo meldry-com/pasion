@@ -1,23 +1,21 @@
-use aide::{OperationIo, transform::TransformOperation};
-use axum::{Json, response::IntoResponse};
-use hyper::StatusCode;
-use mas_axum_utils::record_error;
+use salvo::prelude::*;
+use salvo::http::StatusCode;
+use pasion_salvo_utils::record_error;
 use schemars::JsonSchema;
 use serde::Deserialize;
 use ulid::Ulid;
 
 use crate::{
     admin::{
-        call_context::CallContext,
+        call_context::extract_call_context,
         model::{Resource, User},
-        params::UlidPathParam,
+        params::extract_ulid_param,
         response::{ErrorResponse, SingleResponse},
     },
     impl_from_error_for_route,
 };
 
-#[derive(Debug, thiserror::Error, OperationIo)]
-#[aide(output_with = "Json<ErrorResponse>")]
+#[derive(Debug, thiserror::Error)]
 pub enum RouteError {
     #[error(transparent)]
     Internal(Box<dyn std::error::Error + Send + Sync + 'static>),
@@ -27,53 +25,46 @@ pub enum RouteError {
 }
 
 impl_from_error_for_route!(pasion_storage::RepositoryError);
+impl_from_error_for_route!(crate::admin::params::UlidPathParamRejection);
+impl_from_error_for_route!(crate::admin::call_context::Rejection);
 
-impl IntoResponse for RouteError {
-    fn into_response(self) -> axum::response::Response {
+impl Scribe for RouteError {
+    fn render(self, res: &mut Response) {
         let error = ErrorResponse::from_error(&self);
         let sentry_event_id = record_error!(self, Self::Internal(_));
         let status = match self {
             Self::Internal(_) => StatusCode::INTERNAL_SERVER_ERROR,
             Self::NotFound(_) => StatusCode::NOT_FOUND,
         };
-        (status, sentry_event_id, Json(error)).into_response()
+        res.status_code(status);
+        if let Some(event_id) = sentry_event_id {
+            if let Ok(value) = http::HeaderValue::from_str(&event_id.to_string()) {
+                res.headers_mut().insert("x-sentry-event-id", value);
+            }
+        }
+        res.render(Json(error));
     }
 }
 
 /// # JSON payload for the `POST /api/admin/v1/users/:id/set-admin` endpoint
 #[derive(Deserialize, JsonSchema)]
 #[serde(rename = "UserSetAdminRequest")]
-pub struct Request {
+pub struct RequestBody {
     /// Whether the user can request admin privileges.
     admin: bool,
 }
 
-pub fn doc(operation: TransformOperation) -> TransformOperation {
-    operation
-        .id("userSetAdmin")
-        .summary("Set whether a user can request admin")
-        .description("Calling this endpoint will not have any effect on existing sessions, meaning that their existing sessions will keep admin access if they were granted it.")
-        .tag("user")
-        .response_with::<200, Json<SingleResponse<User>>, _>(|t| {
-            // In the samples, the second user is the one which can request admin
-            let [_alice, bob, ..] = User::samples();
-            let id = bob.id();
-            let response = SingleResponse::new(bob, format!("/api/admin/v1/users/{id}/set-admin"));
-            t.description("User had admin privileges set").example(response)
-        })
-        .response_with::<404, RouteError, _>(|t| {
-            let response = ErrorResponse::from_error(&RouteError::NotFound(Ulid::nil()));
-            t.description("User ID not found").example(response)
-        })
-}
-
+#[handler]
 #[tracing::instrument(name = "handler.admin.v1.users.set_admin", skip_all)]
 pub async fn handler(
-    CallContext { mut repo, .. }: CallContext,
-    id: UlidPathParam,
-    Json(params): Json<Request>,
-) -> Result<Json<SingleResponse<User>>, RouteError> {
-    let id = *id;
+    req: &mut Request,
+    depot: &Depot) -> Result<Json<SingleResponse<User>>, RouteError> {
+    let call_context = extract_call_context(req, depot).await?;
+    let crate::admin::call_context::CallContext { mut repo, .. } = call_context;
+    let id = extract_ulid_param(req)?;
+    let params: RequestBody = req.parse_json().await.map_err(|e| RouteError::Internal(Box::new(e)))?;
+
+    // id already extracted above
     let user = repo
         .user()
         .lookup(id)

@@ -96,14 +96,13 @@ impl Scribe for RouteError {
             }
         }
 
-        // Add Sentry event ID if available
-        if let Ok(value) = http::HeaderValue::from_str(&event_id.to_string()) {
-            res.headers_mut().insert(SentryEventID::name(), value);
-        }
+        let sentry_event_id = pasion_salvo_utils::sentry::SentryEventID::from(event_id);
+        sentry_event_id.write_to_response(res);
     }
 }
 
 impl_from_error_for_route!(pasion_storage::RepositoryError);
+impl_from_error_for_route!(pasion_salvo_utils::client_authorization::ClientAuthorizationError);
 
 impl From<pasion_data_model::TokenFormatError> for RouteError {
     fn from(_e: pasion_data_model::TokenFormatError) -> Self {

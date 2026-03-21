@@ -1,19 +1,18 @@
-use axum::{Json, extract::State, response::IntoResponse};
 use chrono::Duration;
 use hyper::StatusCode;
-use mas_axum_utils::record_error;
-use pasion_data_model::{BoxClock, BoxRng, Clock, SiteConfig, TokenFormatError, TokenType};
+use pasion_data_model::{Clock, TokenFormatError, TokenType};
+use pasion_salvo_utils::record_error;
 use pasion_storage::{
-    BoxRepository,
     compat::{CompatAccessTokenRepository, CompatRefreshTokenRepository, CompatSessionRepository},
 };
+use salvo::prelude::*;
 use serde::{Deserialize, Serialize};
 use serde_with::{DurationMilliSeconds, serde_as};
 use thiserror::Error;
 use ulid::Ulid;
 
 use super::MatrixError;
-use crate::{BoundActivityTracker, impl_from_error_for_route};
+use crate::impl_from_error_for_route;
 
 #[derive(Debug, Deserialize)]
 pub struct RequestBody {
@@ -44,8 +43,8 @@ pub enum RouteError {
     UnknownSession(Ulid),
 }
 
-impl IntoResponse for RouteError {
-    fn into_response(self) -> axum::response::Response {
+impl Scribe for RouteError {
+    fn render(self, res: &mut Response) {
         let sentry_event_id = record_error!(self, Self::Internal(_) | Self::UnknownSession(_));
         let response = match self {
             Self::Internal(_) | Self::UnknownSession(_) => MatrixError {
@@ -64,11 +63,17 @@ impl IntoResponse for RouteError {
             },
         };
 
-        (sentry_event_id, response).into_response()
+        response.render(res);
+
+        // Add Sentry event ID header if available
+        if let Some(event_id) = sentry_event_id {
+            event_id.write_to_response(res);
+        }
     }
 }
 
 impl_from_error_for_route!(pasion_storage::RepositoryError);
+impl_from_error_for_route!(crate::rest::RouteError);
 
 #[serde_as]
 #[derive(Debug, Serialize)]
@@ -79,15 +84,20 @@ pub struct ResponseBody {
     expires_in_ms: Duration,
 }
 
+#[handler]
 #[tracing::instrument(name = "handlers.compat.refresh.post", skip_all)]
-pub(crate) async fn post(
-    mut rng: BoxRng,
-    clock: BoxClock,
-    mut repo: BoxRepository,
-    activity_tracker: BoundActivityTracker,
-    State(site_config): State<SiteConfig>,
-    Json(input): Json<RequestBody>,
-) -> Result<impl IntoResponse, RouteError> {
+pub async fn post(req: &mut Request, depot: &Depot) -> Result<Json<ResponseBody>, RouteError> {
+    let mut rng = crate::rest::make_rng();
+    let clock = crate::rest::make_clock();
+    let mut repo = crate::rest::get_repo_factory(depot)?.create().await?;
+    let activity_tracker = crate::rest::extract_bound_activity_tracker(req, depot);
+    let site_config = crate::rest::get_site_config(depot)?;
+
+    let input: RequestBody = req
+        .parse_json()
+        .await
+        .map_err(|e| RouteError::Internal(Box::new(e)))?;
+
     let token_type = TokenType::check(&input.refresh_token)?;
 
     if token_type != TokenType::CompatRefreshToken {

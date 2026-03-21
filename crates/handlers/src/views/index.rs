@@ -1,30 +1,24 @@
-use axum::{
-    extract::State,
-    response::{Html, IntoResponse, Response},
-};
-use mas_axum_utils::{InternalError, cookies::CookieJar, csrf::CsrfExt};
-use pasion_data_model::{BoxClock, BoxRng};
-use pasion_router::UrlBuilder;
-use pasion_storage::BoxRepository;
+use salvo::prelude::*;
+use salvo::writing::Text;
+use pasion_salvo_utils::{InternalError, cookies::CookieJar, csrf::CsrfExt};
 use pasion_templates::{IndexContext, TemplateContext, Templates};
 
 use crate::{
-    BoundActivityTracker,
-    preferred_language::PreferredLanguage,
+    rest,
     session::{SessionOrFallback, load_session_or_fallback},
 };
 
-#[tracing::instrument(name = "handlers.views.index.get", skip_all)]
-pub async fn get(
-    mut rng: BoxRng,
-    clock: BoxClock,
-    activity_tracker: BoundActivityTracker,
-    State(templates): State<Templates>,
-    State(url_builder): State<UrlBuilder>,
-    mut repo: BoxRepository,
-    cookie_jar: CookieJar,
-    PreferredLanguage(locale): PreferredLanguage,
-) -> Result<Response, InternalError> {
+#[handler]
+pub async fn get(req: &mut Request, depot: &Depot, res: &mut Response) -> Result<(), InternalError> {
+    let mut rng = rest::make_rng();
+    let clock = rest::make_clock();
+    let locale = crate::preferred_language(req, depot);
+    let templates = rest::get_templates(depot)?;
+    let url_builder = rest::get_url_builder(depot)?;
+    let mut repo = rest::get_repo_factory(depot)?.create().await?;
+    let activity_tracker = rest::extract_bound_activity_tracker(req, depot);
+    let cookie_jar = rest::extract_cookie_jar(req, depot)?;
+
     let (cookie_jar, maybe_session) = match load_session_or_fallback(
         cookie_jar, &clock, &mut rng, &templates, &locale, &mut repo,
     )
@@ -35,7 +29,7 @@ pub async fn get(
             maybe_session,
             ..
         } => (cookie_jar, maybe_session),
-        SessionOrFallback::Fallback { response } => return Ok(response),
+        SessionOrFallback::Fallback { response } => { *res = response; return Ok(()); }
     };
 
     let (csrf_token, cookie_jar) = cookie_jar.csrf_token(&clock, &mut rng);
@@ -53,5 +47,7 @@ pub async fn get(
 
     let content = templates.render_index(&ctx)?;
 
-    Ok((cookie_jar, Html(content)).into_response())
+    cookie_jar.write_to_response(res);
+    res.render(Text::Html(content));
+    Ok(())
 }

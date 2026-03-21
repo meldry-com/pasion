@@ -225,6 +225,43 @@ pub fn get_limiter(depot: &Depot) -> Result<Limiter, RouteError> {
     depot_get(depot, "limiter")
 }
 
+pub fn get_templates(depot: &Depot) -> Result<pasion_templates::Templates, RouteError> {
+    depot_get(depot, "templates")
+}
+
+pub fn get_translator(depot: &Depot) -> Result<Arc<pasion_i18n::Translator>, RouteError> {
+    depot_get(depot, "translator")
+}
+
+pub fn get_cookie_manager(depot: &Depot) -> Result<crate::CookieManager, RouteError> {
+    depot_get(depot, "cookie_manager")
+}
+
+pub fn get_metadata_cache(depot: &Depot) -> Result<crate::MetadataCache, RouteError> {
+    depot_get(depot, "metadata_cache")
+}
+
+pub fn get_http_client(depot: &Depot) -> Result<reqwest::Client, RouteError> {
+    depot_get(depot, "http_client")
+}
+
+pub fn get_encrypter(depot: &Depot) -> Result<pasion_keystore::Encrypter, RouteError> {
+    depot_get(depot, "encrypter")
+}
+
+pub fn get_key_store(depot: &Depot) -> Result<pasion_keystore::Keystore, RouteError> {
+    depot_get(depot, "key_store")
+}
+
+pub fn get_app_version(depot: &Depot) -> Result<pasion_data_model::AppVersion, RouteError> {
+    depot_get(depot, "app_version")
+}
+
+pub fn extract_cookie_jar(req: &Request, depot: &Depot) -> Result<CookieJar, RouteError> {
+    let cookie_manager = get_cookie_manager(depot)?;
+    Ok(cookie_manager.cookie_jar_from_headers(req.headers()))
+}
+
 pub fn make_clock() -> BoxClock {
     Box::new(SystemClock::default())
 }
@@ -285,7 +322,7 @@ pub async fn verify_password_if_needed(
         .user_password()
         .active(user)
         .await
-        .map_err(|e| RouteError::Internal(Box::new(e)))?;
+        .map_err(|e| RouteError::Internal(e.into()))?;
 
     let Some(user_password) = user_password else {
         return Ok(true);
@@ -304,7 +341,7 @@ pub async fn verify_password_if_needed(
             user_password.hashed_password,
         )
         .await
-        .map_err(|e| RouteError::Internal(Box::new(e)))?;
+        .map_err(|e| RouteError::Internal(e.into()))?;
 
     Ok(res.is_success())
 }
