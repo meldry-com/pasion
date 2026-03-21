@@ -4,14 +4,14 @@ use std::{collections::HashMap, fmt};
 
 use base64ct::{Base64UrlUnpadded, Encoding};
 use chrono::{DateTime, Duration, Utc};
-use mas_iana::{jose::JsonWebSignatureAlg, oauth::OAuthClientAuthenticationMethod};
-use mas_jose::{
+use pasion_iana::{jose::JsonWebSignatureAlg, oauth::OAuthClientAuthenticationMethod};
+use pasion_jose::{
     claims::{self, ClaimError},
     constraints::Constrainable,
     jwa::{AsymmetricSigningKey, SymmetricKey},
     jwt::{JsonWebSignatureHeader, Jwt},
 };
-use mas_keystore::Keystore;
+use pasion_keystore::Keystore;
 use rand::Rng;
 use serde::Serialize;
 use serde_json::Value;

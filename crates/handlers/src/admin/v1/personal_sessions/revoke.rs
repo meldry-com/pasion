@@ -2,8 +2,8 @@ use aide::{NoApi, OperationIo, transform::TransformOperation};
 use axum::{Json, response::IntoResponse};
 use hyper::StatusCode;
 use mas_axum_utils::record_error;
-use mas_data_model::BoxRng;
-use mas_storage::queue::{QueueJobRepositoryExt as _, SyncDevicesJob};
+use pasion_data_model::BoxRng;
+use pasion_storage::queue::{QueueJobRepositoryExt as _, SyncDevicesJob};
 use ulid::Ulid;
 
 use crate::{
@@ -29,7 +29,7 @@ pub enum RouteError {
     AlreadyRevoked(Ulid),
 }
 
-impl_from_error_for_route!(mas_storage::RepositoryError);
+impl_from_error_for_route!(pasion_storage::RepositoryError);
 impl_from_error_for_route!(InconsistentPersonalSession);
 
 impl IntoResponse for RouteError {
@@ -116,13 +116,13 @@ pub async fn handler(
 mod tests {
     use chrono::Duration;
     use hyper::{Request, StatusCode};
-    use mas_data_model::{Clock, personal::session::PersonalSessionOwner};
+    use pasion_data_model::{Clock, personal::session::PersonalSessionOwner};
     use oauth2_types::scope::Scope;
     use sqlx::PgPool;
 
     use crate::test_utils::{RequestBuilderExt, ResponseExt, TestState, setup};
 
-    #[sqlx::test(migrator = "mas_storage_pg::MIGRATOR")]
+    #[sqlx::test(migrator = "pasion_storage_pg::MIGRATOR")]
     async fn test_revoke_session(pool: PgPool) {
         setup();
         let mut state = TestState::from_pool(pool).await.unwrap();
@@ -169,7 +169,7 @@ mod tests {
         );
     }
 
-    #[sqlx::test(migrator = "mas_storage_pg::MIGRATOR")]
+    #[sqlx::test(migrator = "pasion_storage_pg::MIGRATOR")]
     async fn test_revoke_already_revoked_session(pool: PgPool) {
         setup();
         let mut state = TestState::from_pool(pool).await.unwrap();
@@ -224,7 +224,7 @@ mod tests {
         );
     }
 
-    #[sqlx::test(migrator = "mas_storage_pg::MIGRATOR")]
+    #[sqlx::test(migrator = "pasion_storage_pg::MIGRATOR")]
     async fn test_revoke_unknown_session(pool: PgPool) {
         setup();
         let mut state = TestState::from_pool(pool).await.unwrap();

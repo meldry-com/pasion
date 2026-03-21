@@ -1,5 +1,5 @@
 [package]
-name = "mas-tasks"
+name = "pasion-tasks"
 version.workspace = true
 authors.workspace = true
 edition.workspace = true
@@ -29,12 +29,12 @@ tracing-opentelemetry.workspace = true
 tracing.workspace = true
 ulid.workspace = true
 
-mas-context.workspace = true
-mas-data-model.workspace = true
-mas-email.workspace = true
-mas-i18n.workspace = true
-mas-matrix.workspace = true
-mas-router.workspace = true
-mas-storage-pg.workspace = true
-mas-storage.workspace = true
-mas-templates.workspace = true
+pasion-context.workspace = true
+pasion-data-model.workspace = true
+pasion-email.workspace = true
+pasion-i18n.workspace = true
+pasion-matrix.workspace = true
+pasion-router.workspace = true
+pasion-storage-pg.workspace = true
+pasion-storage.workspace = true
+pasion-templates.workspace = true

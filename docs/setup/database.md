@@ -62,7 +62,7 @@ Those migrations are run automatically when the service starts, but it is also p
 This is done using the [`database migrate`](../reference/cli/database.md#database-migrate) command:
 
 ```sh
-mas-cli database migrate
+pasion-cli database migrate
 ```
 
 ## Next steps

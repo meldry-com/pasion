@@ -1,7 +1,7 @@
 use assert_matches::assert_matches;
-use mas_iana::oauth::{OAuthAuthorizationEndpointResponseType, PkceCodeChallengeMethod};
-use mas_jose::jwa::SUPPORTED_SIGNING_ALGORITHMS;
-use mas_oidc_client::{
+use pasion_iana::oauth::{OAuthAuthorizationEndpointResponseType, PkceCodeChallengeMethod};
+use pasion_jose::jwa::SUPPORTED_SIGNING_ALGORITHMS;
+use pasion_oidc_client::{
     error::DiscoveryError,
     requests::discovery::{discover, insecure_discover},
 };

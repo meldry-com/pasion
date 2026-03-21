@@ -1,4 +1,4 @@
-use mas_data_model::UserAgent;
+use pasion_data_model::UserAgent;
 
 /// Simple command-line tool to try out user-agent parsing
 ///

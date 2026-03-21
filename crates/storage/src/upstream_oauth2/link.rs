@@ -1,5 +1,5 @@
 use async_trait::async_trait;
-use mas_data_model::{Clock, UpstreamOAuthLink, UpstreamOAuthProvider, User};
+use pasion_data_model::{Clock, UpstreamOAuthLink, UpstreamOAuthProvider, User};
 use rand_core::RngCore;
 use ulid::Ulid;
 

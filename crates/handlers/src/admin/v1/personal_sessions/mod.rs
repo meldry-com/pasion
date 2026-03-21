@@ -4,7 +4,7 @@ mod list;
 mod regenerate;
 mod revoke;
 
-use mas_data_model::personal::session::PersonalSessionOwner;
+use pasion_data_model::personal::session::PersonalSessionOwner;
 
 pub use self::{
     add::{doc as add_doc, handler as add},

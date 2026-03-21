@@ -1,6 +1,6 @@
 use aide::transform::TransformOperation;
 use axum::{Json, extract::State};
-use mas_data_model::AppVersion;
+use pasion_data_model::AppVersion;
 use schemars::JsonSchema;
 use serde::Serialize;
 
@@ -23,7 +23,7 @@ pub fn doc(operation: TransformOperation) -> TransformOperation {
 #[tracing::instrument(name = "handler.admin.v1.version", skip_all)]
 pub async fn handler(
     _: CallContext,
-    State(AppVersion(version)): State<mas_data_model::AppVersion>,
+    State(AppVersion(version)): State<pasion_data_model::AppVersion>,
 ) -> Json<Version> {
     Json(Version { version })
 }
@@ -36,7 +36,7 @@ mod tests {
 
     use crate::test_utils::{RequestBuilderExt, ResponseExt, TestState, setup};
 
-    #[sqlx::test(migrator = "mas_storage_pg::MIGRATOR")]
+    #[sqlx::test(migrator = "pasion_storage_pg::MIGRATOR")]
     async fn test_add_user(pool: PgPool) {
         setup();
         let mut state = TestState::from_pool(pool).await.unwrap();

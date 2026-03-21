@@ -12,7 +12,7 @@ A deployment which requires SAML or LDAP-based authentication should use a servi
 
 Configuration of upstream providers is done in the `upstream_oauth2` section of the configuration file, which has a `providers` list.
 Additions and changes to this sections are synced with the database on startup.
-Removals need to be applied using the [`mas-cli config sync --prune`](../reference/cli/config.md#config-sync---prune---dry-run) command.
+Removals need to be applied using the [`pasion-cli config sync --prune`](../reference/cli/config.md#config-sync---prune---dry-run) command.
 
 **An exhaustive list of all the parameters is available in the [configuration file reference](../reference/configuration.md#upstream_oauth2).**
 
@@ -418,7 +418,7 @@ Follow the [Getting Started Guide](https://www.keycloak.org/guides) to install K
 
    | Field | Value |
    |-----------|-----------|
-   | Client ID | `palpo-auth-service` |
+   | Client ID | `pasion` |
    | Client Protocol | `openid-connect` |
 
 3. Click `Save`
@@ -426,7 +426,7 @@ Follow the [Getting Started Guide](https://www.keycloak.org/guides) to install K
 
    | Field | Value |
    |-----------|-----------|
-   | Client ID | `palpo-auth-service` |
+   | Client ID | `pasion` |
    | Enabled | `On` |
    | Client Protocol | `openid-connect` |
    | Access Type | `confidential` |
@@ -451,7 +451,7 @@ upstream_oauth2:
     - id: "01H8PKNWKKRPCBW4YGH1RWV279"
       issuer: "https://<keycloak>/realms/<realm>" # TO BE FILLED
       token_endpoint_auth_method: client_secret_basic
-      client_id: "palpo-auth-service"
+      client_id: "pasion"
       client_secret: "<client-secret>" # TO BE FILLED
       scope: "openid profile email"
       claims_imports:
@@ -546,8 +546,8 @@ upstream_oauth2:
 
    | Field | Value |
    |-----------|-----------|
-   | Client ID | `palpo-auth-service` |
-   | Client Name | `palpo-auth-service` |
+   | Client ID | `pasion` |
+   | Client Name | `pasion` |
    | Redirect URI | `https://<auth-service-domain>/upstream/callback/<id>` |
 
 3. Set the client to be `Confidential`.

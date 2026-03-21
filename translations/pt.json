@@ -11,8 +11,8 @@
     "submit": "Enviar"
   },
   "app": {
-    "human_name": "Palpo Authentication Service",
-    "name": "palpo-auth-service",
+    "human_name": "Pasion",
+    "name": "pasion",
     "technical_description": "Documento de descoberta do OpenID Connect: <a class=\"cpd-link\" data-kind=\"primary\" href=\"%(discovery_url)s\">%(discovery_url)s</a>"
   },
   "branding": {
@@ -225,7 +225,7 @@
     "scope": {
       "edit_profile": "Editar o seu perfil e detalhes de contacto",
       "manage_sessions": "Gerir os seus dispositivos e sessões",
-      "mas_admin": "Administrar qualquer usuário no palpo-auth-service",
+      "mas_admin": "Administrar qualquer usuário no pasion",
       "send_messages": "Envie novas mensagens em seu nome",
       "palpo_admin": "Administrar o servidor Palpo",
       "view_messages": "Ver as mensagens e os dados existentes",

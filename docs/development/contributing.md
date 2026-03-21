@@ -1,10 +1,10 @@
 # Contributing
 
-This document aims to get you started with contributing to the Palpo Authentication Service!
+This document aims to get you started with contributing to the Pasion!
 
 ## 1. Who can contribute to MAS?
 
-Everyone is welcome to contribute code to [Palpo Authentication Service](https://github.com/palpo-im/palpo-auth-service), provided that they are willing to license their contributions to Element under a [Contributor License Agreement](https://cla-assistant.io/palpo-im/palpo-auth-service) (CLA). This ensures that their contribution will be made available under an OSI-approved open-source license, currently Affero General Public License v3 (AGPLv3).
+Everyone is welcome to contribute code to [Pasion](https://github.com/palpo-im/pasion), provided that they are willing to license their contributions to Element under a [Contributor License Agreement](https://cla-assistant.io/palpo-im/pasion) (CLA). This ensures that their contribution will be made available under an OSI-approved open-source license, currently Affero General Public License v3 (AGPLv3).
 
 Please see the [Element blog post](https://element.io/blog/palpo-now-lives-at-github-com-palpo-im-palpo/) for the full rationale.
 
@@ -12,8 +12,8 @@ Please see the [Element blog post](https://element.io/blog/palpo-now-lives-at-gi
 
 There are two main ways to contribute to MAS:
 
-- **Code and documentation**: You can contribute code to the Palpo Authentication Service and help improve its documentation by submitting pull requests to the [GitHub repository](https://github.com/palpo-im/palpo-auth-service).
-- **Translations**: You can contribute translations to the Palpo Authentication Service through [Localazy](https://localazy.com/p/palpo-auth-service).
+- **Code and documentation**: You can contribute code to the Pasion and help improve its documentation by submitting pull requests to the [GitHub repository](https://github.com/palpo-im/pasion).
+- **Translations**: You can contribute translations to the Pasion through [Localazy](https://localazy.com/p/pasion).
 
 ## 3. What do I need?
 
@@ -30,8 +30,8 @@ The preferred and easiest way to contribute changes is to fork the relevant proj
 Please base your changes on the `main` branch.
 
 ```sh
-git clone git@github.com:YOUR_GITHUB_USER_NAME/palpo-auth-service.git
-cd palpo-auth-service
+git clone git@github.com:YOUR_GITHUB_USER_NAME/pasion.git
+cd pasion
 git checkout main
 ```
 
@@ -121,4 +121,4 @@ From this point, you should:
  1. Back to 1.
  1. Once the pull request is ready for review again, please **re-request review** from whichever developer did your initial review (or leave a comment in the pull request that you believe all required changes have been made).
 
-Once both the CI and the developers are happy, the patch will be merged into Palpo Authentication Service and released shortly!
+Once both the CI and the developers are happy, the patch will be merged into Pasion and released shortly!

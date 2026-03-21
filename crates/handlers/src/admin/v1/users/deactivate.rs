@@ -2,8 +2,8 @@ use aide::{NoApi, OperationIo, transform::TransformOperation};
 use axum::{Json, response::IntoResponse};
 use hyper::StatusCode;
 use mas_axum_utils::record_error;
-use mas_data_model::BoxRng;
-use mas_storage::queue::{DeactivateUserJob, QueueJobRepositoryExt as _};
+use pasion_data_model::BoxRng;
+use pasion_storage::queue::{DeactivateUserJob, QueueJobRepositoryExt as _};
 use schemars::JsonSchema;
 use serde::Deserialize;
 use tracing::info;
@@ -29,7 +29,7 @@ pub enum RouteError {
     NotFound(Ulid),
 }
 
-impl_from_error_for_route!(mas_storage::RepositoryError);
+impl_from_error_for_route!(pasion_storage::RepositoryError);
 
 impl IntoResponse for RouteError {
     fn into_response(self) -> axum::response::Response {
@@ -126,8 +126,8 @@ mod tests {
     use chrono::Duration;
     use hyper::{Request, StatusCode};
     use insta::{allow_duplicates, assert_json_snapshot};
-    use mas_data_model::Clock;
-    use mas_storage::{RepositoryAccess, user::UserRepository};
+    use pasion_data_model::Clock;
+    use pasion_storage::{RepositoryAccess, user::UserRepository};
     use sqlx::{PgPool, types::Json};
 
     use crate::test_utils::{RequestBuilderExt, ResponseExt, TestState, setup};
@@ -217,17 +217,17 @@ mod tests {
         "#));
     }
 
-    #[sqlx::test(migrator = "mas_storage_pg::MIGRATOR")]
+    #[sqlx::test(migrator = "pasion_storage_pg::MIGRATOR")]
     async fn test_deactivate_user(pool: PgPool) {
         test_deactivate_user_helper(pool, Option::None).await;
     }
 
-    #[sqlx::test(migrator = "mas_storage_pg::MIGRATOR")]
+    #[sqlx::test(migrator = "pasion_storage_pg::MIGRATOR")]
     async fn test_deactivate_user_skip_erase(pool: PgPool) {
         test_deactivate_user_helper(pool, Option::Some(true)).await;
     }
 
-    #[sqlx::test(migrator = "mas_storage_pg::MIGRATOR")]
+    #[sqlx::test(migrator = "pasion_storage_pg::MIGRATOR")]
     async fn test_deactivate_locked_user(pool: PgPool) {
         setup();
         let mut state = TestState::from_pool(pool.clone()).await.unwrap();
@@ -298,7 +298,7 @@ mod tests {
         "#);
     }
 
-    #[sqlx::test(migrator = "mas_storage_pg::MIGRATOR")]
+    #[sqlx::test(migrator = "pasion_storage_pg::MIGRATOR")]
     async fn test_deactivate_unknown_user(pool: PgPool) {
         setup();
         let mut state = TestState::from_pool(pool).await.unwrap();

@@ -11,7 +11,7 @@ fn default_path() -> Utf8PathBuf {
 
 #[cfg(feature = "docker")]
 fn default_path() -> Utf8PathBuf {
-    "/usr/local/share/mas-cli/templates/".into()
+    "/usr/local/share/pasion-cli/templates/".into()
 }
 
 #[cfg(feature = "dist")]
@@ -30,7 +30,7 @@ fn default_assets_path() -> Utf8PathBuf {
 
 #[cfg(feature = "docker")]
 fn default_assets_path() -> Utf8PathBuf {
-    "/usr/local/share/mas-cli/manifest.json".into()
+    "/usr/local/share/pasion-cli/manifest.json".into()
 }
 
 #[cfg(feature = "dist")]
@@ -49,7 +49,7 @@ fn default_translations_path() -> Utf8PathBuf {
 
 #[cfg(feature = "docker")]
 fn default_translations_path() -> Utf8PathBuf {
-    "/usr/local/share/mas-cli/translations/".into()
+    "/usr/local/share/pasion-cli/translations/".into()
 }
 
 #[cfg(feature = "dist")]

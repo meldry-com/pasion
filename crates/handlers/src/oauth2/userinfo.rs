@@ -1,17 +1,17 @@
-use mas_data_model::{BoxClock, BoxRng, SystemClock};
-use mas_jose::{
+use pasion_data_model::{BoxClock, BoxRng, SystemClock};
+use pasion_jose::{
     constraints::Constrainable,
     jwt::{JsonWebSignatureHeader, Jwt},
 };
-use mas_keystore::Keystore;
-use mas_router::UrlBuilder;
-use mas_salvo_utils::{
+use pasion_keystore::Keystore;
+use pasion_router::UrlBuilder;
+use pasion_salvo_utils::{
     jwt::JwtResponse,
     record_error,
     sentry::SentryEventID,
     user_authorization::{AuthorizationVerificationError, UserAuthorization},
 };
-use mas_storage::{BoxRepository, BoxRepositoryFactory, oauth2::OAuth2ClientRepository};
+use pasion_storage::{BoxRepository, BoxRepositoryFactory, oauth2::OAuth2ClientRepository};
 use rand::{SeedableRng, thread_rng};
 use rand_chacha::ChaChaRng;
 use salvo::prelude::*;
@@ -44,7 +44,7 @@ pub enum RouteError {
 
     #[error("failed to authenticate")]
     AuthorizationVerificationError(
-        #[from] AuthorizationVerificationError<mas_storage::RepositoryError>,
+        #[from] AuthorizationVerificationError<pasion_storage::RepositoryError>,
     ),
 
     #[error("session is not allowed to access the userinfo endpoint")]
@@ -60,9 +60,9 @@ pub enum RouteError {
     NoSuchUser(Ulid),
 }
 
-impl_from_error_for_route!(mas_storage::RepositoryError);
-impl_from_error_for_route!(mas_keystore::WrongAlgorithmError);
-impl_from_error_for_route!(mas_jose::jwt::JwtSignatureError);
+impl_from_error_for_route!(pasion_storage::RepositoryError);
+impl_from_error_for_route!(pasion_keystore::WrongAlgorithmError);
+impl_from_error_for_route!(pasion_jose::jwt::JwtSignatureError);
 
 impl Scribe for RouteError {
     fn render(self, res: &mut Response) {

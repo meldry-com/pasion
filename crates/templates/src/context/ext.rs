@@ -1,10 +1,10 @@
-use mas_data_model::SiteConfig;
+use pasion_data_model::SiteConfig;
 
 use super::{SiteBranding, SiteFeatures};
 
 mod private {
     pub trait Sealed {}
-    impl Sealed for mas_data_model::SiteConfig {}
+    impl Sealed for pasion_data_model::SiteConfig {}
 }
 
 /// Extension trait for [`SiteConfig`] to construct [`SiteBranding`] and

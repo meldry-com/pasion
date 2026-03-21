@@ -1,8 +1,8 @@
 use anyhow::Context as _;
 use async_graphql::{Context, Description, Enum, ID, InputObject, Object};
 use chrono::Duration;
-use mas_data_model::{Device, TokenType};
-use mas_storage::{
+use pasion_data_model::{Device, TokenType};
+use pasion_storage::{
     RepositoryAccess,
     oauth2::{
         OAuth2AccessTokenRepository, OAuth2ClientRepository, OAuth2RefreshTokenRepository,
@@ -41,7 +41,7 @@ pub struct CreateOAuth2SessionInput {
 pub struct CreateOAuth2SessionPayload {
     access_token: String,
     refresh_token: Option<String>,
-    session: mas_data_model::Session,
+    session: pasion_data_model::Session,
 }
 
 #[Object(use_type_description)]
@@ -72,7 +72,7 @@ pub struct EndOAuth2SessionInput {
 /// The payload of the `endOauth2Session` mutation.
 pub enum EndOAuth2SessionPayload {
     NotFound,
-    Ended(Box<mas_data_model::Session>),
+    Ended(Box<pasion_data_model::Session>),
 }
 
 /// The status of the `endOauth2Session` mutation.
@@ -120,7 +120,7 @@ pub enum SetOAuth2SessionNamePayload {
     NotFound,
 
     /// The session was updated.
-    Updated(Box<mas_data_model::Session>),
+    Updated(Box<pasion_data_model::Session>),
 }
 
 /// The status of the `setOauth2SessionName` mutation.

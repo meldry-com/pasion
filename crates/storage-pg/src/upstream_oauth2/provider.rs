@@ -1,7 +1,7 @@
 use async_trait::async_trait;
 use chrono::{DateTime, Utc};
-use mas_data_model::{Clock, UpstreamOAuthProvider, UpstreamOAuthProviderClaimsImports};
-use mas_storage::{
+use pasion_data_model::{Clock, UpstreamOAuthProvider, UpstreamOAuthProviderClaimsImports};
+use pasion_storage::{
     Page, Pagination,
     pagination::Node,
     upstream_oauth2::{

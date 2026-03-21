@@ -1,7 +1,7 @@
 use std::net::IpAddr;
 
 use chrono::{DateTime, Utc};
-use mas_data_model::{
+use pasion_data_model::{
     Device,
     personal::{
         PersonalAccessToken as DataModelPersonalAccessToken,
@@ -93,8 +93,8 @@ impl User {
     }
 }
 
-impl From<mas_data_model::User> for User {
-    fn from(user: mas_data_model::User) -> Self {
+impl From<pasion_data_model::User> for User {
+    fn from(user: pasion_data_model::User) -> Self {
         Self {
             id: user.id,
             username: user.username,
@@ -142,8 +142,8 @@ impl Resource for UserEmail {
     }
 }
 
-impl From<mas_data_model::UserEmail> for UserEmail {
-    fn from(value: mas_data_model::UserEmail) -> Self {
+impl From<pasion_data_model::UserEmail> for UserEmail {
+    fn from(value: pasion_data_model::UserEmail) -> Self {
         Self {
             id: value.id,
             created_at: value.created_at,
@@ -206,14 +206,14 @@ pub struct CompatSession {
 
 impl
     From<(
-        mas_data_model::CompatSession,
-        Option<mas_data_model::CompatSsoLogin>,
+        pasion_data_model::CompatSession,
+        Option<pasion_data_model::CompatSsoLogin>,
     )> for CompatSession
 {
     fn from(
         (session, sso_login): (
-            mas_data_model::CompatSession,
-            Option<mas_data_model::CompatSsoLogin>,
+            pasion_data_model::CompatSession,
+            Option<pasion_data_model::CompatSsoLogin>,
         ),
     ) -> Self {
         let finished_at = session.finished_at();
@@ -328,8 +328,8 @@ pub struct OAuth2Session {
     human_name: Option<String>,
 }
 
-impl From<mas_data_model::Session> for OAuth2Session {
-    fn from(session: mas_data_model::Session) -> Self {
+impl From<pasion_data_model::Session> for OAuth2Session {
+    fn from(session: pasion_data_model::Session) -> Self {
         Self {
             id: session.id,
             created_at: session.created_at,
@@ -428,8 +428,8 @@ pub struct UserSession {
     last_active_ip: Option<IpAddr>,
 }
 
-impl From<mas_data_model::BrowserSession> for UserSession {
-    fn from(value: mas_data_model::BrowserSession) -> Self {
+impl From<pasion_data_model::BrowserSession> for UserSession {
+    fn from(value: pasion_data_model::BrowserSession) -> Self {
         Self {
             id: value.id,
             created_at: value.created_at,
@@ -519,8 +519,8 @@ impl Resource for UpstreamOAuthLink {
     }
 }
 
-impl From<mas_data_model::UpstreamOAuthLink> for UpstreamOAuthLink {
-    fn from(value: mas_data_model::UpstreamOAuthLink) -> Self {
+impl From<pasion_data_model::UpstreamOAuthLink> for UpstreamOAuthLink {
+    fn from(value: pasion_data_model::UpstreamOAuthLink) -> Self {
         Self {
             id: value.id,
             created_at: value.created_at,
@@ -577,8 +577,8 @@ pub struct PolicyData {
     data: serde_json::Value,
 }
 
-impl From<mas_data_model::PolicyData> for PolicyData {
-    fn from(policy_data: mas_data_model::PolicyData) -> Self {
+impl From<pasion_data_model::PolicyData> for PolicyData {
+    fn from(policy_data: pasion_data_model::PolicyData) -> Self {
         Self {
             id: policy_data.id,
             created_at: policy_data.created_at,
@@ -643,7 +643,7 @@ pub struct UserRegistrationToken {
 }
 
 impl UserRegistrationToken {
-    pub fn new(token: mas_data_model::UserRegistrationToken, now: DateTime<Utc>) -> Self {
+    pub fn new(token: pasion_data_model::UserRegistrationToken, now: DateTime<Utc>) -> Self {
         Self {
             id: token.id,
             valid: token.is_valid(now),
@@ -719,8 +719,8 @@ pub struct UpstreamOAuthProvider {
     disabled_at: Option<DateTime<Utc>>,
 }
 
-impl From<mas_data_model::UpstreamOAuthProvider> for UpstreamOAuthProvider {
-    fn from(provider: mas_data_model::UpstreamOAuthProvider) -> Self {
+impl From<pasion_data_model::UpstreamOAuthProvider> for UpstreamOAuthProvider {
+    fn from(provider: pasion_data_model::UpstreamOAuthProvider) -> Self {
         Self {
             id: provider.id,
             issuer: provider.issuer,

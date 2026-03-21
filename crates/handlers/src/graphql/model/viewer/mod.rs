@@ -13,7 +13,7 @@ pub enum Viewer {
 }
 
 impl Viewer {
-    pub fn user(user: mas_data_model::User) -> Self {
+    pub fn user(user: pasion_data_model::User) -> Self {
         Self::User(User(user))
     }
 
@@ -31,11 +31,11 @@ pub enum ViewerSession {
 }
 
 impl ViewerSession {
-    pub fn browser_session(session: mas_data_model::BrowserSession) -> Self {
+    pub fn browser_session(session: pasion_data_model::BrowserSession) -> Self {
         Self::BrowserSession(Box::new(BrowserSession(session)))
     }
 
-    pub fn oauth2_session(session: mas_data_model::Session) -> Self {
+    pub fn oauth2_session(session: pasion_data_model::Session) -> Self {
         Self::OAuth2Session(Box::new(OAuth2Session(session)))
     }
 

@@ -8,8 +8,8 @@ resolver = "2"
 package.version = "1.8.0"
 package.authors = ["Element Backend Team"]
 package.edition = "2024"
-package.homepage = "https://palpo-im.github.io/palpo-auth-service/"
-package.repository = "https://github.com/palpo-im/palpo-auth-service/"
+package.homepage = "https://palpo-im.github.io/pasion/"
+package.repository = "https://github.com/palpo-im/pasion/"
 package.publish = false
 
 [workspace.lints.rust]
@@ -29,33 +29,33 @@ broken_intra_doc_links = "deny"
 [workspace.dependencies]
 
 # Workspace crates
-mas-salvo-utils = { path = "./crates/salvo-utils/", version = "=1.8.0" }
-mas-cli = { path = "./crates/cli/", version = "=1.8.0" }
-mas-config = { path = "./crates/config/", version = "=1.8.0" }
-mas-context = { path = "./crates/context/", version = "=1.8.0" }
-mas-data-model = { path = "./crates/data-model/", version = "=1.8.0" }
-mas-email = { path = "./crates/email/", version = "=1.8.0" }
-mas-graphql = { path = "./crates/graphql/", version = "=1.8.0" }
-mas-handlers = { path = "./crates/handlers/", version = "=1.8.0" }
-mas-http = { path = "./crates/http/", version = "=1.8.0" }
-mas-i18n = { path = "./crates/i18n/", version = "=1.8.0" }
-mas-i18n-scan = { path = "./crates/i18n-scan/", version = "=1.8.0" }
-mas-iana = { path = "./crates/iana/", version = "=1.8.0" }
-mas-iana-codegen = { path = "./crates/iana-codegen/", version = "=1.8.0" }
-mas-jose = { path = "./crates/jose/", version = "=1.8.0" }
-mas-keystore = { path = "./crates/keystore/", version = "=1.8.0" }
-mas-listener = { path = "./crates/listener/", version = "=1.8.0" }
-mas-matrix = { path = "./crates/matrix/", version = "=1.8.0" }
-mas-matrix-palpo = { path = "./crates/matrix-palpo/", version = "=1.8.0" }
-mas-oidc-client = { path = "./crates/oidc-client/", version = "=1.8.0" }
-mas-policy = { path = "./crates/policy/", version = "=1.8.0" }
-mas-router = { path = "./crates/router/", version = "=1.8.0" }
-mas-spa = { path = "./crates/spa/", version = "=1.8.0" }
-mas-storage = { path = "./crates/storage/", version = "=1.8.0" }
-mas-storage-pg = { path = "./crates/storage-pg/", version = "=1.8.0" }
-mas-tasks = { path = "./crates/tasks/", version = "=1.8.0" }
-mas-templates = { path = "./crates/templates/", version = "=1.8.0" }
-mas-tower = { path = "./crates/tower/", version = "=1.8.0" }
+pasion-salvo-utils = { path = "./crates/salvo-utils/", version = "=1.8.0" }
+pasion-cli = { path = "./crates/cli/", version = "=1.8.0" }
+pasion-config = { path = "./crates/config/", version = "=1.8.0" }
+pasion-context = { path = "./crates/context/", version = "=1.8.0" }
+pasion-data-model = { path = "./crates/data-model/", version = "=1.8.0" }
+pasion-email = { path = "./crates/email/", version = "=1.8.0" }
+pasion-graphql = { path = "./crates/graphql/", version = "=1.8.0" }
+pasion-handlers = { path = "./crates/handlers/", version = "=1.8.0" }
+pasion-http = { path = "./crates/http/", version = "=1.8.0" }
+pasion-i18n = { path = "./crates/i18n/", version = "=1.8.0" }
+pasion-i18n-scan = { path = "./crates/i18n-scan/", version = "=1.8.0" }
+pasion-iana = { path = "./crates/iana/", version = "=1.8.0" }
+pasion-iana-codegen = { path = "./crates/iana-codegen/", version = "=1.8.0" }
+pasion-jose = { path = "./crates/jose/", version = "=1.8.0" }
+pasion-keystore = { path = "./crates/keystore/", version = "=1.8.0" }
+pasion-listener = { path = "./crates/listener/", version = "=1.8.0" }
+pasion-matrix = { path = "./crates/matrix/", version = "=1.8.0" }
+pasion-matrix-palpo = { path = "./crates/matrix-palpo/", version = "=1.8.0" }
+pasion-oidc-client = { path = "./crates/oidc-client/", version = "=1.8.0" }
+pasion-policy = { path = "./crates/policy/", version = "=1.8.0" }
+pasion-router = { path = "./crates/router/", version = "=1.8.0" }
+pasion-spa = { path = "./crates/spa/", version = "=1.8.0" }
+pasion-storage = { path = "./crates/storage/", version = "=1.8.0" }
+pasion-storage-pg = { path = "./crates/storage-pg/", version = "=1.8.0" }
+pasion-tasks = { path = "./crates/tasks/", version = "=1.8.0" }
+pasion-templates = { path = "./crates/templates/", version = "=1.8.0" }
+pasion-tower = { path = "./crates/tower/", version = "=1.8.0" }
 oauth2-types = { path = "./crates/oauth2-types/", version = "=1.8.0" }
 syn2mas = { path = "./crates/syn2mas", version = "=1.8.0" }
 

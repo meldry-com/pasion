@@ -4,10 +4,10 @@ use axum::{
 };
 use axum_extra::extract::Query;
 use mas_axum_utils::{InternalError, cookies::CookieJar};
-use mas_data_model::BoxClock;
-use mas_router::UrlBuilder;
-use mas_storage::BoxRepository;
-use mas_templates::{
+use pasion_data_model::BoxClock;
+use pasion_router::UrlBuilder;
+use pasion_storage::BoxRepository;
+use pasion_templates::{
     DeviceLinkContext, DeviceLinkFormField, FieldError, FormState, TemplateContext, Templates,
 };
 use serde::{Deserialize, Serialize};
@@ -47,7 +47,7 @@ pub(crate) async fn get(
         if let Some(grant) = grant {
             // This is a valid code, redirect to the consent page
             // This will in turn redirect to the login page if the user is not logged in
-            let destination = url_builder.redirect(&mas_router::DeviceCodeConsent::new(grant.id));
+            let destination = url_builder.redirect(&pasion_router::DeviceCodeConsent::new(grant.id));
 
             return Ok((cookie_jar, destination).into_response());
         }

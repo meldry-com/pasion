@@ -1,4 +1,4 @@
-use mas_iana::jose::JsonWebSignatureAlg;
+use pasion_iana::jose::JsonWebSignatureAlg;
 use sha2::{Sha256, Sha384, Sha512};
 
 mod asymmetric;

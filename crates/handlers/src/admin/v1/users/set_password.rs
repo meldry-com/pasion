@@ -2,7 +2,7 @@ use aide::{NoApi, OperationIo, transform::TransformOperation};
 use axum::{Json, extract::State, response::IntoResponse};
 use hyper::StatusCode;
 use mas_axum_utils::record_error;
-use mas_data_model::BoxRng;
+use pasion_data_model::BoxRng;
 use schemars::JsonSchema;
 use serde::Deserialize;
 use ulid::Ulid;
@@ -33,7 +33,7 @@ pub enum RouteError {
     NotFound(Ulid),
 }
 
-impl_from_error_for_route!(mas_storage::RepositoryError);
+impl_from_error_for_route!(pasion_storage::RepositoryError);
 
 impl IntoResponse for RouteError {
     fn into_response(self) -> axum::response::Response {
@@ -130,7 +130,7 @@ pub async fn handler(
 #[cfg(test)]
 mod tests {
     use hyper::{Request, StatusCode};
-    use mas_storage::{RepositoryAccess, user::UserPasswordRepository};
+    use pasion_storage::{RepositoryAccess, user::UserPasswordRepository};
     use sqlx::PgPool;
     use zeroize::Zeroizing;
 
@@ -139,7 +139,7 @@ mod tests {
         test_utils::{RequestBuilderExt, ResponseExt, TestState, setup},
     };
 
-    #[sqlx::test(migrator = "mas_storage_pg::MIGRATOR")]
+    #[sqlx::test(migrator = "pasion_storage_pg::MIGRATOR")]
     async fn test_set_password(pool: PgPool) {
         setup();
         let mut state = TestState::from_pool(pool).await.unwrap();
@@ -187,7 +187,7 @@ mod tests {
         assert_eq!(res, PasswordVerificationResult::Success(()));
     }
 
-    #[sqlx::test(migrator = "mas_storage_pg::MIGRATOR")]
+    #[sqlx::test(migrator = "pasion_storage_pg::MIGRATOR")]
     async fn test_weak_password(pool: PgPool) {
         setup();
         let mut state = TestState::from_pool(pool).await.unwrap();
@@ -247,7 +247,7 @@ mod tests {
         assert_eq!(res, PasswordVerificationResult::Success(()));
     }
 
-    #[sqlx::test(migrator = "mas_storage_pg::MIGRATOR")]
+    #[sqlx::test(migrator = "pasion_storage_pg::MIGRATOR")]
     async fn test_unknown_user(pool: PgPool) {
         setup();
         let mut state = TestState::from_pool(pool).await.unwrap();
@@ -270,7 +270,7 @@ mod tests {
         );
     }
 
-    #[sqlx::test(migrator = "mas_storage_pg::MIGRATOR")]
+    #[sqlx::test(migrator = "pasion_storage_pg::MIGRATOR")]
     async fn test_disabled(pool: PgPool) {
         setup();
         let mut state = TestState::from_pool(pool).await.unwrap();

@@ -3,8 +3,8 @@ use async_graphql::{
     connection::{Connection, Edge, OpaqueCursor, query},
 };
 use chrono::{DateTime, Utc};
-use mas_data_model::Device;
-use mas_storage::{
+use pasion_data_model::Device;
+use pasion_storage::{
     Pagination, RepositoryAccess, app_session::AppSessionFilter, user::BrowserSessionRepository,
 };
 
@@ -16,10 +16,10 @@ use crate::graphql::state::ContextExt;
 
 /// A browser session represents a logged in user in a browser.
 #[derive(Description)]
-pub struct BrowserSession(pub mas_data_model::BrowserSession);
+pub struct BrowserSession(pub pasion_data_model::BrowserSession);
 
-impl From<mas_data_model::BrowserSession> for BrowserSession {
-    fn from(v: mas_data_model::BrowserSession) -> Self {
+impl From<pasion_data_model::BrowserSession> for BrowserSession {
+    fn from(v: pasion_data_model::BrowserSession) -> Self {
         Self(v)
     }
 }
@@ -78,7 +78,7 @@ impl BrowserSession {
         self.0
             .user_agent
             .clone()
-            .map(mas_data_model::UserAgent::parse)
+            .map(pasion_data_model::UserAgent::parse)
             .map(UserAgent::from)
     }
 
@@ -167,11 +167,11 @@ impl BrowserSession {
                 connection
                     .edges
                     .extend(page.edges.into_iter().map(|edge| match edge.node {
-                        mas_storage::app_session::AppSession::Compat(session) => Edge::new(
+                        pasion_storage::app_session::AppSession::Compat(session) => Edge::new(
                             OpaqueCursor(NodeCursor(NodeType::CompatSession, session.id)),
                             AppSession::CompatSession(Box::new(CompatSession::new(*session))),
                         ),
-                        mas_storage::app_session::AppSession::OAuth2(session) => Edge::new(
+                        pasion_storage::app_session::AppSession::OAuth2(session) => Edge::new(
                             OpaqueCursor(NodeCursor(NodeType::OAuth2Session, session.id)),
                             AppSession::OAuth2Session(Box::new(OAuth2Session(*session))),
                         ),
@@ -187,7 +187,7 @@ impl BrowserSession {
 /// An authentication records when a user enter their credential in a browser
 /// session.
 #[derive(Description)]
-pub struct Authentication(pub mas_data_model::Authentication);
+pub struct Authentication(pub pasion_data_model::Authentication);
 
 #[Object(use_type_description)]
 impl Authentication {

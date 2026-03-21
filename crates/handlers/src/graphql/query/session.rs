@@ -1,6 +1,6 @@
 use async_graphql::{Context, ID, Object, Union};
-use mas_data_model::Device;
-use mas_storage::{
+use pasion_data_model::Device;
+use pasion_storage::{
     Pagination, RepositoryAccess,
     compat::{CompatSessionFilter, CompatSessionRepository},
     oauth2::OAuth2SessionFilter,

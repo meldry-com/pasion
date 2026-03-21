@@ -1,7 +1,7 @@
 use anyhow::Context as _;
 use async_graphql::{Context, Description, Enum, ID, Object};
 use chrono::{DateTime, Utc};
-use mas_storage::{oauth2::OAuth2ClientRepository, user::BrowserSessionRepository};
+use pasion_storage::{oauth2::OAuth2ClientRepository, user::BrowserSessionRepository};
 use oauth2_types::oidc::ApplicationType;
 use url::Url;
 
@@ -11,7 +11,7 @@ use crate::graphql::{UserId, state::ContextExt};
 /// An OAuth 2.0 session represents a client session which used the OAuth APIs
 /// to login.
 #[derive(Description)]
-pub struct OAuth2Session(pub mas_data_model::Session);
+pub struct OAuth2Session(pub pasion_data_model::Session);
 
 #[Object(use_type_description)]
 impl OAuth2Session {
@@ -47,8 +47,8 @@ impl OAuth2Session {
     /// When the session ended.
     pub async fn finished_at(&self) -> Option<DateTime<Utc>> {
         match &self.0.state {
-            mas_data_model::SessionState::Valid => None,
-            mas_data_model::SessionState::Finished { finished_at } => Some(*finished_at),
+            pasion_data_model::SessionState::Valid => None,
+            pasion_data_model::SessionState::Finished { finished_at } => Some(*finished_at),
         }
     }
 
@@ -57,15 +57,15 @@ impl OAuth2Session {
         self.0
             .user_agent
             .clone()
-            .map(mas_data_model::UserAgent::parse)
+            .map(pasion_data_model::UserAgent::parse)
             .map(UserAgent::from)
     }
 
     /// The state of the session.
     pub async fn state(&self) -> SessionState {
         match &self.0.state {
-            mas_data_model::SessionState::Valid => SessionState::Active,
-            mas_data_model::SessionState::Finished { .. } => SessionState::Finished,
+            pasion_data_model::SessionState::Valid => SessionState::Active,
+            pasion_data_model::SessionState::Finished { .. } => SessionState::Finished,
         }
     }
 
@@ -140,7 +140,7 @@ pub enum OAuth2ApplicationType {
 
 /// An OAuth 2.0 client
 #[derive(Description)]
-pub struct OAuth2Client(pub mas_data_model::Client);
+pub struct OAuth2Client(pub pasion_data_model::Client);
 
 #[Object(use_type_description)]
 impl OAuth2Client {

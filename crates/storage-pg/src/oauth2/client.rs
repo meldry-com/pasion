@@ -4,10 +4,10 @@ use std::{
 };
 
 use async_trait::async_trait;
-use mas_data_model::{Client, Clock, JwksOrJwksUri};
-use mas_iana::{jose::JsonWebSignatureAlg, oauth::OAuthClientAuthenticationMethod};
-use mas_jose::jwk::PublicJsonWebKeySet;
-use mas_storage::oauth2::OAuth2ClientRepository;
+use pasion_data_model::{Client, Clock, JwksOrJwksUri};
+use pasion_iana::{jose::JsonWebSignatureAlg, oauth::OAuthClientAuthenticationMethod};
+use pasion_jose::jwk::PublicJsonWebKeySet;
+use pasion_storage::oauth2::OAuth2ClientRepository;
 use oauth2_types::{oidc::ApplicationType, requests::GrantType};
 use opentelemetry_semantic_conventions::attribute::DB_QUERY_TEXT;
 use rand::RngCore;

@@ -1,7 +1,7 @@
 use async_trait::async_trait;
 use chrono::{DateTime, Utc};
-use mas_data_model::{Clock, Password, User};
-use mas_storage::user::UserPasswordRepository;
+use pasion_data_model::{Clock, Password, User};
+use pasion_storage::user::UserPasswordRepository;
 use rand::RngCore;
 use sqlx::PgConnection;
 use ulid::Ulid;

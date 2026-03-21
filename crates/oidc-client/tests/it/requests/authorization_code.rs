@@ -1,11 +1,11 @@
 use std::{collections::HashMap, num::NonZeroU32};
 
 use assert_matches::assert_matches;
-use mas_iana::oauth::{
+use pasion_iana::oauth::{
     OAuthAccessTokenType, OAuthClientAuthenticationMethod, PkceCodeChallengeMethod,
 };
-use mas_jose::{claims::ClaimError, jwk::PublicJsonWebKeySet};
-use mas_oidc_client::{
+use pasion_jose::{claims::ClaimError, jwk::PublicJsonWebKeySet};
+use pasion_oidc_client::{
     error::{IdTokenError, TokenAuthorizationCodeError},
     requests::{
         authorization_code::{

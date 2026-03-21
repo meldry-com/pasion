@@ -1,7 +1,7 @@
 use std::ops::Deref;
 
-use mas_iana::oauth::OAuthClientAuthenticationMethod;
-use mas_jose::jwk::PublicJsonWebKeySet;
+use pasion_iana::oauth::OAuthClientAuthenticationMethod;
+use pasion_jose::jwk::PublicJsonWebKeySet;
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize, de::Error};
 use serde_with::serde_as;

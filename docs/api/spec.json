@@ -1,7 +1,7 @@
 {
   "openapi": "3.1.0",
   "info": {
-    "title": "Palpo Authentication Service admin API",
+    "title": "Pasion admin API",
     "version": ""
   },
   "servers": [

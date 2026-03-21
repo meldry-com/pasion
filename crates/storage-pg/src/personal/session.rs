@@ -2,14 +2,14 @@ use std::net::IpAddr;
 
 use async_trait::async_trait;
 use chrono::{DateTime, Utc};
-use mas_data_model::{
+use pasion_data_model::{
     Clock, User,
     personal::{
         PersonalAccessToken,
         session::{PersonalSession, PersonalSessionOwner, SessionState},
     },
 };
-use mas_storage::{
+use pasion_storage::{
     Page, Pagination,
     pagination::Node,
     personal::{PersonalSessionFilter, PersonalSessionRepository, PersonalSessionState},

@@ -1,7 +1,7 @@
 use std::collections::BTreeMap;
 
 use camino::Utf8PathBuf;
-use mas_iana::jose::JsonWebSignatureAlg;
+use pasion_iana::jose::JsonWebSignatureAlg;
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize, de::Error};
 use serde_with::{serde_as, skip_serializing_none};

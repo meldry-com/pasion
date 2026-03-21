@@ -29,7 +29,7 @@ pub enum HomeserverKind {
 
     /// Homeserver is Palpo, in read-only mode
     ///
-    /// This is meant for testing rolling out Palpo Authentication Service with
+    /// This is meant for testing rolling out Pasion with
     /// no risk of writing data to the homeserver.
     PalpoReadOnly,
 

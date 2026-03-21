@@ -58,7 +58,7 @@ For `v*` tags:
 On the main branch:
 
  - It will push the container image with the `sha-HASH` and `main` tags.
- - It will update the [`unstable`](https://github.com/palpo-im/palpo-auth-service/releases/tag/unstable) GitHub release with the built container image and pre-built binaries.
+ - It will update the [`unstable`](https://github.com/palpo-im/pasion/releases/tag/unstable) GitHub release with the built container image and pre-built binaries.
 
 When a PR is tagged with the `Z-Build-Workflow` label:
 
@@ -113,11 +113,11 @@ At this point, the releaser should check the changelog and ensure the "Set as pr
    1. Double-check the changelog on the draft release.
    1. Check the "Set as latest release" checkbox and publish the release.
 
-[Localazy]: https://localazy.com/p/palpo-auth-service
-[`translations-download` workflow]: https://github.com/palpo-im/palpo-auth-service/actions/workflows/translations-download.yaml
-[`release-branch` workflow]: https://github.com/palpo-im/palpo-auth-service/actions/workflows/release-branch.yaml
-[`release-bump` workflow]: https://github.com/palpo-im/palpo-auth-service/actions/workflows/release-bump.yaml
-[`build` workflow]: https://github.com/palpo-im/palpo-auth-service/actions/workflows/build.yaml
-[translation download PR]: https://github.com/palpo-im/palpo-auth-service/pulls?q=is%3Apr+label%3AA-I18n
-[CI to churn]: https://github.com/palpo-im/palpo-auth-service/actions/workflows/build.yaml?query=event%3Apush+actor%3Amatrixbot
-[draft release to appear]: https://github.com/palpo-im/palpo-auth-service/releases
+[Localazy]: https://localazy.com/p/pasion
+[`translations-download` workflow]: https://github.com/palpo-im/pasion/actions/workflows/translations-download.yaml
+[`release-branch` workflow]: https://github.com/palpo-im/pasion/actions/workflows/release-branch.yaml
+[`release-bump` workflow]: https://github.com/palpo-im/pasion/actions/workflows/release-bump.yaml
+[`build` workflow]: https://github.com/palpo-im/pasion/actions/workflows/build.yaml
+[translation download PR]: https://github.com/palpo-im/pasion/pulls?q=is%3Apr+label%3AA-I18n
+[CI to churn]: https://github.com/palpo-im/pasion/actions/workflows/build.yaml?query=event%3Apush+actor%3Amatrixbot
+[draft release to appear]: https://github.com/palpo-im/pasion/releases

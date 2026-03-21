@@ -1,6 +1,6 @@
 use base64ct::{Base64UrlUnpadded, Encoding};
 use chrono::{DateTime, Duration, Utc};
-use mas_data_model::Clock;
+use pasion_data_model::Clock;
 use rand::{Rng, RngCore, distributions::Standard, prelude::Distribution as _};
 use serde::{Deserialize, Serialize};
 use serde_with::{TimestampSeconds, serde_as};

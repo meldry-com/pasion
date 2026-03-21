@@ -1,7 +1,7 @@
 use async_trait::async_trait;
 use chrono::{DateTime, Utc};
-use mas_data_model::{Clock, UserRegistrationToken};
-use mas_storage::{
+use pasion_data_model::{Clock, UserRegistrationToken};
+use pasion_storage::{
     Page, Pagination,
     pagination::Node,
     user::{UserRegistrationTokenFilter, UserRegistrationTokenRepository},
@@ -22,7 +22,7 @@ use crate::{
     tracing::ExecuteExt,
 };
 
-/// An implementation of [`mas_storage::user::UserRegistrationTokenRepository`]
+/// An implementation of [`pasion_storage::user::UserRegistrationTokenRepository`]
 /// for a PostgreSQL connection
 pub struct PgUserRegistrationTokenRepository<'c> {
     conn: &'c mut PgConnection,
@@ -430,7 +430,7 @@ impl UserRegistrationTokenRepository for PgUserRegistrationTokenRepository<'_> {
     async fn add(
         &mut self,
         rng: &mut (dyn RngCore + Send),
-        clock: &dyn mas_data_model::Clock,
+        clock: &dyn pasion_data_model::Clock,
         token: String,
         usage_limit: Option<u32>,
         expires_at: Option<DateTime<Utc>>,
@@ -656,8 +656,8 @@ impl UserRegistrationTokenRepository for PgUserRegistrationTokenRepository<'_> {
 #[cfg(test)]
 mod tests {
     use chrono::Duration;
-    use mas_data_model::{Clock as _, clock::MockClock};
-    use mas_storage::{Pagination, user::UserRegistrationTokenFilter};
+    use pasion_data_model::{Clock as _, clock::MockClock};
+    use pasion_storage::{Pagination, user::UserRegistrationTokenFilter};
     use rand::SeedableRng;
     use rand_chacha::ChaChaRng;
     use sqlx::PgPool;

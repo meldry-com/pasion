@@ -3,13 +3,13 @@ use std::{collections::HashMap, sync::Arc};
 use async_trait::async_trait;
 use chrono::{DateTime, Duration, Utc};
 use cron::Schedule;
-use mas_context::LogContext;
-use mas_data_model::Clock;
-use mas_storage::{
+use pasion_context::LogContext;
+use pasion_data_model::Clock;
+use pasion_storage::{
     RepositoryAccess, RepositoryError,
     queue::{InsertableJob, Job, JobMetadata, Worker},
 };
-use mas_storage_pg::{DatabaseError, PgRepository};
+use pasion_storage_pg::{DatabaseError, PgRepository};
 use opentelemetry::{
     KeyValue,
     metrics::{Counter, Histogram, UpDownCounter},
@@ -885,7 +885,7 @@ impl JobTracker {
                     let result = job.run(&state, context.clone()).await;
 
                     let Some(context_stats) =
-                        LogContext::maybe_with(mas_context::LogContext::stats)
+                        LogContext::maybe_with(pasion_context::LogContext::stats)
                     else {
                         // This should never happen, but if it does it's fine: we're recovering fine
                         // from panics in those tasks

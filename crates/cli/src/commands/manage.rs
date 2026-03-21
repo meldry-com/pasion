@@ -6,13 +6,13 @@ use clap::{ArgAction, CommandFactory, Parser};
 use console::{Alignment, Style, Term, pad_str, style};
 use dialoguer::{Confirm, FuzzySelect, Input, Password, theme::ColorfulTheme};
 use figment::Figment;
-use mas_config::{
+use pasion_config::{
     ConfigurationSection, ConfigurationSectionExt, DatabaseConfig, MatrixConfig, PasswordsConfig,
 };
-use mas_data_model::{Clock, Device, SystemClock, TokenType, Ulid, UpstreamOAuthProvider, User};
-use mas_email::Address;
-use mas_matrix::HomeserverConnection;
-use mas_storage::{
+use pasion_data_model::{Clock, Device, SystemClock, TokenType, Ulid, UpstreamOAuthProvider, User};
+use pasion_email::Address;
+use pasion_matrix::HomeserverConnection;
+use pasion_storage::{
     Pagination, RepositoryAccess,
     compat::{CompatAccessTokenRepository, CompatSessionFilter, CompatSessionRepository},
     oauth2::OAuth2SessionFilter,
@@ -25,7 +25,7 @@ use mas_storage::{
         UserRepository,
     },
 };
-use mas_storage_pg::{DatabaseError, PgRepository};
+use pasion_storage_pg::{DatabaseError, PgRepository};
 use rand::{
     RngCore, SeedableRng,
     distributions::{Alphanumeric, DistString as _},
@@ -407,7 +407,7 @@ impl Options {
                     .map_err(anyhow::Error::from_boxed)?;
                 let matrix_config =
                     MatrixConfig::extract(figment).map_err(anyhow::Error::from_boxed)?;
-                let http_client = mas_http::reqwest_client();
+                let http_client = pasion_http::reqwest_client();
                 let homeserver =
                     homeserver_connection_from_config(&matrix_config, http_client).await?;
                 let mut conn = database_connection_from_config(&database_config).await?;
@@ -687,7 +687,7 @@ impl Options {
                 yes,
                 ignore_password_complexity,
             } => {
-                let http_client = mas_http::reqwest_client();
+                let http_client = pasion_http::reqwest_client();
                 let password_config = PasswordsConfig::extract_or_default(figment)
                     .map_err(anyhow::Error::from_boxed)?;
                 let database_config = DatabaseConfig::extract_or_default(figment)

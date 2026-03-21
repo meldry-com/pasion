@@ -1,6 +1,6 @@
 #![allow(clippy::module_name_repetitions)]
 
-use mas_storage::{Pagination, pagination::Edge};
+use pasion_storage::{Pagination, pagination::Edge};
 use schemars::JsonSchema;
 use serde::Serialize;
 use ulid::Ulid;
@@ -78,10 +78,10 @@ fn url_with_pagination(base: &str, pagination: Pagination) -> String {
 
     let count = pagination.count;
     match pagination.direction {
-        mas_storage::pagination::PaginationDirection::Forward => {
+        pasion_storage::pagination::PaginationDirection::Forward => {
             query = format!("{query}&page[first]={count}");
         }
-        mas_storage::pagination::PaginationDirection::Backward => {
+        pasion_storage::pagination::PaginationDirection::Backward => {
             query = format!("{query}&page[last]={count}");
         }
     }
@@ -94,7 +94,7 @@ fn url_with_pagination(base: &str, pagination: Pagination) -> String {
 
 impl<T: Resource> PaginatedResponse<T> {
     pub fn for_page(
-        page: mas_storage::Page<T>,
+        page: pasion_storage::Page<T>,
         current_pagination: Pagination,
         count: Option<usize>,
         base: &str,

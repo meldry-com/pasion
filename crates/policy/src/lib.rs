@@ -3,7 +3,7 @@ pub mod model;
 use std::sync::Arc;
 
 use arc_swap::ArcSwap;
-use mas_data_model::{SessionLimitConfig, Ulid};
+use pasion_data_model::{SessionLimitConfig, Ulid};
 use opa_wasm::{
     Runtime,
     wasmtime::{Config, Engine, Module, OptLevel, Store},
@@ -271,7 +271,7 @@ impl PolicyFactory {
     /// the policy can't be instantiated with the new data.
     pub async fn set_dynamic_data(
         &self,
-        dynamic_data: mas_data_model::PolicyData,
+        dynamic_data: pasion_data_model::PolicyData,
     ) -> Result<bool, LoadError> {
         // Check if the version of the dynamic data we have is the same as the one we're
         // trying to set
@@ -599,7 +599,7 @@ mod tests {
 
         // Update the policy data
         factory
-            .set_dynamic_data(mas_data_model::PolicyData {
+            .set_dynamic_data(pasion_data_model::PolicyData {
                 id: Ulid::nil(),
                 created_at: SystemTime::now().into(),
                 data: serde_json::json!({
@@ -652,7 +652,7 @@ mod tests {
             .collect();
         let json = serde_json::json!({ "emails": { "banned_addresses": { "substrings": data } } });
         factory
-            .set_dynamic_data(mas_data_model::PolicyData {
+            .set_dynamic_data(pasion_data_model::PolicyData {
                 id: Ulid::nil(),
                 created_at: SystemTime::now().into(),
                 data: json,

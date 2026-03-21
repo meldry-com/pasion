@@ -1,5 +1,5 @@
 [package]
-name = "mas-salvo-utils"
+name = "pasion-salvo-utils"
 version.workspace = true
 authors.workspace = true
 edition.workspace = true
@@ -34,10 +34,10 @@ url.workspace = true
 ulid.workspace = true
 
 oauth2-types.workspace = true
-mas-data-model.workspace = true
-mas-http.workspace = true
-mas-iana.workspace = true
-mas-jose.workspace = true
-mas-keystore.workspace = true
-mas-storage.workspace = true
-mas-templates.workspace = true
+pasion-data-model.workspace = true
+pasion-http.workspace = true
+pasion-iana.workspace = true
+pasion-jose.workspace = true
+pasion-keystore.workspace = true
+pasion-storage.workspace = true
+pasion-templates.workspace = true

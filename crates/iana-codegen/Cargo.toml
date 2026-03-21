@@ -1,5 +1,5 @@
 [package]
-name = "mas-iana-codegen"
+name = "pasion-iana-codegen"
 version.workspace = true
 authors.workspace = true
 edition.workspace = true

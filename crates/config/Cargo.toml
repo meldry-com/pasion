@@ -1,5 +1,5 @@
 [package]
-name = "mas-config"
+name = "pasion-config"
 version.workspace = true
 authors.workspace = true
 edition.workspace = true
@@ -34,9 +34,9 @@ tracing.workspace = true
 ulid.workspace = true
 url.workspace = true
 
-mas-jose.workspace = true
-mas-keystore.workspace = true
-mas-iana.workspace = true
+pasion-jose.workspace = true
+pasion-keystore.workspace = true
+pasion-iana.workspace = true
 
 [features]
 docker = []

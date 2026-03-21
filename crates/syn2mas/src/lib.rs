@@ -15,7 +15,7 @@ pub use self::{
     palpo_reader::{
         PalpoReader,
         checks::{
-            palpo_config_check, palpo_config_check_against_mas_config, palpo_database_check,
+            palpo_config_check, palpo_config_check_against_pasion_config, palpo_database_check,
         },
         config as palpo_config,
     },

@@ -1,9 +1,9 @@
 use async_trait::async_trait;
 use chrono::{DateTime, Utc};
-use mas_data_model::{
+use pasion_data_model::{
     Clock, CompatAccessToken, CompatRefreshToken, CompatRefreshTokenState, CompatSession,
 };
-use mas_storage::compat::CompatRefreshTokenRepository;
+use pasion_storage::compat::CompatRefreshTokenRepository;
 use rand::RngCore;
 use sqlx::PgConnection;
 use ulid::Ulid;

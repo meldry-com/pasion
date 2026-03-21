@@ -73,7 +73,7 @@ pub fn doc(operation: TransformOperation) -> TransformOperation {
 #[tracing::instrument(name = "handler.admin.v1.site_config", skip_all)]
 pub async fn handler(
     _: CallContext,
-    State(site_config): State<mas_data_model::SiteConfig>,
+    State(site_config): State<pasion_data_model::SiteConfig>,
 ) -> Json<SiteConfig> {
     Json(SiteConfig {
         server_name: site_config.server_name,

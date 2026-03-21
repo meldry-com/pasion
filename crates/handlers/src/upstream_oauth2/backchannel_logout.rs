@@ -7,18 +7,18 @@ use axum::{
 };
 use hyper::StatusCode;
 use mas_axum_utils::record_error;
-use mas_data_model::{
+use pasion_data_model::{
     BoxClock, BoxRng, UpstreamOAuthProvider, UpstreamOAuthProviderOnBackchannelLogout,
 };
-use mas_jose::{
+use pasion_jose::{
     claims::{self, Claim, TimeOptions},
     jwt::JwtDecodeError,
 };
-use mas_oidc_client::{
+use pasion_oidc_client::{
     error::JwtVerificationError,
     requests::jose::{JwtVerificationData, verify_signed_jwt},
 };
-use mas_storage::{
+use pasion_storage::{
     BoxRepository, Pagination,
     compat::CompatSessionFilter,
     oauth2::OAuth2SessionFilter,
@@ -107,9 +107,9 @@ impl IntoResponse for RouteError {
     }
 }
 
-impl_from_error_for_route!(mas_storage::RepositoryError);
-impl_from_error_for_route!(mas_oidc_client::error::DiscoveryError);
-impl_from_error_for_route!(mas_oidc_client::error::JwksError);
+impl_from_error_for_route!(pasion_storage::RepositoryError);
+impl_from_error_for_route!(pasion_oidc_client::error::DiscoveryError);
+impl_from_error_for_route!(pasion_oidc_client::error::JwksError);
 
 #[derive(Deserialize)]
 pub(crate) struct BackchannelLogoutRequest {
@@ -150,7 +150,7 @@ pub(crate) async fn post(
     let mut lazy_metadata = LazyProviderInfos::new(&metadata_cache, &provider, &client);
 
     let jwks =
-        mas_oidc_client::requests::jose::fetch_jwks(&client, lazy_metadata.jwks_uri().await?)
+        pasion_oidc_client::requests::jose::fetch_jwks(&client, lazy_metadata.jwks_uri().await?)
             .await?;
 
     // Validate the logout token. The rules are defined in

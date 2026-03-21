@@ -2,11 +2,11 @@ use std::net::IpAddr;
 
 use async_trait::async_trait;
 use chrono::{DateTime, Utc};
-use mas_data_model::{
+use pasion_data_model::{
     BrowserSession, Clock, CompatSession, CompatSessionState, CompatSsoLogin, CompatSsoLoginState,
     Device, User,
 };
-use mas_storage::{
+use pasion_storage::{
     Page, Pagination,
     compat::{CompatSessionFilter, CompatSessionRepository},
     pagination::Node,
@@ -372,7 +372,7 @@ impl CompatSessionRepository for PgCompatSessionRepository<'_> {
             db.query.text,
             %compat_session.id,
             user.id = %compat_session.user_id,
-            compat_session.device.id = compat_session.device.as_ref().map(mas_data_model::Device::as_str),
+            compat_session.device.id = compat_session.device.as_ref().map(pasion_data_model::Device::as_str),
         ),
         err,
     )]

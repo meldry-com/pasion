@@ -4,15 +4,15 @@ use anyhow::Context;
 use clap::Parser;
 use figment::Figment;
 use itertools::Itertools;
-use mas_config::{
+use pasion_config::{
     AppConfig, ClientsConfig, ConfigurationSection, ConfigurationSectionExt, UpstreamOAuth2Config,
 };
-use mas_context::LogContext;
-use mas_data_model::SystemClock;
-use mas_handlers::{ActivityTracker, CookieManager, Limiter, MetadataCache};
-use mas_listener::server::Server;
-use mas_router::UrlBuilder;
-use mas_storage_pg::PgRepositoryFactory;
+use pasion_context::LogContext;
+use pasion_data_model::SystemClock;
+use pasion_handlers::{ActivityTracker, CookieManager, Limiter, MetadataCache};
+use pasion_listener::server::Server;
+use pasion_router::UrlBuilder;
+use pasion_storage_pg::PgRepositoryFactory;
 use tracing::{info, info_span, warn};
 
 use crate::{
@@ -67,17 +67,17 @@ impl Options {
 
         if self.no_migrate {
             let mut conn = pool.acquire().await?;
-            let pending_migrations = mas_storage_pg::pending_migrations(&mut conn).await?;
+            let pending_migrations = pasion_storage_pg::pending_migrations(&mut conn).await?;
             if !pending_migrations.is_empty() {
                 // Refuse to start if there are pending migrations
                 return Err(anyhow::anyhow!(
-                    "The server is running with `--no-migrate` but there are pending migrations. Please run them first with `mas-cli database migrate`, or omit the `--no-migrate` flag to apply them automatically on startup."
+                    "The server is running with `--no-migrate` but there are pending migrations. Please run them first with `pasion-cli database migrate`, or omit the `--no-migrate` flag to apply them automatically on startup."
                 ));
             }
         } else {
             info!("Running pending database migrations");
             let mut conn = pool.acquire().await?;
-            mas_storage_pg::migrate(&mut conn)
+            pasion_storage_pg::migrate(&mut conn)
                 .await
                 .context("could not run migrations")?;
         }
@@ -163,7 +163,7 @@ impl Options {
         .await?;
         shutdown.register_reloadable(&templates);
 
-        let http_client = mas_http::reqwest_client();
+        let http_client = pasion_http::reqwest_client();
 
         let homeserver_connection =
             homeserver_connection_from_config(&config.matrix, http_client.clone()).await?;
@@ -173,7 +173,7 @@ impl Options {
             test_mailer_in_background(&mailer, Duration::from_secs(30));
 
             info!("Starting task worker");
-            mas_tasks::init_and_run(
+            pasion_tasks::init_and_run(
                 PgRepositoryFactory::new(pool.clone()),
                 SystemClock::default(),
                 &mailer,
@@ -217,7 +217,7 @@ impl Options {
 
         limiter.start();
 
-        let graphql_schema = mas_handlers::graphql_schema(
+        let graphql_schema = pasion_handlers::graphql_schema(
             PgRepositoryFactory::new(pool.clone()).boxed(),
             &policy_factory,
             homeserver_connection.clone(),
@@ -321,7 +321,7 @@ impl Options {
         shutdown
             .task_tracker()
             .spawn(LogContext::new("run-servers").run(|| {
-                mas_listener::server::run_servers(
+                pasion_listener::server::run_servers(
                     servers,
                     shutdown.soft_shutdown_token(),
                     shutdown.hard_shutdown_token(),

@@ -13,12 +13,12 @@ use mas_axum_utils::{
     cookies::CookieJar,
     csrf::{CsrfExt, ProtectedForm},
 };
-use mas_data_model::{BoxClock, BoxRng, Clock, MatrixUser};
-use mas_matrix::HomeserverConnection;
-use mas_policy::{Policy, model::CompatLogin};
-use mas_router::{CompatLoginSsoAction, UrlBuilder};
-use mas_storage::{BoxRepository, RepositoryAccess, compat::CompatSsoLoginRepository};
-use mas_templates::{
+use pasion_data_model::{BoxClock, BoxRng, Clock, MatrixUser};
+use pasion_matrix::HomeserverConnection;
+use pasion_policy::{Policy, model::CompatLogin};
+use pasion_router::{CompatLoginSsoAction, UrlBuilder};
+use pasion_storage::{BoxRepository, RepositoryAccess, compat::CompatSsoLoginRepository};
+use pasion_templates::{
     CompatLoginPolicyViolationContext, CompatSsoContext, ErrorContext, TemplateContext, Templates,
 };
 use serde::{Deserialize, Serialize};
@@ -84,10 +84,10 @@ pub async fn get(
         // If there is no session, redirect to the login or register screen
         let url = match params.action {
             Some(CompatLoginSsoAction::Register) => {
-                url_builder.redirect(&mas_router::Register::and_continue_compat_sso_login(id))
+                url_builder.redirect(&pasion_router::Register::and_continue_compat_sso_login(id))
             }
             Some(CompatLoginSsoAction::Login) | None => {
-                url_builder.redirect(&mas_router::Login::and_continue_compat_sso_login(id))
+                url_builder.redirect(&pasion_router::Login::and_continue_compat_sso_login(id))
             }
         };
 
@@ -118,7 +118,7 @@ pub async fn get(
     repo.save().await?;
 
     let res = policy
-        .evaluate_compat_login(mas_policy::CompatLoginInput {
+        .evaluate_compat_login(pasion_policy::CompatLoginInput {
             user: &session.user,
             login: CompatLogin::Sso {
                 redirect_uri: login.redirect_uri.to_string(),
@@ -127,7 +127,7 @@ pub async fn get(
             // which happens too late.
             session_replaced: false,
             session_counts,
-            requester: mas_policy::Requester {
+            requester: pasion_policy::Requester {
                 ip_address: activity_tracker.ip(),
                 user_agent,
             },
@@ -225,10 +225,10 @@ pub async fn post(
         // If there is no session, redirect to the login or register screen
         let url = match params.action {
             Some(CompatLoginSsoAction::Register) => {
-                url_builder.redirect(&mas_router::Register::and_continue_compat_sso_login(id))
+                url_builder.redirect(&pasion_router::Register::and_continue_compat_sso_login(id))
             }
             Some(CompatLoginSsoAction::Login) | None => {
-                url_builder.redirect(&mas_router::Login::and_continue_compat_sso_login(id))
+                url_builder.redirect(&pasion_router::Login::and_continue_compat_sso_login(id))
             }
         };
 
@@ -275,7 +275,7 @@ pub async fn post(
     let session_counts = count_user_sessions_for_limiting(&mut repo, &session.user).await?;
 
     let res = policy
-        .evaluate_compat_login(mas_policy::CompatLoginInput {
+        .evaluate_compat_login(pasion_policy::CompatLoginInput {
             user: &session.user,
             login: CompatLogin::Sso {
                 redirect_uri: login.redirect_uri.to_string(),
@@ -284,7 +284,7 @@ pub async fn post(
             // We don't know if there's going to be a replacement until we received the device ID,
             // which happens too late.
             session_replaced: false,
-            requester: mas_policy::Requester {
+            requester: pasion_policy::Requester {
                 ip_address: activity_tracker.ip(),
                 user_agent,
             },

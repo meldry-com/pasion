@@ -1,7 +1,7 @@
 use base64ct::{Base64UrlUnpadded, Encoding};
 use chrono::{DateTime, Utc};
 use crc::{CRC_32_ISO_HDLC, Crc};
-use mas_iana::oauth::OAuthTokenTypeHint;
+use pasion_iana::oauth::OAuthTokenTypeHint;
 use rand::{Rng, RngCore, distributions::Alphanumeric};
 use thiserror::Error;
 use ulid::Ulid;

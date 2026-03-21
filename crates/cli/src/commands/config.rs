@@ -4,8 +4,8 @@ use anyhow::Context;
 use camino::Utf8PathBuf;
 use clap::Parser;
 use figment::Figment;
-use mas_config::{ConfigurationSection, RootConfig, SyncConfig};
-use mas_data_model::{Clock as _, SystemClock};
+use pasion_config::{ConfigurationSection, RootConfig, SyncConfig};
+use pasion_data_model::{Clock as _, SystemClock};
 use rand::SeedableRng;
 use tokio::io::AsyncWriteExt;
 use tracing::{info, info_span};
@@ -100,7 +100,7 @@ impl Options {
                     info!("Adjusting MAS config to match Palpo config from {palpo_config:?}");
                     let palpo_config = syn2mas::palpo_config::Config::load(&palpo_config)
                         .map_err(anyhow::Error::from_boxed)?;
-                    config = palpo_config.adjust_mas_config(config, &mut rng, clock.now());
+                    config = palpo_config.adjust_pasion_config(config, &mut rng, clock.now());
                 }
 
                 let config = serde_yaml::to_string(&config)?;
@@ -122,7 +122,7 @@ impl Options {
                 // Grab a connection to the database
                 let mut conn = database_connection_from_config(&config.database).await?;
 
-                mas_storage_pg::migrate(&mut conn)
+                pasion_storage_pg::migrate(&mut conn)
                     .await
                     .context("could not run migrations")?;
 

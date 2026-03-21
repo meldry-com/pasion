@@ -5,8 +5,8 @@ use axum_extra::typed_header::TypedHeader;
 use headers::{Authorization, authorization::Bearer};
 use hyper::StatusCode;
 use mas_axum_utils::record_error;
-use mas_data_model::{BoxClock, BoxRng, Clock, TokenType};
-use mas_storage::{
+use pasion_data_model::{BoxClock, BoxRng, Clock, TokenType};
+use pasion_storage::{
     BoxRepository, RepositoryAccess,
     compat::{CompatAccessTokenRepository, CompatSessionRepository},
     queue::{QueueJobRepositoryExt as _, SyncDevicesJob},
@@ -35,13 +35,13 @@ pub enum RouteError {
     MissingAuthorization,
 
     #[error("Invalid token format")]
-    TokenFormat(#[from] mas_data_model::TokenFormatError),
+    TokenFormat(#[from] pasion_data_model::TokenFormatError),
 
     #[error("Invalid access token")]
     InvalidAuthorization,
 }
 
-impl_from_error_for_route!(mas_storage::RepositoryError);
+impl_from_error_for_route!(pasion_storage::RepositoryError);
 
 impl IntoResponse for RouteError {
     fn into_response(self) -> axum::response::Response {

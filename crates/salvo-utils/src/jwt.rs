@@ -1,4 +1,4 @@
-use mas_jose::jwt::Jwt;
+use pasion_jose::jwt::Jwt;
 use salvo::prelude::*;
 
 pub struct JwtResponse<T>(pub Jwt<'static, T>);

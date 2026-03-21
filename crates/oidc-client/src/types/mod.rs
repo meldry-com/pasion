@@ -5,8 +5,8 @@ pub mod client_credentials;
 use std::collections::HashMap;
 
 #[doc(inline)]
-pub use mas_iana as iana;
-use mas_jose::jwt::Jwt;
+pub use pasion_iana as iana;
+use pasion_jose::jwt::Jwt;
 pub use oauth2_types::*;
 use serde_json::Value;
 

@@ -5,7 +5,7 @@
 
 use std::path::{Path, PathBuf};
 
-use mas_policy::model::{
+use pasion_policy::model::{
     AuthorizationGrantInput, ClientRegistrationInput, CompatLoginInput, EmailInput, RegisterInput,
 };
 use schemars::{JsonSchema, generate::SchemaSettings};

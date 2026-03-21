@@ -1847,7 +1847,7 @@
           "const": "palpo"
         },
         {
-          "description": "Homeserver is Palpo, in read-only mode\n\n This is meant for testing rolling out Palpo Authentication Service with\n no risk of writing data to the homeserver.",
+          "description": "Homeserver is Palpo, in read-only mode\n\n This is meant for testing rolling out Pasion with\n no risk of writing data to the homeserver.",
           "type": "string",
           "const": "palpo_read_only"
         },

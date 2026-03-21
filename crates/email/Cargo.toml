@@ -1,5 +1,5 @@
 [package]
-name = "mas-email"
+name = "pasion-email"
 version.workspace = true
 authors.workspace = true
 edition.workspace = true
@@ -16,4 +16,4 @@ lettre.workspace = true
 thiserror.workspace = true
 tracing.workspace = true
 
-mas-templates.workspace = true
+pasion-templates.workspace = true

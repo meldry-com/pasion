@@ -4,7 +4,7 @@ use axum_extra::extract::{Query, QueryRejection};
 use axum_macros::FromRequestParts;
 use hyper::StatusCode;
 use mas_axum_utils::record_error;
-use mas_storage::{Page, user::UserRegistrationTokenFilter};
+use pasion_storage::{Page, user::UserRegistrationTokenFilter};
 use schemars::JsonSchema;
 use serde::Deserialize;
 
@@ -79,7 +79,7 @@ pub enum RouteError {
     InvalidFilter(#[from] QueryRejection),
 }
 
-impl_from_error_for_route!(mas_storage::RepositoryError);
+impl_from_error_for_route!(pasion_storage::RepositoryError);
 
 impl IntoResponse for RouteError {
     fn into_response(self) -> axum::response::Response {
@@ -101,11 +101,11 @@ pub fn doc(operation: TransformOperation) -> TransformOperation {
         .tag("user-registration-token")
         .response_with::<200, Json<PaginatedResponse<UserRegistrationToken>>, _>(|t| {
             let tokens = UserRegistrationToken::samples();
-            let pagination = mas_storage::Pagination::first(tokens.len());
+            let pagination = pasion_storage::Pagination::first(tokens.len());
             let page = Page {
                 edges: tokens
                     .into_iter()
-                    .map(|node| mas_storage::pagination::Edge {
+                    .map(|node| pasion_storage::pagination::Edge {
                         cursor: node.id(),
                         node,
                     })
@@ -184,7 +184,7 @@ pub async fn handler(
 mod tests {
     use chrono::Duration;
     use hyper::{Request, StatusCode};
-    use mas_data_model::Clock as _;
+    use pasion_data_model::Clock as _;
     use sqlx::PgPool;
 
     use crate::test_utils::{RequestBuilderExt, ResponseExt, TestState, setup};
@@ -276,7 +276,7 @@ mod tests {
         repo.save().await.unwrap();
     }
 
-    #[sqlx::test(migrator = "mas_storage_pg::MIGRATOR")]
+    #[sqlx::test(migrator = "pasion_storage_pg::MIGRATOR")]
     async fn test_list_all_tokens(pool: PgPool) {
         setup();
         let mut state = TestState::from_pool(pool).await.unwrap();
@@ -416,7 +416,7 @@ mod tests {
         "#);
     }
 
-    #[sqlx::test(migrator = "mas_storage_pg::MIGRATOR")]
+    #[sqlx::test(migrator = "pasion_storage_pg::MIGRATOR")]
     async fn test_filter_by_used(pool: PgPool) {
         setup();
         let mut state = TestState::from_pool(pool).await.unwrap();
@@ -580,7 +580,7 @@ mod tests {
         "#);
     }
 
-    #[sqlx::test(migrator = "mas_storage_pg::MIGRATOR")]
+    #[sqlx::test(migrator = "pasion_storage_pg::MIGRATOR")]
     async fn test_filter_by_revoked(pool: PgPool) {
         setup();
         let mut state = TestState::from_pool(pool).await.unwrap();
@@ -744,7 +744,7 @@ mod tests {
         "#);
     }
 
-    #[sqlx::test(migrator = "mas_storage_pg::MIGRATOR")]
+    #[sqlx::test(migrator = "pasion_storage_pg::MIGRATOR")]
     async fn test_filter_by_expired(pool: PgPool) {
         setup();
         let mut state = TestState::from_pool(pool).await.unwrap();
@@ -908,7 +908,7 @@ mod tests {
         "#);
     }
 
-    #[sqlx::test(migrator = "mas_storage_pg::MIGRATOR")]
+    #[sqlx::test(migrator = "pasion_storage_pg::MIGRATOR")]
     async fn test_filter_by_valid(pool: PgPool) {
         setup();
         let mut state = TestState::from_pool(pool).await.unwrap();
@@ -1072,7 +1072,7 @@ mod tests {
         "#);
     }
 
-    #[sqlx::test(migrator = "mas_storage_pg::MIGRATOR")]
+    #[sqlx::test(migrator = "pasion_storage_pg::MIGRATOR")]
     async fn test_combined_filters(pool: PgPool) {
         setup();
         let mut state = TestState::from_pool(pool).await.unwrap();
@@ -1127,7 +1127,7 @@ mod tests {
         "#);
     }
 
-    #[sqlx::test(migrator = "mas_storage_pg::MIGRATOR")]
+    #[sqlx::test(migrator = "pasion_storage_pg::MIGRATOR")]
     async fn test_pagination(pool: PgPool) {
         setup();
         let mut state = TestState::from_pool(pool).await.unwrap();
@@ -1317,7 +1317,7 @@ mod tests {
         "#);
     }
 
-    #[sqlx::test(migrator = "mas_storage_pg::MIGRATOR")]
+    #[sqlx::test(migrator = "pasion_storage_pg::MIGRATOR")]
     async fn test_invalid_filter(pool: PgPool) {
         setup();
         let mut state = TestState::from_pool(pool).await.unwrap();
@@ -1339,7 +1339,7 @@ mod tests {
         );
     }
 
-    #[sqlx::test(migrator = "mas_storage_pg::MIGRATOR")]
+    #[sqlx::test(migrator = "pasion_storage_pg::MIGRATOR")]
     async fn test_count_parameter(pool: PgPool) {
         setup();
         let mut state = TestState::from_pool(pool).await.unwrap();

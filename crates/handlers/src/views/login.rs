@@ -11,16 +11,16 @@ use mas_axum_utils::{
     cookies::CookieJar,
     csrf::{CsrfExt, ProtectedForm},
 };
-use mas_data_model::{BoxClock, BoxRng, Clock, oauth2::LoginHint};
-use mas_i18n::DataLocale;
-use mas_matrix::HomeserverConnection;
-use mas_router::{UpstreamOAuth2Authorize, UrlBuilder};
-use mas_storage::{
+use pasion_data_model::{BoxClock, BoxRng, Clock, oauth2::LoginHint};
+use pasion_i18n::DataLocale;
+use pasion_matrix::HomeserverConnection;
+use pasion_router::{UpstreamOAuth2Authorize, UrlBuilder};
+use pasion_storage::{
     BoxRepository, RepositoryAccess,
     upstream_oauth2::UpstreamOAuthProviderRepository,
     user::{BrowserSessionRepository, UserPasswordRepository, UserRepository},
 };
-use mas_templates::{
+use pasion_templates::{
     AccountInactiveContext, FieldError, FormError, FormState, LoginContext, LoginFormField,
     PostAuthContext, PostAuthContextInner, TemplateContext, Templates, ToFormState,
 };
@@ -349,7 +349,7 @@ async fn get_user_by_email_or_by_username<R: RepositoryAccess>(
     site_config: &SiteConfig,
     repo: &mut R,
     username_or_email: &str,
-) -> Result<Option<mas_data_model::User>, R::Error> {
+) -> Result<Option<pasion_data_model::User>, R::Error> {
     if site_config.login_with_email_allowed && username_or_email.contains('@') {
         let maybe_user_email = repo.user_email().find_by_email(username_or_email).await?;
 
@@ -435,17 +435,17 @@ mod test {
         Request, StatusCode,
         header::{CONTENT_TYPE, LOCATION},
     };
-    use mas_data_model::{
+    use pasion_data_model::{
         UpstreamOAuthProviderClaimsImports, UpstreamOAuthProviderOnBackchannelLogout,
         UpstreamOAuthProviderTokenAuthMethod,
     };
-    use mas_iana::jose::JsonWebSignatureAlg;
-    use mas_router::Route;
-    use mas_storage::{
+    use pasion_iana::jose::JsonWebSignatureAlg;
+    use pasion_router::Route;
+    use pasion_storage::{
         RepositoryAccess,
         upstream_oauth2::{UpstreamOAuthProviderParams, UpstreamOAuthProviderRepository},
     };
-    use mas_templates::escape_html;
+    use pasion_templates::escape_html;
     use oauth2_types::scope::OPENID;
     use sqlx::PgPool;
     use zeroize::Zeroizing;
@@ -457,7 +457,7 @@ mod test {
         },
     };
 
-    #[sqlx::test(migrator = "mas_storage_pg::MIGRATOR")]
+    #[sqlx::test(migrator = "pasion_storage_pg::MIGRATOR")]
     async fn test_password_disabled(pool: PgPool) {
         setup();
         let state = TestState::from_pool_with_site_config(
@@ -507,8 +507,8 @@ mod test {
                     token_endpoint_override: None,
                     userinfo_endpoint_override: None,
                     jwks_uri_override: None,
-                    discovery_mode: mas_data_model::UpstreamOAuthProviderDiscoveryMode::Oidc,
-                    pkce_mode: mas_data_model::UpstreamOAuthProviderPkceMode::Auto,
+                    discovery_mode: pasion_data_model::UpstreamOAuthProviderDiscoveryMode::Oidc,
+                    pkce_mode: pasion_data_model::UpstreamOAuthProviderPkceMode::Auto,
                     response_mode: None,
                     additional_authorization_parameters: Vec::new(),
                     forward_login_hint: false,
@@ -520,7 +520,7 @@ mod test {
             .unwrap();
         repo.save().await.unwrap();
 
-        let first_provider_login = mas_router::UpstreamOAuth2Authorize::new(first_provider.id);
+        let first_provider_login = pasion_router::UpstreamOAuth2Authorize::new(first_provider.id);
 
         let response = state.request(Request::get("/login").empty()).await;
         response.assert_status(StatusCode::SEE_OTHER);
@@ -550,8 +550,8 @@ mod test {
                     token_endpoint_override: None,
                     userinfo_endpoint_override: None,
                     jwks_uri_override: None,
-                    discovery_mode: mas_data_model::UpstreamOAuthProviderDiscoveryMode::Oidc,
-                    pkce_mode: mas_data_model::UpstreamOAuthProviderPkceMode::Auto,
+                    discovery_mode: pasion_data_model::UpstreamOAuthProviderDiscoveryMode::Oidc,
+                    pkce_mode: pasion_data_model::UpstreamOAuthProviderPkceMode::Auto,
                     response_mode: None,
                     additional_authorization_parameters: Vec::new(),
                     forward_login_hint: false,
@@ -563,7 +563,7 @@ mod test {
             .unwrap();
         repo.save().await.unwrap();
 
-        let second_provider_login = mas_router::UpstreamOAuth2Authorize::new(second_provider.id);
+        let second_provider_login = pasion_router::UpstreamOAuth2Authorize::new(second_provider.id);
 
         let response = state.request(Request::get("/login").empty()).await;
         response.assert_status(StatusCode::OK);
@@ -586,7 +586,7 @@ mod test {
         state: &TestState,
         username: &str,
         password: &str,
-    ) -> mas_data_model::User {
+    ) -> pasion_data_model::User {
         let mut rng = state.rng();
         let mut repo = state.repository().await.unwrap();
         let user = repo
@@ -607,7 +607,7 @@ mod test {
         user
     }
 
-    #[sqlx::test(migrator = "mas_storage_pg::MIGRATOR")]
+    #[sqlx::test(migrator = "pasion_storage_pg::MIGRATOR")]
     async fn test_password_login(pool: PgPool) {
         setup();
         let state = TestState::from_pool(pool).await.unwrap();
@@ -654,7 +654,7 @@ mod test {
         assert!(response.body().contains("john"));
     }
 
-    #[sqlx::test(migrator = "mas_storage_pg::MIGRATOR")]
+    #[sqlx::test(migrator = "pasion_storage_pg::MIGRATOR")]
     async fn test_password_login_with_mxid(pool: PgPool) {
         setup();
         let state = TestState::from_pool(pool).await.unwrap();
@@ -701,7 +701,7 @@ mod test {
         assert!(response.body().contains("john"));
     }
 
-    #[sqlx::test(migrator = "mas_storage_pg::MIGRATOR")]
+    #[sqlx::test(migrator = "pasion_storage_pg::MIGRATOR")]
     async fn test_password_login_with_mxid_wrong_server(pool: PgPool) {
         setup();
         let state = TestState::from_pool(pool).await.unwrap();
@@ -741,7 +741,7 @@ mod test {
         assert!(response.body().contains("Invalid credentials"));
     }
 
-    #[sqlx::test(migrator = "mas_storage_pg::MIGRATOR")]
+    #[sqlx::test(migrator = "pasion_storage_pg::MIGRATOR")]
     async fn test_password_login_rate_limit(pool: PgPool) {
         setup();
         let state = TestState::from_pool(pool).await.unwrap();
@@ -810,7 +810,7 @@ mod test {
         assert!(body.contains("too many requests"));
     }
 
-    #[sqlx::test(migrator = "mas_storage_pg::MIGRATOR")]
+    #[sqlx::test(migrator = "pasion_storage_pg::MIGRATOR")]
     async fn test_password_login_locked_account(pool: PgPool) {
         setup();
         let state = TestState::from_pool(pool).await.unwrap();
@@ -869,7 +869,7 @@ mod test {
         assert!(response.body().contains("Invalid credentials"));
     }
 
-    #[sqlx::test(migrator = "mas_storage_pg::MIGRATOR")]
+    #[sqlx::test(migrator = "pasion_storage_pg::MIGRATOR")]
     async fn test_password_login_deactivated_account(pool: PgPool) {
         setup();
         let state = TestState::from_pool(pool).await.unwrap();

@@ -11,8 +11,8 @@
     "submit": "Elküldés"
   },
   "app": {
-    "human_name": "Palpo Authentication Service",
-    "name": "palpo-auth-service",
+    "human_name": "Pasion",
+    "name": "pasion",
     "technical_description": "OpenID Connect felfedezési dokumentum: <a class=\"cpd-link\" data-kind=\"primary\" href=\"%(discovery_url)s\">%(discovery_url)s</a>"
   },
   "branding": {
@@ -226,7 +226,7 @@
     "scope": {
       "edit_profile": "Profil és elérhetőségek szerkesztése",
       "manage_sessions": "Eszközök és munkamenetek kezelése",
-      "mas_admin": "Bármely felhasználó kezelése a palpo-auth-service szolgáltatásban",
+      "mas_admin": "Bármely felhasználó kezelése a pasion szolgáltatásban",
       "send_messages": "Új üzenetek küldése az Ön nevében",
       "palpo_admin": "A Palpo Matrix-kiszolgáló kezelése",
       "view_messages": "Meglévő üzenetek és adatok megtekintése",

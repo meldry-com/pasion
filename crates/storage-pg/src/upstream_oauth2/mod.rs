@@ -13,12 +13,12 @@ pub use self::{
 #[cfg(test)]
 mod tests {
     use chrono::Duration;
-    use mas_data_model::{
+    use pasion_data_model::{
         UpstreamOAuthProviderClaimsImports, UpstreamOAuthProviderOnBackchannelLogout,
         UpstreamOAuthProviderTokenAuthMethod, clock::MockClock,
     };
-    use mas_iana::jose::JsonWebSignatureAlg;
-    use mas_storage::{
+    use pasion_iana::jose::JsonWebSignatureAlg;
+    use pasion_storage::{
         Pagination, RepositoryAccess,
         upstream_oauth2::{
             UpstreamOAuthLinkFilter, UpstreamOAuthLinkRepository, UpstreamOAuthProviderFilter,
@@ -66,8 +66,8 @@ mod tests {
                     authorization_endpoint_override: None,
                     userinfo_endpoint_override: None,
                     jwks_uri_override: None,
-                    discovery_mode: mas_data_model::UpstreamOAuthProviderDiscoveryMode::Oidc,
-                    pkce_mode: mas_data_model::UpstreamOAuthProviderPkceMode::Auto,
+                    discovery_mode: pasion_data_model::UpstreamOAuthProviderDiscoveryMode::Oidc,
+                    pkce_mode: pasion_data_model::UpstreamOAuthProviderPkceMode::Auto,
                     response_mode: None,
                     additional_authorization_parameters: Vec::new(),
                     forward_login_hint: false,
@@ -345,8 +345,8 @@ mod tests {
                         authorization_endpoint_override: None,
                         userinfo_endpoint_override: None,
                         jwks_uri_override: None,
-                        discovery_mode: mas_data_model::UpstreamOAuthProviderDiscoveryMode::Oidc,
-                        pkce_mode: mas_data_model::UpstreamOAuthProviderPkceMode::Auto,
+                        discovery_mode: pasion_data_model::UpstreamOAuthProviderDiscoveryMode::Oidc,
+                        pkce_mode: pasion_data_model::UpstreamOAuthProviderPkceMode::Auto,
                         response_mode: None,
                         additional_authorization_parameters: Vec::new(),
                         forward_login_hint: false,
@@ -483,8 +483,8 @@ mod tests {
                     authorization_endpoint_override: None,
                     userinfo_endpoint_override: None,
                     jwks_uri_override: None,
-                    discovery_mode: mas_data_model::UpstreamOAuthProviderDiscoveryMode::Oidc,
-                    pkce_mode: mas_data_model::UpstreamOAuthProviderPkceMode::Auto,
+                    discovery_mode: pasion_data_model::UpstreamOAuthProviderDiscoveryMode::Oidc,
+                    pkce_mode: pasion_data_model::UpstreamOAuthProviderPkceMode::Auto,
                     response_mode: None,
                     additional_authorization_parameters: Vec::new(),
                     forward_login_hint: false,

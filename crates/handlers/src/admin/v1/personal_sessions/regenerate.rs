@@ -3,7 +3,7 @@ use axum::{Json, response::IntoResponse};
 use chrono::Duration;
 use hyper::StatusCode;
 use mas_axum_utils::record_error;
-use mas_data_model::{BoxRng, TokenType};
+use pasion_data_model::{BoxRng, TokenType};
 use schemars::JsonSchema;
 use serde::Deserialize;
 use tracing::error;
@@ -38,7 +38,7 @@ pub enum RouteError {
     SessionNotYours,
 }
 
-impl_from_error_for_route!(mas_storage::RepositoryError);
+impl_from_error_for_route!(pasion_storage::RepositoryError);
 impl_from_error_for_route!(InconsistentPersonalSession);
 
 impl IntoResponse for RouteError {
@@ -163,7 +163,7 @@ mod tests {
 
     use crate::test_utils::{RequestBuilderExt, ResponseExt, TestState, setup};
 
-    #[sqlx::test(migrator = "mas_storage_pg::MIGRATOR")]
+    #[sqlx::test(migrator = "pasion_storage_pg::MIGRATOR")]
     async fn test_regenerate_personal_session(pool: PgPool) {
         setup();
         let mut state = TestState::from_pool(pool).await.unwrap();

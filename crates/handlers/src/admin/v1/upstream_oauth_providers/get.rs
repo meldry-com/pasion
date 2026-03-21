@@ -2,7 +2,7 @@ use aide::{OperationIo, transform::TransformOperation};
 use axum::{Json, response::IntoResponse};
 use hyper::StatusCode;
 use mas_axum_utils::record_error;
-use mas_storage::{RepositoryAccess, upstream_oauth2::UpstreamOAuthProviderRepository};
+use pasion_storage::{RepositoryAccess, upstream_oauth2::UpstreamOAuthProviderRepository};
 
 use crate::{
     admin::{
@@ -24,7 +24,7 @@ pub enum RouteError {
     NotFound,
 }
 
-impl_from_error_for_route!(mas_storage::RepositoryError);
+impl_from_error_for_route!(pasion_storage::RepositoryError);
 
 impl IntoResponse for RouteError {
     fn into_response(self) -> axum::response::Response {
@@ -71,13 +71,13 @@ pub async fn handler(
 #[cfg(test)]
 mod tests {
     use hyper::{Request, StatusCode};
-    use mas_data_model::{
+    use pasion_data_model::{
         UpstreamOAuthProvider, UpstreamOAuthProviderClaimsImports,
         UpstreamOAuthProviderDiscoveryMode, UpstreamOAuthProviderOnBackchannelLogout,
         UpstreamOAuthProviderPkceMode, UpstreamOAuthProviderTokenAuthMethod,
     };
-    use mas_iana::jose::JsonWebSignatureAlg;
-    use mas_storage::{
+    use pasion_iana::jose::JsonWebSignatureAlg;
+    use pasion_storage::{
         RepositoryAccess,
         upstream_oauth2::{UpstreamOAuthProviderParams, UpstreamOAuthProviderRepository},
     };
@@ -127,7 +127,7 @@ mod tests {
         provider
     }
 
-    #[sqlx::test(migrator = "mas_storage_pg::MIGRATOR")]
+    #[sqlx::test(migrator = "pasion_storage_pg::MIGRATOR")]
     async fn test_get_provider(pool: PgPool) {
         setup();
         let mut state = TestState::from_pool(pool).await.unwrap();
@@ -172,7 +172,7 @@ mod tests {
         "###);
     }
 
-    #[sqlx::test(migrator = "mas_storage_pg::MIGRATOR")]
+    #[sqlx::test(migrator = "pasion_storage_pg::MIGRATOR")]
     async fn test_not_found(pool: PgPool) {
         setup();
         let mut state = TestState::from_pool(pool).await.unwrap();

@@ -8,15 +8,15 @@ use axum::{
 use axum_extra::TypedHeader;
 use chrono::Duration;
 use mas_axum_utils::{InternalError, SessionInfoExt as _, cookies::CookieJar};
-use mas_data_model::{BoxClock, BoxRng, SiteConfig};
-use mas_matrix::HomeserverConnection;
-use mas_router::{PostAuthAction, UrlBuilder};
-use mas_storage::{
+use pasion_data_model::{BoxClock, BoxRng, SiteConfig};
+use pasion_matrix::HomeserverConnection;
+use pasion_router::{PostAuthAction, UrlBuilder};
+use pasion_storage::{
     BoxRepository,
     queue::{ProvisionUserJob, QueueJobRepositoryExt as _},
     user::UserEmailFilter,
 };
-use mas_templates::{RegisterStepsEmailInUseContext, TemplateContext as _, Templates};
+use pasion_templates::{RegisterStepsEmailInUseContext, TemplateContext as _, Templates};
 use opentelemetry::metrics::Counter;
 use ulid::Ulid;
 
@@ -138,7 +138,7 @@ pub(crate) async fn get(
             // Else redirect to the registration token page
             return Ok((
                 cookie_jar,
-                url_builder.redirect(&mas_router::RegisterToken::new(registration.id)),
+                url_builder.redirect(&pasion_router::RegisterToken::new(registration.id)),
             )
                 .into_response());
         }
@@ -162,7 +162,7 @@ pub(crate) async fn get(
             if email_authentication.completed_at.is_none() {
                 return Ok((
                     cookie_jar,
-                    url_builder.redirect(&mas_router::RegisterVerifyEmail::new(id)),
+                    url_builder.redirect(&pasion_router::RegisterVerifyEmail::new(id)),
                 )
                     .into_response());
             }
@@ -241,7 +241,7 @@ pub(crate) async fn get(
     if registration.display_name.is_none() {
         return Ok((
             cookie_jar,
-            url_builder.redirect(&mas_router::RegisterDisplayName::new(registration.id)),
+            url_builder.redirect(&pasion_router::RegisterDisplayName::new(registration.id)),
         )
             .into_response());
     }

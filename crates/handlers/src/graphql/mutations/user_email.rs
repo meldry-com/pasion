@@ -1,7 +1,7 @@
 use anyhow::Context as _;
 use async_graphql::{Context, Description, Enum, ID, InputObject, Object};
-use mas_i18n::DataLocale;
-use mas_storage::{
+use pasion_i18n::DataLocale;
+use pasion_storage::{
     RepositoryAccess,
     queue::{ProvisionUserJob, QueueJobRepositoryExt as _, SendEmailAuthenticationCodeJob},
     user::{UserEmailFilter, UserEmailRepository, UserRepository},
@@ -50,11 +50,11 @@ pub enum AddEmailStatus {
 /// The payload of the `addEmail` mutation
 #[derive(Description)]
 enum AddEmailPayload {
-    Added(mas_data_model::UserEmail),
-    Exists(mas_data_model::UserEmail),
+    Added(pasion_data_model::UserEmail),
+    Exists(pasion_data_model::UserEmail),
     Invalid,
     Denied {
-        violations: Vec<mas_policy::Violation>,
+        violations: Vec<pasion_policy::Violation>,
     },
 }
 
@@ -137,7 +137,7 @@ enum RemoveEmailStatus {
 /// The payload of the `removeEmail` mutation
 #[derive(Description)]
 enum RemoveEmailPayload {
-    Removed(mas_data_model::UserEmail),
+    Removed(pasion_data_model::UserEmail),
     NotFound,
     IncorrectPassword,
 }
@@ -205,7 +205,7 @@ enum SetPrimaryEmailStatus {
 /// The payload of the `setPrimaryEmail` mutation
 #[derive(Description)]
 enum SetPrimaryEmailPayload {
-    Set(mas_data_model::User),
+    Set(pasion_data_model::User),
     NotFound,
 }
 
@@ -266,7 +266,7 @@ enum StartEmailAuthenticationPayload {
     InvalidEmailAddress,
     RateLimited,
     Denied {
-        violations: Vec<mas_policy::Violation>,
+        violations: Vec<pasion_policy::Violation>,
     },
     InUse,
     IncorrectPassword,
@@ -442,7 +442,7 @@ impl UserEmailMutations {
         if !skip_policy_check {
             let mut policy = state.policy().await?;
             let res = policy
-                .evaluate_email(mas_policy::EmailInput {
+                .evaluate_email(pasion_policy::EmailInput {
                     email: &input.email,
                     requester: requester.for_policy(),
                 })
@@ -647,7 +647,7 @@ impl UserEmailMutations {
         // Check if the email address is allowed by the policy
         let mut policy = state.policy().await?;
         let res = policy
-            .evaluate_email(mas_policy::EmailInput {
+            .evaluate_email(pasion_policy::EmailInput {
                 email: &input.email,
                 requester: requester.for_policy(),
             })

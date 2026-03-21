@@ -1,6 +1,6 @@
 //! Ref: <https://www.rfc-editor.org/rfc/rfc7517.html>
 
-use mas_iana::jose::{
+use pasion_iana::jose::{
     JsonWebKeyEcEllipticCurve, JsonWebKeyOperation, JsonWebKeyType, JsonWebKeyUse,
     JsonWebSignatureAlg,
 };
@@ -350,7 +350,7 @@ impl<P> JsonWebKeySet<P> {
     {
         let constraints = ConstraintSet::new([
             Constraint::alg(alg),
-            Constraint::use_(&mas_iana::jose::JsonWebKeyUse::Sig),
+            Constraint::use_(&pasion_iana::jose::JsonWebKeyUse::Sig),
         ]);
         self.find_key(&constraints)
     }

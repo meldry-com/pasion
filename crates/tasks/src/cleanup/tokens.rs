@@ -3,7 +3,7 @@
 use std::time::Duration;
 
 use async_trait::async_trait;
-use mas_storage::queue::{
+use pasion_storage::queue::{
     CleanupConsumedOAuthRefreshTokensJob, CleanupExpiredOAuthAccessTokensJob,
     CleanupRevokedOAuthAccessTokensJob, CleanupRevokedOAuthRefreshTokensJob,
 };

@@ -1,5 +1,5 @@
 [package]
-name = "mas-storage"
+name = "pasion-storage"
 version.workspace = true
 authors.workspace = true
 edition.workspace = true
@@ -25,6 +25,6 @@ ulid.workspace = true
 url.workspace = true
 
 oauth2-types.workspace = true
-mas-data-model.workspace = true
-mas-iana.workspace = true
-mas-jose.workspace = true
+pasion-data-model.workspace = true
+pasion-iana.workspace = true
+pasion-jose.workspace = true

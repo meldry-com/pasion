@@ -1,5 +1,5 @@
 [package]
-name = "mas-i18n-scan"
+name = "pasion-i18n-scan"
 version.workspace = true
 authors.workspace = true
 edition.workspace = true
@@ -19,4 +19,4 @@ tracing-subscriber.workspace = true
 tracing.workspace = true
 walkdir.workspace = true
 
-mas-i18n.workspace = true
+pasion-i18n.workspace = true

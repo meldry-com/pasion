@@ -1,4 +1,4 @@
-use mas_iana::jose::JsonWebSignatureAlg;
+use pasion_iana::jose::JsonWebSignatureAlg;
 use thiserror::Error;
 
 use super::signature::Signature;

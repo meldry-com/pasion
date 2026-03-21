@@ -11,9 +11,9 @@ use std::{
 };
 
 use camino::{Utf8Path, Utf8PathBuf};
-use mas_i18n::{Argument, ArgumentList, DataLocale, Translator, sprintf::FormattedMessagePart};
-use mas_router::UrlBuilder;
-use mas_spa::ViteManifest;
+use pasion_i18n::{Argument, ArgumentList, DataLocale, Translator, sprintf::FormattedMessagePart};
+use pasion_router::UrlBuilder;
+use pasion_spa::ViteManifest;
 use minijinja::{
     Error, ErrorKind, State, Value, escape_formatter,
     machinery::make_string_output,
@@ -141,7 +141,7 @@ fn filter_id_color_hash(input: &str) -> u32 {
 
 /// Filter which parses a user-agent string
 fn filter_parse_user_agent(user_agent: String) -> Value {
-    let user_agent = mas_data_model::UserAgent::parse(user_agent);
+    let user_agent = pasion_data_model::UserAgent::parse(user_agent);
     Value::from_serialize(user_agent)
 }
 
@@ -388,26 +388,26 @@ impl Object for TranslateFunc {
 /// An adapter to make a [`Timelike`] implement [`IsoTimeInput`]
 ///
 /// [`Timelike`]: chrono::Timelike
-/// [`IsoTimeInput`]: mas_i18n::icu_datetime::input::IsoTimeInput
+/// [`IsoTimeInput`]: pasion_i18n::icu_datetime::input::IsoTimeInput
 struct TimeAdapter<T>(T);
 
-impl<T: chrono::Timelike> mas_i18n::icu_datetime::input::IsoTimeInput for TimeAdapter<T> {
-    fn hour(&self) -> Option<mas_i18n::icu_calendar::types::IsoHour> {
+impl<T: chrono::Timelike> pasion_i18n::icu_datetime::input::IsoTimeInput for TimeAdapter<T> {
+    fn hour(&self) -> Option<pasion_i18n::icu_calendar::types::IsoHour> {
         let hour: usize = chrono::Timelike::hour(&self.0).try_into().ok()?;
         hour.try_into().ok()
     }
 
-    fn minute(&self) -> Option<mas_i18n::icu_calendar::types::IsoMinute> {
+    fn minute(&self) -> Option<pasion_i18n::icu_calendar::types::IsoMinute> {
         let minute: usize = chrono::Timelike::minute(&self.0).try_into().ok()?;
         minute.try_into().ok()
     }
 
-    fn second(&self) -> Option<mas_i18n::icu_calendar::types::IsoSecond> {
+    fn second(&self) -> Option<pasion_i18n::icu_calendar::types::IsoSecond> {
         let second: usize = chrono::Timelike::second(&self.0).try_into().ok()?;
         second.try_into().ok()
     }
 
-    fn nanosecond(&self) -> Option<mas_i18n::icu_calendar::types::NanoSecond> {
+    fn nanosecond(&self) -> Option<pasion_i18n::icu_calendar::types::NanoSecond> {
         let nanosecond: usize = chrono::Timelike::nanosecond(&self.0).try_into().ok()?;
         nanosecond.try_into().ok()
     }
@@ -493,7 +493,7 @@ impl Object for IncludeAsset {
         // We'll accumulate the output in this string
         let mut output = String::new();
         match main.file_type() {
-            mas_spa::FileType::Script => {
+            pasion_spa::FileType::Script => {
                 let integrity = main.integrity_attr();
                 let src = main.src(assets_base);
                 if tracker.mark_included(&src) {
@@ -504,7 +504,7 @@ impl Object for IncludeAsset {
                     .unwrap();
                 }
             }
-            mas_spa::FileType::Stylesheet => {
+            pasion_spa::FileType::Stylesheet => {
                 let integrity = main.integrity_attr();
                 let src = main.src(assets_base);
                 if tracker.mark_included(&src) {
@@ -516,7 +516,7 @@ impl Object for IncludeAsset {
                 }
             }
 
-            mas_spa::FileType::Json => {
+            pasion_spa::FileType::Json => {
                 // When a JSON is included at the top level (a translation), we preload it
                 let integrity = main.integrity_attr();
                 let src = main.src(assets_base);
@@ -543,7 +543,7 @@ impl Object for IncludeAsset {
             let integrity = asset.integrity_attr();
             let src = asset.src(assets_base);
             match asset.file_type() {
-                mas_spa::FileType::Stylesheet => {
+                pasion_spa::FileType::Stylesheet => {
                     // Imported stylesheets are inserted directly, not just preloaded
                     if tracker.mark_included(&src) {
                         writeln!(
@@ -553,7 +553,7 @@ impl Object for IncludeAsset {
                         .unwrap();
                     }
                 }
-                mas_spa::FileType::Script => {
+                pasion_spa::FileType::Script => {
                     if tracker.mark_preloaded(&src) {
                         writeln!(
                             output,
@@ -562,7 +562,7 @@ impl Object for IncludeAsset {
                         .unwrap();
                     }
                 }
-                mas_spa::FileType::Png => {
+                pasion_spa::FileType::Png => {
                     if tracker.mark_preloaded(&src) {
                         writeln!(
                             output,
@@ -571,7 +571,7 @@ impl Object for IncludeAsset {
                         .unwrap();
                     }
                 }
-                mas_spa::FileType::Woff | mas_spa::FileType::Woff2 | mas_spa::FileType::Json => {
+                pasion_spa::FileType::Woff | pasion_spa::FileType::Woff2 | pasion_spa::FileType::Json => {
                     // Skip pre-loading fonts and JSON (translations) as it will
                     // lead to many wasted preloads. For translations, we only
                     // include them as preload if they are included on the

@@ -1,13 +1,13 @@
 use anyhow::Context;
 use async_trait::async_trait;
-use mas_email::{Address, Mailbox};
-use mas_i18n::DataLocale;
-use mas_storage::{
+use pasion_email::{Address, Mailbox};
+use pasion_i18n::DataLocale;
+use pasion_storage::{
     Pagination, RepositoryAccess,
     queue::SendAccountRecoveryEmailsJob,
     user::{UserEmailFilter, UserRecoveryRepository},
 };
-use mas_templates::{EmailRecoveryContext, TemplateContext};
+use pasion_templates::{EmailRecoveryContext, TemplateContext};
 use rand::distributions::{Alphanumeric, DistString};
 use tracing::{error, info};
 

@@ -12,5 +12,5 @@ This tool should help diagnose common issues with the service configuration and 
 When running this tool, make sure it runs from the same point-of-view as the service, with the same configuration file and environment variables.
 
 ```
-$ mas-cli doctor
+$ pasion-cli doctor
 ```

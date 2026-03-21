@@ -5,7 +5,7 @@
 use std::{fmt, ops::Deref};
 
 use language_tags::LanguageTag;
-use mas_iana::{
+use pasion_iana::{
     jose::{JsonWebEncryptionAlg, JsonWebEncryptionEnc, JsonWebSignatureAlg},
     oauth::{OAuthAccessTokenType, OAuthClientAuthenticationMethod, PkceCodeChallengeMethod},
 };
@@ -1219,7 +1219,7 @@ impl fmt::Debug for RpInitiatedLogoutRequest {
 #[cfg(test)]
 mod tests {
     use assert_matches::assert_matches;
-    use mas_iana::{
+    use pasion_iana::{
         jose::JsonWebSignatureAlg,
         oauth::{OAuthAuthorizationEndpointResponseType, OAuthClientAuthenticationMethod},
     };

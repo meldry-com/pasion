@@ -1,7 +1,7 @@
 use anyhow::Context as _;
 use async_graphql::{Context, ID, Object};
 use chrono::{DateTime, Utc};
-use mas_storage::{upstream_oauth2::UpstreamOAuthProviderRepository, user::UserRepository};
+use pasion_storage::{upstream_oauth2::UpstreamOAuthProviderRepository, user::UserRepository};
 use url::Url;
 
 use super::{NodeType, User};
@@ -9,12 +9,12 @@ use crate::graphql::state::ContextExt;
 
 #[derive(Debug, Clone)]
 pub struct UpstreamOAuth2Provider {
-    provider: mas_data_model::UpstreamOAuthProvider,
+    provider: pasion_data_model::UpstreamOAuthProvider,
 }
 
 impl UpstreamOAuth2Provider {
     #[must_use]
-    pub const fn new(provider: mas_data_model::UpstreamOAuthProvider) -> Self {
+    pub const fn new(provider: pasion_data_model::UpstreamOAuthProvider) -> Self {
         Self { provider }
     }
 }
@@ -57,14 +57,14 @@ impl UpstreamOAuth2Provider {
     pub async fn link_url(&self, context: &Context<'_>) -> Url {
         let state = context.state();
         let url_builder = state.url_builder();
-        let route = mas_router::UpstreamOAuth2Authorize::new(self.provider.id);
+        let route = pasion_router::UpstreamOAuth2Authorize::new(self.provider.id);
         url_builder.absolute_url_for(&route)
     }
 }
 
 impl UpstreamOAuth2Link {
     #[must_use]
-    pub const fn new(link: mas_data_model::UpstreamOAuthLink) -> Self {
+    pub const fn new(link: pasion_data_model::UpstreamOAuthLink) -> Self {
         Self {
             link,
             provider: None,
@@ -75,9 +75,9 @@ impl UpstreamOAuth2Link {
 
 #[derive(Debug, Clone)]
 pub struct UpstreamOAuth2Link {
-    link: mas_data_model::UpstreamOAuthLink,
-    provider: Option<mas_data_model::UpstreamOAuthProvider>,
-    user: Option<mas_data_model::User>,
+    link: pasion_data_model::UpstreamOAuthLink,
+    provider: Option<pasion_data_model::UpstreamOAuthProvider>,
+    user: Option<pasion_data_model::User>,
 }
 
 #[Object]

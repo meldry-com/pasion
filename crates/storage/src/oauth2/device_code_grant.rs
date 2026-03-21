@@ -2,7 +2,7 @@ use std::net::IpAddr;
 
 use async_trait::async_trait;
 use chrono::Duration;
-use mas_data_model::{BrowserSession, Client, Clock, DeviceCodeGrant, Session};
+use pasion_data_model::{BrowserSession, Client, Clock, DeviceCodeGrant, Session};
 use oauth2_types::scope::Scope;
 use rand_core::RngCore;
 use ulid::Ulid;
@@ -122,7 +122,7 @@ pub trait OAuth2DeviceCodeGrantRepository: Send + Sync {
     /// Returns [`Self::Error`] if the underlying repository fails or if the
     /// device code grant is not in the [`Pending`] state
     ///
-    /// [`Pending`]: mas_data_model::DeviceCodeGrantState::Pending
+    /// [`Pending`]: pasion_data_model::DeviceCodeGrantState::Pending
     async fn fulfill(
         &mut self,
         clock: &dyn Clock,
@@ -146,7 +146,7 @@ pub trait OAuth2DeviceCodeGrantRepository: Send + Sync {
     /// Returns [`Self::Error`] if the underlying repository fails or if the
     /// device code grant is not in the [`Pending`] state
     ///
-    /// [`Pending`]: mas_data_model::DeviceCodeGrantState::Pending
+    /// [`Pending`]: pasion_data_model::DeviceCodeGrantState::Pending
     async fn reject(
         &mut self,
         clock: &dyn Clock,
@@ -170,7 +170,7 @@ pub trait OAuth2DeviceCodeGrantRepository: Send + Sync {
     /// Returns [`Self::Error`] if the underlying repository fails or if the
     /// device code grant is not in the [`Fulfilled`] state
     ///
-    /// [`Fulfilled`]: mas_data_model::DeviceCodeGrantState::Fulfilled
+    /// [`Fulfilled`]: pasion_data_model::DeviceCodeGrantState::Fulfilled
     async fn exchange(
         &mut self,
         clock: &dyn Clock,

@@ -12,13 +12,13 @@ pub use self::{
 
 #[cfg(test)]
 mod test_utils {
-    use mas_data_model::{
+    use pasion_data_model::{
         UpstreamOAuthProviderClaimsImports, UpstreamOAuthProviderDiscoveryMode,
         UpstreamOAuthProviderOnBackchannelLogout, UpstreamOAuthProviderPkceMode,
         UpstreamOAuthProviderTokenAuthMethod,
     };
-    use mas_iana::jose::JsonWebSignatureAlg;
-    use mas_storage::upstream_oauth2::UpstreamOAuthProviderParams;
+    use pasion_iana::jose::JsonWebSignatureAlg;
+    use pasion_storage::upstream_oauth2::UpstreamOAuthProviderParams;
     use oauth2_types::scope::{OPENID, Scope};
 
     pub(crate) fn oidc_provider_params(name: &str) -> UpstreamOAuthProviderParams {

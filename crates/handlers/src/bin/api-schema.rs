@@ -43,21 +43,21 @@ macro_rules! impl_from_ref {
     };
 }
 
-impl_from_request_parts!(mas_storage::BoxRepository);
-impl_from_request_parts!(mas_data_model::BoxClock);
-impl_from_request_parts!(mas_data_model::BoxRng);
-impl_from_request_parts!(mas_handlers::BoundActivityTracker);
-impl_from_ref!(mas_router::UrlBuilder);
-impl_from_ref!(mas_templates::Templates);
-impl_from_ref!(Arc<dyn mas_matrix::HomeserverConnection>);
-impl_from_ref!(mas_keystore::Keystore);
-impl_from_ref!(mas_handlers::passwords::PasswordManager);
-impl_from_ref!(Arc<mas_policy::PolicyFactory>);
-impl_from_ref!(mas_data_model::SiteConfig);
-impl_from_ref!(mas_data_model::AppVersion);
+impl_from_request_parts!(pasion_storage::BoxRepository);
+impl_from_request_parts!(pasion_data_model::BoxClock);
+impl_from_request_parts!(pasion_data_model::BoxRng);
+impl_from_request_parts!(pasion_handlers::BoundActivityTracker);
+impl_from_ref!(pasion_router::UrlBuilder);
+impl_from_ref!(pasion_templates::Templates);
+impl_from_ref!(Arc<dyn pasion_matrix::HomeserverConnection>);
+impl_from_ref!(pasion_keystore::Keystore);
+impl_from_ref!(pasion_handlers::passwords::PasswordManager);
+impl_from_ref!(Arc<pasion_policy::PolicyFactory>);
+impl_from_ref!(pasion_data_model::SiteConfig);
+impl_from_ref!(pasion_data_model::AppVersion);
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
-    let (mut api, _) = mas_handlers::admin_api_router::<DummyState>();
+    let (mut api, _) = pasion_handlers::admin_api_router::<DummyState>();
 
     // Set the server list to a configurable base URL
     api.servers = vec![Server {

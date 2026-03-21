@@ -23,7 +23,7 @@ pub enum RouteError {
     NotFound,
 }
 
-impl_from_error_for_route!(mas_storage::RepositoryError);
+impl_from_error_for_route!(pasion_storage::RepositoryError);
 impl_from_error_for_route!(InconsistentPersonalSession);
 
 impl IntoResponse for RouteError {
@@ -89,14 +89,14 @@ pub async fn handler(
 mod tests {
     use hyper::{Request, StatusCode};
     use insta::assert_json_snapshot;
-    use mas_data_model::personal::session::PersonalSessionOwner;
+    use pasion_data_model::personal::session::PersonalSessionOwner;
     use oauth2_types::scope::{OPENID, Scope};
     use sqlx::PgPool;
     use ulid::Ulid;
 
     use crate::test_utils::{RequestBuilderExt, ResponseExt, TestState, setup};
 
-    #[sqlx::test(migrator = "mas_storage_pg::MIGRATOR")]
+    #[sqlx::test(migrator = "pasion_storage_pg::MIGRATOR")]
     async fn test_get(pool: PgPool) {
         setup();
         let mut state = TestState::from_pool(pool).await.unwrap();
@@ -168,7 +168,7 @@ mod tests {
         "#);
     }
 
-    #[sqlx::test(migrator = "mas_storage_pg::MIGRATOR")]
+    #[sqlx::test(migrator = "pasion_storage_pg::MIGRATOR")]
     async fn test_not_found(pool: PgPool) {
         setup();
         let mut state = TestState::from_pool(pool).await.unwrap();

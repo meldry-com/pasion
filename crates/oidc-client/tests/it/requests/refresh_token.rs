@@ -1,8 +1,8 @@
 use std::collections::HashMap;
 
 use assert_matches::assert_matches;
-use mas_iana::oauth::{OAuthAccessTokenType, OAuthClientAuthenticationMethod};
-use mas_oidc_client::requests::refresh_token::refresh_access_token;
+use pasion_iana::oauth::{OAuthAccessTokenType, OAuthClientAuthenticationMethod};
+use pasion_oidc_client::requests::refresh_token::refresh_access_token;
 use oauth2_types::requests::AccessTokenResponse;
 use rand::SeedableRng;
 use wiremock::{

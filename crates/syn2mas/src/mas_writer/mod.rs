@@ -1217,7 +1217,7 @@ mod test {
     }
 
     /// Tests writing a single user, without a password.
-    #[sqlx::test(migrator = "mas_storage_pg::MIGRATOR")]
+    #[sqlx::test(migrator = "pasion_storage_pg::MIGRATOR")]
     async fn test_write_user(pool: PgPool) {
         let mut writer = make_mas_writer(&pool).await;
         let mut buffer = MasWriteBuffer::new(&writer);
@@ -1252,7 +1252,7 @@ mod test {
     }
 
     /// Tests writing a single user, with a password.
-    #[sqlx::test(migrator = "mas_storage_pg::MIGRATOR")]
+    #[sqlx::test(migrator = "pasion_storage_pg::MIGRATOR")]
     async fn test_write_user_with_password(pool: PgPool) {
         const USER_ID: NonNilUuid = NonNilUuid::new(Uuid::from_u128(1u128)).unwrap();
 
@@ -1308,7 +1308,7 @@ mod test {
     }
 
     /// Tests writing a single user, with an e-mail address associated.
-    #[sqlx::test(migrator = "mas_storage_pg::MIGRATOR")]
+    #[sqlx::test(migrator = "pasion_storage_pg::MIGRATOR")]
     async fn test_write_user_with_email(pool: PgPool) {
         let mut writer = make_mas_writer(&pool).await;
 
@@ -1363,7 +1363,7 @@ mod test {
 
     /// Tests writing a single user, with a unsupported third-party ID
     /// associated.
-    #[sqlx::test(migrator = "mas_storage_pg::MIGRATOR")]
+    #[sqlx::test(migrator = "pasion_storage_pg::MIGRATOR")]
     async fn test_write_user_with_unsupported_threepid(pool: PgPool) {
         let mut writer = make_mas_writer(&pool).await;
 
@@ -1419,7 +1419,7 @@ mod test {
     /// Tests writing a single user, with a link to an upstream provider.
     /// There needs to be an upstream provider in the database already — in the
     /// real migration, this is done by running a provider sync first.
-    #[sqlx::test(migrator = "mas_storage_pg::MIGRATOR", fixtures("upstream_provider"))]
+    #[sqlx::test(migrator = "pasion_storage_pg::MIGRATOR", fixtures("upstream_provider"))]
     async fn test_write_user_with_upstream_provider_link(pool: PgPool) {
         let mut writer = make_mas_writer(&pool).await;
 
@@ -1474,7 +1474,7 @@ mod test {
     }
 
     /// Tests writing a single user, with a device (compat session).
-    #[sqlx::test(migrator = "mas_storage_pg::MIGRATOR")]
+    #[sqlx::test(migrator = "pasion_storage_pg::MIGRATOR")]
     async fn test_write_user_with_device(pool: PgPool) {
         let mut writer = make_mas_writer(&pool).await;
 
@@ -1533,7 +1533,7 @@ mod test {
     }
 
     /// Tests writing a single user, with a device and an access token.
-    #[sqlx::test(migrator = "mas_storage_pg::MIGRATOR")]
+    #[sqlx::test(migrator = "pasion_storage_pg::MIGRATOR")]
     async fn test_write_user_with_access_token(pool: PgPool) {
         let mut writer = make_mas_writer(&pool).await;
 
@@ -1612,7 +1612,7 @@ mod test {
 
     /// Tests writing a single user, with a device, an access token and a
     /// refresh token.
-    #[sqlx::test(migrator = "mas_storage_pg::MIGRATOR")]
+    #[sqlx::test(migrator = "pasion_storage_pg::MIGRATOR")]
     async fn test_write_user_with_refresh_token(pool: PgPool) {
         let mut writer = make_mas_writer(&pool).await;
 

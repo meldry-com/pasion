@@ -5,7 +5,7 @@ It is also meant to stay lightweight in terms of resource usage and easily scala
 
 ## Scope and goals
 
-The Palpo Authentication Service has been created to support the migration of Matrix to an OpenID Connect (OIDC) based architecture as per [MSC3861](https://github.com/matrix-org/matrix-spec-proposals/pull/3861).
+The Pasion has been created to support the migration of Matrix to an OpenID Connect (OIDC) based architecture as per [MSC3861](https://github.com/matrix-org/matrix-spec-proposals/pull/3861).
 
 It is not intended to be a general purpose Identity Provider (IdP) and instead focuses on the specific needs of Matrix.
 
@@ -21,31 +21,31 @@ The whole repository is a [Cargo Workspace](https://doc.rust-lang.org/book/ch14-
 
 This includes:
 
- - `mas-cli`: Command line utility, main entry point
- - [`mas-config`][mas-config]: Configuration parsing and loading
- - [`mas-data-model`][mas-data-model]: Models of objects that live in the database, regardless of the storage backend
- - [`mas-email`][mas-email]: High-level email sending abstraction
- - [`mas-handlers`][mas-handlers]: Main HTTP application logic
- - [`mas-iana`][mas-iana]: Auto-generated enums from IANA registries
- - [`mas-iana-codegen`][mas-iana-codegen]: Code generator for the `mas-iana` crate
- - [`mas-jose`][mas-jose]: JWT/JWS/JWE/JWK abstraction
+ - `pasion-cli`: Command line utility, main entry point
+ - [`pasion-config`][pasion-config]: Configuration parsing and loading
+ - [`pasion-data-model`][pasion-data-model]: Models of objects that live in the database, regardless of the storage backend
+ - [`pasion-email`][pasion-email]: High-level email sending abstraction
+ - [`pasion-handlers`][pasion-handlers]: Main HTTP application logic
+ - [`pasion-iana`][pasion-iana]: Auto-generated enums from IANA registries
+ - [`pasion-iana-codegen`][pasion-iana-codegen]: Code generator for the `pasion-iana` crate
+ - [`pasion-jose`][pasion-jose]: JWT/JWS/JWE/JWK abstraction
  - [`mas-static-files`][mas-static-files]: Frontend static files (CSS/JS). Includes some frontend tooling
- - [`mas-storage`][mas-storage]: Abstraction of the storage backends
- - [`mas-storage-pg`][mas-storage-pg]: Storage backend implementation for a PostgreSQL database
- - [`mas-tasks`][mas-tasks]: Asynchronous task runner and scheduler
+ - [`pasion-storage`][pasion-storage]: Abstraction of the storage backends
+ - [`pasion-storage-pg`][pasion-storage-pg]: Storage backend implementation for a PostgreSQL database
+ - [`pasion-tasks`][pasion-tasks]: Asynchronous task runner and scheduler
  - [`oauth2-types`][oauth2-types]: Useful structures and types to deal with OAuth 2.0/OpenID Connect endpoints. This might end up published as a standalone library as it can be useful in other contexts.
 
-[mas-config]: ../rustdoc/mas_config/index.html
-[mas-data-model]: ../rustdoc/mas_data_model/index.html
-[mas-email]: ../rustdoc/mas_email/index.html
-[mas-handlers]: ../rustdoc/mas_handlers/index.html
-[mas-iana]: ../rustdoc/mas_iana/index.html
-[mas-iana-codegen]: ../rustdoc/mas_iana_codegen/index.html
-[mas-jose]: ../rustdoc/mas_jose/index.html
+[pasion-config]: ../rustdoc/pasion_config/index.html
+[pasion-data-model]: ../rustdoc/pasion_data_model/index.html
+[pasion-email]: ../rustdoc/pasion_email/index.html
+[pasion-handlers]: ../rustdoc/pasion_handlers/index.html
+[pasion-iana]: ../rustdoc/pasion_iana/index.html
+[pasion-iana-codegen]: ../rustdoc/pasion_iana_codegen/index.html
+[pasion-jose]: ../rustdoc/pasion_jose/index.html
 [mas-static-files]: ../rustdoc/mas_static_files/index.html
-[mas-storage]: ../rustdoc/mas_storage/index.html
-[mas-storage-pg]: ../rustdoc/mas_storage/index.html
-[mas-tasks]: ../rustdoc/mas_tasks/index.html
+[pasion-storage]: ../rustdoc/pasion_storage/index.html
+[pasion-storage-pg]: ../rustdoc/pasion_storage/index.html
+[pasion-tasks]: ../rustdoc/pasion_tasks/index.html
 [oauth2-types]: ../rustdoc/oauth2_types/index.html
 
 ## Important crates

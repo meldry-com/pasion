@@ -4,7 +4,7 @@ use lettre::{
     AsyncTransport, Message,
     message::{Mailbox, MessageBuilder, MultiPart},
 };
-use mas_templates::{EmailRecoveryContext, EmailVerificationContext, Templates, WithLanguage};
+use pasion_templates::{EmailRecoveryContext, EmailVerificationContext, Templates, WithLanguage};
 use thiserror::Error;
 
 use crate::MailTransport;
@@ -22,7 +22,7 @@ pub struct Mailer {
 #[error(transparent)]
 pub enum Error {
     Transport(#[from] crate::transport::Error),
-    Templates(#[from] mas_templates::TemplateError),
+    Templates(#[from] pasion_templates::TemplateError),
     Content(#[from] lettre::error::Error),
 }
 

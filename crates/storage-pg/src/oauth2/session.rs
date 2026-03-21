@@ -2,8 +2,8 @@ use std::net::IpAddr;
 
 use async_trait::async_trait;
 use chrono::{DateTime, Utc};
-use mas_data_model::{BrowserSession, Client, Clock, Session, SessionState, User};
-use mas_storage::{
+use pasion_data_model::{BrowserSession, Client, Clock, Session, SessionState, User};
+use pasion_storage::{
     Page, Pagination,
     oauth2::{OAuth2SessionFilter, OAuth2SessionRepository},
     pagination::Node,

@@ -9,10 +9,10 @@ use mas_axum_utils::{
     cookies::CookieJar,
     csrf::{CsrfExt as _, ProtectedForm},
 };
-use mas_data_model::{BoxClock, BoxRng};
-use mas_router::{PostAuthAction, UrlBuilder};
-use mas_storage::BoxRepository;
-use mas_templates::{
+use pasion_data_model::{BoxClock, BoxRng};
+use pasion_router::{PostAuthAction, UrlBuilder};
+use pasion_storage::BoxRepository;
+use pasion_templates::{
     FieldError, RegisterStepsRegistrationTokenContext, RegisterStepsRegistrationTokenFormField,
     TemplateContext as _, Templates, ToFormState,
 };
@@ -28,7 +28,7 @@ pub(crate) struct RegistrationTokenForm {
 }
 
 impl ToFormState for RegistrationTokenForm {
-    type Field = mas_templates::RegisterStepsRegistrationTokenFormField;
+    type Field = pasion_templates::RegisterStepsRegistrationTokenFormField;
 }
 
 #[tracing::instrument(
@@ -73,7 +73,7 @@ pub(crate) async fn get(
 
     // If the registration already has a token, skip this step
     if registration.user_registration_token_id.is_some() {
-        let destination = mas_router::RegisterDisplayName::new(registration.id);
+        let destination = pasion_router::RegisterDisplayName::new(registration.id);
         return Ok((cookie_jar, url_builder.redirect(&destination)).into_response());
     }
 
@@ -192,6 +192,6 @@ pub(crate) async fn post(
     repo.save().await?;
 
     // Continue to the next step
-    let destination = mas_router::RegisterFinish::new(registration.id);
+    let destination = pasion_router::RegisterFinish::new(registration.id);
     Ok((cookie_jar, url_builder.redirect(&destination)).into_response())
 }

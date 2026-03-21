@@ -11,5 +11,5 @@ Global options:
 Run the pending database migrations.
 
 ```
-$ mas-cli database migrate
+$ pasion-cli database migrate
 ```

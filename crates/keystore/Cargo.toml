@@ -1,6 +1,6 @@
 [package]
-name = "mas-keystore"
-description = "Secret keys store used by the Palpo Authentication Service"
+name = "pasion-keystore"
+description = "Secret keys store used by the Pasion"
 version.workspace = true
 authors.workspace = true
 edition.workspace = true
@@ -31,8 +31,8 @@ sec1.workspace = true
 spki.workspace = true
 thiserror.workspace = true
 
-mas-iana.workspace = true
-mas-jose.workspace = true
+pasion-iana.workspace = true
+pasion-jose.workspace = true
 
 [dev-dependencies]
 insta.workspace = true

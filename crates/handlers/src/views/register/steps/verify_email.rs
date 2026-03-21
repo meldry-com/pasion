@@ -8,10 +8,10 @@ use mas_axum_utils::{
     cookies::CookieJar,
     csrf::{CsrfExt, ProtectedForm},
 };
-use mas_data_model::{BoxClock, BoxRng};
-use mas_router::{PostAuthAction, UrlBuilder};
-use mas_storage::{BoxRepository, RepositoryAccess, user::UserEmailRepository};
-use mas_templates::{
+use pasion_data_model::{BoxClock, BoxRng};
+use pasion_router::{PostAuthAction, UrlBuilder};
+use pasion_storage::{BoxRepository, RepositoryAccess, user::UserEmailRepository};
+use pasion_templates::{
     FieldError, RegisterStepsVerifyEmailContext, RegisterStepsVerifyEmailFormField,
     TemplateContext, Templates, ToFormState,
 };
@@ -26,7 +26,7 @@ pub struct CodeForm {
 }
 
 impl ToFormState for CodeForm {
-    type Field = mas_templates::RegisterStepsVerifyEmailFormField;
+    type Field = pasion_templates::RegisterStepsVerifyEmailFormField;
 }
 
 #[tracing::instrument(
@@ -164,7 +164,7 @@ pub(crate) async fn post(
         let ctx = RegisterStepsVerifyEmailContext::new(email_authentication)
             .with_form_state(
                 form.to_form_state()
-                    .with_error_on_form(mas_templates::FormError::RateLimitExceeded),
+                    .with_error_on_form(pasion_templates::FormError::RateLimitExceeded),
             )
             .with_csrf(csrf_token.form_value())
             .with_language(locale);
@@ -200,6 +200,6 @@ pub(crate) async fn post(
 
     repo.save().await?;
 
-    let destination = mas_router::RegisterFinish::new(registration.id);
+    let destination = pasion_router::RegisterFinish::new(registration.id);
     return Ok((cookie_jar, url_builder.redirect(&destination)).into_response());
 }

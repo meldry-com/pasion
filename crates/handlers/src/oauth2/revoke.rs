@@ -1,12 +1,12 @@
-use mas_data_model::{BoxClock, BoxRng, SystemClock, TokenType};
-use mas_iana::oauth::OAuthTokenTypeHint;
-use mas_keystore::Encrypter;
-use mas_salvo_utils::{
+use pasion_data_model::{BoxClock, BoxRng, SystemClock, TokenType};
+use pasion_iana::oauth::OAuthTokenTypeHint;
+use pasion_keystore::Encrypter;
+use pasion_salvo_utils::{
     client_authorization::{ClientAuthorization, CredentialsVerificationError},
     record_error,
     sentry::SentryEventID,
 };
-use mas_storage::{
+use pasion_storage::{
     BoxRepository, BoxRepositoryFactory, RepositoryAccess,
     queue::{QueueJobRepositoryExt as _, SyncDevicesJob},
 };
@@ -103,10 +103,10 @@ impl Scribe for RouteError {
     }
 }
 
-impl_from_error_for_route!(mas_storage::RepositoryError);
+impl_from_error_for_route!(pasion_storage::RepositoryError);
 
-impl From<mas_data_model::TokenFormatError> for RouteError {
-    fn from(_e: mas_data_model::TokenFormatError) -> Self {
+impl From<pasion_data_model::TokenFormatError> for RouteError {
+    fn from(_e: pasion_data_model::TokenFormatError) -> Self {
         Self::UnknownToken
     }
 }

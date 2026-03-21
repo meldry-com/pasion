@@ -8,21 +8,21 @@ use axum::{
 };
 use hyper::StatusCode;
 use mas_axum_utils::{GenericError, InternalError, cookies::CookieJar};
-use mas_data_model::{
+use pasion_data_model::{
     BoxClock, BoxRng, Clock, UpstreamOAuthProvider, UpstreamOAuthProviderResponseMode,
 };
-use mas_jose::claims::TokenHash;
-use mas_keystore::{Encrypter, Keystore};
-use mas_oidc_client::requests::jose::JwtVerificationData;
-use mas_router::UrlBuilder;
-use mas_storage::{
+use pasion_jose::claims::TokenHash;
+use pasion_keystore::{Encrypter, Keystore};
+use pasion_oidc_client::requests::jose::JwtVerificationData;
+use pasion_router::UrlBuilder;
+use pasion_storage::{
     BoxRepository,
     upstream_oauth2::{
         UpstreamOAuthLinkRepository, UpstreamOAuthProviderRepository,
         UpstreamOAuthSessionRepository,
     },
 };
-use mas_templates::{FormPostContext, Templates};
+use pasion_templates::{FormPostContext, Templates};
 use oauth2_types::{errors::ClientErrorCode, requests::AccessTokenRequest};
 use opentelemetry::{Key, KeyValue, metrics::Counter};
 use serde::{Deserialize, Serialize};
@@ -137,13 +137,13 @@ pub(crate) enum RouteError {
     Internal(Box<dyn std::error::Error + Send + Sync + 'static>),
 }
 
-impl_from_error_for_route!(mas_templates::TemplateError);
-impl_from_error_for_route!(mas_storage::RepositoryError);
-impl_from_error_for_route!(mas_oidc_client::error::DiscoveryError);
-impl_from_error_for_route!(mas_oidc_client::error::JwksError);
-impl_from_error_for_route!(mas_oidc_client::error::TokenRequestError);
-impl_from_error_for_route!(mas_oidc_client::error::IdTokenError);
-impl_from_error_for_route!(mas_oidc_client::error::UserInfoError);
+impl_from_error_for_route!(pasion_templates::TemplateError);
+impl_from_error_for_route!(pasion_storage::RepositoryError);
+impl_from_error_for_route!(pasion_oidc_client::error::DiscoveryError);
+impl_from_error_for_route!(pasion_oidc_client::error::JwksError);
+impl_from_error_for_route!(pasion_oidc_client::error::TokenRequestError);
+impl_from_error_for_route!(pasion_oidc_client::error::IdTokenError);
+impl_from_error_for_route!(pasion_oidc_client::error::UserInfoError);
 impl_from_error_for_route!(super::ProviderCredentialsError);
 impl_from_error_for_route!(super::cookie::UpstreamSessionNotFound);
 
@@ -291,7 +291,7 @@ pub(crate) async fn handler(
 
     let redirect_uri = url_builder.upstream_oauth_callback(provider.id);
 
-    let token_response = mas_oidc_client::requests::token::request_access_token(
+    let token_response = pasion_oidc_client::requests::token::request_access_token(
         &client,
         client_credentials,
         lazy_metadata.token_endpoint().await?,
@@ -311,7 +311,7 @@ pub(crate) async fn handler(
     let mut context = AttributeMappingContext::new();
     if let Some(id_token) = token_response.id_token.as_ref() {
         jwks = Some(
-            mas_oidc_client::requests::jose::fetch_jwks(&client, lazy_metadata.jwks_uri().await?)
+            pasion_oidc_client::requests::jose::fetch_jwks(&client, lazy_metadata.jwks_uri().await?)
                 .await?,
         );
 
@@ -323,7 +323,7 @@ pub(crate) async fn handler(
         };
 
         // Decode and verify the ID token
-        let id_token = mas_oidc_client::requests::jose::verify_id_token(
+        let id_token = pasion_oidc_client::requests::jose::verify_id_token(
             id_token,
             id_token_verification_data,
             None,
@@ -341,7 +341,7 @@ pub(crate) async fn handler(
         );
 
         // Access token hash must match.
-        mas_jose::claims::AT_HASH
+        pasion_jose::claims::AT_HASH
             .extract_optional_with_options(
                 &mut claims,
                 TokenHash::new(
@@ -349,21 +349,21 @@ pub(crate) async fn handler(
                     &token_response.access_token,
                 ),
             )
-            .map_err(mas_oidc_client::error::IdTokenError::from)?;
+            .map_err(pasion_oidc_client::error::IdTokenError::from)?;
 
         // Code hash must match.
-        mas_jose::claims::C_HASH
+        pasion_jose::claims::C_HASH
             .extract_optional_with_options(
                 &mut claims,
                 TokenHash::new(id_token_verification_data.signing_algorithm, &code),
             )
-            .map_err(mas_oidc_client::error::IdTokenError::from)?;
+            .map_err(pasion_oidc_client::error::IdTokenError::from)?;
 
         // Nonce must match if present.
         if let Some(nonce) = session.nonce.as_deref() {
-            mas_jose::claims::NONCE
+            pasion_jose::claims::NONCE
                 .extract_required_with_options(&mut claims, nonce)
-                .map_err(mas_oidc_client::error::IdTokenError::from)?;
+                .map_err(pasion_oidc_client::error::IdTokenError::from)?;
         }
 
         context = context.with_id_token_claims(claims);
@@ -379,7 +379,7 @@ pub(crate) async fn handler(
                 let jwks = match jwks {
                     Some(jwks) => jwks,
                     None => {
-                        mas_oidc_client::requests::jose::fetch_jwks(
+                        pasion_oidc_client::requests::jose::fetch_jwks(
                             &client,
                             lazy_metadata.jwks_uri().await?,
                         )
@@ -387,7 +387,7 @@ pub(crate) async fn handler(
                     }
                 };
 
-                mas_oidc_client::requests::userinfo::fetch_userinfo(
+                pasion_oidc_client::requests::userinfo::fetch_userinfo(
                     &client,
                     lazy_metadata.userinfo_endpoint().await?,
                     token_response.access_token.as_str(),
@@ -401,7 +401,7 @@ pub(crate) async fn handler(
                 .await?
             }
             None => {
-                mas_oidc_client::requests::userinfo::fetch_userinfo(
+                pasion_oidc_client::requests::userinfo::fetch_userinfo(
                     &client,
                     lazy_metadata.userinfo_endpoint().await?,
                     token_response.access_token.as_str(),
@@ -489,7 +489,7 @@ pub(crate) async fn handler(
 
     Ok((
         cookie_jar,
-        url_builder.redirect(&mas_router::UpstreamOAuth2Link::new(link.id)),
+        url_builder.redirect(&pasion_router::UpstreamOAuth2Link::new(link.id)),
     )
         .into_response())
 }

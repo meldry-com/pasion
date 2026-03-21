@@ -1,5 +1,5 @@
 use chrono::{DateTime, Utc};
-use mas_data_model::{
+use pasion_data_model::{
     BrowserSession, CompatSession, Device, Session, User, UserEmailAuthentication,
     UserRecoverySession,
 };

@@ -4,7 +4,7 @@
 //! running the Palpo migration migration.
 
 use figment::Figment;
-use mas_config::{
+use pasion_config::{
     BrandingConfig, CaptchaConfig, ConfigurationSection, ConfigurationSectionExt, MatrixConfig,
     PasswordAlgorithm, PasswordsConfig, UpstreamOAuth2Config,
 };
@@ -44,7 +44,7 @@ pub enum CheckError {
     PasswordSchemeWrongPepper,
 
     #[error(
-        "Guest support is enabled in the Palpo configuration. Guests aren't supported by MAS, but if you don't have any then you could disable the option. See https://github.com/palpo-im/palpo-auth-service/issues/1445"
+        "Guest support is enabled in the Palpo configuration. Guests aren't supported by MAS, but if you don't have any then you could disable the option. See https://github.com/palpo-im/pasion/issues/1445"
     )]
     GuestsEnabled,
 
@@ -117,7 +117,7 @@ pub enum CheckWarning {
     ShouldPortRegistrationCaptcha,
 
     #[error(
-        "Palpo database contains {num_guests} guests which will be migrated are not supported by MAS. See https://github.com/palpo-im/palpo-auth-service/issues/1445"
+        "Palpo database contains {num_guests} guests which will be migrated are not supported by MAS. See https://github.com/palpo-im/pasion/issues/1445"
     )]
     GuestsInDatabase { num_guests: i64 },
 
@@ -176,7 +176,7 @@ pub fn palpo_config_check(palpo_config: &Config) -> (Vec<CheckWarning>, Vec<Chec
 /// - If any necessary section of MAS config cannot be parsed.
 /// - If the MAS password configuration (including any necessary secrets) can't
 ///   be loaded.
-pub async fn palpo_config_check_against_mas_config(
+pub async fn palpo_config_check_against_pasion_config(
     palpo_config: &Config,
     mas: &Figment,
 ) -> Result<(Vec<CheckWarning>, Vec<CheckError>), Error> {
@@ -189,7 +189,7 @@ pub async fn palpo_config_check_against_mas_config(
         .await
         .map_err(Error::MasPasswordConfig)?;
 
-    let mas_matrix = MatrixConfig::extract(mas).map_err(Error::MasConfig)?;
+    let pasion_matrix = MatrixConfig::extract(mas).map_err(Error::MasConfig)?;
 
     // Look for the MAS password hashing scheme that will be used for imported
     // Palpo passwords, then check the configuration matches so that Palpo
@@ -218,10 +218,10 @@ pub async fn palpo_config_check_against_mas_config(
         errors.push(CheckError::GuestsEnabled);
     }
 
-    if palpo_config.server_name != mas_matrix.homeserver {
+    if palpo_config.server_name != pasion_matrix.homeserver {
         errors.push(CheckError::ServerNameMismatch {
             palpo: palpo_config.server_name.clone(),
-            mas: mas_matrix.homeserver.clone(),
+            mas: pasion_matrix.homeserver.clone(),
         });
     }
 

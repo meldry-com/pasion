@@ -5,7 +5,7 @@ use std::collections::BTreeMap;
 use camino::Utf8PathBuf;
 use chrono::{DateTime, Utc};
 use figment::providers::{Format, Yaml};
-use mas_config::{PasswordAlgorithm, PasswordHashingScheme};
+use pasion_config::{PasswordAlgorithm, PasswordHashingScheme};
 use rand::Rng;
 use serde::Deserialize;
 use sqlx::postgres::PgConnectOptions;
@@ -96,7 +96,7 @@ impl Config {
         for file in files {
             // TODO this is not exactly correct behaviour — Palpo does not merge anything
             // other than the top level dict.
-            // https://github.com/palpo-im/palpo-auth-service/pull/3805#discussion_r1922680825
+            // https://github.com/palpo-im/pasion/pull/3805#discussion_r1922680825
             // https://github.com/palpo-im/synapse/blob/develop/synapse/config/_base.py?rgh-link-date=2025-01-20T17%3A02%3A56Z#L870
             figment = figment.merge(Yaml::file(file));
         }
@@ -110,7 +110,7 @@ impl Config {
     /// Palpo's database.
     ///
     /// These are compatible with the `palpo_idp_id` field of
-    /// [`mas_config::UpstreamOAuth2Provider`].
+    /// [`pasion_config::UpstreamOAuth2Provider`].
     #[must_use]
     pub fn all_oidc_providers(&self) -> BTreeMap<String, OidcProvider> {
         let mut out = BTreeMap::new();
@@ -142,21 +142,21 @@ impl Config {
 
     /// Adjust a MAS configuration to match this Palpo configuration.
     #[must_use]
-    pub fn adjust_mas_config(
+    pub fn adjust_pasion_config(
         self,
-        mut mas_config: mas_config::RootConfig,
+        mut pasion_config: pasion_config::RootConfig,
         rng: &mut impl Rng,
         now: DateTime<Utc>,
-    ) -> mas_config::RootConfig {
+    ) -> pasion_config::RootConfig {
         let providers = self.all_oidc_providers();
         for provider in providers.into_values() {
-            let Some(mas_provider_config) = provider.into_mas_config(rng, now) else {
+            let Some(mas_provider_config) = provider.into_pasion_config(rng, now) else {
                 // TODO: better log message
                 warn!("Could not convert OIDC provider to MAS config");
                 continue;
             };
 
-            mas_config
+            pasion_config
                 .upstream_oauth2
                 .providers
                 .push(mas_provider_config);
@@ -164,12 +164,12 @@ impl Config {
 
         // TODO: manage when the option is not set
         if let Some(enable_3pid_changes) = self.enable_3pid_changes {
-            mas_config.account.email_change_allowed = enable_3pid_changes;
+            pasion_config.account.email_change_allowed = enable_3pid_changes;
         }
-        mas_config.account.displayname_change_allowed = self.enable_set_display_name;
+        pasion_config.account.displayname_change_allowed = self.enable_set_display_name;
         if self.password_config.enabled {
-            mas_config.passwords.enabled = true;
-            mas_config.passwords.schemes = vec![
+            pasion_config.passwords.enabled = true;
+            pasion_config.passwords.schemes = vec![
                 // This is the password hashing scheme palpo uses
                 PasswordHashingScheme {
                     version: 1,
@@ -191,23 +191,23 @@ impl Config {
                 },
             ];
 
-            mas_config.account.password_registration_enabled = self.enable_registration;
+            pasion_config.account.password_registration_enabled = self.enable_registration;
         } else {
-            mas_config.passwords.enabled = false;
+            pasion_config.passwords.enabled = false;
         }
 
         if self.enable_registration_captcha {
-            mas_config.captcha.service = Some(mas_config::CaptchaServiceKind::RecaptchaV2);
-            mas_config.captcha.site_key = self.recaptcha_public_key;
-            mas_config.captcha.secret_key = self.recaptcha_private_key;
+            pasion_config.captcha.service = Some(pasion_config::CaptchaServiceKind::RecaptchaV2);
+            pasion_config.captcha.site_key = self.recaptcha_public_key;
+            pasion_config.captcha.secret_key = self.recaptcha_private_key;
         }
 
-        mas_config.matrix.homeserver = self.server_name;
+        pasion_config.matrix.homeserver = self.server_name;
         if let Some(public_baseurl) = self.public_baseurl {
-            mas_config.matrix.endpoint = public_baseurl;
+            pasion_config.matrix.endpoint = public_baseurl;
         }
 
-        mas_config
+        pasion_config
     }
 }
 

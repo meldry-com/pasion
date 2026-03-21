@@ -2,7 +2,7 @@
 
 use async_trait::async_trait;
 use chrono::{DateTime, Duration, Utc};
-use mas_data_model::Clock;
+use pasion_data_model::Clock;
 use opentelemetry::trace::TraceContextExt;
 use rand_core::RngCore;
 use serde::{Deserialize, Serialize};

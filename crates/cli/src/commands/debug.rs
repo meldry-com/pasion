@@ -2,11 +2,11 @@ use std::process::ExitCode;
 
 use clap::Parser;
 use figment::Figment;
-use mas_config::{
+use pasion_config::{
     ConfigurationSection, ConfigurationSectionExt, DatabaseConfig, ExperimentalConfig,
     MatrixConfig, PolicyConfig,
 };
-use mas_storage_pg::PgRepositoryFactory;
+use pasion_storage_pg::PgRepositoryFactory;
 use tracing::{info, info_span};
 
 use crate::util::{

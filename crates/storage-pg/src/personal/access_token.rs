@@ -1,10 +1,10 @@
 use async_trait::async_trait;
 use chrono::{DateTime, Utc};
-use mas_data_model::{
+use pasion_data_model::{
     Clock,
     personal::{PersonalAccessToken, session::PersonalSession},
 };
-use mas_storage::personal::PersonalAccessTokenRepository;
+use pasion_storage::personal::PersonalAccessTokenRepository;
 use rand::RngCore;
 use sha2::{Digest, Sha256};
 use sqlx::PgConnection;

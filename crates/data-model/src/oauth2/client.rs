@@ -1,6 +1,6 @@
 use chrono::{DateTime, Utc};
-use mas_iana::{jose::JsonWebSignatureAlg, oauth::OAuthClientAuthenticationMethod};
-use mas_jose::jwk::PublicJsonWebKeySet;
+use pasion_iana::{jose::JsonWebSignatureAlg, oauth::OAuthClientAuthenticationMethod};
+use pasion_jose::jwk::PublicJsonWebKeySet;
 use oauth2_types::{
     oidc::ApplicationType,
     registration::{ClientMetadata, Localized},

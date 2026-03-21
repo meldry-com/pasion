@@ -1,6 +1,6 @@
 [package]
-name = "mas-http"
-description = "HTTP utilities for the Palpo Authentication Service"
+name = "pasion-http"
+description = "HTTP utilities for the Pasion"
 version.workspace = true
 authors.workspace = true
 edition.workspace = true

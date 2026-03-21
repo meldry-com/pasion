@@ -1,15 +1,15 @@
-use mas_data_model::{AuthorizationCode, BoxClock, BoxRng, Pkce, SystemClock};
-use mas_router::{PostAuthAction, UrlBuilder};
-use mas_salvo_utils::{
+use pasion_data_model::{AuthorizationCode, BoxClock, BoxRng, Pkce, SystemClock};
+use pasion_router::{PostAuthAction, UrlBuilder};
+use pasion_salvo_utils::{
     GenericError, InternalError, SessionInfoExt,
     cookies::CookieJar,
     sentry::SentryEventID,
 };
-use mas_storage::{
+use pasion_storage::{
     BoxRepository, BoxRepositoryFactory,
     oauth2::{OAuth2AuthorizationGrantRepository, OAuth2ClientRepository},
 };
-use mas_templates::Templates;
+use pasion_templates::Templates;
 use oauth2_types::{
     errors::{ClientError, ClientErrorCode},
     pkce,
@@ -43,7 +43,7 @@ pub enum RouteError {
     IntoCallbackDestination(#[from] self::callback::IntoCallbackDestinationError),
 
     #[error("invalid redirect uri")]
-    UnknownRedirectUri(#[from] mas_data_model::InvalidRedirectUriError),
+    UnknownRedirectUri(#[from] pasion_data_model::InvalidRedirectUriError),
 }
 
 impl Scribe for RouteError {
@@ -71,11 +71,11 @@ impl Scribe for RouteError {
     }
 }
 
-impl_from_error_for_route!(mas_storage::RepositoryError);
-impl_from_error_for_route!(mas_templates::TemplateError);
+impl_from_error_for_route!(pasion_storage::RepositoryError);
+impl_from_error_for_route!(pasion_templates::TemplateError);
 impl_from_error_for_route!(self::callback::CallbackDestinationError);
-impl_from_error_for_route!(mas_policy::LoadError);
-impl_from_error_for_route!(mas_policy::EvaluationError);
+impl_from_error_for_route!(pasion_policy::LoadError);
+impl_from_error_for_route!(pasion_policy::EvaluationError);
 
 #[derive(Deserialize)]
 pub(crate) struct Params {
@@ -140,7 +140,7 @@ async fn handle_get(
         .get::<BoundActivityTracker>("activity_tracker")
         .expect("BoundActivityTracker not found in depot");
     let cookie_manager = depot
-        .get::<mas_salvo_utils::cookies::CookieManager>("cookie_manager")
+        .get::<pasion_salvo_utils::cookies::CookieManager>("cookie_manager")
         .expect("CookieManager not found in depot");
 
     let clock: BoxClock = Box::new(SystemClock::default());
@@ -307,14 +307,14 @@ async fn handle_get(
                     // Client asked for a registration, show the registration prompt
                     repo.save().await?;
 
-                    url_builder.redirect(&mas_router::Register::and_then(continue_grant))
+                    url_builder.redirect(&pasion_router::Register::and_then(continue_grant))
                 }
 
                 None => {
                     // Other cases where we don't have a session, ask for a login
                     repo.save().await?;
 
-                    url_builder.redirect(&mas_router::Login::and_then(continue_grant))
+                    url_builder.redirect(&pasion_router::Login::and_then(continue_grant))
                 }
 
                 Some(user_session) => {
@@ -324,7 +324,7 @@ async fn handle_get(
                     activity_tracker
                         .record_browser_session(&clock, &user_session)
                         .await;
-                    url_builder.redirect(&mas_router::Consent(grant.id))
+                    url_builder.redirect(&pasion_router::Consent(grant.id))
                 }
             };
 

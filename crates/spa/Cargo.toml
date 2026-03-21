@@ -1,5 +1,5 @@
 [package]
-name = "mas-spa"
+name = "pasion-spa"
 version.workspace = true
 authors.workspace = true
 edition.workspace = true

@@ -1,5 +1,5 @@
 use async_graphql::SimpleObject;
-use mas_matrix::HomeserverConnection;
+use pasion_matrix::HomeserverConnection;
 
 #[derive(SimpleObject)]
 pub struct MatrixUser {

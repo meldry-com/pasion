@@ -2,7 +2,7 @@
 
 use async_trait::async_trait;
 use chrono::{DateTime, Utc};
-use mas_data_model::{BrowserSession, Clock, CompatSession, Device, Session, User};
+use pasion_data_model::{BrowserSession, Clock, CompatSession, Device, Session, User};
 
 use crate::{Page, Pagination, repository_impl};
 

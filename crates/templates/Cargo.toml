@@ -1,5 +1,5 @@
 [package]
-name = "mas-templates"
+name = "pasion-templates"
 version.workspace = true
 authors.workspace = true
 edition.workspace = true
@@ -32,12 +32,12 @@ v_htmlescape.workspace = true
 walkdir.workspace = true
 
 oauth2-types.workspace = true
-mas-data-model.workspace = true
-mas-i18n.workspace = true
-mas-iana.workspace = true
-mas-policy.workspace = true
-mas-router.workspace = true
-mas-spa.workspace = true
+pasion-data-model.workspace = true
+pasion-i18n.workspace = true
+pasion-iana.workspace = true
+pasion-policy.workspace = true
+pasion-router.workspace = true
+pasion-spa.workspace = true
 
 [dev-dependencies]
 rand_chacha.workspace = true

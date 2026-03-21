@@ -83,8 +83,8 @@ impl SiteConfig {
 
 impl SiteConfig {
     /// Create a new [`SiteConfig`] from the data model
-    /// [`mas_data_model:::SiteConfig`].
-    pub fn new(data_model: &mas_data_model::SiteConfig) -> Self {
+    /// [`pasion_data_model:::SiteConfig`].
+    pub fn new(data_model: &pasion_data_model::SiteConfig) -> Self {
         Self {
             captcha_config: data_model.captcha.as_ref().map(CaptchaConfig::new),
             server_name: data_model.server_name.clone(),
@@ -113,15 +113,15 @@ impl CaptchaConfig {
 
 impl CaptchaConfig {
     /// Create a new [`CaptchaConfig`] from the data model
-    /// [`mas_data_model:::CaptchaConfig`].
-    pub fn new(data_model: &mas_data_model::CaptchaConfig) -> Self {
+    /// [`pasion_data_model:::CaptchaConfig`].
+    pub fn new(data_model: &pasion_data_model::CaptchaConfig) -> Self {
         Self {
             service: match data_model.service {
-                mas_data_model::CaptchaService::RecaptchaV2 => CaptchaService::RecaptchaV2,
-                mas_data_model::CaptchaService::CloudflareTurnstile => {
+                pasion_data_model::CaptchaService::RecaptchaV2 => CaptchaService::RecaptchaV2,
+                pasion_data_model::CaptchaService::CloudflareTurnstile => {
                     CaptchaService::CloudflareTurnstile
                 }
-                mas_data_model::CaptchaService::HCaptcha => CaptchaService::HCaptcha,
+                pasion_data_model::CaptchaService::HCaptcha => CaptchaService::HCaptcha,
             },
             site_key: data_model.site_key.clone(),
         }

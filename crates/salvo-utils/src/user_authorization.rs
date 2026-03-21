@@ -2,8 +2,8 @@ use std::{collections::HashMap, error::Error};
 
 use headers::{Header, HeaderMapExt, HeaderName, authorization::{Bearer, Credentials}};
 use http::{HeaderMap, HeaderValue, StatusCode, header::WWW_AUTHENTICATE};
-use mas_data_model::{Clock, Session};
-use mas_storage::{
+use pasion_data_model::{Clock, Session};
+use pasion_storage::{
     RepositoryAccess,
     oauth2::{OAuth2AccessTokenRepository, OAuth2SessionRepository},
 };
@@ -31,7 +31,7 @@ impl AccessToken {
     async fn fetch<E>(
         &self,
         repo: &mut impl RepositoryAccess<Error = E>,
-    ) -> Result<(mas_data_model::AccessToken, Session), AuthorizationVerificationError<E>> {
+    ) -> Result<(pasion_data_model::AccessToken, Session), AuthorizationVerificationError<E>> {
         let token = match self {
             AccessToken::Form(t) | AccessToken::Header(t) => t,
             AccessToken::None => return Err(AuthorizationVerificationError::MissingToken),

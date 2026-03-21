@@ -7,8 +7,8 @@ use std::{collections::HashSet, num::NonZeroU32};
 use base64ct::{Base64UrlUnpadded, Encoding};
 use chrono::{DateTime, Utc};
 use language_tags::LanguageTag;
-use mas_iana::oauth::{OAuthAuthorizationEndpointResponseType, PkceCodeChallengeMethod};
-use mas_jose::claims::{self, TokenHash};
+use pasion_iana::oauth::{OAuthAuthorizationEndpointResponseType, PkceCodeChallengeMethod};
+use pasion_jose::claims::{self, TokenHash};
 use oauth2_types::{
     pkce,
     prelude::CodeChallengeMethodExt,

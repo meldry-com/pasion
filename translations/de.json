@@ -11,8 +11,8 @@
     "submit": "Absenden"
   },
   "app": {
-    "human_name": "Palpo Authentication Service",
-    "name": "palpo-auth-service",
+    "human_name": "Pasion",
+    "name": "pasion",
     "technical_description": "OpenID Connect discovery document: <a class=\"cpd-link\" data-kind=\"primary\" href=\"%(discovery_url)s\">%(discovery_url)s</a>"
   },
   "branding": {

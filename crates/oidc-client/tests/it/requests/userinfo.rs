@@ -1,4 +1,4 @@
-use mas_oidc_client::requests::userinfo::fetch_userinfo;
+use pasion_oidc_client::requests::userinfo::fetch_userinfo;
 use serde_json::json;
 use wiremock::{
     Mock, ResponseTemplate,

@@ -7,7 +7,7 @@ use std::{
 
 use anyhow::Context;
 use hyper::{Request, Response};
-use mas_listener::{ConnectionInfo, server::Server};
+use pasion_listener::{ConnectionInfo, server::Server};
 use tokio_rustls::rustls::{
     RootCertStore, ServerConfig,
     pki_types::{CertificateDer, PrivateKeyDer, PrivatePkcs1KeyDer, pem::PemObject},
@@ -68,7 +68,7 @@ async fn main() -> Result<(), anyhow::Error> {
         });
     }
 
-    mas_listener::server::run_servers(servers, hard_shutdown, soft_shutdown).await;
+    pasion_listener::server::run_servers(servers, hard_shutdown, soft_shutdown).await;
 
     Ok(())
 }

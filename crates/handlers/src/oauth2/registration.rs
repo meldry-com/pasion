@@ -1,11 +1,11 @@
 use std::sync::{Arc, LazyLock};
 
-use mas_data_model::{BoxClock, BoxRng, SystemClock};
-use mas_iana::oauth::OAuthClientAuthenticationMethod;
-use mas_keystore::Encrypter;
-use mas_policy::{EvaluationResult, Policy, PolicyFactory};
-use mas_salvo_utils::{record_error, sentry::SentryEventID};
-use mas_storage::{BoxRepository, BoxRepositoryFactory, oauth2::OAuth2ClientRepository};
+use pasion_data_model::{BoxClock, BoxRng, SystemClock};
+use pasion_iana::oauth::OAuthClientAuthenticationMethod;
+use pasion_keystore::Encrypter;
+use pasion_policy::{EvaluationResult, Policy, PolicyFactory};
+use pasion_salvo_utils::{record_error, sentry::SentryEventID};
+use pasion_storage::{BoxRepository, BoxRepositoryFactory, oauth2::OAuth2ClientRepository};
 use oauth2_types::{
     errors::{ClientError, ClientErrorCode},
     registration::{
@@ -53,10 +53,10 @@ pub(crate) enum RouteError {
     PolicyDenied(EvaluationResult),
 }
 
-impl_from_error_for_route!(mas_storage::RepositoryError);
-impl_from_error_for_route!(mas_policy::LoadError);
-impl_from_error_for_route!(mas_policy::EvaluationError);
-impl_from_error_for_route!(mas_keystore::aead::Error);
+impl_from_error_for_route!(pasion_storage::RepositoryError);
+impl_from_error_for_route!(pasion_policy::LoadError);
+impl_from_error_for_route!(pasion_policy::EvaluationError);
+impl_from_error_for_route!(pasion_keystore::aead::Error);
 impl_from_error_for_route!(serde_json::Error);
 
 impl Scribe for RouteError {
@@ -277,9 +277,9 @@ async fn handle_post(req: &mut Request, depot: &Depot) -> Result<RouteResponse, 
     }
 
     let res = policy
-        .evaluate_client_registration(mas_policy::ClientRegistrationInput {
+        .evaluate_client_registration(pasion_policy::ClientRegistrationInput {
             client_metadata: &metadata,
-            requester: mas_policy::Requester {
+            requester: pasion_policy::Requester {
                 ip_address: activity_tracker.ip(),
                 user_agent,
             },

@@ -2,7 +2,7 @@ use async_graphql::{
     Context, Enum, ID, Object,
     connection::{Connection, Edge, OpaqueCursor, query},
 };
-use mas_storage::{Pagination, user::UserFilter};
+use pasion_storage::{Pagination, user::UserFilter};
 
 use crate::graphql::{
     UserId,

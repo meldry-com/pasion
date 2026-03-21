@@ -1,12 +1,12 @@
 use anyhow::Context;
-use mas_router::{PostAuthAction, Route, UrlBuilder};
-use mas_storage::{
+use pasion_router::{PostAuthAction, Route, UrlBuilder};
+use pasion_storage::{
     RepositoryAccess,
     compat::CompatSsoLoginRepository,
     oauth2::OAuth2AuthorizationGrantRepository,
     upstream_oauth2::{UpstreamOAuthLinkRepository, UpstreamOAuthProviderRepository},
 };
-use mas_templates::{PostAuthContext, PostAuthContextInner};
+use pasion_templates::{PostAuthContext, PostAuthContextInner};
 use serde::{Deserialize, Serialize};
 
 #[derive(Serialize, Deserialize, Default, Debug, Clone)]
@@ -34,7 +34,7 @@ impl OptionalPostAuthAction {
     }
 
     pub fn go_next(&self, url_builder: &UrlBuilder) -> axum::response::Redirect {
-        self.go_next_or_default(url_builder, &mas_router::Index)
+        self.go_next_or_default(url_builder, &pasion_router::Index)
     }
 
     pub async fn load_context<'a>(

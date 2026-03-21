@@ -14,8 +14,8 @@ Options:
 - `--no-sync`: Do not sync the configuration with the database.
 
 ```
-$ mas-cli server
-INFO mas_cli::server: Starting task scheduler
+$ pasion-cli server
+INFO pasion_cli::server: Starting task scheduler
 INFO mas_core::templates: Loading builtin templates
-INFO mas_cli::server: Listening on http://0.0.0.0:8080
+INFO pasion_cli::server: Listening on http://0.0.0.0:8080
 ```

@@ -12,7 +12,7 @@ use axum::{
 use axum_extra::extract::{Query, QueryRejection};
 use axum_macros::FromRequestParts;
 use hyper::StatusCode;
-use mas_storage::pagination::PaginationDirection;
+use pasion_storage::pagination::PaginationDirection;
 use schemars::JsonSchema;
 use serde::Deserialize;
 use ulid::Ulid;
@@ -131,7 +131,7 @@ impl IntoResponse for PaginationRejection {
 /// An extractor for pagination parameters in the query string
 #[derive(OperationIo, Debug, Clone, Copy)]
 #[aide(input_with = "Query<PaginationParams>")]
-pub struct Pagination(pub mas_storage::Pagination, pub IncludeCount);
+pub struct Pagination(pub pasion_storage::Pagination, pub IncludeCount);
 
 impl<S: Send + Sync> FromRequestParts<S> for Pagination {
     type Rejection = PaginationRejection;
@@ -155,7 +155,7 @@ impl<S: Send + Sync> FromRequestParts<S> for Pagination {
         };
 
         Ok(Self(
-            mas_storage::Pagination {
+            pasion_storage::Pagination {
                 before: params.before,
                 after: params.after,
                 direction,

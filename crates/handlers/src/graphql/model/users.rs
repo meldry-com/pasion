@@ -4,8 +4,8 @@ use async_graphql::{
     connection::{Connection, Edge, OpaqueCursor, query},
 };
 use chrono::{DateTime, Utc};
-use mas_data_model::Device;
-use mas_storage::{
+use pasion_data_model::Device;
+use pasion_storage::{
     Pagination, RepositoryAccess,
     app_session::AppSessionFilter,
     compat::{CompatSessionFilter, CompatSsoLoginFilter, CompatSsoLoginRepository},
@@ -24,16 +24,16 @@ use crate::graphql::{DateFilter, state::ContextExt};
 
 #[derive(Description)]
 /// A user is an individual's account.
-pub struct User(pub mas_data_model::User);
+pub struct User(pub pasion_data_model::User);
 
-impl From<mas_data_model::User> for User {
-    fn from(v: mas_data_model::User) -> Self {
+impl From<pasion_data_model::User> for User {
+    fn from(v: pasion_data_model::User) -> Self {
         Self(v)
     }
 }
 
-impl From<mas_data_model::BrowserSession> for User {
-    fn from(v: mas_data_model::BrowserSession) -> Self {
+impl From<pasion_data_model::BrowserSession> for User {
+    fn from(v: pasion_data_model::BrowserSession) -> Self {
         Self(v.user)
     }
 }
@@ -683,11 +683,11 @@ impl User {
                 connection
                     .edges
                     .extend(page.edges.into_iter().map(|edge| match edge.node {
-                        mas_storage::app_session::AppSession::Compat(session) => Edge::new(
+                        pasion_storage::app_session::AppSession::Compat(session) => Edge::new(
                             OpaqueCursor(NodeCursor(NodeType::CompatSession, edge.cursor)),
                             AppSession::CompatSession(Box::new(CompatSession::new(*session))),
                         ),
-                        mas_storage::app_session::AppSession::OAuth2(session) => Edge::new(
+                        pasion_storage::app_session::AppSession::OAuth2(session) => Edge::new(
                             OpaqueCursor(NodeCursor(NodeType::OAuth2Session, edge.cursor)),
                             AppSession::OAuth2Session(Box::new(OAuth2Session(*session))),
                         ),
@@ -719,7 +719,7 @@ pub enum AppSession {
 
 /// A user email address
 #[derive(Description)]
-pub struct UserEmail(pub mas_data_model::UserEmail);
+pub struct UserEmail(pub pasion_data_model::UserEmail);
 
 #[Object(use_type_description)]
 impl UserEmail {
@@ -758,7 +758,7 @@ pub enum UserEmailState {
 
 /// A recovery ticket
 #[derive(Description)]
-pub struct UserRecoveryTicket(pub mas_data_model::UserRecoveryTicket);
+pub struct UserRecoveryTicket(pub pasion_data_model::UserRecoveryTicket);
 
 /// The status of a recovery ticket
 #[derive(Enum, Copy, Clone, Eq, PartialEq)]
@@ -856,7 +856,7 @@ impl UserRecoveryTicket {
 
 /// A email authentication session
 #[derive(Description)]
-pub struct UserEmailAuthentication(pub mas_data_model::UserEmailAuthentication);
+pub struct UserEmailAuthentication(pub pasion_data_model::UserEmailAuthentication);
 
 #[Object(use_type_description)]
 impl UserEmailAuthentication {

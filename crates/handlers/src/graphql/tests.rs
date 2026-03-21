@@ -1,10 +1,10 @@
 use axum::http::Request;
 use hyper::StatusCode;
 use mas_axum_utils::SessionInfoExt;
-use mas_data_model::{AccessToken, Client, TokenType, User};
-use mas_matrix::{HomeserverConnection, ProvisionRequest};
-use mas_router::SimpleRoute;
-use mas_storage::{
+use pasion_data_model::{AccessToken, Client, TokenType, User};
+use pasion_matrix::{HomeserverConnection, ProvisionRequest};
+use pasion_router::SimpleRoute;
+use pasion_storage::{
     RepositoryAccess,
     oauth2::{OAuth2AccessTokenRepository, OAuth2ClientRepository},
 };
@@ -115,7 +115,7 @@ struct GraphQLResponse {
 }
 
 /// Test that the GraphQL endpoint can be queried with a GET request.
-#[sqlx::test(migrator = "mas_storage_pg::MIGRATOR")]
+#[sqlx::test(migrator = "pasion_storage_pg::MIGRATOR")]
 async fn test_get(pool: PgPool) {
     setup();
     let state = TestState::from_pool(pool).await.unwrap();
@@ -139,7 +139,7 @@ async fn test_get(pool: PgPool) {
 
 /// Test that the GraphQL endpoint can be queried with a POST request
 /// anonymously.
-#[sqlx::test(migrator = "mas_storage_pg::MIGRATOR")]
+#[sqlx::test(migrator = "pasion_storage_pg::MIGRATOR")]
 async fn test_anonymous_viewer(pool: PgPool) {
     setup();
     let state = TestState::from_pool(pool).await.unwrap();
@@ -170,7 +170,7 @@ async fn test_anonymous_viewer(pool: PgPool) {
 }
 
 /// Test that the GraphQL endpoint can be authenticated with a bearer token.
-#[sqlx::test(migrator = "mas_storage_pg::MIGRATOR")]
+#[sqlx::test(migrator = "pasion_storage_pg::MIGRATOR")]
 async fn test_oauth2_viewer(pool: PgPool) {
     setup();
     let state = TestState::from_pool(pool).await.unwrap();
@@ -217,7 +217,7 @@ async fn test_oauth2_viewer(pool: PgPool) {
 }
 
 /// Test that the GraphQL endpoint requires the GraphQL scope.
-#[sqlx::test(migrator = "mas_storage_pg::MIGRATOR")]
+#[sqlx::test(migrator = "pasion_storage_pg::MIGRATOR")]
 async fn test_oauth2_no_scope(pool: PgPool) {
     setup();
     let state = TestState::from_pool(pool).await.unwrap();
@@ -255,7 +255,7 @@ async fn test_oauth2_no_scope(pool: PgPool) {
 }
 
 /// Test the admin scope on the GraphQL endpoint.
-#[sqlx::test(migrator = "mas_storage_pg::MIGRATOR")]
+#[sqlx::test(migrator = "pasion_storage_pg::MIGRATOR")]
 async fn test_oauth2_admin(pool: PgPool) {
     setup();
     let state = TestState::from_pool(pool).await.unwrap();
@@ -342,14 +342,14 @@ async fn test_oauth2_admin(pool: PgPool) {
 
 /// Test that we can query the GraphQL endpoint with a token from a
 /// `client_credentials` grant.
-#[sqlx::test(migrator = "mas_storage_pg::MIGRATOR")]
+#[sqlx::test(migrator = "pasion_storage_pg::MIGRATOR")]
 async fn test_oauth2_client_credentials(pool: PgPool) {
     setup();
     let state = TestState::from_pool(pool).await.unwrap();
 
     // Provision a client
     let request =
-        Request::post(mas_router::OAuth2RegistrationEndpoint::PATH).json(serde_json::json!({
+        Request::post(pasion_router::OAuth2RegistrationEndpoint::PATH).json(serde_json::json!({
             "client_uri": "https://example.com/",
             "token_endpoint_auth_method": "client_secret_post",
             "grant_types": ["client_credentials"],
@@ -363,7 +363,7 @@ async fn test_oauth2_client_credentials(pool: PgPool) {
     let client_secret = response.client_secret.expect("to have a client secret");
 
     // Call the token endpoint with the graphql scope
-    let request = Request::post(mas_router::OAuth2TokenEndpoint::PATH).form(serde_json::json!({
+    let request = Request::post(pasion_router::OAuth2TokenEndpoint::PATH).form(serde_json::json!({
         "grant_type": "client_credentials",
         "client_id": client_id,
         "client_secret": client_secret,
@@ -431,7 +431,7 @@ async fn test_oauth2_client_credentials(pool: PgPool) {
     assert!(response.data.is_null());
 
     // Check that we can't do a query once the token is revoked
-    let request = Request::post(mas_router::OAuth2Revocation::PATH).form(serde_json::json!({
+    let request = Request::post(pasion_router::OAuth2Revocation::PATH).form(serde_json::json!({
         "token": access_token,
         "client_id": client_id,
         "client_secret": client_secret,
@@ -475,7 +475,7 @@ async fn test_oauth2_client_credentials(pool: PgPool) {
     };
 
     // Ask for a token again, with the admin scope
-    let request = Request::post(mas_router::OAuth2TokenEndpoint::PATH).form(serde_json::json!({
+    let request = Request::post(pasion_router::OAuth2TokenEndpoint::PATH).form(serde_json::json!({
         "grant_type": "client_credentials",
         "client_id": client_id,
         "client_secret": client_secret,
@@ -567,14 +567,14 @@ async fn test_oauth2_client_credentials(pool: PgPool) {
 }
 
 /// Test the addUser mutation
-#[sqlx::test(migrator = "mas_storage_pg::MIGRATOR")]
+#[sqlx::test(migrator = "pasion_storage_pg::MIGRATOR")]
 async fn test_add_user(pool: PgPool) {
     setup();
     let state = TestState::from_pool(pool).await.unwrap();
 
     // Provision a client
     let request =
-        Request::post(mas_router::OAuth2RegistrationEndpoint::PATH).json(serde_json::json!({
+        Request::post(pasion_router::OAuth2RegistrationEndpoint::PATH).json(serde_json::json!({
             "client_uri": "https://example.com/",
             "token_endpoint_auth_method": "client_secret_post",
             "grant_types": ["client_credentials"],
@@ -601,7 +601,7 @@ async fn test_add_user(pool: PgPool) {
     };
 
     // Ask for a token with the admin scope
-    let request = Request::post(mas_router::OAuth2TokenEndpoint::PATH).form(serde_json::json!({
+    let request = Request::post(pasion_router::OAuth2TokenEndpoint::PATH).form(serde_json::json!({
         "grant_type": "client_credentials",
         "client_id": client_id,
         "client_secret": client_secret,
@@ -777,7 +777,7 @@ async fn test_add_user(pool: PgPool) {
 
 /// Test the setPassword mutation where the current password provided is
 /// wrong.
-#[sqlx::test(migrator = "mas_storage_pg::MIGRATOR")]
+#[sqlx::test(migrator = "pasion_storage_pg::MIGRATOR")]
 async fn test_set_password_rejected_wrong_password(pool: PgPool) {
     setup();
     let state = TestState::from_pool(pool).await.unwrap();
@@ -851,7 +851,7 @@ async fn test_set_password_rejected_wrong_password(pool: PgPool) {
 
 /// Test the startEmailAuthentication mutation where the current password
 /// provided is invalid.
-#[sqlx::test(migrator = "mas_storage_pg::MIGRATOR")]
+#[sqlx::test(migrator = "pasion_storage_pg::MIGRATOR")]
 async fn test_start_email_authentication_rejected_wrong_password(pool: PgPool) {
     setup();
     let state = TestState::from_pool(pool).await.unwrap();
@@ -922,7 +922,7 @@ async fn test_start_email_authentication_rejected_wrong_password(pool: PgPool) {
 
 /// Test the removeEmail mutation where the current password
 /// provided is invalid.
-#[sqlx::test(migrator = "mas_storage_pg::MIGRATOR")]
+#[sqlx::test(migrator = "pasion_storage_pg::MIGRATOR")]
 async fn test_remove_email_rejected_wrong_password(pool: PgPool) {
     setup();
     let state = TestState::from_pool(pool).await.unwrap();
@@ -1004,7 +1004,7 @@ async fn test_remove_email_rejected_wrong_password(pool: PgPool) {
 
 /// Test the deactivateUser mutation where the current password
 /// provided is invalid.
-#[sqlx::test(migrator = "mas_storage_pg::MIGRATOR")]
+#[sqlx::test(migrator = "pasion_storage_pg::MIGRATOR")]
 async fn test_deactivate_user_rejected_wrong_password(pool: PgPool) {
     setup();
     let state = TestState::from_pool(pool).await.unwrap();

@@ -6,7 +6,7 @@ use std::{collections::HashSet, fmt, hash::Hash, num::NonZeroU32};
 
 use chrono::{DateTime, Duration, Utc};
 use language_tags::LanguageTag;
-use mas_iana::oauth::{OAuthAccessTokenType, OAuthTokenTypeHint};
+use pasion_iana::oauth::{OAuthAccessTokenType, OAuthTokenTypeHint};
 use serde::{Deserialize, Serialize};
 use serde_with::{
     DeserializeFromStr, DisplayFromStr, DurationSeconds, SerializeDisplay, StringWithSeparator,

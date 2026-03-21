@@ -2,9 +2,9 @@ use axum::{extract::State, response::IntoResponse};
 use axum_extra::extract::Query;
 use hyper::StatusCode;
 use mas_axum_utils::{GenericError, InternalError};
-use mas_data_model::{BoxClock, BoxRng};
-use mas_router::{CompatLoginSsoAction, CompatLoginSsoComplete, UrlBuilder};
-use mas_storage::{BoxRepository, compat::CompatSsoLoginRepository};
+use pasion_data_model::{BoxClock, BoxRng};
+use pasion_router::{CompatLoginSsoAction, CompatLoginSsoComplete, UrlBuilder};
+use pasion_storage::{BoxRepository, compat::CompatSsoLoginRepository};
 use rand::distributions::{Alphanumeric, DistString};
 use serde::Deserialize;
 use serde_with::serde;
@@ -32,7 +32,7 @@ pub enum RouteError {
     InvalidRedirectUrl,
 }
 
-impl_from_error_for_route!(mas_storage::RepositoryError);
+impl_from_error_for_route!(pasion_storage::RepositoryError);
 
 impl IntoResponse for RouteError {
     fn into_response(self) -> axum::response::Response {

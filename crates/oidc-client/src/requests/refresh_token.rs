@@ -3,7 +3,7 @@
 //! [Refresh Tokens]: https://openid.net/specs/openid-connect-core-1_0.html#RefreshTokens
 
 use chrono::{DateTime, Utc};
-use mas_jose::claims::{self, TokenHash};
+use pasion_jose::claims::{self, TokenHash};
 use oauth2_types::{
     requests::{AccessTokenRequest, AccessTokenResponse, RefreshTokenGrant},
     scope::Scope,

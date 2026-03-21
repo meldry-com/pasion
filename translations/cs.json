@@ -11,8 +11,8 @@
     "submit": "Odeslat"
   },
   "app": {
-    "human_name": "Palpo Authentication Service",
-    "name": "palpo-auth-service",
+    "human_name": "Pasion",
+    "name": "pasion",
     "technical_description": "Dokument o zjišťování služby OpenID Connect: <a class=\"cpd-link\" data-kind=\"primary\" href=\"%(discovery_url)s\">%(discovery_url)s</a>"
   },
   "branding": {
@@ -226,7 +226,7 @@
     "scope": {
       "edit_profile": "Upravte svůj profil a kontaktní údaje",
       "manage_sessions": "Spravujte svá zařízení a relace",
-      "mas_admin": "Spravujte libovolného uživatele ve službě palpo-auth-service",
+      "mas_admin": "Spravujte libovolného uživatele ve službě pasion",
       "send_messages": "Odesílání nových zpráv vaším jménem",
       "palpo_admin": "Spravujte domovský server Palpo",
       "view_messages": "Zobrazte své stávající zprávy a data",

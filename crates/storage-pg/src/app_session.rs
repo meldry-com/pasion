@@ -1,10 +1,10 @@
 //! A module containing PostgreSQL implementation of repositories for sessions
 
 use async_trait::async_trait;
-use mas_data_model::{
+use pasion_data_model::{
     Clock, CompatSession, CompatSessionState, Device, Session, SessionState, User,
 };
-use mas_storage::{
+use pasion_storage::{
     Page, Pagination,
     app_session::{AppSession, AppSessionFilter, AppSessionRepository, AppSessionState},
     compat::CompatSessionFilter,
@@ -49,7 +49,7 @@ mod priv_ {
     use std::net::IpAddr;
 
     use chrono::{DateTime, Utc};
-    use mas_storage::pagination::Node;
+    use pasion_storage::pagination::Node;
     use sea_query::enum_def;
     use ulid::Ulid;
     use uuid::Uuid;
@@ -539,8 +539,8 @@ impl AppSessionRepository for PgAppSessionRepository<'_> {
 #[cfg(test)]
 mod tests {
     use chrono::Duration;
-    use mas_data_model::{Device, clock::MockClock};
-    use mas_storage::{
+    use pasion_data_model::{Device, clock::MockClock};
+    use pasion_storage::{
         Pagination, RepositoryAccess,
         app_session::{AppSession, AppSessionFilter},
         oauth2::OAuth2SessionRepository,

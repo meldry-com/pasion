@@ -1,7 +1,7 @@
 use std::str::FromStr as _;
 
 use chrono::{DateTime, Utc};
-use mas_iana::oauth::PkceCodeChallengeMethod;
+use pasion_iana::oauth::PkceCodeChallengeMethod;
 use oauth2_types::{
     pkce::{CodeChallengeError, CodeChallengeMethodExt},
     requests::ResponseMode,

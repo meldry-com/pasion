@@ -3,7 +3,7 @@
 
 use async_trait::async_trait;
 use chrono::{DateTime, Utc};
-use mas_storage::queue::{QueueScheduleRepository, ScheduleStatus};
+use pasion_storage::queue::{QueueScheduleRepository, ScheduleStatus};
 use sqlx::PgConnection;
 
 use crate::{DatabaseError, ExecuteExt};

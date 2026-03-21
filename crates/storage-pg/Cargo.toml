@@ -1,5 +1,5 @@
 [package]
-name = "mas-storage-pg"
+name = "pasion-storage-pg"
 version.workspace = true
 authors.workspace = true
 edition.workspace = true
@@ -32,7 +32,7 @@ url.workspace = true
 uuid.workspace = true
 
 oauth2-types.workspace = true
-mas-storage.workspace = true
-mas-data-model.workspace = true
-mas-iana.workspace = true
-mas-jose.workspace = true
+pasion-storage.workspace = true
+pasion-data-model.workspace = true
+pasion-iana.workspace = true
+pasion-jose.workspace = true

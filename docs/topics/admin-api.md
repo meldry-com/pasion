@@ -67,7 +67,7 @@ clients:
     client_secret: wie9oh2EekeeDeithei9Eipaeh2sohte
     redirect_uris:
       # The Swagger UI callback in the hosted documentation
-      - https://palpo-im.github.io/palpo-auth-service/api/oauth2-redirect.html
+      - https://palpo-im.github.io/pasion/api/oauth2-redirect.html
       # The Swagger UI callback hosted by the service
       - https://mas.example.com/api/doc/oauth2-callback
 ```

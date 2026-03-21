@@ -4,10 +4,10 @@ mod worker;
 use std::net::IpAddr;
 
 use chrono::{DateTime, Utc};
-use mas_data_model::{
+use pasion_data_model::{
     BrowserSession, Clock, CompatSession, Session, personal::session::PersonalSession,
 };
-use mas_storage::BoxRepositoryFactory;
+use pasion_storage::BoxRepositoryFactory;
 use tokio_util::{sync::CancellationToken, task::TaskTracker};
 use ulid::Ulid;
 

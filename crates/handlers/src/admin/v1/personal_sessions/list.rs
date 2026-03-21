@@ -7,7 +7,7 @@ use axum_macros::FromRequestParts;
 use chrono::{DateTime, Utc};
 use hyper::StatusCode;
 use mas_axum_utils::record_error;
-use mas_storage::personal::PersonalSessionFilter;
+use pasion_storage::personal::PersonalSessionFilter;
 use oauth2_types::scope::{Scope, ScopeToken};
 use schemars::JsonSchema;
 use serde::Deserialize;
@@ -149,7 +149,7 @@ pub enum RouteError {
     InvalidScope(String),
 }
 
-impl_from_error_for_route!(mas_storage::RepositoryError);
+impl_from_error_for_route!(pasion_storage::RepositoryError);
 impl_from_error_for_route!(InconsistentPersonalSession);
 
 impl IntoResponse for RouteError {
@@ -175,11 +175,11 @@ Use the `filter[status]` parameter to filter the sessions by their status and `p
         .tag("personal-session")
         .response_with::<200, Json<PaginatedResponse<PersonalSession>>, _>(|t| {
             let sessions = PersonalSession::samples();
-            let pagination = mas_storage::Pagination::first(sessions.len());
-            let page = mas_storage::Page {
+            let pagination = pasion_storage::Pagination::first(sessions.len());
+            let page = pasion_storage::Page {
                 edges: sessions
                     .into_iter()
-                    .map(|node| mas_storage::pagination::Edge {
+                    .map(|node| pasion_storage::pagination::Edge {
                         cursor: node.id(),
                         node,
                     })
@@ -337,13 +337,13 @@ mod tests {
     use chrono::Duration;
     use hyper::{Request, StatusCode};
     use insta::assert_json_snapshot;
-    use mas_data_model::personal::session::PersonalSessionOwner;
+    use pasion_data_model::personal::session::PersonalSessionOwner;
     use oauth2_types::scope::{OPENID, Scope};
     use sqlx::PgPool;
 
     use crate::test_utils::{RequestBuilderExt, ResponseExt, TestState, setup};
 
-    #[sqlx::test(migrator = "mas_storage_pg::MIGRATOR")]
+    #[sqlx::test(migrator = "pasion_storage_pg::MIGRATOR")]
     async fn test_list(pool: PgPool) {
         setup();
         let mut state = TestState::from_pool(pool).await.unwrap();

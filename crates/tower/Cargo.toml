@@ -1,6 +1,6 @@
 [package]
-name = "mas-tower"
-description = "Tower layers used by the Palpo Authentication Service"
+name = "pasion-tower"
+description = "Tower layers used by the Pasion"
 version.workspace = true
 authors.workspace = true
 edition.workspace = true

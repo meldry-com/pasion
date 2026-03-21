@@ -5,7 +5,7 @@ use std::borrow::Cow;
 use anyhow::bail;
 use camino::Utf8PathBuf;
 use ipnetwork::IpNetwork;
-use mas_keystore::PrivateKey;
+use pasion_keystore::PrivateKey;
 use rustls_pki_types::{CertificateDer, PrivateKeyDer, PrivatePkcs8KeyDer, pem::PemObject};
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
@@ -24,7 +24,7 @@ fn http_listener_assets_path_default() -> Utf8PathBuf {
 
 #[cfg(feature = "docker")]
 fn http_listener_assets_path_default() -> Utf8PathBuf {
-    "/usr/local/share/mas-cli/assets/".into()
+    "/usr/local/share/pasion-cli/assets/".into()
 }
 
 #[cfg(feature = "dist")]

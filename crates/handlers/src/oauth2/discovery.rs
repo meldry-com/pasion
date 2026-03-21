@@ -1,11 +1,11 @@
-use mas_data_model::SiteConfig;
-use mas_iana::oauth::{
+use pasion_data_model::SiteConfig;
+use pasion_iana::oauth::{
     OAuthAuthorizationEndpointResponseType, OAuthClientAuthenticationMethod,
     PkceCodeChallengeMethod,
 };
-use mas_jose::jwa::SUPPORTED_SIGNING_ALGORITHMS;
-use mas_keystore::Keystore;
-use mas_router::UrlBuilder;
+use pasion_jose::jwa::SUPPORTED_SIGNING_ALGORITHMS;
+use pasion_keystore::Keystore;
+use pasion_router::UrlBuilder;
 use oauth2_types::{
     oidc::{ClaimType, ProviderMetadata, SubjectType},
     requests::{Display, GrantType, Prompt, ResponseMode},
@@ -19,7 +19,7 @@ struct DiscoveryResponse {
     #[serde(flatten)]
     standard: ProviderMetadata,
 
-    #[serde(rename = "org.matrix.palpo-auth-service.graphql_endpoint")]
+    #[serde(rename = "org.matrix.pasion.graphql_endpoint")]
     graphql_endpoint: url::Url,
 
     // As per MSC2965
@@ -49,7 +49,7 @@ pub async fn get(depot: &Depot) -> Json<DiscoveryResponse> {
         OAuthClientAuthenticationMethod::None,
     ]);
 
-    // Those are the algorithms supported by `mas-jose`
+    // Those are the algorithms supported by `pasion-jose`
     let client_auth_signing_alg_values_supported = Some(SUPPORTED_SIGNING_ALGORITHMS.to_vec());
 
     // This is how we can sign stuff

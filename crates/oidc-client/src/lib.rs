@@ -1,6 +1,6 @@
 //! An [OpenID Connect] client library for the [Matrix] specification.
 //!
-//! This is part of the [Palpo Authentication Service] project.
+//! This is part of the [Pasion] project.
 //!
 //! # Scope
 //!
@@ -30,7 +30,7 @@
 //!
 //! [OpenID Connect]: https://openid.net/connect/
 //! [Matrix]: https://matrix.org/
-//! [Palpo Authentication Service]: https://github.com/palpo-im/palpo-auth-service
+//! [Pasion]: https://github.com/palpo-im/pasion
 //! [MSC3861]: https://github.com/matrix-org/matrix-spec-proposals/pull/3861
 //! [OAuth 2.0]: https://oauth.net/2/
 
@@ -44,7 +44,7 @@ pub mod types;
 use std::fmt;
 
 #[doc(inline)]
-pub use mas_jose as jose;
+pub use pasion_jose as jose;
 
 // Wrapper around `String` that cannot be used in a meaningful way outside of
 // this crate. Used for string enums that only allow certain characters because

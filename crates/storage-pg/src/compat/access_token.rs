@@ -1,7 +1,7 @@
 use async_trait::async_trait;
 use chrono::{DateTime, Duration, Utc};
-use mas_data_model::{Clock, CompatAccessToken, CompatSession};
-use mas_storage::compat::CompatAccessTokenRepository;
+use pasion_data_model::{Clock, CompatAccessToken, CompatSession};
+use pasion_storage::compat::CompatAccessTokenRepository;
 use rand::RngCore;
 use sqlx::PgConnection;
 use ulid::Ulid;

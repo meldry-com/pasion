@@ -1,19 +1,19 @@
 use std::collections::HashMap;
 
 use chrono::Duration;
-use mas_data_model::{
+use pasion_data_model::{
     AccessToken, Authentication, AuthorizationGrant, BrowserSession, Client, Clock, RefreshToken,
     Session, TokenType,
 };
-use mas_iana::jose::JsonWebSignatureAlg;
-use mas_jose::{
+use pasion_iana::jose::JsonWebSignatureAlg;
+use pasion_jose::{
     claims::{self, hash_token},
     constraints::Constrainable,
     jwt::{JsonWebSignatureHeader, Jwt},
 };
-use mas_keystore::Keystore;
-use mas_router::UrlBuilder;
-use mas_storage::RepositoryAccess;
+use pasion_keystore::Keystore;
+use pasion_router::UrlBuilder;
+use pasion_storage::RepositoryAccess;
 use thiserror::Error;
 
 pub mod authorization;
@@ -32,10 +32,10 @@ pub mod webfinger;
 pub(crate) enum IdTokenSignatureError {
     #[error("The signing key is invalid")]
     InvalidSigningKey,
-    Claim(#[from] mas_jose::claims::ClaimError),
-    JwtSignature(#[from] mas_jose::jwt::JwtSignatureError),
-    WrongAlgorithm(#[from] mas_keystore::WrongAlgorithmError),
-    TokenHash(#[from] mas_jose::claims::TokenHashError),
+    Claim(#[from] pasion_jose::claims::ClaimError),
+    JwtSignature(#[from] pasion_jose::jwt::JwtSignatureError),
+    WrongAlgorithm(#[from] pasion_keystore::WrongAlgorithmError),
+    TokenHash(#[from] pasion_jose::claims::TokenHashError),
 }
 
 pub(crate) fn generate_id_token(

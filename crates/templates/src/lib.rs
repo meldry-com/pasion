@@ -11,9 +11,9 @@ use std::{
 use anyhow::Context as _;
 use arc_swap::ArcSwap;
 use camino::{Utf8Path, Utf8PathBuf};
-use mas_i18n::Translator;
-use mas_router::UrlBuilder;
-use mas_spa::ViteManifest;
+use pasion_i18n::Translator;
+use pasion_router::UrlBuilder;
+use pasion_spa::ViteManifest;
 use minijinja::{UndefinedBehavior, Value};
 use rand::Rng;
 use serde::Serialize;
@@ -92,7 +92,7 @@ pub enum TemplateLoadingError {
 
     /// Failed to load the translations
     #[error("failed to load the translations")]
-    Translations(#[from] mas_i18n::LoadError),
+    Translations(#[from] pasion_i18n::LoadError),
 
     /// Failed to traverse the filesystem
     #[error("failed to traverse the filesystem")]

@@ -5,13 +5,13 @@ use axum_extra::typed_header::TypedHeader;
 use chrono::Duration;
 use hyper::StatusCode;
 use mas_axum_utils::record_error;
-use mas_data_model::{
+use pasion_data_model::{
     BoxClock, BoxRng, Clock, CompatSession, CompatSsoLoginState, Device, SiteConfig, TokenType,
     User,
 };
-use mas_matrix::HomeserverConnection;
-use mas_policy::{Policy, Requester, ViolationCode, model::CompatLogin};
-use mas_storage::{
+use pasion_matrix::HomeserverConnection;
+use pasion_policy::{Policy, Requester, ViolationCode, model::CompatLogin};
+use pasion_storage::{
     BoxRepository, BoxRepositoryFactory, RepositoryAccess,
     compat::{
         CompatAccessTokenRepository, CompatRefreshTokenRepository, CompatSessionRepository,
@@ -217,8 +217,8 @@ pub enum RouteError {
     PolicyHardSessionLimitReached,
 }
 
-impl_from_error_for_route!(mas_storage::RepositoryError);
-impl_from_error_for_route!(mas_policy::EvaluationError);
+impl_from_error_for_route!(pasion_storage::RepositoryError);
+impl_from_error_for_route!(pasion_policy::EvaluationError);
 
 impl From<anyhow::Error> for RouteError {
     fn from(err: anyhow::Error) -> Self {
@@ -578,7 +578,7 @@ async fn token_login(
     let session_counts = count_user_sessions_for_limiting(repo, &browser_session.user).await?;
 
     let res = policy
-        .evaluate_compat_login(mas_policy::CompatLoginInput {
+        .evaluate_compat_login(pasion_policy::CompatLoginInput {
             user: &browser_session.user,
             login: CompatLogin::Token,
             session_replaced,
@@ -711,7 +711,7 @@ async fn user_password_login(
     let session_counts = count_user_sessions_for_limiting(repo, &user).await?;
 
     let res = policy
-        .evaluate_compat_login(mas_policy::CompatLoginInput {
+        .evaluate_compat_login(pasion_policy::CompatLoginInput {
             user: &user,
             login: CompatLogin::Password,
             session_replaced,
@@ -754,7 +754,7 @@ async fn user_password_login(
 #[cfg(test)]
 mod tests {
     use hyper::Request;
-    use mas_matrix::{HomeserverConnection, ProvisionRequest};
+    use pasion_matrix::{HomeserverConnection, ProvisionRequest};
     use rand::distributions::{Alphanumeric, DistString};
     use sqlx::PgPool;
 
@@ -762,7 +762,7 @@ mod tests {
     use crate::test_utils::{RequestBuilderExt, ResponseExt, TestState, setup, test_site_config};
 
     /// Test that the server advertises the right login flows.
-    #[sqlx::test(migrator = "mas_storage_pg::MIGRATOR")]
+    #[sqlx::test(migrator = "pasion_storage_pg::MIGRATOR")]
     async fn test_get_login(pool: PgPool) {
         setup();
         let state = TestState::from_pool(pool).await.unwrap();
@@ -792,7 +792,7 @@ mod tests {
     }
 
     /// Test the cases where the body is invalid
-    #[sqlx::test(migrator = "mas_storage_pg::MIGRATOR")]
+    #[sqlx::test(migrator = "pasion_storage_pg::MIGRATOR")]
     async fn test_bad_body(pool: PgPool) {
         setup();
         let state = TestState::from_pool(pool).await.unwrap();
@@ -842,7 +842,7 @@ mod tests {
 
     /// Test that the server doesn't allow login with a password if the password
     /// manager is disabled
-    #[sqlx::test(migrator = "mas_storage_pg::MIGRATOR")]
+    #[sqlx::test(migrator = "pasion_storage_pg::MIGRATOR")]
     async fn test_password_disabled(pool: PgPool) {
         setup();
         let state = TestState::from_pool_with_site_config(
@@ -938,7 +938,7 @@ mod tests {
 
     /// Test that a user can login with a password using the Matrix
     /// compatibility API.
-    #[sqlx::test(migrator = "mas_storage_pg::MIGRATOR")]
+    #[sqlx::test(migrator = "pasion_storage_pg::MIGRATOR")]
     async fn test_user_password_login(pool: PgPool) {
         setup();
         let state = TestState::from_pool(pool).await.unwrap();
@@ -1110,7 +1110,7 @@ mod tests {
     }
 
     /// Test that we can send a login request without a Content-Type header
-    #[sqlx::test(migrator = "mas_storage_pg::MIGRATOR")]
+    #[sqlx::test(migrator = "pasion_storage_pg::MIGRATOR")]
     async fn test_no_content_type(pool: PgPool) {
         setup();
         let state = TestState::from_pool(pool).await.unwrap();
@@ -1142,7 +1142,7 @@ mod tests {
 
     /// Test that a user can login with a password using the Matrix
     /// compatibility API, using a MXID as identifier
-    #[sqlx::test(migrator = "mas_storage_pg::MIGRATOR")]
+    #[sqlx::test(migrator = "pasion_storage_pg::MIGRATOR")]
     async fn test_user_password_login_mxid(pool: PgPool) {
         setup();
         let state = TestState::from_pool(pool).await.unwrap();
@@ -1208,7 +1208,7 @@ mod tests {
     }
 
     /// Test that password logins are rate limited.
-    #[sqlx::test(migrator = "mas_storage_pg::MIGRATOR")]
+    #[sqlx::test(migrator = "pasion_storage_pg::MIGRATOR")]
     async fn test_password_login_rate_limit(pool: PgPool) {
         setup();
         let state = TestState::from_pool(pool).await.unwrap();
@@ -1262,7 +1262,7 @@ mod tests {
     }
 
     /// Test the response of an unsupported password identifier.
-    #[sqlx::test(migrator = "mas_storage_pg::MIGRATOR")]
+    #[sqlx::test(migrator = "pasion_storage_pg::MIGRATOR")]
     async fn test_unsupported_login_identifier(pool: PgPool) {
         setup();
         let state = TestState::from_pool(pool).await.unwrap();
@@ -1289,7 +1289,7 @@ mod tests {
     }
 
     /// Test the response of an unsupported login flow.
-    #[sqlx::test(migrator = "mas_storage_pg::MIGRATOR")]
+    #[sqlx::test(migrator = "pasion_storage_pg::MIGRATOR")]
     async fn test_unsupported_login(pool: PgPool) {
         setup();
         let state = TestState::from_pool(pool).await.unwrap();
@@ -1311,7 +1311,7 @@ mod tests {
     }
 
     /// Test `m.login.token` login flow.
-    #[sqlx::test(migrator = "mas_storage_pg::MIGRATOR")]
+    #[sqlx::test(migrator = "pasion_storage_pg::MIGRATOR")]
     async fn test_login_token_login(pool: PgPool) {
         setup();
         let state = TestState::from_pool(pool).await.unwrap();

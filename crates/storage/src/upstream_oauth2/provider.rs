@@ -1,13 +1,13 @@
 use std::marker::PhantomData;
 
 use async_trait::async_trait;
-use mas_data_model::{
+use pasion_data_model::{
     Clock, UpstreamOAuthProvider, UpstreamOAuthProviderClaimsImports,
     UpstreamOAuthProviderDiscoveryMode, UpstreamOAuthProviderOnBackchannelLogout,
     UpstreamOAuthProviderPkceMode, UpstreamOAuthProviderResponseMode,
     UpstreamOAuthProviderTokenAuthMethod,
 };
-use mas_iana::jose::JsonWebSignatureAlg;
+use pasion_iana::jose::JsonWebSignatureAlg;
 use oauth2_types::scope::Scope;
 use rand_core::RngCore;
 use ulid::Ulid;

@@ -2,8 +2,8 @@ use axum::{Json, extract::State, response::IntoResponse};
 use chrono::Duration;
 use hyper::StatusCode;
 use mas_axum_utils::record_error;
-use mas_data_model::{BoxClock, BoxRng, Clock, SiteConfig, TokenFormatError, TokenType};
-use mas_storage::{
+use pasion_data_model::{BoxClock, BoxRng, Clock, SiteConfig, TokenFormatError, TokenType};
+use pasion_storage::{
     BoxRepository,
     compat::{CompatAccessTokenRepository, CompatRefreshTokenRepository, CompatSessionRepository},
 };
@@ -68,7 +68,7 @@ impl IntoResponse for RouteError {
     }
 }
 
-impl_from_error_for_route!(mas_storage::RepositoryError);
+impl_from_error_for_route!(pasion_storage::RepositoryError);
 
 #[serde_as]
 #[derive(Debug, Serialize)]

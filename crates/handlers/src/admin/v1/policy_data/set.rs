@@ -4,8 +4,8 @@ use aide::{NoApi, OperationIo, transform::TransformOperation};
 use axum::{Json, extract::State, response::IntoResponse};
 use hyper::StatusCode;
 use mas_axum_utils::record_error;
-use mas_data_model::BoxRng;
-use mas_policy::PolicyFactory;
+use pasion_data_model::BoxRng;
+use pasion_policy::PolicyFactory;
 use schemars::JsonSchema;
 use serde::Deserialize;
 
@@ -22,13 +22,13 @@ use crate::{
 #[aide(output_with = "Json<ErrorResponse>")]
 pub enum RouteError {
     #[error("Failed to instanciate policy with the provided data")]
-    InvalidPolicyData(#[from] mas_policy::LoadError),
+    InvalidPolicyData(#[from] pasion_policy::LoadError),
 
     #[error(transparent)]
     Internal(Box<dyn std::error::Error + Send + Sync + 'static>),
 }
 
-impl_from_error_for_route!(mas_storage::RepositoryError);
+impl_from_error_for_route!(pasion_storage::RepositoryError);
 
 impl IntoResponse for RouteError {
     fn into_response(self) -> axum::response::Response {
@@ -71,7 +71,7 @@ pub fn doc(operation: TransformOperation) -> TransformOperation {
         })
         .response_with::<400, Json<ErrorResponse>, _>(|t| {
             let error = ErrorResponse::from_error(&RouteError::InvalidPolicyData(
-                mas_policy::LoadError::invalid_data_example(),
+                pasion_policy::LoadError::invalid_data_example(),
             ));
             t.description("Invalid policy data").example(error)
         })
@@ -110,7 +110,7 @@ mod tests {
 
     use crate::test_utils::{RequestBuilderExt, ResponseExt, TestState, setup};
 
-    #[sqlx::test(migrator = "mas_storage_pg::MIGRATOR")]
+    #[sqlx::test(migrator = "pasion_storage_pg::MIGRATOR")]
     async fn test_create(pool: PgPool) {
         setup();
         let mut state = TestState::from_pool(pool).await.unwrap();

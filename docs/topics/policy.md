@@ -8,7 +8,7 @@ A decision of the policy engine is deterministically made based on three compone
  - The action to be performed
 
 The policy is a [Open Policy Agent (OPA)](https://www.openpolicyagent.org/) policy compiled into WebAssembly.
-Palpo Authentication Service ships with a default policy which should be sufficient for most deployments.
+Pasion ships with a default policy which should be sufficient for most deployments.
 It can be replaced with a custom policy if needed, which can be useful to implement custom authorization logic without recompiling the service.
 
 ## Actions
@@ -68,7 +68,7 @@ This is especially important as in the future it will make it possible to implem
 To understand the authorization process and how sessions are created, refer to the [authorization and sessions](./authorization.md) section.
 
 
-[`register.rego`]: https://github.com/palpo-im/palpo-auth-service/blob/main/policies/register/register.rego 
-[`email.rego`]: https://github.com/palpo-im/palpo-auth-service/blob/main/policies/email/email.rego 
-[`client_registration.rego`]: https://github.com/palpo-im/palpo-auth-service/blob/main/policies/client_registration/client_registration.rego 
-[`authorization_grant.rego`]: https://github.com/palpo-im/palpo-auth-service/blob/main/policies/authorization_grant/authorization_grant.rego
+[`register.rego`]: https://github.com/palpo-im/pasion/blob/main/policies/register/register.rego 
+[`email.rego`]: https://github.com/palpo-im/pasion/blob/main/policies/email/email.rego 
+[`client_registration.rego`]: https://github.com/palpo-im/pasion/blob/main/policies/client_registration/client_registration.rego 
+[`authorization_grant.rego`]: https://github.com/palpo-im/pasion/blob/main/policies/authorization_grant/authorization_grant.rego

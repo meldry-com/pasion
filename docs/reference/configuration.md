@@ -157,7 +157,7 @@ templates:
   assets_manifest: /to/manifest.json
 
   # From where to load the translation files
-  # Default in Docker distribution: `/usr/local/share/mas-cli/translations/`
+  # Default in Docker distribution: `/usr/local/share/pasion-cli/translations/`
   # Default in pre-built binaries: `./share/translations/`
   # Default in locally-built binaries: `./translations/`
   translations_path: /to/translations
@@ -393,7 +393,7 @@ Policy settings
 ```yaml
 policy:
   # Path to the WASM module
-  # Default in Docker distribution: `/usr/local/share/mas-cli/policy.wasm`
+  # Default in Docker distribution: `/usr/local/share/pasion-cli/policy.wasm`
   # Default in pre-built binaries: `./share/policy.wasm`
   # Default in locally-built binaries: `./policies/policy.wasm`
   wasm_module: ./policies/policy.wasm

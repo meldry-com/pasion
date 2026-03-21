@@ -5,9 +5,9 @@ use aide::axum::{
     routing::{get_with, post_with},
 };
 use axum::extract::{FromRef, FromRequestParts};
-use mas_data_model::{AppVersion, BoxRng, SiteConfig};
-use mas_matrix::HomeserverConnection;
-use mas_policy::PolicyFactory;
+use pasion_data_model::{AppVersion, BoxRng, SiteConfig};
+use pasion_matrix::HomeserverConnection;
+use pasion_policy::PolicyFactory;
 
 use super::call_context::CallContext;
 use crate::passwords::PasswordManager;

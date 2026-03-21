@@ -1,7 +1,7 @@
 use std::net::IpAddr;
 
 use async_trait::async_trait;
-use mas_data_model::{
+use pasion_data_model::{
     Clock, UpstreamOAuthAuthorizationSession, UserEmailAuthentication, UserRegistration,
     UserRegistrationToken,
 };

@@ -2,7 +2,7 @@ use async_graphql::{
     Context, ID, Object,
     connection::{Connection, Edge, OpaqueCursor, query},
 };
-use mas_storage::{Pagination, RepositoryAccess, upstream_oauth2::UpstreamOAuthProviderFilter};
+use pasion_storage::{Pagination, RepositoryAccess, upstream_oauth2::UpstreamOAuthProviderFilter};
 
 use crate::graphql::{
     model::{

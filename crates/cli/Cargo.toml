@@ -1,5 +1,5 @@
 [package]
-name = "mas-cli"
+name = "pasion-cli"
 version.workspace = true
 authors.workspace = true
 edition.workspace = true
@@ -62,24 +62,24 @@ opentelemetry_sdk.workspace = true
 sentry.workspace = true
 sentry-tracing.workspace = true
 
-mas-config.workspace = true
-mas-context.workspace = true
-mas-data-model.workspace = true
-mas-email.workspace = true
-mas-handlers.workspace = true
-mas-http.workspace = true
-mas-i18n.workspace = true
-mas-keystore.workspace = true
-mas-listener.workspace = true
-mas-matrix.workspace = true
-mas-matrix-palpo.workspace = true
-mas-policy.workspace = true
-mas-router.workspace = true
-mas-storage.workspace = true
-mas-storage-pg.workspace = true
-mas-tasks.workspace = true
-mas-templates.workspace = true
-mas-tower.workspace = true
+pasion-config.workspace = true
+pasion-context.workspace = true
+pasion-data-model.workspace = true
+pasion-email.workspace = true
+pasion-handlers.workspace = true
+pasion-http.workspace = true
+pasion-i18n.workspace = true
+pasion-keystore.workspace = true
+pasion-listener.workspace = true
+pasion-matrix.workspace = true
+pasion-matrix-palpo.workspace = true
+pasion-policy.workspace = true
+pasion-router.workspace = true
+pasion-storage.workspace = true
+pasion-storage-pg.workspace = true
+pasion-tasks.workspace = true
+pasion-templates.workspace = true
+pasion-tower.workspace = true
 
 syn2mas.workspace = true
 
@@ -89,7 +89,7 @@ vergen-gitcl.workspace = true
 
 [features]
 # Features used for the prebuilt binaries
-dist = ["mas-config/dist"]
+dist = ["pasion-config/dist"]
 
 # Features used in the Docker image
-docker = ["mas-config/docker"]
+docker = ["pasion-config/docker"]

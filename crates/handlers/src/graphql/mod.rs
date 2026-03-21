@@ -11,16 +11,16 @@ use chrono::{DateTime, Utc};
 use futures_util::TryStreamExt;
 use headers::{authorization::Bearer, Authorization, ContentType, HeaderValue};
 use http::header::CACHE_CONTROL;
-use mas_data_model::{
+use pasion_data_model::{
     BoxClock, BoxRng, BrowserSession, Clock, Session, SiteConfig, SystemClock, User,
 };
-use mas_matrix::HomeserverConnection;
-use mas_policy::{InstantiateError, Policy, PolicyFactory};
-use mas_router::UrlBuilder;
-use mas_salvo_utils::{
+use pasion_matrix::HomeserverConnection;
+use pasion_policy::{InstantiateError, Policy, PolicyFactory};
+use pasion_router::UrlBuilder;
+use pasion_salvo_utils::{
     InternalError, SessionInfo, SessionInfoExt, cookies::CookieJar, sentry::SentryEventID,
 };
-use mas_storage::{BoxRepository, BoxRepositoryFactory, RepositoryError};
+use pasion_storage::{BoxRepository, BoxRepositoryFactory, RepositoryError};
 use opentelemetry_semantic_conventions::trace::{GRAPHQL_DOCUMENT, GRAPHQL_OPERATION_NAME};
 use rand::{SeedableRng, thread_rng};
 use rand_chacha::ChaChaRng;
@@ -168,7 +168,7 @@ pub enum RouteError {
     ParseRequest(#[from] async_graphql::ParseRequestError),
 }
 
-impl_from_error_for_route!(mas_storage::RepositoryError);
+impl_from_error_for_route!(pasion_storage::RepositoryError);
 
 impl Scribe for RouteError {
     fn render(self, res: &mut Response) {
@@ -360,8 +360,8 @@ impl Requester {
         }
     }
 
-    pub fn for_policy(&self) -> mas_policy::Requester {
-        mas_policy::Requester {
+    pub fn for_policy(&self) -> pasion_policy::Requester {
+        pasion_policy::Requester {
             ip_address: self.ip_address,
             user_agent: self.user_agent.clone(),
         }
@@ -406,7 +406,7 @@ impl OwnerId for BrowserSession {
     }
 }
 
-impl OwnerId for mas_data_model::UserEmail {
+impl OwnerId for pasion_data_model::UserEmail {
     fn owner_id(&self) -> Option<Ulid> {
         Some(self.user_id)
     }
@@ -418,13 +418,13 @@ impl OwnerId for Session {
     }
 }
 
-impl OwnerId for mas_data_model::CompatSession {
+impl OwnerId for pasion_data_model::CompatSession {
     fn owner_id(&self) -> Option<Ulid> {
         Some(self.user_id)
     }
 }
 
-impl OwnerId for mas_data_model::UpstreamOAuthLink {
+impl OwnerId for pasion_data_model::UpstreamOAuthLink {
     fn owner_id(&self) -> Option<Ulid> {
         self.user_id
     }

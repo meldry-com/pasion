@@ -1,6 +1,6 @@
 use anyhow::Context as _;
 use async_graphql::{Context, Enum, ID, InputObject, Object};
-use mas_storage::{
+use pasion_storage::{
     RepositoryAccess,
     compat::CompatSessionRepository,
     queue::{QueueJobRepositoryExt as _, SyncDevicesJob},
@@ -26,7 +26,7 @@ pub struct EndCompatSessionInput {
 /// The payload of the `endCompatSession` mutation.
 pub enum EndCompatSessionPayload {
     NotFound,
-    Ended(Box<mas_data_model::CompatSession>),
+    Ended(Box<pasion_data_model::CompatSession>),
 }
 
 /// The status of the `endCompatSession` mutation.
@@ -74,7 +74,7 @@ pub enum SetCompatSessionNamePayload {
     NotFound,
 
     /// The session was updated.
-    Updated(mas_data_model::CompatSession),
+    Updated(pasion_data_model::CompatSession),
 }
 
 /// The status of the `setCompatSessionName` mutation.

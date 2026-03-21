@@ -1,6 +1,6 @@
 //! Utilities to manage paginated queries.
 
-use mas_storage::{Pagination, pagination::PaginationDirection};
+use pasion_storage::{Pagination, pagination::PaginationDirection};
 use sea_query::IntoColumnRef;
 use uuid::Uuid;
 

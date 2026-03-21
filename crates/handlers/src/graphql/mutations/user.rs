@@ -1,6 +1,6 @@
 use anyhow::Context as _;
 use async_graphql::{Context, Description, Enum, ID, InputObject, Object};
-use mas_storage::{
+use pasion_storage::{
     queue::{
         DeactivateUserJob, ProvisionUserJob, QueueJobRepositoryExt as _,
         SendAccountRecoveryEmailsJob,
@@ -57,8 +57,8 @@ enum AddUserStatus {
 /// The payload for the `addUser` mutation.
 #[derive(Description)]
 enum AddUserPayload {
-    Added(mas_data_model::User),
-    Exists(mas_data_model::User),
+    Added(pasion_data_model::User),
+    Exists(pasion_data_model::User),
     Reserved,
     Invalid,
 }
@@ -108,7 +108,7 @@ enum LockUserStatus {
 #[derive(Description)]
 enum LockUserPayload {
     /// The user was locked.
-    Locked(mas_data_model::User),
+    Locked(pasion_data_model::User),
 
     /// The user was not found.
     NotFound,
@@ -154,7 +154,7 @@ enum UnlockUserStatus {
 #[derive(Description)]
 enum UnlockUserPayload {
     /// The user was unlocked.
-    Unlocked(mas_data_model::User),
+    Unlocked(pasion_data_model::User),
 
     /// The user was not found.
     NotFound,
@@ -193,7 +193,7 @@ struct SetCanRequestAdminInput {
 #[derive(Description)]
 enum SetCanRequestAdminPayload {
     /// The user was updated.
-    Updated(mas_data_model::User),
+    Updated(pasion_data_model::User),
 
     /// The user was not found.
     NotFound,
@@ -221,7 +221,7 @@ struct AllowUserCrossSigningResetInput {
 #[derive(Description)]
 enum AllowUserCrossSigningResetPayload {
     /// The user was updated.
-    Allowed(mas_data_model::User),
+    Allowed(pasion_data_model::User),
 
     /// The user was not found.
     NotFound,
@@ -371,7 +371,7 @@ impl ResendRecoveryEmailPayload {
             Self::Sent {
                 recovery_session_id,
             } => {
-                let route = mas_router::AccountRecoveryProgress::new(*recovery_session_id);
+                let route = pasion_router::AccountRecoveryProgress::new(*recovery_session_id);
                 Some(url_builder.absolute_url_for(&route))
             }
         }
@@ -399,7 +399,7 @@ pub struct DeactivateUserInput {
 #[derive(Description)]
 pub enum DeactivateUserPayload {
     /// The user was deactivated.
-    Deactivated(mas_data_model::User),
+    Deactivated(pasion_data_model::User),
 
     /// The password was wrong or missing.
     IncorrectPassword,

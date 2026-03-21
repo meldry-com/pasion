@@ -1,21 +1,21 @@
 use std::{sync::Arc, time::Duration};
 
 use anyhow::Context;
-use mas_config::{
+use pasion_config::{
     AccountConfig, BrandingConfig, CaptchaConfig, DatabaseConfig, EmailConfig, EmailSmtpMode,
     EmailTransportKind, ExperimentalConfig, HomeserverKind, MatrixConfig, PasswordsConfig,
     PolicyConfig, TemplatesConfig,
 };
-use mas_context::LogContext;
-use mas_data_model::{SessionExpirationConfig, SessionLimitConfig, SiteConfig};
-use mas_email::{MailTransport, Mailer};
-use mas_handlers::passwords::PasswordManager;
-use mas_matrix::{HomeserverConnection, ReadOnlyHomeserverConnection};
-use mas_matrix_palpo::PalpoConnection;
-use mas_policy::PolicyFactory;
-use mas_router::UrlBuilder;
-use mas_storage::{BoxRepositoryFactory, RepositoryAccess, RepositoryFactory};
-use mas_templates::{SiteConfigExt, Templates};
+use pasion_context::LogContext;
+use pasion_data_model::{SessionExpirationConfig, SessionLimitConfig, SiteConfig};
+use pasion_email::{MailTransport, Mailer};
+use pasion_handlers::passwords::PasswordManager;
+use pasion_matrix::{HomeserverConnection, ReadOnlyHomeserverConnection};
+use pasion_matrix_palpo::PalpoConnection;
+use pasion_policy::PolicyFactory;
+use pasion_router::UrlBuilder;
+use pasion_storage::{BoxRepositoryFactory, RepositoryAccess, RepositoryFactory};
+use pasion_templates::{SiteConfigExt, Templates};
 use sqlx::{
     ConnectOptions, Executor, PgConnection, PgPool,
     postgres::{PgConnectOptions, PgPoolOptions},
@@ -32,15 +32,15 @@ pub async fn password_manager_from_config(
 
     let schemes = config.load().await?.into_iter().map(
         |(version, algorithm, cost, secret, unicode_normalization)| {
-            use mas_handlers::passwords::Hasher;
+            use pasion_handlers::passwords::Hasher;
             let hasher = match algorithm {
-                mas_config::PasswordAlgorithm::Pbkdf2 => {
+                pasion_config::PasswordAlgorithm::Pbkdf2 => {
                     Hasher::pbkdf2(secret, unicode_normalization)
                 }
-                mas_config::PasswordAlgorithm::Bcrypt => {
+                pasion_config::PasswordAlgorithm::Bcrypt => {
                     Hasher::bcrypt(cost, secret, unicode_normalization)
                 }
-                mas_config::PasswordAlgorithm::Argon2id => {
+                pasion_config::PasswordAlgorithm::Argon2id => {
                     Hasher::argon2id(secret, unicode_normalization)
                 }
             };
@@ -77,7 +77,7 @@ pub fn mailer_from_config(
                 .context("invalid email configuration: missing mode")?;
 
             let credentials = match (config.username(), config.password()) {
-                (Some(username), Some(password)) => Some(mas_email::SmtpCredentials::new(
+                (Some(username), Some(password)) => Some(pasion_email::SmtpCredentials::new(
                     username.to_owned(),
                     password.to_owned(),
                 )),
@@ -88,9 +88,9 @@ pub fn mailer_from_config(
             };
 
             let mode = match mode {
-                EmailSmtpMode::Plain => mas_email::SmtpMode::Plain,
-                EmailSmtpMode::StartTls => mas_email::SmtpMode::StartTls,
-                EmailSmtpMode::Tls => mas_email::SmtpMode::Tls,
+                EmailSmtpMode::Plain => pasion_email::SmtpMode::Plain,
+                EmailSmtpMode::StartTls => pasion_email::SmtpMode::StartTls,
+                EmailSmtpMode::Tls => pasion_email::SmtpMode::Tls,
             };
 
             MailTransport::smtp(mode, hostname, config.port(), credentials)
@@ -135,7 +135,7 @@ pub async fn policy_factory_from_config(
         .await
         .context("failed to open OPA WASM policy file")?;
 
-    let entrypoints = mas_policy::Entrypoints {
+    let entrypoints = pasion_policy::Entrypoints {
         register: config.register_entrypoint.clone(),
         client_registration: config.client_registration_entrypoint.clone(),
         authorization_grant: config.authorization_grant_entrypoint.clone(),
@@ -152,7 +152,7 @@ pub async fn policy_factory_from_config(
                 hard_limit: c.hard_limit,
             });
 
-    let data = mas_policy::Data::new(matrix_config.homeserver.clone(), session_limit_config)
+    let data = pasion_policy::Data::new(matrix_config.homeserver.clone(), session_limit_config)
         .with_rest(config.data.clone());
 
     PolicyFactory::load(policy_file, data, entrypoints)
@@ -162,20 +162,20 @@ pub async fn policy_factory_from_config(
 
 pub fn captcha_config_from_config(
     captcha_config: &CaptchaConfig,
-) -> Result<Option<mas_data_model::CaptchaConfig>, anyhow::Error> {
+) -> Result<Option<pasion_data_model::CaptchaConfig>, anyhow::Error> {
     let Some(service) = captcha_config.service else {
         return Ok(None);
     };
 
     let service = match service {
-        mas_config::CaptchaServiceKind::RecaptchaV2 => mas_data_model::CaptchaService::RecaptchaV2,
-        mas_config::CaptchaServiceKind::CloudflareTurnstile => {
-            mas_data_model::CaptchaService::CloudflareTurnstile
+        pasion_config::CaptchaServiceKind::RecaptchaV2 => pasion_data_model::CaptchaService::RecaptchaV2,
+        pasion_config::CaptchaServiceKind::CloudflareTurnstile => {
+            pasion_data_model::CaptchaService::CloudflareTurnstile
         }
-        mas_config::CaptchaServiceKind::HCaptcha => mas_data_model::CaptchaService::HCaptcha,
+        pasion_config::CaptchaServiceKind::HCaptcha => pasion_data_model::CaptchaService::HCaptcha,
     };
 
-    Ok(Some(mas_data_model::CaptchaConfig {
+    Ok(Some(pasion_data_model::CaptchaConfig {
         service,
         site_key: captcha_config
             .site_key
@@ -268,7 +268,7 @@ fn database_connect_options_from_config(
         uri.parse()
             .context("could not parse database connection string")?
     } else {
-        let mut opts = PgConnectOptions::new().application_name("palpo-auth-service");
+        let mut opts = PgConnectOptions::new().application_name("pasion");
 
         if let Some(host) = config.host.as_deref() {
             opts = opts.host(host);
@@ -334,12 +334,12 @@ fn database_connect_options_from_config(
     let options = match &config.ssl_mode {
         Some(ssl_mode) => {
             let ssl_mode = match ssl_mode {
-                mas_config::PgSslMode::Disable => sqlx::postgres::PgSslMode::Disable,
-                mas_config::PgSslMode::Allow => sqlx::postgres::PgSslMode::Allow,
-                mas_config::PgSslMode::Prefer => sqlx::postgres::PgSslMode::Prefer,
-                mas_config::PgSslMode::Require => sqlx::postgres::PgSslMode::Require,
-                mas_config::PgSslMode::VerifyCa => sqlx::postgres::PgSslMode::VerifyCa,
-                mas_config::PgSslMode::VerifyFull => sqlx::postgres::PgSslMode::VerifyFull,
+                pasion_config::PgSslMode::Disable => sqlx::postgres::PgSslMode::Disable,
+                pasion_config::PgSslMode::Allow => sqlx::postgres::PgSslMode::Allow,
+                pasion_config::PgSslMode::Prefer => sqlx::postgres::PgSslMode::Prefer,
+                pasion_config::PgSslMode::Require => sqlx::postgres::PgSslMode::Require,
+                pasion_config::PgSslMode::VerifyCa => sqlx::postgres::PgSslMode::VerifyCa,
+                pasion_config::PgSslMode::VerifyFull => sqlx::postgres::PgSslMode::VerifyFull,
             };
 
             options.ssl_mode(ssl_mode)

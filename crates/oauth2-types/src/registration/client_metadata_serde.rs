@@ -3,11 +3,11 @@ use std::borrow::Cow;
 use chrono::Duration;
 use indexmap::IndexMap;
 use language_tags::LanguageTag;
-use mas_iana::{
+use pasion_iana::{
     jose::{JsonWebEncryptionAlg, JsonWebEncryptionEnc, JsonWebSignatureAlg},
     oauth::OAuthClientAuthenticationMethod,
 };
-use mas_jose::jwk::PublicJsonWebKeySet;
+use pasion_jose::jwk::PublicJsonWebKeySet;
 use serde::{
     Deserialize, Serialize,
     de::{DeserializeOwned, Error},

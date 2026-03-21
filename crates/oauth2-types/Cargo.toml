@@ -1,6 +1,6 @@
 [package]
 name = "oauth2-types"
-description = "OAuth 2.0 types used by the Palpo Authentication Service"
+description = "OAuth 2.0 types used by the Pasion"
 version.workspace = true
 authors.workspace = true
 edition.workspace = true
@@ -23,8 +23,8 @@ sha2.workspace = true
 thiserror.workspace = true
 url.workspace = true
 
-mas-iana.workspace = true
-mas-jose.workspace = true
+pasion-iana.workspace = true
+pasion-jose.workspace = true
 
 [dev-dependencies]
 assert_matches.workspace = true

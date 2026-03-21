@@ -6,7 +6,7 @@
 
 use std::{collections::BTreeSet, fmt, iter::FromIterator, str::FromStr};
 
-use mas_iana::oauth::OAuthAuthorizationEndpointResponseType;
+use pasion_iana::oauth::OAuthAuthorizationEndpointResponseType;
 use serde_with::{DeserializeFromStr, SerializeDisplay};
 use thiserror::Error;
 

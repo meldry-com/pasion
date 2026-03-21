@@ -1,6 +1,6 @@
 use async_trait::async_trait;
 use chrono::{DateTime, Duration, Utc};
-use mas_data_model::{AccessToken, Clock, Session};
+use pasion_data_model::{AccessToken, Clock, Session};
 use rand_core::RngCore;
 use ulid::Ulid;
 

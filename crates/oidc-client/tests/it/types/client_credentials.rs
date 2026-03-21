@@ -2,12 +2,12 @@ use std::collections::HashMap;
 
 use base64ct::Encoding;
 use http::header::AUTHORIZATION;
-use mas_iana::oauth::{OAuthAccessTokenType, OAuthClientAuthenticationMethod};
-use mas_jose::{
+use pasion_iana::oauth::{OAuthAccessTokenType, OAuthClientAuthenticationMethod};
+use pasion_jose::{
     claims::{self, TimeOptions},
     jwt::Jwt,
 };
-use mas_oidc_client::{
+use pasion_oidc_client::{
     requests::client_credentials::access_token_with_client_credentials,
     types::client_credentials::ClientCredentials,
 };

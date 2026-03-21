@@ -1,6 +1,6 @@
 use std::net::IpAddr;
 
-use mas_data_model::{
+use pasion_data_model::{
     BrowserSession, Clock, CompatSession, Session, personal::session::PersonalSession,
 };
 

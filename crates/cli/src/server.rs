@@ -8,11 +8,11 @@ use anyhow::Context;
 use headers::{CacheControl, HeaderMapExt as _, UserAgent};
 use http::{Method, StatusCode, Version, header::USER_AGENT};
 use listenfd::ListenFd;
-use mas_config::{HttpBindConfig, HttpResource, HttpTlsConfig, UnixOrTcp};
-use mas_context::LogContext;
-use mas_listener::{ConnectionInfo, unix_or_tcp::UnixOrTcpListener};
-use mas_router::Route;
-use mas_templates::Templates;
+use pasion_config::{HttpBindConfig, HttpResource, HttpTlsConfig, UnixOrTcp};
+use pasion_context::LogContext;
+use pasion_listener::{ConnectionInfo, unix_or_tcp::UnixOrTcpListener};
+use pasion_router::Route;
+use pasion_templates::Templates;
 use opentelemetry::{Key, KeyValue};
 use opentelemetry_http::HeaderExtractor;
 use opentelemetry_semantic_conventions::trace::{
@@ -254,64 +254,64 @@ pub fn build_router(
     // Build sub-routers for each resource
     for resource in resources {
         router = match resource {
-            mas_config::HttpResource::Health => {
+            pasion_config::HttpResource::Health => {
                 router.push(
-                    Router::with_path(mas_router::Healthcheck::route())
-                        .get(mas_handlers::health::get)
+                    Router::with_path(pasion_router::Healthcheck::route())
+                        .get(pasion_handlers::health::get)
                 )
             }
-            mas_config::HttpResource::Prometheus => {
+            pasion_config::HttpResource::Prometheus => {
                 router.push(
                     Router::with_path("/metrics")
                         .get(crate::telemetry::prometheus_handler)
                 )
             }
-            mas_config::HttpResource::Discovery => {
+            pasion_config::HttpResource::Discovery => {
                 router
-                    .push(Router::with_path(mas_router::OidcConfiguration::route())
-                        .get(mas_handlers::oauth2::discovery::get))
-                    .push(Router::with_path(mas_router::Webfinger::route())
-                        .get(mas_handlers::oauth2::webfinger::get))
+                    .push(Router::with_path(pasion_router::OidcConfiguration::route())
+                        .get(pasion_handlers::oauth2::discovery::get))
+                    .push(Router::with_path(pasion_router::Webfinger::route())
+                        .get(pasion_handlers::oauth2::webfinger::get))
             }
-            mas_config::HttpResource::Human => {
+            pasion_config::HttpResource::Human => {
                 build_human_router(router, templates.clone())
             }
-            mas_config::HttpResource::GraphQL {
+            pasion_config::HttpResource::GraphQL {
                 playground,
                 undocumented_oauth2_access,
             } => {
-                let mut graphql_router = Router::with_path(mas_router::GraphQL::route())
-                    .get(mas_handlers::graphql::get)
-                    .post(mas_handlers::graphql::post);
+                let mut graphql_router = Router::with_path(pasion_router::GraphQL::route())
+                    .get(pasion_handlers::graphql::get)
+                    .post(pasion_handlers::graphql::post);
 
                 if *playground {
                     graphql_router = graphql_router.push(
-                        Router::with_path(mas_router::GraphQLPlayground::route())
-                            .get(mas_handlers::graphql::playground)
+                        Router::with_path(pasion_router::GraphQLPlayground::route())
+                            .get(pasion_handlers::graphql::playground)
                     );
                 }
 
                 router.push(graphql_router)
             }
-            mas_config::HttpResource::Assets { path } => {
+            pasion_config::HttpResource::Assets { path } => {
                 router.push(
-                    Router::with_path(&format!("{}/<**path>", mas_router::StaticAsset::route()))
+                    Router::with_path(&format!("{}/<**path>", pasion_router::StaticAsset::route()))
                         .hoop(cache_control_middleware)
                         .get(StaticDir::new([path.clone()])
                             .include_dot_files(false)
                             .auto_list(false))
                 )
             }
-            mas_config::HttpResource::OAuth => {
+            pasion_config::HttpResource::OAuth => {
                 build_oauth_router(router)
             }
-            mas_config::HttpResource::Compat => {
+            pasion_config::HttpResource::Compat => {
                 build_compat_router(router, templates.clone())
             }
-            mas_config::HttpResource::AdminApi => {
+            pasion_config::HttpResource::AdminApi => {
                 build_admin_router(router)
             }
-            mas_config::HttpResource::ConnectionInfo => {
+            pasion_config::HttpResource::ConnectionInfo => {
                 router.push(
                     Router::with_path("/connection-info")
                         .get(connection_info_handler)
@@ -340,105 +340,105 @@ fn build_human_router(router: Router, _templates: Templates) -> Router {
     router
         // Account routes
         .push(Router::with_path("/account").get(account_redirect_handler))
-        .push(Router::with_path(mas_router::Account::route()).get(mas_handlers::views::app::get))
-        .push(Router::with_path(mas_router::AccountWildcard::route()).get(mas_handlers::views::app::get))
-        .push(Router::with_path(mas_router::AccountRecoveryFinish::route()).get(mas_handlers::views::app::get_anonymous))
-        .push(Router::with_path(mas_router::ChangePasswordDiscovery::route()).get(change_password_redirect_handler))
+        .push(Router::with_path(pasion_router::Account::route()).get(pasion_handlers::views::app::get))
+        .push(Router::with_path(pasion_router::AccountWildcard::route()).get(pasion_handlers::views::app::get))
+        .push(Router::with_path(pasion_router::AccountRecoveryFinish::route()).get(pasion_handlers::views::app::get_anonymous))
+        .push(Router::with_path(pasion_router::ChangePasswordDiscovery::route()).get(change_password_redirect_handler))
         // Index
-        .push(Router::with_path(mas_router::Index::route()).get(mas_handlers::views::index::get))
+        .push(Router::with_path(pasion_router::Index::route()).get(pasion_handlers::views::index::get))
         // Login/Logout
-        .push(Router::with_path(mas_router::Login::route())
-            .get(mas_handlers::views::login::get)
-            .post(mas_handlers::views::login::post))
-        .push(Router::with_path(mas_router::Logout::route()).post(mas_handlers::views::logout::post))
+        .push(Router::with_path(pasion_router::Login::route())
+            .get(pasion_handlers::views::login::get)
+            .post(pasion_handlers::views::login::post))
+        .push(Router::with_path(pasion_router::Logout::route()).post(pasion_handlers::views::logout::post))
         // Registration
-        .push(Router::with_path(mas_router::Register::route()).get(mas_handlers::views::register::get))
-        .push(Router::with_path(mas_router::PasswordRegister::route())
-            .get(mas_handlers::views::register::password::get)
-            .post(mas_handlers::views::register::password::post))
-        .push(Router::with_path(mas_router::RegisterVerifyEmail::route())
-            .get(mas_handlers::views::register::steps::verify_email::get)
-            .post(mas_handlers::views::register::steps::verify_email::post))
-        .push(Router::with_path(mas_router::RegisterToken::route())
-            .get(mas_handlers::views::register::steps::registration_token::get)
-            .post(mas_handlers::views::register::steps::registration_token::post))
-        .push(Router::with_path(mas_router::RegisterDisplayName::route())
-            .get(mas_handlers::views::register::steps::display_name::get)
-            .post(mas_handlers::views::register::steps::display_name::post))
-        .push(Router::with_path(mas_router::RegisterFinish::route())
-            .get(mas_handlers::views::register::steps::finish::get))
+        .push(Router::with_path(pasion_router::Register::route()).get(pasion_handlers::views::register::get))
+        .push(Router::with_path(pasion_router::PasswordRegister::route())
+            .get(pasion_handlers::views::register::password::get)
+            .post(pasion_handlers::views::register::password::post))
+        .push(Router::with_path(pasion_router::RegisterVerifyEmail::route())
+            .get(pasion_handlers::views::register::steps::verify_email::get)
+            .post(pasion_handlers::views::register::steps::verify_email::post))
+        .push(Router::with_path(pasion_router::RegisterToken::route())
+            .get(pasion_handlers::views::register::steps::registration_token::get)
+            .post(pasion_handlers::views::register::steps::registration_token::post))
+        .push(Router::with_path(pasion_router::RegisterDisplayName::route())
+            .get(pasion_handlers::views::register::steps::display_name::get)
+            .post(pasion_handlers::views::register::steps::display_name::post))
+        .push(Router::with_path(pasion_router::RegisterFinish::route())
+            .get(pasion_handlers::views::register::steps::finish::get))
         // Account recovery
-        .push(Router::with_path(mas_router::AccountRecoveryStart::route())
-            .get(mas_handlers::views::recovery::start::get)
-            .post(mas_handlers::views::recovery::start::post))
-        .push(Router::with_path(mas_router::AccountRecoveryProgress::route())
-            .get(mas_handlers::views::recovery::progress::get)
-            .post(mas_handlers::views::recovery::progress::post))
+        .push(Router::with_path(pasion_router::AccountRecoveryStart::route())
+            .get(pasion_handlers::views::recovery::start::get)
+            .post(pasion_handlers::views::recovery::start::post))
+        .push(Router::with_path(pasion_router::AccountRecoveryProgress::route())
+            .get(pasion_handlers::views::recovery::progress::get)
+            .post(pasion_handlers::views::recovery::progress::post))
         // OAuth2 authorization
-        .push(Router::with_path(mas_router::OAuth2AuthorizationEndpoint::route())
-            .get(mas_handlers::oauth2::authorization::get))
-        .push(Router::with_path(mas_router::Consent::route())
-            .get(mas_handlers::oauth2::authorization::consent::get)
-            .post(mas_handlers::oauth2::authorization::consent::post))
+        .push(Router::with_path(pasion_router::OAuth2AuthorizationEndpoint::route())
+            .get(pasion_handlers::oauth2::authorization::get))
+        .push(Router::with_path(pasion_router::Consent::route())
+            .get(pasion_handlers::oauth2::authorization::consent::get)
+            .post(pasion_handlers::oauth2::authorization::consent::post))
         // SSO complete
-        .push(Router::with_path(mas_router::CompatLoginSsoComplete::route())
-            .get(mas_handlers::compat::login_sso_complete::get)
-            .post(mas_handlers::compat::login_sso_complete::post))
+        .push(Router::with_path(pasion_router::CompatLoginSsoComplete::route())
+            .get(pasion_handlers::compat::login_sso_complete::get)
+            .post(pasion_handlers::compat::login_sso_complete::post))
         // Upstream OAuth2
-        .push(Router::with_path(mas_router::UpstreamOAuth2Authorize::route())
-            .get(mas_handlers::upstream_oauth2::authorize::get))
-        .push(Router::with_path(mas_router::UpstreamOAuth2Callback::route())
-            .get(mas_handlers::upstream_oauth2::callback::handler)
-            .post(mas_handlers::upstream_oauth2::callback::handler))
-        .push(Router::with_path(mas_router::UpstreamOAuth2Link::route())
-            .get(mas_handlers::upstream_oauth2::link::get)
-            .post(mas_handlers::upstream_oauth2::link::post))
-        .push(Router::with_path(mas_router::UpstreamOAuth2BackchannelLogout::route())
-            .post(mas_handlers::upstream_oauth2::backchannel_logout::post))
+        .push(Router::with_path(pasion_router::UpstreamOAuth2Authorize::route())
+            .get(pasion_handlers::upstream_oauth2::authorize::get))
+        .push(Router::with_path(pasion_router::UpstreamOAuth2Callback::route())
+            .get(pasion_handlers::upstream_oauth2::callback::handler)
+            .post(pasion_handlers::upstream_oauth2::callback::handler))
+        .push(Router::with_path(pasion_router::UpstreamOAuth2Link::route())
+            .get(pasion_handlers::upstream_oauth2::link::get)
+            .post(pasion_handlers::upstream_oauth2::link::post))
+        .push(Router::with_path(pasion_router::UpstreamOAuth2BackchannelLogout::route())
+            .post(pasion_handlers::upstream_oauth2::backchannel_logout::post))
         // Device code
-        .push(Router::with_path(mas_router::DeviceCodeLink::route())
-            .get(mas_handlers::oauth2::device::link::get))
-        .push(Router::with_path(mas_router::DeviceCodeConsent::route())
-            .get(mas_handlers::oauth2::device::consent::get)
-            .post(mas_handlers::oauth2::device::consent::post))
+        .push(Router::with_path(pasion_router::DeviceCodeLink::route())
+            .get(pasion_handlers::oauth2::device::link::get))
+        .push(Router::with_path(pasion_router::DeviceCodeConsent::route())
+            .get(pasion_handlers::oauth2::device::consent::get)
+            .post(pasion_handlers::oauth2::device::consent::post))
 }
 
 fn build_oauth_router(router: Router) -> Router {
     router
-        .push(Router::with_path(mas_router::OAuth2Keys::route())
-            .get(mas_handlers::oauth2::keys::get))
-        .push(Router::with_path(mas_router::OidcUserinfo::route())
-            .get(mas_handlers::oauth2::userinfo::get)
-            .post(mas_handlers::oauth2::userinfo::get))
-        .push(Router::with_path(mas_router::OAuth2Introspection::route())
-            .post(mas_handlers::oauth2::introspection::post))
-        .push(Router::with_path(mas_router::OAuth2Revocation::route())
-            .post(mas_handlers::oauth2::revoke::post))
-        .push(Router::with_path(mas_router::OAuth2TokenEndpoint::route())
-            .post(mas_handlers::oauth2::token::post))
-        .push(Router::with_path(mas_router::OAuth2RegistrationEndpoint::route())
-            .post(mas_handlers::oauth2::registration::post))
-        .push(Router::with_path(mas_router::OAuth2DeviceAuthorizationEndpoint::route())
-            .post(mas_handlers::oauth2::device::authorize::post))
+        .push(Router::with_path(pasion_router::OAuth2Keys::route())
+            .get(pasion_handlers::oauth2::keys::get))
+        .push(Router::with_path(pasion_router::OidcUserinfo::route())
+            .get(pasion_handlers::oauth2::userinfo::get)
+            .post(pasion_handlers::oauth2::userinfo::get))
+        .push(Router::with_path(pasion_router::OAuth2Introspection::route())
+            .post(pasion_handlers::oauth2::introspection::post))
+        .push(Router::with_path(pasion_router::OAuth2Revocation::route())
+            .post(pasion_handlers::oauth2::revoke::post))
+        .push(Router::with_path(pasion_router::OAuth2TokenEndpoint::route())
+            .post(pasion_handlers::oauth2::token::post))
+        .push(Router::with_path(pasion_router::OAuth2RegistrationEndpoint::route())
+            .post(pasion_handlers::oauth2::registration::post))
+        .push(Router::with_path(pasion_router::OAuth2DeviceAuthorizationEndpoint::route())
+            .post(pasion_handlers::oauth2::device::authorize::post))
 }
 
 fn build_compat_router(router: Router, _templates: Templates) -> Router {
     router
-        .push(Router::with_path(mas_router::CompatLoginSsoRedirect::route())
-            .get(mas_handlers::compat::login_sso_redirect::get))
-        .push(Router::with_path(mas_router::CompatLoginSsoRedirectIdp::route())
-            .get(mas_handlers::compat::login_sso_redirect::get))
-        .push(Router::with_path(mas_router::CompatLoginSsoRedirectSlash::route())
-            .get(mas_handlers::compat::login_sso_redirect::get))
-        .push(Router::with_path(mas_router::CompatLogin::route())
-            .get(mas_handlers::compat::login::get)
-            .post(mas_handlers::compat::login::post))
-        .push(Router::with_path(mas_router::CompatLogout::route())
-            .post(mas_handlers::compat::logout::post))
-        .push(Router::with_path(mas_router::CompatLogoutAll::route())
-            .post(mas_handlers::compat::logout_all::post))
-        .push(Router::with_path(mas_router::CompatRefresh::route())
-            .post(mas_handlers::compat::refresh::post))
+        .push(Router::with_path(pasion_router::CompatLoginSsoRedirect::route())
+            .get(pasion_handlers::compat::login_sso_redirect::get))
+        .push(Router::with_path(pasion_router::CompatLoginSsoRedirectIdp::route())
+            .get(pasion_handlers::compat::login_sso_redirect::get))
+        .push(Router::with_path(pasion_router::CompatLoginSsoRedirectSlash::route())
+            .get(pasion_handlers::compat::login_sso_redirect::get))
+        .push(Router::with_path(pasion_router::CompatLogin::route())
+            .get(pasion_handlers::compat::login::get)
+            .post(pasion_handlers::compat::login::post))
+        .push(Router::with_path(pasion_router::CompatLogout::route())
+            .post(pasion_handlers::compat::logout::post))
+        .push(Router::with_path(pasion_router::CompatLogoutAll::route())
+            .post(pasion_handlers::compat::logout_all::post))
+        .push(Router::with_path(pasion_router::CompatRefresh::route())
+            .post(pasion_handlers::compat::refresh::post))
 }
 
 fn build_admin_router(router: Router) -> Router {
@@ -460,10 +460,10 @@ async fn account_redirect_handler(depot: &Depot) -> impl Writer {
     let url_builder = depot.get_url_builder().cloned();
     if let Some(url_builder) = url_builder {
         let prefix = url_builder.prefix().unwrap_or_default();
-        let route = mas_router::Account::route();
+        let route = pasion_router::Account::route();
         Redirect::found(format!("{prefix}{route}"))
     } else {
-        Redirect::found(mas_router::Account::route())
+        Redirect::found(pasion_router::Account::route())
     }
 }
 
@@ -473,7 +473,7 @@ async fn change_password_redirect_handler(depot: &Depot) -> impl Writer {
 
     let url_builder = depot.get_url_builder().cloned();
     if let Some(url_builder) = url_builder {
-        Redirect::found(url_builder.absolute_url_for(&mas_router::AccountPasswordChange).to_string())
+        Redirect::found(url_builder.absolute_url_for(&pasion_router::AccountPasswordChange).to_string())
     } else {
         Redirect::found("/account/password/change")
     }

@@ -2,14 +2,14 @@ use std::collections::HashMap;
 
 use assert_matches::assert_matches;
 use chrono::{DateTime, Duration, Utc};
-use mas_iana::jose::JsonWebSignatureAlg;
-use mas_jose::{
+use pasion_iana::jose::JsonWebSignatureAlg;
+use pasion_jose::{
     claims::{self, ClaimError},
     constraints::Constrainable,
     jwk::PublicJsonWebKeySet,
     jwt::{JsonWebSignatureHeader, Jwt},
 };
-use mas_oidc_client::{
+use pasion_oidc_client::{
     error::{IdTokenError, JwtVerificationError},
     requests::jose::{JwtVerificationData, verify_id_token},
     types::IdToken,

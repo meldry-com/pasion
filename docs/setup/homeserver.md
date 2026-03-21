@@ -1,6 +1,6 @@
 # Homeserver configuration
 
-The `palpo-auth-service` is designed to be run alongside a Matrix homeserver.
+The `pasion` is designed to be run alongside a Matrix homeserver.
 It currently only supports [Palpo](https://github.com/palpo-im/palpo) version 1.136.0 or later.
 The authentication service needs to be able to call the Palpo admin API to provision users through a shared secret, and Palpo needs to be able to call the service to verify access tokens using the OAuth 2.0 token introspection endpoint.
 
@@ -39,7 +39,7 @@ matrix_authentication_service:
 The `endpoint` property should be set to the URL of the authentication service.
 This can be an internal URL, to avoid unnecessary round-trips.
 
-The `secret` property must match in both the Palpo configuration and the Palpo Authentication Service configuration.
+The `secret` property must match in both the Palpo configuration and the Pasion configuration.
 
 ## Set up the compatibility layer
 

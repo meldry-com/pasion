@@ -4,7 +4,7 @@ use axum_extra::extract::{Query, QueryRejection};
 use axum_macros::FromRequestParts;
 use hyper::StatusCode;
 use mas_axum_utils::record_error;
-use mas_storage::{Page, user::UserEmailFilter};
+use pasion_storage::{Page, user::UserEmailFilter};
 use schemars::JsonSchema;
 use serde::Deserialize;
 use ulid::Ulid;
@@ -66,7 +66,7 @@ pub enum RouteError {
     InvalidFilter(#[from] QueryRejection),
 }
 
-impl_from_error_for_route!(mas_storage::RepositoryError);
+impl_from_error_for_route!(pasion_storage::RepositoryError);
 
 impl IntoResponse for RouteError {
     fn into_response(self) -> axum::response::Response {
@@ -89,11 +89,11 @@ pub fn doc(operation: TransformOperation) -> TransformOperation {
         .tag("user-email")
         .response_with::<200, Json<PaginatedResponse<UserEmail>>, _>(|t| {
             let emails = UserEmail::samples();
-            let pagination = mas_storage::Pagination::first(emails.len());
+            let pagination = pasion_storage::Pagination::first(emails.len());
             let page = Page {
                 edges: emails
                     .into_iter()
-                    .map(|node| mas_storage::pagination::Edge {
+                    .map(|node| pasion_storage::pagination::Edge {
                         cursor: node.id(),
                         node,
                     })
@@ -183,7 +183,7 @@ mod tests {
 
     use crate::test_utils::{RequestBuilderExt, ResponseExt, TestState, setup};
 
-    #[sqlx::test(migrator = "mas_storage_pg::MIGRATOR")]
+    #[sqlx::test(migrator = "pasion_storage_pg::MIGRATOR")]
     async fn test_list(pool: PgPool) {
         setup();
         let mut state = TestState::from_pool(pool).await.unwrap();

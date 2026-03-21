@@ -1,20 +1,20 @@
 use std::{net::IpAddr, sync::Arc};
 
 use ipnetwork::IpNetwork;
-use mas_context::LogContext;
-use mas_data_model::{AppVersion, BoxClock, BoxRng, SiteConfig, SystemClock};
-use mas_handlers::{
+use pasion_context::LogContext;
+use pasion_data_model::{AppVersion, BoxClock, BoxRng, SiteConfig, SystemClock};
+use pasion_handlers::{
     ActivityTracker, BoundActivityTracker, CookieManager, GraphQLSchema, Limiter,
     MetadataCache, RequesterFingerprint, passwords::PasswordManager,
 };
-use mas_i18n::Translator;
-use mas_keystore::{Encrypter, Keystore};
-use mas_matrix::HomeserverConnection;
-use mas_policy::{Policy, PolicyFactory};
-use mas_router::UrlBuilder;
-use mas_storage::{BoxRepository, BoxRepositoryFactory, RepositoryFactory};
-use mas_storage_pg::PgRepositoryFactory;
-use mas_templates::Templates;
+use pasion_i18n::Translator;
+use pasion_keystore::{Encrypter, Keystore};
+use pasion_matrix::HomeserverConnection;
+use pasion_policy::{Policy, PolicyFactory};
+use pasion_router::UrlBuilder;
+use pasion_storage::{BoxRepository, BoxRepositoryFactory, RepositoryFactory};
+use pasion_storage_pg::PgRepositoryFactory;
+use pasion_templates::Templates;
 use opentelemetry::KeyValue;
 use rand::SeedableRng;
 use salvo::prelude::*;
@@ -271,20 +271,20 @@ pub fn extract_rng() -> BoxRng {
 }
 
 /// Extract Policy from depot
-pub async fn extract_policy(depot: &Depot) -> Result<Policy, mas_policy::InstantiateError> {
+pub async fn extract_policy(depot: &Depot) -> Result<Policy, pasion_policy::InstantiateError> {
     let policy_factory = depot
         .get_policy_factory()
         .ok_or_else(|| {
-            mas_policy::InstantiateError::Instantiate(anyhow::anyhow!("PolicyFactory not found in depot").into())
+            pasion_policy::InstantiateError::Instantiate(anyhow::anyhow!("PolicyFactory not found in depot").into())
         })?;
     policy_factory.instantiate().await
 }
 
 /// Extract BoxRepository from depot
-pub async fn extract_repository(depot: &Depot) -> Result<BoxRepository, mas_storage::RepositoryError> {
+pub async fn extract_repository(depot: &Depot) -> Result<BoxRepository, pasion_storage::RepositoryError> {
     let app_state = depot
         .get::<AppState>("app_state")
-        .ok_or_else(|| mas_storage::RepositoryError::from(anyhow::anyhow!("AppState not found in depot")))?;
+        .ok_or_else(|| pasion_storage::RepositoryError::from(anyhow::anyhow!("AppState not found in depot")))?;
     app_state.repository_factory.create().await
 }
 
@@ -292,7 +292,7 @@ fn infer_client_ip(
     req: &Request,
     trusted_proxies: &[IpNetwork],
 ) -> Option<IpAddr> {
-    let connection_info = req.extensions().get::<mas_listener::ConnectionInfo>();
+    let connection_info = req.extensions().get::<pasion_listener::ConnectionInfo>();
 
     let peer = if let Some(info) = connection_info {
         // We can always trust the proxy protocol to give us the correct IP address

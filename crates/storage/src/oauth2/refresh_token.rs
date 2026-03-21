@@ -1,5 +1,5 @@
 use async_trait::async_trait;
-use mas_data_model::{AccessToken, Clock, RefreshToken, Session};
+use pasion_data_model::{AccessToken, Clock, RefreshToken, Session};
 use rand_core::RngCore;
 use ulid::Ulid;
 

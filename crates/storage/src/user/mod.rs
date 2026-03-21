@@ -1,7 +1,7 @@
 //! Repositories to interact with entities related to user accounts
 
 use async_trait::async_trait;
-use mas_data_model::{Clock, User};
+use pasion_data_model::{Clock, User};
 use rand_core::RngCore;
 use ulid::Ulid;
 

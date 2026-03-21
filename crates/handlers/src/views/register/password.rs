@@ -12,17 +12,17 @@ use mas_axum_utils::{
     cookies::CookieJar,
     csrf::{CsrfExt, CsrfToken, ProtectedForm},
 };
-use mas_data_model::{BoxClock, BoxRng, CaptchaConfig};
-use mas_i18n::DataLocale;
-use mas_matrix::HomeserverConnection;
-use mas_policy::Policy;
-use mas_router::UrlBuilder;
-use mas_storage::{
+use pasion_data_model::{BoxClock, BoxRng, CaptchaConfig};
+use pasion_i18n::DataLocale;
+use pasion_matrix::HomeserverConnection;
+use pasion_policy::Policy;
+use pasion_router::UrlBuilder;
+use pasion_storage::{
     BoxRepository, RepositoryAccess,
     queue::{QueueJobRepositoryExt as _, SendEmailAuthenticationCodeJob},
     user::{UserEmailRepository, UserRepository},
 };
-use mas_templates::{
+use pasion_templates::{
     FieldError, FormError, FormState, PasswordRegisterContext, RegisterFormField, TemplateContext,
     Templates, ToFormState,
 };
@@ -86,7 +86,7 @@ pub(crate) async fn get(
     if !site_config.password_registration_enabled {
         // If password-based registration is disabled, redirect to the login page here
         return Ok(url_builder
-            .redirect(&mas_router::Login::from(query.action.post_auth_action))
+            .redirect(&pasion_router::Login::from(query.action.post_auth_action))
             .into_response());
     }
 
@@ -241,11 +241,11 @@ pub(crate) async fn post(
         }
 
         let res = policy
-            .evaluate_register(mas_policy::RegisterInput {
-                registration_method: mas_policy::RegistrationMethod::Password,
+            .evaluate_register(pasion_policy::RegisterInput {
+                registration_method: pasion_policy::RegistrationMethod::Password,
                 username: &form.username,
                 email: email.as_deref(),
-                requester: mas_policy::Requester {
+                requester: pasion_policy::Requester {
                     ip_address: activity_tracker.ip(),
                     user_agent: user_agent.clone(),
                 },
@@ -393,7 +393,7 @@ pub(crate) async fn post(
 
     Ok((
         cookie_jar,
-        url_builder.redirect(&mas_router::RegisterFinish::new(registration.id)),
+        url_builder.redirect(&pasion_router::RegisterFinish::new(registration.id)),
     )
         .into_response())
 }
@@ -431,7 +431,7 @@ mod tests {
         Request, StatusCode,
         header::{CONTENT_TYPE, LOCATION},
     };
-    use mas_router::Route;
+    use pasion_router::Route;
     use sqlx::PgPool;
 
     use crate::{
@@ -441,7 +441,7 @@ mod tests {
         },
     };
 
-    #[sqlx::test(migrator = "mas_storage_pg::MIGRATOR")]
+    #[sqlx::test(migrator = "pasion_storage_pg::MIGRATOR")]
     async fn test_password_disabled(pool: PgPool) {
         setup();
         let state = TestState::from_pool_with_site_config(
@@ -456,12 +456,12 @@ mod tests {
         .unwrap();
 
         let request =
-            Request::get(&*mas_router::PasswordRegister::default().path_and_query()).empty();
+            Request::get(&*pasion_router::PasswordRegister::default().path_and_query()).empty();
         let response = state.request(request).await;
         response.assert_status(StatusCode::SEE_OTHER);
         response.assert_header_value(LOCATION, "/login");
 
-        let request = Request::post(&*mas_router::PasswordRegister::default().path_and_query())
+        let request = Request::post(&*pasion_router::PasswordRegister::default().path_and_query())
             .form(serde_json::json!({
                 "csrf": "abc",
                 "username": "john",
@@ -474,7 +474,7 @@ mod tests {
     }
 
     /// Test the registration happy path
-    #[sqlx::test(migrator = "mas_storage_pg::MIGRATOR")]
+    #[sqlx::test(migrator = "pasion_storage_pg::MIGRATOR")]
     async fn test_register(pool: PgPool) {
         setup();
         let state = TestState::from_pool(pool).await.unwrap();
@@ -482,7 +482,7 @@ mod tests {
 
         // Render the registration page and get the CSRF token
         let request =
-            Request::get(&*mas_router::PasswordRegister::default().path_and_query()).empty();
+            Request::get(&*pasion_router::PasswordRegister::default().path_and_query()).empty();
         let request = cookies.with_cookies(request);
         let response = state.request(request).await;
         cookies.save_cookies(&response);
@@ -499,7 +499,7 @@ mod tests {
             .unwrap();
 
         // Submit the registration form
-        let request = Request::post(&*mas_router::PasswordRegister::default().path_and_query())
+        let request = Request::post(&*pasion_router::PasswordRegister::default().path_and_query())
             .form(serde_json::json!({
                 "csrf": csrf_token,
                 "username": "john",
@@ -540,7 +540,7 @@ mod tests {
     }
 
     /// When the two password fields mismatch, it should give an error
-    #[sqlx::test(migrator = "mas_storage_pg::MIGRATOR")]
+    #[sqlx::test(migrator = "pasion_storage_pg::MIGRATOR")]
     async fn test_register_password_mismatch(pool: PgPool) {
         setup();
         let state = TestState::from_pool(pool).await.unwrap();
@@ -548,7 +548,7 @@ mod tests {
 
         // Render the registration page and get the CSRF token
         let request =
-            Request::get(&*mas_router::PasswordRegister::default().path_and_query()).empty();
+            Request::get(&*pasion_router::PasswordRegister::default().path_and_query()).empty();
         let request = cookies.with_cookies(request);
         let response = state.request(request).await;
         cookies.save_cookies(&response);
@@ -565,7 +565,7 @@ mod tests {
             .unwrap();
 
         // Submit the registration form
-        let request = Request::post(&*mas_router::PasswordRegister::default().path_and_query())
+        let request = Request::post(&*pasion_router::PasswordRegister::default().path_and_query())
             .form(serde_json::json!({
                 "csrf": csrf_token,
                 "username": "john",
@@ -581,7 +581,7 @@ mod tests {
         assert!(response.body().contains("Password fields don't match"));
     }
 
-    #[sqlx::test(migrator = "mas_storage_pg::MIGRATOR")]
+    #[sqlx::test(migrator = "pasion_storage_pg::MIGRATOR")]
     async fn test_register_username_too_long(pool: PgPool) {
         setup();
         let state = TestState::from_pool(pool).await.unwrap();
@@ -589,7 +589,7 @@ mod tests {
 
         // Render the registration page and get the CSRF token
         let request =
-            Request::get(&*mas_router::PasswordRegister::default().path_and_query()).empty();
+            Request::get(&*pasion_router::PasswordRegister::default().path_and_query()).empty();
         let request = cookies.with_cookies(request);
         let response = state.request(request).await;
         cookies.save_cookies(&response);
@@ -606,7 +606,7 @@ mod tests {
             .unwrap();
 
         // Submit the registration form
-        let request = Request::post(&*mas_router::PasswordRegister::default().path_and_query())
+        let request = Request::post(&*pasion_router::PasswordRegister::default().path_and_query())
             .form(serde_json::json!({
                 "csrf": csrf_token,
                 "username": "a".repeat(256),
@@ -627,7 +627,7 @@ mod tests {
     }
 
     /// When the user already exists in the database, it should give an error
-    #[sqlx::test(migrator = "mas_storage_pg::MIGRATOR")]
+    #[sqlx::test(migrator = "pasion_storage_pg::MIGRATOR")]
     async fn test_register_user_exists(pool: PgPool) {
         setup();
         let state = TestState::from_pool(pool).await.unwrap();
@@ -644,7 +644,7 @@ mod tests {
 
         // Render the registration page and get the CSRF token
         let request =
-            Request::get(&*mas_router::PasswordRegister::default().path_and_query()).empty();
+            Request::get(&*pasion_router::PasswordRegister::default().path_and_query()).empty();
         let request = cookies.with_cookies(request);
         let response = state.request(request).await;
         cookies.save_cookies(&response);
@@ -661,7 +661,7 @@ mod tests {
             .unwrap();
 
         // Submit the registration form
-        let request = Request::post(&*mas_router::PasswordRegister::default().path_and_query())
+        let request = Request::post(&*pasion_router::PasswordRegister::default().path_and_query())
             .form(serde_json::json!({
                 "csrf": csrf_token,
                 "username": "john",
@@ -679,7 +679,7 @@ mod tests {
 
     /// When the username is already reserved on the homeserver, it should give
     /// an error
-    #[sqlx::test(migrator = "mas_storage_pg::MIGRATOR")]
+    #[sqlx::test(migrator = "pasion_storage_pg::MIGRATOR")]
     async fn test_register_user_reserved(pool: PgPool) {
         setup();
         let state = TestState::from_pool(pool).await.unwrap();
@@ -687,7 +687,7 @@ mod tests {
 
         // Render the registration page and get the CSRF token
         let request =
-            Request::get(&*mas_router::PasswordRegister::default().path_and_query()).empty();
+            Request::get(&*pasion_router::PasswordRegister::default().path_and_query()).empty();
         let request = cookies.with_cookies(request);
         let response = state.request(request).await;
         cookies.save_cookies(&response);
@@ -707,7 +707,7 @@ mod tests {
         state.homeserver_connection.reserve_localpart("john").await;
 
         // Submit the registration form
-        let request = Request::post(&*mas_router::PasswordRegister::default().path_and_query())
+        let request = Request::post(&*pasion_router::PasswordRegister::default().path_and_query())
             .form(serde_json::json!({
                 "csrf": csrf_token,
                 "username": "john",
@@ -724,7 +724,7 @@ mod tests {
     }
 
     /// Test registration without email when email is not required
-    #[sqlx::test(migrator = "mas_storage_pg::MIGRATOR")]
+    #[sqlx::test(migrator = "pasion_storage_pg::MIGRATOR")]
     async fn test_register_without_email_when_not_required(pool: PgPool) {
         setup();
         let state = TestState::from_pool_with_site_config(
@@ -740,7 +740,7 @@ mod tests {
 
         // Render the registration page and get the CSRF token
         let request =
-            Request::get(&*mas_router::PasswordRegister::default().path_and_query()).empty();
+            Request::get(&*pasion_router::PasswordRegister::default().path_and_query()).empty();
         let request = cookies.with_cookies(request);
         let response = state.request(request).await;
         cookies.save_cookies(&response);
@@ -757,7 +757,7 @@ mod tests {
             .unwrap();
 
         // Submit the registration form without email
-        let request = Request::post(&*mas_router::PasswordRegister::default().path_and_query())
+        let request = Request::post(&*pasion_router::PasswordRegister::default().path_and_query())
             .form(serde_json::json!({
                 "csrf": csrf_token,
                 "username": "alice",
@@ -793,7 +793,7 @@ mod tests {
 
     /// Test registration with valid email when email is not required
     /// (email input is ignored completely when not required)
-    #[sqlx::test(migrator = "mas_storage_pg::MIGRATOR")]
+    #[sqlx::test(migrator = "pasion_storage_pg::MIGRATOR")]
     async fn test_register_with_email_when_not_required(pool: PgPool) {
         setup();
         let state = TestState::from_pool_with_site_config(
@@ -809,7 +809,7 @@ mod tests {
 
         // Render the registration page and get the CSRF token
         let request =
-            Request::get(&*mas_router::PasswordRegister::default().path_and_query()).empty();
+            Request::get(&*pasion_router::PasswordRegister::default().path_and_query()).empty();
         let request = cookies.with_cookies(request);
         let response = state.request(request).await;
         cookies.save_cookies(&response);
@@ -826,7 +826,7 @@ mod tests {
             .unwrap();
 
         // Submit the registration form with valid email
-        let request = Request::post(&*mas_router::PasswordRegister::default().path_and_query())
+        let request = Request::post(&*pasion_router::PasswordRegister::default().path_and_query())
             .form(serde_json::json!({
                 "csrf": csrf_token,
                 "username": "charlie",
@@ -863,7 +863,7 @@ mod tests {
     }
 
     /// Test registration fails when email is required but not provided
-    #[sqlx::test(migrator = "mas_storage_pg::MIGRATOR")]
+    #[sqlx::test(migrator = "pasion_storage_pg::MIGRATOR")]
     async fn test_register_fails_without_email_when_required(pool: PgPool) {
         setup();
         let state = TestState::from_pool_with_site_config(
@@ -879,7 +879,7 @@ mod tests {
 
         // Render the registration page and get the CSRF token
         let request =
-            Request::get(&*mas_router::PasswordRegister::default().path_and_query()).empty();
+            Request::get(&*pasion_router::PasswordRegister::default().path_and_query()).empty();
         let request = cookies.with_cookies(request);
         let response = state.request(request).await;
         cookies.save_cookies(&response);
@@ -896,7 +896,7 @@ mod tests {
             .unwrap();
 
         // Submit the registration form without email
-        let request = Request::post(&*mas_router::PasswordRegister::default().path_and_query())
+        let request = Request::post(&*pasion_router::PasswordRegister::default().path_and_query())
             .form(serde_json::json!({
                 "csrf": csrf_token,
                 "username": "david",
@@ -921,7 +921,7 @@ mod tests {
     }
 
     /// Test registration fails when email is required but empty
-    #[sqlx::test(migrator = "mas_storage_pg::MIGRATOR")]
+    #[sqlx::test(migrator = "pasion_storage_pg::MIGRATOR")]
     async fn test_register_fails_with_empty_email_when_required(pool: PgPool) {
         setup();
         let state = TestState::from_pool_with_site_config(
@@ -937,7 +937,7 @@ mod tests {
 
         // Render the registration page and get the CSRF token
         let request =
-            Request::get(&*mas_router::PasswordRegister::default().path_and_query()).empty();
+            Request::get(&*pasion_router::PasswordRegister::default().path_and_query()).empty();
         let request = cookies.with_cookies(request);
         let response = state.request(request).await;
         cookies.save_cookies(&response);
@@ -954,7 +954,7 @@ mod tests {
             .unwrap();
 
         // Submit the registration form with empty email
-        let request = Request::post(&*mas_router::PasswordRegister::default().path_and_query())
+        let request = Request::post(&*pasion_router::PasswordRegister::default().path_and_query())
             .form(serde_json::json!({
                 "csrf": csrf_token,
                 "username": "eve",
@@ -980,7 +980,7 @@ mod tests {
     }
 
     /// Test registration fails with invalid email when email is required
-    #[sqlx::test(migrator = "mas_storage_pg::MIGRATOR")]
+    #[sqlx::test(migrator = "pasion_storage_pg::MIGRATOR")]
     async fn test_register_fails_with_invalid_email_when_required(pool: PgPool) {
         setup();
         let state = TestState::from_pool_with_site_config(
@@ -996,7 +996,7 @@ mod tests {
 
         // Render the registration page and get the CSRF token
         let request =
-            Request::get(&*mas_router::PasswordRegister::default().path_and_query()).empty();
+            Request::get(&*pasion_router::PasswordRegister::default().path_and_query()).empty();
         let request = cookies.with_cookies(request);
         let response = state.request(request).await;
         cookies.save_cookies(&response);
@@ -1013,7 +1013,7 @@ mod tests {
             .unwrap();
 
         // Submit the registration form with invalid email
-        let request = Request::post(&*mas_router::PasswordRegister::default().path_and_query())
+        let request = Request::post(&*pasion_router::PasswordRegister::default().path_and_query())
             .form(serde_json::json!({
                 "csrf": csrf_token,
                 "username": "grace",

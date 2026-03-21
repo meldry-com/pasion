@@ -2,7 +2,7 @@ use std::net::IpAddr;
 
 use async_trait::async_trait;
 use chrono::{DateTime, Utc};
-use mas_data_model::{
+use pasion_data_model::{
     Client, Clock, Device, User,
     personal::{
         PersonalAccessToken,

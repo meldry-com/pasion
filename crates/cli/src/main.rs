@@ -4,7 +4,7 @@ use std::{io::IsTerminal, process::ExitCode, sync::Arc};
 
 use anyhow::Context;
 use clap::Parser;
-use mas_config::{ConfigurationSectionExt, TelemetryConfig};
+use pasion_config::{ConfigurationSectionExt, TelemetryConfig};
 use sentry_tracing::EventFilter;
 use tracing_subscriber::{
     EnvFilter, Layer, Registry,
@@ -32,7 +32,7 @@ struct SentryTransportFactory {
 impl SentryTransportFactory {
     fn new() -> Self {
         Self {
-            client: mas_http::reqwest_client(),
+            client: pasion_http::reqwest_client(),
         }
     }
 }
@@ -88,7 +88,7 @@ async fn try_main() -> anyhow::Result<ExitCode> {
     let (log_writer, _guard) = tracing_appender::non_blocking(output);
     let fmt_layer = tracing_subscriber::fmt::layer()
         .with_writer(log_writer)
-        .event_format(mas_context::EventFormatter)
+        .event_format(pasion_context::EventFormatter)
         .with_ansi(with_ansi);
     let filter_layer = EnvFilter::try_from_default_env()
         .or_else(|_| EnvFilter::try_new("info"))

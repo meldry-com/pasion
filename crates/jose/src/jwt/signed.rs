@@ -372,7 +372,7 @@ impl<T> Jwt<'static, T> {
 #[cfg(test)]
 mod tests {
     #![allow(clippy::disallowed_methods)]
-    use mas_iana::jose::JsonWebSignatureAlg;
+    use pasion_iana::jose::JsonWebSignatureAlg;
     use rand::thread_rng;
 
     use super::*;

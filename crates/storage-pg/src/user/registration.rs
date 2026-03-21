@@ -2,11 +2,11 @@ use std::net::IpAddr;
 
 use async_trait::async_trait;
 use chrono::{DateTime, Utc};
-use mas_data_model::{
+use pasion_data_model::{
     Clock, UpstreamOAuthAuthorizationSession, UserEmailAuthentication, UserRegistration,
     UserRegistrationPassword, UserRegistrationToken,
 };
-use mas_storage::user::UserRegistrationRepository;
+use pasion_storage::user::UserRegistrationRepository;
 use rand::RngCore;
 use sqlx::PgConnection;
 use ulid::Ulid;
@@ -517,13 +517,13 @@ impl UserRegistrationRepository for PgUserRegistrationRepository<'_> {
 mod tests {
     use std::net::{IpAddr, Ipv4Addr};
 
-    use mas_data_model::{
+    use pasion_data_model::{
         Clock, UpstreamOAuthProviderClaimsImports, UpstreamOAuthProviderDiscoveryMode,
         UpstreamOAuthProviderOnBackchannelLogout, UpstreamOAuthProviderPkceMode,
         UpstreamOAuthProviderTokenAuthMethod, UserRegistrationPassword, clock::MockClock,
     };
-    use mas_iana::jose::JsonWebSignatureAlg;
-    use mas_storage::upstream_oauth2::UpstreamOAuthProviderParams;
+    use pasion_iana::jose::JsonWebSignatureAlg;
+    use pasion_storage::upstream_oauth2::UpstreamOAuthProviderParams;
     use oauth2_types::scope::Scope;
     use rand::SeedableRng;
     use rand_chacha::ChaChaRng;

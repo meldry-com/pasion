@@ -1,5 +1,5 @@
 [package]
-name = "mas-matrix-palpo"
+name = "pasion-matrix-palpo"
 version.workspace = true
 authors.workspace = true
 edition.workspace = true
@@ -21,5 +21,5 @@ tracing.workspace = true
 url.workspace = true
 urlencoding.workspace = true
 
-mas-http.workspace = true
-mas-matrix.workspace = true
+pasion-http.workspace = true
+pasion-matrix.workspace = true

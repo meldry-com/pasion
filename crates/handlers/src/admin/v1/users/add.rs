@@ -4,8 +4,8 @@ use aide::{NoApi, OperationIo, transform::TransformOperation};
 use axum::{Json, extract::State, response::IntoResponse};
 use hyper::StatusCode;
 use mas_axum_utils::record_error;
-use mas_data_model::BoxRng;
-use mas_matrix::{HomeserverConnection, ProvisionRequest};
+use pasion_data_model::BoxRng;
+use pasion_matrix::{HomeserverConnection, ProvisionRequest};
 use schemars::JsonSchema;
 use serde::Deserialize;
 use tracing::warn;
@@ -68,7 +68,7 @@ pub enum RouteError {
     UsernameReserved,
 }
 
-impl_from_error_for_route!(mas_storage::RepositoryError);
+impl_from_error_for_route!(pasion_storage::RepositoryError);
 
 impl IntoResponse for RouteError {
     fn into_response(self) -> axum::response::Response {
@@ -175,13 +175,13 @@ pub async fn handler(
 #[cfg(test)]
 mod tests {
     use hyper::{Request, StatusCode};
-    use mas_matrix::HomeserverConnection;
-    use mas_storage::{RepositoryAccess, user::UserRepository};
+    use pasion_matrix::HomeserverConnection;
+    use pasion_storage::{RepositoryAccess, user::UserRepository};
     use sqlx::PgPool;
 
     use crate::test_utils::{RequestBuilderExt, ResponseExt, TestState, setup};
 
-    #[sqlx::test(migrator = "mas_storage_pg::MIGRATOR")]
+    #[sqlx::test(migrator = "pasion_storage_pg::MIGRATOR")]
     async fn test_add_user(pool: PgPool) {
         setup();
         let mut state = TestState::from_pool(pool).await.unwrap();
@@ -217,7 +217,7 @@ mod tests {
         assert!(result.is_ok());
     }
 
-    #[sqlx::test(migrator = "mas_storage_pg::MIGRATOR")]
+    #[sqlx::test(migrator = "pasion_storage_pg::MIGRATOR")]
     async fn test_add_user_invalid_username(pool: PgPool) {
         setup();
         let mut state = TestState::from_pool(pool).await.unwrap();
@@ -236,7 +236,7 @@ mod tests {
         assert_eq!(body["errors"][0]["title"], "Username is not valid");
     }
 
-    #[sqlx::test(migrator = "mas_storage_pg::MIGRATOR")]
+    #[sqlx::test(migrator = "pasion_storage_pg::MIGRATOR")]
     async fn test_add_user_exists(pool: PgPool) {
         setup();
         let mut state = TestState::from_pool(pool).await.unwrap();
@@ -268,7 +268,7 @@ mod tests {
         assert_eq!(body["errors"][0]["title"], "User already exists");
     }
 
-    #[sqlx::test(migrator = "mas_storage_pg::MIGRATOR")]
+    #[sqlx::test(migrator = "pasion_storage_pg::MIGRATOR")]
     async fn test_add_user_reserved(pool: PgPool) {
         setup();
         let mut state = TestState::from_pool(pool).await.unwrap();

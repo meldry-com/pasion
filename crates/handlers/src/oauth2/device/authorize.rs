@@ -7,10 +7,10 @@ use mas_axum_utils::{
     client_authorization::{ClientAuthorization, CredentialsVerificationError},
     record_error,
 };
-use mas_data_model::{BoxClock, BoxRng};
-use mas_keystore::Encrypter;
-use mas_router::UrlBuilder;
-use mas_storage::{BoxRepository, oauth2::OAuth2DeviceCodeGrantParams};
+use pasion_data_model::{BoxClock, BoxRng};
+use pasion_keystore::Encrypter;
+use pasion_router::UrlBuilder;
+use pasion_storage::{BoxRepository, oauth2::OAuth2DeviceCodeGrantParams};
 use oauth2_types::{
     errors::{ClientError, ClientErrorCode},
     requests::{DeviceAuthorizationRequest, DeviceAuthorizationResponse, GrantType},
@@ -48,7 +48,7 @@ pub(crate) enum RouteError {
     },
 }
 
-impl_from_error_for_route!(mas_storage::RepositoryError);
+impl_from_error_for_route!(pasion_storage::RepositoryError);
 
 impl IntoResponse for RouteError {
     fn into_response(self) -> axum::response::Response {
@@ -176,7 +176,7 @@ pub(crate) async fn post(
 #[cfg(test)]
 mod tests {
     use hyper::{Request, StatusCode};
-    use mas_router::SimpleRoute;
+    use pasion_router::SimpleRoute;
     use oauth2_types::{
         registration::ClientRegistrationResponse, requests::DeviceAuthorizationResponse,
     };
@@ -184,14 +184,14 @@ mod tests {
 
     use crate::test_utils::{RequestBuilderExt, ResponseExt, TestState, setup};
 
-    #[sqlx::test(migrator = "mas_storage_pg::MIGRATOR")]
+    #[sqlx::test(migrator = "pasion_storage_pg::MIGRATOR")]
     async fn test_device_code_request(pool: PgPool) {
         setup();
         let state = TestState::from_pool(pool).await.unwrap();
 
         // Provision a client
         let request =
-            Request::post(mas_router::OAuth2RegistrationEndpoint::PATH).json(serde_json::json!({
+            Request::post(pasion_router::OAuth2RegistrationEndpoint::PATH).json(serde_json::json!({
                 "client_uri": "https://example.com/",
                 "token_endpoint_auth_method": "none",
                 "grant_types": ["urn:ietf:params:oauth:grant-type:device_code"],
@@ -205,7 +205,7 @@ mod tests {
         let client_id = response.client_id;
 
         // Test the happy path: the client is allowed to use the device code grant type
-        let request = Request::post(mas_router::OAuth2DeviceAuthorizationEndpoint::PATH).form(
+        let request = Request::post(pasion_router::OAuth2DeviceAuthorizationEndpoint::PATH).form(
             serde_json::json!({
                 "client_id": client_id,
                 "scope": "openid",

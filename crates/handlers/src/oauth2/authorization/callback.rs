@@ -3,9 +3,9 @@
 use std::collections::HashMap;
 
 use axum::response::{Html, IntoResponse, Redirect, Response};
-use mas_data_model::AuthorizationGrant;
-use mas_i18n::DataLocale;
-use mas_templates::{FormPostContext, Templates};
+use pasion_data_model::AuthorizationGrant;
+use pasion_i18n::DataLocale;
+use pasion_templates::{FormPostContext, Templates};
 use oauth2_types::requests::ResponseMode;
 use serde::Serialize;
 use thiserror::Error;
@@ -42,7 +42,7 @@ pub enum IntoCallbackDestinationError {
 #[derive(Debug, Error)]
 pub enum CallbackDestinationError {
     #[error("Failed to render the form_post template")]
-    FormPostRender(#[from] mas_templates::TemplateError),
+    FormPostRender(#[from] pasion_templates::TemplateError),
 
     #[error("Failed to serialize parameters query string")]
     ParamsSerialization(#[from] serde_urlencoded::ser::Error),

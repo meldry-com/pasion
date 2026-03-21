@@ -1,10 +1,10 @@
 use der::pem::LineEnding;
-use mas_iana::jose::JsonWebSignatureAlg;
-use mas_jose::{
+use pasion_iana::jose::JsonWebSignatureAlg;
+use pasion_jose::{
     jwk::ParametersInfo,
     jwt::{JsonWebSignatureHeader, Jwt},
 };
-use mas_keystore::{JsonWebKey, JsonWebKeySet, Keystore, PrivateKey};
+use pasion_keystore::{JsonWebKey, JsonWebKeySet, Keystore, PrivateKey};
 use rand::SeedableRng;
 
 static PASSWORD: &str = "hunter2";

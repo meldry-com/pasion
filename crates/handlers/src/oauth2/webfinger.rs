@@ -1,4 +1,4 @@
-use mas_router::UrlBuilder;
+use pasion_router::UrlBuilder;
 use oauth2_types::webfinger::WebFingerResponse;
 use salvo::prelude::*;
 use serde::Deserialize;

@@ -34,12 +34,12 @@
     }
   },
   "app": {
-    "human_name": "Palpo Authentication Service",
+    "human_name": "Pasion",
     "@human_name": {
       "context": "pages/index.html:15:29-48",
       "description": "Human readable name of the application"
     },
-    "name": "palpo-auth-service",
+    "name": "pasion",
     "@name": {
       "context": "app.html:17:14-27, base.html:24:31-44",
       "description": "Name of the application"

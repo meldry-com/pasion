@@ -2,8 +2,8 @@
 
 use chrono::{DateTime, Duration, Utc};
 use mas_axum_utils::cookies::CookieJar;
-use mas_data_model::Clock;
-use mas_router::PostAuthAction;
+use pasion_data_model::Clock;
+use pasion_router::PostAuthAction;
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 use ulid::Ulid;

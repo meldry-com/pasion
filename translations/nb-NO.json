@@ -11,8 +11,8 @@
     "submit": "Send"
   },
   "app": {
-    "human_name": "Palpo Authentication Service",
-    "name": "palpo-auth-service",
+    "human_name": "Pasion",
+    "name": "pasion",
     "technical_description": "OpenID Connect oppdagelsesdokument: <a class=\"cpd-link\" data-kind=\"primary\" href=\"%(discovery_url)s\">%(discovery_url)s</a>"
   },
   "branding": {
@@ -226,7 +226,7 @@
     "scope": {
       "edit_profile": "Rediger din profil og kontaktdetaljer",
       "manage_sessions": "Administrer enhetene og sesjonene dine",
-      "mas_admin": "Administrer alle brukere på palpo-auth-service",
+      "mas_admin": "Administrer alle brukere på pasion",
       "send_messages": "Send nye meldinger på dine vegne",
       "palpo_admin": "Administrer Palpo-hjemmeserveren",
       "view_messages": "Se dine eksisterende meldinger og data",

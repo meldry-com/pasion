@@ -1,8 +1,8 @@
 use anyhow::Context as _;
 use async_graphql::{Context, Description, Enum, ID, Object};
 use chrono::{DateTime, Utc};
-use mas_data_model::Device;
-use mas_storage::{compat::CompatSessionRepository, user::UserRepository};
+use pasion_data_model::Device;
+use pasion_storage::{compat::CompatSessionRepository, user::UserRepository};
 use url::Url;
 
 use super::{BrowserSession, NodeType, SessionState, User, UserAgent};
@@ -22,12 +22,12 @@ enum ReverseReference<T> {
 /// login API.
 #[derive(Description)]
 pub struct CompatSession {
-    session: mas_data_model::CompatSession,
-    sso_login: ReverseReference<Option<mas_data_model::CompatSsoLogin>>,
+    session: pasion_data_model::CompatSession,
+    sso_login: ReverseReference<Option<pasion_data_model::CompatSsoLogin>>,
 }
 
 impl CompatSession {
-    pub fn new(session: mas_data_model::CompatSession) -> Self {
+    pub fn new(session: pasion_data_model::CompatSession) -> Self {
         Self {
             session,
             sso_login: ReverseReference::Lazy,
@@ -37,7 +37,7 @@ impl CompatSession {
     /// Save an eagerly loaded SSO login.
     pub fn with_loaded_sso_login(
         mut self,
-        sso_login: Option<mas_data_model::CompatSsoLogin>,
+        sso_login: Option<pasion_data_model::CompatSsoLogin>,
     ) -> Self {
         self.sso_login = ReverseReference::Loaded(sso_login);
         self
@@ -95,7 +95,7 @@ impl CompatSession {
         self.session
             .user_agent
             .clone()
-            .map(mas_data_model::UserAgent::parse)
+            .map(pasion_data_model::UserAgent::parse)
             .map(UserAgent::from)
     }
 
@@ -145,8 +145,8 @@ impl CompatSession {
     /// The state of the session.
     pub async fn state(&self) -> SessionState {
         match &self.session.state {
-            mas_data_model::CompatSessionState::Valid => SessionState::Active,
-            mas_data_model::CompatSessionState::Finished { .. } => SessionState::Finished,
+            pasion_data_model::CompatSessionState::Valid => SessionState::Active,
+            pasion_data_model::CompatSessionState::Finished { .. } => SessionState::Finished,
         }
     }
 
@@ -169,7 +169,7 @@ impl CompatSession {
 /// A compat SSO login represents a login done through the legacy Matrix login
 /// API, via the `m.login.sso` login method.
 #[derive(Description)]
-pub struct CompatSsoLogin(pub mas_data_model::CompatSsoLogin);
+pub struct CompatSsoLogin(pub pasion_data_model::CompatSsoLogin);
 
 #[Object(use_type_description)]
 impl CompatSsoLogin {

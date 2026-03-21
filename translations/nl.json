@@ -10,8 +10,8 @@
     "submit": "Bevestigen"
   },
   "app": {
-    "human_name": "Palpo Authentication Service",
-    "name": "palpo-auth-service"
+    "human_name": "Pasion",
+    "name": "pasion"
   },
   "branding": {
     "privacy_policy": {

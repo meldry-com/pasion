@@ -2,7 +2,7 @@
 
 use chrono::{DateTime, Utc};
 use http::header::ACCEPT;
-use mas_http::RequestBuilderExt;
+use pasion_http::RequestBuilderExt;
 use mime::APPLICATION_JSON;
 use oauth2_types::requests::{AccessTokenRequest, AccessTokenResponse};
 use rand::Rng;

@@ -66,7 +66,7 @@ pub trait EnumEntry: DeserializeOwned + Send + Sync {
         )]
         let response = client
             .get(Self::URL)
-            .header("User-Agent", "mas-iana-codegen/0.1")
+            .header("User-Agent", "pasion-iana-codegen/0.1")
             .send()
             .await
             .context(format!("can't the CSV at {}", Self::URL))?;

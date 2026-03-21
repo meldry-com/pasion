@@ -11,16 +11,16 @@ use mas_axum_utils::{
     cookies::CookieJar,
     csrf::{CsrfExt, ProtectedForm},
 };
-use mas_data_model::{AuthorizationGrantStage, BoxClock, BoxRng, MatrixUser};
-use mas_keystore::Keystore;
-use mas_matrix::HomeserverConnection;
-use mas_policy::Policy;
-use mas_router::{PostAuthAction, UrlBuilder};
-use mas_storage::{
+use pasion_data_model::{AuthorizationGrantStage, BoxClock, BoxRng, MatrixUser};
+use pasion_keystore::Keystore;
+use pasion_matrix::HomeserverConnection;
+use pasion_policy::Policy;
+use pasion_router::{PostAuthAction, UrlBuilder};
+use pasion_storage::{
     BoxRepository,
     oauth2::{OAuth2AuthorizationGrantRepository, OAuth2ClientRepository},
 };
-use mas_templates::{ConsentContext, PolicyViolationContext, TemplateContext, Templates};
+use pasion_templates::{ConsentContext, PolicyViolationContext, TemplateContext, Templates};
 use oauth2_types::requests::AuthorizationResponse;
 use thiserror::Error;
 use ulid::Ulid;
@@ -50,10 +50,10 @@ pub enum RouteError {
     NoSuchClient(Ulid),
 }
 
-impl_from_error_for_route!(mas_templates::TemplateError);
-impl_from_error_for_route!(mas_storage::RepositoryError);
-impl_from_error_for_route!(mas_policy::LoadError);
-impl_from_error_for_route!(mas_policy::EvaluationError);
+impl_from_error_for_route!(pasion_templates::TemplateError);
+impl_from_error_for_route!(pasion_storage::RepositoryError);
+impl_from_error_for_route!(pasion_policy::LoadError);
+impl_from_error_for_route!(pasion_policy::EvaluationError);
 impl_from_error_for_route!(crate::session::SessionLoadError);
 impl_from_error_for_route!(crate::oauth2::IdTokenSignatureError);
 impl_from_error_for_route!(super::callback::IntoCallbackDestinationError);
@@ -124,7 +124,7 @@ pub(crate) async fn get(
     }
 
     let Some(session) = maybe_session else {
-        let login = mas_router::Login::and_continue_grant(grant_id);
+        let login = pasion_router::Login::and_continue_grant(grant_id);
         return Ok((cookie_jar, url_builder.redirect(&login)).into_response());
     };
 
@@ -140,13 +140,13 @@ pub(crate) async fn get(
     repo.save().await?;
 
     let res = policy
-        .evaluate_authorization_grant(mas_policy::AuthorizationGrantInput {
+        .evaluate_authorization_grant(pasion_policy::AuthorizationGrantInput {
             user: Some(&session.user),
             client: &client,
             session_counts: Some(session_counts),
             scope: &grant.scope,
-            grant_type: mas_policy::GrantType::AuthorizationCode,
-            requester: mas_policy::Requester {
+            grant_type: pasion_policy::GrantType::AuthorizationCode,
+            requester: pasion_policy::Requester {
                 ip_address: activity_tracker.ip(),
                 user_agent,
             },
@@ -251,7 +251,7 @@ pub(crate) async fn post(
 
     let Some(browser_session) = maybe_session else {
         let next = PostAuthAction::continue_grant(grant_id);
-        let login = mas_router::Login::and_then(next);
+        let login = pasion_router::Login::and_then(next);
         return Ok((cookie_jar, url_builder.redirect(&login)).into_response());
     };
 
@@ -272,13 +272,13 @@ pub(crate) async fn post(
     let session_counts = count_user_sessions_for_limiting(&mut repo, &browser_session.user).await?;
 
     let res = policy
-        .evaluate_authorization_grant(mas_policy::AuthorizationGrantInput {
+        .evaluate_authorization_grant(pasion_policy::AuthorizationGrantInput {
             user: Some(&browser_session.user),
             client: &client,
             session_counts: Some(session_counts),
             scope: &grant.scope,
-            grant_type: mas_policy::GrantType::AuthorizationCode,
-            requester: mas_policy::Requester {
+            grant_type: pasion_policy::GrantType::AuthorizationCode,
+            requester: pasion_policy::Requester {
                 ip_address: activity_tracker.ip(),
                 user_agent,
             },

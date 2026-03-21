@@ -21,18 +21,18 @@ use mas_axum_utils::{
     ErrorWrapper,
     cookies::{CookieJar, CookieManager},
 };
-use mas_config::RateLimitingConfig;
-use mas_data_model::{AppVersion, BoxClock, BoxRng, SiteConfig, clock::MockClock};
-use mas_email::{MailTransport, Mailer};
-use mas_i18n::Translator;
-use mas_keystore::{Encrypter, JsonWebKey, JsonWebKeySet, Keystore, PrivateKey};
-use mas_matrix::{HomeserverConnection, MockHomeserverConnection};
-use mas_policy::{InstantiateError, Policy, PolicyFactory};
-use mas_router::{SimpleRoute, UrlBuilder};
-use mas_storage::{BoxRepository, BoxRepositoryFactory, RepositoryError, RepositoryFactory};
-use mas_storage_pg::PgRepositoryFactory;
-use mas_tasks::QueueWorker;
-use mas_templates::{SiteConfigExt, Templates};
+use pasion_config::RateLimitingConfig;
+use pasion_data_model::{AppVersion, BoxClock, BoxRng, SiteConfig, clock::MockClock};
+use pasion_email::{MailTransport, Mailer};
+use pasion_i18n::Translator;
+use pasion_keystore::{Encrypter, JsonWebKey, JsonWebKeySet, Keystore, PrivateKey};
+use pasion_matrix::{HomeserverConnection, MockHomeserverConnection};
+use pasion_policy::{InstantiateError, Policy, PolicyFactory};
+use pasion_router::{SimpleRoute, UrlBuilder};
+use pasion_storage::{BoxRepository, BoxRepositoryFactory, RepositoryError, RepositoryFactory};
+use pasion_storage_pg::PgRepositoryFactory;
+use pasion_tasks::QueueWorker;
+use pasion_templates::{SiteConfigExt, Templates};
 use oauth2_types::{registration::ClientRegistrationResponse, requests::AccessTokenResponse};
 use rand::SeedableRng;
 use rand_chacha::ChaChaRng;
@@ -72,7 +72,7 @@ pub(crate) async fn policy_factory(
 
     let file = tokio::fs::File::open(workspace_root.join("policies").join("policy.wasm")).await?;
 
-    let entrypoints = mas_policy::Entrypoints {
+    let entrypoints = pasion_policy::Entrypoints {
         register: "register/violation".to_owned(),
         client_registration: "client_registration/violation".to_owned(),
         authorization_grant: "authorization_grant/violation".to_owned(),
@@ -80,7 +80,7 @@ pub(crate) async fn policy_factory(
         email: "email/violation".to_owned(),
     };
 
-    let data = mas_policy::Data::new(server_name.to_owned(), None).with_rest(data);
+    let data = pasion_policy::Data::new(server_name.to_owned(), None).with_rest(data);
 
     let policy_factory = PolicyFactory::load(file, data, entrypoints).await?;
     let policy_factory = Arc::new(policy_factory);
@@ -177,7 +177,7 @@ impl TestState {
         )
         .await?;
 
-        let http_client = mas_http::reqwest_client();
+        let http_client = pasion_http::reqwest_client();
 
         // TODO: add more test keys to the store
         let rsa =
@@ -241,7 +241,7 @@ impl TestState {
             "hello@example.com".parse().unwrap(),
         );
 
-        let queue_worker = mas_tasks::init(
+        let queue_worker = pasion_tasks::init(
             PgRepositoryFactory::new(pool.clone()),
             Arc::clone(&clock),
             &mailer,
@@ -344,7 +344,7 @@ impl TestState {
     pub async fn token_with_scope(&mut self, scope: &str) -> String {
         // Provision a client
         let request =
-            Request::post(mas_router::OAuth2RegistrationEndpoint::PATH).json(serde_json::json!({
+            Request::post(pasion_router::OAuth2RegistrationEndpoint::PATH).json(serde_json::json!({
                 "client_uri": "https://example.com/",
                 "token_endpoint_auth_method": "client_secret_post",
                 "grant_types": ["client_credentials"],
@@ -371,7 +371,7 @@ impl TestState {
 
         // Ask for a token with the admin scope
         let request =
-            Request::post(mas_router::OAuth2TokenEndpoint::PATH).form(serde_json::json!({
+            Request::post(pasion_router::OAuth2TokenEndpoint::PATH).form(serde_json::json!({
                 "grant_type": "client_credentials",
                 "client_id": client_id,
                 "client_secret": client_secret,
@@ -406,7 +406,7 @@ impl TestState {
     ///
     /// Panics if the response status code is not 200 or 401.
     pub async fn is_access_token_valid(&self, token: &str) -> bool {
-        let request = Request::get(mas_router::OidcUserinfo::PATH)
+        let request = Request::get(pasion_router::OidcUserinfo::PATH)
             .bearer(token)
             .empty();
 
@@ -439,7 +439,7 @@ struct TestGraphQLState {
 
 #[async_trait::async_trait]
 impl graphql::State for TestGraphQLState {
-    async fn repository(&self) -> Result<BoxRepository, mas_storage::RepositoryError> {
+    async fn repository(&self) -> Result<BoxRepository, pasion_storage::RepositoryError> {
         self.repository_factory.create().await
     }
 
@@ -651,7 +651,7 @@ impl FromRequestParts<TestState> for BoxRepository {
 }
 
 impl FromRequestParts<TestState> for Policy {
-    type Rejection = ErrorWrapper<mas_policy::InstantiateError>;
+    type Rejection = ErrorWrapper<pasion_policy::InstantiateError>;
 
     async fn from_request_parts(
         _parts: &mut axum::http::request::Parts,

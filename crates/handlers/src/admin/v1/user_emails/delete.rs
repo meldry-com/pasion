@@ -2,8 +2,8 @@ use aide::{NoApi, OperationIo, transform::TransformOperation};
 use axum::{Json, response::IntoResponse};
 use hyper::StatusCode;
 use mas_axum_utils::record_error;
-use mas_data_model::BoxRng;
-use mas_storage::queue::{ProvisionUserJob, QueueJobRepositoryExt as _};
+use pasion_data_model::BoxRng;
+use pasion_storage::queue::{ProvisionUserJob, QueueJobRepositoryExt as _};
 use ulid::Ulid;
 
 use crate::{
@@ -21,7 +21,7 @@ pub enum RouteError {
     NotFound(Ulid),
 }
 
-impl_from_error_for_route!(mas_storage::RepositoryError);
+impl_from_error_for_route!(pasion_storage::RepositoryError);
 
 impl IntoResponse for RouteError {
     fn into_response(self) -> axum::response::Response {
@@ -79,7 +79,7 @@ mod tests {
     use ulid::Ulid;
 
     use crate::test_utils::{RequestBuilderExt, ResponseExt, TestState, setup};
-    #[sqlx::test(migrator = "mas_storage_pg::MIGRATOR")]
+    #[sqlx::test(migrator = "pasion_storage_pg::MIGRATOR")]
     async fn test_delete(pool: PgPool) {
         setup();
         let mut state = TestState::from_pool(pool).await.unwrap();
@@ -93,7 +93,7 @@ mod tests {
             .add(&mut rng, &state.clock, "alice".to_owned())
             .await
             .unwrap();
-        let mas_data_model::UserEmail { id, .. } = repo
+        let pasion_data_model::UserEmail { id, .. } = repo
             .user_email()
             .add(
                 &mut rng,
@@ -120,7 +120,7 @@ mod tests {
         response.assert_status(StatusCode::NOT_FOUND);
     }
 
-    #[sqlx::test(migrator = "mas_storage_pg::MIGRATOR")]
+    #[sqlx::test(migrator = "pasion_storage_pg::MIGRATOR")]
     async fn test_not_found(pool: PgPool) {
         setup();
         let mut state = TestState::from_pool(pool).await.unwrap();

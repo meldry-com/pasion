@@ -2,7 +2,7 @@ use std::net::IpAddr;
 
 use async_trait::async_trait;
 use chrono::{DateTime, Utc};
-use mas_data_model::{BrowserSession, Clock, CompatSession, CompatSsoLogin, Device, User};
+use pasion_data_model::{BrowserSession, Clock, CompatSession, CompatSsoLogin, Device, User};
 use rand_core::RngCore;
 use ulid::Ulid;
 

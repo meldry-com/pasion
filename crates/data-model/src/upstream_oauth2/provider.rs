@@ -1,5 +1,5 @@
 use chrono::{DateTime, Utc};
-use mas_iana::jose::JsonWebSignatureAlg;
+use pasion_iana::jose::JsonWebSignatureAlg;
 use oauth2_types::scope::Scope;
 use serde::{Deserialize, Serialize};
 use thiserror::Error;

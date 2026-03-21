@@ -4,11 +4,11 @@ use anyhow::Context;
 use camino::Utf8PathBuf;
 use clap::Parser;
 use figment::Figment;
-use mas_config::{
+use pasion_config::{
     ConfigurationSection, ConfigurationSectionExt, DatabaseConfig, MatrixConfig, SyncConfig,
     UpstreamOAuth2Config,
 };
-use mas_data_model::SystemClock;
+use pasion_data_model::SystemClock;
 use rand::thread_rng;
 use sqlx::{Connection, Either, PgConnection, postgres::PgConnectOptions, types::Uuid};
 use syn2mas::{
@@ -116,7 +116,7 @@ impl Options {
         )
         .await?;
 
-        mas_storage_pg::migrate(&mut mas_connection)
+        pasion_storage_pg::migrate(&mut mas_connection)
             .await
             .context("could not run migrations")?;
 
@@ -156,7 +156,7 @@ impl Options {
         let (mut check_warnings, mut check_errors) = syn2mas::palpo_config_check(&palpo_config);
         {
             let (extra_warnings, extra_errors) =
-                syn2mas::palpo_config_check_against_mas_config(&palpo_config, figment).await?;
+                syn2mas::palpo_config_check_against_pasion_config(&palpo_config, figment).await?;
             check_warnings.extend(extra_warnings);
             check_errors.extend(extra_errors);
         }
@@ -246,12 +246,12 @@ impl Options {
                 let occasional_progress_logger_task =
                     tokio::spawn(occasional_progress_logger(progress.clone()));
 
-                let mas_matrix =
+                let pasion_matrix =
                     MatrixConfig::extract(figment).map_err(anyhow::Error::from_boxed)?;
                 syn2mas::migrate(
                     reader,
                     writer,
-                    mas_matrix.homeserver,
+                    pasion_matrix.homeserver,
                     &clock,
                     &mut rng,
                     provider_id_mappings,

@@ -2,10 +2,10 @@ use std::{process::ExitCode, time::Duration};
 
 use clap::Parser;
 use figment::Figment;
-use mas_config::{AppConfig, ConfigurationSection};
-use mas_data_model::SystemClock;
-use mas_router::UrlBuilder;
-use mas_storage_pg::PgRepositoryFactory;
+use pasion_config::{AppConfig, ConfigurationSection};
+use pasion_data_model::SystemClock;
+use pasion_router::UrlBuilder;
+use pasion_storage_pg::PgRepositoryFactory;
 use tracing::{info, info_span};
 
 use crate::{
@@ -60,13 +60,13 @@ impl Options {
         let mailer = mailer_from_config(&config.email, &templates)?;
         test_mailer_in_background(&mailer, Duration::from_secs(30));
 
-        let http_client = mas_http::reqwest_client();
+        let http_client = pasion_http::reqwest_client();
         let conn = homeserver_connection_from_config(&config.matrix, http_client).await?;
 
         drop(config);
 
         info!("Starting task scheduler");
-        mas_tasks::init_and_run(
+        pasion_tasks::init_and_run(
             PgRepositoryFactory::new(pool.clone()),
             SystemClock::default(),
             &mailer,

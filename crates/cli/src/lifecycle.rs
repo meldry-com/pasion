@@ -1,8 +1,8 @@
 use std::{process::ExitCode, time::Duration};
 
 use futures_util::future::{BoxFuture, Either};
-use mas_handlers::ActivityTracker;
-use mas_templates::Templates;
+use pasion_handlers::ActivityTracker;
+use pasion_templates::Templates;
 use tokio::signal::unix::{Signal, SignalKind};
 use tokio_util::{sync::CancellationToken, task::TaskTracker};
 

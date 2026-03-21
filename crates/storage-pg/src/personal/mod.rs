@@ -10,10 +10,10 @@ pub use session::PgPersonalSessionRepository;
 #[cfg(test)]
 mod tests {
     use chrono::Duration;
-    use mas_data_model::{
+    use pasion_data_model::{
         Clock, Device, clock::MockClock, personal::session::PersonalSessionOwner,
     };
-    use mas_storage::{
+    use pasion_storage::{
         Pagination, RepositoryAccess,
         personal::{
             PersonalAccessTokenRepository, PersonalSessionFilter, PersonalSessionRepository,

@@ -1,7 +1,7 @@
 use chrono::Duration;
-use mas_data_model::{Clock, clock::MockClock};
-use mas_iana::jose::JsonWebSignatureAlg;
-use mas_storage::{
+use pasion_data_model::{Clock, clock::MockClock};
+use pasion_iana::jose::JsonWebSignatureAlg;
+use pasion_storage::{
     Pagination, RepositoryAccess,
     upstream_oauth2::{UpstreamOAuthProviderParams, UpstreamOAuthSessionFilter},
     user::{
@@ -745,26 +745,26 @@ async fn test_user_session(pool: PgPool) {
                 brand_name: None,
                 scope: Scope::from_iter([OPENID]),
                 token_endpoint_auth_method:
-                    mas_data_model::UpstreamOAuthProviderTokenAuthMethod::None,
+                    pasion_data_model::UpstreamOAuthProviderTokenAuthMethod::None,
                 token_endpoint_signing_alg: None,
                 id_token_signed_response_alg: JsonWebSignatureAlg::Rs256,
                 fetch_userinfo: false,
                 userinfo_signed_response_alg: None,
                 client_id: "client".to_owned(),
                 encrypted_client_secret: None,
-                claims_imports: mas_data_model::UpstreamOAuthProviderClaimsImports::default(),
+                claims_imports: pasion_data_model::UpstreamOAuthProviderClaimsImports::default(),
                 authorization_endpoint_override: None,
                 token_endpoint_override: None,
                 userinfo_endpoint_override: None,
                 jwks_uri_override: None,
-                discovery_mode: mas_data_model::UpstreamOAuthProviderDiscoveryMode::Disabled,
-                pkce_mode: mas_data_model::UpstreamOAuthProviderPkceMode::Disabled,
+                discovery_mode: pasion_data_model::UpstreamOAuthProviderDiscoveryMode::Disabled,
+                pkce_mode: pasion_data_model::UpstreamOAuthProviderPkceMode::Disabled,
                 response_mode: None,
                 additional_authorization_parameters: Vec::new(),
                 forward_login_hint: false,
                 ui_order: 0,
                 on_backchannel_logout:
-                    mas_data_model::UpstreamOAuthProviderOnBackchannelLogout::DoNothing,
+                    pasion_data_model::UpstreamOAuthProviderOnBackchannelLogout::DoNothing,
             },
         )
         .await

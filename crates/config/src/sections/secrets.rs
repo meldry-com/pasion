@@ -3,8 +3,8 @@ use std::borrow::Cow;
 use anyhow::{Context, bail};
 use camino::Utf8PathBuf;
 use futures_util::future::{try_join, try_join_all};
-use mas_jose::jwk::{JsonWebKey, JsonWebKeySet, Thumbprint};
-use mas_keystore::{Encrypter, Keystore, PrivateKey};
+use pasion_jose::jwk::{JsonWebKey, JsonWebKeySet, Thumbprint};
+use pasion_keystore::{Encrypter, Keystore, PrivateKey};
 use rand::{Rng, SeedableRng, distributions::Standard, prelude::Distribution as _};
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
@@ -160,7 +160,7 @@ impl KeyConfig {
     /// Returns the JSON Web Key derived from this key config.
     ///
     /// Password and/or key are read from file if they’re given as path.
-    async fn json_web_key(&self) -> anyhow::Result<JsonWebKey<mas_keystore::PrivateKey>> {
+    async fn json_web_key(&self) -> anyhow::Result<JsonWebKey<pasion_keystore::PrivateKey>> {
         let (key, password) = try_join(self.key(), self.password()).await?;
 
         let private_key = match password {
@@ -175,7 +175,7 @@ impl KeyConfig {
 
         Ok(JsonWebKey::new(private_key)
             .with_kid(kid)
-            .with_use(mas_iana::jose::JsonWebKeyUse::Sig))
+            .with_use(pasion_iana::jose::JsonWebKeyUse::Sig))
     }
 }
 
@@ -464,7 +464,7 @@ mod tests {
         Figment, Jail,
         providers::{Format, Yaml},
     };
-    use mas_jose::constraints::Constrainable;
+    use pasion_jose::constraints::Constrainable;
     use tokio::{runtime::Handle, task};
 
     use super::*;

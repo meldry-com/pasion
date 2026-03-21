@@ -3,19 +3,19 @@ use std::{
     sync::{Arc, LazyLock},
 };
 
-use mas_data_model::{
+use pasion_data_model::{
     BoxClock, Clock, Device, SystemClock, TokenFormatError, TokenType,
     personal::session::PersonalSessionOwner,
 };
-use mas_iana::oauth::{OAuthClientAuthenticationMethod, OAuthTokenTypeHint};
-use mas_keystore::Encrypter;
-use mas_matrix::HomeserverConnection;
-use mas_salvo_utils::{
+use pasion_iana::oauth::{OAuthClientAuthenticationMethod, OAuthTokenTypeHint};
+use pasion_keystore::Encrypter;
+use pasion_matrix::HomeserverConnection;
+use pasion_salvo_utils::{
     client_authorization::{ClientAuthorization, CredentialsVerificationError},
     record_error,
     sentry::SentryEventID,
 };
-use mas_storage::{
+use pasion_storage::{
     BoxRepository, BoxRepositoryFactory,
     compat::{CompatAccessTokenRepository, CompatRefreshTokenRepository, CompatSessionRepository},
     oauth2::{OAuth2AccessTokenRepository, OAuth2RefreshTokenRepository, OAuth2SessionRepository},
@@ -100,7 +100,7 @@ pub enum RouteError {
 
     /// The Device ID in the compat session can't be encoded as a scope
     #[error("device ID contains characters that are not allowed in a scope")]
-    CantEncodeDeviceID(#[from] mas_data_model::ToScopeTokenError),
+    CantEncodeDeviceID(#[from] pasion_data_model::ToScopeTokenError),
 
     #[error("invalid user {0}")]
     InvalidUser(Ulid),
@@ -190,7 +190,7 @@ impl Scribe for RouteError {
     }
 }
 
-impl_from_error_for_route!(mas_storage::RepositoryError);
+impl_from_error_for_route!(pasion_storage::RepositoryError);
 
 const INACTIVE: IntrospectionResponse = IntrospectionResponse {
     active: false,

@@ -32,7 +32,7 @@ use tracing_opentelemetry::OpenTelemetrySpanExt;
 
 use crate::METER;
 
-static USER_AGENT: &str = concat!("palpo-auth-service/", env!("CARGO_PKG_VERSION"));
+static USER_AGENT: &str = concat!("pasion/", env!("CARGO_PKG_VERSION"));
 
 static HTTP_REQUESTS_DURATION_HISTOGRAM: LazyLock<Histogram<u64>> = LazyLock::new(|| {
     METER

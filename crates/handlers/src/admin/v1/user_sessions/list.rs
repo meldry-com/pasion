@@ -4,7 +4,7 @@ use axum_extra::extract::{Query, QueryRejection};
 use axum_macros::FromRequestParts;
 use hyper::StatusCode;
 use mas_axum_utils::record_error;
-use mas_storage::{pagination::Page, user::BrowserSessionFilter};
+use pasion_storage::{pagination::Page, user::BrowserSessionFilter};
 use schemars::JsonSchema;
 use serde::Deserialize;
 use ulid::Ulid;
@@ -88,7 +88,7 @@ pub enum RouteError {
     InvalidFilter(#[from] QueryRejection),
 }
 
-impl_from_error_for_route!(mas_storage::RepositoryError);
+impl_from_error_for_route!(pasion_storage::RepositoryError);
 
 impl IntoResponse for RouteError {
     fn into_response(self) -> axum::response::Response {
@@ -113,11 +113,11 @@ Use the `filter[status]` parameter to filter the sessions by their status and `p
         .tag("user-session")
         .response_with::<200, Json<PaginatedResponse<UserSession>>, _>(|t| {
             let sessions = UserSession::samples();
-            let pagination = mas_storage::Pagination::first(sessions.len());
+            let pagination = pasion_storage::Pagination::first(sessions.len());
             let page = Page {
                 edges: sessions
                     .into_iter()
-                    .map(|node| mas_storage::pagination::Edge {
+                    .map(|node| pasion_storage::pagination::Edge {
                         cursor: node.id(),
                         node,
                     })
@@ -210,7 +210,7 @@ mod tests {
 
     use crate::test_utils::{RequestBuilderExt, ResponseExt, TestState, setup};
 
-    #[sqlx::test(migrator = "mas_storage_pg::MIGRATOR")]
+    #[sqlx::test(migrator = "pasion_storage_pg::MIGRATOR")]
     async fn test_user_session_list(pool: PgPool) {
         setup();
         let mut state = TestState::from_pool(pool).await.unwrap();

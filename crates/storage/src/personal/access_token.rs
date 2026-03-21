@@ -1,6 +1,6 @@
 use async_trait::async_trait;
 use chrono::Duration;
-use mas_data_model::{
+use pasion_data_model::{
     Clock,
     personal::{PersonalAccessToken, session::PersonalSession},
 };

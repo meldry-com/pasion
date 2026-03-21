@@ -18,8 +18,8 @@ pub use self::{
 #[cfg(test)]
 mod tests {
     use chrono::Duration;
-    use mas_data_model::{AuthorizationCode, Clock, clock::MockClock};
-    use mas_storage::{
+    use pasion_data_model::{AuthorizationCode, Clock, clock::MockClock};
+    use pasion_storage::{
         Pagination,
         oauth2::{OAuth2DeviceCodeGrantParams, OAuth2SessionFilter, OAuth2SessionRepository},
     };

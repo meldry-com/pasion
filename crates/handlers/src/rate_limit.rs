@@ -1,8 +1,8 @@
 use std::{net::IpAddr, sync::Arc, time::Duration};
 
 use governor::{RateLimiter, clock::QuantaClock, state::keyed::DashMapStateStore};
-use mas_config::RateLimitingConfig;
-use mas_data_model::{User, UserEmailAuthentication};
+use pasion_config::RateLimitingConfig;
+use pasion_data_model::{User, UserEmailAuthentication};
 use ulid::Ulid;
 
 #[derive(Debug, Clone, thiserror::Error)]
@@ -295,7 +295,7 @@ impl Limiter {
 
 #[cfg(test)]
 mod tests {
-    use mas_data_model::{Clock, User, clock::MockClock};
+    use pasion_data_model::{Clock, User, clock::MockClock};
     use rand::SeedableRng;
 
     use super::*;

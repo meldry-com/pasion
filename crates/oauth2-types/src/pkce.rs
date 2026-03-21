@@ -5,7 +5,7 @@
 use std::borrow::Cow;
 
 use base64ct::{Base64UrlUnpadded, Encoding};
-use mas_iana::oauth::PkceCodeChallengeMethod;
+use pasion_iana::oauth::PkceCodeChallengeMethod;
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use thiserror::Error;

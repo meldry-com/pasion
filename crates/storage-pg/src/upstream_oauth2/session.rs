@@ -1,10 +1,10 @@
 use async_trait::async_trait;
 use chrono::{DateTime, Utc};
-use mas_data_model::{
+use pasion_data_model::{
     BrowserSession, Clock, UpstreamOAuthAuthorizationSession,
     UpstreamOAuthAuthorizationSessionState, UpstreamOAuthLink, UpstreamOAuthProvider,
 };
-use mas_storage::{
+use pasion_storage::{
     Page, Pagination,
     pagination::Node,
     upstream_oauth2::{UpstreamOAuthSessionFilter, UpstreamOAuthSessionRepository},

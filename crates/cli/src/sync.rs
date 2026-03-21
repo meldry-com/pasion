@@ -2,77 +2,77 @@
 
 use std::collections::{BTreeMap, BTreeSet};
 
-use mas_config::{ClientsConfig, UpstreamOAuth2Config};
-use mas_data_model::Clock;
-use mas_keystore::Encrypter;
-use mas_storage::{
+use pasion_config::{ClientsConfig, UpstreamOAuth2Config};
+use pasion_data_model::Clock;
+use pasion_keystore::Encrypter;
+use pasion_storage::{
     Pagination, RepositoryAccess,
     upstream_oauth2::{UpstreamOAuthProviderFilter, UpstreamOAuthProviderParams},
 };
-use mas_storage_pg::PgRepository;
+use pasion_storage_pg::PgRepository;
 use sqlx::{Connection, PgConnection, postgres::PgAdvisoryLock};
 use tracing::{error, info, info_span, warn};
 
 fn map_import_action(
-    config: mas_config::UpstreamOAuth2ImportAction,
-) -> mas_data_model::UpstreamOAuthProviderImportAction {
+    config: pasion_config::UpstreamOAuth2ImportAction,
+) -> pasion_data_model::UpstreamOAuthProviderImportAction {
     match config {
-        mas_config::UpstreamOAuth2ImportAction::Ignore => {
-            mas_data_model::UpstreamOAuthProviderImportAction::Ignore
+        pasion_config::UpstreamOAuth2ImportAction::Ignore => {
+            pasion_data_model::UpstreamOAuthProviderImportAction::Ignore
         }
-        mas_config::UpstreamOAuth2ImportAction::Suggest => {
-            mas_data_model::UpstreamOAuthProviderImportAction::Suggest
+        pasion_config::UpstreamOAuth2ImportAction::Suggest => {
+            pasion_data_model::UpstreamOAuthProviderImportAction::Suggest
         }
-        mas_config::UpstreamOAuth2ImportAction::Force => {
-            mas_data_model::UpstreamOAuthProviderImportAction::Force
+        pasion_config::UpstreamOAuth2ImportAction::Force => {
+            pasion_data_model::UpstreamOAuthProviderImportAction::Force
         }
-        mas_config::UpstreamOAuth2ImportAction::Require => {
-            mas_data_model::UpstreamOAuthProviderImportAction::Require
+        pasion_config::UpstreamOAuth2ImportAction::Require => {
+            pasion_data_model::UpstreamOAuthProviderImportAction::Require
         }
     }
 }
 
 fn map_import_on_conflict(
-    config: mas_config::UpstreamOAuth2OnConflict,
-) -> mas_data_model::UpstreamOAuthProviderOnConflict {
+    config: pasion_config::UpstreamOAuth2OnConflict,
+) -> pasion_data_model::UpstreamOAuthProviderOnConflict {
     match config {
-        mas_config::UpstreamOAuth2OnConflict::Add => {
-            mas_data_model::UpstreamOAuthProviderOnConflict::Add
+        pasion_config::UpstreamOAuth2OnConflict::Add => {
+            pasion_data_model::UpstreamOAuthProviderOnConflict::Add
         }
-        mas_config::UpstreamOAuth2OnConflict::Replace => {
-            mas_data_model::UpstreamOAuthProviderOnConflict::Replace
+        pasion_config::UpstreamOAuth2OnConflict::Replace => {
+            pasion_data_model::UpstreamOAuthProviderOnConflict::Replace
         }
-        mas_config::UpstreamOAuth2OnConflict::Set => {
-            mas_data_model::UpstreamOAuthProviderOnConflict::Set
+        pasion_config::UpstreamOAuth2OnConflict::Set => {
+            pasion_data_model::UpstreamOAuthProviderOnConflict::Set
         }
-        mas_config::UpstreamOAuth2OnConflict::Fail => {
-            mas_data_model::UpstreamOAuthProviderOnConflict::Fail
+        pasion_config::UpstreamOAuth2OnConflict::Fail => {
+            pasion_data_model::UpstreamOAuthProviderOnConflict::Fail
         }
     }
 }
 
 fn map_claims_imports(
-    config: &mas_config::UpstreamOAuth2ClaimsImports,
-) -> mas_data_model::UpstreamOAuthProviderClaimsImports {
-    mas_data_model::UpstreamOAuthProviderClaimsImports {
-        subject: mas_data_model::UpstreamOAuthProviderSubjectPreference {
+    config: &pasion_config::UpstreamOAuth2ClaimsImports,
+) -> pasion_data_model::UpstreamOAuthProviderClaimsImports {
+    pasion_data_model::UpstreamOAuthProviderClaimsImports {
+        subject: pasion_data_model::UpstreamOAuthProviderSubjectPreference {
             template: config.subject.template.clone(),
         },
         skip_confirmation: config.skip_confirmation,
-        localpart: mas_data_model::UpstreamOAuthProviderLocalpartPreference {
+        localpart: pasion_data_model::UpstreamOAuthProviderLocalpartPreference {
             action: map_import_action(config.localpart.action),
             template: config.localpart.template.clone(),
             on_conflict: map_import_on_conflict(config.localpart.on_conflict),
         },
-        displayname: mas_data_model::UpstreamOAuthProviderImportPreference {
+        displayname: pasion_data_model::UpstreamOAuthProviderImportPreference {
             action: map_import_action(config.displayname.action),
             template: config.displayname.template.clone(),
         },
-        email: mas_data_model::UpstreamOAuthProviderImportPreference {
+        email: pasion_data_model::UpstreamOAuthProviderImportPreference {
             action: map_import_action(config.email.action),
             template: config.email.template.clone(),
         },
-        account_name: mas_data_model::UpstreamOAuthProviderSubjectPreference {
+        account_name: pasion_data_model::UpstreamOAuthProviderSubjectPreference {
             template: config.account_name.template.clone(),
         },
     }
@@ -174,10 +174,10 @@ pub async fn config_sync(
             match len {
                 0 => {}
                 1 => warn!(
-                    "A provider is soft-deleted in the database. Run `mas-cli config sync --prune` to delete it."
+                    "A provider is soft-deleted in the database. Run `pasion-cli config sync --prune` to delete it."
                 ),
                 n => warn!(
-                    "{n} providers are soft-deleted in the database. Run `mas-cli config sync --prune` to delete them."
+                    "{n} providers are soft-deleted in the database. Run `pasion-cli config sync --prune` to delete them."
                 ),
             }
         }
@@ -223,46 +223,46 @@ pub async fn config_sync(
             };
 
             let discovery_mode = match provider.discovery_mode {
-                mas_config::UpstreamOAuth2DiscoveryMode::Oidc => {
-                    mas_data_model::UpstreamOAuthProviderDiscoveryMode::Oidc
+                pasion_config::UpstreamOAuth2DiscoveryMode::Oidc => {
+                    pasion_data_model::UpstreamOAuthProviderDiscoveryMode::Oidc
                 }
-                mas_config::UpstreamOAuth2DiscoveryMode::Insecure => {
-                    mas_data_model::UpstreamOAuthProviderDiscoveryMode::Insecure
+                pasion_config::UpstreamOAuth2DiscoveryMode::Insecure => {
+                    pasion_data_model::UpstreamOAuthProviderDiscoveryMode::Insecure
                 }
-                mas_config::UpstreamOAuth2DiscoveryMode::Disabled => {
-                    mas_data_model::UpstreamOAuthProviderDiscoveryMode::Disabled
+                pasion_config::UpstreamOAuth2DiscoveryMode::Disabled => {
+                    pasion_data_model::UpstreamOAuthProviderDiscoveryMode::Disabled
                 }
             };
 
             let token_endpoint_auth_method = match provider.token_endpoint_auth_method {
-                mas_config::UpstreamOAuth2TokenAuthMethod::None => {
-                    mas_data_model::UpstreamOAuthProviderTokenAuthMethod::None
+                pasion_config::UpstreamOAuth2TokenAuthMethod::None => {
+                    pasion_data_model::UpstreamOAuthProviderTokenAuthMethod::None
                 }
-                mas_config::UpstreamOAuth2TokenAuthMethod::ClientSecretBasic => {
-                    mas_data_model::UpstreamOAuthProviderTokenAuthMethod::ClientSecretBasic
+                pasion_config::UpstreamOAuth2TokenAuthMethod::ClientSecretBasic => {
+                    pasion_data_model::UpstreamOAuthProviderTokenAuthMethod::ClientSecretBasic
                 }
-                mas_config::UpstreamOAuth2TokenAuthMethod::ClientSecretPost => {
-                    mas_data_model::UpstreamOAuthProviderTokenAuthMethod::ClientSecretPost
+                pasion_config::UpstreamOAuth2TokenAuthMethod::ClientSecretPost => {
+                    pasion_data_model::UpstreamOAuthProviderTokenAuthMethod::ClientSecretPost
                 }
-                mas_config::UpstreamOAuth2TokenAuthMethod::ClientSecretJwt => {
-                    mas_data_model::UpstreamOAuthProviderTokenAuthMethod::ClientSecretJwt
+                pasion_config::UpstreamOAuth2TokenAuthMethod::ClientSecretJwt => {
+                    pasion_data_model::UpstreamOAuthProviderTokenAuthMethod::ClientSecretJwt
                 }
-                mas_config::UpstreamOAuth2TokenAuthMethod::PrivateKeyJwt => {
-                    mas_data_model::UpstreamOAuthProviderTokenAuthMethod::PrivateKeyJwt
+                pasion_config::UpstreamOAuth2TokenAuthMethod::PrivateKeyJwt => {
+                    pasion_data_model::UpstreamOAuthProviderTokenAuthMethod::PrivateKeyJwt
                 }
-                mas_config::UpstreamOAuth2TokenAuthMethod::SignInWithApple => {
-                    mas_data_model::UpstreamOAuthProviderTokenAuthMethod::SignInWithApple
+                pasion_config::UpstreamOAuth2TokenAuthMethod::SignInWithApple => {
+                    pasion_data_model::UpstreamOAuthProviderTokenAuthMethod::SignInWithApple
                 }
             };
 
             let response_mode = provider
                 .response_mode
                 .map(|response_mode| match response_mode {
-                    mas_config::UpstreamOAuth2ResponseMode::Query => {
-                        mas_data_model::UpstreamOAuthProviderResponseMode::Query
+                    pasion_config::UpstreamOAuth2ResponseMode::Query => {
+                        pasion_data_model::UpstreamOAuthProviderResponseMode::Query
                     }
-                    mas_config::UpstreamOAuth2ResponseMode::FormPost => {
-                        mas_data_model::UpstreamOAuthProviderResponseMode::FormPost
+                    pasion_config::UpstreamOAuth2ResponseMode::FormPost => {
+                        pasion_data_model::UpstreamOAuthProviderResponseMode::FormPost
                     }
                 });
 
@@ -281,26 +281,26 @@ pub async fn config_sync(
             }
 
             let pkce_mode = match provider.pkce_method {
-                mas_config::UpstreamOAuth2PkceMethod::Auto => {
-                    mas_data_model::UpstreamOAuthProviderPkceMode::Auto
+                pasion_config::UpstreamOAuth2PkceMethod::Auto => {
+                    pasion_data_model::UpstreamOAuthProviderPkceMode::Auto
                 }
-                mas_config::UpstreamOAuth2PkceMethod::Always => {
-                    mas_data_model::UpstreamOAuthProviderPkceMode::S256
+                pasion_config::UpstreamOAuth2PkceMethod::Always => {
+                    pasion_data_model::UpstreamOAuthProviderPkceMode::S256
                 }
-                mas_config::UpstreamOAuth2PkceMethod::Never => {
-                    mas_data_model::UpstreamOAuthProviderPkceMode::Disabled
+                pasion_config::UpstreamOAuth2PkceMethod::Never => {
+                    pasion_data_model::UpstreamOAuthProviderPkceMode::Disabled
                 }
             };
 
             let on_backchannel_logout = match provider.on_backchannel_logout {
-                mas_config::UpstreamOAuth2OnBackchannelLogout::DoNothing => {
-                    mas_data_model::UpstreamOAuthProviderOnBackchannelLogout::DoNothing
+                pasion_config::UpstreamOAuth2OnBackchannelLogout::DoNothing => {
+                    pasion_data_model::UpstreamOAuthProviderOnBackchannelLogout::DoNothing
                 }
-                mas_config::UpstreamOAuth2OnBackchannelLogout::LogoutBrowserOnly => {
-                    mas_data_model::UpstreamOAuthProviderOnBackchannelLogout::LogoutBrowserOnly
+                pasion_config::UpstreamOAuth2OnBackchannelLogout::LogoutBrowserOnly => {
+                    pasion_data_model::UpstreamOAuthProviderOnBackchannelLogout::LogoutBrowserOnly
                 }
-                mas_config::UpstreamOAuth2OnBackchannelLogout::LogoutAll => {
-                    mas_data_model::UpstreamOAuthProviderOnBackchannelLogout::LogoutAll
+                pasion_config::UpstreamOAuth2OnBackchannelLogout::LogoutAll => {
+                    pasion_data_model::UpstreamOAuthProviderOnBackchannelLogout::LogoutAll
                 }
             };
 

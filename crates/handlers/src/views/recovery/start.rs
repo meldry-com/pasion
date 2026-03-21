@@ -12,13 +12,13 @@ use mas_axum_utils::{
     cookies::CookieJar,
     csrf::{CsrfExt, ProtectedForm},
 };
-use mas_data_model::{BoxClock, BoxRng, SiteConfig};
-use mas_router::UrlBuilder;
-use mas_storage::{
+use pasion_data_model::{BoxClock, BoxRng, SiteConfig};
+use pasion_router::UrlBuilder;
+use pasion_storage::{
     BoxRepository,
     queue::{QueueJobRepositoryExt as _, SendAccountRecoveryEmailsJob},
 };
-use mas_templates::{
+use pasion_templates::{
     EmptyContext, FieldError, FormError, FormState, RecoveryStartContext, RecoveryStartFormField,
     TemplateContext, Templates,
 };
@@ -53,7 +53,7 @@ pub(crate) async fn get(
     let maybe_session = session_info.load_active_session(&mut repo).await?;
     if maybe_session.is_some() {
         // TODO: redirect to continue whatever action was going on
-        return Ok((cookie_jar, url_builder.redirect(&mas_router::Index)).into_response());
+        return Ok((cookie_jar, url_builder.redirect(&pasion_router::Index)).into_response());
     }
 
     let context = RecoveryStartContext::new()
@@ -93,7 +93,7 @@ pub(crate) async fn post(
     let maybe_session = session_info.load_active_session(&mut repo).await?;
     if maybe_session.is_some() {
         // TODO: redirect to continue whatever action was going on
-        return Ok((cookie_jar, url_builder.redirect(&mas_router::Index)).into_response());
+        return Ok((cookie_jar, url_builder.redirect(&pasion_router::Index)).into_response());
     }
 
     let user_agent = user_agent.as_str().to_owned();
@@ -151,7 +151,7 @@ pub(crate) async fn post(
 
     Ok((
         cookie_jar,
-        url_builder.redirect(&mas_router::AccountRecoveryProgress::new(session.id)),
+        url_builder.redirect(&pasion_router::AccountRecoveryProgress::new(session.id)),
     )
         .into_response())
 }

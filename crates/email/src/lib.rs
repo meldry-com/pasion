@@ -8,7 +8,7 @@ mod transport;
 pub use lettre::{
     Address, message::Mailbox, transport::smtp::authentication::Credentials as SmtpCredentials,
 };
-pub use mas_templates::EmailVerificationContext;
+pub use pasion_templates::EmailVerificationContext;
 
 pub use self::{
     mailer::Mailer,

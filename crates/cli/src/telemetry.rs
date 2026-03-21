@@ -4,7 +4,7 @@ use anyhow::Context as _;
 use bytes::Bytes;
 use http_body_util::Full;
 use hyper::{Response, header::CONTENT_TYPE};
-use mas_config::{
+use pasion_config::{
     MetricsConfig, MetricsExporterKind, Propagator, TelemetryConfig, TracingConfig,
     TracingExporterKind,
 };
@@ -47,7 +47,7 @@ pub fn setup(config: &TelemetryConfig) -> anyhow::Result<()> {
 
     // The CORS filter needs to know what headers it should whitelist for
     // CORS-protected requests.
-    mas_http::set_propagator(&propagator);
+    pasion_http::set_propagator(&propagator);
     opentelemetry::global::set_text_map_propagator(propagator);
 
     init_tracer(&config.tracing).context("Failed to configure traces exporter")?;
@@ -129,7 +129,7 @@ fn init_tracer(config: &TracingConfig) -> anyhow::Result<()> {
         TracingExporterKind::Otlp => {
             let mut exporter = opentelemetry_otlp::SpanExporter::builder()
                 .with_http()
-                .with_http_client(mas_http::reqwest_client());
+                .with_http_client(pasion_http::reqwest_client());
             if let Some(endpoint) = &config.endpoint {
                 exporter = exporter.with_endpoint(endpoint.as_str());
             }
@@ -165,7 +165,7 @@ fn otlp_metric_reader(
 ) -> anyhow::Result<PeriodicReader<opentelemetry_otlp::MetricExporter>> {
     let mut exporter = opentelemetry_otlp::MetricExporter::builder()
         .with_http()
-        .with_http_client(mas_http::reqwest_client());
+        .with_http_client(pasion_http::reqwest_client());
     if let Some(endpoint) = endpoint {
         exporter = exporter.with_endpoint(endpoint.to_string());
     }

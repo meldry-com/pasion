@@ -1,7 +1,7 @@
 use std::{collections::HashMap, net::IpAddr};
 
 use chrono::{DateTime, Utc};
-use mas_storage::{
+use pasion_storage::{
     BoxRepositoryFactory, RepositoryAccess, RepositoryError, user::BrowserSessionRepository,
 };
 use opentelemetry::{

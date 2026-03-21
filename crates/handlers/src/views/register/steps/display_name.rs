@@ -9,10 +9,10 @@ use mas_axum_utils::{
     cookies::CookieJar,
     csrf::{CsrfExt as _, ProtectedForm},
 };
-use mas_data_model::{BoxClock, BoxRng};
-use mas_router::{PostAuthAction, UrlBuilder};
-use mas_storage::BoxRepository;
-use mas_templates::{
+use pasion_data_model::{BoxClock, BoxRng};
+use pasion_router::{PostAuthAction, UrlBuilder};
+use pasion_storage::BoxRepository;
+use pasion_templates::{
     FieldError, RegisterStepsDisplayNameContext, RegisterStepsDisplayNameFormField,
     TemplateContext as _, Templates, ToFormState,
 };
@@ -38,7 +38,7 @@ pub(crate) struct DisplayNameForm {
 }
 
 impl ToFormState for DisplayNameForm {
-    type Field = mas_templates::RegisterStepsDisplayNameFormField;
+    type Field = pasion_templates::RegisterStepsDisplayNameFormField;
 }
 
 #[tracing::instrument(
@@ -173,6 +173,6 @@ pub(crate) async fn post(
 
     repo.save().await?;
 
-    let destination = mas_router::RegisterFinish::new(registration.id);
+    let destination = pasion_router::RegisterFinish::new(registration.id);
     return Ok((cookie_jar, url_builder.redirect(&destination)).into_response());
 }

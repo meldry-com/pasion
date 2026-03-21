@@ -1,10 +1,10 @@
 //! [OAuth 2.0] and [OpenID Connect] types.
 //!
-//! This is part of the [Palpo Authentication Service] project.
+//! This is part of the [Pasion] project.
 //!
 //! [OAuth 2.0]: https://oauth.net/2/
 //! [OpenID Connect]: https://openid.net/connect/
-//! [Palpo Authentication Service]: https://github.com/palpo-im/palpo-auth-service
+//! [Pasion]: https://github.com/palpo-im/pasion
 
 #![deny(missing_docs)]
 #![allow(clippy::module_name_repetitions)]

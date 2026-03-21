@@ -1,6 +1,6 @@
 use std::collections::HashSet;
 
-use mas_iana::jose::{JsonWebKeyType, JsonWebKeyUse, JsonWebSignatureAlg};
+use pasion_iana::jose::{JsonWebKeyType, JsonWebKeyUse, JsonWebSignatureAlg};
 
 use crate::jwt::JsonWebSignatureHeader;
 

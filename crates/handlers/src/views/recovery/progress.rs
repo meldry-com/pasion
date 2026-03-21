@@ -9,13 +9,13 @@ use mas_axum_utils::{
     cookies::CookieJar,
     csrf::{CsrfExt, ProtectedForm},
 };
-use mas_data_model::{BoxClock, BoxRng, SiteConfig};
-use mas_router::UrlBuilder;
-use mas_storage::{
+use pasion_data_model::{BoxClock, BoxRng, SiteConfig};
+use pasion_router::UrlBuilder;
+use pasion_storage::{
     BoxRepository,
     queue::{QueueJobRepositoryExt as _, SendAccountRecoveryEmailsJob},
 };
-use mas_templates::{EmptyContext, RecoveryProgressContext, TemplateContext, Templates};
+use pasion_templates::{EmptyContext, RecoveryProgressContext, TemplateContext, Templates};
 use ulid::Ulid;
 
 use crate::{Limiter, PreferredLanguage, RequesterFingerprint};
@@ -43,14 +43,14 @@ pub(crate) async fn get(
     let maybe_session = session_info.load_active_session(&mut repo).await?;
     if maybe_session.is_some() {
         // TODO: redirect to continue whatever action was going on
-        return Ok((cookie_jar, url_builder.redirect(&mas_router::Index)).into_response());
+        return Ok((cookie_jar, url_builder.redirect(&pasion_router::Index)).into_response());
     }
 
     let Some(recovery_session) = repo.user_recovery().lookup_session(id).await? else {
         // XXX: is that the right thing to do?
         return Ok((
             cookie_jar,
-            url_builder.redirect(&mas_router::AccountRecoveryStart),
+            url_builder.redirect(&pasion_router::AccountRecoveryStart),
         )
             .into_response());
     };
@@ -97,14 +97,14 @@ pub(crate) async fn post(
     let maybe_session = session_info.load_active_session(&mut repo).await?;
     if maybe_session.is_some() {
         // TODO: redirect to continue whatever action was going on
-        return Ok((cookie_jar, url_builder.redirect(&mas_router::Index)).into_response());
+        return Ok((cookie_jar, url_builder.redirect(&pasion_router::Index)).into_response());
     }
 
     let Some(recovery_session) = repo.user_recovery().lookup_session(id).await? else {
         // XXX: is that the right thing to do?
         return Ok((
             cookie_jar,
-            url_builder.redirect(&mas_router::AccountRecoveryStart),
+            url_builder.redirect(&pasion_router::AccountRecoveryStart),
         )
             .into_response());
     };

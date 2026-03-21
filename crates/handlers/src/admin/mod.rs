@@ -14,15 +14,15 @@ use axum::{
 use hyper::header::{ACCEPT, AUTHORIZATION, CONTENT_TYPE};
 use indexmap::IndexMap;
 use mas_axum_utils::InternalError;
-use mas_data_model::{AppVersion, BoxRng, SiteConfig};
-use mas_http::CorsLayerExt;
-use mas_matrix::HomeserverConnection;
-use mas_policy::PolicyFactory;
-use mas_router::{
+use pasion_data_model::{AppVersion, BoxRng, SiteConfig};
+use pasion_http::CorsLayerExt;
+use pasion_matrix::HomeserverConnection;
+use pasion_policy::PolicyFactory;
+use pasion_router::{
     ApiDoc, ApiDocCallback, OAuth2AuthorizationEndpoint, OAuth2TokenEndpoint, Route, SimpleRoute,
     UrlBuilder,
 };
-use mas_templates::{ApiDocContext, Templates};
+use pasion_templates::{ApiDocContext, Templates};
 use schemars::transform::AddNullable;
 use tower_http::cors::{Any, CorsLayer};
 
@@ -37,7 +37,7 @@ use self::call_context::CallContext;
 use crate::passwords::PasswordManager;
 
 fn finish(t: TransformOpenApi) -> TransformOpenApi {
-    t.title("Palpo Authentication Service admin API")
+    t.title("Pasion admin API")
         .tag(Tag {
             name: "server".to_owned(),
             description: Some("Information about the server".to_owned()),

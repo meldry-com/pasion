@@ -6,7 +6,7 @@ use std::collections::HashMap;
 
 use headers::{ContentType, HeaderMapExt, HeaderValue};
 use http::header::ACCEPT;
-use mas_http::RequestBuilderExt;
+use pasion_http::RequestBuilderExt;
 use mime::Mime;
 use serde_json::Value;
 use url::Url;
@@ -44,7 +44,7 @@ use crate::{
 /// Returns an error if the request fails, the response is invalid or the
 /// validation of the signed response fails.
 ///
-/// [`Claim`]: mas_jose::claims::Claim
+/// [`Claim`]: pasion_jose::claims::Claim
 #[tracing::instrument(skip_all, fields(userinfo_endpoint))]
 pub async fn fetch_userinfo(
     http_client: &reqwest::Client,

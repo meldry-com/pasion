@@ -8,7 +8,7 @@ use ::minijinja::{machinery::WhitespaceConfig, syntax::SyntaxConfig};
 use camino::Utf8PathBuf;
 use clap::Parser;
 use key::Context;
-use mas_i18n::translations::TranslationTree;
+use pasion_i18n::translations::TranslationTree;
 
 mod key;
 mod minijinja;

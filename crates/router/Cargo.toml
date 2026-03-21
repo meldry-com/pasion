@@ -1,5 +1,5 @@
 [package]
-name = "mas-router"
+name = "pasion-router"
 version.workspace = true
 authors.workspace = true
 edition.workspace = true

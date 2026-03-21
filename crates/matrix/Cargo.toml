@@ -1,5 +1,5 @@
 [package]
-name = "mas-matrix"
+name = "pasion-matrix"
 version.workspace = true
 authors.workspace = true
 edition.workspace = true

@@ -2,7 +2,7 @@ use std::ops::{Deref, DerefMut};
 
 use async_trait::async_trait;
 use futures_util::{FutureExt, TryFutureExt, future::BoxFuture};
-use mas_storage::{
+use pasion_storage::{
     BoxRepository, BoxRepositoryFactory, MapErr, Repository, RepositoryAccess, RepositoryError,
     RepositoryFactory, RepositoryTransaction,
     app_session::AppSessionRepository,
@@ -326,7 +326,7 @@ where
 
     fn personal_access_token<'c>(
         &'c mut self,
-    ) -> Box<dyn mas_storage::personal::PersonalAccessTokenRepository<Error = Self::Error> + 'c>
+    ) -> Box<dyn pasion_storage::personal::PersonalAccessTokenRepository<Error = Self::Error> + 'c>
     {
         Box::new(PgPersonalAccessTokenRepository::new(self.conn.as_mut()))
     }

@@ -55,7 +55,7 @@ macro_rules! impl_from_error_for_route {
     };
 }
 
-pub use mas_salvo_utils::{ErrorWrapper, cookies::CookieManager};
+pub use pasion_salvo_utils::{ErrorWrapper, cookies::CookieManager};
 
 pub use self::{
     activity_tracker::{ActivityTracker, Bound as BoundActivityTracker},

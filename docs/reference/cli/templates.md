@@ -10,7 +10,7 @@ Check the validity of the templates loaded by the config.
 It compiles the templates and then renders them with different contexts.
 
 ```console
-$ mas-cli templates check
+$ pasion-cli templates check
 INFO mas_core::templates: Loading templates from filesystem path=./templates/**/*.{html,txt}
 INFO mas_core::templates::check: Rendering template name="login.html" context={"csrf_token":"fake_csrf_token","form":{"fields_errors":{},"form_errors":[],"has_errors":false}}
 INFO mas_core::templates::check: Rendering template name="register.html" context={"__UNUSED":null,"csrf_token":"fake_csrf_token"}

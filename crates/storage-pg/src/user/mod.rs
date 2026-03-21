@@ -2,8 +2,8 @@
 //! repositories
 
 use async_trait::async_trait;
-use mas_data_model::{Clock, User};
-use mas_storage::user::{UserFilter, UserRepository};
+use pasion_data_model::{Clock, User};
+use pasion_storage::user::{UserFilter, UserRepository};
 use rand::RngCore;
 use sea_query::{Expr, PostgresQueryBuilder, Query, extension::postgres::PgExpr as _};
 use sea_query_binder::SqlxBinder;
@@ -55,7 +55,7 @@ mod priv_ {
     #![allow(missing_docs)]
 
     use chrono::{DateTime, Utc};
-    use mas_storage::pagination::Node;
+    use pasion_storage::pagination::Node;
     use sea_query::enum_def;
     use ulid::Ulid;
     use uuid::Uuid;
@@ -102,13 +102,13 @@ impl Filter for UserFilter<'_> {
         sea_query::Condition::all()
             .add_option(self.state().map(|state| {
                 match state {
-                    mas_storage::user::UserState::Deactivated => {
+                    pasion_storage::user::UserState::Deactivated => {
                         Expr::col((Users::Table, Users::DeactivatedAt)).is_not_null()
                     }
-                    mas_storage::user::UserState::Locked => {
+                    pasion_storage::user::UserState::Locked => {
                         Expr::col((Users::Table, Users::LockedAt)).is_not_null()
                     }
-                    mas_storage::user::UserState::Active => {
+                    pasion_storage::user::UserState::Active => {
                         Expr::col((Users::Table, Users::LockedAt))
                             .is_null()
                             .and(Expr::col((Users::Table, Users::DeactivatedAt)).is_null())
@@ -474,8 +474,8 @@ impl UserRepository for PgUserRepository<'_> {
     async fn list(
         &mut self,
         filter: UserFilter<'_>,
-        pagination: mas_storage::Pagination,
-    ) -> Result<mas_storage::Page<User>, Self::Error> {
+        pagination: pasion_storage::Pagination,
+    ) -> Result<pasion_storage::Page<User>, Self::Error> {
         let (sql, arguments) = Query::select()
             .expr_as(
                 Expr::col((Users::Table, Users::UserId)),

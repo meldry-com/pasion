@@ -1,7 +1,7 @@
 //! The error types used in this crate.
 
 use async_trait::async_trait;
-use mas_jose::{
+use pasion_jose::{
     claims::ClaimError,
     jwa::InvalidAlgorithm,
     jwt::{JwtDecodeError, JwtSignatureError, NoKeyWorked},

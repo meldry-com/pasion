@@ -4,7 +4,7 @@ use aide::{OperationIo, transform::TransformOperation};
 use axum::{Json, extract::State, response::IntoResponse};
 use hyper::StatusCode;
 use mas_axum_utils::record_error;
-use mas_matrix::HomeserverConnection;
+use pasion_matrix::HomeserverConnection;
 use ulid::Ulid;
 
 use crate::{
@@ -30,7 +30,7 @@ pub enum RouteError {
     NotFound(Ulid),
 }
 
-impl_from_error_for_route!(mas_storage::RepositoryError);
+impl_from_error_for_route!(pasion_storage::RepositoryError);
 
 impl IntoResponse for RouteError {
     fn into_response(self) -> axum::response::Response {
@@ -97,14 +97,14 @@ pub async fn handler(
 #[cfg(test)]
 mod tests {
     use hyper::{Request, StatusCode};
-    use mas_data_model::Clock;
-    use mas_matrix::{HomeserverConnection, ProvisionRequest};
-    use mas_storage::{RepositoryAccess, user::UserRepository};
+    use pasion_data_model::Clock;
+    use pasion_matrix::{HomeserverConnection, ProvisionRequest};
+    use pasion_storage::{RepositoryAccess, user::UserRepository};
     use sqlx::PgPool;
 
     use crate::test_utils::{RequestBuilderExt, ResponseExt, TestState, setup};
 
-    #[sqlx::test(migrator = "mas_storage_pg::MIGRATOR")]
+    #[sqlx::test(migrator = "pasion_storage_pg::MIGRATOR")]
     async fn test_reactivate_deactivated_user(pool: PgPool) {
         setup();
         let mut state = TestState::from_pool(pool.clone()).await.unwrap();
@@ -159,7 +159,7 @@ mod tests {
         );
     }
 
-    #[sqlx::test(migrator = "mas_storage_pg::MIGRATOR")]
+    #[sqlx::test(migrator = "pasion_storage_pg::MIGRATOR")]
     async fn test_reactivate_active_user(pool: PgPool) {
         setup();
         let mut state = TestState::from_pool(pool.clone()).await.unwrap();
@@ -197,7 +197,7 @@ mod tests {
         );
     }
 
-    #[sqlx::test(migrator = "mas_storage_pg::MIGRATOR")]
+    #[sqlx::test(migrator = "pasion_storage_pg::MIGRATOR")]
     async fn test_reactivate_unknown_user(pool: PgPool) {
         setup();
         let mut state = TestState::from_pool(pool).await.unwrap();

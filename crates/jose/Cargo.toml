@@ -1,5 +1,5 @@
 [package]
-name = "mas-jose"
+name = "pasion-jose"
 description = "JSON Object Signing and Encryption (JWT & co) utilities"
 version.workspace = true
 authors.workspace = true
@@ -34,7 +34,7 @@ signature.workspace = true
 thiserror.workspace = true
 url.workspace = true
 
-mas-iana.workspace = true
+pasion-iana.workspace = true
 
 [dev-dependencies]
 insta.workspace = true

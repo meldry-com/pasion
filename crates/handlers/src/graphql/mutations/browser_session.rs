@@ -1,5 +1,5 @@
 use async_graphql::{Context, Enum, ID, InputObject, Object};
-use mas_storage::RepositoryAccess;
+use pasion_storage::RepositoryAccess;
 
 use crate::graphql::{
     model::{BrowserSession, NodeType},
@@ -21,7 +21,7 @@ pub struct EndBrowserSessionInput {
 /// The payload of the `endBrowserSession` mutation.
 pub enum EndBrowserSessionPayload {
     NotFound,
-    Ended(Box<mas_data_model::BrowserSession>),
+    Ended(Box<pasion_data_model::BrowserSession>),
 }
 
 /// The status of the `endBrowserSession` mutation.

@@ -1,5 +1,5 @@
 [package]
-name = "mas-i18n"
+name = "pasion-i18n"
 version.workspace = true
 authors.workspace = true
 edition.workspace = true

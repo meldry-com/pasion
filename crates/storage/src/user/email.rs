@@ -1,5 +1,5 @@
 use async_trait::async_trait;
-use mas_data_model::{
+use pasion_data_model::{
     BrowserSession, Clock, UpstreamOAuthAuthorizationSession, User, UserEmail,
     UserEmailAuthentication, UserEmailAuthenticationCode, UserRegistration,
 };

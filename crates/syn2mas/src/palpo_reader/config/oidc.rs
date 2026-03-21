@@ -1,12 +1,12 @@
 use std::{collections::BTreeMap, str::FromStr as _};
 
 use chrono::{DateTime, Utc};
-use mas_config::{
+use pasion_config::{
     ClientSecret, UpstreamOAuth2ClaimsImports, UpstreamOAuth2DiscoveryMode,
     UpstreamOAuth2ImportAction, UpstreamOAuth2OnBackchannelLogout, UpstreamOAuth2PkceMethod,
     UpstreamOAuth2ResponseMode, UpstreamOAuth2TokenAuthMethod,
 };
-use mas_iana::jose::JsonWebSignatureAlg;
+use pasion_iana::jose::JsonWebSignatureAlg;
 use oauth2_types::scope::{OPENID, Scope, ScopeToken};
 use rand::Rng;
 use serde::Deserialize;
@@ -40,7 +40,7 @@ struct UserMappingProviderConfig {
 }
 
 impl UserMappingProviderConfig {
-    fn into_mas_config(self) -> UpstreamOAuth2ClaimsImports {
+    fn into_pasion_config(self) -> UpstreamOAuth2ClaimsImports {
         let mut config = UpstreamOAuth2ClaimsImports::default();
 
         match (self.subject_claim, self.subject_template) {
@@ -188,11 +188,11 @@ impl OidcProvider {
     }
 
     /// Map this Palpo OIDC provider config to a MAS upstream provider config.
-    pub(crate) fn into_mas_config(
+    pub(crate) fn into_pasion_config(
         self,
         rng: &mut impl Rng,
         now: DateTime<Utc>,
-    ) -> Option<mas_config::UpstreamOAuth2Provider> {
+    ) -> Option<pasion_config::UpstreamOAuth2Provider> {
         let client_id = self.client_id?;
 
         if self.client_secret_path.is_some() {
@@ -306,7 +306,7 @@ impl OidcProvider {
             );
             UpstreamOAuth2ClaimsImports::default()
         } else {
-            self.user_mapping_provider.config.into_mas_config()
+            self.user_mapping_provider.config.into_pasion_config()
         };
 
         let on_backchannel_logout = if self.backchannel_logout_enabled {
@@ -315,7 +315,7 @@ impl OidcProvider {
             UpstreamOAuth2OnBackchannelLogout::LogoutBrowserOnly
         };
 
-        Some(mas_config::UpstreamOAuth2Provider {
+        Some(pasion_config::UpstreamOAuth2Provider {
             enabled: true,
             id,
             palpo_idp_id: self.idp_id,

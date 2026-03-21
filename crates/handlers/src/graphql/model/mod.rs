@@ -80,13 +80,13 @@ pub enum DeviceType {
     Unknown,
 }
 
-impl From<mas_data_model::DeviceType> for DeviceType {
-    fn from(device_type: mas_data_model::DeviceType) -> Self {
+impl From<pasion_data_model::DeviceType> for DeviceType {
+    fn from(device_type: pasion_data_model::DeviceType) -> Self {
         match device_type {
-            mas_data_model::DeviceType::Pc => Self::Pc,
-            mas_data_model::DeviceType::Mobile => Self::Mobile,
-            mas_data_model::DeviceType::Tablet => Self::Tablet,
-            mas_data_model::DeviceType::Unknown => Self::Unknown,
+            pasion_data_model::DeviceType::Pc => Self::Pc,
+            pasion_data_model::DeviceType::Mobile => Self::Mobile,
+            pasion_data_model::DeviceType::Tablet => Self::Tablet,
+            pasion_data_model::DeviceType::Unknown => Self::Unknown,
         }
     }
 }
@@ -116,8 +116,8 @@ pub struct UserAgent {
     pub device_type: DeviceType,
 }
 
-impl From<mas_data_model::UserAgent> for UserAgent {
-    fn from(ua: mas_data_model::UserAgent) -> Self {
+impl From<pasion_data_model::UserAgent> for UserAgent {
+    fn from(ua: pasion_data_model::UserAgent) -> Self {
         Self {
             raw: ua.raw,
             name: ua.name,

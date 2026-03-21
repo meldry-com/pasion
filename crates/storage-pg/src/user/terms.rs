@@ -1,6 +1,6 @@
 use async_trait::async_trait;
-use mas_data_model::{Clock, User};
-use mas_storage::user::UserTermsRepository;
+use pasion_data_model::{Clock, User};
+use pasion_storage::user::UserTermsRepository;
 use rand::RngCore;
 use sqlx::PgConnection;
 use ulid::Ulid;

@@ -9,5 +9,5 @@ Global options:
 Runs the authentication service worker.
 
 ```
-$ mas-cli worker
+$ pasion-cli worker
 ```

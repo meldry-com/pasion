@@ -1,5 +1,5 @@
 use http::StatusCode;
-use mas_templates::ErrorContext;
+use pasion_templates::ErrorContext;
 use salvo::prelude::*;
 
 use crate::sentry::SentryEventID;

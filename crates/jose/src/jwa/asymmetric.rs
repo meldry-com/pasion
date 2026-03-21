@@ -1,5 +1,5 @@
 use digest::Digest;
-use mas_iana::jose::{JsonWebKeyEcEllipticCurve, JsonWebSignatureAlg};
+use pasion_iana::jose::{JsonWebKeyEcEllipticCurve, JsonWebSignatureAlg};
 use sha2::{Sha256, Sha384, Sha512};
 use signature::rand_core::CryptoRngCore;
 use thiserror::Error;

@@ -3,7 +3,7 @@ use std::process::ExitCode;
 use anyhow::Context;
 use clap::Parser;
 use figment::Figment;
-use mas_config::{ConfigurationSectionExt, DatabaseConfig};
+use pasion_config::{ConfigurationSectionExt, DatabaseConfig};
 use tracing::info_span;
 
 use crate::util::database_connection_from_config;
@@ -28,7 +28,7 @@ impl Options {
         let mut conn = database_connection_from_config(&config).await?;
 
         // Run pending migrations
-        mas_storage_pg::migrate(&mut conn)
+        pasion_storage_pg::migrate(&mut conn)
             .await
             .context("could not run migrations")?;
 

@@ -1,9 +1,9 @@
 use async_graphql::{Response, ServerError};
-use mas_data_model::{BoxClock, BoxRng, SiteConfig};
-use mas_matrix::HomeserverConnection;
-use mas_policy::Policy;
-use mas_router::UrlBuilder;
-use mas_storage::{BoxRepository, RepositoryError};
+use pasion_data_model::{BoxClock, BoxRng, SiteConfig};
+use pasion_matrix::HomeserverConnection;
+use pasion_policy::Policy;
+use pasion_router::UrlBuilder;
+use pasion_storage::{BoxRepository, RepositoryError};
 
 use crate::{Limiter, graphql::Requester, passwords::PasswordManager};
 
@@ -12,7 +12,7 @@ const CLEAR_SESSION_SENTINEL: &str = "__CLEAR_SESSION__";
 #[async_trait::async_trait]
 pub trait State {
     async fn repository(&self) -> Result<BoxRepository, RepositoryError>;
-    async fn policy(&self) -> Result<Policy, mas_policy::InstantiateError>;
+    async fn policy(&self) -> Result<Policy, pasion_policy::InstantiateError>;
     fn password_manager(&self) -> PasswordManager;
     fn homeserver_connection(&self) -> &dyn HomeserverConnection;
     fn clock(&self) -> BoxClock;

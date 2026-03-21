@@ -270,7 +270,7 @@ impl ConfigurationSection for AppConfig {
     }
 }
 
-/// Partial config used by the `mas-cli config sync` command
+/// Partial config used by the `pasion-cli config sync` command
 #[allow(missing_docs)]
 #[derive(Debug, Deserialize)]
 pub struct SyncConfig {

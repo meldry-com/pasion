@@ -21,7 +21,7 @@ The refresh token can then be used to get a new access token without the user ha
 
 ## How Palpo behaves
 
-When an incoming request is made to Palpo, it will introspect the access token through the Palpo Authentication Service.
+When an incoming request is made to Palpo, it will introspect the access token through the Pasion.
 This is using a standard OAuth 2.0 introspection request ([RFC 7662]).
 
 Out of this request, Palpo will care about the following:

@@ -5,10 +5,10 @@ use axum::{
 use axum_extra::extract::Query;
 use hyper::StatusCode;
 use mas_axum_utils::{GenericError, InternalError, cookies::CookieJar};
-use mas_data_model::{BoxClock, BoxRng, UpstreamOAuthProvider};
-use mas_oidc_client::requests::authorization_code::AuthorizationRequestData;
-use mas_router::{PostAuthAction, UrlBuilder};
-use mas_storage::{
+use pasion_data_model::{BoxClock, BoxRng, UpstreamOAuthProvider};
+use pasion_oidc_client::requests::authorization_code::AuthorizationRequestData;
+use pasion_router::{PostAuthAction, UrlBuilder};
+use pasion_storage::{
     BoxRepository,
     upstream_oauth2::{UpstreamOAuthProviderRepository, UpstreamOAuthSessionRepository},
 };
@@ -30,9 +30,9 @@ pub(crate) enum RouteError {
     Internal(Box<dyn std::error::Error>),
 }
 
-impl_from_error_for_route!(mas_oidc_client::error::DiscoveryError);
-impl_from_error_for_route!(mas_oidc_client::error::AuthorizationError);
-impl_from_error_for_route!(mas_storage::RepositoryError);
+impl_from_error_for_route!(pasion_oidc_client::error::DiscoveryError);
+impl_from_error_for_route!(pasion_oidc_client::error::AuthorizationError);
+impl_from_error_for_route!(pasion_storage::RepositoryError);
 
 impl IntoResponse for RouteError {
     fn into_response(self) -> axum::response::Response {
@@ -106,7 +106,7 @@ pub(crate) async fn get(
     };
 
     // Build an authorization request for it
-    let (mut url, data) = mas_oidc_client::requests::authorization_code::build_authorization_url(
+    let (mut url, data) = pasion_oidc_client::requests::authorization_code::build_authorization_url(
         lazy_metadata.authorization_endpoint().await?.clone(),
         data,
         &mut rng,

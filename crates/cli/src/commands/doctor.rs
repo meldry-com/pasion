@@ -9,13 +9,13 @@ use anyhow::Context;
 use clap::Parser;
 use figment::Figment;
 use hyper::StatusCode;
-use mas_config::{ConfigurationSection, RootConfig};
-use mas_http::RequestBuilderExt;
+use pasion_config::{ConfigurationSection, RootConfig};
+use pasion_http::RequestBuilderExt;
 use tracing::{error, info, info_span, warn};
 use url::{Host, Url};
 
 /// Base URL for the human-readable documentation
-const DOCS_BASE: &str = "https://palpo-im.github.io/palpo-auth-service";
+const DOCS_BASE: &str = "https://palpo-im.github.io/pasion";
 
 #[derive(Parser, Debug)]
 pub(super) struct Options {}
@@ -30,7 +30,7 @@ impl Options {
         let config = RootConfig::extract(figment).map_err(anyhow::Error::from_boxed)?;
 
         // We'll need an HTTP client
-        let http_client = mas_http::reqwest_client();
+        let http_client = pasion_http::reqwest_client();
         let base_url = config.http.public_base.as_str();
         let issuer = config.http.issuer.as_ref().map(url::Url::as_str);
         let issuer = issuer.unwrap_or(base_url);

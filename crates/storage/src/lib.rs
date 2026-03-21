@@ -14,7 +14,7 @@
 //! To define a new repository, you have to:
 //!   1. Define a new (async) repository trait, with the methods you need
 //!   2. Write an implementation of this trait for each storage backend you want
-//!      (currently only for `mas-storage-pg`)
+//!      (currently only for `pasion-storage-pg`)
 //!   3. Make it accessible via the [`RepositoryAccess`] trait
 //!
 //! The repository trait definition should look like this:
@@ -74,7 +74,7 @@
 //!   2. Lookups return an `Result<Option<T>, Self::Error>`, because 'not found'
 //!      errors are usually cases that are handled differently
 //!   3. Operations that need to record the current type use a
-//!      [`mas_data_model::Clock`] parameter. Operations that need to generate
+//!      [`pasion_data_model::Clock`] parameter. Operations that need to generate
 //!      new IDs also use a random number generator.
 //!   4. All the methods use an `&mut self`. This is ensures only one operation
 //!      is done at a time on a single repository instance.

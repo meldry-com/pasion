@@ -3181,665 +3181,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "mas-cli"
-version = "1.8.0"
-dependencies = [
- "anyhow",
- "bytes",
- "camino",
- "chrono",
- "clap",
- "console",
- "dialoguer",
- "dotenvy",
- "figment",
- "futures-util",
- "headers",
- "http-body-util",
- "hyper",
- "ipnetwork",
- "itertools 0.14.0",
- "listenfd",
- "mas-config",
- "mas-context",
- "mas-data-model",
- "mas-email",
- "mas-handlers",
- "mas-http",
- "mas-i18n",
- "mas-keystore",
- "mas-listener",
- "mas-matrix",
- "mas-matrix-palpo",
- "mas-policy",
- "mas-router",
- "mas-storage",
- "mas-storage-pg",
- "mas-tasks",
- "mas-templates",
- "mas-tower",
- "opentelemetry",
- "opentelemetry-http",
- "opentelemetry-instrumentation-process",
- "opentelemetry-instrumentation-tokio",
- "opentelemetry-jaeger-propagator",
- "opentelemetry-otlp",
- "opentelemetry-prometheus-text-exporter",
- "opentelemetry-resource-detectors",
- "opentelemetry-semantic-conventions",
- "opentelemetry-stdout",
- "opentelemetry_sdk",
- "rand 0.8.5",
- "rand_chacha 0.3.1",
- "reqwest",
- "rustls",
- "salvo",
- "sd-notify",
- "sentry",
- "sentry-tracing",
- "serde_json",
- "serde_yaml",
- "sqlx",
- "syn2mas",
- "tokio",
- "tokio-util",
- "tower",
- "tracing",
- "tracing-appender",
- "tracing-opentelemetry",
- "tracing-subscriber",
- "url",
- "vergen-gitcl",
- "zeroize",
-]
-
-[[package]]
-name = "mas-config"
-version = "1.8.0"
-dependencies = [
- "anyhow",
- "camino",
- "chrono",
- "figment",
- "futures-util",
- "governor",
- "hex",
- "indoc",
- "ipnetwork",
- "lettre",
- "mas-iana",
- "mas-jose",
- "mas-keystore",
- "pem-rfc7468",
- "rand 0.8.5",
- "rand_chacha 0.3.1",
- "rustls-pki-types",
- "schemars 0.9.0",
- "serde",
- "serde_json",
- "serde_with",
- "tokio",
- "tracing",
- "ulid",
- "url",
-]
-
-[[package]]
-name = "mas-context"
-version = "1.8.0"
-dependencies = [
- "console",
- "opentelemetry",
- "pin-project-lite",
- "quanta",
- "tokio",
- "tower-layer",
- "tower-service",
- "tracing",
- "tracing-opentelemetry",
- "tracing-subscriber",
-]
-
-[[package]]
-name = "mas-data-model"
-version = "1.8.0"
-dependencies = [
- "base64ct",
- "chrono",
- "crc",
- "lettre",
- "mas-iana",
- "mas-jose",
- "oauth2-types",
- "rand 0.8.5",
- "rand_chacha 0.3.1",
- "regex",
- "ruma-common",
- "serde",
- "serde_json",
- "thiserror 2.0.17",
- "ulid",
- "url",
- "woothee",
-]
-
-[[package]]
-name = "mas-email"
-version = "1.8.0"
-dependencies = [
- "async-trait",
- "lettre",
- "mas-templates",
- "thiserror 2.0.17",
- "tracing",
-]
-
-[[package]]
-name = "mas-handlers"
-version = "1.8.0"
-dependencies = [
- "anyhow",
- "argon2",
- "async-graphql",
- "async-trait",
- "base64ct",
- "bcrypt",
- "camino",
- "chrono",
- "cookie_store",
- "elliptic-curve",
- "futures-util",
- "governor",
- "headers",
- "hex",
- "hyper",
- "icu_normalizer",
- "indexmap 2.11.4",
- "insta",
- "lettre",
- "mas-config",
- "mas-context",
- "mas-data-model",
- "mas-email",
- "mas-http",
- "mas-i18n",
- "mas-iana",
- "mas-jose",
- "mas-keystore",
- "mas-matrix",
- "mas-oidc-client",
- "mas-policy",
- "mas-router",
- "mas-salvo-utils",
- "mas-storage",
- "mas-storage-pg",
- "mas-tasks",
- "mas-templates",
- "mime",
- "minijinja",
- "minijinja-contrib",
- "oauth2-types",
- "opentelemetry",
- "opentelemetry-semantic-conventions",
- "pbkdf2",
- "pkcs8",
- "psl",
- "rand 0.8.5",
- "rand_chacha 0.3.1",
- "reqwest",
- "rustls",
- "salvo",
- "schemars 0.9.0",
- "sentry",
- "serde",
- "serde_json",
- "serde_urlencoded",
- "serde_with",
- "sha2",
- "sqlx",
- "thiserror 2.0.17",
- "tokio",
- "tokio-util",
- "tower",
- "tracing",
- "tracing-subscriber",
- "ulid",
- "url",
- "wiremock",
- "zeroize",
- "zxcvbn",
-]
-
-[[package]]
-name = "mas-http"
-version = "1.8.0"
-dependencies = [
- "futures-util",
- "headers",
- "http",
- "hyper-util",
- "opentelemetry",
- "opentelemetry-http",
- "opentelemetry-semantic-conventions",
- "reqwest",
- "rustls",
- "rustls-platform-verifier",
- "tokio",
- "tower",
- "tower-http",
- "tracing",
- "tracing-opentelemetry",
-]
-
-[[package]]
-name = "mas-i18n"
-version = "1.8.0"
-dependencies = [
- "camino",
- "icu_calendar",
- "icu_datetime",
- "icu_experimental",
- "icu_locid",
- "icu_locid_transform",
- "icu_plurals",
- "icu_provider",
- "icu_provider_adapters",
- "pad",
- "pest",
- "pest_derive",
- "serde",
- "serde_json",
- "thiserror 2.0.17",
- "writeable",
-]
-
-[[package]]
-name = "mas-i18n-scan"
-version = "1.8.0"
-dependencies = [
- "camino",
- "clap",
- "mas-i18n",
- "minijinja",
- "serde_json",
- "tracing",
- "tracing-subscriber",
- "walkdir",
-]
-
-[[package]]
-name = "mas-iana"
-version = "1.8.0"
-dependencies = [
- "schemars 0.9.0",
- "serde",
-]
-
-[[package]]
-name = "mas-iana-codegen"
-version = "1.8.0"
-dependencies = [
- "anyhow",
- "async-trait",
- "camino",
- "convert_case",
- "csv",
- "reqwest",
- "rustls",
- "serde",
- "tokio",
- "tracing",
- "tracing-subscriber",
-]
-
-[[package]]
-name = "mas-jose"
-version = "1.8.0"
-dependencies = [
- "base64ct",
- "chrono",
- "digest",
- "ecdsa",
- "elliptic-curve",
- "generic-array",
- "hmac",
- "insta",
- "k256",
- "mas-iana",
- "p256",
- "p384",
- "rand 0.8.5",
- "rand_chacha 0.3.1",
- "rsa",
- "schemars 0.9.0",
- "sec1",
- "serde",
- "serde_json",
- "serde_with",
- "sha2",
- "signature",
- "thiserror 2.0.17",
- "url",
-]
-
-[[package]]
-name = "mas-keystore"
-version = "1.8.0"
-dependencies = [
- "aead",
- "base64ct",
- "chacha20poly1305",
- "const-oid",
- "der",
- "elliptic-curve",
- "generic-array",
- "insta",
- "k256",
- "mas-iana",
- "mas-jose",
- "p256",
- "p384",
- "pem-rfc7468",
- "pkcs1",
- "pkcs8",
- "rand 0.8.5",
- "rand_chacha 0.3.1",
- "rsa",
- "sec1",
- "spki",
- "thiserror 2.0.17",
-]
-
-[[package]]
-name = "mas-listener"
-version = "1.8.0"
-dependencies = [
- "anyhow",
- "bytes",
- "futures-util",
- "http-body",
- "hyper",
- "hyper-util",
- "mas-context",
- "pin-project-lite",
- "socket2",
- "thiserror 2.0.17",
- "tokio",
- "tokio-rustls",
- "tokio-test",
- "tokio-util",
- "tower",
- "tower-http",
- "tracing",
- "tracing-subscriber",
-]
-
-[[package]]
-name = "mas-matrix"
-version = "1.8.0"
-dependencies = [
- "anyhow",
- "async-trait",
- "ruma-common",
- "tokio",
-]
-
-[[package]]
-name = "mas-matrix-palpo"
-version = "1.8.0"
-dependencies = [
- "anyhow",
- "async-trait",
- "http",
- "mas-http",
- "mas-matrix",
- "reqwest",
- "serde",
- "thiserror 2.0.17",
- "tracing",
- "url",
- "urlencoding",
-]
-
-[[package]]
-name = "mas-oidc-client"
-version = "1.8.0"
-dependencies = [
- "assert_matches",
- "async-trait",
- "base64ct",
- "bitflags",
- "chrono",
- "elliptic-curve",
- "form_urlencoded",
- "headers",
- "http",
- "http-body-util",
- "language-tags",
- "mas-http",
- "mas-iana",
- "mas-jose",
- "mas-keystore",
- "mime",
- "oauth2-types",
- "p256",
- "rand 0.8.5",
- "rand_chacha 0.3.1",
- "reqwest",
- "rustls",
- "serde",
- "serde_json",
- "serde_urlencoded",
- "thiserror 2.0.17",
- "tokio",
- "tracing",
- "url",
- "wiremock",
-]
-
-[[package]]
-name = "mas-policy"
-version = "1.8.0"
-dependencies = [
- "anyhow",
- "arc-swap",
- "mas-data-model",
- "oauth2-types",
- "opa-wasm",
- "schemars 0.9.0",
- "serde",
- "serde_json",
- "thiserror 2.0.17",
- "tokio",
- "tracing",
-]
-
-[[package]]
-name = "mas-router"
-version = "1.8.0"
-dependencies = [
- "salvo",
- "serde",
- "serde_urlencoded",
- "ulid",
- "url",
-]
-
-[[package]]
-name = "mas-salvo-utils"
-version = "1.8.0"
-dependencies = [
- "anyhow",
- "async-trait",
- "base64ct",
- "chrono",
- "cookie",
- "headers",
- "http",
- "icu_locid",
- "mas-data-model",
- "mas-http",
- "mas-iana",
- "mas-jose",
- "mas-keystore",
- "mas-storage",
- "mas-templates",
- "mime",
- "oauth2-types",
- "rand 0.8.5",
- "reqwest",
- "salvo",
- "sentry",
- "serde",
- "serde_json",
- "serde_with",
- "thiserror 2.0.17",
- "tokio",
- "tracing",
- "ulid",
- "url",
-]
-
-[[package]]
-name = "mas-spa"
-version = "1.8.0"
-dependencies = [
- "camino",
- "serde",
- "thiserror 2.0.17",
-]
-
-[[package]]
-name = "mas-storage"
-version = "1.8.0"
-dependencies = [
- "async-trait",
- "chrono",
- "futures-util",
- "mas-data-model",
- "mas-iana",
- "mas-jose",
- "oauth2-types",
- "opentelemetry",
- "rand_core 0.6.4",
- "serde",
- "serde_json",
- "thiserror 2.0.17",
- "tracing",
- "tracing-opentelemetry",
- "ulid",
- "url",
-]
-
-[[package]]
-name = "mas-storage-pg"
-version = "1.8.0"
-dependencies = [
- "async-trait",
- "chrono",
- "crc",
- "futures-util",
- "mas-data-model",
- "mas-iana",
- "mas-jose",
- "mas-storage",
- "oauth2-types",
- "opentelemetry",
- "opentelemetry-semantic-conventions",
- "rand 0.8.5",
- "rand_chacha 0.3.1",
- "sea-query",
- "sea-query-binder",
- "serde_json",
- "sha2",
- "sqlx",
- "thiserror 2.0.17",
- "tokio",
- "tracing",
- "ulid",
- "url",
- "uuid",
-]
-
-[[package]]
-name = "mas-tasks"
-version = "1.8.0"
-dependencies = [
- "anyhow",
- "async-trait",
- "chrono",
- "cron",
- "mas-context",
- "mas-data-model",
- "mas-email",
- "mas-i18n",
- "mas-matrix",
- "mas-router",
- "mas-storage",
- "mas-storage-pg",
- "mas-templates",
- "opentelemetry",
- "opentelemetry-semantic-conventions",
- "rand 0.8.5",
- "rand_chacha 0.3.1",
- "serde",
- "serde_json",
- "sqlx",
- "thiserror 2.0.17",
- "tokio",
- "tokio-util",
- "tracing",
- "tracing-opentelemetry",
- "ulid",
-]
-
-[[package]]
-name = "mas-templates"
-version = "1.8.0"
-dependencies = [
- "anyhow",
- "arc-swap",
- "camino",
- "chrono",
- "http",
- "mas-data-model",
- "mas-i18n",
- "mas-iana",
- "mas-policy",
- "mas-router",
- "mas-spa",
- "minijinja",
- "minijinja-contrib",
- "oauth2-types",
- "rand 0.8.5",
- "rand_chacha 0.3.1",
- "serde",
- "serde_json",
- "serde_urlencoded",
- "thiserror 2.0.17",
- "tokio",
- "tracing",
- "ulid",
- "url",
- "v_htmlescape",
- "walkdir",
-]
-
-[[package]]
-name = "mas-tower"
-version = "1.8.0"
-dependencies = [
- "http",
- "opentelemetry",
- "opentelemetry-http",
- "opentelemetry-semantic-conventions",
- "pin-project-lite",
- "tower",
- "tracing",
- "tracing-opentelemetry",
-]
-
-[[package]]
 name = "matchers"
 version = "0.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -4131,8 +3472,8 @@ dependencies = [
  "indexmap 2.11.4",
  "insta",
  "language-tags",
- "mas-iana",
- "mas-jose",
+ "pasion-iana",
+ "pasion-jose",
  "serde",
  "serde_json",
  "serde_with",
@@ -4433,6 +3774,665 @@ name = "parse-size"
 version = "1.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "487f2ccd1e17ce8c1bfab3a65c89525af41cfad4c8659021a1e9a2aacd73b89b"
+
+[[package]]
+name = "pasion-cli"
+version = "1.8.0"
+dependencies = [
+ "anyhow",
+ "bytes",
+ "camino",
+ "chrono",
+ "clap",
+ "console",
+ "dialoguer",
+ "dotenvy",
+ "figment",
+ "futures-util",
+ "headers",
+ "http-body-util",
+ "hyper",
+ "ipnetwork",
+ "itertools 0.14.0",
+ "listenfd",
+ "opentelemetry",
+ "opentelemetry-http",
+ "opentelemetry-instrumentation-process",
+ "opentelemetry-instrumentation-tokio",
+ "opentelemetry-jaeger-propagator",
+ "opentelemetry-otlp",
+ "opentelemetry-prometheus-text-exporter",
+ "opentelemetry-resource-detectors",
+ "opentelemetry-semantic-conventions",
+ "opentelemetry-stdout",
+ "opentelemetry_sdk",
+ "pasion-config",
+ "pasion-context",
+ "pasion-data-model",
+ "pasion-email",
+ "pasion-handlers",
+ "pasion-http",
+ "pasion-i18n",
+ "pasion-keystore",
+ "pasion-listener",
+ "pasion-matrix",
+ "pasion-matrix-palpo",
+ "pasion-policy",
+ "pasion-router",
+ "pasion-storage",
+ "pasion-storage-pg",
+ "pasion-tasks",
+ "pasion-templates",
+ "pasion-tower",
+ "rand 0.8.5",
+ "rand_chacha 0.3.1",
+ "reqwest",
+ "rustls",
+ "salvo",
+ "sd-notify",
+ "sentry",
+ "sentry-tracing",
+ "serde_json",
+ "serde_yaml",
+ "sqlx",
+ "syn2mas",
+ "tokio",
+ "tokio-util",
+ "tower",
+ "tracing",
+ "tracing-appender",
+ "tracing-opentelemetry",
+ "tracing-subscriber",
+ "url",
+ "vergen-gitcl",
+ "zeroize",
+]
+
+[[package]]
+name = "pasion-config"
+version = "1.8.0"
+dependencies = [
+ "anyhow",
+ "camino",
+ "chrono",
+ "figment",
+ "futures-util",
+ "governor",
+ "hex",
+ "indoc",
+ "ipnetwork",
+ "lettre",
+ "pasion-iana",
+ "pasion-jose",
+ "pasion-keystore",
+ "pem-rfc7468",
+ "rand 0.8.5",
+ "rand_chacha 0.3.1",
+ "rustls-pki-types",
+ "schemars 0.9.0",
+ "serde",
+ "serde_json",
+ "serde_with",
+ "tokio",
+ "tracing",
+ "ulid",
+ "url",
+]
+
+[[package]]
+name = "pasion-context"
+version = "1.8.0"
+dependencies = [
+ "console",
+ "opentelemetry",
+ "pin-project-lite",
+ "quanta",
+ "tokio",
+ "tower-layer",
+ "tower-service",
+ "tracing",
+ "tracing-opentelemetry",
+ "tracing-subscriber",
+]
+
+[[package]]
+name = "pasion-data-model"
+version = "1.8.0"
+dependencies = [
+ "base64ct",
+ "chrono",
+ "crc",
+ "lettre",
+ "oauth2-types",
+ "pasion-iana",
+ "pasion-jose",
+ "rand 0.8.5",
+ "rand_chacha 0.3.1",
+ "regex",
+ "ruma-common",
+ "serde",
+ "serde_json",
+ "thiserror 2.0.17",
+ "ulid",
+ "url",
+ "woothee",
+]
+
+[[package]]
+name = "pasion-email"
+version = "1.8.0"
+dependencies = [
+ "async-trait",
+ "lettre",
+ "pasion-templates",
+ "thiserror 2.0.17",
+ "tracing",
+]
+
+[[package]]
+name = "pasion-handlers"
+version = "1.8.0"
+dependencies = [
+ "anyhow",
+ "argon2",
+ "async-graphql",
+ "async-trait",
+ "base64ct",
+ "bcrypt",
+ "camino",
+ "chrono",
+ "cookie_store",
+ "elliptic-curve",
+ "futures-util",
+ "governor",
+ "headers",
+ "hex",
+ "hyper",
+ "icu_normalizer",
+ "indexmap 2.11.4",
+ "insta",
+ "lettre",
+ "mime",
+ "minijinja",
+ "minijinja-contrib",
+ "oauth2-types",
+ "opentelemetry",
+ "opentelemetry-semantic-conventions",
+ "pasion-config",
+ "pasion-context",
+ "pasion-data-model",
+ "pasion-email",
+ "pasion-http",
+ "pasion-i18n",
+ "pasion-iana",
+ "pasion-jose",
+ "pasion-keystore",
+ "pasion-matrix",
+ "pasion-oidc-client",
+ "pasion-policy",
+ "pasion-router",
+ "pasion-salvo-utils",
+ "pasion-storage",
+ "pasion-storage-pg",
+ "pasion-tasks",
+ "pasion-templates",
+ "pbkdf2",
+ "pkcs8",
+ "psl",
+ "rand 0.8.5",
+ "rand_chacha 0.3.1",
+ "reqwest",
+ "rustls",
+ "salvo",
+ "schemars 0.9.0",
+ "sentry",
+ "serde",
+ "serde_json",
+ "serde_urlencoded",
+ "serde_with",
+ "sha2",
+ "sqlx",
+ "thiserror 2.0.17",
+ "tokio",
+ "tokio-util",
+ "tower",
+ "tracing",
+ "tracing-subscriber",
+ "ulid",
+ "url",
+ "wiremock",
+ "zeroize",
+ "zxcvbn",
+]
+
+[[package]]
+name = "pasion-http"
+version = "1.8.0"
+dependencies = [
+ "futures-util",
+ "headers",
+ "http",
+ "hyper-util",
+ "opentelemetry",
+ "opentelemetry-http",
+ "opentelemetry-semantic-conventions",
+ "reqwest",
+ "rustls",
+ "rustls-platform-verifier",
+ "tokio",
+ "tower",
+ "tower-http",
+ "tracing",
+ "tracing-opentelemetry",
+]
+
+[[package]]
+name = "pasion-i18n"
+version = "1.8.0"
+dependencies = [
+ "camino",
+ "icu_calendar",
+ "icu_datetime",
+ "icu_experimental",
+ "icu_locid",
+ "icu_locid_transform",
+ "icu_plurals",
+ "icu_provider",
+ "icu_provider_adapters",
+ "pad",
+ "pest",
+ "pest_derive",
+ "serde",
+ "serde_json",
+ "thiserror 2.0.17",
+ "writeable",
+]
+
+[[package]]
+name = "pasion-i18n-scan"
+version = "1.8.0"
+dependencies = [
+ "camino",
+ "clap",
+ "minijinja",
+ "pasion-i18n",
+ "serde_json",
+ "tracing",
+ "tracing-subscriber",
+ "walkdir",
+]
+
+[[package]]
+name = "pasion-iana"
+version = "1.8.0"
+dependencies = [
+ "schemars 0.9.0",
+ "serde",
+]
+
+[[package]]
+name = "pasion-iana-codegen"
+version = "1.8.0"
+dependencies = [
+ "anyhow",
+ "async-trait",
+ "camino",
+ "convert_case",
+ "csv",
+ "reqwest",
+ "rustls",
+ "serde",
+ "tokio",
+ "tracing",
+ "tracing-subscriber",
+]
+
+[[package]]
+name = "pasion-jose"
+version = "1.8.0"
+dependencies = [
+ "base64ct",
+ "chrono",
+ "digest",
+ "ecdsa",
+ "elliptic-curve",
+ "generic-array",
+ "hmac",
+ "insta",
+ "k256",
+ "p256",
+ "p384",
+ "pasion-iana",
+ "rand 0.8.5",
+ "rand_chacha 0.3.1",
+ "rsa",
+ "schemars 0.9.0",
+ "sec1",
+ "serde",
+ "serde_json",
+ "serde_with",
+ "sha2",
+ "signature",
+ "thiserror 2.0.17",
+ "url",
+]
+
+[[package]]
+name = "pasion-keystore"
+version = "1.8.0"
+dependencies = [
+ "aead",
+ "base64ct",
+ "chacha20poly1305",
+ "const-oid",
+ "der",
+ "elliptic-curve",
+ "generic-array",
+ "insta",
+ "k256",
+ "p256",
+ "p384",
+ "pasion-iana",
+ "pasion-jose",
+ "pem-rfc7468",
+ "pkcs1",
+ "pkcs8",
+ "rand 0.8.5",
+ "rand_chacha 0.3.1",
+ "rsa",
+ "sec1",
+ "spki",
+ "thiserror 2.0.17",
+]
+
+[[package]]
+name = "pasion-listener"
+version = "1.8.0"
+dependencies = [
+ "anyhow",
+ "bytes",
+ "futures-util",
+ "http-body",
+ "hyper",
+ "hyper-util",
+ "pasion-context",
+ "pin-project-lite",
+ "socket2",
+ "thiserror 2.0.17",
+ "tokio",
+ "tokio-rustls",
+ "tokio-test",
+ "tokio-util",
+ "tower",
+ "tower-http",
+ "tracing",
+ "tracing-subscriber",
+]
+
+[[package]]
+name = "pasion-matrix"
+version = "1.8.0"
+dependencies = [
+ "anyhow",
+ "async-trait",
+ "ruma-common",
+ "tokio",
+]
+
+[[package]]
+name = "pasion-matrix-palpo"
+version = "1.8.0"
+dependencies = [
+ "anyhow",
+ "async-trait",
+ "http",
+ "pasion-http",
+ "pasion-matrix",
+ "reqwest",
+ "serde",
+ "thiserror 2.0.17",
+ "tracing",
+ "url",
+ "urlencoding",
+]
+
+[[package]]
+name = "pasion-oidc-client"
+version = "1.8.0"
+dependencies = [
+ "assert_matches",
+ "async-trait",
+ "base64ct",
+ "bitflags",
+ "chrono",
+ "elliptic-curve",
+ "form_urlencoded",
+ "headers",
+ "http",
+ "http-body-util",
+ "language-tags",
+ "mime",
+ "oauth2-types",
+ "p256",
+ "pasion-http",
+ "pasion-iana",
+ "pasion-jose",
+ "pasion-keystore",
+ "rand 0.8.5",
+ "rand_chacha 0.3.1",
+ "reqwest",
+ "rustls",
+ "serde",
+ "serde_json",
+ "serde_urlencoded",
+ "thiserror 2.0.17",
+ "tokio",
+ "tracing",
+ "url",
+ "wiremock",
+]
+
+[[package]]
+name = "pasion-policy"
+version = "1.8.0"
+dependencies = [
+ "anyhow",
+ "arc-swap",
+ "oauth2-types",
+ "opa-wasm",
+ "pasion-data-model",
+ "schemars 0.9.0",
+ "serde",
+ "serde_json",
+ "thiserror 2.0.17",
+ "tokio",
+ "tracing",
+]
+
+[[package]]
+name = "pasion-router"
+version = "1.8.0"
+dependencies = [
+ "salvo",
+ "serde",
+ "serde_urlencoded",
+ "ulid",
+ "url",
+]
+
+[[package]]
+name = "pasion-salvo-utils"
+version = "1.8.0"
+dependencies = [
+ "anyhow",
+ "async-trait",
+ "base64ct",
+ "chrono",
+ "cookie",
+ "headers",
+ "http",
+ "icu_locid",
+ "mime",
+ "oauth2-types",
+ "pasion-data-model",
+ "pasion-http",
+ "pasion-iana",
+ "pasion-jose",
+ "pasion-keystore",
+ "pasion-storage",
+ "pasion-templates",
+ "rand 0.8.5",
+ "reqwest",
+ "salvo",
+ "sentry",
+ "serde",
+ "serde_json",
+ "serde_with",
+ "thiserror 2.0.17",
+ "tokio",
+ "tracing",
+ "ulid",
+ "url",
+]
+
+[[package]]
+name = "pasion-spa"
+version = "1.8.0"
+dependencies = [
+ "camino",
+ "serde",
+ "thiserror 2.0.17",
+]
+
+[[package]]
+name = "pasion-storage"
+version = "1.8.0"
+dependencies = [
+ "async-trait",
+ "chrono",
+ "futures-util",
+ "oauth2-types",
+ "opentelemetry",
+ "pasion-data-model",
+ "pasion-iana",
+ "pasion-jose",
+ "rand_core 0.6.4",
+ "serde",
+ "serde_json",
+ "thiserror 2.0.17",
+ "tracing",
+ "tracing-opentelemetry",
+ "ulid",
+ "url",
+]
+
+[[package]]
+name = "pasion-storage-pg"
+version = "1.8.0"
+dependencies = [
+ "async-trait",
+ "chrono",
+ "crc",
+ "futures-util",
+ "oauth2-types",
+ "opentelemetry",
+ "opentelemetry-semantic-conventions",
+ "pasion-data-model",
+ "pasion-iana",
+ "pasion-jose",
+ "pasion-storage",
+ "rand 0.8.5",
+ "rand_chacha 0.3.1",
+ "sea-query",
+ "sea-query-binder",
+ "serde_json",
+ "sha2",
+ "sqlx",
+ "thiserror 2.0.17",
+ "tokio",
+ "tracing",
+ "ulid",
+ "url",
+ "uuid",
+]
+
+[[package]]
+name = "pasion-tasks"
+version = "1.8.0"
+dependencies = [
+ "anyhow",
+ "async-trait",
+ "chrono",
+ "cron",
+ "opentelemetry",
+ "opentelemetry-semantic-conventions",
+ "pasion-context",
+ "pasion-data-model",
+ "pasion-email",
+ "pasion-i18n",
+ "pasion-matrix",
+ "pasion-router",
+ "pasion-storage",
+ "pasion-storage-pg",
+ "pasion-templates",
+ "rand 0.8.5",
+ "rand_chacha 0.3.1",
+ "serde",
+ "serde_json",
+ "sqlx",
+ "thiserror 2.0.17",
+ "tokio",
+ "tokio-util",
+ "tracing",
+ "tracing-opentelemetry",
+ "ulid",
+]
+
+[[package]]
+name = "pasion-templates"
+version = "1.8.0"
+dependencies = [
+ "anyhow",
+ "arc-swap",
+ "camino",
+ "chrono",
+ "http",
+ "minijinja",
+ "minijinja-contrib",
+ "oauth2-types",
+ "pasion-data-model",
+ "pasion-i18n",
+ "pasion-iana",
+ "pasion-policy",
+ "pasion-router",
+ "pasion-spa",
+ "rand 0.8.5",
+ "rand_chacha 0.3.1",
+ "serde",
+ "serde_json",
+ "serde_urlencoded",
+ "thiserror 2.0.17",
+ "tokio",
+ "tracing",
+ "ulid",
+ "url",
+ "v_htmlescape",
+ "walkdir",
+]
+
+[[package]]
+name = "pasion-tower"
+version = "1.8.0"
+dependencies = [
+ "http",
+ "opentelemetry",
+ "opentelemetry-http",
+ "opentelemetry-semantic-conventions",
+ "pin-project-lite",
+ "tower",
+ "tracing",
+ "tracing-opentelemetry",
+]
 
 [[package]]
 name = "password-hash"
@@ -6702,14 +6702,14 @@ dependencies = [
  "figment",
  "futures-util",
  "insta",
- "mas-config",
- "mas-data-model",
- "mas-iana",
- "mas-storage",
- "mas-storage-pg",
  "oauth2-types",
  "opentelemetry",
  "opentelemetry-semantic-conventions",
+ "pasion-config",
+ "pasion-data-model",
+ "pasion-iana",
+ "pasion-storage",
+ "pasion-storage-pg",
  "rand 0.8.5",
  "rand_chacha 0.3.1",
  "rustc-hash",

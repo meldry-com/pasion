@@ -3,9 +3,9 @@
 use std::collections::HashMap;
 
 use chrono::{DateTime, Utc};
-use mas_http::RequestBuilderExt;
-use mas_iana::jose::JsonWebSignatureAlg;
-use mas_jose::{
+use pasion_http::RequestBuilderExt;
+use pasion_iana::jose::JsonWebSignatureAlg;
+use pasion_jose::{
     claims::{self, TimeOptions},
     jwk::PublicJsonWebKeySet,
     jwt::Jwt,

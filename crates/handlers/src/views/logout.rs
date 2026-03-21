@@ -7,9 +7,9 @@ use mas_axum_utils::{
     cookies::CookieJar,
     csrf::{CsrfExt, ProtectedForm},
 };
-use mas_data_model::BoxClock;
-use mas_router::{PostAuthAction, UrlBuilder};
-use mas_storage::{BoxRepository, user::BrowserSessionRepository};
+use pasion_data_model::BoxClock;
+use pasion_router::{PostAuthAction, UrlBuilder};
+use pasion_storage::{BoxRepository, user::BrowserSessionRepository};
 
 use crate::BoundActivityTracker;
 
@@ -48,7 +48,7 @@ pub(crate) async fn post(
     let destination = if let Some(action) = form {
         action.go_next(&url_builder)
     } else {
-        url_builder.redirect(&mas_router::Login::default())
+        url_builder.redirect(&pasion_router::Login::default())
     };
 
     Ok((cookie_jar, destination))

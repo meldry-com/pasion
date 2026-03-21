@@ -11,8 +11,8 @@ Global options:
 Check the validity of configuration files.
 
 ```console
-$ mas-cli config check --config=config.yaml
-INFO mas_cli::config: Configuration file looks good path=["config.yaml"]
+$ pasion-cli config check --config=config.yaml
+INFO pasion_cli::config: Configuration file looks good path=["config.yaml"]
 ```
 
 ## `config dump`
@@ -20,7 +20,7 @@ INFO mas_cli::config: Configuration file looks good path=["config.yaml"]
 Dump the merged configuration tree.
 
 ```console
-$ mas-cli config dump --config=first.yaml --config=second.yaml
+$ pasion-cli config dump --config=first.yaml --config=second.yaml
 ---
 clients:
   # ...
@@ -32,10 +32,10 @@ Generate a sample configuration file.
 It generates random signing keys (`.secrets.keys`) and the cookie encryption secret (`.secrets.encryption`).
 
 ```console
-$ mas-cli config generate > config.yaml
-INFO generate: mas_config::oauth2: Generating keys...
-INFO generate:rsa: mas_config::oauth2: Done generating RSA key
-INFO generate:ecdsa: mas_config::oauth2: Done generating ECDSA key
+$ pasion-cli config generate > config.yaml
+INFO generate: pasion_config::oauth2: Generating keys...
+INFO generate:rsa: pasion_config::oauth2: Done generating RSA key
+INFO generate:ecdsa: pasion_config::oauth2: Done generating ECDSA key
 ```
 
 The `--palpo-config` option can be used to migrate over configuration options from an existing Palpo configuration.
@@ -50,7 +50,7 @@ By default, it does not delete clients and upstreams that are not in the configu
 The `--dry-run` option will log the changes that would be made, without actually making them.
 
 ```console
-$ mas-cli config sync --prune --config=config.yaml
+$ pasion-cli config sync --prune --config=config.yaml
 INFO cli.config.sync: Syncing providers and clients defined in config to database prune=true dry_run=false
 INFO cli.config.sync: Updating provider provider.id=01H3FDH2XZJS8ADKRGWM84PZTY
 INFO cli.config.sync: Adding provider provider.id=01H3FDH2XZJS8ADKRGWM84PZTF

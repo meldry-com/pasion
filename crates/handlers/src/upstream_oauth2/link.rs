@@ -16,22 +16,22 @@ use mas_axum_utils::{
     csrf::{CsrfExt, ProtectedForm},
     record_error,
 };
-use mas_data_model::{
+use pasion_data_model::{
     BoxClock, BoxRng, UpstreamOAuthAuthorizationSession, UpstreamOAuthProviderOnConflict,
     UserRegistration,
 };
-use mas_jose::jwt::Jwt;
-use mas_matrix::HomeserverConnection;
-use mas_policy::Policy;
-use mas_router::UrlBuilder;
-use mas_storage::{
+use pasion_jose::jwt::Jwt;
+use pasion_matrix::HomeserverConnection;
+use pasion_policy::Policy;
+use pasion_router::UrlBuilder;
+use pasion_storage::{
     BoxRepository, Pagination, RepositoryAccess,
     upstream_oauth2::{
         UpstreamOAuthLinkFilter, UpstreamOAuthLinkRepository, UpstreamOAuthSessionRepository,
     },
     user::{BrowserSessionRepository, UserEmailRepository, UserRepository},
 };
-use mas_templates::{
+use pasion_templates::{
     AccountInactiveContext, ErrorContext, FieldError, FormError, TemplateContext, Templates,
     ToFormState, UpstreamExistingLinkContext, UpstreamRegister, UpstreamSuggestLink,
 };
@@ -120,12 +120,12 @@ pub(crate) enum RouteError {
     Internal(Box<dyn std::error::Error + Send + Sync + 'static>),
 }
 
-impl_from_error_for_route!(mas_templates::TemplateError);
+impl_from_error_for_route!(pasion_templates::TemplateError);
 impl_from_error_for_route!(mas_axum_utils::csrf::CsrfError);
 impl_from_error_for_route!(super::cookie::UpstreamSessionNotFound);
-impl_from_error_for_route!(mas_storage::RepositoryError);
-impl_from_error_for_route!(mas_policy::EvaluationError);
-impl_from_error_for_route!(mas_jose::jwt::JwtDecodeError);
+impl_from_error_for_route!(pasion_storage::RepositoryError);
+impl_from_error_for_route!(pasion_policy::EvaluationError);
+impl_from_error_for_route!(pasion_jose::jwt::JwtDecodeError);
 
 impl IntoResponse for RouteError {
     fn into_response(self) -> axum::response::Response {
@@ -212,7 +212,7 @@ pub(crate) enum FormData {
 }
 
 impl ToFormState for FormData {
-    type Field = mas_templates::UpstreamRegisterFormField;
+    type Field = pasion_templates::UpstreamRegisterFormField;
 }
 
 #[tracing::instrument(
@@ -474,11 +474,11 @@ pub(crate) async fn get(
                 // engine on this registration and react early to a problem on
                 // the username
                 let res = policy
-                    .evaluate_register(mas_policy::RegisterInput {
-                        registration_method: mas_policy::RegistrationMethod::UpstreamOAuth2,
+                    .evaluate_register(pasion_policy::RegisterInput {
+                        registration_method: pasion_policy::RegistrationMethod::UpstreamOAuth2,
                         username: &localpart,
                         email: email.as_deref(),
-                        requester: mas_policy::Requester {
+                        requester: pasion_policy::Requester {
                             ip_address: activity_tracker.ip(),
                             user_agent: user_agent.clone(),
                         },
@@ -798,7 +798,7 @@ pub(crate) async fn get(
                 return Ok((
                     cookie_jar,
                     url_builder
-                        .redirect(&mas_router::RegisterFinish::new(registration.id))
+                        .redirect(&pasion_router::RegisterFinish::new(registration.id))
                         .into_response(),
                 ));
             }
@@ -1047,12 +1047,12 @@ pub(crate) async fn post(
                 let mut homeserver_denied_username = false;
                 if username.is_empty() {
                     form_state.add_error_on_field(
-                        mas_templates::UpstreamRegisterFormField::Username,
+                        pasion_templates::UpstreamRegisterFormField::Username,
                         FieldError::Required,
                     );
                 } else if repo.user().exists(&username).await? {
                     form_state.add_error_on_field(
-                        mas_templates::UpstreamRegisterFormField::Username,
+                        pasion_templates::UpstreamRegisterFormField::Username,
                         FieldError::Exists,
                     );
                 } else if !homeserver
@@ -1074,18 +1074,18 @@ pub(crate) async fn post(
                 // If we have a TOS in the config, make sure the user has accepted it
                 if site_config.tos_uri.is_some() && !accept_terms {
                     form_state.add_error_on_field(
-                        mas_templates::UpstreamRegisterFormField::AcceptTerms,
+                        pasion_templates::UpstreamRegisterFormField::AcceptTerms,
                         FieldError::Required,
                     );
                 }
 
                 // Policy check
                 let res = policy
-                    .evaluate_register(mas_policy::RegisterInput {
-                        registration_method: mas_policy::RegistrationMethod::UpstreamOAuth2,
+                    .evaluate_register(pasion_policy::RegisterInput {
+                        registration_method: pasion_policy::RegistrationMethod::UpstreamOAuth2,
                         username: &username,
                         email: email.as_deref(),
-                        requester: mas_policy::Requester {
+                        requester: pasion_policy::Requester {
                             ip_address: activity_tracker.ip(),
                             user_agent: user_agent.clone(),
                         },
@@ -1100,7 +1100,7 @@ pub(crate) async fn post(
                             // both, so we reset the state here
                             homeserver_denied_username = false;
                             form_state.add_error_on_field(
-                                mas_templates::UpstreamRegisterFormField::Username,
+                                pasion_templates::UpstreamRegisterFormField::Username,
                                 FieldError::Policy {
                                     code: violation.code.map(|c| c.as_str()),
                                     message: violation.msg,
@@ -1117,7 +1117,7 @@ pub(crate) async fn post(
                 if homeserver_denied_username {
                     // XXX: we may want to return different errors like "this username is reserved"
                     form_state.add_error_on_field(
-                        mas_templates::UpstreamRegisterFormField::Username,
+                        pasion_templates::UpstreamRegisterFormField::Username,
                         FieldError::Exists,
                     );
                 }
@@ -1175,7 +1175,7 @@ pub(crate) async fn post(
             // finish
             Ok((
                 cookie_jar,
-                url_builder.redirect(&mas_router::RegisterFinish::new(registration.id)),
+                url_builder.redirect(&pasion_router::RegisterFinish::new(registration.id)),
             )
                 .into_response())
         }
@@ -1246,16 +1246,16 @@ async fn prepare_user_registration(
 #[cfg(test)]
 mod tests {
     use hyper::{Request, StatusCode, header::CONTENT_TYPE};
-    use mas_data_model::{
+    use pasion_data_model::{
         UpstreamOAuthAuthorizationSession, UpstreamOAuthLink, UpstreamOAuthProviderClaimsImports,
         UpstreamOAuthProviderImportPreference, UpstreamOAuthProviderLocalpartPreference,
         UpstreamOAuthProviderTokenAuthMethod, UserEmailAuthentication, UserRegistration,
     };
-    use mas_iana::jose::JsonWebSignatureAlg;
-    use mas_jose::jwt::{JsonWebSignatureHeader, Jwt};
-    use mas_keystore::Keystore;
-    use mas_router::Route;
-    use mas_storage::{Repository, RepositoryError, upstream_oauth2::UpstreamOAuthProviderParams};
+    use pasion_iana::jose::JsonWebSignatureAlg;
+    use pasion_jose::jwt::{JsonWebSignatureHeader, Jwt};
+    use pasion_keystore::Keystore;
+    use pasion_router::Route;
+    use pasion_storage::{Repository, RepositoryError, upstream_oauth2::UpstreamOAuthProviderParams};
     use oauth2_types::scope::{OPENID, Scope};
     use rand_chacha::ChaChaRng;
     use serde_json::Value;
@@ -1265,7 +1265,7 @@ mod tests {
     use super::UpstreamSessionsCookie;
     use crate::test_utils::{CookieHelper, RequestBuilderExt, ResponseExt, TestState, setup};
 
-    #[sqlx::test(migrator = "mas_storage_pg::MIGRATOR")]
+    #[sqlx::test(migrator = "pasion_storage_pg::MIGRATOR")]
     async fn test_register(pool: PgPool) {
         setup();
         let state = TestState::from_pool(pool).await.unwrap();
@@ -1274,12 +1274,12 @@ mod tests {
 
         let claims_imports = UpstreamOAuthProviderClaimsImports {
             localpart: UpstreamOAuthProviderLocalpartPreference {
-                action: mas_data_model::UpstreamOAuthProviderImportAction::Force,
+                action: pasion_data_model::UpstreamOAuthProviderImportAction::Force,
                 template: None,
-                on_conflict: mas_data_model::UpstreamOAuthProviderOnConflict::default(),
+                on_conflict: pasion_data_model::UpstreamOAuthProviderOnConflict::default(),
             },
             email: UpstreamOAuthProviderImportPreference {
-                action: mas_data_model::UpstreamOAuthProviderImportAction::Force,
+                action: pasion_data_model::UpstreamOAuthProviderImportAction::Force,
                 template: None,
             },
             ..UpstreamOAuthProviderClaimsImports::default()
@@ -1331,14 +1331,14 @@ mod tests {
                     fetch_userinfo: false,
                     userinfo_signed_response_alg: None,
                     jwks_uri_override: None,
-                    discovery_mode: mas_data_model::UpstreamOAuthProviderDiscoveryMode::Oidc,
-                    pkce_mode: mas_data_model::UpstreamOAuthProviderPkceMode::Auto,
+                    discovery_mode: pasion_data_model::UpstreamOAuthProviderDiscoveryMode::Oidc,
+                    pkce_mode: pasion_data_model::UpstreamOAuthProviderPkceMode::Auto,
                     response_mode: None,
                     additional_authorization_parameters: Vec::new(),
                     forward_login_hint: false,
                     ui_order: 0,
                     on_backchannel_logout:
-                        mas_data_model::UpstreamOAuthProviderOnBackchannelLogout::DoNothing,
+                        pasion_data_model::UpstreamOAuthProviderOnBackchannelLogout::DoNothing,
                 },
             )
             .await
@@ -1393,7 +1393,7 @@ mod tests {
         let cookie_jar = upstream_sessions.save(cookie_jar, &state.clock);
         cookies.import(cookie_jar);
 
-        let request = Request::get(&*mas_router::UpstreamOAuth2Link::new(link.id).path()).empty();
+        let request = Request::get(&*pasion_router::UpstreamOAuth2Link::new(link.id).path()).empty();
         let request = cookies.with_cookies(request);
         let response = state.request(request).await;
         cookies.save_cookies(&response);
@@ -1410,7 +1410,7 @@ mod tests {
             .next()
             .unwrap();
 
-        let request = Request::post(&*mas_router::UpstreamOAuth2Link::new(link.id).path()).form(
+        let request = Request::post(&*pasion_router::UpstreamOAuth2Link::new(link.id).path()).form(
             serde_json::json!({
                 "csrf": csrf_token,
                 "action": "register",
@@ -1459,7 +1459,7 @@ mod tests {
         assert!(email_auth.completed_at.is_some());
     }
 
-    #[sqlx::test(migrator = "mas_storage_pg::MIGRATOR")]
+    #[sqlx::test(migrator = "pasion_storage_pg::MIGRATOR")]
     async fn test_register_skip_confirmation(pool: PgPool) {
         // Same test as test_register, but checks that we get straight to the
         // registration flow skipping the confirmation
@@ -1471,12 +1471,12 @@ mod tests {
         let claims_imports = UpstreamOAuthProviderClaimsImports {
             skip_confirmation: true,
             localpart: UpstreamOAuthProviderLocalpartPreference {
-                action: mas_data_model::UpstreamOAuthProviderImportAction::Require,
+                action: pasion_data_model::UpstreamOAuthProviderImportAction::Require,
                 template: None,
-                on_conflict: mas_data_model::UpstreamOAuthProviderOnConflict::default(),
+                on_conflict: pasion_data_model::UpstreamOAuthProviderOnConflict::default(),
             },
             email: UpstreamOAuthProviderImportPreference {
-                action: mas_data_model::UpstreamOAuthProviderImportAction::Force,
+                action: pasion_data_model::UpstreamOAuthProviderImportAction::Force,
                 template: None,
             },
             ..UpstreamOAuthProviderClaimsImports::default()
@@ -1528,14 +1528,14 @@ mod tests {
                     fetch_userinfo: false,
                     userinfo_signed_response_alg: None,
                     jwks_uri_override: None,
-                    discovery_mode: mas_data_model::UpstreamOAuthProviderDiscoveryMode::Oidc,
-                    pkce_mode: mas_data_model::UpstreamOAuthProviderPkceMode::Auto,
+                    discovery_mode: pasion_data_model::UpstreamOAuthProviderDiscoveryMode::Oidc,
+                    pkce_mode: pasion_data_model::UpstreamOAuthProviderPkceMode::Auto,
                     response_mode: None,
                     additional_authorization_parameters: Vec::new(),
                     forward_login_hint: false,
                     ui_order: 0,
                     on_backchannel_logout:
-                        mas_data_model::UpstreamOAuthProviderOnBackchannelLogout::DoNothing,
+                        pasion_data_model::UpstreamOAuthProviderOnBackchannelLogout::DoNothing,
                 },
             )
             .await
@@ -1590,7 +1590,7 @@ mod tests {
         let cookie_jar = upstream_sessions.save(cookie_jar, &state.clock);
         cookies.import(cookie_jar);
 
-        let request = Request::get(&*mas_router::UpstreamOAuth2Link::new(link.id).path()).empty();
+        let request = Request::get(&*pasion_router::UpstreamOAuth2Link::new(link.id).path()).empty();
         let request = cookies.with_cookies(request);
         let response = state.request(request).await;
         cookies.save_cookies(&response);
@@ -1631,7 +1631,7 @@ mod tests {
         assert!(email_auth.completed_at.is_some());
     }
 
-    #[sqlx::test(migrator = "mas_storage_pg::MIGRATOR")]
+    #[sqlx::test(migrator = "pasion_storage_pg::MIGRATOR")]
     async fn test_link_existing_account(pool: PgPool) {
         let existing_username = "john";
         let subject = "subject";
@@ -1643,14 +1643,14 @@ mod tests {
 
         let claims_imports = UpstreamOAuthProviderClaimsImports {
             localpart: UpstreamOAuthProviderLocalpartPreference {
-                action: mas_data_model::UpstreamOAuthProviderImportAction::Require,
+                action: pasion_data_model::UpstreamOAuthProviderImportAction::Require,
                 template: None,
                 // This is the important bit: this will automatically link
                 // existing accounts if the localpart matches
-                on_conflict: mas_data_model::UpstreamOAuthProviderOnConflict::Add,
+                on_conflict: pasion_data_model::UpstreamOAuthProviderOnConflict::Add,
             },
             email: UpstreamOAuthProviderImportPreference {
-                action: mas_data_model::UpstreamOAuthProviderImportAction::Require,
+                action: pasion_data_model::UpstreamOAuthProviderImportAction::Require,
                 template: None,
             },
             ..UpstreamOAuthProviderClaimsImports::default()
@@ -1689,13 +1689,13 @@ mod tests {
                     fetch_userinfo: false,
                     userinfo_signed_response_alg: None,
                     jwks_uri_override: None,
-                    discovery_mode: mas_data_model::UpstreamOAuthProviderDiscoveryMode::Oidc,
-                    pkce_mode: mas_data_model::UpstreamOAuthProviderPkceMode::Auto,
+                    discovery_mode: pasion_data_model::UpstreamOAuthProviderDiscoveryMode::Oidc,
+                    pkce_mode: pasion_data_model::UpstreamOAuthProviderPkceMode::Auto,
                     response_mode: None,
                     additional_authorization_parameters: Vec::new(),
                     forward_login_hint: false,
                     on_backchannel_logout:
-                        mas_data_model::UpstreamOAuthProviderOnBackchannelLogout::DoNothing,
+                        pasion_data_model::UpstreamOAuthProviderOnBackchannelLogout::DoNothing,
                     ui_order: 0,
                 },
             )
@@ -1731,7 +1731,7 @@ mod tests {
 
         repo.save().await.unwrap();
 
-        let request = Request::get(&*mas_router::UpstreamOAuth2Link::new(link.id).path()).empty();
+        let request = Request::get(&*pasion_router::UpstreamOAuth2Link::new(link.id).path()).empty();
         let request = cookies.with_cookies(request);
         let response = state.request(request).await;
         cookies.save_cookies(&response);
@@ -1750,7 +1750,7 @@ mod tests {
         assert_eq!(link.user_id, Some(user.id));
     }
 
-    #[sqlx::test(migrator = "mas_storage_pg::MIGRATOR")]
+    #[sqlx::test(migrator = "pasion_storage_pg::MIGRATOR")]
     async fn test_link_existing_account_when_not_allowed_by_default(pool: PgPool) {
         let existing_username = "john";
 
@@ -1761,12 +1761,12 @@ mod tests {
 
         let claims_imports = UpstreamOAuthProviderClaimsImports {
             localpart: UpstreamOAuthProviderLocalpartPreference {
-                action: mas_data_model::UpstreamOAuthProviderImportAction::Require,
+                action: pasion_data_model::UpstreamOAuthProviderImportAction::Require,
                 template: None,
-                on_conflict: mas_data_model::UpstreamOAuthProviderOnConflict::default(),
+                on_conflict: pasion_data_model::UpstreamOAuthProviderOnConflict::default(),
             },
             email: UpstreamOAuthProviderImportPreference {
-                action: mas_data_model::UpstreamOAuthProviderImportAction::Require,
+                action: pasion_data_model::UpstreamOAuthProviderImportAction::Require,
                 template: None,
             },
             ..UpstreamOAuthProviderClaimsImports::default()
@@ -1805,13 +1805,13 @@ mod tests {
                     fetch_userinfo: false,
                     userinfo_signed_response_alg: None,
                     jwks_uri_override: None,
-                    discovery_mode: mas_data_model::UpstreamOAuthProviderDiscoveryMode::Oidc,
-                    pkce_mode: mas_data_model::UpstreamOAuthProviderPkceMode::Auto,
+                    discovery_mode: pasion_data_model::UpstreamOAuthProviderDiscoveryMode::Oidc,
+                    pkce_mode: pasion_data_model::UpstreamOAuthProviderPkceMode::Auto,
                     response_mode: None,
                     additional_authorization_parameters: Vec::new(),
                     forward_login_hint: false,
                     on_backchannel_logout:
-                        mas_data_model::UpstreamOAuthProviderOnBackchannelLogout::DoNothing,
+                        pasion_data_model::UpstreamOAuthProviderOnBackchannelLogout::DoNothing,
                     ui_order: 0,
                 },
             )
@@ -1846,7 +1846,7 @@ mod tests {
         let cookie_jar = upstream_sessions.save(cookie_jar, &state.clock);
         cookies.import(cookie_jar);
 
-        let request = Request::get(&*mas_router::UpstreamOAuth2Link::new(link.id).path()).empty();
+        let request = Request::get(&*pasion_router::UpstreamOAuth2Link::new(link.id).path()).empty();
         let request = cookies.with_cookies(request);
         let response = state.request(request).await;
         cookies.save_cookies(&response);
@@ -1860,7 +1860,7 @@ mod tests {
         rng: &mut ChaChaRng,
         keystore: &Keystore,
         payload: Value,
-    ) -> Result<Jwt<'static, Value>, mas_jose::jwt::JwtSignatureError> {
+    ) -> Result<Jwt<'static, Value>, pasion_jose::jwt::JwtSignatureError> {
         let key = keystore
             .signing_key_for_algorithm(&JsonWebSignatureAlg::Rs256)
             .unwrap();
@@ -1877,9 +1877,9 @@ mod tests {
 
     async fn add_linked_upstream_session(
         rng: &mut ChaChaRng,
-        clock: &impl mas_data_model::Clock,
+        clock: &impl pasion_data_model::Clock,
         repo: &mut Box<dyn Repository<RepositoryError> + Send + Sync + 'static>,
-        provider: &mas_data_model::UpstreamOAuthProvider,
+        provider: &pasion_data_model::UpstreamOAuthProvider,
         subject: &str,
         id_token: &str,
         id_token_claims: Value,
@@ -1917,7 +1917,7 @@ mod tests {
         Ok((link, session))
     }
 
-    #[sqlx::test(migrator = "mas_storage_pg::MIGRATOR")]
+    #[sqlx::test(migrator = "pasion_storage_pg::MIGRATOR")]
     async fn test_link_existing_account_replace_conflict(pool: PgPool) {
         let existing_username = "john";
         let subject = "subject";
@@ -1930,13 +1930,13 @@ mod tests {
 
         let claims_imports = UpstreamOAuthProviderClaimsImports {
             localpart: UpstreamOAuthProviderLocalpartPreference {
-                action: mas_data_model::UpstreamOAuthProviderImportAction::Require,
+                action: pasion_data_model::UpstreamOAuthProviderImportAction::Require,
                 template: None,
                 // This will replace any existing links for this provider and user
-                on_conflict: mas_data_model::UpstreamOAuthProviderOnConflict::Replace,
+                on_conflict: pasion_data_model::UpstreamOAuthProviderOnConflict::Replace,
             },
             email: UpstreamOAuthProviderImportPreference {
-                action: mas_data_model::UpstreamOAuthProviderImportAction::Require,
+                action: pasion_data_model::UpstreamOAuthProviderImportAction::Require,
                 template: None,
             },
             ..UpstreamOAuthProviderClaimsImports::default()
@@ -1974,13 +1974,13 @@ mod tests {
                     fetch_userinfo: false,
                     userinfo_signed_response_alg: None,
                     jwks_uri_override: None,
-                    discovery_mode: mas_data_model::UpstreamOAuthProviderDiscoveryMode::Oidc,
-                    pkce_mode: mas_data_model::UpstreamOAuthProviderPkceMode::Auto,
+                    discovery_mode: pasion_data_model::UpstreamOAuthProviderDiscoveryMode::Oidc,
+                    pkce_mode: pasion_data_model::UpstreamOAuthProviderPkceMode::Auto,
                     response_mode: None,
                     additional_authorization_parameters: Vec::new(),
                     forward_login_hint: false,
                     on_backchannel_logout:
-                        mas_data_model::UpstreamOAuthProviderOnBackchannelLogout::DoNothing,
+                        pasion_data_model::UpstreamOAuthProviderOnBackchannelLogout::DoNothing,
                     ui_order: 0,
                 },
             )
@@ -2035,7 +2035,7 @@ mod tests {
         let cookie_jar = upstream_sessions.save(cookie_jar, &state.clock);
         cookies.import(cookie_jar);
 
-        let request = Request::get(&*mas_router::UpstreamOAuth2Link::new(link.id).path()).empty();
+        let request = Request::get(&*pasion_router::UpstreamOAuth2Link::new(link.id).path()).empty();
         let request = cookies.with_cookies(request);
         let response = state.request(request).await;
         cookies.save_cookies(&response);
@@ -2066,7 +2066,7 @@ mod tests {
         );
     }
 
-    #[sqlx::test(migrator = "mas_storage_pg::MIGRATOR")]
+    #[sqlx::test(migrator = "pasion_storage_pg::MIGRATOR")]
     async fn test_link_existing_account_set_conflict_success(pool: PgPool) {
         let existing_username = "john";
         let subject = "subject";
@@ -2078,13 +2078,13 @@ mod tests {
 
         let claims_imports = UpstreamOAuthProviderClaimsImports {
             localpart: UpstreamOAuthProviderLocalpartPreference {
-                action: mas_data_model::UpstreamOAuthProviderImportAction::Require,
+                action: pasion_data_model::UpstreamOAuthProviderImportAction::Require,
                 template: None,
                 // This will only link if there are no existing links for this provider and user
-                on_conflict: mas_data_model::UpstreamOAuthProviderOnConflict::Set,
+                on_conflict: pasion_data_model::UpstreamOAuthProviderOnConflict::Set,
             },
             email: UpstreamOAuthProviderImportPreference {
-                action: mas_data_model::UpstreamOAuthProviderImportAction::Require,
+                action: pasion_data_model::UpstreamOAuthProviderImportAction::Require,
                 template: None,
             },
             ..UpstreamOAuthProviderClaimsImports::default()
@@ -2122,13 +2122,13 @@ mod tests {
                     fetch_userinfo: false,
                     userinfo_signed_response_alg: None,
                     jwks_uri_override: None,
-                    discovery_mode: mas_data_model::UpstreamOAuthProviderDiscoveryMode::Oidc,
-                    pkce_mode: mas_data_model::UpstreamOAuthProviderPkceMode::Auto,
+                    discovery_mode: pasion_data_model::UpstreamOAuthProviderDiscoveryMode::Oidc,
+                    pkce_mode: pasion_data_model::UpstreamOAuthProviderPkceMode::Auto,
                     response_mode: None,
                     additional_authorization_parameters: Vec::new(),
                     forward_login_hint: false,
                     on_backchannel_logout:
-                        mas_data_model::UpstreamOAuthProviderOnBackchannelLogout::DoNothing,
+                        pasion_data_model::UpstreamOAuthProviderOnBackchannelLogout::DoNothing,
                     ui_order: 0,
                 },
             )
@@ -2165,7 +2165,7 @@ mod tests {
         let cookie_jar = upstream_sessions.save(cookie_jar, &state.clock);
         cookies.import(cookie_jar);
 
-        let request = Request::get(&*mas_router::UpstreamOAuth2Link::new(link.id).path()).empty();
+        let request = Request::get(&*pasion_router::UpstreamOAuth2Link::new(link.id).path()).empty();
         let request = cookies.with_cookies(request);
         let response = state.request(request).await;
         cookies.save_cookies(&response);
@@ -2184,7 +2184,7 @@ mod tests {
         assert_eq!(new_link.user_id, Some(user.id));
     }
 
-    #[sqlx::test(migrator = "mas_storage_pg::MIGRATOR")]
+    #[sqlx::test(migrator = "pasion_storage_pg::MIGRATOR")]
     async fn test_link_existing_account_set_conflict_failure(pool: PgPool) {
         let existing_username = "john";
         let subject = "subject";
@@ -2197,13 +2197,13 @@ mod tests {
 
         let claims_imports = UpstreamOAuthProviderClaimsImports {
             localpart: UpstreamOAuthProviderLocalpartPreference {
-                action: mas_data_model::UpstreamOAuthProviderImportAction::Require,
+                action: pasion_data_model::UpstreamOAuthProviderImportAction::Require,
                 template: None,
                 // This will only link if there are no existing links for this provider and user
-                on_conflict: mas_data_model::UpstreamOAuthProviderOnConflict::Set,
+                on_conflict: pasion_data_model::UpstreamOAuthProviderOnConflict::Set,
             },
             email: UpstreamOAuthProviderImportPreference {
-                action: mas_data_model::UpstreamOAuthProviderImportAction::Require,
+                action: pasion_data_model::UpstreamOAuthProviderImportAction::Require,
                 template: None,
             },
             ..UpstreamOAuthProviderClaimsImports::default()
@@ -2241,13 +2241,13 @@ mod tests {
                     fetch_userinfo: false,
                     userinfo_signed_response_alg: None,
                     jwks_uri_override: None,
-                    discovery_mode: mas_data_model::UpstreamOAuthProviderDiscoveryMode::Oidc,
-                    pkce_mode: mas_data_model::UpstreamOAuthProviderPkceMode::Auto,
+                    discovery_mode: pasion_data_model::UpstreamOAuthProviderDiscoveryMode::Oidc,
+                    pkce_mode: pasion_data_model::UpstreamOAuthProviderPkceMode::Auto,
                     response_mode: None,
                     additional_authorization_parameters: Vec::new(),
                     forward_login_hint: false,
                     on_backchannel_logout:
-                        mas_data_model::UpstreamOAuthProviderOnBackchannelLogout::DoNothing,
+                        pasion_data_model::UpstreamOAuthProviderOnBackchannelLogout::DoNothing,
                     ui_order: 0,
                 },
             )
@@ -2302,7 +2302,7 @@ mod tests {
         let cookie_jar = upstream_sessions.save(cookie_jar, &state.clock);
         cookies.import(cookie_jar);
 
-        let request = Request::get(&*mas_router::UpstreamOAuth2Link::new(link.id).path()).empty();
+        let request = Request::get(&*pasion_router::UpstreamOAuth2Link::new(link.id).path()).empty();
         let request = cookies.with_cookies(request);
         let response = state.request(request).await;
         cookies.save_cookies(&response);

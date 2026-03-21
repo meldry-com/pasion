@@ -1,23 +1,23 @@
 //! Utilities for showing proposer HTML fallbacks when the user is logged out,
 //! locked or deactivated
 
-use mas_salvo_utils::{SessionInfoExt, cookies::CookieJar, csrf::CsrfExt};
+use pasion_salvo_utils::{SessionInfoExt, cookies::CookieJar, csrf::CsrfExt};
 use salvo::prelude::*;
-use mas_data_model::{BrowserSession, Clock, User};
-use mas_i18n::DataLocale;
-use mas_policy::model::SessionCounts;
-use mas_storage::{
+use pasion_data_model::{BrowserSession, Clock, User};
+use pasion_i18n::DataLocale;
+use pasion_policy::model::SessionCounts;
+use pasion_storage::{
     BoxRepository, RepositoryError, compat::CompatSessionFilter, oauth2::OAuth2SessionFilter,
     personal::PersonalSessionFilter,
 };
-use mas_templates::{AccountInactiveContext, TemplateContext, Templates};
+use pasion_templates::{AccountInactiveContext, TemplateContext, Templates};
 use rand::RngCore;
 use thiserror::Error;
 
 #[derive(Debug, Error)]
 #[error(transparent)]
 pub enum SessionLoadError {
-    Template(#[from] mas_templates::TemplateError),
+    Template(#[from] pasion_templates::TemplateError),
     Repository(#[from] RepositoryError),
 }
 

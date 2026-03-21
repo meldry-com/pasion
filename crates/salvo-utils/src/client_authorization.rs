@@ -2,12 +2,12 @@ use std::collections::HashMap;
 
 use headers::authorization::{Basic, Bearer, Credentials as _};
 use http::StatusCode;
-use mas_data_model::{Client, JwksOrJwksUri};
-use mas_http::RequestBuilderExt;
-use mas_iana::oauth::OAuthClientAuthenticationMethod;
-use mas_jose::{jwk::PublicJsonWebKeySet, jwt::Jwt};
-use mas_keystore::Encrypter;
-use mas_storage::{RepositoryAccess, oauth2::OAuth2ClientRepository};
+use pasion_data_model::{Client, JwksOrJwksUri};
+use pasion_http::RequestBuilderExt;
+use pasion_iana::oauth::OAuthClientAuthenticationMethod;
+use pasion_jose::{jwk::PublicJsonWebKeySet, jwt::Jwt};
+use pasion_keystore::Encrypter;
+use pasion_storage::{RepositoryAccess, oauth2::OAuth2ClientRepository};
 use oauth2_types::errors::{ClientError, ClientErrorCode};
 use salvo::prelude::*;
 use serde::{Deserialize, de::DeserializeOwned};

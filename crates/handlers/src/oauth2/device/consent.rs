@@ -12,12 +12,12 @@ use mas_axum_utils::{
     cookies::CookieJar,
     csrf::{CsrfExt, ProtectedForm},
 };
-use mas_data_model::{BoxClock, BoxRng, MatrixUser};
-use mas_matrix::HomeserverConnection;
-use mas_policy::Policy;
-use mas_router::UrlBuilder;
-use mas_storage::BoxRepository;
-use mas_templates::{DeviceConsentContext, PolicyViolationContext, TemplateContext, Templates};
+use pasion_data_model::{BoxClock, BoxRng, MatrixUser};
+use pasion_matrix::HomeserverConnection;
+use pasion_policy::Policy;
+use pasion_router::UrlBuilder;
+use pasion_storage::BoxRepository;
+use pasion_templates::{DeviceConsentContext, PolicyViolationContext, TemplateContext, Templates};
 use serde::Deserialize;
 use tracing::warn;
 use ulid::Ulid;
@@ -72,7 +72,7 @@ pub(crate) async fn get(
     let user_agent = user_agent.map(|ua| ua.to_string());
 
     let Some(session) = maybe_session else {
-        let login = mas_router::Login::and_continue_device_code_grant(grant_id);
+        let login = pasion_router::Login::and_continue_device_code_grant(grant_id);
         return Ok((cookie_jar, url_builder.redirect(&login)).into_response());
     };
 
@@ -108,13 +108,13 @@ pub(crate) async fn get(
 
     // Evaluate the policy
     let res = policy
-        .evaluate_authorization_grant(mas_policy::AuthorizationGrantInput {
-            grant_type: mas_policy::GrantType::DeviceCode,
+        .evaluate_authorization_grant(pasion_policy::AuthorizationGrantInput {
+            grant_type: pasion_policy::GrantType::DeviceCode,
             client: &client,
             session_counts: Some(session_counts),
             scope: &grant.scope,
             user: Some(&session.user),
-            requester: mas_policy::Requester {
+            requester: pasion_policy::Requester {
                 ip_address: activity_tracker.ip(),
                 user_agent,
             },
@@ -211,7 +211,7 @@ pub(crate) async fn post(
     let user_agent = user_agent.map(|TypedHeader(ua)| ua.to_string());
 
     let Some(session) = maybe_session else {
-        let login = mas_router::Login::and_continue_device_code_grant(grant_id);
+        let login = pasion_router::Login::and_continue_device_code_grant(grant_id);
         return Ok((cookie_jar, url_builder.redirect(&login)).into_response());
     };
 
@@ -244,13 +244,13 @@ pub(crate) async fn post(
 
     // Evaluate the policy
     let res = policy
-        .evaluate_authorization_grant(mas_policy::AuthorizationGrantInput {
-            grant_type: mas_policy::GrantType::DeviceCode,
+        .evaluate_authorization_grant(pasion_policy::AuthorizationGrantInput {
+            grant_type: pasion_policy::GrantType::DeviceCode,
             client: &client,
             session_counts: Some(session_counts),
             scope: &grant.scope,
             user: Some(&session.user),
-            requester: mas_policy::Requester {
+            requester: pasion_policy::Requester {
                 ip_address: activity_tracker.ip(),
                 user_agent,
             },

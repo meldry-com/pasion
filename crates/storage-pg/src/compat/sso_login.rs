@@ -1,7 +1,7 @@
 use async_trait::async_trait;
 use chrono::{DateTime, Utc};
-use mas_data_model::{BrowserSession, Clock, CompatSession, CompatSsoLogin, CompatSsoLoginState};
-use mas_storage::{
+use pasion_data_model::{BrowserSession, Clock, CompatSession, CompatSsoLogin, CompatSsoLoginState};
+use pasion_storage::{
     Page, Pagination,
     compat::{CompatSsoLoginFilter, CompatSsoLoginRepository},
     pagination::Node,
@@ -349,7 +349,7 @@ impl CompatSsoLoginRepository for PgCompatSsoLoginRepository<'_> {
             db.query.text,
             %compat_sso_login.id,
             %compat_session.id,
-            compat_session.device.id = compat_session.device.as_ref().map(mas_data_model::Device::as_str),
+            compat_session.device.id = compat_session.device.as_ref().map(pasion_data_model::Device::as_str),
         ),
         err,
     )]

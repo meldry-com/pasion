@@ -7,11 +7,11 @@ use std::ops::Deref;
 use chrono::{DateTime, Duration, Utc};
 use indexmap::IndexMap;
 use language_tags::LanguageTag;
-use mas_iana::{
+use pasion_iana::{
     jose::{JsonWebEncryptionAlg, JsonWebEncryptionEnc, JsonWebSignatureAlg},
     oauth::{OAuthAuthorizationEndpointResponseType, OAuthClientAuthenticationMethod},
 };
-use mas_jose::jwk::PublicJsonWebKeySet;
+use pasion_jose::jwk::PublicJsonWebKeySet;
 use serde::{Deserialize, Serialize};
 use serde_with::{TimestampSeconds, serde_as, skip_serializing_none};
 use thiserror::Error;
@@ -917,11 +917,11 @@ pub struct ClientRegistrationResponse {
 #[cfg(test)]
 mod tests {
     use assert_matches::assert_matches;
-    use mas_iana::{
+    use pasion_iana::{
         jose::{JsonWebEncryptionAlg, JsonWebEncryptionEnc, JsonWebSignatureAlg},
         oauth::{OAuthAuthorizationEndpointResponseType, OAuthClientAuthenticationMethod},
     };
-    use mas_jose::jwk::PublicJsonWebKeySet;
+    use pasion_jose::jwk::PublicJsonWebKeySet;
     use url::Url;
 
     use super::{ClientMetadata, ClientMetadataVerificationError};

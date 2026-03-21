@@ -22,8 +22,8 @@ env:
   CARGO_NET_GIT_FETCH_WITH_CLI: "true"
   SCCACHE_GHA_ENABLED: "true"
   RUSTC_WRAPPER: "sccache"
-  IMAGE: ghcr.io/palpo-im/palpo-auth-service
-  BUILDCACHE: ghcr.io/palpo-im/palpo-auth-service/buildcache
+  IMAGE: ghcr.io/palpo-im/pasion
+  BUILDCACHE: ghcr.io/palpo-im/pasion/buildcache
   DOCKER_METADATA_ANNOTATIONS_LEVELS: manifest,index
 
 jobs:
@@ -135,13 +135,13 @@ jobs:
             --target ${{ matrix.target }}.2.17 \
             --no-default-features \
             --features dist \
-            -p mas-cli
+            -p pasion-cli
 
       - name: Upload binary artifact
         uses: actions/upload-artifact@v6.0.0
         with:
           name: binary-${{ matrix.target }}
-          path: target/${{ matrix.target }}/release/mas-cli
+          path: target/${{ matrix.target }}/release/pasion-cli
 
   assemble-archives:
     name: Assemble release archives
@@ -180,23 +180,23 @@ jobs:
             mkdir -p dist/${arch}/share
             cp -r assets-dist/share/* dist/${arch}/share/
             cp assets-dist/LICENSE dist/${arch}/LICENSE
-            cp binary-$arch/mas-cli dist/${arch}/mas-cli
+            cp binary-$arch/pasion-cli dist/${arch}/pasion-cli
             chmod -R u=rwX,go=rX dist/${arch}/
-            chmod u=rwx,go=rx dist/${arch}/mas-cli
-            tar -czvf mas-cli-${arch}-linux.tar.gz --owner=0 --group=0 -C dist/${arch}/ .
+            chmod u=rwx,go=rx dist/${arch}/pasion-cli
+            tar -czvf pasion-cli-${arch}-linux.tar.gz --owner=0 --group=0 -C dist/${arch}/ .
           done
 
       - name: Upload aarch64 archive
         uses: actions/upload-artifact@v6.0.0
         with:
-          name: mas-cli-aarch64-linux
-          path: mas-cli-aarch64-linux.tar.gz
+          name: pasion-cli-aarch64-linux
+          path: pasion-cli-aarch64-linux.tar.gz
 
       - name: Upload x86_64 archive
         uses: actions/upload-artifact@v6.0.0
         with:
-          name: mas-cli-x86_64-linux
-          path: mas-cli-x86_64-linux.tar.gz
+          name: pasion-cli-x86_64-linux
+          path: pasion-cli-x86_64-linux.tar.gz
 
   build-image:
     name: Build and push Docker image
@@ -317,7 +317,7 @@ jobs:
       - name: Download the artifacts from the previous job
         uses: actions/download-artifact@v7
         with:
-          pattern: mas-cli-*
+          pattern: pasion-cli-*
           path: artifacts
           merge-multiple: true
 
@@ -353,8 +353,8 @@ jobs:
                 ```
 
           files: |
-            artifacts/mas-cli-aarch64-linux.tar.gz
-            artifacts/mas-cli-x86_64-linux.tar.gz
+            artifacts/pasion-cli-aarch64-linux.tar.gz
+            artifacts/pasion-cli-x86_64-linux.tar.gz
           draft: true
 
   unstable:
@@ -379,7 +379,7 @@ jobs:
       - name: Download the artifacts from the previous job
         uses: actions/download-artifact@v7
         with:
-          pattern: mas-cli-*
+          pattern: pasion-cli-*
           path: artifacts
           merge-multiple: true
 
@@ -430,8 +430,8 @@ jobs:
                 ```
 
           files: |
-            artifacts/mas-cli-aarch64-linux.tar.gz
-            artifacts/mas-cli-x86_64-linux.tar.gz
+            artifacts/pasion-cli-aarch64-linux.tar.gz
+            artifacts/pasion-cli-x86_64-linux.tar.gz
           prerelease: true
           make_latest: false
 

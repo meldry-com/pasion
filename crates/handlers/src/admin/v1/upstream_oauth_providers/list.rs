@@ -4,7 +4,7 @@ use axum_extra::extract::{Query, QueryRejection};
 use axum_macros::FromRequestParts;
 use hyper::StatusCode;
 use mas_axum_utils::record_error;
-use mas_storage::{Page, upstream_oauth2::UpstreamOAuthProviderFilter};
+use pasion_storage::{Page, upstream_oauth2::UpstreamOAuthProviderFilter};
 use schemars::JsonSchema;
 use serde::Deserialize;
 
@@ -52,7 +52,7 @@ pub enum RouteError {
     InvalidFilter(#[from] QueryRejection),
 }
 
-impl_from_error_for_route!(mas_storage::RepositoryError);
+impl_from_error_for_route!(pasion_storage::RepositoryError);
 
 impl IntoResponse for RouteError {
     fn into_response(self) -> axum::response::Response {
@@ -74,11 +74,11 @@ pub fn doc(operation: TransformOperation) -> TransformOperation {
         .tag("upstream-oauth-provider")
         .response_with::<200, Json<PaginatedResponse<UpstreamOAuthProvider>>, _>(|t| {
             let providers = UpstreamOAuthProvider::samples();
-            let pagination = mas_storage::Pagination::first(providers.len());
+            let pagination = pasion_storage::Pagination::first(providers.len());
             let page = Page {
                 edges: providers
                     .into_iter()
-                    .map(|node| mas_storage::pagination::Edge {
+                    .map(|node| pasion_storage::pagination::Edge {
                         cursor: node.id(),
                         node,
                     })
@@ -143,13 +143,13 @@ pub async fn handler(
 #[cfg(test)]
 mod tests {
     use hyper::{Request, StatusCode};
-    use mas_data_model::{
+    use pasion_data_model::{
         UpstreamOAuthProviderClaimsImports, UpstreamOAuthProviderDiscoveryMode,
         UpstreamOAuthProviderOnBackchannelLogout, UpstreamOAuthProviderPkceMode,
         UpstreamOAuthProviderTokenAuthMethod,
     };
-    use mas_iana::jose::JsonWebSignatureAlg;
-    use mas_storage::{
+    use pasion_iana::jose::JsonWebSignatureAlg;
+    use pasion_storage::{
         RepositoryAccess,
         upstream_oauth2::{UpstreamOAuthProviderParams, UpstreamOAuthProviderRepository},
     };
@@ -267,7 +267,7 @@ mod tests {
         Box::new(repo).save().await.unwrap();
     }
 
-    #[sqlx::test(migrator = "mas_storage_pg::MIGRATOR")]
+    #[sqlx::test(migrator = "pasion_storage_pg::MIGRATOR")]
     async fn test_list_all_providers(pool: PgPool) {
         setup();
         let mut state = TestState::from_pool(pool).await.unwrap();
@@ -358,7 +358,7 @@ mod tests {
         "#);
     }
 
-    #[sqlx::test(migrator = "mas_storage_pg::MIGRATOR")]
+    #[sqlx::test(migrator = "pasion_storage_pg::MIGRATOR")]
     async fn test_filter_by_enabled_true(pool: PgPool) {
         setup();
         let mut state = TestState::from_pool(pool).await.unwrap();
@@ -427,7 +427,7 @@ mod tests {
         "#);
     }
 
-    #[sqlx::test(migrator = "mas_storage_pg::MIGRATOR")]
+    #[sqlx::test(migrator = "pasion_storage_pg::MIGRATOR")]
     async fn test_filter_by_enabled_false(pool: PgPool) {
         setup();
         let mut state = TestState::from_pool(pool).await.unwrap();
@@ -477,7 +477,7 @@ mod tests {
         "#);
     }
 
-    #[sqlx::test(migrator = "mas_storage_pg::MIGRATOR")]
+    #[sqlx::test(migrator = "pasion_storage_pg::MIGRATOR")]
     async fn test_pagination(pool: PgPool) {
         setup();
         let mut state = TestState::from_pool(pool).await.unwrap();
@@ -594,7 +594,7 @@ mod tests {
         "#);
     }
 
-    #[sqlx::test(migrator = "mas_storage_pg::MIGRATOR")]
+    #[sqlx::test(migrator = "pasion_storage_pg::MIGRATOR")]
     async fn test_invalid_filter(pool: PgPool) {
         setup();
         let mut state = TestState::from_pool(pool).await.unwrap();
@@ -609,7 +609,7 @@ mod tests {
         response.assert_status(StatusCode::BAD_REQUEST);
     }
 
-    #[sqlx::test(migrator = "mas_storage_pg::MIGRATOR")]
+    #[sqlx::test(migrator = "pasion_storage_pg::MIGRATOR")]
     async fn test_count_parameter(pool: PgPool) {
         setup();
         let mut state = TestState::from_pool(pool).await.unwrap();

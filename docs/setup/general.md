@@ -12,23 +12,23 @@ It mainly includes:
 Although it is possible to generate these secrets manually, it is strongly recommended to use the [`config generate`](../reference/cli/config.md#config-generate) command to generate a configuration file with unique secrets and keys.
 
 ```sh
-mas-cli config generate > config.yaml
+pasion-cli config generate > config.yaml
 ```
 
-If you're using the docker container, the command `mas-cli` can be invoked with `docker run`:
+If you're using the docker container, the command `pasion-cli` can be invoked with `docker run`:
 
 ```sh
-docker run ghcr.io/palpo-im/palpo-auth-service config generate > config.yaml
+docker run ghcr.io/palpo-im/pasion config generate > config.yaml
 ```
 
-This applies to all of the `mas-cli` commands in this document.
+This applies to all of the `pasion-cli` commands in this document.
 
 **Note:** The generated configuration file is very extensive, and contains the default values for all the configuration options.
 This will be made easier to read in the future, but in the meantime, it is recommended to strip untouched options from the configuration file.
 
 ## Using and inspecting the configuration file
 
-When using the `mas-cli`, multiple configuration files can be loaded, with the following rule:
+When using the `pasion-cli`, multiple configuration files can be loaded, with the following rule:
 
 1. If the `--config` option is specified, possibly multiple times, load the file at the specified path, relative to the current working directory
 2. If not, load the files specified in the `MAS_CONFIG` environment variable if set, separated by `:`, relative to the current working directory
@@ -38,19 +38,19 @@ The validity of the configuration file can be checked using the [`config check`]
 
 ```sh
 # This will read both the `first.yaml` and `second.yaml` files
-mas-cli config check --config=first.yaml --config=second.yaml
+pasion-cli config check --config=first.yaml --config=second.yaml
 
 # This will also read both the `first.yaml` and `second.yaml` files
-MAS_CONFIG=first.yaml:second.yaml mas-cli config check
+MAS_CONFIG=first.yaml:second.yaml pasion-cli config check
 
 # This will only read the `config.yaml` file
-mas-cli config check
+pasion-cli config check
 ```
 
 To help understand what the resulting configuration looks like after merging all the configuration files, the [`config dump`](../reference/cli/config.md#config-dump) command can be used:
 
 ```sh
-mas-cli config dump
+pasion-cli config dump
 ```
 
 ## Configuration schema
@@ -68,7 +68,7 @@ By default, this will only add new clients and upstream OAuth providers and upda
 To do so, use the `--prune` option:
 
 ```sh
-mas-cli config sync --prune
+pasion-cli config sync --prune
 ```
 
 ## Next step

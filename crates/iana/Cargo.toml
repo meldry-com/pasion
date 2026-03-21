@@ -1,5 +1,5 @@
 [package]
-name = "mas-iana"
+name = "pasion-iana"
 description = "IANA registry data for JOSE and OAuth 2.0"
 version.workspace = true
 authors.workspace = true

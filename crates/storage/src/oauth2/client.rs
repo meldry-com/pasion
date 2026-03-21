@@ -1,9 +1,9 @@
 use std::collections::{BTreeMap, BTreeSet};
 
 use async_trait::async_trait;
-use mas_data_model::{Client, Clock};
-use mas_iana::{jose::JsonWebSignatureAlg, oauth::OAuthClientAuthenticationMethod};
-use mas_jose::jwk::PublicJsonWebKeySet;
+use pasion_data_model::{Client, Clock};
+use pasion_iana::{jose::JsonWebSignatureAlg, oauth::OAuthClientAuthenticationMethod};
+use pasion_jose::jwk::PublicJsonWebKeySet;
 use oauth2_types::{oidc::ApplicationType, requests::GrantType};
 use rand_core::RngCore;
 use ulid::Ulid;

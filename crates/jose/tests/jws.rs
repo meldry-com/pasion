@@ -15,11 +15,11 @@ static EDDSA_ED25519_JWT: &str = include_str!("./jwts/eddsa-ed25519.jwt");
 static EDDSA_ED448_JWT: &str = include_str!("./jwts/eddsa-ed448.jwt");
 static OCT_KEY: &[u8] = include_bytes!("./keys/oct.bin");
 
-fn public_jwks() -> mas_jose::jwk::PublicJsonWebKeySet {
+fn public_jwks() -> pasion_jose::jwk::PublicJsonWebKeySet {
     serde_json::from_str(include_str!("./keys/jwks.pub.json")).unwrap()
 }
 
-fn private_jwks() -> mas_jose::jwk::PrivateJsonWebKeySet {
+fn private_jwks() -> pasion_jose::jwk::PrivateJsonWebKeySet {
     serde_json::from_str(include_str!("./keys/jwks.priv.json")).unwrap()
 }
 
@@ -47,8 +47,8 @@ macro_rules! asymetric_jwt_test {
         mod $test_name {
             use std::ops::Deref;
 
-            use mas_iana::jose::JsonWebSignatureAlg;
-            use mas_jose::{constraints::ConstraintSet, jwt::Jwt};
+            use pasion_iana::jose::JsonWebSignatureAlg;
+            use pasion_jose::{constraints::ConstraintSet, jwt::Jwt};
 
             use super::*;
 
@@ -80,7 +80,7 @@ macro_rules! asymetric_jwt_test {
             }
 
             conditional! { $supported =>
-                use mas_jose::jwt::JsonWebSignatureHeader;
+                use pasion_jose::jwt::JsonWebSignatureHeader;
                 use rand_chacha::ChaCha8Rng;
                 use rand::SeedableRng;
 
@@ -91,7 +91,7 @@ macro_rules! asymetric_jwt_test {
 
                     let key = jwks.find_key(&jwt.header().into()).unwrap();
 
-                    let key = mas_jose::jwa::AsymmetricVerifyingKey::from_jwk_and_alg(
+                    let key = pasion_jose::jwa::AsymmetricVerifyingKey::from_jwk_and_alg(
                         key.params(),
                         &JsonWebSignatureAlg::$alg,
                     )
@@ -112,7 +112,7 @@ macro_rules! asymetric_jwt_test {
                     let jwks = private_jwks();
                     let key = jwks.signing_key_for_algorithm(&alg).unwrap();
 
-                    let key = mas_jose::jwa::AsymmetricSigningKey::from_jwk_and_alg(key.params(), &alg)
+                    let key = pasion_jose::jwa::AsymmetricSigningKey::from_jwk_and_alg(key.params(), &alg)
                         .unwrap();
 
                     let jwt: Jwt<'_, Payload> = Jwt::sign_with_rng(&mut rng, header, payload, &key).unwrap();
@@ -130,7 +130,7 @@ macro_rules! asymetric_jwt_test {
                     let jwks = private_jwks();
                     let key = jwks.signing_key_for_algorithm(&alg).unwrap();
 
-                    let key = mas_jose::jwa::AsymmetricSigningKey::from_jwk_and_alg(key.params(), &alg)
+                    let key = pasion_jose::jwa::AsymmetricSigningKey::from_jwk_and_alg(key.params(), &alg)
                         .unwrap();
 
                     let jwt: Jwt<'_, Payload> = Jwt::sign(header, payload, &key).unwrap();
@@ -140,7 +140,7 @@ macro_rules! asymetric_jwt_test {
                     let key = jwks.find_key(&jwt.header().into()).unwrap();
 
                     let key =
-                        mas_jose::jwa::AsymmetricVerifyingKey::from_jwk_and_alg(key.params(), &alg)
+                        pasion_jose::jwa::AsymmetricVerifyingKey::from_jwk_and_alg(key.params(), &alg)
                             .unwrap();
 
                     jwt.verify(&key).unwrap();
@@ -153,8 +153,8 @@ macro_rules! asymetric_jwt_test {
 macro_rules! symetric_jwt_test {
     ($test_name:ident, $alg:ident, $jwt:ident) => {
         mod $test_name {
-            use mas_iana::jose::JsonWebSignatureAlg;
-            use mas_jose::jwt::{JsonWebSignatureHeader, Jwt};
+            use pasion_iana::jose::JsonWebSignatureAlg;
+            use pasion_jose::jwt::{JsonWebSignatureHeader, Jwt};
 
             use super::*;
 
@@ -169,7 +169,7 @@ macro_rules! symetric_jwt_test {
             fn verify_jwt() {
                 let jwt: Jwt<'_, Payload> = Jwt::try_from($jwt).unwrap();
                 let key =
-                    mas_jose::jwa::SymmetricKey::new_for_alg(oct_key(), &JsonWebSignatureAlg::$alg)
+                    pasion_jose::jwa::SymmetricKey::new_for_alg(oct_key(), &JsonWebSignatureAlg::$alg)
                         .unwrap();
                 jwt.verify(&key).unwrap();
             }
@@ -182,7 +182,7 @@ macro_rules! symetric_jwt_test {
                 };
                 let header = JsonWebSignatureHeader::new(alg.clone());
 
-                let key = mas_jose::jwa::SymmetricKey::new_for_alg(oct_key(), &alg).unwrap();
+                let key = pasion_jose::jwa::SymmetricKey::new_for_alg(oct_key(), &alg).unwrap();
 
                 let jwt: Jwt<'_, Payload> = Jwt::sign(header, payload, &key).unwrap();
                 let jwt: Jwt<'_, Payload> = Jwt::try_from(jwt.as_str()).unwrap();
@@ -213,7 +213,7 @@ asymetric_jwt_test!(eddsa_ed448, EdDsa, EDDSA_ED448_JWT, supported = false);
 #[test]
 fn test_private_to_public_jwks() {
     let priv_jwks = private_jwks();
-    let pub_jwks = mas_jose::jwk::PublicJsonWebKeySet::from(priv_jwks);
+    let pub_jwks = pasion_jose::jwk::PublicJsonWebKeySet::from(priv_jwks);
 
     assert_eq!(pub_jwks, public_jwks());
 }

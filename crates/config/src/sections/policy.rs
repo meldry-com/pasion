@@ -12,7 +12,7 @@ fn default_policy_path() -> Utf8PathBuf {
 
 #[cfg(feature = "docker")]
 fn default_policy_path() -> Utf8PathBuf {
-    "/usr/local/share/mas-cli/policy.wasm".into()
+    "/usr/local/share/pasion-cli/policy.wasm".into()
 }
 
 #[cfg(feature = "dist")]

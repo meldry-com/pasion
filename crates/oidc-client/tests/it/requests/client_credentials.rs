@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 
-use mas_iana::oauth::{OAuthAccessTokenType, OAuthClientAuthenticationMethod};
-use mas_oidc_client::requests::client_credentials::access_token_with_client_credentials;
+use pasion_iana::oauth::{OAuthAccessTokenType, OAuthClientAuthenticationMethod};
+use pasion_oidc_client::requests::client_credentials::access_token_with_client_credentials;
 use oauth2_types::{
     requests::AccessTokenResponse,
     scope::{PROFILE, Scope},

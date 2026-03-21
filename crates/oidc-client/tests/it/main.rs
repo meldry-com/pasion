@@ -1,15 +1,15 @@
 use std::collections::HashMap;
 
 use chrono::{DateTime, Duration, Utc};
-use mas_iana::{jose::JsonWebSignatureAlg, oauth::OAuthClientAuthenticationMethod};
-use mas_jose::{
+use pasion_iana::{jose::JsonWebSignatureAlg, oauth::OAuthClientAuthenticationMethod};
+use pasion_jose::{
     claims::{self, hash_token},
     constraints::Constrainable,
     jwk::PublicJsonWebKeySet,
     jwt::{JsonWebSignatureHeader, Jwt},
 };
-use mas_keystore::{JsonWebKey, JsonWebKeySet, Keystore, PrivateKey};
-use mas_oidc_client::types::{IdToken, client_credentials::ClientCredentials};
+use pasion_keystore::{JsonWebKey, JsonWebKeySet, Keystore, PrivateKey};
+use pasion_oidc_client::types::{IdToken, client_credentials::ClientCredentials};
 use rand::{
     SeedableRng,
     distributions::{Alphanumeric, DistString},
@@ -39,7 +39,7 @@ fn now() -> DateTime<Utc> {
 async fn init_test() -> (reqwest::Client, MockServer, Url) {
     let _ = rustls::crypto::aws_lc_rs::default_provider().install_default();
 
-    let client = mas_http::reqwest_client();
+    let client = pasion_http::reqwest_client();
     let mock_server = MockServer::start().await;
     let issuer = Url::parse(&mock_server.uri()).expect("Couldn't parse URL");
 

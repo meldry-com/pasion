@@ -1,9 +1,9 @@
 use std::string::FromUtf8Error;
 
-use mas_data_model::{UpstreamOAuthProvider, UpstreamOAuthProviderTokenAuthMethod};
-use mas_iana::jose::JsonWebSignatureAlg;
-use mas_keystore::{DecryptError, Encrypter, Keystore};
-use mas_oidc_client::types::client_credentials::ClientCredentials;
+use pasion_data_model::{UpstreamOAuthProvider, UpstreamOAuthProviderTokenAuthMethod};
+use pasion_iana::jose::JsonWebSignatureAlg;
+use pasion_keystore::{DecryptError, Encrypter, Keystore};
+use pasion_oidc_client::types::client_credentials::ClientCredentials;
 use pkcs8::DecodePrivateKey;
 use serde::Deserialize;
 use thiserror::Error;

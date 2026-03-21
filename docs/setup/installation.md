@@ -4,12 +4,12 @@
 
 Pre-built binaries can be found attached on each release, for Linux on both `x86_64` and `aarch64` architectures.
 
-- [`mas-cli-aarch64-linux.tar.gz`](https://github.com/palpo-im/palpo-auth-service/releases/latest/download/mas-cli-aarch64-linux.tar.gz)
-- [`mas-cli-x86_64-linux.tar.gz`](https://github.com/palpo-im/palpo-auth-service/releases/latest/download/mas-cli-x86_64-linux.tar.gz)
+- [`pasion-cli-aarch64-linux.tar.gz`](https://github.com/palpo-im/pasion/releases/latest/download/pasion-cli-aarch64-linux.tar.gz)
+- [`pasion-cli-x86_64-linux.tar.gz`](https://github.com/palpo-im/pasion/releases/latest/download/pasion-cli-x86_64-linux.tar.gz)
 
 Each archive contains:
 
-- the `mas-cli` binary
+- the `pasion-cli` binary
 - assets needed for running the service, including:
   - `share/assets/`: the built frontend assets
   - `share/manifest.json`: the manifest for the frontend assets
@@ -21,7 +21,7 @@ The location of all these assets can be overridden in the [configuration file](.
 
 ---
 
-Example shell commands to download and extract the `mas-cli` binary:
+Example shell commands to download and extract the `pasion-cli` binary:
 
 ```sh
 ARCH=x86_64 # or aarch64
@@ -29,20 +29,20 @@ OS=linux
 VERSION=latest # or a specific version, like "v0.1.0"
 
 # URL to the right archive
-URL="https://github.com/palpo-im/palpo-auth-service/releases/${VERSION}/download/mas-cli-${ARCH}-${OS}.tar.gz"
+URL="https://github.com/palpo-im/pasion/releases/${VERSION}/download/pasion-cli-${ARCH}-${OS}.tar.gz"
 
 # Create a directory and extract the archive in it
 mkdir -p /path/to/mas
 curl -sL "$URL" | tar xzC /path/to/mas
 
 # This should display the help message
-/path/to/mas/mas-cli --help
+/path/to/mas/pasion-cli --help
 ```
 
 
 ## Using the Docker image
 
-A pre-built Docker image is available here: [`ghcr.io/palpo-im/palpo-auth-service:latest`](https://ghcr.io/palpo-im/palpo-auth-service:latest)
+A pre-built Docker image is available here: [`ghcr.io/palpo-im/pasion:latest`](https://ghcr.io/palpo-im/pasion:latest)
 
 The `latest` tag is built using the latest release.
 The `main` tag is built from the `main` branch, and each commit on the `main` branch is also tagged with a stable `sha-<commit sha>` tag.
@@ -51,8 +51,8 @@ The image can also be built from the source:
 
 1. Get the source
    ```sh
-   git clone https://github.com/palpo-im/palpo-auth-service.git
-   cd palpo-auth-service
+   git clone https://github.com/palpo-im/pasion.git
+   cd pasion
    ```
 1. Build the image
    ```sh
@@ -69,8 +69,8 @@ Building from the source requires:
 
 1. Get the source
    ```sh
-   git clone https://github.com/palpo-im/palpo-auth-service.git
-   cd palpo-auth-service
+   git clone https://github.com/palpo-im/pasion.git
+   cd pasion
    ```
 1. Build the frontend
    ```sh
@@ -101,8 +101,8 @@ Building from the source requires:
    ```
 1. Grab the built binary
    ```sh
-   cp ./target/release/mas-cli ~/.local/bin # Copy the binary somewhere in $PATH
-   mas-cli --help # Should display the help message
+   cp ./target/release/pasion-cli ~/.local/bin # Copy the binary somewhere in $PATH
+   pasion-cli --help # Should display the help message
    ```
 
 ## Next steps

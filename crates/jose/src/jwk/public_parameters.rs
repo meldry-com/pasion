@@ -1,4 +1,4 @@
-use mas_iana::jose::{
+use pasion_iana::jose::{
     JsonWebKeyEcEllipticCurve, JsonWebKeyOkpEllipticCurve, JsonWebKeyType, JsonWebSignatureAlg,
 };
 use schemars::JsonSchema;

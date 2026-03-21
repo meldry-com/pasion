@@ -4,9 +4,9 @@ use std::{ops::Deref, sync::Arc};
 
 use der::{Decode, Encode, EncodePem, zeroize::Zeroizing};
 use elliptic_curve::{pkcs8::EncodePrivateKey, sec1::ToEncodedPoint};
-use mas_iana::jose::{JsonWebKeyType, JsonWebSignatureAlg};
-pub use mas_jose::jwk::{JsonWebKey, JsonWebKeySet};
-use mas_jose::{
+use pasion_iana::jose::{JsonWebKeyType, JsonWebSignatureAlg};
+pub use pasion_jose::jwk::{JsonWebKey, JsonWebKeySet};
+use pasion_jose::{
     jwa::{AsymmetricSigningKey, AsymmetricVerifyingKey},
     jwk::{JsonWebKeyPublicParameters, ParametersInfo, PublicJsonWebKeySet, Thumbprint},
 };

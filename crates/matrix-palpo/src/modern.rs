@@ -2,8 +2,8 @@ use std::collections::HashSet;
 
 use anyhow::Context as _;
 use http::{Method, StatusCode};
-use mas_http::RequestBuilderExt;
-use mas_matrix::{HomeserverConnection, MatrixUser, ProvisionRequest};
+use pasion_http::RequestBuilderExt;
+use pasion_matrix::{HomeserverConnection, MatrixUser, ProvisionRequest};
 use serde::{Deserialize, Serialize};
 use tracing::debug;
 use url::Url;

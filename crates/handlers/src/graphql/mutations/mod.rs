@@ -7,8 +7,8 @@ mod user_email;
 
 use anyhow::Context as _;
 use async_graphql::MergedObject;
-use mas_data_model::SiteConfig;
-use mas_storage::BoxRepository;
+use pasion_data_model::SiteConfig;
+use pasion_storage::BoxRepository;
 use zeroize::Zeroizing;
 
 use super::Requester;
@@ -41,7 +41,7 @@ async fn verify_password_if_needed(
     config: &SiteConfig,
     password_manager: &PasswordManager,
     password: Option<String>,
-    user: &mas_data_model::User,
+    user: &pasion_data_model::User,
     repo: &mut BoxRepository,
 ) -> Result<bool, async_graphql::Error> {
     // If the requester is admin, they don't need to provide a password

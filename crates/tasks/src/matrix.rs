@@ -2,9 +2,9 @@ use std::collections::HashSet;
 
 use anyhow::Context;
 use async_trait::async_trait;
-use mas_data_model::Device;
-use mas_matrix::ProvisionRequest;
-use mas_storage::{
+use pasion_data_model::Device;
+use pasion_matrix::ProvisionRequest;
+use pasion_storage::{
     Pagination, RepositoryAccess,
     compat::CompatSessionFilter,
     oauth2::OAuth2SessionFilter,

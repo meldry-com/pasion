@@ -1,4 +1,4 @@
-use mas_salvo_utils::InternalError;
+use pasion_salvo_utils::InternalError;
 use salvo::prelude::*;
 use sqlx::PgPool;
 use tracing::{Instrument, info_span};

@@ -1,7 +1,7 @@
 use std::{collections::HashMap, convert::Infallible, marker::PhantomData, ops::Deref};
 
 use base64ct::{Base64UrlUnpadded, Encoding};
-use mas_iana::jose::JsonWebSignatureAlg;
+use pasion_iana::jose::JsonWebSignatureAlg;
 use serde::{Deserialize, Serialize, de::DeserializeOwned};
 use sha2::{Digest, Sha256, Sha384, Sha512};
 use thiserror::Error;

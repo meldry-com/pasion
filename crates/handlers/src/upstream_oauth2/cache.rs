@@ -1,12 +1,12 @@
 use std::{collections::HashMap, sync::Arc};
 
-use mas_context::LogContext;
-use mas_data_model::{
+use pasion_context::LogContext;
+use pasion_data_model::{
     UpstreamOAuthProvider, UpstreamOAuthProviderDiscoveryMode, UpstreamOAuthProviderPkceMode,
 };
-use mas_iana::oauth::PkceCodeChallengeMethod;
-use mas_oidc_client::error::DiscoveryError;
-use mas_storage::{RepositoryAccess, upstream_oauth2::UpstreamOAuthProviderRepository};
+use pasion_iana::oauth::PkceCodeChallengeMethod;
+use pasion_oidc_client::error::DiscoveryError;
+use pasion_storage::{RepositoryAccess, upstream_oauth2::UpstreamOAuthProviderRepository};
 use oauth2_types::oidc::VerifiedProviderMetadata;
 use tokio::sync::RwLock;
 use url::Url;
@@ -211,7 +211,7 @@ impl MetadataCache {
         verify: bool,
     ) -> Result<Arc<VerifiedProviderMetadata>, DiscoveryError> {
         if verify {
-            let metadata = mas_oidc_client::requests::discovery::discover(client, issuer).await?;
+            let metadata = pasion_oidc_client::requests::discovery::discover(client, issuer).await?;
             let metadata = Arc::new(metadata);
 
             self.cache
@@ -222,7 +222,7 @@ impl MetadataCache {
             Ok(metadata)
         } else {
             let metadata =
-                mas_oidc_client::requests::discovery::insecure_discover(client, issuer).await?;
+                pasion_oidc_client::requests::discovery::insecure_discover(client, issuer).await?;
             let metadata = Arc::new(metadata);
 
             self.insecure_cache
@@ -295,11 +295,11 @@ mod tests {
     // XXX: sadly, we can't test HTTPS requests with wiremock, so we can only test
     // 'insecure' discovery
 
-    use mas_data_model::{
+    use pasion_data_model::{
         Clock, UpstreamOAuthProviderClaimsImports, UpstreamOAuthProviderOnBackchannelLogout,
         UpstreamOAuthProviderTokenAuthMethod, clock::MockClock,
     };
-    use mas_iana::jose::JsonWebSignatureAlg;
+    use pasion_iana::jose::JsonWebSignatureAlg;
     use oauth2_types::scope::{OPENID, Scope};
     use ulid::Ulid;
     use wiremock::{
@@ -314,7 +314,7 @@ mod tests {
     async fn test_metadata_cache() {
         setup();
         let mock_server = MockServer::start().await;
-        let http_client = mas_http::reqwest_client();
+        let http_client = pasion_http::reqwest_client();
 
         let cache = MetadataCache::new();
 
@@ -378,7 +378,7 @@ mod tests {
         setup();
 
         let mock_server = MockServer::start().await;
-        let http_client = mas_http::reqwest_client();
+        let http_client = pasion_http::reqwest_client();
 
         let expected_calls = 2;
         let mut calls = 0;

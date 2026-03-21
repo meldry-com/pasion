@@ -1,8 +1,8 @@
 use async_trait::async_trait;
 use chrono::Duration;
-use mas_email::{Address, EmailVerificationContext, Mailbox};
-use mas_storage::queue::{SendEmailAuthenticationCodeJob, VerifyEmailJob};
-use mas_templates::TemplateContext as _;
+use pasion_email::{Address, EmailVerificationContext, Mailbox};
+use pasion_storage::queue::{SendEmailAuthenticationCodeJob, VerifyEmailJob};
+use pasion_templates::TemplateContext as _;
 use rand::{Rng, distributions::Uniform};
 use tracing::info;
 

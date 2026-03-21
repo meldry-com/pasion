@@ -1,5 +1,5 @@
 use async_trait::async_trait;
-use mas_data_model::{AuthorizationCode, AuthorizationGrant, Client, Clock, Session};
+use pasion_data_model::{AuthorizationCode, AuthorizationGrant, Client, Clock, Session};
 use oauth2_types::{requests::ResponseMode, scope::Scope};
 use rand_core::RngCore;
 use ulid::Ulid;

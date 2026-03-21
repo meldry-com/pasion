@@ -6,8 +6,8 @@ use axum::{Json, extract::State, response::IntoResponse};
 use chrono::Duration;
 use hyper::StatusCode;
 use mas_axum_utils::record_error;
-use mas_data_model::{BoxRng, Device, TokenType};
-use mas_matrix::HomeserverConnection;
+use pasion_data_model::{BoxRng, Device, TokenType};
+use pasion_matrix::HomeserverConnection;
 use oauth2_types::scope::Scope;
 use schemars::JsonSchema;
 use serde::Deserialize;
@@ -39,7 +39,7 @@ pub enum RouteError {
     InvalidScope,
 }
 
-impl_from_error_for_route!(mas_storage::RepositoryError);
+impl_from_error_for_route!(pasion_storage::RepositoryError);
 impl_from_error_for_route!(InconsistentPersonalSession);
 
 impl IntoResponse for RouteError {
@@ -189,7 +189,7 @@ mod tests {
 
     use crate::test_utils::{RequestBuilderExt, ResponseExt, TestState, setup};
 
-    #[sqlx::test(migrator = "mas_storage_pg::MIGRATOR")]
+    #[sqlx::test(migrator = "pasion_storage_pg::MIGRATOR")]
     async fn test_create_personal_session_with_token(pool: PgPool) {
         setup();
         let mut state = TestState::from_pool(pool).await.unwrap();
@@ -251,7 +251,7 @@ mod tests {
         "#);
     }
 
-    #[sqlx::test(migrator = "mas_storage_pg::MIGRATOR")]
+    #[sqlx::test(migrator = "pasion_storage_pg::MIGRATOR")]
     async fn test_create_personal_session_invalid_user(pool: PgPool) {
         setup();
         let mut state = TestState::from_pool(pool).await.unwrap();
@@ -272,7 +272,7 @@ mod tests {
         response.assert_status(StatusCode::NOT_FOUND);
     }
 
-    #[sqlx::test(migrator = "mas_storage_pg::MIGRATOR")]
+    #[sqlx::test(migrator = "pasion_storage_pg::MIGRATOR")]
     async fn test_create_personal_session_invalid_scope(pool: PgPool) {
         setup();
         let mut state = TestState::from_pool(pool).await.unwrap();

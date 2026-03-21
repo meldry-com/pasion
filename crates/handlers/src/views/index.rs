@@ -3,10 +3,10 @@ use axum::{
     response::{Html, IntoResponse, Response},
 };
 use mas_axum_utils::{InternalError, cookies::CookieJar, csrf::CsrfExt};
-use mas_data_model::{BoxClock, BoxRng};
-use mas_router::UrlBuilder;
-use mas_storage::BoxRepository;
-use mas_templates::{IndexContext, TemplateContext, Templates};
+use pasion_data_model::{BoxClock, BoxRng};
+use pasion_router::UrlBuilder;
+use pasion_storage::BoxRepository;
+use pasion_templates::{IndexContext, TemplateContext, Templates};
 
 use crate::{
     BoundActivityTracker,

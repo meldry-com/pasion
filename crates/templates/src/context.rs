@@ -13,7 +13,7 @@ use std::{
 
 use chrono::{DateTime, Duration, Utc};
 use http::{Method, Uri, Version};
-use mas_data_model::{
+use pasion_data_model::{
     AuthorizationGrant, BrowserSession, Client, CompatSsoLogin, CompatSsoLoginState,
     DeviceCodeGrant, MatrixUser, UpstreamOAuthLink, UpstreamOAuthProvider,
     UpstreamOAuthProviderClaimsImports, UpstreamOAuthProviderDiscoveryMode,
@@ -21,10 +21,10 @@ use mas_data_model::{
     UpstreamOAuthProviderTokenAuthMethod, User, UserEmailAuthentication,
     UserEmailAuthenticationCode, UserRecoverySession, UserRegistration,
 };
-use mas_i18n::DataLocale;
-use mas_iana::jose::JsonWebSignatureAlg;
-use mas_policy::{Violation, ViolationCode};
-use mas_router::{Account, GraphQL, PostAuthAction, UrlBuilder};
+use pasion_i18n::DataLocale;
+use pasion_iana::jose::JsonWebSignatureAlg;
+use pasion_policy::{Violation, ViolationCode};
+use pasion_router::{Account, GraphQL, PostAuthAction, UrlBuilder};
 use oauth2_types::scope::{OPENID, Scope};
 use rand::{
     Rng, SeedableRng,
@@ -92,7 +92,7 @@ pub trait TemplateContext: Serialize {
     }
 
     /// Attach a CAPTCHA configuration to the template context
-    fn with_captcha(self, captcha: Option<mas_data_model::CaptchaConfig>) -> WithCaptcha<Self>
+    fn with_captcha(self, captcha: Option<pasion_data_model::CaptchaConfig>) -> WithCaptcha<Self>
     where
         Self: Sized,
     {
@@ -439,8 +439,8 @@ impl ApiDocContext {
     #[must_use]
     pub fn from_url_builder(url_builder: &UrlBuilder) -> Self {
         Self {
-            openapi_url: url_builder.absolute_url_for(&mas_router::ApiSpec),
-            callback_url: url_builder.absolute_url_for(&mas_router::ApiDocCallback),
+            openapi_url: url_builder.absolute_url_for(&pasion_router::ApiSpec),
+            callback_url: url_builder.absolute_url_for(&pasion_router::ApiDocCallback),
         }
     }
 }
@@ -816,7 +816,7 @@ impl TemplateContext for PolicyViolationContext {
                     let device_code_grant = PolicyViolationContext::for_device_code_grant(
                         DeviceCodeGrant {
                             id: Ulid::from_datetime_with_source(now.into(), rng),
-                            state: mas_data_model::DeviceCodeGrantState::Pending,
+                            state: pasion_data_model::DeviceCodeGrantState::Pending,
                             client_id: client.id,
                             scope: [OPENID].into_iter().collect(),
                             user_code: Alphanumeric.sample_string(rng, 6).to_uppercase(),
@@ -1828,7 +1828,7 @@ impl TemplateContext for DeviceConsentContext {
             .map(|client|  {
                 let grant = DeviceCodeGrant {
                     id: Ulid::from_datetime_with_source(now.into(), rng),
-                    state: mas_data_model::DeviceCodeGrantState::Pending,
+                    state: pasion_data_model::DeviceCodeGrantState::Pending,
                     client_id: client.id,
                     scope: [OPENID].into_iter().collect(),
                     user_code: Alphanumeric.sample_string(rng, 6).to_uppercase(),

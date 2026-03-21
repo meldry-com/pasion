@@ -1,22 +1,22 @@
 use std::sync::{Arc, LazyLock};
 
 use chrono::Duration;
-use mas_data_model::{
+use pasion_data_model::{
     AuthorizationGrantStage, BoxClock, BoxRng, Client, Clock, Device, DeviceCodeGrantState,
     SiteConfig, SystemClock, TokenType,
 };
-use mas_i18n::DataLocale;
-use mas_keystore::{Encrypter, Keystore};
-use mas_matrix::HomeserverConnection;
-use mas_oidc_client::types::scope::ScopeToken;
-use mas_policy::Policy;
-use mas_router::UrlBuilder;
-use mas_salvo_utils::{
+use pasion_i18n::DataLocale;
+use pasion_keystore::{Encrypter, Keystore};
+use pasion_matrix::HomeserverConnection;
+use pasion_oidc_client::types::scope::ScopeToken;
+use pasion_policy::Policy;
+use pasion_router::UrlBuilder;
+use pasion_salvo_utils::{
     client_authorization::{ClientAuthorization, CredentialsVerificationError},
     record_error,
     sentry::SentryEventID,
 };
-use mas_storage::{
+use pasion_storage::{
     BoxRepository, BoxRepositoryFactory, RepositoryAccess,
     oauth2::{
         OAuth2AccessTokenRepository, OAuth2AuthorizationGrantRepository,
@@ -24,7 +24,7 @@ use mas_storage::{
     },
     user::BrowserSessionRepository,
 };
-use mas_templates::{DeviceNameContext, TemplateContext, Templates};
+use pasion_templates::{DeviceNameContext, TemplateContext, Templates};
 use oauth2_types::{
     errors::{ClientError, ClientErrorCode},
     pkce::CodeChallengeError,
@@ -105,7 +105,7 @@ pub(crate) enum RouteError {
     ClientIDMismatch { expected: Ulid, actual: Ulid },
 
     #[error("policy denied the request: {0}")]
-    DeniedByPolicy(mas_policy::EvaluationResult),
+    DeniedByPolicy(pasion_policy::EvaluationResult),
 
     #[error("unsupported grant type")]
     UnsupportedGrantType,
@@ -251,10 +251,10 @@ impl Scribe for RouteError {
     }
 }
 
-impl_from_error_for_route!(mas_i18n::DataError);
-impl_from_error_for_route!(mas_templates::TemplateError);
-impl_from_error_for_route!(mas_storage::RepositoryError);
-impl_from_error_for_route!(mas_policy::EvaluationError);
+impl_from_error_for_route!(pasion_i18n::DataError);
+impl_from_error_for_route!(pasion_templates::TemplateError);
+impl_from_error_for_route!(pasion_storage::RepositoryError);
+impl_from_error_for_route!(pasion_policy::EvaluationError);
 impl_from_error_for_route!(super::IdTokenSignatureError);
 
 #[handler]
@@ -308,7 +308,7 @@ async fn handle_post(
         .get::<BoundActivityTracker>("activity_tracker")
         .expect("BoundActivityTracker not found in depot");
     let policy_factory = depot
-        .get::<Arc<mas_policy::PolicyFactory>>("policy_factory")
+        .get::<Arc<pasion_policy::PolicyFactory>>("policy_factory")
         .expect("PolicyFactory not found in depot");
 
     let clock: BoxClock = Box::new(SystemClock::default());
@@ -803,13 +803,13 @@ async fn client_credentials_grant(
 
     // Make the request go through the policy engine
     let res = policy
-        .evaluate_authorization_grant(mas_policy::AuthorizationGrantInput {
+        .evaluate_authorization_grant(pasion_policy::AuthorizationGrantInput {
             user: None,
             client,
             session_counts: None,
             scope: &scope,
-            grant_type: mas_policy::GrantType::ClientCredentials,
-            requester: mas_policy::Requester {
+            grant_type: pasion_policy::GrantType::ClientCredentials,
+            requester: pasion_policy::Requester {
                 ip_address: activity_tracker.ip(),
                 user_agent: user_agent.clone(),
             },

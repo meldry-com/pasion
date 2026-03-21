@@ -11,8 +11,8 @@
     "submit": "Надіслати"
   },
   "app": {
-    "human_name": "Palpo Authentication Service",
-    "name": "palpo-auth-service",
+    "human_name": "Pasion",
+    "name": "pasion",
     "technical_description": "Документ виявлення OpenID Connect: \n<a class=\"cpd-link\" data-kind=\"primary\" href=\"%(discovery_url)s\">\n%(discovery_url)s\n</a>"
   },
   "branding": {

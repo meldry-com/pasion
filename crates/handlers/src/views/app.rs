@@ -4,10 +4,10 @@ use axum::{
 };
 use axum_extra::extract::Query;
 use mas_axum_utils::{InternalError, cookies::CookieJar};
-use mas_data_model::{BoxClock, BoxRng};
-use mas_router::{PostAuthAction, UrlBuilder};
-use mas_storage::BoxRepository;
-use mas_templates::{AppContext, TemplateContext, Templates};
+use pasion_data_model::{BoxClock, BoxRng};
+use pasion_router::{PostAuthAction, UrlBuilder};
+use pasion_storage::BoxRepository;
+use pasion_templates::{AppContext, TemplateContext, Templates};
 use serde::Deserialize;
 
 use crate::{
@@ -18,7 +18,7 @@ use crate::{
 #[derive(Deserialize)]
 pub struct Params {
     #[serde(default, flatten)]
-    action: Option<mas_router::AccountAction>,
+    action: Option<pasion_router::AccountAction>,
 }
 
 #[tracing::instrument(name = "handlers.views.app.get", skip_all)]
@@ -50,7 +50,7 @@ pub async fn get(
     let Some(session) = maybe_session else {
         return Ok((
             cookie_jar,
-            url_builder.redirect(&mas_router::Login::and_then(
+            url_builder.redirect(&pasion_router::Login::and_then(
                 PostAuthAction::manage_account(action),
             )),
         )
