@@ -253,8 +253,8 @@ pasion worker -c config.yaml
 
 ## 系统要求
 
-- **PostgreSQL** 13 或更高版本
-- **Palpo** homeserver 1.136.0 或更高版本（或任何兼容的 Matrix homeserver）
+- **PostgreSQL** 17 或更高版本
+- **Palpo** homeserver 0.2.1 或更高版本（或任何兼容的 Matrix homeserver）
 - 反向代理（nginx、Caddy 等）用于 TLS 终止
 
 ## 许可证

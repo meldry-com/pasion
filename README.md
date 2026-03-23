@@ -253,8 +253,8 @@ Full documentation is available at <https://palpo-im.github.io/pasion/>.
 
 ## Requirements
 
-- **PostgreSQL** 13 or later
-- **Palpo** homeserver 1.136.0 or later (or any compatible Matrix homeserver)
+- **PostgreSQL** 17 or later
+- **Palpo** homeserver 0.2.1 or later (or any compatible Matrix homeserver)
 - A reverse proxy (nginx, Caddy, etc.) for TLS termination
 
 ## License
