@@ -7,3 +7,6 @@ target
 
 # OS garbage
 .DS_Store
+
+_*.*
+.cladue
