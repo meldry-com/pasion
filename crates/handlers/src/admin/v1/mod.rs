@@ -1,4 +1,3 @@
-pub mod compat_sessions;
 pub mod oauth2_sessions;
 pub mod personal_sessions;
 pub mod policy_data;

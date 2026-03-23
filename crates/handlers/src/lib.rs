@@ -4,7 +4,6 @@
 //! concern area:
 //!
 //! - [`admin`] — Admin API handlers for managing users, sessions, and clients
-//! - [`compat`] — Legacy Matrix `/_matrix/client/*/login` compatibility layer
 //! - [`health`] — Health-check endpoint
 //! - [`oauth2`] — OAuth 2.0 / OpenID Connect endpoints (token, authorization,
 //!   discovery, userinfo, etc.)
@@ -30,8 +29,6 @@ use opentelemetry::metrics::Meter;
 
 /// Admin API handlers (JSON API, cursor-paginated).
 pub mod admin;
-/// Legacy Matrix login/logout/refresh compatibility endpoints.
-pub mod compat;
 /// Health-check endpoint (`/health`).
 pub mod health;
 /// REST API endpoints consumed by the account-management frontend.

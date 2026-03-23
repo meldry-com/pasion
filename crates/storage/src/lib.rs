@@ -103,7 +103,6 @@ pub(crate) mod repository;
 mod utils;
 
 pub mod app_session;
-pub mod compat;
 pub mod oauth2;
 pub mod personal;
 pub mod policy_data;

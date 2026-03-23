@@ -23,7 +23,6 @@ use thiserror::Error;
 
 /// Clock abstraction for testability (`SystemClock` in production, mock clock in tests).
 pub mod clock;
-pub(crate) mod compat;
 /// OAuth 2.0 client and session models.
 pub mod oauth2;
 /// Personal access token types.
@@ -46,10 +45,6 @@ pub use ulid::Ulid;
 
 pub use self::{
     clock::{Clock, SystemClock},
-    compat::{
-        CompatAccessToken, CompatRefreshToken, CompatRefreshTokenState, CompatSession,
-        CompatSessionState, CompatSsoLogin, CompatSsoLoginState, Device, ToScopeTokenError,
-    },
     oauth2::{
         AuthorizationCode, AuthorizationGrant, AuthorizationGrantStage, Client, DeviceCodeGrant,
         DeviceCodeGrantState, InvalidRedirectUriError, JwksOrJwksUri, Pkce, Session, SessionState,

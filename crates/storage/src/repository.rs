@@ -4,10 +4,6 @@ use thiserror::Error;
 
 use crate::{
     app_session::AppSessionRepository,
-    compat::{
-        CompatAccessTokenRepository, CompatRefreshTokenRepository, CompatSessionRepository,
-        CompatSsoLoginRepository,
-    },
     oauth2::{
         OAuth2AccessTokenRepository, OAuth2AuthorizationGrantRepository, OAuth2ClientRepository,
         OAuth2DeviceCodeGrantRepository, OAuth2RefreshTokenRepository, OAuth2SessionRepository,
@@ -189,26 +185,6 @@ pub trait RepositoryAccess: Send {
         &'c mut self,
     ) -> Box<dyn OAuth2DeviceCodeGrantRepository<Error = Self::Error> + 'c>;
 
-    /// Get a [`CompatSessionRepository`]
-    fn compat_session<'c>(
-        &'c mut self,
-    ) -> Box<dyn CompatSessionRepository<Error = Self::Error> + 'c>;
-
-    /// Get a [`CompatSsoLoginRepository`]
-    fn compat_sso_login<'c>(
-        &'c mut self,
-    ) -> Box<dyn CompatSsoLoginRepository<Error = Self::Error> + 'c>;
-
-    /// Get a [`CompatAccessTokenRepository`]
-    fn compat_access_token<'c>(
-        &'c mut self,
-    ) -> Box<dyn CompatAccessTokenRepository<Error = Self::Error> + 'c>;
-
-    /// Get a [`CompatRefreshTokenRepository`]
-    fn compat_refresh_token<'c>(
-        &'c mut self,
-    ) -> Box<dyn CompatRefreshTokenRepository<Error = Self::Error> + 'c>;
-
     /// Get a [`PersonalAccessTokenRepository`]
     fn personal_access_token<'c>(
         &'c mut self,
@@ -243,10 +219,6 @@ mod impls {
     use crate::{
         MapErr, Repository, RepositoryTransaction,
         app_session::AppSessionRepository,
-        compat::{
-            CompatAccessTokenRepository, CompatRefreshTokenRepository, CompatSessionRepository,
-            CompatSsoLoginRepository,
-        },
         oauth2::{
             OAuth2AccessTokenRepository, OAuth2AuthorizationGrantRepository,
             OAuth2ClientRepository, OAuth2DeviceCodeGrantRepository, OAuth2RefreshTokenRepository,
@@ -434,36 +406,6 @@ mod impls {
             ))
         }
 
-        fn compat_session<'c>(
-            &'c mut self,
-        ) -> Box<dyn CompatSessionRepository<Error = Self::Error> + 'c> {
-            Box::new(MapErr::new(self.inner.compat_session(), &mut self.mapper))
-        }
-
-        fn compat_sso_login<'c>(
-            &'c mut self,
-        ) -> Box<dyn CompatSsoLoginRepository<Error = Self::Error> + 'c> {
-            Box::new(MapErr::new(self.inner.compat_sso_login(), &mut self.mapper))
-        }
-
-        fn compat_access_token<'c>(
-            &'c mut self,
-        ) -> Box<dyn CompatAccessTokenRepository<Error = Self::Error> + 'c> {
-            Box::new(MapErr::new(
-                self.inner.compat_access_token(),
-                &mut self.mapper,
-            ))
-        }
-
-        fn compat_refresh_token<'c>(
-            &'c mut self,
-        ) -> Box<dyn CompatRefreshTokenRepository<Error = Self::Error> + 'c> {
-            Box::new(MapErr::new(
-                self.inner.compat_refresh_token(),
-                &mut self.mapper,
-            ))
-        }
-
         fn personal_access_token<'c>(
             &'c mut self,
         ) -> Box<dyn PersonalAccessTokenRepository<Error = Self::Error> + 'c> {
@@ -605,30 +547,6 @@ mod impls {
             &'c mut self,
         ) -> Box<dyn OAuth2DeviceCodeGrantRepository<Error = Self::Error> + 'c> {
             (**self).oauth2_device_code_grant()
-        }
-
-        fn compat_session<'c>(
-            &'c mut self,
-        ) -> Box<dyn CompatSessionRepository<Error = Self::Error> + 'c> {
-            (**self).compat_session()
-        }
-
-        fn compat_sso_login<'c>(
-            &'c mut self,
-        ) -> Box<dyn CompatSsoLoginRepository<Error = Self::Error> + 'c> {
-            (**self).compat_sso_login()
-        }
-
-        fn compat_access_token<'c>(
-            &'c mut self,
-        ) -> Box<dyn CompatAccessTokenRepository<Error = Self::Error> + 'c> {
-            (**self).compat_access_token()
-        }
-
-        fn compat_refresh_token<'c>(
-            &'c mut self,
-        ) -> Box<dyn CompatRefreshTokenRepository<Error = Self::Error> + 'c> {
-            (**self).compat_refresh_token()
         }
 
         fn personal_access_token<'c>(

@@ -13,7 +13,7 @@ use thiserror::Error;
 use tokio::io::{AsyncRead, AsyncReadExt};
 
 pub use self::model::{
-    AuthorizationGrantInput, ClientRegistrationInput, Code as ViolationCode, CompatLoginInput,
+    AuthorizationGrantInput, ClientRegistrationInput, Code as ViolationCode,
     EmailInput, EvaluationResult, GrantType, RegisterInput, RegistrationMethod, Requester,
     Violation,
 };
@@ -67,17 +67,15 @@ pub struct Entrypoints {
     pub register: String,
     pub client_registration: String,
     pub authorization_grant: String,
-    pub compat_login: String,
     pub email: String,
 }
 
 impl Entrypoints {
-    fn all(&self) -> [&str; 5] {
+    fn all(&self) -> [&str; 4] {
         [
             self.register.as_str(),
             self.client_registration.as_str(),
             self.authorization_grant.as_str(),
-            self.compat_login.as_str(),
             self.email.as_str(),
         ]
     }
@@ -457,29 +455,6 @@ impl Policy {
         Ok(res)
     }
 
-    /// Evaluate the `compat_login` entrypoint.
-    ///
-    /// # Errors
-    ///
-    /// Returns an error if the policy engine fails to evaluate the entrypoint.
-    #[tracing::instrument(
-        name = "policy.evaluate.compat_login",
-        skip_all,
-        fields(
-            %input.user.id,
-        ),
-    )]
-    pub async fn evaluate_compat_login(
-        &mut self,
-        input: CompatLoginInput<'_>,
-    ) -> Result<EvaluationResult, EvaluationError> {
-        let [res]: [EvaluationResult; 1] = self
-            .instance
-            .evaluate(&mut self.store, &self.entrypoints.compat_login, &input)
-            .await?;
-
-        Ok(res)
-    }
 }
 
 #[cfg(test)]
@@ -494,7 +469,7 @@ mod tests {
             register: "register/violation".to_owned(),
             client_registration: "client_registration/violation".to_owned(),
             authorization_grant: "authorization_grant/violation".to_owned(),
-            compat_login: "compat_login/violation".to_owned(),
+
             email: "email/violation".to_owned(),
         }
     }

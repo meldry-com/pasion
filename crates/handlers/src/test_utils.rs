@@ -64,7 +64,7 @@ pub(crate) async fn policy_factory(
         register: "register/violation".to_owned(),
         client_registration: "client_registration/violation".to_owned(),
         authorization_grant: "authorization_grant/violation".to_owned(),
-        compat_login: "compat_login/violation".to_owned(),
+
         email: "email/violation".to_owned(),
     };
 
@@ -355,10 +355,6 @@ impl TestState {
                 .delete(crate::rest::sessions::end_oauth2_session))
             .push(Router::with_path("/api/v1/oauth2-sessions/<id>/name")
                 .put(crate::rest::sessions::set_oauth2_session_name))
-            .push(Router::with_path("/api/v1/compat-sessions/<id>")
-                .delete(crate::rest::sessions::end_compat_session))
-            .push(Router::with_path("/api/v1/compat-sessions/<id>/name")
-                .put(crate::rest::sessions::set_compat_session_name))
             .push(Router::with_path("/api/v1/oauth2-clients/<id>")
                 .get(crate::rest::oauth2_clients::get_client))
             .push(Router::with_path("/api/v1/viewer/password")
@@ -383,21 +379,6 @@ impl TestState {
                 .post(crate::rest::emails::resend_email_auth_code))
             .push(Router::with_path("/api/v1/user-emails/<id>")
                 .delete(crate::rest::emails::remove_email))
-            // Compat
-            .push(Router::with_path(pasion_router::CompatLogin::route())
-                .get(crate::compat::login::get)
-                .post(crate::compat::login::post))
-            .push(Router::with_path(pasion_router::CompatLogout::route())
-                .post(crate::compat::logout::post))
-            .push(Router::with_path(pasion_router::CompatLogoutAll::route())
-                .post(crate::compat::logout_all::post))
-            .push(Router::with_path(pasion_router::CompatRefresh::route())
-                .post(crate::compat::refresh::post))
-            .push(Router::with_path(pasion_router::CompatLoginSsoRedirect::route())
-                .get(crate::compat::login_sso_redirect::get))
-            .push(Router::with_path(pasion_router::CompatLoginSsoComplete::route())
-                .get(crate::compat::login_sso_complete::get)
-                .post(crate::compat::login_sso_complete::post))
             // Human/Views
             .push(Router::with_path(pasion_router::Login::route())
                 .get(crate::views::login::get)

@@ -6,10 +6,6 @@ use pasion_storage::{
     BoxRepository, BoxRepositoryFactory, MapErr, Repository, RepositoryAccess, RepositoryError,
     RepositoryFactory, RepositoryTransaction,
     app_session::AppSessionRepository,
-    compat::{
-        CompatAccessTokenRepository, CompatRefreshTokenRepository, CompatSessionRepository,
-        CompatSsoLoginRepository,
-    },
     oauth2::{
         OAuth2AccessTokenRepository, OAuth2AuthorizationGrantRepository, OAuth2ClientRepository,
         OAuth2DeviceCodeGrantRepository, OAuth2RefreshTokenRepository, OAuth2SessionRepository,
@@ -33,10 +29,6 @@ use tracing::Instrument;
 use crate::{
     DatabaseError,
     app_session::PgAppSessionRepository,
-    compat::{
-        PgCompatAccessTokenRepository, PgCompatRefreshTokenRepository, PgCompatSessionRepository,
-        PgCompatSsoLoginRepository,
-    },
     oauth2::{
         PgOAuth2AccessTokenRepository, PgOAuth2AuthorizationGrantRepository,
         PgOAuth2ClientRepository, PgOAuth2DeviceCodeGrantRepository,
@@ -298,30 +290,6 @@ where
         &'c mut self,
     ) -> Box<dyn OAuth2DeviceCodeGrantRepository<Error = Self::Error> + 'c> {
         Box::new(PgOAuth2DeviceCodeGrantRepository::new(self.conn.as_mut()))
-    }
-
-    fn compat_session<'c>(
-        &'c mut self,
-    ) -> Box<dyn CompatSessionRepository<Error = Self::Error> + 'c> {
-        Box::new(PgCompatSessionRepository::new(self.conn.as_mut()))
-    }
-
-    fn compat_sso_login<'c>(
-        &'c mut self,
-    ) -> Box<dyn CompatSsoLoginRepository<Error = Self::Error> + 'c> {
-        Box::new(PgCompatSsoLoginRepository::new(self.conn.as_mut()))
-    }
-
-    fn compat_access_token<'c>(
-        &'c mut self,
-    ) -> Box<dyn CompatAccessTokenRepository<Error = Self::Error> + 'c> {
-        Box::new(PgCompatAccessTokenRepository::new(self.conn.as_mut()))
-    }
-
-    fn compat_refresh_token<'c>(
-        &'c mut self,
-    ) -> Box<dyn CompatRefreshTokenRepository<Error = Self::Error> + 'c> {
-        Box::new(PgCompatRefreshTokenRepository::new(self.conn.as_mut()))
     }
 
     fn personal_access_token<'c>(

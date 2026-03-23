@@ -295,7 +295,8 @@ pub fn build_router(
                 build_oauth_router(router)
             }
             pasion_config::HttpResource::Compat => {
-                build_compat_router(router, templates.clone())
+                // Compat layer removed — pass through
+                router
             }
             pasion_config::HttpResource::AdminApi => {
                 build_admin_router(router)
@@ -369,10 +370,6 @@ fn build_human_router(router: Router, _templates: Templates) -> Router {
         .push(Router::with_path(pasion_router::Consent::route())
             .get(pasion_handlers::oauth2::authorization::consent::get)
             .post(pasion_handlers::oauth2::authorization::consent::post))
-        // SSO complete
-        .push(Router::with_path(pasion_router::CompatLoginSsoComplete::route())
-            .get(pasion_handlers::compat::login_sso_complete::get)
-            .post(pasion_handlers::compat::login_sso_complete::post))
         // Upstream OAuth2
         .push(Router::with_path(pasion_router::UpstreamOAuth2Authorize::route())
             .get(pasion_handlers::upstream_oauth2::authorize::get))
@@ -411,25 +408,6 @@ fn build_oauth_router(router: Router) -> Router {
             .post(pasion_handlers::oauth2::device::authorize::post))
 }
 
-fn build_compat_router(router: Router, _templates: Templates) -> Router {
-    router
-        .push(Router::with_path(pasion_router::CompatLoginSsoRedirect::route())
-            .get(pasion_handlers::compat::login_sso_redirect::get))
-        .push(Router::with_path(pasion_router::CompatLoginSsoRedirectIdp::route())
-            .get(pasion_handlers::compat::login_sso_redirect::get))
-        .push(Router::with_path(pasion_router::CompatLoginSsoRedirectSlash::route())
-            .get(pasion_handlers::compat::login_sso_redirect::get))
-        .push(Router::with_path(pasion_router::CompatLogin::route())
-            .get(pasion_handlers::compat::login::get)
-            .post(pasion_handlers::compat::login::post))
-        .push(Router::with_path(pasion_router::CompatLogout::route())
-            .post(pasion_handlers::compat::logout::post))
-        .push(Router::with_path(pasion_router::CompatLogoutAll::route())
-            .post(pasion_handlers::compat::logout_all::post))
-        .push(Router::with_path(pasion_router::CompatRefresh::route())
-            .post(pasion_handlers::compat::refresh::post))
-}
-
 fn build_rest_api_router(router: Router) -> Router {
     router
         // Viewer (combined viewer + session + site config)
@@ -447,10 +425,6 @@ fn build_rest_api_router(router: Router) -> Router {
             .delete(pasion_handlers::rest::sessions::end_oauth2_session))
         .push(Router::with_path("/api/v1/oauth2-sessions/<id>/name")
             .put(pasion_handlers::rest::sessions::set_oauth2_session_name))
-        .push(Router::with_path("/api/v1/compat-sessions/<id>")
-            .delete(pasion_handlers::rest::sessions::end_compat_session))
-        .push(Router::with_path("/api/v1/compat-sessions/<id>/name")
-            .put(pasion_handlers::rest::sessions::set_compat_session_name))
         // OAuth2 clients
         .push(Router::with_path("/api/v1/oauth2-clients/<id>")
             .get(pasion_handlers::rest::oauth2_clients::get_client))

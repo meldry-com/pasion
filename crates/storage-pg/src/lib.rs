@@ -165,7 +165,6 @@ use sqlx::{
 };
 
 pub mod app_session;
-pub mod compat;
 pub mod oauth2;
 pub mod personal;
 pub mod queue;

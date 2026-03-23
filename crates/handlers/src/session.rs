@@ -8,7 +8,7 @@ use pasion_data_model::{BrowserSession, Clock, User};
 use pasion_i18n::DataLocale;
 use pasion_policy::model::SessionCounts;
 use pasion_storage::{
-    BoxRepository, RepositoryError, compat::CompatSessionFilter, oauth2::OAuth2SessionFilter,
+    BoxRepository, RepositoryError, oauth2::OAuth2SessionFilter,
     personal::PersonalSessionFilter,
 };
 use pasion_templates::{AccountInactiveContext, TemplateContext, Templates};
@@ -153,11 +153,6 @@ pub(crate) async fn count_user_sessions_for_limiting(
         .count(OAuth2SessionFilter::new().active_only().for_user(user))
         .await? as u64;
 
-    let compat = repo
-        .compat_session()
-        .count(CompatSessionFilter::new().active_only().for_user(user))
-        .await? as u64;
-
     // Only include self-owned personal sessions, not administratively-owned ones
     let personal = repo
         .personal_session()
@@ -170,9 +165,8 @@ pub(crate) async fn count_user_sessions_for_limiting(
         .await? as u64;
 
     Ok(SessionCounts {
-        total: oauth2 + compat + personal,
+        total: oauth2 + personal,
         oauth2,
-        compat,
         personal,
     })
 }
