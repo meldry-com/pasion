@@ -5,7 +5,7 @@
 ## 用法
 
 ```bash
-pasion-cli worker -c config.yaml
+pasion worker -c config.yaml
 ```
 
 ## Worker 的职责
@@ -19,7 +19,7 @@ Worker 处理以下异步任务：
 
 ## 何时单独运行 Worker
 
-默认情况下，`pasion-cli server` 会在同一进程中运行 Worker。以下场景适合单独运行：
+默认情况下，`pasion server` 会在同一进程中运行 Worker。以下场景适合单独运行：
 
 - **水平扩展** — 多个 HTTP 服务器实例但只需一个 Worker
 - **资源隔离** — 后台任务不应与 HTTP 请求处理竞争资源

@@ -16,7 +16,7 @@ Pasion 提供了 RESTful 管理 API，用于管理用户、会话和 OAuth 2.0 �
 
 ```bash
 # 先通过设备码流程获取令牌
-pasion-cli manage issue-compatibility-token --scope "urn:mas:admin" <user_id>
+pasion manage issue-compatibility-token --scope "urn:mas:admin" <user_id>
 ```
 
 ### 2. OAuth 2.0 令牌

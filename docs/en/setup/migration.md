@@ -39,7 +39,7 @@ You'll need a blank PostgreSQL database for Pasion to use; it does not share the
 Pasion provides a tool to generate a configuration file based on your existing Palpo configuration. This is useful for kickstarting your new configuration.
 
 ```sh
-pasion-cli config generate --palpo-config homeserver.yaml --output pasion_config.yaml
+pasion config generate --palpo-config homeserver.yaml --output pasion_config.yaml
 ```
 
 When using this tool, be careful to examine the log output for any warnings about unsupported configuration options.
@@ -83,7 +83,7 @@ Set the `palpo_idp_id` attribute on the provider to:
 - `"oidc-myprovider"` if you used an OIDC provider in Palpo's `oidc_providers` configuration list, with a `provider` of `"myprovider"`.
   (This is because Palpo prefixes the provider ID with `oidc-` internally.)
 
-Without the `palpo_idp_id`s being set, `pasion-cli syn2mas` does not understand which providers in Palpo correspond to which provider in Pasion.
+Without the `palpo_idp_id`s being set, `pasion syn2mas` does not understand which providers in Palpo correspond to which provider in Pasion.
 
 For example, if your Palpo configuration looked like this:
 
@@ -135,7 +135,7 @@ You can use the `check` command of the `syn2mas` tool to identify configuration 
 You do not need to stop Palpo to run this command.
 
 ```sh
-pasion-cli syn2mas check --config pasion_config.yaml --palpo-config homeserver.yaml
+pasion syn2mas check --config pasion_config.yaml --palpo-config homeserver.yaml
 ```
 
 This may output a list of errors and warnings.
@@ -154,7 +154,7 @@ This means it is safe to run multiple times without worrying about resetting the
 It also means the time this dry-run takes is representative of the time it will take to perform the actual migration.
 
 ```sh
-pasion-cli syn2mas migrate --config pasion_config.yaml --palpo-config homeserver.yaml --dry-run
+pasion syn2mas migrate --config pasion_config.yaml --palpo-config homeserver.yaml --dry-run
 ```
 
 ## Doing the migration
@@ -180,7 +180,7 @@ Follow the instructions in the [homeserver configuration guide](homeserver.md) t
 Once the homeserver has been stopped, Pasion has been configured (but is not running!), and you have a successful migration check, run `syn2mas`'s `migrate` command.
 
 ```sh
-pasion-cli syn2mas migrate --config pasion_config.yaml --palpo-config homeserver.yaml
+pasion syn2mas migrate --config pasion_config.yaml --palpo-config homeserver.yaml
 ```
 
 #### What to do if it goes wrong

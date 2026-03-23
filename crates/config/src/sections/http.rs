@@ -24,7 +24,7 @@ fn http_listener_assets_path_default() -> Utf8PathBuf {
 
 #[cfg(feature = "docker")]
 fn http_listener_assets_path_default() -> Utf8PathBuf {
-    "/usr/local/share/pasion-cli/assets/".into()
+    "/usr/local/share/pasion/assets/".into()
 }
 
 #[cfg(feature = "dist")]

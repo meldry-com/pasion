@@ -174,10 +174,10 @@ pub async fn config_sync(
             match len {
                 0 => {}
                 1 => warn!(
-                    "A provider is soft-deleted in the database. Run `pasion-cli config sync --prune` to delete it."
+                    "A provider is soft-deleted in the database. Run `pasion config sync --prune` to delete it."
                 ),
                 n => warn!(
-                    "{n} providers are soft-deleted in the database. Run `pasion-cli config sync --prune` to delete them."
+                    "{n} providers are soft-deleted in the database. Run `pasion config sync --prune` to delete them."
                 ),
             }
         }

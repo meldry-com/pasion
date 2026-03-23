@@ -7,25 +7,25 @@
 ### 注册用户
 
 ```bash
-pasion-cli manage register-user -c config.yaml <用户名>
+pasion manage register-user -c config.yaml <用户名>
 ```
 
 ### 设置密码
 
 ```bash
-pasion-cli manage set-password -c config.yaml <用户名>
+pasion manage set-password -c config.yaml <用户名>
 ```
 
 ### 添加邮箱
 
 ```bash
-pasion-cli manage add-email -c config.yaml <用户名> <邮箱>
+pasion manage add-email -c config.yaml <用户名> <邮箱>
 ```
 
 ### 验证邮箱
 
 ```bash
-pasion-cli manage verify-email -c config.yaml <用户名> <邮箱>
+pasion manage verify-email -c config.yaml <用户名> <邮箱>
 ```
 
 ## 管理员管理
@@ -33,19 +33,19 @@ pasion-cli manage verify-email -c config.yaml <用户名> <邮箱>
 ### 提升为管理员
 
 ```bash
-pasion-cli manage promote-admin -c config.yaml <用户名>
+pasion manage promote-admin -c config.yaml <用户名>
 ```
 
 ### 撤销管理员权限
 
 ```bash
-pasion-cli manage demote-admin -c config.yaml <用户名>
+pasion manage demote-admin -c config.yaml <用户名>
 ```
 
 ### 列出所有管理员
 
 ```bash
-pasion-cli manage list-admin-users -c config.yaml
+pasion manage list-admin-users -c config.yaml
 ```
 
 ## 用户状态
@@ -53,13 +53,13 @@ pasion-cli manage list-admin-users -c config.yaml
 ### 锁定用户
 
 ```bash
-pasion-cli manage lock-user -c config.yaml <用户名>
+pasion manage lock-user -c config.yaml <用户名>
 ```
 
 ### 解锁用户
 
 ```bash
-pasion-cli manage unlock-user -c config.yaml <用户名>
+pasion manage unlock-user -c config.yaml <用户名>
 ```
 
 ## 会话管理
@@ -67,7 +67,7 @@ pasion-cli manage unlock-user -c config.yaml <用户名>
 ### 终止用户的所有会话
 
 ```bash
-pasion-cli manage kill-sessions -c config.yaml <用户名>
+pasion manage kill-sessions -c config.yaml <用户名>
 ```
 
 ## 令牌管理
@@ -77,7 +77,7 @@ pasion-cli manage kill-sessions -c config.yaml <用户名>
 为用户签发一个旧版 Matrix 兼容令牌：
 
 ```bash
-pasion-cli manage issue-compatibility-token -c config.yaml <用户名>
+pasion manage issue-compatibility-token -c config.yaml <用户名>
 ```
 
 ### 签发注册令牌
@@ -85,7 +85,7 @@ pasion-cli manage issue-compatibility-token -c config.yaml <用户名>
 生成一次性注册令牌：
 
 ```bash
-pasion-cli manage issue-user-registration-token -c config.yaml
+pasion manage issue-user-registration-token -c config.yaml
 ```
 
 ## 批量操作
@@ -95,5 +95,5 @@ pasion-cli manage issue-user-registration-token -c config.yaml
 将 Pasion 中的所有用户同步到 Matrix homeserver：
 
 ```bash
-pasion-cli manage provision-all-users -c config.yaml
+pasion manage provision-all-users -c config.yaml
 ```

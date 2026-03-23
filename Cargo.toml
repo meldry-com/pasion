@@ -30,7 +30,7 @@ broken_intra_doc_links = "deny"
 
 # Workspace crates
 pasion-salvo-utils = { path = "./crates/salvo-utils/", version = "=1.8.0" }
-pasion-cli = { path = "./crates/cli/", version = "=1.8.0" }
+pasion = { path = "./crates/cli/", version = "=1.8.0" }
 pasion-config = { path = "./crates/config/", version = "=1.8.0" }
 pasion-context = { path = "./crates/context/", version = "=1.8.0" }
 pasion-data-model = { path = "./crates/data-model/", version = "=1.8.0" }

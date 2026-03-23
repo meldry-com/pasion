@@ -5,7 +5,7 @@
 使用 `config generate` 命令生成一个带有合理默认值的配置文件：
 
 ```bash
-pasion-cli config generate > config.yaml
+pasion config generate > config.yaml
 ```
 
 生成的配置文件包含所有可用选项及其默认值。你需要根据实际部署环境修改以下关键设置：
@@ -20,7 +20,7 @@ pasion-cli config generate > config.yaml
 使用 `config check` 命令验证配置文件的正确性：
 
 ```bash
-pasion-cli config check -c config.yaml
+pasion config check -c config.yaml
 ```
 
 ## 查看最终配置
@@ -28,7 +28,7 @@ pasion-cli config check -c config.yaml
 使用 `config dump` 命令查看合并后的完整配置（包括默认值）：
 
 ```bash
-pasion-cli config dump -c config.yaml
+pasion config dump -c config.yaml
 ```
 
 ## 编辑器支持

@@ -34,16 +34,16 @@ database:
 
 ## 数据库迁移
 
-Pasion 使用自动迁移机制管理数据库架构。默认情况下，`pasion-cli server` 启动时会自动应用所有待执行的迁移。
+Pasion 使用自动迁移机制管理数据库架构。默认情况下，`pasion server` 启动时会自动应用所有待执行的迁移。
 
 如果你希望手动控制迁移过程：
 
 ```bash
 # 使用 --no-migrate 标志启动服务器
-pasion-cli server --no-migrate -c config.yaml
+pasion server --no-migrate -c config.yaml
 
 # 手动执行迁移
-pasion-cli database migrate -c config.yaml
+pasion database migrate -c config.yaml
 ```
 
 ## 备份建议

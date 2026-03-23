@@ -5,12 +5,12 @@ Pasion 由两个主要组件组成：
 1. **HTTP 服务器** — 处理所有 Web 请求（登录页面、OAuth 2.0 端点、管理 API 等）
 2. **后台 Worker** — 处理异步任务（发送邮件、用户同步等）
 
-默认情况下，`pasion-cli server` 命令会同时启动这两个组件。
+默认情况下，`pasion server` 命令会同时启动这两个组件。
 
 ## 基本启动
 
 ```bash
-pasion-cli server -c config.yaml
+pasion server -c config.yaml
 ```
 
 ## 运行时依赖
@@ -38,10 +38,10 @@ pasion-cli server -c config.yaml
 
 ```bash
 # 启动 HTTP 服务器（不启动 Worker）
-pasion-cli server --no-worker -c config.yaml
+pasion server --no-worker -c config.yaml
 
 # 在另一个进程中启动 Worker
-pasion-cli worker -c config.yaml
+pasion worker -c config.yaml
 ```
 
 ## systemd 服务配置
@@ -52,7 +52,7 @@ Description=Pasion 认证服务
 After=network.target postgresql.service
 
 [Service]
-ExecStart=/usr/local/bin/pasion-cli server -c /etc/pasion/config.yaml
+ExecStart=/usr/local/bin/pasion server -c /etc/pasion/config.yaml
 Restart=on-failure
 User=pasion
 Environment=RUST_LOG=info
@@ -101,8 +101,8 @@ volumes:
 
 ```bash
 # 显示所有 info 级别日志
-RUST_LOG=info pasion-cli server -c config.yaml
+RUST_LOG=info pasion server -c config.yaml
 
 # 仅显示 Pasion 相关的 debug 日志
-RUST_LOG=pasion=debug pasion-cli server -c config.yaml
+RUST_LOG=pasion=debug pasion server -c config.yaml
 ```

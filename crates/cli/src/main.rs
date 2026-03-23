@@ -2,7 +2,7 @@
 //!
 //! This binary provides sub-commands for running the HTTP server, the
 //! background worker, managing users, and performing database operations.
-//! See `pasion-cli --help` for the full list.
+//! See `pasion --help` for the full list.
 //!
 //! # Architecture
 //!

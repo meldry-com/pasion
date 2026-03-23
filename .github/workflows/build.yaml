@@ -135,13 +135,13 @@ jobs:
             --target ${{ matrix.target }}.2.17 \
             --no-default-features \
             --features dist \
-            -p pasion-cli
+            -p pasion
 
       - name: Upload binary artifact
         uses: actions/upload-artifact@v6.0.0
         with:
           name: binary-${{ matrix.target }}
-          path: target/${{ matrix.target }}/release/pasion-cli
+          path: target/${{ matrix.target }}/release/pasion
 
   assemble-archives:
     name: Assemble release archives
@@ -180,23 +180,23 @@ jobs:
             mkdir -p dist/${arch}/share
             cp -r assets-dist/share/* dist/${arch}/share/
             cp assets-dist/LICENSE dist/${arch}/LICENSE
-            cp binary-$arch/pasion-cli dist/${arch}/pasion-cli
+            cp binary-$arch/pasion dist/${arch}/pasion
             chmod -R u=rwX,go=rX dist/${arch}/
-            chmod u=rwx,go=rx dist/${arch}/pasion-cli
-            tar -czvf pasion-cli-${arch}-linux.tar.gz --owner=0 --group=0 -C dist/${arch}/ .
+            chmod u=rwx,go=rx dist/${arch}/pasion
+            tar -czvf pasion-${arch}-linux.tar.gz --owner=0 --group=0 -C dist/${arch}/ .
           done
 
       - name: Upload aarch64 archive
         uses: actions/upload-artifact@v6.0.0
         with:
-          name: pasion-cli-aarch64-linux
-          path: pasion-cli-aarch64-linux.tar.gz
+          name: pasion-aarch64-linux
+          path: pasion-aarch64-linux.tar.gz
 
       - name: Upload x86_64 archive
         uses: actions/upload-artifact@v6.0.0
         with:
-          name: pasion-cli-x86_64-linux
-          path: pasion-cli-x86_64-linux.tar.gz
+          name: pasion-x86_64-linux
+          path: pasion-x86_64-linux.tar.gz
 
   build-image:
     name: Build and push Docker image
@@ -317,7 +317,7 @@ jobs:
       - name: Download the artifacts from the previous job
         uses: actions/download-artifact@v7
         with:
-          pattern: pasion-cli-*
+          pattern: pasion-*
           path: artifacts
           merge-multiple: true
 
@@ -353,8 +353,8 @@ jobs:
                 ```
 
           files: |
-            artifacts/pasion-cli-aarch64-linux.tar.gz
-            artifacts/pasion-cli-x86_64-linux.tar.gz
+            artifacts/pasion-aarch64-linux.tar.gz
+            artifacts/pasion-x86_64-linux.tar.gz
           draft: true
 
   unstable:
@@ -379,7 +379,7 @@ jobs:
       - name: Download the artifacts from the previous job
         uses: actions/download-artifact@v7
         with:
-          pattern: pasion-cli-*
+          pattern: pasion-*
           path: artifacts
           merge-multiple: true
 
@@ -430,8 +430,8 @@ jobs:
                 ```
 
           files: |
-            artifacts/pasion-cli-aarch64-linux.tar.gz
-            artifacts/pasion-cli-x86_64-linux.tar.gz
+            artifacts/pasion-aarch64-linux.tar.gz
+            artifacts/pasion-x86_64-linux.tar.gz
           prerelease: true
           make_latest: false
 

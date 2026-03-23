@@ -7,7 +7,7 @@
 Pasion 使用 YAML 格式的配置文件。通过 `-c` 或 `--config` 参数指定：
 
 ```bash
-pasion-cli server -c config.yaml
+pasion server -c config.yaml
 ```
 
 ## 主要配置段

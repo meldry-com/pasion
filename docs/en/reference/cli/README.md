@@ -26,7 +26,7 @@ Print the mas cli version.
 ---
 
 ```
-Usage: pasion-cli [OPTIONS] [COMMAND]
+Usage: pasion [OPTIONS] [COMMAND]
 
 Commands:
   config     Configuration-related commands

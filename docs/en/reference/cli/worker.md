@@ -9,7 +9,7 @@ Global options:
 Runs the background task worker as a standalone process.
 
 ```
-$ pasion-cli worker -c config.yaml
+$ pasion worker -c config.yaml
 ```
 
 ### What the worker does
@@ -23,7 +23,7 @@ The worker process handles asynchronous tasks that do not need to be performed d
 
 ### When to use a separate worker
 
-By default, `pasion-cli server` runs the worker in the same process (unless `--no-worker` is passed). Running the worker separately is useful when:
+By default, `pasion server` runs the worker in the same process (unless `--no-worker` is passed). Running the worker separately is useful when:
 
 - **Horizontal scaling** — You want multiple HTTP server instances but only one worker processing tasks.
 - **Resource isolation** — Background tasks should not compete with HTTP request handling for CPU and memory.
@@ -45,7 +45,7 @@ Description=Pasion Background Worker
 After=network.target postgresql.service
 
 [Service]
-ExecStart=/usr/local/bin/pasion-cli worker -c /etc/pasion/config.yaml
+ExecStart=/usr/local/bin/pasion worker -c /etc/pasion/config.yaml
 Restart=on-failure
 User=pasion
 

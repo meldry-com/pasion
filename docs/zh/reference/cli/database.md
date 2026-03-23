@@ -7,7 +7,7 @@
 执行所有待应用的数据库迁移：
 
 ```bash
-pasion-cli database migrate -c config.yaml
+pasion database migrate -c config.yaml
 ```
 
 ### 使用场景

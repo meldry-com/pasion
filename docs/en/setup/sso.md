@@ -12,7 +12,7 @@ A deployment which requires SAML or LDAP-based authentication should use a servi
 
 Configuration of upstream providers is done in the `upstream_oauth2` section of the configuration file, which has a `providers` list.
 Additions and changes to this sections are synced with the database on startup.
-Removals need to be applied using the [`pasion-cli config sync --prune`](../reference/cli/config.md#config-sync---prune---dry-run) command.
+Removals need to be applied using the [`pasion config sync --prune`](../reference/cli/config.md#config-sync---prune---dry-run) command.
 
 **An exhaustive list of all the parameters is available in the [configuration file reference](../reference/configuration.md#upstream_oauth2).**
 

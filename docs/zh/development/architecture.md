@@ -14,7 +14,7 @@ Pasion 设计为轻量级、易于嵌入的服务，仅依赖 PostgreSQL 数据�
 
 | Crate | 说明 |
 |-------|------|
-| `pasion-cli` | 命令行工具，主入口 |
+| `pasion` | 命令行工具，主入口 |
 | `pasion-config` | 配置文件解析和加载 |
 | `pasion-data-model` | 数据库对象模型 |
 | `pasion-email` | 邮件发送抽象层 |

@@ -14,7 +14,7 @@ Options:
 - `--no-sync`: Do not sync the configuration (OAuth 2.0 clients and upstream providers) with the database.
 
 ```
-$ pasion-cli server -c config.yaml
+$ pasion server -c config.yaml
 INFO pasion_cli::server: Starting task scheduler
 INFO pasion_cli::server: Listening on http://0.0.0.0:8080
 ```
@@ -49,7 +49,7 @@ Description=Pasion Authentication Service
 After=network.target postgresql.service
 
 [Service]
-ExecStart=/usr/local/bin/pasion-cli server -c /etc/pasion/config.yaml
+ExecStart=/usr/local/bin/pasion server -c /etc/pasion/config.yaml
 Restart=on-failure
 User=pasion
 

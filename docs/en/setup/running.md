@@ -5,8 +5,8 @@ To fully function, the service needs to run two main components:
  - An HTTP server
  - A background worker
 
-By default, the [`pasion-cli server`](../reference/cli/server.md) command will start both components.
-It is possible to only run the HTTP server by setting the `--no-worker` option, and run a background worker with the [`pasion-cli worker`](../reference/cli/worker.md) command.
+By default, the [`pasion server`](../reference/cli/server.md) command will start both components.
+It is possible to only run the HTTP server by setting the `--no-worker` option, and run a background worker with the [`pasion worker`](../reference/cli/worker.md) command.
 
 Both components are stateless, and can be scaled horizontally by running multiple instances of each.
 
@@ -48,10 +48,10 @@ A few configuration sections might still require some tweaking, including:
 
 ## Run the service
 
-Once the configuration is done, the service can be started with the [`pasion-cli server`](../reference/cli/server.md) command:
+Once the configuration is done, the service can be started with the [`pasion server`](../reference/cli/server.md) command:
 
 ```sh
-pasion-cli server
+pasion server
 ```
 
 It is advised to run the service as a non-root user, using a tool like [`systemd`](https://www.freedesktop.org/wiki/Software/systemd/) to manage the service lifecycle.
@@ -59,5 +59,5 @@ It is advised to run the service as a non-root user, using a tool like [`systemd
 
 ## Troubleshoot common issues
 
-Once the service is running, it is possible to check its configuration using the [`pasion-cli doctor`](../reference/cli/doctor.md) command.
+Once the service is running, it is possible to check its configuration using the [`pasion doctor`](../reference/cli/doctor.md) command.
 This should help diagnose common issues with the service configuration and deployment.

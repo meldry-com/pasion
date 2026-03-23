@@ -11,7 +11,7 @@ Global options:
 Run the pending database migrations. This updates the database schema to match the version expected by the current binary.
 
 ```
-$ pasion-cli database migrate -c config.yaml
+$ pasion database migrate -c config.yaml
 ```
 
 ### When to use
@@ -22,7 +22,7 @@ $ pasion-cli database migrate -c config.yaml
 
 ### Automatic migrations
 
-By default, `pasion-cli server` applies pending migrations automatically on startup. You can disable this with the `--no-migrate` flag, in which case the server will refuse to start if there are unapplied migrations.
+By default, `pasion server` applies pending migrations automatically on startup. You can disable this with the `--no-migrate` flag, in which case the server will refuse to start if there are unapplied migrations.
 
 ### Recovery from failed migrations
 
@@ -30,6 +30,6 @@ If a migration fails partway through:
 
 1. Check the server logs for the specific error.
 2. Fix the underlying issue (usually a database permission or constraint problem).
-3. Re-run `pasion-cli database migrate` — it will resume from where it left off.
+3. Re-run `pasion database migrate` — it will resume from where it left off.
 
 Migrations are applied inside transactions when possible, so a failed migration typically leaves the database in the state before that migration was attempted.

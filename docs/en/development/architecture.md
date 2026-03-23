@@ -21,7 +21,7 @@ The whole repository is a [Cargo Workspace](https://doc.rust-lang.org/book/ch14-
 
 This includes:
 
- - `pasion-cli`: Command line utility, main entry point
+ - `pasion`: Command line utility, main entry point
  - [`pasion-config`][pasion-config]: Configuration parsing and loading
  - [`pasion-data-model`][pasion-data-model]: Models of objects that live in the database, regardless of the storage backend
  - [`pasion-email`][pasion-email]: High-level email sending abstraction

@@ -12,7 +12,7 @@ Global options:
 Add an email address to the specified user.
 
 ```
-$ pasion-cli manage add-email <username> <email>
+$ pasion manage add-email <username> <email>
 ```
 
 ## `manage verify-email`
@@ -20,7 +20,7 @@ $ pasion-cli manage add-email <username> <email>
 [DEPRECATED] Mark an email address as verified.
 
 ```
-$ pasion-cli manage verify-email <username> <email>
+$ pasion manage verify-email <username> <email>
 ```
 
 ## `manage promote-admin`
@@ -28,7 +28,7 @@ $ pasion-cli manage verify-email <username> <email>
 Make a user admin.
 
 ```
-$ pasion-cli manage promote-admin <username>
+$ pasion manage promote-admin <username>
 ```
 
 **This doesn't make all the users sessions admin, but rather lets the user request admin access in administration tools.**
@@ -38,7 +38,7 @@ $ pasion-cli manage promote-admin <username>
 Make a user non-admin.
 
 ```
-$ pasion-cli manage demote-admin <username>
+$ pasion manage demote-admin <username>
 ```
 
 ## `manage list-admin-users`
@@ -46,7 +46,7 @@ $ pasion-cli manage demote-admin <username>
 List all users with admin privileges.
 
 ```
-$ pasion-cli manage list-admins
+$ pasion manage list-admins
 ```
 
 ## `manage set-password`
@@ -57,7 +57,7 @@ Options:
 - `--ignore-complexity`: Don't enforce that the password provided is above the minimum configured complexity.
 
 ```
-$ pasion-cli manage set-password <username> <password> --ignore-complexity
+$ pasion manage set-password <username> <password> --ignore-complexity
 ```
 
 ## `manage issue-compatibility-token`
@@ -69,7 +69,7 @@ Options:
 - `--yes-i-want-to-grant-admin-privileges`: Whether the token should be given admin privileges.
 
 ```
-$ pasion-cli manage issue-compatibility-token <username> --device-id <device_id> --yes-i-want-to-grant-admin-privileges
+$ pasion manage issue-compatibility-token <username> --device-id <device_id> --yes-i-want-to-grant-admin-privileges
 ```
 
 ## `manage issue-user-registration-token`
@@ -83,7 +83,7 @@ Options:
 - `--expires-in <expires_in>`: Time in seconds after which the token expires. If not provided, the token never expires.
 
 ```
-$ pasion-cli manage issue-user-registration-token --token <token> --usage-limit <usage_limit> --expires-in <expires_in>
+$ pasion manage issue-user-registration-token --token <token> --usage-limit <usage_limit> --expires-in <expires_in>
 ```
 
 ## `manage provision-all-users`
@@ -91,7 +91,7 @@ $ pasion-cli manage issue-user-registration-token --token <token> --usage-limit 
 Trigger a provisioning job for all users.
 
 ```
-$ pasion-cli manage provision-all-users
+$ pasion manage provision-all-users
 ```
 
 ## `manage kill-sessions`
@@ -102,7 +102,7 @@ Options:
 - `--dry-run`: Do a dry run, ie see which sessions would be killed.
 
 ```
-$ pasion-cli manage kill-sessions <username> --dry-run
+$ pasion manage kill-sessions <username> --dry-run
 ```
 
 ## `manage lock-user`
@@ -113,7 +113,7 @@ Options:
 - `--deactivate`: Whether to deactivate the user.
 
 ```
-$ pasion-cli manage lock-user <username> --deactivate
+$ pasion manage lock-user <username> --deactivate
 ```
 
 ## `manage unlock-user`
@@ -124,7 +124,7 @@ Options:
 - `--reactivate`: Whether to reactivate the user.
 
 ```
-$ pasion-cli manage unlock-user <username> --reactivate
+$ pasion manage unlock-user <username> --reactivate
 ```
 
 ## `manage register-user`
@@ -143,5 +143,5 @@ Options:
 - `--ignore-password-complexity`: Don't enforce that the password provided is above the minimum configured complexity.
 
 ```
-$ pasion-cli manage register-user
+$ pasion manage register-user
 ```

@@ -5,7 +5,7 @@
 ## 用法
 
 ```bash
-pasion-cli server [选项] -c <配置文件>
+pasion server [选项] -c <配置文件>
 ```
 
 ## 选项
@@ -38,8 +38,8 @@ pasion-cli server [选项] -c <配置文件>
 
 ```bash
 # 基本启动
-pasion-cli server -c config.yaml
+pasion server -c config.yaml
 
 # 不自动迁移，不启动 Worker
-pasion-cli server --no-migrate --no-worker -c config.yaml
+pasion server --no-migrate --no-worker -c config.yaml
 ```

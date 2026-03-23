@@ -72,7 +72,7 @@ impl Options {
             if !pending_migrations.is_empty() {
                 // Refuse to start if there are pending migrations
                 return Err(anyhow::anyhow!(
-                    "The server is running with `--no-migrate` but there are pending migrations. Please run them first with `pasion-cli database migrate`, or omit the `--no-migrate` flag to apply them automatically on startup."
+                    "The server is running with `--no-migrate` but there are pending migrations. Please run them first with `pasion database migrate`, or omit the `--no-migrate` flag to apply them automatically on startup."
                 ));
             }
         } else {

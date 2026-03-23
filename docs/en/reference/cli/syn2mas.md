@@ -13,7 +13,7 @@ Global options:
 Check the setup for potential problems before running a migration
 
 ```console
-$ pasion-cli syn2mas check --config pasion_config.yaml --palpo-config homeserver.yaml
+$ pasion syn2mas check --config pasion_config.yaml --palpo-config homeserver.yaml
 ```
 
 ## `syn2mas migrate [--dry-run]`
@@ -25,5 +25,5 @@ It will perform a full data migration, but then empty the Pasion database at the
 
 
 ```console
-$ pasion-cli syn2mas migrate --config pasion_config.yaml --palpo-config homeserver.yaml
+$ pasion syn2mas migrate --config pasion_config.yaml --palpo-config homeserver.yaml
 ```

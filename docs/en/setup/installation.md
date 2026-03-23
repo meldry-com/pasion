@@ -4,12 +4,12 @@
 
 Pre-built binaries can be found attached on each release, for Linux on both `x86_64` and `aarch64` architectures.
 
-- [`pasion-cli-aarch64-linux.tar.gz`](https://github.com/taidge/pasion/releases/latest/download/pasion-cli-aarch64-linux.tar.gz)
-- [`pasion-cli-x86_64-linux.tar.gz`](https://github.com/taidge/pasion/releases/latest/download/pasion-cli-x86_64-linux.tar.gz)
+- [`pasion-aarch64-linux.tar.gz`](https://github.com/taidge/pasion/releases/latest/download/pasion-aarch64-linux.tar.gz)
+- [`pasion-x86_64-linux.tar.gz`](https://github.com/taidge/pasion/releases/latest/download/pasion-x86_64-linux.tar.gz)
 
 Each archive contains:
 
-- the `pasion-cli` binary
+- the `pasion` binary
 - assets needed for running the service, including:
   - `share/assets/`: the built frontend assets
   - `share/manifest.json`: the manifest for the frontend assets
@@ -21,7 +21,7 @@ The location of all these assets can be overridden in the [configuration file](.
 
 ---
 
-Example shell commands to download and extract the `pasion-cli` binary:
+Example shell commands to download and extract the `pasion` binary:
 
 ```sh
 ARCH=x86_64 # or aarch64
@@ -29,14 +29,14 @@ OS=linux
 VERSION=latest # or a specific version, like "v0.1.0"
 
 # URL to the right archive
-URL="https://github.com/taidge/pasion/releases/${VERSION}/download/pasion-cli-${ARCH}-${OS}.tar.gz"
+URL="https://github.com/taidge/pasion/releases/${VERSION}/download/pasion-${ARCH}-${OS}.tar.gz"
 
 # Create a directory and extract the archive in it
 mkdir -p /path/to/mas
 curl -sL "$URL" | tar xzC /path/to/mas
 
 # This should display the help message
-/path/to/mas/pasion-cli --help
+/path/to/mas/pasion --help
 ```
 
 
@@ -101,8 +101,8 @@ Building from the source requires:
    ```
 1. Grab the built binary
    ```sh
-   cp ./target/release/pasion-cli ~/.local/bin # Copy the binary somewhere in $PATH
-   pasion-cli --help # Should display the help message
+   cp ./target/release/pasion ~/.local/bin # Copy the binary somewhere in $PATH
+   pasion --help # Should display the help message
    ```
 
 ## Next steps

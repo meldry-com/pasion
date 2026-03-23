@@ -23,7 +23,7 @@
 ### 1. 检查兼容性
 
 ```bash
-pasion-cli syn2mas check -c syn2mas-config.yaml
+pasion syn2mas check -c syn2mas-config.yaml
 ```
 
 此命令会检查源数据库中的用户数据，报告可能的问题。
@@ -31,7 +31,7 @@ pasion-cli syn2mas check -c syn2mas-config.yaml
 ### 2. 试运行
 
 ```bash
-pasion-cli syn2mas migrate --dry-run -c syn2mas-config.yaml
+pasion syn2mas migrate --dry-run -c syn2mas-config.yaml
 ```
 
 试运行不会修改任何数据，但会显示将要执行的操作。
@@ -39,7 +39,7 @@ pasion-cli syn2mas migrate --dry-run -c syn2mas-config.yaml
 ### 3. 执行迁移
 
 ```bash
-pasion-cli syn2mas migrate -c syn2mas-config.yaml
+pasion syn2mas migrate -c syn2mas-config.yaml
 ```
 
 ### 4. 验证迁移结果

@@ -9,67 +9,229 @@ Pasion handles authentication for Matrix homeservers using the industry-standard
 ### Key Features
 
 - **OAuth 2.0 & OpenID Connect** — Full-featured OIDC Provider with authorization code, client credentials, and device code grant flows
-- **Upstream SSO** — Federate with external identity providers (Google, GitHub, GitLab, Apple, Keycloak, LDAP via Dex, and more)
+- **Upstream SSO** — Federate with external identity providers (Google, GitHub, GitLab, Apple, Keycloak, LDAP via Dex, QQ, WeChat, WeCom, Feishu, Lark, DingTalk, and more)
 - **Admin API** — RESTful JSON API for managing users, sessions, and OAuth 2.0 clients
 - **Policy Engine** — Extensible OPA-based (WebAssembly) policy engine for fine-grained access control
-- **Compatibility Layer** — Supports legacy Matrix `/_matrix/client/*/login` API for older clients
 - **Security** — Argon2id password hashing, encrypted cookies, rate limiting, CAPTCHA support
 - **Internationalization** — Multi-language UI with configurable templates
 - **Observability** — OpenTelemetry tracing and Prometheus metrics export
 
 ## Quick Start
 
-### Using Pre-built Binaries (Linux)
+### 1. Install
+
+**Pre-built Binaries (Linux)**
 
 ```bash
-# Download the latest release
-curl -sL https://github.com/taidge/pasion/releases/latest/download/pasion-cli-x86_64-linux.tar.gz | tar xz
-
-# Generate a configuration file
-./pasion-cli config generate > config.yaml
-
-# Edit config.yaml to set your database, domain, and secrets
-# Then run the server
-./pasion-cli server -c config.yaml
+curl -sL https://github.com/taidge/pasion/releases/latest/download/pasion-x86_64-linux.tar.gz | tar xz
+mv pasion /usr/local/bin/
 ```
 
-### Using Docker
+**Docker**
 
 ```bash
-docker run -v $(pwd)/config.yaml:/config.yaml ghcr.io/taidge/pasion:latest \
-  server -c /config.yaml
+docker pull ghcr.io/taidge/pasion:latest
 ```
 
-### Building from Source
+**From Source**
 
 ```bash
 git clone https://github.com/taidge/pasion.git
 cd pasion
+cd front && npm ci && npm run build && cd ..
 cargo build --release
 ```
 
-See the [installation guide](docs/setup/installation.md) for full details.
+### 2. Prepare Database
+
+```sql
+CREATE USER pasion WITH PASSWORD 'your_password';
+CREATE DATABASE pasion WITH OWNER pasion;
+```
+
+### 3. Generate and Edit Configuration
+
+```bash
+pasion config generate > config.yaml
+# Edit config.yaml — see Configuration section below
+```
+
+### 4. Start the Server
+
+```bash
+pasion server -c config.yaml
+```
+
+This single command will automatically run database migrations, start the HTTP server, and launch the background task worker.
+
+## Configuration
+
+Pasion uses a YAML configuration file. Key sections:
+
+```yaml
+# Public-facing URL
+http:
+  public_base: https://auth.example.com/
+  listeners:
+    - name: web
+      binds:
+        - address: "[::]:8080"
+      resources:
+        - name: discovery     # OIDC discovery endpoints
+        - name: human         # Login / registration UI
+        - name: oauth         # OAuth 2.0 endpoints
+        - name: health        # Health check
+        - name: assets        # Static frontend assets
+
+# Database connection
+database:
+  uri: postgresql://pasion:password@localhost/pasion
+
+# Matrix homeserver integration
+matrix:
+  homeserver: matrix.example.com
+  secret: "shared-secret-with-homeserver"
+  endpoint: "https://matrix.example.com"
+
+# Encryption and signing keys
+secrets:
+  encryption: "base64-encoded-32-byte-key"
+  keys:
+    - kid: "key-id-1"
+      key: |
+        -----BEGIN RSA PRIVATE KEY-----
+        ...
+        -----END RSA PRIVATE KEY-----
+
+# Password authentication
+passwords:
+  enabled: true
+  schemes:
+    - version: 1
+      algorithm: argon2id
+
+# Upstream SSO providers (optional)
+upstream_oauth2:
+  providers:
+    - id: "01HFRQFT5QFBM3Y5BHNFHMP6M0"
+      issuer: "https://accounts.google.com/"
+      client_id: "your-client-id"
+      client_secret: "your-client-secret"
+      token_endpoint_auth_method: client_secret_post
+      scope: "openid email profile"
+
+# Email (optional, for verification and recovery)
+email:
+  from: '"Pasion" <noreply@example.com>'
+  transport: smtp
+  mode: starttls
+  hostname: smtp.example.com
+```
+
+See the [full configuration reference](docs/en/reference/configuration.md) for all options.
 
 ## Architecture
 
-Pasion is deployed alongside a Matrix homeserver, handling all authentication flows:
+Pasion is deployed alongside a Matrix homeserver behind a reverse proxy. It handles all authentication flows while the homeserver handles Matrix protocol operations (messaging, rooms, etc.).
 
 ```
-             ┌──────────────┐
-Users ──────>│ Reverse Proxy │
-             └──────┬───────┘
-                    │
-        ┌───────────┼───────────┐
-        │           │           │
-   ┌────▼───┐  ┌────▼────┐  ┌──▼──────────┐
-   │ Pasion │  │ Palpo   │  │ Static      │
-   │ (auth) │  │ (Matrix)│  │ Assets      │
-   └────────┘  └─────────┘  └─────────────┘
-        │
-   ┌────▼──────┐
-   │ PostgreSQL │
-   └───────────┘
+              ┌───────────────┐
+ Users ──────>│ Reverse Proxy │ (TLS termination)
+              └───────┬───────┘
+                      │
+         ┌────────────┼────────────┐
+         │            │            │
+    ┌────▼────┐  ┌────▼─────┐  ┌──▼──────────┐
+    │ Pasion  │  │  Palpo   │  │   Static    │
+    │ (auth)  │  │ (Matrix) │  │   Assets    │
+    │  :8080  │  │  :8008   │  │             │
+    └────┬────┘  └──────────┘  └─────────────┘
+         │
+    ┌────▼──────┐
+    │ PostgreSQL │
+    └───────────┘
 ```
+
+### Palpo Homeserver Configuration
+
+Configure Palpo to delegate authentication to Pasion:
+
+```yaml
+experimental_features:
+  msc3861:
+    enabled: true
+    issuer: https://auth.example.com/
+    client_id: 0000000000000000000PALPO
+    client_auth_method: client_secret_basic
+    client_secret: "your-secret"
+    admin_token: "admin-token"
+    account_management_url: "https://auth.example.com/account/"
+```
+
+## CLI Reference
+
+| Command | Description |
+|---------|-------------|
+| `pasion server -c config.yaml` | Start the HTTP server (default) |
+| `pasion config generate` | Generate a default configuration file |
+| `pasion config check -c config.yaml` | Validate configuration |
+| `pasion config sync -c config.yaml` | Sync OAuth clients / upstream providers to the database |
+| `pasion database migrate -c config.yaml` | Run database migrations manually |
+| `pasion manage register-user` | Create a new user |
+| `pasion manage set-password` | Set or reset a user's password |
+| `pasion manage promote-user` | Promote a user to admin |
+| `pasion worker -c config.yaml` | Run background task worker separately |
+| `pasion doctor -c config.yaml` | Check deployment health |
+| `pasion syn2mas` | Migrate from Palpo built-in auth to Pasion |
+
+### Server Options
+
+```bash
+pasion server -c config.yaml                # Full startup (default)
+pasion server -c config.yaml --no-worker    # HTTP only, no background worker
+pasion server -c config.yaml --no-migrate   # Skip automatic DB migrations
+pasion server -c config.yaml --no-sync      # Skip config sync to DB
+```
+
+## Upstream SSO Providers
+
+Pasion supports federation with external identity providers. Any standard OIDC provider works out of the box. Additionally, dedicated support is provided for these Chinese platforms with non-standard OAuth2 flows:
+
+| Provider | `token_endpoint_auth_method` | Notes |
+|----------|------------------------------|-------|
+| Google, GitHub, GitLab, etc. | `client_secret_post` / `client_secret_basic` | Standard OIDC |
+| Apple | `sign_in_with_apple` | Apple-specific JWT client secret |
+| QQ | `qq_connect` | Non-standard token + separate OpenID endpoint |
+| WeChat | `wechat` | Uses `appid`/`secret`, token includes `openid` |
+| WeCom | `wecom` | Corp access token + user identity resolution |
+| Feishu | `feishu` | Two-step: app_access_token then user token |
+| Lark | `lark` | International Feishu, same flow with different endpoints |
+| DingTalk | `dingtalk` | JSON body + custom access token header |
+
+See the [SSO setup guide](docs/en/setup/sso.md) for provider-specific configuration examples.
+
+## Production Deployment
+
+For production, consider separating the HTTP server and background workers:
+
+```bash
+# HTTP server (can be load-balanced)
+pasion server --no-worker -c config.yaml
+
+# Background workers (can run multiple instances)
+pasion worker -c config.yaml
+```
+
+Key endpoints exposed by the server:
+
+| Endpoint | Purpose |
+|----------|---------|
+| `/health` | Health check |
+| `/metrics` | Prometheus metrics |
+| `/.well-known/openid-configuration` | OIDC discovery |
+| `/oauth2/authorize` | OAuth 2.0 authorization |
+| `/oauth2/token` | Token endpoint |
+| `/api/admin/v1/*` | Admin API |
 
 ## Documentation
 
@@ -77,11 +239,17 @@ Full documentation is available at <https://palpo-im.github.io/pasion/>.
 
 | Section | Description |
 |---------|-------------|
-| [Installation](docs/setup/installation.md) | Install and configure Pasion |
-| [Configuration](docs/reference/configuration.md) | Full configuration reference |
-| [Admin API](docs/topics/admin-api.md) | Manage users and sessions via API |
-| [Architecture](docs/development/architecture.md) | Internal design and crate structure |
-| [Contributing](docs/development/contributing.md) | How to contribute to the project |
+| [Installation](docs/en/setup/installation.md) | Install and configure Pasion |
+| [General Setup](docs/en/setup/general.md) | Basic configuration walkthrough |
+| [Database](docs/en/setup/database.md) | Database setup and migrations |
+| [Homeserver](docs/en/setup/homeserver.md) | Palpo / Matrix integration |
+| [Reverse Proxy](docs/en/setup/reverse-proxy.md) | nginx / Caddy configuration |
+| [SSO](docs/en/setup/sso.md) | Upstream identity provider setup |
+| [Configuration Reference](docs/en/reference/configuration.md) | Full configuration options |
+| [CLI Reference](docs/en/reference/cli/) | Command-line tool documentation |
+| [Admin API](docs/en/topics/admin-api.md) | Manage users and sessions via API |
+| [Architecture](docs/en/development/architecture.md) | Internal design and crate structure |
+| [Contributing](docs/en/development/contributing.md) | How to contribute to the project |
 
 ## Requirements
 

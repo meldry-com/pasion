@@ -5,7 +5,7 @@
 ## 用法
 
 ```bash
-pasion-cli doctor -c config.yaml
+pasion doctor -c config.yaml
 ```
 
 ## 检查项目

@@ -1,11 +1,11 @@
 # 命令行工具
 
-Pasion 通过 `pasion-cli` 命令行工具进行管理和操作。
+Pasion 通过 `pasion` 命令行工具进行管理和操作。
 
 ## 基本用法
 
 ```bash
-pasion-cli [全局选项] <子命令> [选项]
+pasion [全局选项] <子命令> [选项]
 ```
 
 ## 全局选项
@@ -33,11 +33,11 @@ pasion-cli [全局选项] <子命令> [选项]
 
 ```bash
 # 默认 info 级别
-RUST_LOG=info pasion-cli server
+RUST_LOG=info pasion server
 
 # 调试级别（输出更多细节）
-RUST_LOG=debug pasion-cli server
+RUST_LOG=debug pasion server
 
 # 仅显示特定模块的日志
-RUST_LOG=pasion_handlers=debug,pasion_cli=info pasion-cli server
+RUST_LOG=pasion_handlers=debug,pasion_cli=info pasion server
 ```

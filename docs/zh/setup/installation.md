@@ -7,16 +7,16 @@
 ### x86_64 (amd64)
 
 ```bash
-curl -sL https://github.com/taidge/pasion/releases/latest/download/pasion-cli-x86_64-linux.tar.gz | tar xz
+curl -sL https://github.com/taidge/pasion/releases/latest/download/pasion-x86_64-linux.tar.gz | tar xz
 ```
 
 ### aarch64 (arm64)
 
 ```bash
-curl -sL https://github.com/taidge/pasion/releases/latest/download/pasion-cli-aarch64-linux.tar.gz | tar xz
+curl -sL https://github.com/taidge/pasion/releases/latest/download/pasion-aarch64-linux.tar.gz | tar xz
 ```
 
-解压后会得到 `pasion-cli` 可执行文件。建议将其移动到 `/usr/local/bin/` 或其他在 `PATH` 中的目录。
+解压后会得到 `pasion` 可执行文件。建议将其移动到 `/usr/local/bin/` 或其他在 `PATH` 中的目录。
 
 ## 使用 Docker
 
@@ -57,4 +57,4 @@ cd ..
 cargo build --release
 ```
 
-编译完成后，可执行文件位于 `target/release/pasion-cli`。
+编译完成后，可执行文件位于 `target/release/pasion`。
