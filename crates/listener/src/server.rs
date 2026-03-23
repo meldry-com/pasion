@@ -1,9 +1,4 @@
-use std::{
-    pin::Pin,
-    sync::Arc,
-    task::Poll,
-    time::Duration,
-};
+use std::{pin::Pin, sync::Arc, task::Poll, time::Duration};
 
 use futures_util::{StreamExt, stream::SelectAll};
 use hyper::{Request, Response};
@@ -152,7 +147,7 @@ async fn accept<F, Fut, B, E>(
 where
     F: Fn(Request<hyper::body::Incoming>) -> Fut + Clone + Send + Sync + 'static,
     Fut: Future<Output = Result<Response<B>, E>> + Send + 'static,
-        E: Into<Box<dyn std::error::Error + Send + Sync>> + 'static,
+    E: Into<Box<dyn std::error::Error + Send + Sync>> + 'static,
     B: http_body::Body + Send + 'static,
     B::Data: Send,
     B::Error: std::error::Error + Send + Sync + 'static,
@@ -247,7 +242,7 @@ pub async fn run_servers<F, Fut, B, E>(
 ) where
     F: Fn(Request<hyper::body::Incoming>) -> Fut + Clone + Send + Sync + 'static,
     Fut: Future<Output = Result<Response<B>, E>> + Send + 'static,
-        E: Into<Box<dyn std::error::Error + Send + Sync>> + 'static,
+    E: Into<Box<dyn std::error::Error + Send + Sync>> + 'static,
     B: http_body::Body + Send + 'static,
     B::Data: Send,
     B::Error: std::error::Error + Send + Sync + 'static,

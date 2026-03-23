@@ -1,20 +1,21 @@
 use std::time::Duration;
 
 use anyhow::Context;
+use pasion_data_model::{Clock, MatrixUser};
+use pasion_policy::Policy;
 use pasion_salvo_utils::{
     InternalError,
     csrf::{CsrfExt, ProtectedForm},
 };
-use pasion_data_model::{Clock, MatrixUser};
-use pasion_policy::Policy;
 use pasion_templates::{DeviceConsentContext, PolicyViolationContext, TemplateContext};
-use salvo::prelude::*;
-use salvo::writing::Text;
+use salvo::{prelude::*, writing::Text};
 use serde::Deserialize;
 use tracing::warn;
 use ulid::Ulid;
 
-use crate::session::{SessionOrFallback, count_user_sessions_for_limiting, load_session_or_fallback};
+use crate::session::{
+    SessionOrFallback, count_user_sessions_for_limiting, load_session_or_fallback,
+};
 
 #[derive(Deserialize, Debug)]
 #[serde(rename_all = "lowercase")]
@@ -50,13 +51,16 @@ async fn handle_get(
     let homeserver = crate::rest::get_homeserver(depot)?;
     let mut repo = crate::rest::get_repo_factory(depot)?.create().await?;
     let policy_factory = crate::rest::get_policy_factory(depot)?;
-    let mut policy: Policy = policy_factory.instantiate().await
+    let mut policy: Policy = policy_factory
+        .instantiate()
+        .await
         .map_err(|e| InternalError::new(Box::new(e)))?;
     let activity_tracker = crate::rest::extract_bound_activity_tracker(req, depot);
     let user_agent: Option<String> = req.header("user-agent");
     let cookie_jar = crate::rest::extract_cookie_jar(req, depot)?;
-    let grant_id: Ulid = req.param("device_code_id")
-        .ok_or_else(|| InternalError::from_anyhow(anyhow::anyhow!("Missing device_code_id path parameter")))?;
+    let grant_id: Ulid = req.param("device_code_id").ok_or_else(|| {
+        InternalError::from_anyhow(anyhow::anyhow!("Missing device_code_id path parameter"))
+    })?;
 
     let (cookie_jar, maybe_session) = match load_session_or_fallback(
         cookie_jar, &clock, &mut rng, &templates, &locale, &mut repo,
@@ -68,7 +72,10 @@ async fn handle_get(
             maybe_session,
             ..
         } => (cookie_jar, maybe_session),
-        SessionOrFallback::Fallback { response } => { *res = response; return Ok(()); }
+        SessionOrFallback::Fallback { response } => {
+            *res = response;
+            return Ok(());
+        }
     };
 
     let (csrf_token, cookie_jar) = cookie_jar.csrf_token(&clock, &mut rng);
@@ -76,7 +83,7 @@ async fn handle_get(
     let Some(session) = maybe_session else {
         let login = pasion_router::Login::and_continue_device_code_grant(grant_id);
         let redirect = url_builder.redirect(&login);
-            cookie_jar.write_to_response(res);
+        cookie_jar.write_to_response(res);
         res.render(redirect);
         return Ok(());
     };
@@ -136,7 +143,7 @@ async fn handle_get(
 
         let content = templates.render_policy_violation(&ctx)?;
 
-            cookie_jar.write_to_response(res);
+        cookie_jar.write_to_response(res);
         res.render(Text::Html(content));
         return Ok(());
     }
@@ -208,17 +215,23 @@ async fn handle_post(
     let homeserver = crate::rest::get_homeserver(depot)?;
     let mut repo = crate::rest::get_repo_factory(depot)?.create().await?;
     let policy_factory = crate::rest::get_policy_factory(depot)?;
-    let mut policy: Policy = policy_factory.instantiate().await
+    let mut policy: Policy = policy_factory
+        .instantiate()
+        .await
         .map_err(|e| InternalError::new(Box::new(e)))?;
     let activity_tracker = crate::rest::extract_bound_activity_tracker(req, depot);
     let user_agent: Option<String> = req.header("user-agent");
     let cookie_jar = crate::rest::extract_cookie_jar(req, depot)?;
-    let grant_id: Ulid = req.param("device_code_id")
-        .ok_or_else(|| InternalError::from_anyhow(anyhow::anyhow!("Missing device_code_id path parameter")))?;
+    let grant_id: Ulid = req.param("device_code_id").ok_or_else(|| {
+        InternalError::from_anyhow(anyhow::anyhow!("Missing device_code_id path parameter"))
+    })?;
 
-    let form: ProtectedForm<ConsentForm> = req.parse_form().await
+    let form: ProtectedForm<ConsentForm> = req
+        .parse_form()
+        .await
         .map_err(|e| InternalError::new(Box::new(e)))?;
-    let form = cookie_jar.verify_form(&clock, form)
+    let form = cookie_jar
+        .verify_form(&clock, form)
         .map_err(|e| InternalError::new(Box::new(e)))?;
 
     let (cookie_jar, maybe_session) = match load_session_or_fallback(
@@ -231,14 +244,17 @@ async fn handle_post(
             maybe_session,
             ..
         } => (cookie_jar, maybe_session),
-        SessionOrFallback::Fallback { response } => { *res = response; return Ok(()); }
+        SessionOrFallback::Fallback { response } => {
+            *res = response;
+            return Ok(());
+        }
     };
     let (csrf_token, cookie_jar) = cookie_jar.csrf_token(&clock, &mut rng);
 
     let Some(session) = maybe_session else {
         let login = pasion_router::Login::and_continue_device_code_grant(grant_id);
         let redirect = url_builder.redirect(&login);
-            cookie_jar.write_to_response(res);
+        cookie_jar.write_to_response(res);
         res.render(redirect);
         return Ok(());
     };
@@ -295,7 +311,7 @@ async fn handle_post(
 
         let content = templates.render_policy_violation(&ctx)?;
 
-            cookie_jar.write_to_response(res);
+        cookie_jar.write_to_response(res);
         res.render(Text::Html(content));
         return Ok(());
     }

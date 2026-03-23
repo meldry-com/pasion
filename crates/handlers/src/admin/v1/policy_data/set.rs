@@ -1,10 +1,9 @@
-use salvo::prelude::*;
 use std::sync::Arc;
 
-use salvo::http::StatusCode;
-use pasion_salvo_utils::record_error;
 use pasion_data_model::BoxRng;
 use pasion_policy::PolicyFactory;
+use pasion_salvo_utils::record_error;
+use salvo::{http::StatusCode, prelude::*};
 use schemars::JsonSchema;
 use serde::Deserialize;
 
@@ -68,12 +67,18 @@ pub struct SetPolicyDataRequest {
 #[tracing::instrument(name = "handler.admin.v1.policy_data.set", skip_all)]
 pub async fn handler(
     req: &mut Request,
-    depot: &Depot) -> Result<(StatusCode, Json<SingleResponse<PolicyData>>), RouteError> {
+    depot: &Depot,
+) -> Result<(StatusCode, Json<SingleResponse<PolicyData>>), RouteError> {
     let call_context = extract_call_context(req, depot).await?;
-    let crate::admin::call_context::CallContext { mut repo, clock, .. } = call_context;
+    let crate::admin::call_context::CallContext {
+        mut repo, clock, ..
+    } = call_context;
     let mut rng = crate::rest::make_rng();
     let policy_factory = crate::rest::get_policy_factory(depot)?;
-    let request: SetPolicyDataRequest = req.parse_json().await.map_err(|e| RouteError::Internal(Box::new(e)))?;
+    let request: SetPolicyDataRequest = req
+        .parse_json()
+        .await
+        .map_err(|e| RouteError::Internal(Box::new(e)))?;
 
     let policy_data = repo
         .policy_data()

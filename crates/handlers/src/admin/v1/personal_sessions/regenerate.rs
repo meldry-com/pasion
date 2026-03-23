@@ -1,8 +1,7 @@
-use salvo::prelude::*;
 use chrono::Duration;
-use salvo::http::StatusCode;
-use pasion_salvo_utils::record_error;
 use pasion_data_model::{BoxRng, TokenType};
+use pasion_salvo_utils::record_error;
+use salvo::{http::StatusCode, prelude::*};
 use schemars::JsonSchema;
 use serde::Deserialize;
 use tracing::error;
@@ -74,12 +73,21 @@ pub struct RequestBody {
 #[tracing::instrument(name = "handler.admin.v1.personal_sessions.add", skip_all)]
 pub async fn handler(
     req: &mut Request,
-    depot: &Depot) -> Result<(StatusCode, Json<SingleResponse<PersonalSession>>), RouteError> {
+    depot: &Depot,
+) -> Result<(StatusCode, Json<SingleResponse<PersonalSession>>), RouteError> {
     let call_context = extract_call_context(req, depot).await?;
-    let crate::admin::call_context::CallContext { mut repo, clock, session: caller_session, .. } = call_context;
+    let crate::admin::call_context::CallContext {
+        mut repo,
+        clock,
+        session: caller_session,
+        ..
+    } = call_context;
     let id = extract_ulid_param(req)?;
     let mut rng = crate::rest::make_rng();
-    let params: RequestBody = req.parse_json().await.unwrap_or(RequestBody { expires_in: None });
+    let params: RequestBody = req
+        .parse_json()
+        .await
+        .unwrap_or(RequestBody { expires_in: None });
 
     let session_id = id;
 

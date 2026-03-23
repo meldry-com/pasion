@@ -11,9 +11,7 @@ use pasion_config::{
 use pasion_data_model::SystemClock;
 use rand::thread_rng;
 use sqlx::{Connection, Either, PgConnection, postgres::PgConnectOptions, types::Uuid};
-use syn2mas::{
-    LockedMasDatabase, MasWriter, Progress, ProgressStage, PalpoReader, palpo_config,
-};
+use syn2mas::{LockedMasDatabase, MasWriter, PalpoReader, Progress, ProgressStage, palpo_config};
 use tracing::{Instrument, error, info};
 
 use crate::util::{DatabaseConnectOptions, database_connection_from_config_with_options};
@@ -77,7 +75,8 @@ enum Subcommand {
     },
 }
 
-/// The number of parallel writing transactions active against the Pasion database.
+/// The number of parallel writing transactions active against the Pasion
+/// database.
 const NUM_WRITER_CONNECTIONS: usize = 8;
 
 impl Options {

@@ -1,17 +1,16 @@
-use pasion_salvo_utils::{GenericError, InternalError, cookies::CookieJar};
 use pasion_data_model::UpstreamOAuthProvider;
 use pasion_oidc_client::requests::authorization_code::AuthorizationRequestData;
 use pasion_router::PostAuthAction;
-use pasion_storage::upstream_oauth2::{UpstreamOAuthProviderRepository, UpstreamOAuthSessionRepository};
+use pasion_salvo_utils::{GenericError, InternalError, cookies::CookieJar};
+use pasion_storage::upstream_oauth2::{
+    UpstreamOAuthProviderRepository, UpstreamOAuthSessionRepository,
+};
 use salvo::prelude::*;
 use thiserror::Error;
 use ulid::Ulid;
 
 use super::{UpstreamSessionsCookie, cache::LazyProviderInfos};
-use crate::{
-    impl_from_error_for_route,
-    views::shared::OptionalPostAuthAction,
-};
+use crate::{impl_from_error_for_route, views::shared::OptionalPostAuthAction};
 
 #[derive(Debug, Error)]
 pub enum RouteError {
@@ -41,11 +40,12 @@ impl Scribe for RouteError {
 }
 
 #[handler]
-#[tracing::instrument(
-    name = "handlers.upstream_oauth2.authorize.get",
-    skip_all,
-)]
-pub async fn get(req: &mut Request, depot: &mut Depot, res: &mut Response) -> Result<(), RouteError> {
+#[tracing::instrument(name = "handlers.upstream_oauth2.authorize.get", skip_all)]
+pub async fn get(
+    req: &mut Request,
+    depot: &mut Depot,
+    res: &mut Response,
+) -> Result<(), RouteError> {
     let provider_id: Ulid = req.param("id").ok_or(RouteError::ProviderNotFound)?;
     let mut rng = crate::rest::make_rng();
     let clock = crate::rest::make_clock();
@@ -101,11 +101,12 @@ pub async fn get(req: &mut Request, depot: &mut Depot, res: &mut Response) -> Re
     };
 
     // Build an authorization request for it
-    let (mut url, data) = pasion_oidc_client::requests::authorization_code::build_authorization_url(
-        lazy_metadata.authorization_endpoint().await?.clone(),
-        data,
-        &mut rng,
-    )?;
+    let (mut url, data) =
+        pasion_oidc_client::requests::authorization_code::build_authorization_url(
+            lazy_metadata.authorization_endpoint().await?.clone(),
+            data,
+            &mut rng,
+        )?;
 
     // We do that in a block because params borrows url mutably
     {

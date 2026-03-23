@@ -1,7 +1,6 @@
 use dioxus::prelude::*;
 
-use crate::api::types::DeviceType;
-use crate::pages::Route;
+use crate::{api::types::DeviceType, pages::Route};
 
 #[component]
 pub fn SessionCardRoot(children: Element) -> Element {
@@ -11,7 +10,11 @@ pub fn SessionCardRoot(children: Element) -> Element {
 }
 
 #[component]
-pub fn SessionCardBody(compact: Option<bool>, disabled: Option<bool>, children: Element) -> Element {
+pub fn SessionCardBody(
+    compact: Option<bool>,
+    disabled: Option<bool>,
+    children: Element,
+) -> Element {
     let mut class = "session-card".to_string();
     if compact.unwrap_or(false) {
         class.push_str(" compact");

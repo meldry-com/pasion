@@ -1,24 +1,21 @@
 use std::sync::{Arc, LazyLock};
 
 use anyhow::Context as _;
-use salvo::prelude::*;
-use salvo::writing::Text;
 use chrono::Duration;
-use pasion_salvo_utils::{InternalError, SessionInfoExt as _, cookies::CookieJar};
+use opentelemetry::metrics::Counter;
 use pasion_matrix::HomeserverConnection;
 use pasion_router::PostAuthAction;
+use pasion_salvo_utils::{InternalError, SessionInfoExt as _, cookies::CookieJar};
 use pasion_storage::{
     queue::{ProvisionUserJob, QueueJobRepositoryExt as _},
     user::UserEmailFilter,
 };
 use pasion_templates::{RegisterStepsEmailInUseContext, TemplateContext as _, Templates};
-use opentelemetry::metrics::Counter;
+use salvo::{prelude::*, writing::Text};
 use ulid::Ulid;
 
 use super::super::cookie::UserRegistrationSessions;
-use crate::{
-    METER, rest, views::shared::OptionalPostAuthAction,
-};
+use crate::{METER, rest, views::shared::OptionalPostAuthAction};
 
 static PASSWORD_REGISTER_COUNTER: LazyLock<Counter<u64>> = LazyLock::new(|| {
     METER
@@ -29,7 +26,11 @@ static PASSWORD_REGISTER_COUNTER: LazyLock<Counter<u64>> = LazyLock::new(|| {
 });
 
 #[handler]
-pub async fn get(req: &mut Request, depot: &Depot, res: &mut Response) -> Result<(), InternalError> {
+pub async fn get(
+    req: &mut Request,
+    depot: &Depot,
+    res: &mut Response,
+) -> Result<(), InternalError> {
     let mut rng = rest::make_rng();
     let clock = rest::make_clock();
     let lang = crate::preferred_language(req, depot);
@@ -39,7 +40,11 @@ pub async fn get(req: &mut Request, depot: &Depot, res: &mut Response) -> Result
     let site_config = rest::get_site_config(depot)?;
     let mut repo = rest::get_repo_factory(depot)?.create().await?;
     let activity_tracker = rest::extract_bound_activity_tracker(req, depot);
-    let user_agent = req.headers().get("user-agent").and_then(|h| h.to_str().ok()).map(|s| s.to_owned());
+    let user_agent = req
+        .headers()
+        .get("user-agent")
+        .and_then(|h| h.to_str().ok())
+        .map(|s| s.to_owned());
     let cookie_jar = rest::extract_cookie_jar(req, depot)?;
     let id: Ulid = req.param("id").unwrap_or_default();
     let registration = repo
@@ -58,7 +63,7 @@ pub async fn get(req: &mut Request, depot: &Depot, res: &mut Response) -> Result
             .map(serde_json::from_value)
             .transpose()?;
 
-            cookie_jar.write_to_response(res);
+        cookie_jar.write_to_response(res);
         res.render(OptionalPostAuthAction::from(post_auth_action).go_next(&url_builder));
         return Ok(());
     }
@@ -123,7 +128,7 @@ pub async fn get(req: &mut Request, depot: &Depot, res: &mut Response) -> Result
             Some(registration_token)
         } else {
             // Else redirect to the registration token page
-                    cookie_jar.write_to_response(res);
+            cookie_jar.write_to_response(res);
             res.render(url_builder.redirect(&pasion_router::RegisterToken::new(registration.id)));
             return Ok(());
         }
@@ -145,7 +150,7 @@ pub async fn get(req: &mut Request, depot: &Depot, res: &mut Response) -> Result
 
             // Check that the email authentication has been completed
             if email_authentication.completed_at.is_none() {
-                            cookie_jar.write_to_response(res);
+                cookie_jar.write_to_response(res);
                 res.render(url_builder.redirect(&pasion_router::RegisterVerifyEmail::new(id)));
                 return Ok(());
             }
@@ -168,8 +173,10 @@ pub async fn get(req: &mut Request, depot: &Depot, res: &mut Response) -> Result
                 let ctx = RegisterStepsEmailInUseContext::new(email_authentication.email, action)
                     .with_language(lang);
 
-                            cookie_jar.write_to_response(res);
-                res.render(Text::Html(templates.render_register_steps_email_in_use(&ctx)?));
+                cookie_jar.write_to_response(res);
+                res.render(Text::Html(
+                    templates.render_register_steps_email_in_use(&ctx)?,
+                ));
                 return Ok(());
             }
 
@@ -220,7 +227,7 @@ pub async fn get(req: &mut Request, depot: &Depot, res: &mut Response) -> Result
 
     // Check that the display name is set
     if registration.display_name.is_none() {
-            cookie_jar.write_to_response(res);
+        cookie_jar.write_to_response(res);
         res.render(url_builder.redirect(&pasion_router::RegisterDisplayName::new(registration.id)));
         return Ok(());
     }

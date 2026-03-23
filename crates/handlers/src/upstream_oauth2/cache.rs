@@ -1,5 +1,6 @@
 use std::{collections::HashMap, sync::Arc};
 
+use oauth2_types::oidc::VerifiedProviderMetadata;
 use pasion_context::LogContext;
 use pasion_data_model::{
     UpstreamOAuthProvider, UpstreamOAuthProviderDiscoveryMode, UpstreamOAuthProviderPkceMode,
@@ -7,7 +8,6 @@ use pasion_data_model::{
 use pasion_iana::oauth::PkceCodeChallengeMethod;
 use pasion_oidc_client::error::DiscoveryError;
 use pasion_storage::{RepositoryAccess, upstream_oauth2::UpstreamOAuthProviderRepository};
-use oauth2_types::oidc::VerifiedProviderMetadata;
 use tokio::sync::RwLock;
 use url::Url;
 
@@ -211,7 +211,8 @@ impl MetadataCache {
         verify: bool,
     ) -> Result<Arc<VerifiedProviderMetadata>, DiscoveryError> {
         if verify {
-            let metadata = pasion_oidc_client::requests::discovery::discover(client, issuer).await?;
+            let metadata =
+                pasion_oidc_client::requests::discovery::discover(client, issuer).await?;
             let metadata = Arc::new(metadata);
 
             self.cache
@@ -295,12 +296,12 @@ mod tests {
     // XXX: sadly, we can't test HTTPS requests with wiremock, so we can only test
     // 'insecure' discovery
 
+    use oauth2_types::scope::{OPENID, Scope};
     use pasion_data_model::{
         Clock, UpstreamOAuthProviderClaimsImports, UpstreamOAuthProviderOnBackchannelLogout,
         UpstreamOAuthProviderTokenAuthMethod, clock::MockClock,
     };
     use pasion_iana::jose::JsonWebSignatureAlg;
-    use oauth2_types::scope::{OPENID, Scope};
     use ulid::Ulid;
     use wiremock::{
         Mock, MockServer, ResponseTemplate,

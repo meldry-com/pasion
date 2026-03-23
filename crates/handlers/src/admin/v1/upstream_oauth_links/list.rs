@@ -1,7 +1,6 @@
-use salvo::prelude::*;
-use salvo::http::StatusCode;
 use pasion_salvo_utils::record_error;
 use pasion_storage::{Page, upstream_oauth2::UpstreamOAuthLinkFilter};
+use salvo::{http::StatusCode, prelude::*};
 use schemars::JsonSchema;
 use serde::Deserialize;
 use ulid::Ulid;
@@ -68,7 +67,6 @@ pub enum RouteError {
 
     #[error("Provider ID {0} not found")]
     ProviderNotFound(Ulid),
-
 }
 
 impl_from_error_for_route!(pasion_storage::RepositoryError);
@@ -97,7 +95,8 @@ impl Scribe for RouteError {
 #[tracing::instrument(name = "handler.admin.v1.upstream_oauth_links.list", skip_all)]
 pub async fn handler(
     req: &mut Request,
-    depot: &Depot) -> Result<Json<PaginatedResponse<UpstreamOAuthLink>>, RouteError> {
+    depot: &Depot,
+) -> Result<Json<PaginatedResponse<UpstreamOAuthLink>>, RouteError> {
     let call_context = extract_call_context(req, depot).await?;
     let crate::admin::call_context::CallContext { mut repo, .. } = call_context;
     let (pagination, include_count) = extract_pagination(req)?;

@@ -1,10 +1,9 @@
-use salvo::prelude::*;
 use std::str::FromStr;
 
-use salvo::http::StatusCode;
+use oauth2_types::scope::{Scope, ScopeToken};
 use pasion_salvo_utils::record_error;
 use pasion_storage::{Page, oauth2::OAuth2SessionFilter};
-use oauth2_types::scope::{Scope, ScopeToken};
+use salvo::{http::StatusCode, prelude::*};
 use schemars::JsonSchema;
 use serde::Deserialize;
 use ulid::Ulid;
@@ -141,7 +140,6 @@ pub enum RouteError {
     #[error("User session ID {0} not found")]
     UserSessionNotFound(Ulid),
 
-
     #[error("Invalid scope {0:?} in filter parameters")]
     InvalidScope(String),
 }
@@ -175,7 +173,8 @@ impl Scribe for RouteError {
 #[tracing::instrument(name = "handler.admin.v1.oauth2_sessions.list", skip_all)]
 pub async fn handler(
     req: &mut Request,
-    depot: &Depot) -> Result<Json<PaginatedResponse<OAuth2Session>>, RouteError> {
+    depot: &Depot,
+) -> Result<Json<PaginatedResponse<OAuth2Session>>, RouteError> {
     let call_context = extract_call_context(req, depot).await?;
     let crate::admin::call_context::CallContext { mut repo, .. } = call_context;
     let (pagination, include_count) = extract_pagination(req)?;

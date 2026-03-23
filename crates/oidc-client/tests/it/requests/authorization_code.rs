@@ -1,6 +1,10 @@
 use std::{collections::HashMap, num::NonZeroU32};
 
 use assert_matches::assert_matches;
+use oauth2_types::{
+    requests::{AccessTokenResponse, Display, Prompt},
+    scope::OPENID,
+};
 use pasion_iana::oauth::{
     OAuthAccessTokenType, OAuthClientAuthenticationMethod, PkceCodeChallengeMethod,
 };
@@ -14,10 +18,6 @@ use pasion_oidc_client::{
         },
         jose::JwtVerificationData,
     },
-};
-use oauth2_types::{
-    requests::{AccessTokenResponse, Display, Prompt},
-    scope::OPENID,
 };
 use rand::SeedableRng;
 use url::Url;

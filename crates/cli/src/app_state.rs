@@ -1,11 +1,12 @@
 use std::{net::IpAddr, sync::Arc};
 
 use ipnetwork::IpNetwork;
+use opentelemetry::KeyValue;
 use pasion_context::LogContext;
 use pasion_data_model::{AppVersion, BoxClock, BoxRng, SiteConfig, SystemClock};
 use pasion_handlers::{
-    ActivityTracker, BoundActivityTracker, CookieManager, Limiter,
-    MetadataCache, RequesterFingerprint, passwords::PasswordManager,
+    ActivityTracker, BoundActivityTracker, CookieManager, Limiter, MetadataCache,
+    RequesterFingerprint, passwords::PasswordManager,
 };
 use pasion_i18n::Translator;
 use pasion_keystore::{Encrypter, Keystore};
@@ -15,7 +16,6 @@ use pasion_router::UrlBuilder;
 use pasion_storage::{BoxRepository, BoxRepositoryFactory, RepositoryFactory};
 use pasion_storage_pg::PgRepositoryFactory;
 use pasion_templates::Templates;
-use opentelemetry::KeyValue;
 use rand::SeedableRng;
 use salvo::prelude::*;
 use sqlx::PgPool;
@@ -135,7 +135,10 @@ pub async fn inject_app_state(
 
     // Inject all components into depot with their type names as keys
     depot.insert("pg_pool", state.repository_factory.pool());
-    depot.insert("box_repository_factory", state.repository_factory.clone().boxed());
+    depot.insert(
+        "box_repository_factory",
+        state.repository_factory.clone().boxed(),
+    );
     depot.insert("templates", state.templates.clone());
     depot.insert("translator", state.templates.translator());
     depot.insert("keystore", state.key_store.clone());
@@ -148,7 +151,10 @@ pub async fn inject_app_state(
     depot.insert("site_config", state.site_config.clone());
     depot.insert("limiter", state.limiter.clone());
     depot.insert("policy_factory", state.policy_factory.clone());
-    depot.insert("homeserver_connection", Arc::clone(&state.homeserver_connection));
+    depot.insert(
+        "homeserver_connection",
+        Arc::clone(&state.homeserver_connection),
+    );
     depot.insert("app_version", AppVersion(VERSION));
     depot.insert("activity_tracker", state.activity_tracker.clone());
     depot.insert("trusted_proxies", state.trusted_proxies.clone());
@@ -272,26 +278,25 @@ pub fn extract_rng() -> BoxRng {
 
 /// Extract Policy from depot
 pub async fn extract_policy(depot: &Depot) -> Result<Policy, pasion_policy::InstantiateError> {
-    let policy_factory = depot
-        .get_policy_factory()
-        .ok_or_else(|| {
-            pasion_policy::InstantiateError::Instantiate(anyhow::anyhow!("PolicyFactory not found in depot").into())
-        })?;
+    let policy_factory = depot.get_policy_factory().ok_or_else(|| {
+        pasion_policy::InstantiateError::Instantiate(
+            anyhow::anyhow!("PolicyFactory not found in depot").into(),
+        )
+    })?;
     policy_factory.instantiate().await
 }
 
 /// Extract BoxRepository from depot
-pub async fn extract_repository(depot: &Depot) -> Result<BoxRepository, pasion_storage::RepositoryError> {
-    let app_state = depot
-        .get::<AppState>("app_state")
-        .ok_or_else(|| pasion_storage::RepositoryError::from(anyhow::anyhow!("AppState not found in depot")))?;
+pub async fn extract_repository(
+    depot: &Depot,
+) -> Result<BoxRepository, pasion_storage::RepositoryError> {
+    let app_state = depot.get::<AppState>("app_state").ok_or_else(|| {
+        pasion_storage::RepositoryError::from(anyhow::anyhow!("AppState not found in depot"))
+    })?;
     app_state.repository_factory.create().await
 }
 
-fn infer_client_ip(
-    req: &Request,
-    trusted_proxies: &[IpNetwork],
-) -> Option<IpAddr> {
+fn infer_client_ip(req: &Request, trusted_proxies: &[IpNetwork]) -> Option<IpAddr> {
     let connection_info = req.extensions().get::<pasion_listener::ConnectionInfo>();
 
     let peer = if let Some(info) = connection_info {

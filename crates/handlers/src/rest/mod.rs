@@ -53,7 +53,8 @@ pub mod viewer;
 /// The authenticated entity making a REST API request, together with
 /// connection metadata (IP address, user-agent).
 pub struct Requester {
-    /// Who is making the request (anonymous, browser session, or OAuth 2.0 session).
+    /// Who is making the request (anonymous, browser session, or OAuth 2.0
+    /// session).
     pub entity: RequestingEntity,
     /// Client IP address (after trusted-proxy unwrapping).
     pub ip_address: Option<IpAddr>,
@@ -209,15 +210,12 @@ impl Scribe for RouteError {
 // ── Depot helpers ──────────────────────────────────────────────
 
 fn depot_get<T: Send + Sync + Clone + 'static>(depot: &Depot, key: &str) -> Result<T, RouteError> {
-    depot
-        .get::<T>(key)
-        .cloned()
-        .map_err(|_| {
-            RouteError::Internal(Box::new(std::io::Error::new(
-                std::io::ErrorKind::Other,
-                format!("{key} not found in depot"),
-            )))
-        })
+    depot.get::<T>(key).cloned().map_err(|_| {
+        RouteError::Internal(Box::new(std::io::Error::new(
+            std::io::ErrorKind::Other,
+            format!("{key} not found in depot"),
+        )))
+    })
 }
 
 pub fn get_repo_factory(depot: &Depot) -> Result<&BoxRepositoryFactory, RouteError> {
@@ -475,8 +473,16 @@ pub fn parse_user_agent(ua: &str) -> UserAgentInfo {
     let parsed = woothee::parser::Parser::new().parse(ua);
     let (name, os, category) = match parsed {
         Some(result) => (
-            if result.name != "UNKNOWN" { Some(result.name.to_owned()) } else { None },
-            if result.os != "UNKNOWN" { Some(result.os.to_owned()) } else { None },
+            if result.name != "UNKNOWN" {
+                Some(result.name.to_owned())
+            } else {
+                None
+            },
+            if result.os != "UNKNOWN" {
+                Some(result.os.to_owned())
+            } else {
+                None
+            },
             result.category,
         ),
         None => (None, None, "UNKNOWN"),
@@ -555,10 +561,7 @@ pub fn extract_bound_activity_tracker(req: &Request, depot: &Depot) -> BoundActi
     activity_tracker.bind(ip)
 }
 
-fn infer_client_ip(
-    req: &Request,
-    trusted_proxies: &[ipnetwork::IpNetwork],
-) -> Option<IpAddr> {
+fn infer_client_ip(req: &Request, trusted_proxies: &[ipnetwork::IpNetwork]) -> Option<IpAddr> {
     // Get IPs from the X-Forwarded-For header
     let peers_from_header = req
         .headers()
@@ -568,7 +571,9 @@ fn infer_client_ip(
         .into_iter()
         .flatten();
 
-    let peer_list: Vec<IpAddr> = peers_from_header.map(|ip: IpAddr| ip.to_canonical()).collect();
+    let peer_list: Vec<IpAddr> = peers_from_header
+        .map(|ip: IpAddr| ip.to_canonical())
+        .collect();
 
     let fallback = peer_list.first().copied();
 

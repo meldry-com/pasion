@@ -1,6 +1,5 @@
-use salvo::prelude::*;
-use salvo::http::StatusCode;
 use pasion_salvo_utils::record_error;
+use salvo::{http::StatusCode, prelude::*};
 use schemars::JsonSchema;
 use serde::Deserialize;
 
@@ -53,10 +52,13 @@ pub struct UsernamePathParam {
 #[tracing::instrument(name = "handler.admin.v1.users.by_username", skip_all)]
 pub async fn handler(
     req: &mut Request,
-    depot: &Depot) -> Result<Json<SingleResponse<User>>, RouteError> {
+    depot: &Depot,
+) -> Result<Json<SingleResponse<User>>, RouteError> {
     let call_context = extract_call_context(req, depot).await?;
     let crate::admin::call_context::CallContext { mut repo, .. } = call_context;
-    let username: String = req.param::<String>("username").ok_or_else(|| RouteError::NotFound("unknown".to_owned()))?;
+    let username: String = req
+        .param::<String>("username")
+        .ok_or_else(|| RouteError::NotFound("unknown".to_owned()))?;
 
     let self_path = format!("/api/admin/v1/users/by-username/{username}");
     let user = repo

@@ -134,38 +134,32 @@ fn client_credentials_for_provider(
 
         UpstreamOAuthProviderTokenAuthMethod::QQConnect => ClientCredentials::QQConnect {
             client_id,
-            client_secret: client_secret
-                .ok_or(ProviderCredentialsError::MissingClientSecret)?,
+            client_secret: client_secret.ok_or(ProviderCredentialsError::MissingClientSecret)?,
         },
 
         UpstreamOAuthProviderTokenAuthMethod::Feishu => ClientCredentials::Feishu {
             client_id,
-            client_secret: client_secret
-                .ok_or(ProviderCredentialsError::MissingClientSecret)?,
+            client_secret: client_secret.ok_or(ProviderCredentialsError::MissingClientSecret)?,
         },
 
         UpstreamOAuthProviderTokenAuthMethod::Lark => ClientCredentials::Lark {
             client_id,
-            client_secret: client_secret
-                .ok_or(ProviderCredentialsError::MissingClientSecret)?,
+            client_secret: client_secret.ok_or(ProviderCredentialsError::MissingClientSecret)?,
         },
 
         UpstreamOAuthProviderTokenAuthMethod::DingTalk => ClientCredentials::DingTalk {
             client_id,
-            client_secret: client_secret
-                .ok_or(ProviderCredentialsError::MissingClientSecret)?,
+            client_secret: client_secret.ok_or(ProviderCredentialsError::MissingClientSecret)?,
         },
 
         UpstreamOAuthProviderTokenAuthMethod::WeChat => ClientCredentials::WeChat {
             client_id,
-            client_secret: client_secret
-                .ok_or(ProviderCredentialsError::MissingClientSecret)?,
+            client_secret: client_secret.ok_or(ProviderCredentialsError::MissingClientSecret)?,
         },
 
         UpstreamOAuthProviderTokenAuthMethod::WeCom => ClientCredentials::WeCom {
             client_id,
-            client_secret: client_secret
-                .ok_or(ProviderCredentialsError::MissingClientSecret)?,
+            client_secret: client_secret.ok_or(ProviderCredentialsError::MissingClientSecret)?,
         },
     };
 

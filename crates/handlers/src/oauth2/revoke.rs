@@ -1,3 +1,7 @@
+use oauth2_types::{
+    errors::{ClientError, ClientErrorCode},
+    requests::RevocationRequest,
+};
 use pasion_data_model::{BoxClock, BoxRng, SystemClock, TokenType};
 use pasion_iana::oauth::OAuthTokenTypeHint;
 use pasion_keystore::Encrypter;
@@ -9,10 +13,6 @@ use pasion_salvo_utils::{
 use pasion_storage::{
     BoxRepository, BoxRepositoryFactory, RepositoryAccess,
     queue::{QueueJobRepositoryExt as _, SyncDevicesJob},
-};
-use oauth2_types::{
-    errors::{ClientError, ClientErrorCode},
-    requests::RevocationRequest,
 };
 use rand::{SeedableRng, thread_rng};
 use rand_chacha::ChaChaRng;
@@ -87,7 +87,9 @@ impl Scribe for RouteError {
 
             Self::UnsupportedTokenType => {
                 res.status_code(StatusCode::BAD_REQUEST);
-                res.render(Json(ClientError::from(ClientErrorCode::UnsupportedTokenType)));
+                res.render(Json(ClientError::from(
+                    ClientErrorCode::UnsupportedTokenType,
+                )));
             }
 
             // If the token is unknown, we still return a 200 OK response.

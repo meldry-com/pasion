@@ -1,12 +1,14 @@
 use dioxus::prelude::*;
 
-use crate::components::layout::Layout;
-use crate::components::loading::{LoadingScreen, LoadingSpinner};
-use crate::components::page_heading::PageHeading;
-use crate::api::types::{
-    CompleteEmailAuthStatus, UserEmailAuthentication, ResendEmailAuthCodePayload,
+use crate::{
+    api::types::{CompleteEmailAuthStatus, ResendEmailAuthCodePayload, UserEmailAuthentication},
+    components::{
+        layout::Layout,
+        loading::{LoadingScreen, LoadingSpinner},
+        page_heading::PageHeading,
+    },
+    pages::Route,
 };
-use crate::pages::Route;
 
 #[component]
 pub fn EmailVerify(id: String) -> Element {
@@ -23,10 +25,7 @@ pub fn EmailVerify(id: String) -> Element {
     let auth_data = use_resource(move || {
         let qid = id_for_query.clone();
         async move {
-            crate::api::api_get::<UserEmailAuthentication>(
-                &format!("/email-auth/{}", qid),
-            )
-            .await
+            crate::api::api_get::<UserEmailAuthentication>(&format!("/email-auth/{}", qid)).await
         }
     });
 

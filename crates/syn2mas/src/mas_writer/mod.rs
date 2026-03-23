@@ -964,8 +964,8 @@ impl MasWriter {
         Ok(())
     }
 
-    /// Finish writing to the Pasion database, flushing and committing all changes.
-    /// It returns the unlocked underlying connection.
+    /// Finish writing to the Pasion database, flushing and committing all
+    /// changes. It returns the unlocked underlying connection.
     ///
     /// # Errors
     ///
@@ -1419,7 +1419,10 @@ mod test {
     /// Tests writing a single user, with a link to an upstream provider.
     /// There needs to be an upstream provider in the database already — in the
     /// real migration, this is done by running a provider sync first.
-    #[sqlx::test(migrator = "pasion_storage_pg::MIGRATOR", fixtures("upstream_provider"))]
+    #[sqlx::test(
+        migrator = "pasion_storage_pg::MIGRATOR",
+        fixtures("upstream_provider")
+    )]
     async fn test_write_user_with_upstream_provider_link(pool: PgPool) {
         let mut writer = make_mas_writer(&pool).await;
 

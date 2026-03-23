@@ -22,8 +22,9 @@ use crate::{
     tracing::ExecuteExt,
 };
 
-/// An implementation of [`pasion_storage::user::UserRegistrationTokenRepository`]
-/// for a PostgreSQL connection
+/// An implementation of
+/// [`pasion_storage::user::UserRegistrationTokenRepository`] for a PostgreSQL
+/// connection
 pub struct PgUserRegistrationTokenRepository<'c> {
     conn: &'c mut PgConnection,
 }

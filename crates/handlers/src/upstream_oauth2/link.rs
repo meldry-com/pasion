@@ -3,19 +3,19 @@ use std::{
     sync::{Arc, LazyLock},
 };
 
-use pasion_salvo_utils::{
-    GenericError,
-    cookies::CookieJar,
-    csrf::{CsrfExt, ProtectedForm},
-    record_error,
-    SessionInfoExt,
-};
+use minijinja::Environment;
+use opentelemetry::{Key, KeyValue, metrics::Counter};
 use pasion_data_model::{
-    UpstreamOAuthAuthorizationSession, UpstreamOAuthProviderOnConflict,
-    UserRegistration,
+    UpstreamOAuthAuthorizationSession, UpstreamOAuthProviderOnConflict, UserRegistration,
 };
 use pasion_jose::jwt::Jwt;
 use pasion_matrix::HomeserverConnection;
+use pasion_salvo_utils::{
+    GenericError, SessionInfoExt,
+    cookies::CookieJar,
+    csrf::{CsrfExt, ProtectedForm},
+    record_error,
+};
 use pasion_storage::{
     Pagination, RepositoryAccess,
     upstream_oauth2::{
@@ -28,8 +28,6 @@ use pasion_templates::{
     AccountInactiveContext, ErrorContext, FieldError, FormError, TemplateContext, Templates,
     ToFormState, UpstreamExistingLinkContext, UpstreamRegister, UpstreamSuggestLink,
 };
-use minijinja::Environment;
-use opentelemetry::{Key, KeyValue, metrics::Counter};
 use salvo::prelude::*;
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
@@ -216,11 +214,12 @@ impl ToFormState for FormData {
 }
 
 #[handler]
-#[tracing::instrument(
-    name = "handlers.upstream_oauth2.link.get",
-    skip_all,
-)]
-pub async fn get(req: &mut Request, depot: &mut Depot, res: &mut Response) -> Result<(), RouteError> {
+#[tracing::instrument(name = "handlers.upstream_oauth2.link.get", skip_all)]
+pub async fn get(
+    req: &mut Request,
+    depot: &mut Depot,
+    res: &mut Response,
+) -> Result<(), RouteError> {
     let link_id: Ulid = req.param("id").ok_or(RouteError::LinkNotFound)?;
     let mut rng = crate::rest::make_rng();
     let clock = crate::rest::make_clock();
@@ -809,8 +808,7 @@ pub async fn get(req: &mut Request, depot: &mut Depot, res: &mut Response) -> Re
                 // finish
                 cookie_jar.write_to_response(&mut *res);
                 res.render(
-                    url_builder
-                        .redirect(&pasion_router::RegisterFinish::new(registration.id)),
+                    url_builder.redirect(&pasion_router::RegisterFinish::new(registration.id)),
                 );
                 return Ok(());
             }
@@ -848,11 +846,12 @@ pub async fn get(req: &mut Request, depot: &mut Depot, res: &mut Response) -> Re
 }
 
 #[handler]
-#[tracing::instrument(
-    name = "handlers.upstream_oauth2.link.post",
-    skip_all,
-)]
-pub async fn post(req: &mut Request, depot: &mut Depot, res: &mut Response) -> Result<(), RouteError> {
+#[tracing::instrument(name = "handlers.upstream_oauth2.link.post", skip_all)]
+pub async fn post(
+    req: &mut Request,
+    depot: &mut Depot,
+    res: &mut Response,
+) -> Result<(), RouteError> {
     let link_id: Ulid = req.param("id").ok_or(RouteError::LinkNotFound)?;
     let mut rng = crate::rest::make_rng();
     let clock = crate::rest::make_clock();
@@ -1194,9 +1193,7 @@ pub async fn post(req: &mut Request, depot: &mut Depot, res: &mut Response) -> R
             // Redirect to the user registration flow, in case we have any other step to
             // finish
             cookie_jar.write_to_response(res);
-            res.render(
-                url_builder.redirect(&pasion_router::RegisterFinish::new(registration.id)),
-            );
+            res.render(url_builder.redirect(&pasion_router::RegisterFinish::new(registration.id)));
             Ok(())
         }
 
@@ -1266,6 +1263,7 @@ async fn prepare_user_registration(
 #[cfg(test)]
 mod tests {
     use hyper::{Request, StatusCode, header::CONTENT_TYPE};
+    use oauth2_types::scope::{OPENID, Scope};
     use pasion_data_model::{
         UpstreamOAuthAuthorizationSession, UpstreamOAuthLink, UpstreamOAuthProviderClaimsImports,
         UpstreamOAuthProviderImportPreference, UpstreamOAuthProviderLocalpartPreference,
@@ -1275,8 +1273,9 @@ mod tests {
     use pasion_jose::jwt::{JsonWebSignatureHeader, Jwt};
     use pasion_keystore::Keystore;
     use pasion_router::Route;
-    use pasion_storage::{Repository, RepositoryError, upstream_oauth2::UpstreamOAuthProviderParams};
-    use oauth2_types::scope::{OPENID, Scope};
+    use pasion_storage::{
+        Repository, RepositoryError, upstream_oauth2::UpstreamOAuthProviderParams,
+    };
     use rand_chacha::ChaChaRng;
     use serde_json::Value;
     use sqlx::PgPool;
@@ -1414,7 +1413,8 @@ mod tests {
         let cookie_jar = upstream_sessions.save(cookie_jar, &state.clock);
         cookies.import(cookie_jar);
 
-        let request = Request::get(&*pasion_router::UpstreamOAuth2Link::new(link.id).path()).empty();
+        let request =
+            Request::get(&*pasion_router::UpstreamOAuth2Link::new(link.id).path()).empty();
         let request = cookies.with_cookies(request);
         let response = state.request(request).await;
         cookies.save_cookies(&response);
@@ -1611,7 +1611,8 @@ mod tests {
         let cookie_jar = upstream_sessions.save(cookie_jar, &state.clock);
         cookies.import(cookie_jar);
 
-        let request = Request::get(&*pasion_router::UpstreamOAuth2Link::new(link.id).path()).empty();
+        let request =
+            Request::get(&*pasion_router::UpstreamOAuth2Link::new(link.id).path()).empty();
         let request = cookies.with_cookies(request);
         let response = state.request(request).await;
         cookies.save_cookies(&response);
@@ -1752,7 +1753,8 @@ mod tests {
 
         repo.save().await.unwrap();
 
-        let request = Request::get(&*pasion_router::UpstreamOAuth2Link::new(link.id).path()).empty();
+        let request =
+            Request::get(&*pasion_router::UpstreamOAuth2Link::new(link.id).path()).empty();
         let request = cookies.with_cookies(request);
         let response = state.request(request).await;
         cookies.save_cookies(&response);
@@ -1867,7 +1869,8 @@ mod tests {
         let cookie_jar = upstream_sessions.save(cookie_jar, &state.clock);
         cookies.import(cookie_jar);
 
-        let request = Request::get(&*pasion_router::UpstreamOAuth2Link::new(link.id).path()).empty();
+        let request =
+            Request::get(&*pasion_router::UpstreamOAuth2Link::new(link.id).path()).empty();
         let request = cookies.with_cookies(request);
         let response = state.request(request).await;
         cookies.save_cookies(&response);
@@ -2056,7 +2059,8 @@ mod tests {
         let cookie_jar = upstream_sessions.save(cookie_jar, &state.clock);
         cookies.import(cookie_jar);
 
-        let request = Request::get(&*pasion_router::UpstreamOAuth2Link::new(link.id).path()).empty();
+        let request =
+            Request::get(&*pasion_router::UpstreamOAuth2Link::new(link.id).path()).empty();
         let request = cookies.with_cookies(request);
         let response = state.request(request).await;
         cookies.save_cookies(&response);
@@ -2186,7 +2190,8 @@ mod tests {
         let cookie_jar = upstream_sessions.save(cookie_jar, &state.clock);
         cookies.import(cookie_jar);
 
-        let request = Request::get(&*pasion_router::UpstreamOAuth2Link::new(link.id).path()).empty();
+        let request =
+            Request::get(&*pasion_router::UpstreamOAuth2Link::new(link.id).path()).empty();
         let request = cookies.with_cookies(request);
         let response = state.request(request).await;
         cookies.save_cookies(&response);
@@ -2323,7 +2328,8 @@ mod tests {
         let cookie_jar = upstream_sessions.save(cookie_jar, &state.clock);
         cookies.import(cookie_jar);
 
-        let request = Request::get(&*pasion_router::UpstreamOAuth2Link::new(link.id).path()).empty();
+        let request =
+            Request::get(&*pasion_router::UpstreamOAuth2Link::new(link.id).path()).empty();
         let request = cookies.with_cookies(request);
         let response = state.request(request).await;
         cookies.save_cookies(&response);

@@ -2,8 +2,8 @@
 //!
 //! [Discovery]: https://openid.net/specs/openid-connect-discovery-1_0.html
 
-use pasion_http::RequestBuilderExt;
 use oauth2_types::oidc::{ProviderMetadata, VerifiedProviderMetadata};
+use pasion_http::RequestBuilderExt;
 use url::Url;
 
 use crate::error::DiscoveryError;

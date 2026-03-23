@@ -2,6 +2,8 @@ use std::net::IpAddr;
 
 use async_trait::async_trait;
 use chrono::{DateTime, Utc};
+use oauth2_types::scope::Scope;
+use opentelemetry_semantic_conventions::trace::DB_QUERY_TEXT;
 use pasion_data_model::{
     Clock, User,
     personal::{
@@ -14,8 +16,6 @@ use pasion_storage::{
     pagination::Node,
     personal::{PersonalSessionFilter, PersonalSessionRepository, PersonalSessionState},
 };
-use oauth2_types::scope::Scope;
-use opentelemetry_semantic_conventions::trace::DB_QUERY_TEXT;
 use rand::RngCore;
 use sea_query::{
     Cond, Condition, Expr, PgFunc, PostgresQueryBuilder, Query, SimpleExpr, enum_def,

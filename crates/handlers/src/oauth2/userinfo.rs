@@ -90,16 +90,14 @@ impl Scribe for RouteError {
 #[tracing::instrument(name = "handlers.oauth2.userinfo.get", skip_all)]
 pub async fn get(req: &mut Request, depot: &Depot, res: &mut Response) {
     match handle_get(req, depot).await {
-        Ok(response) => {
-            match response {
-                UserinfoResponse::Json(user_info) => {
-                    res.render(Json(user_info));
-                }
-                UserinfoResponse::Jwt(token) => {
-                    res.render(JwtResponse(token));
-                }
+        Ok(response) => match response {
+            UserinfoResponse::Json(user_info) => {
+                res.render(Json(user_info));
             }
-        }
+            UserinfoResponse::Jwt(token) => {
+                res.render(JwtResponse(token));
+            }
+        },
         Err(e) => e.render(res),
     }
 }

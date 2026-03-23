@@ -2,9 +2,11 @@
 //!
 //! Feishu uses a non-standard OAuth2 flow:
 //! - A separate step is needed to obtain an `app_access_token`
-//! - The token exchange uses `app_access_token` as Bearer auth (not client_secret)
+//! - The token exchange uses `app_access_token` as Bearer auth (not
+//!   client_secret)
 //! - Request bodies are JSON (not form-encoded)
-//! - All responses are wrapped in a `{"code": 0, "msg": "...", "data": {...}}` envelope
+//! - All responses are wrapped in a `{"code": 0, "msg": "...", "data": {...}}`
+//!   envelope
 
 use std::collections::HashMap;
 
@@ -137,10 +139,7 @@ pub async fn get_app_access_token(
 ) -> Result<String, TokenRequestError> {
     tracing::debug!("Requesting Feishu/Lark app_access_token...");
 
-    let body = AppAccessTokenRequest {
-        app_id,
-        app_secret,
-    };
+    let body = AppAccessTokenRequest { app_id, app_secret };
 
     let response: AppAccessTokenResponse = http_client
         .post(app_token_endpoint)
@@ -198,10 +197,12 @@ pub async fn request_access_token(
         });
     }
 
-    response.data.ok_or_else(|| TokenRequestError::ProviderError {
-        code: response.code,
-        msg: "missing data in response".to_owned(),
-    })
+    response
+        .data
+        .ok_or_else(|| TokenRequestError::ProviderError {
+            code: response.code,
+            msg: "missing data in response".to_owned(),
+        })
 }
 
 /// Fetch user info from Feishu's userinfo endpoint.

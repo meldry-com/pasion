@@ -1,10 +1,14 @@
 use dioxus::prelude::*;
 
-use crate::components::browser_session::BrowserSessionCard;
-use crate::components::empty_state::EmptyState;
-use crate::components::loading::LoadingScreen;
-use crate::components::pagination::{PaginationControls, PaginationDirection, PaginationState};
-use crate::api::types::ViewerResponse;
+use crate::{
+    api::types::ViewerResponse,
+    components::{
+        browser_session::BrowserSessionCard,
+        empty_state::EmptyState,
+        loading::LoadingScreen,
+        pagination::{PaginationControls, PaginationDirection, PaginationState},
+    },
+};
 
 #[component]
 pub fn BrowserSessions() -> Element {
@@ -60,16 +64,9 @@ pub fn BrowserSessions() -> Element {
                 .as_ref()
                 .map(|p| p.has_previous_page)
                 .unwrap_or(false);
-            let has_next = page_info
-                .as_ref()
-                .map(|p| p.has_next_page)
-                .unwrap_or(false);
-            let start_cursor = page_info
-                .as_ref()
-                .and_then(|p| p.start_cursor.clone());
-            let end_cursor = page_info
-                .as_ref()
-                .and_then(|p| p.end_cursor.clone());
+            let has_next = page_info.as_ref().map(|p| p.has_next_page).unwrap_or(false);
+            let start_cursor = page_info.as_ref().and_then(|p| p.start_cursor.clone());
+            let end_cursor = page_info.as_ref().and_then(|p| p.end_cursor.clone());
 
             let current_id = &session.id;
             let inactive_active = show_inactive();

@@ -1,4 +1,5 @@
 use chrono::Duration;
+use oauth2_types::scope::{OPENID, Scope};
 use pasion_data_model::{Clock, clock::MockClock};
 use pasion_iana::jose::JsonWebSignatureAlg;
 use pasion_storage::{
@@ -9,7 +10,6 @@ use pasion_storage::{
         UserFilter, UserPasswordRepository, UserRepository,
     },
 };
-use oauth2_types::scope::{OPENID, Scope};
 use rand::SeedableRng;
 use rand_chacha::ChaChaRng;
 use sqlx::PgPool;

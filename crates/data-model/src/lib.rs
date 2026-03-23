@@ -21,7 +21,8 @@
 
 use thiserror::Error;
 
-/// Clock abstraction for testability (`SystemClock` in production, mock clock in tests).
+/// Clock abstraction for testability (`SystemClock` in production, mock clock
+/// in tests).
 pub mod clock;
 /// OAuth 2.0 client and session models.
 pub mod oauth2;

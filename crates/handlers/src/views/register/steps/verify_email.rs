@@ -1,17 +1,16 @@
 use anyhow::Context;
-use salvo::prelude::*;
-use salvo::writing::Text;
+use pasion_router::PostAuthAction;
 use pasion_salvo_utils::{
     InternalError,
     cookies::CookieJar,
     csrf::{CsrfExt, ProtectedForm},
 };
-use pasion_router::PostAuthAction;
 use pasion_storage::{RepositoryAccess, user::UserEmailRepository};
 use pasion_templates::{
     FieldError, RegisterStepsVerifyEmailContext, RegisterStepsVerifyEmailFormField,
     TemplateContext, Templates, ToFormState,
 };
+use salvo::{prelude::*, writing::Text};
 use serde::{Deserialize, Serialize};
 use ulid::Ulid;
 
@@ -27,7 +26,11 @@ impl ToFormState for CodeForm {
 }
 
 #[handler]
-pub async fn get(req: &mut Request, depot: &Depot, res: &mut Response) -> Result<(), InternalError> {
+pub async fn get(
+    req: &mut Request,
+    depot: &Depot,
+    res: &mut Response,
+) -> Result<(), InternalError> {
     let mut rng = rest::make_rng();
     let clock = rest::make_clock();
     let locale = crate::preferred_language(req, depot);
@@ -55,7 +58,7 @@ pub async fn get(req: &mut Request, depot: &Depot, res: &mut Response) -> Result
             .map(serde_json::from_value)
             .transpose()?;
 
-            cookie_jar.write_to_response(res);
+        cookie_jar.write_to_response(res);
         res.render(OptionalPostAuthAction::from(post_auth_action).go_next(&url_builder));
         return Ok(());
     }
@@ -90,7 +93,11 @@ pub async fn get(req: &mut Request, depot: &Depot, res: &mut Response) -> Result
 }
 
 #[handler]
-pub async fn post(req: &mut Request, depot: &Depot, res: &mut Response) -> Result<(), InternalError> {
+pub async fn post(
+    req: &mut Request,
+    depot: &Depot,
+    res: &mut Response,
+) -> Result<(), InternalError> {
     let clock = rest::make_clock();
     let mut rng = rest::make_rng();
     let locale = crate::preferred_language(req, depot);
@@ -100,7 +107,9 @@ pub async fn post(req: &mut Request, depot: &Depot, res: &mut Response) -> Resul
     let cookie_jar = rest::extract_cookie_jar(req, depot)?;
     let url_builder = rest::get_url_builder(depot)?;
     let id: Ulid = req.param("id").unwrap_or_default();
-    let form: ProtectedForm<CodeForm> = req.parse_form().await
+    let form: ProtectedForm<CodeForm> = req
+        .parse_form()
+        .await
         .map_err(|e| InternalError::from_anyhow(e.into()))?;
 
     let form = cookie_jar.verify_form(&clock, form)?;
@@ -121,7 +130,7 @@ pub async fn post(req: &mut Request, depot: &Depot, res: &mut Response) -> Resul
             .map(serde_json::from_value)
             .transpose()?;
 
-            cookie_jar.write_to_response(res);
+        cookie_jar.write_to_response(res);
         res.render(OptionalPostAuthAction::from(post_auth_action).go_next(&url_builder));
         return Ok(());
     }
@@ -157,7 +166,7 @@ pub async fn post(req: &mut Request, depot: &Depot, res: &mut Response) -> Resul
 
         let content = templates.render_register_steps_verify_email(&ctx)?;
 
-            cookie_jar.write_to_response(res);
+        cookie_jar.write_to_response(res);
         res.render(Text::Html(content));
         return Ok(());
     }
@@ -179,7 +188,7 @@ pub async fn post(req: &mut Request, depot: &Depot, res: &mut Response) -> Resul
 
         let content = templates.render_register_steps_verify_email(&ctx)?;
 
-            cookie_jar.write_to_response(res);
+        cookie_jar.write_to_response(res);
         res.render(Text::Html(content));
         return Ok(());
     };

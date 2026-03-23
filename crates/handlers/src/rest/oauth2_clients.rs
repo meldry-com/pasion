@@ -21,7 +21,9 @@ pub async fn get_client(
     req: &mut Request,
     depot: &Depot,
 ) -> Result<Json<Oauth2ClientResponse>, RouteError> {
-    let id = req.param::<String>("id").ok_or(RouteError::BadRequest("missing id".into()))?;
+    let id = req
+        .param::<String>("id")
+        .ok_or(RouteError::BadRequest("missing id".into()))?;
     let ulid = NodeType::OAuth2Client.extract_ulid(&id)?;
 
     let repo_factory = get_repo_factory(depot)?;

@@ -1,9 +1,7 @@
 use std::collections::{HashMap, HashSet};
 
-use pasion_salvo_utils::record_error;
-use pasion_data_model::{
-    UpstreamOAuthProvider, UpstreamOAuthProviderOnBackchannelLogout,
-};
+use oauth2_types::errors::{ClientError, ClientErrorCode};
+use pasion_data_model::{UpstreamOAuthProvider, UpstreamOAuthProviderOnBackchannelLogout};
 use pasion_jose::{
     claims::{self, Claim, TimeOptions},
     jwt::JwtDecodeError,
@@ -12,6 +10,7 @@ use pasion_oidc_client::{
     error::JwtVerificationError,
     requests::jose::{JwtVerificationData, verify_signed_jwt},
 };
+use pasion_salvo_utils::record_error;
 use pasion_storage::{
     Pagination,
     compat::CompatSessionFilter,
@@ -20,7 +19,6 @@ use pasion_storage::{
     upstream_oauth2::UpstreamOAuthSessionFilter,
     user::BrowserSessionFilter,
 };
-use oauth2_types::errors::{ClientError, ClientErrorCode};
 use salvo::prelude::*;
 use serde::Deserialize;
 use serde_json::Value;
@@ -121,10 +119,7 @@ struct LogoutTokenEvents {
 const EVENTS: Claim<LogoutTokenEvents> = Claim::new("events");
 
 #[handler]
-#[tracing::instrument(
-    name = "handlers.upstream_oauth2.backchannel_logout.post",
-    skip_all,
-)]
+#[tracing::instrument(name = "handlers.upstream_oauth2.backchannel_logout.post", skip_all)]
 pub async fn post(req: &mut Request, depot: &mut Depot) -> Result<(), RouteError> {
     let provider_id: Ulid = req.param("id").ok_or(RouteError::ProviderNotFound)?;
     let clock = crate::rest::make_clock();

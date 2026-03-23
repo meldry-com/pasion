@@ -3,6 +3,10 @@ use std::{collections::HashMap, sync::Arc};
 use async_trait::async_trait;
 use chrono::{DateTime, Duration, Utc};
 use cron::Schedule;
+use opentelemetry::{
+    KeyValue,
+    metrics::{Counter, Histogram, UpDownCounter},
+};
 use pasion_context::LogContext;
 use pasion_data_model::Clock;
 use pasion_storage::{
@@ -10,10 +14,6 @@ use pasion_storage::{
     queue::{InsertableJob, Job, JobMetadata, Worker},
 };
 use pasion_storage_pg::{DatabaseError, PgRepository};
-use opentelemetry::{
-    KeyValue,
-    metrics::{Counter, Histogram, UpDownCounter},
-};
 use rand::{Rng, RngCore, distributions::Uniform};
 use serde::de::DeserializeOwned;
 use sqlx::{

@@ -7,8 +7,6 @@ use std::{collections::HashSet, num::NonZeroU32};
 use base64ct::{Base64UrlUnpadded, Encoding};
 use chrono::{DateTime, Utc};
 use language_tags::LanguageTag;
-use pasion_iana::oauth::{OAuthAuthorizationEndpointResponseType, PkceCodeChallengeMethod};
-use pasion_jose::claims::{self, TokenHash};
 use oauth2_types::{
     pkce,
     prelude::CodeChallengeMethodExt,
@@ -18,6 +16,8 @@ use oauth2_types::{
     },
     scope::{OPENID, Scope},
 };
+use pasion_iana::oauth::{OAuthAuthorizationEndpointResponseType, PkceCodeChallengeMethod};
+use pasion_jose::claims::{self, TokenHash};
 use rand::{
     Rng,
     distributions::{Alphanumeric, DistString},

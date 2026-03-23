@@ -1,13 +1,12 @@
-use salvo::prelude::*;
 use std::sync::Arc;
 
 use anyhow::Context;
 use chrono::Duration;
-use salvo::http::StatusCode;
-use pasion_salvo_utils::record_error;
+use oauth2_types::scope::Scope;
 use pasion_data_model::{BoxRng, Device, TokenType};
 use pasion_matrix::HomeserverConnection;
-use oauth2_types::scope::Scope;
+use pasion_salvo_utils::record_error;
+use salvo::{http::StatusCode, prelude::*};
 use schemars::JsonSchema;
 use serde::Deserialize;
 use ulid::Ulid;
@@ -83,12 +82,23 @@ pub struct RequestBody {
 
 #[handler]
 #[tracing::instrument(name = "handler.admin.v1.personal_sessions.add", skip_all)]
-pub async fn handler(req: &mut Request, depot: &Depot) -> Result<(StatusCode, Json<SingleResponse<PersonalSession>>), RouteError> {
+pub async fn handler(
+    req: &mut Request,
+    depot: &Depot,
+) -> Result<(StatusCode, Json<SingleResponse<PersonalSession>>), RouteError> {
     let call_context = extract_call_context(req, depot).await?;
-    let crate::admin::call_context::CallContext { mut repo, clock, session, .. } = call_context;
+    let crate::admin::call_context::CallContext {
+        mut repo,
+        clock,
+        session,
+        ..
+    } = call_context;
     let mut rng = crate::rest::make_rng();
     let homeserver = crate::rest::get_homeserver(depot)?;
-    let params: RequestBody = req.parse_json().await.map_err(|e| RouteError::Internal(Box::new(e)))?;
+    let params: RequestBody = req
+        .parse_json()
+        .await
+        .map_err(|e| RouteError::Internal(Box::new(e)))?;
     let owner = personal_session_owner_from_caller(&session);
 
     let actor_user = repo

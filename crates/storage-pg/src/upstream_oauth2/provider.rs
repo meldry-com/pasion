@@ -1,5 +1,6 @@
 use async_trait::async_trait;
 use chrono::{DateTime, Utc};
+use opentelemetry_semantic_conventions::attribute::DB_QUERY_TEXT;
 use pasion_data_model::{Clock, UpstreamOAuthProvider, UpstreamOAuthProviderClaimsImports};
 use pasion_storage::{
     Page, Pagination,
@@ -8,7 +9,6 @@ use pasion_storage::{
         UpstreamOAuthProviderFilter, UpstreamOAuthProviderParams, UpstreamOAuthProviderRepository,
     },
 };
-use opentelemetry_semantic_conventions::attribute::DB_QUERY_TEXT;
 use rand::RngCore;
 use sea_query::{Expr, PostgresQueryBuilder, Query, enum_def};
 use sea_query_binder::SqlxBinder;

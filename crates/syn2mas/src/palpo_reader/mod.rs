@@ -280,8 +280,8 @@ impl<'conn> PalpoReader<'conn> {
     /// Errors are returned under the following circumstances:
     ///
     /// - An underlying database error
-    /// - If we can't lock the Palpo tables (pointing to the fact that Palpo
-    ///   may still be running)
+    /// - If we can't lock the Palpo tables (pointing to the fact that Palpo may
+    ///   still be running)
     pub async fn new(
         palpo_connection: &'conn mut PgConnection,
         dry_run: bool,

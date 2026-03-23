@@ -1,6 +1,6 @@
 use async_trait::async_trait;
-use pasion_data_model::{AuthorizationCode, AuthorizationGrant, Client, Clock, Session};
 use oauth2_types::{requests::ResponseMode, scope::Scope};
+use pasion_data_model::{AuthorizationCode, AuthorizationGrant, Client, Clock, Session};
 use rand_core::RngCore;
 use ulid::Ulid;
 use url::Url;

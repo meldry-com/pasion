@@ -1,7 +1,6 @@
-use salvo::prelude::*;
-use salvo::http::StatusCode;
 use pasion_salvo_utils::record_error;
 use pasion_storage::{pagination::Page, user::BrowserSessionFilter};
+use salvo::{http::StatusCode, prelude::*};
 use schemars::JsonSchema;
 use serde::Deserialize;
 use ulid::Ulid;
@@ -77,7 +76,6 @@ pub enum RouteError {
 
     #[error("User ID {0} not found")]
     UserNotFound(Ulid),
-
 }
 
 impl_from_error_for_route!(pasion_storage::RepositoryError);
@@ -106,7 +104,8 @@ impl Scribe for RouteError {
 #[tracing::instrument(name = "handler.admin.v1.user_sessions.list", skip_all)]
 pub async fn handler(
     req: &mut Request,
-    depot: &Depot) -> Result<Json<PaginatedResponse<UserSession>>, RouteError> {
+    depot: &Depot,
+) -> Result<Json<PaginatedResponse<UserSession>>, RouteError> {
     let call_context = extract_call_context(req, depot).await?;
     let crate::admin::call_context::CallContext { mut repo, .. } = call_context;
     let (pagination, include_count) = extract_pagination(req)?;

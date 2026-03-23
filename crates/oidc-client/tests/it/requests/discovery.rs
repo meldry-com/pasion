@@ -1,11 +1,11 @@
 use assert_matches::assert_matches;
+use oauth2_types::oidc::{ProviderMetadata, SubjectType};
 use pasion_iana::oauth::{OAuthAuthorizationEndpointResponseType, PkceCodeChallengeMethod};
 use pasion_jose::jwa::SUPPORTED_SIGNING_ALGORITHMS;
 use pasion_oidc_client::{
     error::DiscoveryError,
     requests::discovery::{discover, insecure_discover},
 };
-use oauth2_types::oidc::{ProviderMetadata, SubjectType};
 use url::Url;
 use wiremock::{
     Mock, ResponseTemplate,

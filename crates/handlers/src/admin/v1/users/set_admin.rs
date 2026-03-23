@@ -1,6 +1,5 @@
-use salvo::prelude::*;
-use salvo::http::StatusCode;
 use pasion_salvo_utils::record_error;
+use salvo::{http::StatusCode, prelude::*};
 use schemars::JsonSchema;
 use serde::Deserialize;
 use ulid::Ulid;
@@ -58,11 +57,15 @@ pub struct RequestBody {
 #[tracing::instrument(name = "handler.admin.v1.users.set_admin", skip_all)]
 pub async fn handler(
     req: &mut Request,
-    depot: &Depot) -> Result<Json<SingleResponse<User>>, RouteError> {
+    depot: &Depot,
+) -> Result<Json<SingleResponse<User>>, RouteError> {
     let call_context = extract_call_context(req, depot).await?;
     let crate::admin::call_context::CallContext { mut repo, .. } = call_context;
     let id = extract_ulid_param(req)?;
-    let params: RequestBody = req.parse_json().await.map_err(|e| RouteError::Internal(Box::new(e)))?;
+    let params: RequestBody = req
+        .parse_json()
+        .await
+        .map_err(|e| RouteError::Internal(Box::new(e)))?;
 
     // id already extracted above
     let user = repo

@@ -2,13 +2,13 @@ use std::collections::HashMap;
 
 use headers::authorization::{Basic, Bearer, Credentials as _};
 use http::StatusCode;
+use oauth2_types::errors::{ClientError, ClientErrorCode};
 use pasion_data_model::{Client, JwksOrJwksUri};
 use pasion_http::RequestBuilderExt;
 use pasion_iana::oauth::OAuthClientAuthenticationMethod;
 use pasion_jose::{jwk::PublicJsonWebKeySet, jwt::Jwt};
 use pasion_keystore::Encrypter;
 use pasion_storage::{RepositoryAccess, oauth2::OAuth2ClientRepository};
-use oauth2_types::errors::{ClientError, ClientErrorCode};
 use salvo::prelude::*;
 use serde::{Deserialize, de::DeserializeOwned};
 use serde_json::Value;
@@ -317,16 +317,12 @@ impl Scribe for ClientAuthorizationError {
 
             ClientAuthorizationError::InvalidAssertion => (
                 StatusCode::BAD_REQUEST,
-                ClientError::new(
-                    ClientErrorCode::InvalidRequest,
-                    "Invalid client_assertion",
-                ),
+                ClientError::new(ClientErrorCode::InvalidRequest, "Invalid client_assertion"),
             ),
 
             ClientAuthorizationError::Internal(e) => (
                 StatusCode::INTERNAL_SERVER_ERROR,
-                ClientError::from(ClientErrorCode::ServerError)
-                    .with_description(format!("{e}")),
+                ClientError::from(ClientErrorCode::ServerError).with_description(format!("{e}")),
             ),
         };
 
@@ -514,5 +510,6 @@ mod tests {
     use super::*;
 
     // Tests would need to be updated for Salvo's test utilities
-    // For now, we'll skip the tests as they require significant Salvo-specific changes
+    // For now, we'll skip the tests as they require significant Salvo-specific
+    // changes
 }

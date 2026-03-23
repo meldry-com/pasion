@@ -91,8 +91,8 @@ pub fn PasswordCreationDoubleInput(
     new_password_again: Signal<String>,
     force_invalid: Option<bool>,
 ) -> Element {
-    let passwords_match = new_password.read().eq(&*new_password_again.read())
-        || new_password_again.read().is_empty();
+    let passwords_match =
+        new_password.read().eq(&*new_password_again.read()) || new_password_again.read().is_empty();
     let show_mismatch = !passwords_match && !new_password_again.read().is_empty();
     let force_invalid = force_invalid.unwrap_or(false);
 

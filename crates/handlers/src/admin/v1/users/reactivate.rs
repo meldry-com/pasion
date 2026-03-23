@@ -1,9 +1,8 @@
-use salvo::prelude::*;
 use std::sync::Arc;
 
-use salvo::http::StatusCode;
-use pasion_salvo_utils::record_error;
 use pasion_matrix::HomeserverConnection;
+use pasion_salvo_utils::record_error;
+use salvo::{http::StatusCode, prelude::*};
 use ulid::Ulid;
 
 use crate::{
@@ -55,7 +54,8 @@ impl Scribe for RouteError {
 #[tracing::instrument(name = "handler.admin.v1.users.reactivate", skip_all)]
 pub async fn handler(
     req: &mut Request,
-    depot: &Depot) -> Result<Json<SingleResponse<User>>, RouteError> {
+    depot: &Depot,
+) -> Result<Json<SingleResponse<User>>, RouteError> {
     let call_context = extract_call_context(req, depot).await?;
     let crate::admin::call_context::CallContext { mut repo, .. } = call_context;
     let id = extract_ulid_param(req)?;

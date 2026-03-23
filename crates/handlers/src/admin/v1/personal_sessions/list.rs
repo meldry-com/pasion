@@ -1,11 +1,10 @@
-use salvo::prelude::*;
 use std::str::FromStr as _;
 
 use chrono::{DateTime, Utc};
-use salvo::http::StatusCode;
+use oauth2_types::scope::{Scope, ScopeToken};
 use pasion_salvo_utils::record_error;
 use pasion_storage::personal::PersonalSessionFilter;
-use oauth2_types::scope::{Scope, ScopeToken};
+use salvo::{http::StatusCode, prelude::*};
 use schemars::JsonSchema;
 use serde::Deserialize;
 use ulid::Ulid;
@@ -136,7 +135,6 @@ pub enum RouteError {
     #[error("Client ID {0} not found")]
     ClientNotFound(Ulid),
 
-
     #[error("Invalid scope {0:?} in filter parameters")]
     InvalidScope(String),
 }
@@ -169,7 +167,8 @@ impl Scribe for RouteError {
 #[tracing::instrument(name = "handler.admin.v1.personal_sessions.list", skip_all)]
 pub async fn handler(
     req: &mut Request,
-    depot: &Depot) -> Result<Json<PaginatedResponse<PersonalSession>>, RouteError> {
+    depot: &Depot,
+) -> Result<Json<PaginatedResponse<PersonalSession>>, RouteError> {
     let call_context = extract_call_context(req, depot).await?;
     let crate::admin::call_context::CallContext { mut repo, .. } = call_context;
     let (pagination, include_count) = extract_pagination(req)?;
@@ -300,8 +299,8 @@ mod tests {
     use chrono::Duration;
     use hyper::{Request, StatusCode};
     use insta::assert_json_snapshot;
-    use pasion_data_model::personal::session::PersonalSessionOwner;
     use oauth2_types::scope::{OPENID, Scope};
+    use pasion_data_model::personal::session::PersonalSessionOwner;
     use sqlx::PgPool;
 
     use crate::test_utils::{RequestBuilderExt, ResponseExt, TestState, setup};

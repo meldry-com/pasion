@@ -1,8 +1,7 @@
-use salvo::prelude::*;
-use salvo::http::StatusCode;
-use pasion_salvo_utils::record_error;
 use pasion_data_model::BoxRng;
+use pasion_salvo_utils::record_error;
 use pasion_storage::queue::{QueueJobRepositoryExt as _, SyncDevicesJob};
+use salvo::{http::StatusCode, prelude::*};
 use ulid::Ulid;
 
 use crate::{
@@ -54,9 +53,12 @@ impl Scribe for RouteError {
 #[tracing::instrument(name = "handler.admin.v1.oauth2_sessions.finish", skip_all)]
 pub async fn handler(
     req: &mut Request,
-    depot: &Depot) -> Result<Json<SingleResponse<OAuth2Session>>, RouteError> {
+    depot: &Depot,
+) -> Result<Json<SingleResponse<OAuth2Session>>, RouteError> {
     let call_context = extract_call_context(req, depot).await?;
-    let crate::admin::call_context::CallContext { mut repo, clock, .. } = call_context;
+    let crate::admin::call_context::CallContext {
+        mut repo, clock, ..
+    } = call_context;
     let id = extract_ulid_param(req)?;
     let mut rng = crate::rest::make_rng();
 

@@ -1,18 +1,20 @@
 use dioxus::prelude::*;
 
-use crate::components::layout::Layout;
-use crate::components::loading::{LoadingScreen, LoadingSpinner};
-use crate::components::page_heading::PageHeading;
-use crate::components::password_input::PasswordCreationDoubleInput;
-use crate::components::separator::Separator;
-use crate::api::types::{ViewerResponse, SetPasswordStatus};
-use crate::pages::Route;
+use crate::{
+    api::types::{SetPasswordStatus, ViewerResponse},
+    components::{
+        layout::Layout,
+        loading::{LoadingScreen, LoadingSpinner},
+        page_heading::PageHeading,
+        password_input::PasswordCreationDoubleInput,
+        separator::Separator,
+    },
+    pages::Route,
+};
 
 #[component]
 pub fn PasswordChange() -> Element {
-    let data = use_resource(|| async {
-        crate::api::api_get::<ViewerResponse>("/viewer").await
-    });
+    let data = use_resource(|| async { crate::api::api_get::<ViewerResponse>("/viewer").await });
     let binding = data.read();
 
     match &*binding {

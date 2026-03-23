@@ -1,14 +1,10 @@
 use dioxus::prelude::*;
 
-use crate::components::loading::LoadingScreen;
-use crate::api::types::SiteConfig;
-use crate::pages::Route;
+use crate::{api::types::SiteConfig, components::loading::LoadingScreen, pages::Route};
 
 #[component]
 pub fn Plan() -> Element {
-    let data = use_resource(|| async {
-        crate::api::api_get::<SiteConfig>("/site-config").await
-    });
+    let data = use_resource(|| async { crate::api::api_get::<SiteConfig>("/site-config").await });
     let nav = navigator();
     let binding = data.read();
 

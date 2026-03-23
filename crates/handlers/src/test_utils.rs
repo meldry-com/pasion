@@ -7,7 +7,7 @@ use hyper::{
     Request, Response, StatusCode,
     header::{CONTENT_TYPE, COOKIE, SET_COOKIE},
 };
-use pasion_salvo_utils::cookies::{CookieJar, CookieManager};
+use oauth2_types::{registration::ClientRegistrationResponse, requests::AccessTokenResponse};
 use pasion_config::RateLimitingConfig;
 use pasion_data_model::{AppVersion, BoxClock, BoxRng, SiteConfig, clock::MockClock};
 use pasion_email::{MailTransport, Mailer};
@@ -16,15 +16,14 @@ use pasion_keystore::{Encrypter, JsonWebKey, JsonWebKeySet, Keystore, PrivateKey
 use pasion_matrix::{HomeserverConnection, MockHomeserverConnection};
 use pasion_policy::{InstantiateError, Policy, PolicyFactory};
 use pasion_router::{SimpleRoute, UrlBuilder};
+use pasion_salvo_utils::cookies::{CookieJar, CookieManager};
 use pasion_storage::{BoxRepository, BoxRepositoryFactory, RepositoryError, RepositoryFactory};
 use pasion_storage_pg::PgRepositoryFactory;
 use pasion_tasks::QueueWorker;
 use pasion_templates::{SiteConfigExt, Templates};
-use oauth2_types::{registration::ClientRegistrationResponse, requests::AccessTokenResponse};
 use rand::SeedableRng;
 use rand_chacha::ChaChaRng;
-use salvo::prelude::*;
-use salvo::test::TestClient;
+use salvo::{prelude::*, test::TestClient};
 use serde::{Serialize, de::DeserializeOwned};
 use sqlx::PgPool;
 use tokio_util::{
@@ -148,7 +147,10 @@ impl Handler for InjectTestState {
         ctrl: &mut FlowCtrl,
     ) {
         let state = &self.0;
-        depot.insert("box_repository_factory", state.repository_factory.clone().boxed());
+        depot.insert(
+            "box_repository_factory",
+            state.repository_factory.clone().boxed(),
+        );
         depot.insert("templates", state.templates.clone());
         depot.insert("translator", state.templates.translator());
         depot.insert("key_store", state.key_store.clone());
@@ -319,122 +321,203 @@ impl TestState {
         Router::new()
             .hoop(InjectTestState(self.clone()))
             // Health
-            .push(Router::with_path(pasion_router::Healthcheck::route())
-                .get(crate::health::get))
+            .push(Router::with_path(pasion_router::Healthcheck::route()).get(crate::health::get))
             // OAuth2 discovery
-            .push(Router::with_path(pasion_router::OidcConfiguration::route())
-                .get(crate::oauth2::discovery::get))
-            .push(Router::with_path(pasion_router::Webfinger::route())
-                .get(crate::oauth2::webfinger::get))
+            .push(
+                Router::with_path(pasion_router::OidcConfiguration::route())
+                    .get(crate::oauth2::discovery::get),
+            )
+            .push(
+                Router::with_path(pasion_router::Webfinger::route())
+                    .get(crate::oauth2::webfinger::get),
+            )
             // OAuth2 endpoints
-            .push(Router::with_path(pasion_router::OAuth2Keys::route())
-                .get(crate::oauth2::keys::get))
-            .push(Router::with_path(pasion_router::OidcUserinfo::route())
-                .get(crate::oauth2::userinfo::get)
-                .post(crate::oauth2::userinfo::get))
-            .push(Router::with_path(pasion_router::OAuth2Introspection::route())
-                .post(crate::oauth2::introspection::post))
-            .push(Router::with_path(pasion_router::OAuth2Revocation::route())
-                .post(crate::oauth2::revoke::post))
-            .push(Router::with_path(pasion_router::OAuth2TokenEndpoint::route())
-                .post(crate::oauth2::token::post))
-            .push(Router::with_path(pasion_router::OAuth2RegistrationEndpoint::route())
-                .post(crate::oauth2::registration::post))
-            .push(Router::with_path(pasion_router::OAuth2DeviceAuthorizationEndpoint::route())
-                .post(crate::oauth2::device::authorize::post))
+            .push(
+                Router::with_path(pasion_router::OAuth2Keys::route()).get(crate::oauth2::keys::get),
+            )
+            .push(
+                Router::with_path(pasion_router::OidcUserinfo::route())
+                    .get(crate::oauth2::userinfo::get)
+                    .post(crate::oauth2::userinfo::get),
+            )
+            .push(
+                Router::with_path(pasion_router::OAuth2Introspection::route())
+                    .post(crate::oauth2::introspection::post),
+            )
+            .push(
+                Router::with_path(pasion_router::OAuth2Revocation::route())
+                    .post(crate::oauth2::revoke::post),
+            )
+            .push(
+                Router::with_path(pasion_router::OAuth2TokenEndpoint::route())
+                    .post(crate::oauth2::token::post),
+            )
+            .push(
+                Router::with_path(pasion_router::OAuth2RegistrationEndpoint::route())
+                    .post(crate::oauth2::registration::post),
+            )
+            .push(
+                Router::with_path(pasion_router::OAuth2DeviceAuthorizationEndpoint::route())
+                    .post(crate::oauth2::device::authorize::post),
+            )
             // REST API
-            .push(Router::with_path("/api/v1/viewer")
-                .get(crate::rest::viewer::get_viewer))
-            .push(Router::with_path("/api/v1/site-config")
-                .get(crate::rest::site_config::get))
-            .push(Router::with_path("/api/v1/sessions/<id>")
-                .get(crate::rest::sessions::get_session))
-            .push(Router::with_path("/api/v1/browser-sessions/<id>")
-                .delete(crate::rest::sessions::end_browser_session))
-            .push(Router::with_path("/api/v1/oauth2-sessions/<id>")
-                .delete(crate::rest::sessions::end_oauth2_session))
-            .push(Router::with_path("/api/v1/oauth2-sessions/<id>/name")
-                .put(crate::rest::sessions::set_oauth2_session_name))
-            .push(Router::with_path("/api/v1/oauth2-clients/<id>")
-                .get(crate::rest::oauth2_clients::get_client))
-            .push(Router::with_path("/api/v1/viewer/password")
-                .post(crate::rest::password::set_password))
-            .push(Router::with_path("/api/v1/password-recovery/set")
-                .post(crate::rest::password::set_password_by_recovery))
-            .push(Router::with_path("/api/v1/password-recovery/resend")
-                .post(crate::rest::password::resend_recovery_email))
-            .push(Router::with_path("/api/v1/viewer/display-name")
-                .post(crate::rest::users::set_display_name))
-            .push(Router::with_path("/api/v1/viewer/cross-signing-reset")
-                .post(crate::rest::users::allow_cross_signing_reset))
-            .push(Router::with_path("/api/v1/viewer/deactivate")
-                .post(crate::rest::users::deactivate_user))
-            .push(Router::with_path("/api/v1/email-auth/start")
-                .post(crate::rest::emails::start_email_auth))
-            .push(Router::with_path("/api/v1/email-auth/<id>")
-                .get(crate::rest::emails::get_email_auth))
-            .push(Router::with_path("/api/v1/email-auth/<id>/complete")
-                .post(crate::rest::emails::complete_email_auth))
-            .push(Router::with_path("/api/v1/email-auth/<id>/resend")
-                .post(crate::rest::emails::resend_email_auth_code))
-            .push(Router::with_path("/api/v1/user-emails/<id>")
-                .delete(crate::rest::emails::remove_email))
+            .push(Router::with_path("/api/v1/viewer").get(crate::rest::viewer::get_viewer))
+            .push(Router::with_path("/api/v1/site-config").get(crate::rest::site_config::get))
+            .push(
+                Router::with_path("/api/v1/sessions/<id>").get(crate::rest::sessions::get_session),
+            )
+            .push(
+                Router::with_path("/api/v1/browser-sessions/<id>")
+                    .delete(crate::rest::sessions::end_browser_session),
+            )
+            .push(
+                Router::with_path("/api/v1/oauth2-sessions/<id>")
+                    .delete(crate::rest::sessions::end_oauth2_session),
+            )
+            .push(
+                Router::with_path("/api/v1/oauth2-sessions/<id>/name")
+                    .put(crate::rest::sessions::set_oauth2_session_name),
+            )
+            .push(
+                Router::with_path("/api/v1/oauth2-clients/<id>")
+                    .get(crate::rest::oauth2_clients::get_client),
+            )
+            .push(
+                Router::with_path("/api/v1/viewer/password")
+                    .post(crate::rest::password::set_password),
+            )
+            .push(
+                Router::with_path("/api/v1/password-recovery/set")
+                    .post(crate::rest::password::set_password_by_recovery),
+            )
+            .push(
+                Router::with_path("/api/v1/password-recovery/resend")
+                    .post(crate::rest::password::resend_recovery_email),
+            )
+            .push(
+                Router::with_path("/api/v1/viewer/display-name")
+                    .post(crate::rest::users::set_display_name),
+            )
+            .push(
+                Router::with_path("/api/v1/viewer/cross-signing-reset")
+                    .post(crate::rest::users::allow_cross_signing_reset),
+            )
+            .push(
+                Router::with_path("/api/v1/viewer/deactivate")
+                    .post(crate::rest::users::deactivate_user),
+            )
+            .push(
+                Router::with_path("/api/v1/email-auth/start")
+                    .post(crate::rest::emails::start_email_auth),
+            )
+            .push(
+                Router::with_path("/api/v1/email-auth/<id>")
+                    .get(crate::rest::emails::get_email_auth),
+            )
+            .push(
+                Router::with_path("/api/v1/email-auth/<id>/complete")
+                    .post(crate::rest::emails::complete_email_auth),
+            )
+            .push(
+                Router::with_path("/api/v1/email-auth/<id>/resend")
+                    .post(crate::rest::emails::resend_email_auth_code),
+            )
+            .push(
+                Router::with_path("/api/v1/user-emails/<id>")
+                    .delete(crate::rest::emails::remove_email),
+            )
             // Human/Views
-            .push(Router::with_path(pasion_router::Login::route())
-                .get(crate::views::login::get)
-                .post(crate::views::login::post))
-            .push(Router::with_path(pasion_router::Register::route())
-                .get(crate::views::register::get))
-            .push(Router::with_path(pasion_router::PasswordRegister::route())
-                .get(crate::views::register::password::get)
-                .post(crate::views::register::password::post))
-            .push(Router::with_path(pasion_router::RegisterVerifyEmail::route())
-                .get(crate::views::register::steps::verify_email::get)
-                .post(crate::views::register::steps::verify_email::post))
-            .push(Router::with_path(pasion_router::RegisterToken::route())
-                .get(crate::views::register::steps::registration_token::get)
-                .post(crate::views::register::steps::registration_token::post))
-            .push(Router::with_path(pasion_router::RegisterDisplayName::route())
-                .get(crate::views::register::steps::display_name::get)
-                .post(crate::views::register::steps::display_name::post))
-            .push(Router::with_path(pasion_router::RegisterFinish::route())
-                .get(crate::views::register::steps::finish::get))
+            .push(
+                Router::with_path(pasion_router::Login::route())
+                    .get(crate::views::login::get)
+                    .post(crate::views::login::post),
+            )
+            .push(
+                Router::with_path(pasion_router::Register::route())
+                    .get(crate::views::register::get),
+            )
+            .push(
+                Router::with_path(pasion_router::PasswordRegister::route())
+                    .get(crate::views::register::password::get)
+                    .post(crate::views::register::password::post),
+            )
+            .push(
+                Router::with_path(pasion_router::RegisterVerifyEmail::route())
+                    .get(crate::views::register::steps::verify_email::get)
+                    .post(crate::views::register::steps::verify_email::post),
+            )
+            .push(
+                Router::with_path(pasion_router::RegisterToken::route())
+                    .get(crate::views::register::steps::registration_token::get)
+                    .post(crate::views::register::steps::registration_token::post),
+            )
+            .push(
+                Router::with_path(pasion_router::RegisterDisplayName::route())
+                    .get(crate::views::register::steps::display_name::get)
+                    .post(crate::views::register::steps::display_name::post),
+            )
+            .push(
+                Router::with_path(pasion_router::RegisterFinish::route())
+                    .get(crate::views::register::steps::finish::get),
+            )
             // OAuth2 authorization
-            .push(Router::with_path(pasion_router::OAuth2AuthorizationEndpoint::route())
-                .get(crate::oauth2::authorization::get))
-            .push(Router::with_path(pasion_router::Consent::route())
-                .get(crate::oauth2::authorization::consent::get)
-                .post(crate::oauth2::authorization::consent::post))
+            .push(
+                Router::with_path(pasion_router::OAuth2AuthorizationEndpoint::route())
+                    .get(crate::oauth2::authorization::get),
+            )
+            .push(
+                Router::with_path(pasion_router::Consent::route())
+                    .get(crate::oauth2::authorization::consent::get)
+                    .post(crate::oauth2::authorization::consent::post),
+            )
             // Upstream OAuth2
-            .push(Router::with_path(pasion_router::UpstreamOAuth2Authorize::route())
-                .get(crate::upstream_oauth2::authorize::get))
-            .push(Router::with_path(pasion_router::UpstreamOAuth2Callback::route())
-                .get(crate::upstream_oauth2::callback::handler)
-                .post(crate::upstream_oauth2::callback::handler))
-            .push(Router::with_path(pasion_router::UpstreamOAuth2Link::route())
-                .get(crate::upstream_oauth2::link::get)
-                .post(crate::upstream_oauth2::link::post))
-            .push(Router::with_path(pasion_router::UpstreamOAuth2BackchannelLogout::route())
-                .post(crate::upstream_oauth2::backchannel_logout::post))
+            .push(
+                Router::with_path(pasion_router::UpstreamOAuth2Authorize::route())
+                    .get(crate::upstream_oauth2::authorize::get),
+            )
+            .push(
+                Router::with_path(pasion_router::UpstreamOAuth2Callback::route())
+                    .get(crate::upstream_oauth2::callback::handler)
+                    .post(crate::upstream_oauth2::callback::handler),
+            )
+            .push(
+                Router::with_path(pasion_router::UpstreamOAuth2Link::route())
+                    .get(crate::upstream_oauth2::link::get)
+                    .post(crate::upstream_oauth2::link::post),
+            )
+            .push(
+                Router::with_path(pasion_router::UpstreamOAuth2BackchannelLogout::route())
+                    .post(crate::upstream_oauth2::backchannel_logout::post),
+            )
             // Device code
-            .push(Router::with_path(pasion_router::DeviceCodeLink::route())
-                .get(crate::oauth2::device::link::get))
-            .push(Router::with_path(pasion_router::DeviceCodeConsent::route())
-                .get(crate::oauth2::device::consent::get)
-                .post(crate::oauth2::device::consent::post))
+            .push(
+                Router::with_path(pasion_router::DeviceCodeLink::route())
+                    .get(crate::oauth2::device::link::get),
+            )
+            .push(
+                Router::with_path(pasion_router::DeviceCodeConsent::route())
+                    .get(crate::oauth2::device::consent::get)
+                    .post(crate::oauth2::device::consent::post),
+            )
             // Account recovery
-            .push(Router::with_path(pasion_router::AccountRecoveryStart::route())
-                .get(crate::views::recovery::start::get)
-                .post(crate::views::recovery::start::post))
-            .push(Router::with_path(pasion_router::AccountRecoveryProgress::route())
-                .get(crate::views::recovery::progress::get)
-                .post(crate::views::recovery::progress::post))
+            .push(
+                Router::with_path(pasion_router::AccountRecoveryStart::route())
+                    .get(crate::views::recovery::start::get)
+                    .post(crate::views::recovery::start::post),
+            )
+            .push(
+                Router::with_path(pasion_router::AccountRecoveryProgress::route())
+                    .get(crate::views::recovery::progress::get)
+                    .post(crate::views::recovery::progress::post),
+            )
             // Admin API (catch-all for admin routes)
-            .push(Router::with_path("/api/admin/v1/<**path>")
-                .get(crate::admin::v1::handler)
-                .post(crate::admin::v1::handler)
-                .put(crate::admin::v1::handler)
-                .delete(crate::admin::v1::handler))
+            .push(
+                Router::with_path("/api/admin/v1/<**path>")
+                    .get(crate::admin::v1::handler)
+                    .post(crate::admin::v1::handler)
+                    .put(crate::admin::v1::handler)
+                    .delete(crate::admin::v1::handler),
+            )
     }
 
     pub async fn request(&self, request: Request<String>) -> Response<String> {
@@ -445,9 +528,7 @@ impl TestState {
         let uri = parts.uri;
         let url = format!(
             "https://example.com{}",
-            uri.path_and_query()
-                .map(|p| p.as_str())
-                .unwrap_or("/")
+            uri.path_and_query().map(|p| p.as_str()).unwrap_or("/")
         );
 
         let mut test_req = match parts.method {
@@ -482,12 +563,13 @@ impl TestState {
     /// Get a token with the given scope
     pub async fn token_with_scope(&mut self, scope: &str) -> String {
         // Provision a client
-        let request =
-            Request::post(pasion_router::OAuth2RegistrationEndpoint::PATH).json(serde_json::json!({
+        let request = Request::post(pasion_router::OAuth2RegistrationEndpoint::PATH).json(
+            serde_json::json!({
                 "client_uri": "https://example.com/",
                 "token_endpoint_auth_method": "client_secret_post",
                 "grant_types": ["client_credentials"],
-            }));
+            }),
+        );
         let response = self.request(request).await;
         response.assert_status(StatusCode::CREATED);
         let response: ClientRegistrationResponse = response.json();
@@ -739,9 +821,10 @@ impl CookieHelper {
         let url = "https://example.com/".parse().unwrap();
         let mut store = self.store.write().unwrap();
         store.store_response_cookies(
-            cookie_jar.pending_cookies().iter().map(|c| {
-                RawCookie::parse(c.to_string()).expect("Invalid cookie from CookieJar")
-            }),
+            cookie_jar
+                .pending_cookies()
+                .iter()
+                .map(|c| RawCookie::parse(c.to_string()).expect("Invalid cookie from CookieJar")),
             &url,
         );
     }

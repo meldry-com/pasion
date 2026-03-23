@@ -1,13 +1,17 @@
 use dioxus::prelude::*;
 
-use crate::components::compat_session::CompatSessionCard;
-use crate::components::empty_state::EmptyState;
-use crate::components::loading::LoadingScreen;
-use crate::components::oauth2_session::OAuth2SessionCard;
-use crate::components::pagination::{PaginationControls, PaginationDirection, PaginationState};
-use crate::components::separator::{Separator, SeparatorKind};
-use crate::api::types::{AppSession, ViewerResponse};
-use crate::pages::Route;
+use crate::{
+    api::types::{AppSession, ViewerResponse},
+    components::{
+        compat_session::CompatSessionCard,
+        empty_state::EmptyState,
+        loading::LoadingScreen,
+        oauth2_session::OAuth2SessionCard,
+        pagination::{PaginationControls, PaginationDirection, PaginationState},
+        separator::{Separator, SeparatorKind},
+    },
+    pages::Route,
+};
 
 #[component]
 pub fn Sessions() -> Element {
@@ -20,9 +24,8 @@ pub fn Sessions() -> Element {
         pagination.set(PaginationState::new(6));
     });
 
-    let overview = use_resource(|| async {
-        crate::api::api_get::<ViewerResponse>("/viewer").await
-    });
+    let overview =
+        use_resource(|| async { crate::api::api_get::<ViewerResponse>("/viewer").await });
 
     let sessions = use_resource(move || {
         let _inactive = show_inactive();
@@ -75,16 +78,9 @@ pub fn Sessions() -> Element {
                 .as_ref()
                 .map(|p| p.has_previous_page)
                 .unwrap_or(false);
-            let has_next = page_info
-                .as_ref()
-                .map(|p| p.has_next_page)
-                .unwrap_or(false);
-            let start_cursor = page_info
-                .as_ref()
-                .and_then(|p| p.start_cursor.clone());
-            let end_cursor = page_info
-                .as_ref()
-                .and_then(|p| p.end_cursor.clone());
+            let has_next = page_info.as_ref().map(|p| p.has_next_page).unwrap_or(false);
+            let start_cursor = page_info.as_ref().and_then(|p| p.start_cursor.clone());
+            let end_cursor = page_info.as_ref().and_then(|p| p.end_cursor.clone());
 
             let inactive_active = show_inactive();
 

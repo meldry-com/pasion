@@ -3,6 +3,12 @@ use std::{
     sync::{Arc, LazyLock},
 };
 
+use oauth2_types::{
+    errors::{ClientError, ClientErrorCode},
+    requests::{IntrospectionRequest, IntrospectionResponse},
+    scope::{Scope, ScopeToken},
+};
+use opentelemetry::{Key, KeyValue, metrics::Counter};
 use pasion_data_model::{
     BoxClock, Clock, Device, SystemClock, TokenFormatError, TokenType,
     personal::session::PersonalSessionOwner,
@@ -21,12 +27,6 @@ use pasion_storage::{
     oauth2::{OAuth2AccessTokenRepository, OAuth2RefreshTokenRepository, OAuth2SessionRepository},
     user::UserRepository,
 };
-use oauth2_types::{
-    errors::{ClientError, ClientErrorCode},
-    requests::{IntrospectionRequest, IntrospectionResponse},
-    scope::{Scope, ScopeToken},
-};
-use opentelemetry::{Key, KeyValue, metrics::Counter};
 use salvo::prelude::*;
 use thiserror::Error;
 use ulid::Ulid;
@@ -155,7 +155,8 @@ impl Scribe for RouteError {
             e @ Self::InvalidBearerToken => {
                 res.status_code(StatusCode::UNAUTHORIZED);
                 res.render(Json(
-                    ClientError::from(ClientErrorCode::AccessDenied).with_description(e.to_string()),
+                    ClientError::from(ClientErrorCode::AccessDenied)
+                        .with_description(e.to_string()),
                 ));
             }
 

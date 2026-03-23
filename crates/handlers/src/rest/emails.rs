@@ -60,7 +60,9 @@ pub async fn get_email_auth(
     req: &mut Request,
     depot: &Depot,
 ) -> Result<Json<EmailAuthStatusResponse>, RouteError> {
-    let id = req.param::<String>("id").ok_or(RouteError::BadRequest("missing id".into()))?;
+    let id = req
+        .param::<String>("id")
+        .ok_or(RouteError::BadRequest("missing id".into()))?;
     let ulid = NodeType::UserEmailAuthentication.extract_ulid(&id)?;
 
     let repo_factory = get_repo_factory(depot)?;
@@ -117,7 +119,8 @@ pub async fn start_email_auth(
     let session_info = extract_session_info(depot);
 
     let repo = repo_factory.create().await?;
-    let (requester, mut repo) = get_requester(&clock, &activity_tracker, repo, &session_info).await?;
+    let (requester, mut repo) =
+        get_requester(&clock, &activity_tracker, repo, &session_info).await?;
 
     let Some(browser_session) = requester.browser_session() else {
         return Err(RouteError::Unauthorized);
@@ -141,7 +144,8 @@ pub async fn start_email_auth(
     }
 
     // Rate limit check
-    if let Err(_e) = limiter.check_email_authentication_email(requester.fingerprint(), &input.email) {
+    if let Err(_e) = limiter.check_email_authentication_email(requester.fingerprint(), &input.email)
+    {
         return Ok(Json(StartEmailAuthResponse {
             status: "RATE_LIMITED",
             authentication: None,
@@ -206,7 +210,9 @@ pub async fn complete_email_auth(
     req: &mut Request,
     depot: &Depot,
 ) -> Result<Json<CompleteEmailAuthResponse>, RouteError> {
-    let id = req.param::<String>("id").ok_or(RouteError::BadRequest("missing id".into()))?;
+    let id = req
+        .param::<String>("id")
+        .ok_or(RouteError::BadRequest("missing id".into()))?;
     let ulid = NodeType::UserEmailAuthentication.extract_ulid(&id)?;
 
     let input: CompleteEmailAuthInput = req
@@ -223,7 +229,8 @@ pub async fn complete_email_auth(
     let session_info = extract_session_info(depot);
 
     let repo = repo_factory.create().await?;
-    let (requester, mut repo) = get_requester(&clock, &activity_tracker, repo, &session_info).await?;
+    let (requester, mut repo) =
+        get_requester(&clock, &activity_tracker, repo, &session_info).await?;
 
     let Some(browser_session) = requester.browser_session() else {
         return Err(RouteError::Unauthorized);
@@ -241,12 +248,16 @@ pub async fn complete_email_auth(
     }
 
     if auth.completed_at.is_some() {
-        return Ok(Json(CompleteEmailAuthResponse { status: "COMPLETED" }));
+        return Ok(Json(CompleteEmailAuthResponse {
+            status: "COMPLETED",
+        }));
     }
 
     // Rate limit check
     if let Err(_e) = limiter.check_email_authentication_attempt(&auth) {
-        return Ok(Json(CompleteEmailAuthResponse { status: "RATE_LIMITED" }));
+        return Ok(Json(CompleteEmailAuthResponse {
+            status: "RATE_LIMITED",
+        }));
     }
 
     // Find and validate code
@@ -256,11 +267,15 @@ pub async fn complete_email_auth(
         .await?;
 
     let Some(code) = code else {
-        return Ok(Json(CompleteEmailAuthResponse { status: "INVALID_CODE" }));
+        return Ok(Json(CompleteEmailAuthResponse {
+            status: "INVALID_CODE",
+        }));
     };
 
     if code.expires_at < clock.now() {
-        return Ok(Json(CompleteEmailAuthResponse { status: "CODE_EXPIRED" }));
+        return Ok(Json(CompleteEmailAuthResponse {
+            status: "CODE_EXPIRED",
+        }));
     }
 
     // Complete authentication
@@ -269,7 +284,10 @@ pub async fn complete_email_auth(
         .await?;
 
     // Check if email is already in use
-    let existing = repo.user_email().find(&browser_session.user, &auth.email).await?;
+    let existing = repo
+        .user_email()
+        .find(&browser_session.user, &auth.email)
+        .await?;
     if existing.is_none() {
         // Add email to user
         repo.user_email()
@@ -279,7 +297,9 @@ pub async fn complete_email_auth(
 
     repo.save().await?;
 
-    Ok(Json(CompleteEmailAuthResponse { status: "COMPLETED" }))
+    Ok(Json(CompleteEmailAuthResponse {
+        status: "COMPLETED",
+    }))
 }
 
 // ── POST /api/v1/email-auth/:id/resend ─────────────────────────
@@ -296,13 +316,14 @@ pub async fn resend_email_auth_code(
     req: &mut Request,
     depot: &Depot,
 ) -> Result<Json<ResendEmailAuthCodeResponse>, RouteError> {
-    let id = req.param::<String>("id").ok_or(RouteError::BadRequest("missing id".into()))?;
+    let id = req
+        .param::<String>("id")
+        .ok_or(RouteError::BadRequest("missing id".into()))?;
     let ulid = NodeType::UserEmailAuthentication.extract_ulid(&id)?;
 
-    let input: ResendEmailAuthInput = req
-        .parse_json()
-        .await
-        .unwrap_or(ResendEmailAuthInput { language: "en".to_owned() });
+    let input: ResendEmailAuthInput = req.parse_json().await.unwrap_or(ResendEmailAuthInput {
+        language: "en".to_owned(),
+    });
 
     let repo_factory = get_repo_factory(depot)?;
     let limiter = get_limiter(depot)?;
@@ -313,7 +334,8 @@ pub async fn resend_email_auth_code(
     let session_info = extract_session_info(depot);
 
     let repo = repo_factory.create().await?;
-    let (requester, mut repo) = get_requester(&clock, &activity_tracker, repo, &session_info).await?;
+    let (requester, mut repo) =
+        get_requester(&clock, &activity_tracker, repo, &session_info).await?;
 
     let Some(browser_session) = requester.browser_session() else {
         return Err(RouteError::Unauthorized);
@@ -330,11 +352,15 @@ pub async fn resend_email_auth_code(
     }
 
     if auth.completed_at.is_some() {
-        return Ok(Json(ResendEmailAuthCodeResponse { status: "COMPLETED" }));
+        return Ok(Json(ResendEmailAuthCodeResponse {
+            status: "COMPLETED",
+        }));
     }
 
     if let Err(_e) = limiter.check_email_authentication_send_code(requester.fingerprint(), &auth) {
-        return Ok(Json(ResendEmailAuthCodeResponse { status: "RATE_LIMITED" }));
+        return Ok(Json(ResendEmailAuthCodeResponse {
+            status: "RATE_LIMITED",
+        }));
     }
 
     repo.queue_job()
@@ -362,11 +388,16 @@ pub async fn remove_email(
     req: &mut Request,
     depot: &Depot,
 ) -> Result<Json<RemoveEmailResponse>, RouteError> {
-    let id = req.param::<String>("id").ok_or(RouteError::BadRequest("missing id".into()))?;
+    let id = req
+        .param::<String>("id")
+        .ok_or(RouteError::BadRequest("missing id".into()))?;
     let ulid = NodeType::UserEmail.extract_ulid(&id)?;
 
     // Body is optional for DELETE
-    let input: RemoveEmailInput = req.parse_json().await.unwrap_or(RemoveEmailInput { password: None });
+    let input: RemoveEmailInput = req
+        .parse_json()
+        .await
+        .unwrap_or(RemoveEmailInput { password: None });
 
     let repo_factory = get_repo_factory(depot)?;
     let config = get_site_config(depot)?;
@@ -378,7 +409,8 @@ pub async fn remove_email(
     let session_info = extract_session_info(depot);
 
     let repo = repo_factory.create().await?;
-    let (requester, mut repo) = get_requester(&clock, &activity_tracker, repo, &session_info).await?;
+    let (requester, mut repo) =
+        get_requester(&clock, &activity_tracker, repo, &session_info).await?;
 
     let email = repo
         .user_email()
@@ -390,10 +422,25 @@ pub async fn remove_email(
         return Err(RouteError::Unauthorized);
     }
 
-    let user = repo.user().lookup(email.user_id).await?.ok_or(RouteError::LoadFailed)?;
+    let user = repo
+        .user()
+        .lookup(email.user_id)
+        .await?
+        .ok_or(RouteError::LoadFailed)?;
 
-    if !verify_password_if_needed(&requester, &config, &password_manager, input.password, &user, &mut repo).await? {
-        return Ok(Json(RemoveEmailResponse { status: "INCORRECT_PASSWORD" }));
+    if !verify_password_if_needed(
+        &requester,
+        &config,
+        &password_manager,
+        input.password,
+        &user,
+        &mut repo,
+    )
+    .await?
+    {
+        return Ok(Json(RemoveEmailResponse {
+            status: "INCORRECT_PASSWORD",
+        }));
     }
 
     repo.user_email().remove(email).await?;

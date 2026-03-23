@@ -1,19 +1,21 @@
 use dioxus::prelude::*;
 
-use crate::components::collapsible::CollapsibleSection;
-use crate::components::loading::LoadingScreen;
-use crate::components::password_input::AccountManagementPasswordPreview;
-use crate::components::separator::{Separator, SeparatorKind};
-use crate::components::user_email::UserEmailList;
-use crate::components::user_profile::AddEmailForm;
-use crate::api::types::ViewerResponse;
-use crate::pages::Route;
+use crate::{
+    api::types::ViewerResponse,
+    components::{
+        collapsible::CollapsibleSection,
+        loading::LoadingScreen,
+        password_input::AccountManagementPasswordPreview,
+        separator::{Separator, SeparatorKind},
+        user_email::UserEmailList,
+        user_profile::AddEmailForm,
+    },
+    pages::Route,
+};
 
 #[component]
 pub fn AccountSettings() -> Element {
-    let data = use_resource(|| async {
-        crate::api::api_get::<ViewerResponse>("/viewer").await
-    });
+    let data = use_resource(|| async { crate::api::api_get::<ViewerResponse>("/viewer").await });
     let nav = navigator();
     let binding = data.read();
 
@@ -38,11 +40,7 @@ pub fn AccountSettings() -> Element {
                 .as_ref()
                 .map(|ec| ec.edges.iter().map(|e| e.node.clone()).collect())
                 .unwrap_or_default();
-            let email_count = user
-                .emails
-                .as_ref()
-                .map(|ec| ec.total_count)
-                .unwrap_or(0);
+            let email_count = user.emails.as_ref().map(|ec| ec.total_count).unwrap_or(0);
             let has_password = user.has_password.unwrap_or(false);
             let email_change_allowed = result.site_config.email_change_allowed;
             let password_login_enabled = result.site_config.password_login_enabled;

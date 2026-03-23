@@ -1,8 +1,8 @@
 use std::sync::Arc;
 
 use headers::HeaderMapExt as _;
-use pasion_salvo_utils::language_detection::AcceptLanguage;
 use pasion_i18n::{DataLocale, Translator, locale};
+use pasion_salvo_utils::language_detection::AcceptLanguage;
 use salvo::prelude::*;
 
 use crate::rest::RouteError;

@@ -44,7 +44,8 @@ pub async fn set_password(
     let session_info = extract_session_info(depot);
 
     let repo = repo_factory.create().await?;
-    let (requester, mut repo) = get_requester(&clock, &activity_tracker, repo, &session_info).await?;
+    let (requester, mut repo) =
+        get_requester(&clock, &activity_tracker, repo, &session_info).await?;
 
     let user_id = NodeType::User.extract_ulid(&input.user_id)?;
 
@@ -53,31 +54,43 @@ pub async fn set_password(
     }
 
     if input.new_password.is_empty() {
-        return Ok(Json(SetPasswordResponse { status: "INVALID_NEW_PASSWORD" }));
+        return Ok(Json(SetPasswordResponse {
+            status: "INVALID_NEW_PASSWORD",
+        }));
     }
 
     if !password_manager.is_enabled() {
-        return Ok(Json(SetPasswordResponse { status: "PASSWORD_CHANGES_DISABLED" }));
+        return Ok(Json(SetPasswordResponse {
+            status: "PASSWORD_CHANGES_DISABLED",
+        }));
     }
 
     if !password_manager
         .is_password_complex_enough(&input.new_password)
         .map_err(|e| RouteError::Internal(e.into()))?
     {
-        return Ok(Json(SetPasswordResponse { status: "INVALID_NEW_PASSWORD" }));
+        return Ok(Json(SetPasswordResponse {
+            status: "INVALID_NEW_PASSWORD",
+        }));
     }
 
     let Some(user) = repo.user().lookup(user_id).await? else {
-        return Ok(Json(SetPasswordResponse { status: "NOT_FOUND" }));
+        return Ok(Json(SetPasswordResponse {
+            status: "NOT_FOUND",
+        }));
     };
 
     if !requester.is_admin() {
         if !config.password_change_allowed {
-            return Ok(Json(SetPasswordResponse { status: "PASSWORD_CHANGES_DISABLED" }));
+            return Ok(Json(SetPasswordResponse {
+                status: "PASSWORD_CHANGES_DISABLED",
+            }));
         }
 
         let Some(active_password) = repo.user_password().active(&user).await? else {
-            return Ok(Json(SetPasswordResponse { status: "NO_CURRENT_PASSWORD" }));
+            return Ok(Json(SetPasswordResponse {
+                status: "NO_CURRENT_PASSWORD",
+            }));
         };
 
         let Some(current_password) = input.current_password else {
@@ -96,7 +109,9 @@ pub async fn set_password(
             .map_err(|e| RouteError::Internal(e.into()))?
             .is_success()
         {
-            return Ok(Json(SetPasswordResponse { status: "WRONG_PASSWORD" }));
+            return Ok(Json(SetPasswordResponse {
+                status: "WRONG_PASSWORD",
+            }));
         }
     }
 
@@ -140,20 +155,26 @@ pub async fn set_password_by_recovery(
     let mut rng = make_rng();
 
     if !password_manager.is_enabled() || !config.account_recovery_allowed {
-        return Ok(Json(SetPasswordResponse { status: "PASSWORD_CHANGES_DISABLED" }));
+        return Ok(Json(SetPasswordResponse {
+            status: "PASSWORD_CHANGES_DISABLED",
+        }));
     }
 
     if !password_manager
         .is_password_complex_enough(&input.new_password)
         .map_err(|e| RouteError::Internal(e.into()))?
     {
-        return Ok(Json(SetPasswordResponse { status: "INVALID_NEW_PASSWORD" }));
+        return Ok(Json(SetPasswordResponse {
+            status: "INVALID_NEW_PASSWORD",
+        }));
     }
 
     let mut repo = repo_factory.create().await?;
 
     let Some(ticket) = repo.user_recovery().find_ticket(&input.ticket).await? else {
-        return Ok(Json(SetPasswordResponse { status: "NO_SUCH_RECOVERY_TICKET" }));
+        return Ok(Json(SetPasswordResponse {
+            status: "NO_SUCH_RECOVERY_TICKET",
+        }));
     };
 
     let session = repo
@@ -164,11 +185,15 @@ pub async fn set_password_by_recovery(
         .map_err(|e| RouteError::Internal(e.into()))?;
 
     if session.consumed_at.is_some() {
-        return Ok(Json(SetPasswordResponse { status: "RECOVERY_TICKET_ALREADY_USED" }));
+        return Ok(Json(SetPasswordResponse {
+            status: "RECOVERY_TICKET_ALREADY_USED",
+        }));
     }
 
     if !ticket.active(clock.now()) {
-        return Ok(Json(SetPasswordResponse { status: "EXPIRED_RECOVERY_TICKET" }));
+        return Ok(Json(SetPasswordResponse {
+            status: "EXPIRED_RECOVERY_TICKET",
+        }));
     }
 
     let user_email = repo
@@ -186,7 +211,9 @@ pub async fn set_password_by_recovery(
         .map_err(|e| RouteError::Internal(e.into()))?;
 
     if !user.is_valid() {
-        return Ok(Json(SetPasswordResponse { status: "ACCOUNT_LOCKED" }));
+        return Ok(Json(SetPasswordResponse {
+            status: "ACCOUNT_LOCKED",
+        }));
     }
 
     let (version, hash) = password_manager
@@ -238,10 +265,13 @@ pub async fn resend_recovery_email(
     let session_info = extract_session_info(depot);
 
     let repo = repo_factory.create().await?;
-    let (requester, mut repo) = get_requester(&clock, &activity_tracker, repo, &session_info).await?;
+    let (requester, mut repo) =
+        get_requester(&clock, &activity_tracker, repo, &session_info).await?;
 
     let Some(ticket) = repo.user_recovery().find_ticket(&input.ticket).await? else {
-        return Ok(Json(ResendRecoveryResponse { status: "NO_SUCH_RECOVERY_TICKET" }));
+        return Ok(Json(ResendRecoveryResponse {
+            status: "NO_SUCH_RECOVERY_TICKET",
+        }));
     };
 
     let session = repo
@@ -252,7 +282,9 @@ pub async fn resend_recovery_email(
         .map_err(|e| RouteError::Internal(e.into()))?;
 
     if let Err(_e) = limiter.check_account_recovery(requester.fingerprint(), &session.email) {
-        return Ok(Json(ResendRecoveryResponse { status: "RATE_LIMITED" }));
+        return Ok(Json(ResendRecoveryResponse {
+            status: "RATE_LIMITED",
+        }));
     }
 
     repo.queue_job()

@@ -1,3 +1,8 @@
+use oauth2_types::{
+    oidc::{ClaimType, ProviderMetadata, SubjectType},
+    requests::{Display, GrantType, Prompt, ResponseMode},
+    scope,
+};
 use pasion_data_model::SiteConfig;
 use pasion_iana::oauth::{
     OAuthAuthorizationEndpointResponseType, OAuthClientAuthenticationMethod,
@@ -6,11 +11,6 @@ use pasion_iana::oauth::{
 use pasion_jose::jwa::SUPPORTED_SIGNING_ALGORITHMS;
 use pasion_keystore::Keystore;
 use pasion_router::UrlBuilder;
-use oauth2_types::{
-    oidc::{ClaimType, ProviderMetadata, SubjectType},
-    requests::{Display, GrantType, Prompt, ResponseMode},
-    scope,
-};
 use salvo::prelude::*;
 use serde::Serialize;
 

@@ -5,6 +5,7 @@ pub mod list;
 
 #[cfg(test)]
 mod test_utils {
+    use oauth2_types::scope::{OPENID, Scope};
     use pasion_data_model::{
         UpstreamOAuthProviderClaimsImports, UpstreamOAuthProviderDiscoveryMode,
         UpstreamOAuthProviderOnBackchannelLogout, UpstreamOAuthProviderPkceMode,
@@ -12,7 +13,6 @@ mod test_utils {
     };
     use pasion_iana::jose::JsonWebSignatureAlg;
     use pasion_storage::upstream_oauth2::UpstreamOAuthProviderParams;
-    use oauth2_types::scope::{OPENID, Scope};
 
     pub(crate) fn oidc_provider_params(name: &str) -> UpstreamOAuthProviderParams {
         UpstreamOAuthProviderParams {

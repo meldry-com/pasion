@@ -18,14 +18,14 @@ pub use self::{
 #[cfg(test)]
 mod tests {
     use chrono::Duration;
+    use oauth2_types::{
+        requests::{GrantType, ResponseMode},
+        scope::{EMAIL, OPENID, PROFILE, Scope},
+    };
     use pasion_data_model::{AuthorizationCode, Clock, clock::MockClock};
     use pasion_storage::{
         Pagination,
         oauth2::{OAuth2DeviceCodeGrantParams, OAuth2SessionFilter, OAuth2SessionRepository},
-    };
-    use oauth2_types::{
-        requests::{GrantType, ResponseMode},
-        scope::{EMAIL, OPENID, PROFILE, Scope},
     };
     use rand::SeedableRng;
     use rand_chacha::ChaChaRng;

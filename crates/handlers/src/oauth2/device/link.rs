@@ -3,8 +3,7 @@ use pasion_salvo_utils::InternalError;
 use pasion_templates::{
     DeviceLinkContext, DeviceLinkFormField, FieldError, FormState, TemplateContext,
 };
-use salvo::prelude::*;
-use salvo::writing::Text;
+use salvo::{prelude::*, writing::Text};
 use serde::{Deserialize, Serialize};
 
 #[derive(Default, Serialize, Deserialize)]
@@ -55,7 +54,7 @@ async fn handle_get(
             // This will in turn redirect to the login page if the user is not logged in
             let redirect = url_builder.redirect(&pasion_router::DeviceCodeConsent::new(grant.id));
 
-                    cookie_jar.write_to_response(res);
+            cookie_jar.write_to_response(res);
             res.render(redirect);
             return Ok(());
         }

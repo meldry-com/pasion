@@ -517,6 +517,7 @@ impl UserRegistrationRepository for PgUserRegistrationRepository<'_> {
 mod tests {
     use std::net::{IpAddr, Ipv4Addr};
 
+    use oauth2_types::scope::Scope;
     use pasion_data_model::{
         Clock, UpstreamOAuthProviderClaimsImports, UpstreamOAuthProviderDiscoveryMode,
         UpstreamOAuthProviderOnBackchannelLogout, UpstreamOAuthProviderPkceMode,
@@ -524,7 +525,6 @@ mod tests {
     };
     use pasion_iana::jose::JsonWebSignatureAlg;
     use pasion_storage::upstream_oauth2::UpstreamOAuthProviderParams;
-    use oauth2_types::scope::Scope;
     use rand::SeedableRng;
     use rand_chacha::ChaChaRng;
     use sqlx::PgPool;

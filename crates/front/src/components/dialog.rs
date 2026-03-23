@@ -1,11 +1,7 @@
 use dioxus::prelude::*;
 
 #[component]
-pub fn Dialog(
-    trigger: Element,
-    open: Signal<bool>,
-    children: Element,
-) -> Element {
+pub fn Dialog(trigger: Element, open: Signal<bool>, children: Element) -> Element {
     rsx! {
         // Trigger element
         div {

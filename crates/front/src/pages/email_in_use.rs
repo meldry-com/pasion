@@ -1,8 +1,9 @@
 use dioxus::prelude::*;
 
-use crate::components::layout::Layout;
-use crate::components::page_heading::PageHeading;
-use crate::pages::Route;
+use crate::{
+    components::{layout::Layout, page_heading::PageHeading},
+    pages::Route,
+};
 
 #[component]
 pub fn EmailInUse(id: String) -> Element {

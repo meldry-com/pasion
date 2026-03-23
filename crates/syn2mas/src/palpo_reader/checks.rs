@@ -174,8 +174,8 @@ pub fn palpo_config_check(palpo_config: &Config) -> (Vec<CheckWarning>, Vec<Chec
 /// # Errors
 ///
 /// - If any necessary section of Pasion config cannot be parsed.
-/// - If the Pasion password configuration (including any necessary secrets) can't
-///   be loaded.
+/// - If the Pasion password configuration (including any necessary secrets)
+///   can't be loaded.
 pub async fn palpo_config_check_against_pasion_config(
     palpo_config: &Config,
     mas: &Figment,

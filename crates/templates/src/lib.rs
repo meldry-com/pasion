@@ -11,10 +11,10 @@ use std::{
 use anyhow::Context as _;
 use arc_swap::ArcSwap;
 use camino::{Utf8Path, Utf8PathBuf};
+use minijinja::{UndefinedBehavior, Value};
 use pasion_i18n::Translator;
 use pasion_router::UrlBuilder;
 use pasion_spa::ViteManifest;
-use minijinja::{UndefinedBehavior, Value};
 use rand::Rng;
 use serde::Serialize;
 use thiserror::Error;

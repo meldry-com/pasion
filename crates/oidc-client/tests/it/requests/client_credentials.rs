@@ -1,11 +1,11 @@
 use std::collections::HashMap;
 
-use pasion_iana::oauth::{OAuthAccessTokenType, OAuthClientAuthenticationMethod};
-use pasion_oidc_client::requests::client_credentials::access_token_with_client_credentials;
 use oauth2_types::{
     requests::AccessTokenResponse,
     scope::{PROFILE, Scope},
 };
+use pasion_iana::oauth::{OAuthAccessTokenType, OAuthClientAuthenticationMethod};
+use pasion_oidc_client::requests::client_credentials::access_token_with_client_credentials;
 use rand::SeedableRng;
 use wiremock::{
     Mock, Request, ResponseTemplate,

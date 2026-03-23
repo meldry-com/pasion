@@ -41,7 +41,8 @@ pub async fn set_display_name(
     let session_info = extract_session_info(depot);
 
     let repo = repo_factory.create().await?;
-    let (requester, mut repo) = get_requester(&clock, &activity_tracker, repo, &session_info).await?;
+    let (requester, mut repo) =
+        get_requester(&clock, &activity_tracker, repo, &session_info).await?;
 
     let user_id = NodeType::User.extract_ulid(&input.user_id)?;
 
@@ -49,7 +50,11 @@ pub async fn set_display_name(
         return Err(RouteError::Unauthorized);
     }
 
-    let user = repo.user().lookup(user_id).await?.ok_or(RouteError::NotFound)?;
+    let user = repo
+        .user()
+        .lookup(user_id)
+        .await?
+        .ok_or(RouteError::NotFound)?;
     repo.cancel().await?;
 
     match &input.display_name {
@@ -109,7 +114,8 @@ pub async fn allow_cross_signing_reset(
     let session_info = extract_session_info(depot);
 
     let repo = repo_factory.create().await?;
-    let (requester, mut repo) = get_requester(&clock, &activity_tracker, repo, &session_info).await?;
+    let (requester, mut repo) =
+        get_requester(&clock, &activity_tracker, repo, &session_info).await?;
 
     let user_id = NodeType::User.extract_ulid(&input.user_id)?;
 
@@ -117,7 +123,11 @@ pub async fn allow_cross_signing_reset(
         return Err(RouteError::Unauthorized);
     }
 
-    let user = repo.user().lookup(user_id).await?.ok_or(RouteError::NotFound)?;
+    let user = repo
+        .user()
+        .lookup(user_id)
+        .await?
+        .ok_or(RouteError::NotFound)?;
     repo.cancel().await?;
 
     homeserver
@@ -167,7 +177,8 @@ pub async fn deactivate_user(
     let session_info = extract_session_info(depot);
 
     let repo = repo_factory.create().await?;
-    let (requester, mut repo) = get_requester(&clock, &activity_tracker, repo, &session_info).await?;
+    let (requester, mut repo) =
+        get_requester(&clock, &activity_tracker, repo, &session_info).await?;
 
     let Some(browser_session) = requester.browser_session() else {
         return Err(RouteError::Unauthorized);
@@ -189,7 +200,9 @@ pub async fn deactivate_user(
     )
     .await?
     {
-        return Ok(Json(DeactivateUserResponse { status: "INCORRECT_PASSWORD" }));
+        return Ok(Json(DeactivateUserResponse {
+            status: "INCORRECT_PASSWORD",
+        }));
     }
 
     let user = repo
@@ -207,5 +220,7 @@ pub async fn deactivate_user(
 
     repo.save().await?;
 
-    Ok(Json(DeactivateUserResponse { status: "DEACTIVATED" }))
+    Ok(Json(DeactivateUserResponse {
+        status: "DEACTIVATED",
+    }))
 }

@@ -1,10 +1,10 @@
 use dioxus::prelude::*;
 
-use crate::components::layout::Layout;
-use crate::components::loading::LoadingScreen;
-use crate::components::page_heading::PageHeading;
-use crate::api::types::{AllowCrossSigningResetPayload, ViewerResponse};
-use crate::pages::Route;
+use crate::{
+    api::types::{AllowCrossSigningResetPayload, ViewerResponse},
+    components::{layout::Layout, loading::LoadingScreen, page_heading::PageHeading},
+    pages::Route,
+};
 
 #[derive(Debug, Clone, PartialEq)]
 enum ResetState {
@@ -44,8 +44,7 @@ pub fn ResetCrossSigning() -> Element {
 
     // Fetch current user
     let _data = use_resource(move || async move {
-        let result =
-            crate::api::api_get::<ViewerResponse>("/viewer").await;
+        let result = crate::api::api_get::<ViewerResponse>("/viewer").await;
         match result {
             Ok(data) => {
                 if let Some(user) = data.viewer.as_user() {

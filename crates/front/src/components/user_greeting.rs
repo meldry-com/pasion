@@ -51,9 +51,7 @@ pub fn UserGreeting(
 
 #[component]
 fn EditDisplayNameDialog(open: Signal<bool>, user_id: String, matrix: MatrixUser) -> Element {
-    let mut display_name_value = use_signal(|| {
-        matrix.display_name.clone().unwrap_or_default()
-    });
+    let mut display_name_value = use_signal(|| matrix.display_name.clone().unwrap_or_default());
     let mut saving = use_signal(|| false);
     let mut error = use_signal(|| None::<String>);
 

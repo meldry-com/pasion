@@ -2,10 +2,6 @@ use std::sync::{LazyLock, OnceLock};
 
 use anyhow::Context as _;
 use hyper::header::CONTENT_TYPE;
-use pasion_config::{
-    MetricsConfig, MetricsExporterKind, Propagator, TelemetryConfig, TracingConfig,
-    TracingExporterKind,
-};
 use opentelemetry::{
     InstrumentationScope, KeyValue,
     metrics::Meter,
@@ -24,6 +20,10 @@ use opentelemetry_sdk::{
     },
 };
 use opentelemetry_semantic_conventions as semcov;
+use pasion_config::{
+    MetricsConfig, MetricsExporterKind, Propagator, TelemetryConfig, TracingConfig,
+    TracingExporterKind,
+};
 
 static SCOPE: LazyLock<InstrumentationScope> = LazyLock::new(|| {
     InstrumentationScope::builder(env!("CARGO_PKG_NAME"))
@@ -193,17 +193,26 @@ pub async fn prometheus_handler(res: &mut salvo::Response) {
             );
 
             res.status_code(salvo::http::StatusCode::INTERNAL_SERVER_ERROR);
-            res.headers_mut().insert(CONTENT_TYPE, "text/plain".parse().unwrap());
-            res.render(salvo::writing::Text::Plain("Failed to export Prometheus metrics, see logs for details"));
+            res.headers_mut()
+                .insert(CONTENT_TYPE, "text/plain".parse().unwrap());
+            res.render(salvo::writing::Text::Plain(
+                "Failed to export Prometheus metrics, see logs for details",
+            ));
         } else {
             res.status_code(salvo::http::StatusCode::OK);
-            res.headers_mut().insert(CONTENT_TYPE, "text/plain;version=1.0.0".parse().unwrap());
-            res.render(salvo::writing::Text::Plain(String::from_utf8_lossy(&buffer).into_owned()));
+            res.headers_mut()
+                .insert(CONTENT_TYPE, "text/plain;version=1.0.0".parse().unwrap());
+            res.render(salvo::writing::Text::Plain(
+                String::from_utf8_lossy(&buffer).into_owned(),
+            ));
         }
     } else {
         res.status_code(salvo::http::StatusCode::INTERNAL_SERVER_ERROR);
-        res.headers_mut().insert(CONTENT_TYPE, "text/plain".parse().unwrap());
-        res.render(salvo::writing::Text::Plain("Prometheus exporter was not enabled in config"));
+        res.headers_mut()
+            .insert(CONTENT_TYPE, "text/plain".parse().unwrap());
+        res.render(salvo::writing::Text::Plain(
+            "Prometheus exporter was not enabled in config",
+        ));
     }
 }
 

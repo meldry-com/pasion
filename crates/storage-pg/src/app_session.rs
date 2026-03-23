@@ -1,6 +1,8 @@
 //! A module containing PostgreSQL implementation of repositories for sessions
 
 use async_trait::async_trait;
+use oauth2_types::scope::{Scope, ScopeToken};
+use opentelemetry_semantic_conventions::trace::DB_QUERY_TEXT;
 use pasion_data_model::{
     Clock, CompatSession, CompatSessionState, Device, Session, SessionState, User,
 };
@@ -10,8 +12,6 @@ use pasion_storage::{
     compat::CompatSessionFilter,
     oauth2::OAuth2SessionFilter,
 };
-use oauth2_types::scope::{Scope, ScopeToken};
-use opentelemetry_semantic_conventions::trace::DB_QUERY_TEXT;
 use sea_query::{
     Alias, ColumnRef, CommonTableExpression, Expr, PostgresQueryBuilder, Query, UnionType,
 };
@@ -539,15 +539,15 @@ impl AppSessionRepository for PgAppSessionRepository<'_> {
 #[cfg(test)]
 mod tests {
     use chrono::Duration;
+    use oauth2_types::{
+        requests::GrantType,
+        scope::{OPENID, Scope},
+    };
     use pasion_data_model::{Device, clock::MockClock};
     use pasion_storage::{
         Pagination, RepositoryAccess,
         app_session::{AppSession, AppSessionFilter},
         oauth2::OAuth2SessionRepository,
-    };
-    use oauth2_types::{
-        requests::GrantType,
-        scope::{OPENID, Scope},
     };
     use rand::SeedableRng;
     use rand_chacha::ChaChaRng;

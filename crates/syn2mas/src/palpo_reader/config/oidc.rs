@@ -1,13 +1,13 @@
 use std::{collections::BTreeMap, str::FromStr as _};
 
 use chrono::{DateTime, Utc};
+use oauth2_types::scope::{OPENID, Scope, ScopeToken};
 use pasion_config::{
     ClientSecret, UpstreamOAuth2ClaimsImports, UpstreamOAuth2DiscoveryMode,
     UpstreamOAuth2ImportAction, UpstreamOAuth2OnBackchannelLogout, UpstreamOAuth2PkceMethod,
     UpstreamOAuth2ResponseMode, UpstreamOAuth2TokenAuthMethod,
 };
 use pasion_iana::jose::JsonWebSignatureAlg;
-use oauth2_types::scope::{OPENID, Scope, ScopeToken};
 use rand::Rng;
 use serde::Deserialize;
 use tracing::warn;
@@ -187,7 +187,8 @@ impl OidcProvider {
         self.issuer.is_some() && self.client_id.is_some()
     }
 
-    /// Map this Palpo OIDC provider config to a Pasion upstream provider config.
+    /// Map this Palpo OIDC provider config to a Pasion upstream provider
+    /// config.
     pub(crate) fn into_pasion_config(
         self,
         rng: &mut impl Rng,

@@ -2,12 +2,14 @@
 
 use std::collections::HashMap;
 
+use oauth2_types::requests::ResponseMode;
 use pasion_data_model::AuthorizationGrant;
 use pasion_i18n::DataLocale;
 use pasion_templates::{FormPostContext, Templates};
-use oauth2_types::requests::ResponseMode;
-use salvo::prelude::*;
-use salvo::writing::{Redirect, Text};
+use salvo::{
+    prelude::*,
+    writing::{Redirect, Text},
+};
 use serde::Serialize;
 use thiserror::Error;
 use url::Url;

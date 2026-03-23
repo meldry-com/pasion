@@ -11,14 +11,14 @@ use std::{
 };
 
 use camino::{Utf8Path, Utf8PathBuf};
-use pasion_i18n::{Argument, ArgumentList, DataLocale, Translator, sprintf::FormattedMessagePart};
-use pasion_router::UrlBuilder;
-use pasion_spa::ViteManifest;
 use minijinja::{
     Error, ErrorKind, State, Value, escape_formatter,
     machinery::make_string_output,
     value::{Kwargs, Object, ViaDeserialize, from_args},
 };
+use pasion_i18n::{Argument, ArgumentList, DataLocale, Translator, sprintf::FormattedMessagePart};
+use pasion_router::UrlBuilder;
+use pasion_spa::ViteManifest;
 use url::Url;
 
 pub fn register(
@@ -571,7 +571,9 @@ impl Object for IncludeAsset {
                         .unwrap();
                     }
                 }
-                pasion_spa::FileType::Woff | pasion_spa::FileType::Woff2 | pasion_spa::FileType::Json => {
+                pasion_spa::FileType::Woff
+                | pasion_spa::FileType::Woff2
+                | pasion_spa::FileType::Json => {
                     // Skip pre-loading fonts and JSON (translations) as it will
                     // lead to many wasted preloads. For translations, we only
                     // include them as preload if they are included on the

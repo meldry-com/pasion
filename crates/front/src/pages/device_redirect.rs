@@ -1,9 +1,10 @@
 use dioxus::prelude::*;
 
-use crate::components::layout::Layout;
-use crate::components::loading::LoadingScreen;
-use crate::api::types::{AppSession, ViewerResponse};
-use crate::pages::Route;
+use crate::{
+    api::types::{AppSession, ViewerResponse},
+    components::{layout::Layout, loading::LoadingScreen},
+    pages::Route,
+};
 
 #[component]
 pub fn DeviceRedirect(route: Vec<String>) -> Element {
@@ -40,9 +41,7 @@ pub fn DeviceRedirect(route: Vec<String>) -> Element {
                         AppSession::Oauth2Session(s) => s.id.clone(),
                         AppSession::CompatSession(s) => s.id.clone(),
                     };
-                    nav.push(Route::SessionDetail {
-                        id: session_id,
-                    });
+                    nav.push(Route::SessionDetail { id: session_id });
                     return rsx! { LoadingScreen {} };
                 }
             }

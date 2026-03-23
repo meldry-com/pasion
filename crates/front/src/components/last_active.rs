@@ -1,4 +1,5 @@
 use dioxus::prelude::*;
+
 use crate::utils::format_last_active;
 
 #[component]

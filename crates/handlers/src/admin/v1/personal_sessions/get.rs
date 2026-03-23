@@ -1,6 +1,5 @@
-use salvo::prelude::*;
-use salvo::http::StatusCode;
 use pasion_salvo_utils::record_error;
+use salvo::{http::StatusCode, prelude::*};
 
 use crate::{
     admin::{
@@ -45,13 +44,11 @@ impl Scribe for RouteError {
 }
 
 #[handler]
-#[tracing::instrument(
-    name = "handler.admin.v1.personal_sessions.get",
-    skip_all,
-)]
+#[tracing::instrument(name = "handler.admin.v1.personal_sessions.get", skip_all)]
 pub async fn handler(
     req: &mut Request,
-    depot: &Depot) -> Result<Json<SingleResponse<PersonalSession>>, RouteError> {
+    depot: &Depot,
+) -> Result<Json<SingleResponse<PersonalSession>>, RouteError> {
     let call_context = extract_call_context(req, depot).await?;
     let crate::admin::call_context::CallContext { mut repo, .. } = call_context;
     let id = extract_ulid_param(req)?;
@@ -81,8 +78,8 @@ pub async fn handler(
 mod tests {
     use hyper::{Request, StatusCode};
     use insta::assert_json_snapshot;
-    use pasion_data_model::personal::session::PersonalSessionOwner;
     use oauth2_types::scope::{OPENID, Scope};
+    use pasion_data_model::personal::session::PersonalSessionOwner;
     use sqlx::PgPool;
     use ulid::Ulid;
 

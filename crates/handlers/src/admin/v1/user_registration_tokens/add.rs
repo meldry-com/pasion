@@ -1,9 +1,8 @@
-use salvo::prelude::*;
 use chrono::{DateTime, Utc};
-use salvo::http::StatusCode;
-use pasion_salvo_utils::record_error;
 use pasion_data_model::BoxRng;
+use pasion_salvo_utils::record_error;
 use rand::distributions::{Alphanumeric, DistString};
+use salvo::{http::StatusCode, prelude::*};
 use schemars::JsonSchema;
 use serde::Deserialize;
 
@@ -65,11 +64,17 @@ pub struct RequestBody {
 #[tracing::instrument(name = "handler.admin.v1.user_registration_tokens.post", skip_all)]
 pub async fn handler(
     req: &mut Request,
-    depot: &Depot) -> Result<(StatusCode, Json<SingleResponse<UserRegistrationToken>>), RouteError> {
+    depot: &Depot,
+) -> Result<(StatusCode, Json<SingleResponse<UserRegistrationToken>>), RouteError> {
     let call_context = extract_call_context(req, depot).await?;
-    let crate::admin::call_context::CallContext { mut repo, clock, .. } = call_context;
+    let crate::admin::call_context::CallContext {
+        mut repo, clock, ..
+    } = call_context;
     let mut rng = crate::rest::make_rng();
-    let params: RequestBody = req.parse_json().await.map_err(|e| RouteError::Internal(Box::new(e)))?;
+    let params: RequestBody = req
+        .parse_json()
+        .await
+        .map_err(|e| RouteError::Internal(Box::new(e)))?;
 
     // Generate a random token if none was provided
     let token = params

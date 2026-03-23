@@ -1,10 +1,10 @@
 use std::{collections::BTreeMap, sync::Arc};
 
-use pasion_i18n::DataLocale;
 use minijinja::{
     Value,
     value::{Enumerator, Object},
 };
+use pasion_i18n::DataLocale;
 use rand::Rng;
 use serde::Serialize;
 

@@ -3,9 +3,9 @@
 
 use async_trait::async_trait;
 use chrono::{DateTime, Duration, Utc};
+use opentelemetry_semantic_conventions::trace::DB_QUERY_TEXT;
 use pasion_data_model::Clock;
 use pasion_storage::queue::{Job, QueueJobRepository, Worker};
-use opentelemetry_semantic_conventions::trace::DB_QUERY_TEXT;
 use rand::RngCore;
 use sqlx::PgConnection;
 use tracing::Instrument;

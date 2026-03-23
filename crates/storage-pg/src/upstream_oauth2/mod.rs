@@ -13,6 +13,7 @@ pub use self::{
 #[cfg(test)]
 mod tests {
     use chrono::Duration;
+    use oauth2_types::scope::{OPENID, Scope};
     use pasion_data_model::{
         UpstreamOAuthProviderClaimsImports, UpstreamOAuthProviderOnBackchannelLogout,
         UpstreamOAuthProviderTokenAuthMethod, clock::MockClock,
@@ -27,7 +28,6 @@ mod tests {
         },
         user::UserRepository,
     };
-    use oauth2_types::scope::{OPENID, Scope};
     use rand::SeedableRng;
     use sqlx::PgPool;
 

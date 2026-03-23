@@ -1,8 +1,7 @@
-use salvo::prelude::*;
-use salvo::http::StatusCode;
-use pasion_salvo_utils::record_error;
 use pasion_data_model::BoxRng;
+use pasion_salvo_utils::record_error;
 use pasion_storage::queue::{QueueJobRepositoryExt as _, SyncDevicesJob};
+use salvo::{http::StatusCode, prelude::*};
 use ulid::Ulid;
 
 use crate::{
@@ -52,15 +51,15 @@ impl Scribe for RouteError {
 }
 
 #[handler]
-#[tracing::instrument(
-    name = "handler.admin.v1.personal_sessions.revoke",
-    skip_all,
-)]
+#[tracing::instrument(name = "handler.admin.v1.personal_sessions.revoke", skip_all)]
 pub async fn handler(
     req: &mut Request,
-    depot: &Depot) -> Result<Json<SingleResponse<PersonalSession>>, RouteError> {
+    depot: &Depot,
+) -> Result<Json<SingleResponse<PersonalSession>>, RouteError> {
     let call_context = extract_call_context(req, depot).await?;
-    let crate::admin::call_context::CallContext { mut repo, clock, .. } = call_context;
+    let crate::admin::call_context::CallContext {
+        mut repo, clock, ..
+    } = call_context;
     let session_id = extract_ulid_param(req)?;
     let mut rng = crate::rest::make_rng();
 
@@ -100,8 +99,8 @@ pub async fn handler(
 mod tests {
     use chrono::Duration;
     use hyper::{Request, StatusCode};
-    use pasion_data_model::{Clock, personal::session::PersonalSessionOwner};
     use oauth2_types::scope::Scope;
+    use pasion_data_model::{Clock, personal::session::PersonalSessionOwner};
     use sqlx::PgPool;
 
     use crate::test_utils::{RequestBuilderExt, ResponseExt, TestState, setup};

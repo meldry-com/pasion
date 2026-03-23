@@ -29,15 +29,11 @@ pub fn get_config() -> AppConfig {
                         .ok()
                         .and_then(|v| v.as_string())
                         .unwrap_or_else(|| "/".to_string());
-                    let api_endpoint =
-                        js_sys::Reflect::get(&val, &"apiEndpoint".into())
-                            .ok()
-                            .and_then(|v| v.as_string())
-                            .unwrap_or_else(|| "/api/v1".to_string());
-                    return AppConfig {
-                        root,
-                        api_endpoint,
-                    };
+                    let api_endpoint = js_sys::Reflect::get(&val, &"apiEndpoint".into())
+                        .ok()
+                        .and_then(|v| v.as_string())
+                        .unwrap_or_else(|| "/api/v1".to_string());
+                    return AppConfig { root, api_endpoint };
                 }
             }
         }

@@ -86,10 +86,7 @@ pub fn UserEmailItem(email: UserEmail) -> Element {
 }
 
 #[component]
-pub fn UserEmailList(
-    emails: Vec<UserEmail>,
-    email_change_allowed: bool,
-) -> Element {
+pub fn UserEmailList(emails: Vec<UserEmail>, email_change_allowed: bool) -> Element {
     rsx! {
         div { class: "flex flex-col",
             for email in emails.iter() {

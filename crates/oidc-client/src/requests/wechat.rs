@@ -82,7 +82,8 @@ pub async fn request_access_token(
 ///
 /// `GET https://api.weixin.qq.com/sns/userinfo?access_token=TOKEN&openid=OPENID&lang=zh_CN`
 ///
-/// Returns claims including `nickname`, `headimgurl`, `sex`, `province`, `city`, `country`, etc.
+/// Returns claims including `nickname`, `headimgurl`, `sex`, `province`,
+/// `city`, `country`, etc.
 #[tracing::instrument(skip_all)]
 pub async fn fetch_userinfo(
     http_client: &reqwest::Client,
@@ -91,8 +92,7 @@ pub async fn fetch_userinfo(
 ) -> Result<HashMap<String, Value>, UserInfoError> {
     tracing::debug!("Fetching WeChat user info...");
 
-    let mut url = Url::parse("https://api.weixin.qq.com/sns/userinfo")
-        .expect("valid URL");
+    let mut url = Url::parse("https://api.weixin.qq.com/sns/userinfo").expect("valid URL");
     url.query_pairs_mut()
         .append_pair("access_token", access_token)
         .append_pair("openid", openid)

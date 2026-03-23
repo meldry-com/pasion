@@ -13,16 +13,12 @@ pub mod reset_cross_signing;
 pub mod session_detail;
 pub mod sessions;
 
-use dioxus::prelude::*;
-
-use crate::components::error::NotFound;
-use crate::components::layout::Layout;
-
 // Re-export page components for the router
 use account_settings::AccountSettings;
 use browser_sessions::BrowserSessions;
 use client_detail::ClientDetail;
 use device_redirect::DeviceRedirect;
+use dioxus::prelude::*;
 use email_in_use::EmailInUse;
 use email_verify::EmailVerify;
 use password_change::PasswordChange;
@@ -32,6 +28,8 @@ use plan::Plan;
 use reset_cross_signing::ResetCrossSigning;
 use session_detail::SessionDetail;
 use sessions::Sessions;
+
+use crate::components::{error::NotFound, layout::Layout};
 
 /// Application route definition.
 /// Mirrors the TanStack Router file-based routes from the React frontend.
@@ -75,7 +73,8 @@ pub enum Route {
     PageNotFound { route: Vec<String> },
 }
 
-/// Account layout wrapping the account-related pages (settings, sessions, plan).
+/// Account layout wrapping the account-related pages (settings, sessions,
+/// plan).
 #[component]
 fn AccountLayout() -> Element {
     rsx! {

@@ -1,7 +1,7 @@
 //! DingTalk (钉钉) OAuth2 specific request implementations.
 //!
-//! DingTalk uses a mostly standard OAuth2 flow with JSON request/response bodies
-//! and a custom header for the access token in userinfo requests.
+//! DingTalk uses a mostly standard OAuth2 flow with JSON request/response
+//! bodies and a custom header for the access token in userinfo requests.
 
 use std::collections::HashMap;
 

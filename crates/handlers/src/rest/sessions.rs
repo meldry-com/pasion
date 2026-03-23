@@ -86,7 +86,9 @@ pub async fn get_session(
     req: &mut Request,
     depot: &Depot,
 ) -> Result<Json<SessionDetailResponse>, RouteError> {
-    let id = req.param::<String>("id").ok_or(RouteError::BadRequest("missing id".into()))?;
+    let id = req
+        .param::<String>("id")
+        .ok_or(RouteError::BadRequest("missing id".into()))?;
 
     let repo_factory = get_repo_factory(depot)?;
     let clock = make_clock();
@@ -95,7 +97,8 @@ pub async fn get_session(
     let session_info = extract_session_info(depot);
 
     let repo = repo_factory.create().await?;
-    let (requester, mut repo) = get_requester(&clock, &activity_tracker, repo, &session_info).await?;
+    let (requester, mut repo) =
+        get_requester(&clock, &activity_tracker, repo, &session_info).await?;
 
     let (node_type, ulid) = NodeType::deserialize(&id)?;
 
@@ -111,7 +114,10 @@ pub async fn get_session(
                 return Err(RouteError::Unauthorized);
             }
 
-            let last_auth = repo.browser_session().get_last_authentication(&session).await?;
+            let last_auth = repo
+                .browser_session()
+                .get_last_authentication(&session)
+                .await?;
 
             SessionDetailResponse::BrowserSession(BrowserSessionDetail {
                 id: NodeType::BrowserSession.serialize(session.id),
@@ -167,10 +173,14 @@ pub async fn get_session(
                 return Err(RouteError::Unauthorized);
             }
 
-            let sso_login = repo.compat_sso_login().find_for_session(&session).await?.map(|l| SsoLoginData {
-                id: NodeType::CompatSsoLogin.serialize(l.id),
-                redirect_uri: l.redirect_uri.to_string(),
-            });
+            let sso_login = repo
+                .compat_sso_login()
+                .find_for_session(&session)
+                .await?
+                .map(|l| SsoLoginData {
+                    id: NodeType::CompatSsoLogin.serialize(l.id),
+                    redirect_uri: l.redirect_uri.to_string(),
+                });
 
             SessionDetailResponse::CompatSession(CompatSessionDetail {
                 id: NodeType::CompatSession.serialize(session.id),
@@ -203,7 +213,9 @@ pub async fn end_browser_session(
     req: &mut Request,
     depot: &Depot,
 ) -> Result<Json<EndSessionResponse>, RouteError> {
-    let id = req.param::<String>("id").ok_or(RouteError::BadRequest("missing id".into()))?;
+    let id = req
+        .param::<String>("id")
+        .ok_or(RouteError::BadRequest("missing id".into()))?;
     let ulid = NodeType::BrowserSession.extract_ulid(&id)?;
 
     let repo_factory = get_repo_factory(depot)?;
@@ -213,7 +225,8 @@ pub async fn end_browser_session(
     let session_info = extract_session_info(depot);
 
     let repo = repo_factory.create().await?;
-    let (requester, mut repo) = get_requester(&clock, &activity_tracker, repo, &session_info).await?;
+    let (requester, mut repo) =
+        get_requester(&clock, &activity_tracker, repo, &session_info).await?;
 
     let session = repo
         .browser_session()
@@ -238,7 +251,9 @@ pub async fn end_oauth2_session(
     req: &mut Request,
     depot: &Depot,
 ) -> Result<Json<EndSessionResponse>, RouteError> {
-    let id = req.param::<String>("id").ok_or(RouteError::BadRequest("missing id".into()))?;
+    let id = req
+        .param::<String>("id")
+        .ok_or(RouteError::BadRequest("missing id".into()))?;
     let ulid = NodeType::OAuth2Session.extract_ulid(&id)?;
 
     let repo_factory = get_repo_factory(depot)?;
@@ -249,7 +264,8 @@ pub async fn end_oauth2_session(
     let session_info = extract_session_info(depot);
 
     let repo = repo_factory.create().await?;
-    let (requester, mut repo) = get_requester(&clock, &activity_tracker, repo, &session_info).await?;
+    let (requester, mut repo) =
+        get_requester(&clock, &activity_tracker, repo, &session_info).await?;
 
     let session = repo
         .oauth2_session()
@@ -283,7 +299,9 @@ pub async fn end_compat_session(
     req: &mut Request,
     depot: &Depot,
 ) -> Result<Json<EndSessionResponse>, RouteError> {
-    let id = req.param::<String>("id").ok_or(RouteError::BadRequest("missing id".into()))?;
+    let id = req
+        .param::<String>("id")
+        .ok_or(RouteError::BadRequest("missing id".into()))?;
     let ulid = NodeType::CompatSession.extract_ulid(&id)?;
 
     let repo_factory = get_repo_factory(depot)?;
@@ -294,7 +312,8 @@ pub async fn end_compat_session(
     let session_info = extract_session_info(depot);
 
     let repo = repo_factory.create().await?;
-    let (requester, mut repo) = get_requester(&clock, &activity_tracker, repo, &session_info).await?;
+    let (requester, mut repo) =
+        get_requester(&clock, &activity_tracker, repo, &session_info).await?;
 
     let session = repo
         .compat_session()
@@ -337,7 +356,9 @@ pub async fn set_oauth2_session_name(
     req: &mut Request,
     depot: &Depot,
 ) -> Result<Json<SetSessionNameResponse>, RouteError> {
-    let id = req.param::<String>("id").ok_or(RouteError::BadRequest("missing id".into()))?;
+    let id = req
+        .param::<String>("id")
+        .ok_or(RouteError::BadRequest("missing id".into()))?;
     let ulid = NodeType::OAuth2Session.extract_ulid(&id)?;
 
     let input: SetSessionNameInput = req
@@ -353,7 +374,8 @@ pub async fn set_oauth2_session_name(
     let session_info = extract_session_info(depot);
 
     let repo = repo_factory.create().await?;
-    let (requester, mut repo) = get_requester(&clock, &activity_tracker, repo, &session_info).await?;
+    let (requester, mut repo) =
+        get_requester(&clock, &activity_tracker, repo, &session_info).await?;
 
     let session = repo
         .oauth2_session()
@@ -373,9 +395,15 @@ pub async fn set_oauth2_session_name(
     // Update device display name on homeserver for each device in scope
     if let Some(name) = &input.human_name {
         for token in session.scope.iter() {
-            if let Some(device_id) = token.strip_prefix("urn:matrix:org.matrix.msc2967.client:device:") {
+            if let Some(device_id) =
+                token.strip_prefix("urn:matrix:org.matrix.msc2967.client:device:")
+            {
                 let _ = homeserver
-                    .update_device_display_name(&session.user_id.map(|_| "").unwrap_or(""), device_id, name)
+                    .update_device_display_name(
+                        &session.user_id.map(|_| "").unwrap_or(""),
+                        device_id,
+                        name,
+                    )
                     .await;
             }
         }
@@ -393,7 +421,9 @@ pub async fn set_compat_session_name(
     req: &mut Request,
     depot: &Depot,
 ) -> Result<Json<SetSessionNameResponse>, RouteError> {
-    let id = req.param::<String>("id").ok_or(RouteError::BadRequest("missing id".into()))?;
+    let id = req
+        .param::<String>("id")
+        .ok_or(RouteError::BadRequest("missing id".into()))?;
     let ulid = NodeType::CompatSession.extract_ulid(&id)?;
 
     let input: SetSessionNameInput = req
@@ -409,7 +439,8 @@ pub async fn set_compat_session_name(
     let session_info = extract_session_info(depot);
 
     let repo = repo_factory.create().await?;
-    let (requester, mut repo) = get_requester(&clock, &activity_tracker, repo, &session_info).await?;
+    let (requester, mut repo) =
+        get_requester(&clock, &activity_tracker, repo, &session_info).await?;
 
     let session = repo
         .compat_session()

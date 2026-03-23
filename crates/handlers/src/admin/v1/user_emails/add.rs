@@ -1,13 +1,12 @@
-use salvo::prelude::*;
 use std::str::FromStr as _;
 
-use salvo::http::StatusCode;
-use pasion_salvo_utils::record_error;
 use pasion_data_model::BoxRng;
+use pasion_salvo_utils::record_error;
 use pasion_storage::{
     queue::{ProvisionUserJob, QueueJobRepositoryExt as _},
     user::UserEmailFilter,
 };
+use salvo::{http::StatusCode, prelude::*};
 use schemars::JsonSchema;
 use serde::Deserialize;
 use ulid::Ulid;
@@ -81,11 +80,17 @@ pub struct RequestBody {
 #[tracing::instrument(name = "handler.admin.v1.user_emails.add", skip_all)]
 pub async fn handler(
     req: &mut Request,
-    depot: &Depot) -> Result<(StatusCode, Json<SingleResponse<UserEmail>>), RouteError> {
+    depot: &Depot,
+) -> Result<(StatusCode, Json<SingleResponse<UserEmail>>), RouteError> {
     let call_context = extract_call_context(req, depot).await?;
-    let crate::admin::call_context::CallContext { mut repo, clock, .. } = call_context;
+    let crate::admin::call_context::CallContext {
+        mut repo, clock, ..
+    } = call_context;
     let mut rng = crate::rest::make_rng();
-    let params: RequestBody = req.parse_json().await.map_err(|e| RouteError::Internal(Box::new(e)))?;
+    let params: RequestBody = req
+        .parse_json()
+        .await
+        .map_err(|e| RouteError::Internal(Box::new(e)))?;
 
     // Find the user
     let user = repo

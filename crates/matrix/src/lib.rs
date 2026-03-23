@@ -201,8 +201,8 @@ pub trait HomeserverConnection: Send + Sync {
         Some(mxid.localpart())
     }
 
-    /// Verify a bearer token coming from the homeserver for homeserver to Pasion
-    /// interactions
+    /// Verify a bearer token coming from the homeserver for homeserver to
+    /// Pasion interactions
     ///
     /// Returns `true` if the token is valid, `false` otherwise.
     ///

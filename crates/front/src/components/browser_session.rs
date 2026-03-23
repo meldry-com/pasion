@@ -1,9 +1,10 @@
 use dioxus::prelude::*;
 
-use crate::api::types::{BrowserSession as BrowserSessionData, DeviceType};
-use crate::pages::Route;
-
 use super::session_card::*;
+use crate::{
+    api::types::{BrowserSession as BrowserSessionData, DeviceType},
+    pages::Route,
+};
 
 fn session_display_name(session: &BrowserSessionData) -> String {
     if let Some(ref name) = session.display_name {
@@ -32,10 +33,7 @@ pub fn BrowserSessionCard(session: BrowserSessionData, is_current: Option<bool>)
         .map(|ua| ua.device_type.clone())
         .unwrap_or(DeviceType::Unknown);
     let name = session_display_name(&session);
-    let os = session
-        .user_agent
-        .as_ref()
-        .and_then(|ua| ua.os.clone());
+    let os = session.user_agent.as_ref().and_then(|ua| ua.os.clone());
 
     rsx! {
         SessionCardRoot {

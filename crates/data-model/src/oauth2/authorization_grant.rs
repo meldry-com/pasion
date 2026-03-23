@@ -1,12 +1,12 @@
 use std::str::FromStr as _;
 
 use chrono::{DateTime, Utc};
-use pasion_iana::oauth::PkceCodeChallengeMethod;
 use oauth2_types::{
     pkce::{CodeChallengeError, CodeChallengeMethodExt},
     requests::ResponseMode,
     scope::{OPENID, PROFILE, Scope},
 };
+use pasion_iana::oauth::PkceCodeChallengeMethod;
 use rand::{
     RngCore,
     distributions::{Alphanumeric, DistString},

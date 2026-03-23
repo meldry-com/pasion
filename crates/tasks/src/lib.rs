@@ -4,7 +4,8 @@
 //! are enqueued during HTTP request handling and processed by a background
 //! worker. Task types include:
 //!
-//! - **Email delivery** — sending verification codes, password-reset links, etc.
+//! - **Email delivery** — sending verification codes, password-reset links,
+//!   etc.
 //! - **Homeserver provisioning** — creating / deactivating Matrix users via the
 //!   homeserver admin API
 //! - **Session cleanup** — expiring old sessions and tokens
@@ -19,14 +20,14 @@
 
 use std::sync::{Arc, LazyLock};
 
+use new_queue::QueueRunnerError;
+use opentelemetry::metrics::Meter;
 use pasion_data_model::{Clock, SiteConfig};
 use pasion_email::Mailer;
 use pasion_matrix::HomeserverConnection;
 use pasion_router::UrlBuilder;
 use pasion_storage::{BoxRepository, RepositoryError, RepositoryFactory};
 use pasion_storage_pg::PgRepositoryFactory;
-use new_queue::QueueRunnerError;
-use opentelemetry::metrics::Meter;
 use rand::SeedableRng;
 use sqlx::{Pool, Postgres};
 use tokio_util::{sync::CancellationToken, task::TaskTracker};

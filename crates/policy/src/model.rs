@@ -5,8 +5,8 @@
 
 use std::net::IpAddr;
 
-use pasion_data_model::{Client, User};
 use oauth2_types::{registration::VerifiedClientMetadata, scope::Scope};
+use pasion_data_model::{Client, User};
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 

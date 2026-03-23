@@ -1,8 +1,7 @@
-use salvo::prelude::*;
-use salvo::writing::Text;
-use pasion_salvo_utils::{InternalError, SessionInfoExt, cookies::CookieJar, csrf::CsrfExt as _};
 use pasion_router::{PasswordRegister, UpstreamOAuth2Authorize};
+use pasion_salvo_utils::{InternalError, SessionInfoExt, cookies::CookieJar, csrf::CsrfExt as _};
 use pasion_templates::{RegisterContext, TemplateContext, Templates};
+use salvo::{prelude::*, writing::Text};
 
 use super::shared::OptionalPostAuthAction;
 use crate::rest;
@@ -14,7 +13,11 @@ pub mod steps;
 pub use self::cookie::UserRegistrationSessions as UserRegistrationSessionsCookie;
 
 #[handler]
-pub async fn get(req: &mut Request, depot: &Depot, res: &mut Response) -> Result<(), InternalError> {
+pub async fn get(
+    req: &mut Request,
+    depot: &Depot,
+    res: &mut Response,
+) -> Result<(), InternalError> {
     let mut rng = rest::make_rng();
     let clock = rest::make_clock();
     let locale = crate::preferred_language(req, depot);
@@ -37,7 +40,7 @@ pub async fn get(req: &mut Request, depot: &Depot, res: &mut Response) -> Result
             .await;
 
         let reply = query.go_next(&url_builder);
-            cookie_jar.write_to_response(res);
+        cookie_jar.write_to_response(res);
         res.render(reply);
         return Ok(());
     }
@@ -55,7 +58,7 @@ pub async fn get(req: &mut Request, depot: &Depot, res: &mut Response) -> Result
             destination = destination.and_then(action);
         }
 
-            cookie_jar.write_to_response(res);
+        cookie_jar.write_to_response(res);
         res.render(url_builder.redirect(&destination));
         return Ok(());
     }
@@ -69,7 +72,7 @@ pub async fn get(req: &mut Request, depot: &Depot, res: &mut Response) -> Result
             destination = destination.and_then(action);
         }
 
-            cookie_jar.write_to_response(res);
+        cookie_jar.write_to_response(res);
         res.render(url_builder.redirect(&destination));
         return Ok(());
     }

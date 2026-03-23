@@ -118,7 +118,8 @@ pub enum ClientCredentials {
     },
 
     /// Feishu (Lark): uses app_access_token as Bearer auth for token exchange.
-    /// The actual token exchange uses a Feishu-specific flow handled separately.
+    /// The actual token exchange uses a Feishu-specific flow handled
+    /// separately.
     Feishu {
         /// The unique ID for the client (Feishu app_id).
         client_id: String,
@@ -127,7 +128,8 @@ pub enum ClientCredentials {
         client_secret: String,
     },
 
-    /// Lark (international Feishu): same flow as Feishu with different endpoints.
+    /// Lark (international Feishu): same flow as Feishu with different
+    /// endpoints.
     Lark {
         /// The unique ID for the client (Lark app_id).
         client_id: String,

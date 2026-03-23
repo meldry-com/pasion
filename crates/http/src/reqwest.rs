@@ -71,7 +71,9 @@ impl reqwest::dns::Resolve for TracingResolver {
                 .map(|result| {
                     result
                         .map(|addrs| -> reqwest::dns::Addrs { Box::new(addrs) })
-                        .map_err(|err| -> Box<dyn std::error::Error + Send + Sync> { Box::new(err) })
+                        .map_err(|err| -> Box<dyn std::error::Error + Send + Sync> {
+                            Box::new(err)
+                        })
                 })
                 .instrument(span),
         )

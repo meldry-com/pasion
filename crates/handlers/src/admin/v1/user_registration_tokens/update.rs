@@ -1,7 +1,6 @@
-use salvo::prelude::*;
 use chrono::{DateTime, Utc};
-use salvo::http::StatusCode;
 use pasion_salvo_utils::record_error;
+use salvo::{http::StatusCode, prelude::*};
 use schemars::JsonSchema;
 use serde::{Deserialize, Deserializer};
 use ulid::Ulid;
@@ -83,11 +82,17 @@ impl Scribe for RouteError {
 #[tracing::instrument(name = "handler.admin.v1.user_registration_tokens.update", skip_all)]
 pub async fn handler(
     req: &mut Request,
-    depot: &Depot) -> Result<Json<SingleResponse<UserRegistrationToken>>, RouteError> {
+    depot: &Depot,
+) -> Result<Json<SingleResponse<UserRegistrationToken>>, RouteError> {
     let call_context = extract_call_context(req, depot).await?;
-    let crate::admin::call_context::CallContext { mut repo, clock, .. } = call_context;
+    let crate::admin::call_context::CallContext {
+        mut repo, clock, ..
+    } = call_context;
     let id = extract_ulid_param(req)?;
-    let request: RequestBody = req.parse_json().await.map_err(|e| RouteError::Internal(Box::new(e)))?;
+    let request: RequestBody = req
+        .parse_json()
+        .await
+        .map_err(|e| RouteError::Internal(Box::new(e)))?;
 
     // id already extracted above
 

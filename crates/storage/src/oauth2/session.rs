@@ -2,8 +2,8 @@ use std::net::IpAddr;
 
 use async_trait::async_trait;
 use chrono::{DateTime, Utc};
-use pasion_data_model::{BrowserSession, Client, Clock, Device, Session, User};
 use oauth2_types::scope::Scope;
+use pasion_data_model::{BrowserSession, Client, Clock, Device, Session, User};
 use rand_core::RngCore;
 use ulid::Ulid;
 

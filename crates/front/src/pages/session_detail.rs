@@ -1,23 +1,19 @@
 use dioxus::prelude::*;
 
-use crate::components::last_active::LastActive;
-use crate::components::layout::Layout;
-use crate::components::loading::LoadingScreen;
-use crate::components::session_card::*;
-use crate::api::types::{DeviceType, SessionNode};
-use crate::utils::format_date;
+use crate::{
+    api::types::{DeviceType, SessionNode},
+    components::{
+        last_active::LastActive, layout::Layout, loading::LoadingScreen, session_card::*,
+    },
+    utils::format_date,
+};
 
 #[component]
 pub fn SessionDetail(id: String) -> Element {
     let id_clone = id.clone();
     let data = use_resource(move || {
         let id = id_clone.clone();
-        async move {
-            crate::api::api_get::<SessionNode>(
-                &format!("/sessions/{}", id),
-            )
-            .await
-        }
+        async move { crate::api::api_get::<SessionNode>(&format!("/sessions/{}", id)).await }
     });
     let binding = data.read();
 
@@ -114,12 +110,7 @@ fn SessionDetailView(node: SessionNode) -> Element {
             let name = session
                 .display_name
                 .clone()
-                .or_else(|| {
-                    session
-                        .client
-                        .as_ref()
-                        .and_then(|c| c.client_name.clone())
-                })
+                .or_else(|| session.client.as_ref().and_then(|c| c.client_name.clone()))
                 .unwrap_or_else(|| "Unknown app".to_string());
             let session_id = session.id.clone();
             let client_name = session.client.as_ref().and_then(|c| c.client_name.clone());

@@ -18,7 +18,10 @@ pub async fn api_get<T: for<'de> Deserialize<'de>>(path: &str) -> Result<T, Stri
         .map_err(|e| format!("API request failed: {e}"))?;
 
     if !response.status().is_success() {
-        return Err(format!("API request failed with status: {}", response.status()));
+        return Err(format!(
+            "API request failed with status: {}",
+            response.status()
+        ));
     }
 
     response
@@ -28,10 +31,7 @@ pub async fn api_get<T: for<'de> Deserialize<'de>>(path: &str) -> Result<T, Stri
 }
 
 /// Execute a POST request to the REST API.
-pub async fn api_post<T: for<'de> Deserialize<'de>>(
-    path: &str,
-    body: Value,
-) -> Result<T, String> {
+pub async fn api_post<T: for<'de> Deserialize<'de>>(path: &str, body: Value) -> Result<T, String> {
     let url = format!("{}{}", api_base_url(), path);
     let client = Client::new();
 
@@ -44,7 +44,10 @@ pub async fn api_post<T: for<'de> Deserialize<'de>>(
         .map_err(|e| format!("API request failed: {e}"))?;
 
     if !response.status().is_success() {
-        return Err(format!("API request failed with status: {}", response.status()));
+        return Err(format!(
+            "API request failed with status: {}",
+            response.status()
+        ));
     }
 
     response
@@ -54,10 +57,7 @@ pub async fn api_post<T: for<'de> Deserialize<'de>>(
 }
 
 /// Execute a PUT request to the REST API.
-pub async fn api_put<T: for<'de> Deserialize<'de>>(
-    path: &str,
-    body: Value,
-) -> Result<T, String> {
+pub async fn api_put<T: for<'de> Deserialize<'de>>(path: &str, body: Value) -> Result<T, String> {
     let url = format!("{}{}", api_base_url(), path);
     let client = Client::new();
 
@@ -70,7 +70,10 @@ pub async fn api_put<T: for<'de> Deserialize<'de>>(
         .map_err(|e| format!("API request failed: {e}"))?;
 
     if !response.status().is_success() {
-        return Err(format!("API request failed with status: {}", response.status()));
+        return Err(format!(
+            "API request failed with status: {}",
+            response.status()
+        ));
     }
 
     response
@@ -80,9 +83,7 @@ pub async fn api_put<T: for<'de> Deserialize<'de>>(
 }
 
 /// Execute a DELETE request to the REST API.
-pub async fn api_delete<T: for<'de> Deserialize<'de>>(
-    path: &str,
-) -> Result<T, String> {
+pub async fn api_delete<T: for<'de> Deserialize<'de>>(path: &str) -> Result<T, String> {
     let url = format!("{}{}", api_base_url(), path);
     let client = Client::new();
 
@@ -93,7 +94,10 @@ pub async fn api_delete<T: for<'de> Deserialize<'de>>(
         .map_err(|e| format!("API request failed: {e}"))?;
 
     if !response.status().is_success() {
-        return Err(format!("API request failed with status: {}", response.status()));
+        return Err(format!(
+            "API request failed with status: {}",
+            response.status()
+        ));
     }
 
     response
@@ -119,7 +123,10 @@ pub async fn api_delete_with_body<T: for<'de> Deserialize<'de>>(
         .map_err(|e| format!("API request failed: {e}"))?;
 
     if !response.status().is_success() {
-        return Err(format!("API request failed with status: {}", response.status()));
+        return Err(format!(
+            "API request failed with status: {}",
+            response.status()
+        ));
     }
 
     response

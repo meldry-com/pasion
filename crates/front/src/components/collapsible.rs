@@ -1,11 +1,7 @@
 use dioxus::prelude::*;
 
 #[component]
-pub fn CollapsibleSection(
-    title: String,
-    default_open: Option<bool>,
-    children: Element,
-) -> Element {
+pub fn CollapsibleSection(title: String, default_open: Option<bool>, children: Element) -> Element {
     let mut is_open = use_signal(|| default_open.unwrap_or(false));
     let icon_class = if is_open() {
         "collapsible-icon open"

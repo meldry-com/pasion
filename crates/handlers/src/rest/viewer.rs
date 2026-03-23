@@ -5,7 +5,7 @@ use serde::Serialize;
 
 use super::{
     NodeType, RouteError, UserAgentInfo, extract_bound_activity_tracker, extract_session_info,
-    get_repo_factory, get_requester, get_site_config, get_homeserver, make_clock, parse_user_agent,
+    get_homeserver, get_repo_factory, get_requester, get_site_config, make_clock, parse_user_agent,
 };
 
 // ── Response types ─────────────────────────────────────────────
@@ -136,7 +136,8 @@ pub async fn get_viewer(
     let session_info = extract_session_info(depot);
 
     let repo = repo_factory.create().await?;
-    let (requester, mut repo) = get_requester(&clock, &activity_tracker, repo, &session_info).await?;
+    let (requester, mut repo) =
+        get_requester(&clock, &activity_tracker, repo, &session_info).await?;
 
     let (viewer, viewer_session) = match &requester.entity {
         super::RequestingEntity::BrowserSession(session) => {
@@ -185,10 +186,7 @@ pub async fn get_viewer(
             let browser_session_data = BrowserSessionData {
                 id: NodeType::BrowserSession.serialize(session.id),
                 user: None, // avoid duplication, user is in viewer
-                user_agent: session
-                    .user_agent
-                    .as_deref()
-                    .map(parse_user_agent),
+                user_agent: session.user_agent.as_deref().map(parse_user_agent),
                 last_active_ip: session.last_active_ip.map(|ip| ip.to_string()),
                 last_active_at: session.last_active_at.map(|t| t.to_rfc3339()),
                 created_at: Some(session.created_at.to_rfc3339()),
@@ -200,8 +198,12 @@ pub async fn get_viewer(
             )
         }
         _ => (
-            ViewerData::Anonymous(AnonymousData { id: "anonymous".to_owned() }),
-            ViewerSessionData::Anonymous(AnonymousData { id: "anonymous".to_owned() }),
+            ViewerData::Anonymous(AnonymousData {
+                id: "anonymous".to_owned(),
+            }),
+            ViewerSessionData::Anonymous(AnonymousData {
+                id: "anonymous".to_owned(),
+            }),
         ),
     };
 
@@ -213,4 +215,3 @@ pub async fn get_viewer(
         site_config: site_config_data(&config),
     }))
 }
-

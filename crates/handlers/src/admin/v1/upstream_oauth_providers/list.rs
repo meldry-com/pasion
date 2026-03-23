@@ -1,7 +1,6 @@
-use salvo::prelude::*;
-use salvo::http::StatusCode;
 use pasion_salvo_utils::record_error;
 use pasion_storage::{Page, upstream_oauth2::UpstreamOAuthProviderFilter};
+use salvo::{http::StatusCode, prelude::*};
 use schemars::JsonSchema;
 use serde::Deserialize;
 
@@ -41,7 +40,6 @@ impl std::fmt::Display for FilterParams {
 pub enum RouteError {
     #[error(transparent)]
     Internal(Box<dyn std::error::Error + Send + Sync + 'static>),
-
 }
 
 impl_from_error_for_route!(pasion_storage::RepositoryError);
@@ -70,7 +68,8 @@ impl Scribe for RouteError {
 #[tracing::instrument(name = "handler.admin.v1.upstream_oauth_providers.list", skip_all)]
 pub async fn handler(
     req: &mut Request,
-    depot: &Depot) -> Result<Json<PaginatedResponse<UpstreamOAuthProvider>>, RouteError> {
+    depot: &Depot,
+) -> Result<Json<PaginatedResponse<UpstreamOAuthProvider>>, RouteError> {
     let call_context = extract_call_context(req, depot).await?;
     let crate::admin::call_context::CallContext { mut repo, .. } = call_context;
     let (pagination, include_count) = extract_pagination(req)?;
@@ -116,6 +115,7 @@ pub async fn handler(
 #[cfg(test)]
 mod tests {
     use hyper::{Request, StatusCode};
+    use oauth2_types::scope::{OPENID, Scope};
     use pasion_data_model::{
         UpstreamOAuthProviderClaimsImports, UpstreamOAuthProviderDiscoveryMode,
         UpstreamOAuthProviderOnBackchannelLogout, UpstreamOAuthProviderPkceMode,
@@ -126,7 +126,6 @@ mod tests {
         RepositoryAccess,
         upstream_oauth2::{UpstreamOAuthProviderParams, UpstreamOAuthProviderRepository},
     };
-    use oauth2_types::scope::{OPENID, Scope};
     use sqlx::PgPool;
 
     use crate::test_utils::{RequestBuilderExt, ResponseExt, TestState, setup};

@@ -2,6 +2,7 @@ use std::net::IpAddr;
 
 use async_trait::async_trait;
 use chrono::{DateTime, Utc};
+use oauth2_types::scope::Scope;
 use pasion_data_model::{
     Client, Clock, Device, User,
     personal::{
@@ -9,7 +10,6 @@ use pasion_data_model::{
         session::{PersonalSession, PersonalSessionOwner},
     },
 };
-use oauth2_types::scope::Scope;
 use rand_core::RngCore;
 use ulid::Ulid;
 

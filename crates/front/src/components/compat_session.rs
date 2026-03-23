@@ -1,9 +1,10 @@
 use dioxus::prelude::*;
 
-use crate::api::types::{CompatSession as CompatSessionData, DeviceType};
-use crate::pages::Route;
-
 use super::session_card::*;
+use crate::{
+    api::types::{CompatSession as CompatSessionData, DeviceType},
+    pages::Route,
+};
 
 fn session_display_name(session: &CompatSessionData) -> String {
     if let Some(ref name) = session.display_name {

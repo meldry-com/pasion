@@ -1,15 +1,15 @@
 use chrono::Duration;
+use oauth2_types::{
+    errors::{ClientError, ClientErrorCode},
+    requests::{DeviceAuthorizationRequest, DeviceAuthorizationResponse, GrantType},
+    scope::ScopeToken,
+};
 use pasion_salvo_utils::{
     client_authorization::{ClientAuthorization, CredentialsVerificationError},
     record_error,
     sentry::SentryEventID,
 };
 use pasion_storage::oauth2::OAuth2DeviceCodeGrantParams;
-use oauth2_types::{
-    errors::{ClientError, ClientErrorCode},
-    requests::{DeviceAuthorizationRequest, DeviceAuthorizationResponse, GrantType},
-    scope::ScopeToken,
-};
 use rand::distributions::{Alphanumeric, DistString};
 use salvo::prelude::*;
 use thiserror::Error;
@@ -76,10 +76,7 @@ impl Scribe for RouteError {
 }
 
 #[handler]
-#[tracing::instrument(
-    name = "handlers.oauth2.device.request.post",
-    skip_all,
-)]
+#[tracing::instrument(name = "handlers.oauth2.device.request.post", skip_all)]
 pub async fn post(req: &mut Request, depot: &Depot, res: &mut Response) {
     match handle_post(req, depot).await {
         Ok(response) => {
@@ -196,10 +193,10 @@ async fn handle_post(
 #[cfg(test)]
 mod tests {
     use hyper::{Request, StatusCode};
-    use pasion_router::SimpleRoute;
     use oauth2_types::{
         registration::ClientRegistrationResponse, requests::DeviceAuthorizationResponse,
     };
+    use pasion_router::SimpleRoute;
     use sqlx::PgPool;
 
     use crate::test_utils::{RequestBuilderExt, ResponseExt, TestState, setup};
@@ -210,13 +207,14 @@ mod tests {
         let state = TestState::from_pool(pool).await.unwrap();
 
         // Provision a client
-        let request =
-            Request::post(pasion_router::OAuth2RegistrationEndpoint::PATH).json(serde_json::json!({
+        let request = Request::post(pasion_router::OAuth2RegistrationEndpoint::PATH).json(
+            serde_json::json!({
                 "client_uri": "https://example.com/",
                 "token_endpoint_auth_method": "none",
                 "grant_types": ["urn:ietf:params:oauth:grant-type:device_code"],
                 "response_types": [],
-            }));
+            }),
+        );
 
         let response = state.request(request).await;
         response.assert_status(StatusCode::CREATED);

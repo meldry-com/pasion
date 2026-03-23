@@ -1,17 +1,16 @@
 use std::time::Duration;
 
+use oauth2_types::requests::AuthorizationResponse;
+use pasion_data_model::{AuthorizationGrantStage, Clock, MatrixUser};
+use pasion_policy::Policy;
+use pasion_router::PostAuthAction;
 use pasion_salvo_utils::{
     GenericError, InternalError,
     csrf::{CsrfExt, ProtectedForm},
 };
-use pasion_data_model::{AuthorizationGrantStage, Clock, MatrixUser};
-use pasion_policy::Policy;
-use pasion_router::PostAuthAction;
 use pasion_storage::oauth2::{OAuth2AuthorizationGrantRepository, OAuth2ClientRepository};
 use pasion_templates::{ConsentContext, PolicyViolationContext, TemplateContext};
-use oauth2_types::requests::AuthorizationResponse;
-use salvo::prelude::*;
-use salvo::writing::Text;
+use salvo::{prelude::*, writing::Text};
 use thiserror::Error;
 use ulid::Ulid;
 
@@ -56,19 +55,14 @@ impl Scribe for RouteError {
             Self::Internal(e) => InternalError::new(e).render(res),
             e @ Self::NoSuchClient(_) => InternalError::new(Box::new(e)).render(res),
             e @ Self::GrantNotFound => GenericError::new(StatusCode::NOT_FOUND, e).render(res),
-            e @ Self::GrantNotPending(_) => {
-                GenericError::new(StatusCode::CONFLICT, e).render(res)
-            }
+            e @ Self::GrantNotPending(_) => GenericError::new(StatusCode::CONFLICT, e).render(res),
             e @ Self::Csrf(_) => GenericError::new(StatusCode::BAD_REQUEST, e).render(res),
         }
     }
 }
 
 #[handler]
-#[tracing::instrument(
-    name = "handlers.oauth2.authorization.consent.get",
-    skip_all,
-)]
+#[tracing::instrument(name = "handlers.oauth2.authorization.consent.get", skip_all)]
 pub async fn get(req: &mut Request, depot: &Depot, res: &mut Response) {
     match handle_get(req, depot, res).await {
         Ok(()) => {}
@@ -88,14 +82,15 @@ async fn handle_get(
     let url_builder = crate::rest::get_url_builder(depot)?;
     let homeserver = crate::rest::get_homeserver(depot)?;
     let policy_factory = crate::rest::get_policy_factory(depot)?;
-    let mut policy: Policy = policy_factory.instantiate().await
+    let mut policy: Policy = policy_factory
+        .instantiate()
+        .await
         .map_err(|e| RouteError::Internal(Box::new(e)))?;
     let mut repo = crate::rest::get_repo_factory(depot)?.create().await?;
     let activity_tracker = crate::rest::extract_bound_activity_tracker(req, depot);
     let user_agent: Option<String> = req.header("user-agent");
     let cookie_jar = crate::rest::extract_cookie_jar(req, depot)?;
-    let grant_id: Ulid = req.param("grant_id")
-        .ok_or(RouteError::GrantNotFound)?;
+    let grant_id: Ulid = req.param("grant_id").ok_or(RouteError::GrantNotFound)?;
 
     let (cookie_jar, maybe_session) = match load_session_or_fallback(
         cookie_jar, &clock, &mut rng, &templates, &locale, &mut repo,
@@ -107,7 +102,10 @@ async fn handle_get(
             maybe_session,
             ..
         } => (cookie_jar, maybe_session),
-        SessionOrFallback::Fallback { response } => { *res = response; return Ok(()); }
+        SessionOrFallback::Fallback { response } => {
+            *res = response;
+            return Ok(());
+        }
     };
 
     let grant = repo
@@ -214,10 +212,7 @@ async fn handle_get(
 }
 
 #[handler]
-#[tracing::instrument(
-    name = "handlers.oauth2.authorization.consent.post",
-    skip_all,
-)]
+#[tracing::instrument(name = "handlers.oauth2.authorization.consent.post", skip_all)]
 pub async fn post(req: &mut Request, depot: &Depot, res: &mut Response) {
     match handle_post(req, depot, res).await {
         Ok(()) => {}
@@ -236,17 +231,20 @@ async fn handle_post(
     let templates = crate::rest::get_templates(depot)?;
     let key_store = crate::rest::get_key_store(depot)?;
     let policy_factory = crate::rest::get_policy_factory(depot)?;
-    let mut policy: Policy = policy_factory.instantiate().await
+    let mut policy: Policy = policy_factory
+        .instantiate()
+        .await
         .map_err(|e| RouteError::Internal(Box::new(e)))?;
     let mut repo = crate::rest::get_repo_factory(depot)?.create().await?;
     let activity_tracker = crate::rest::extract_bound_activity_tracker(req, depot);
     let user_agent: Option<String> = req.header("user-agent");
     let cookie_jar = crate::rest::extract_cookie_jar(req, depot)?;
     let url_builder = crate::rest::get_url_builder(depot)?;
-    let grant_id: Ulid = req.param("grant_id")
-        .ok_or(RouteError::GrantNotFound)?;
+    let grant_id: Ulid = req.param("grant_id").ok_or(RouteError::GrantNotFound)?;
 
-    let form: ProtectedForm<()> = req.parse_form().await
+    let form: ProtectedForm<()> = req
+        .parse_form()
+        .await
         .map_err(|e| RouteError::Internal(Box::new(e)))?;
     cookie_jar.verify_form(&clock, form)?;
 
@@ -260,7 +258,10 @@ async fn handle_post(
             maybe_session,
             ..
         } => (cookie_jar, maybe_session),
-        SessionOrFallback::Fallback { response } => { *res = response; return Ok(()); }
+        SessionOrFallback::Fallback { response } => {
+            *res = response;
+            return Ok(());
+        }
     };
 
     let (csrf_token, cookie_jar) = cookie_jar.csrf_token(&clock, &mut rng);

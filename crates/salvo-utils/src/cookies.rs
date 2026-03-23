@@ -1,8 +1,7 @@
 //! Private (encrypted) cookie jar for Salvo
 
 use cookie::{Cookie, Key, SameSite};
-use salvo::http::HeaderValue;
-use salvo::prelude::*;
+use salvo::{http::HeaderValue, prelude::*};
 use serde::{Serialize, de::DeserializeOwned};
 use thiserror::Error;
 use url::Url;

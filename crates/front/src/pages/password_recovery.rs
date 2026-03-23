@@ -1,11 +1,13 @@
 use dioxus::prelude::*;
 
-use crate::components::layout::Layout;
-use crate::components::loading::{LoadingScreen, LoadingSpinner};
-use crate::components::page_heading::PageHeading;
-use crate::components::password_input::PasswordCreationDoubleInput;
-use crate::api::types::{
-    ResendRecoveryEmailPayload, SetPasswordPayload, SetPasswordStatus, SiteConfig,
+use crate::{
+    api::types::{ResendRecoveryEmailPayload, SetPasswordPayload, SetPasswordStatus, SiteConfig},
+    components::{
+        layout::Layout,
+        loading::{LoadingScreen, LoadingSpinner},
+        page_heading::PageHeading,
+        password_input::PasswordCreationDoubleInput,
+    },
 };
 
 /// Recovery ticket state based on query/mutation responses.
@@ -62,10 +64,7 @@ pub fn PasswordRecovery() -> Element {
                     ));
                     return;
                 }
-                let result = crate::api::api_get::<SiteConfig>(
-                    "/site-config",
-                )
-                .await;
+                let result = crate::api::api_get::<SiteConfig>("/site-config").await;
                 match result {
                     Ok(_) => {
                         recovery_state.set(RecoveryState::Valid);

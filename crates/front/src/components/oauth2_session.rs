@@ -1,9 +1,10 @@
 use dioxus::prelude::*;
 
-use crate::api::types::{DeviceType, Oauth2Session as Oauth2SessionData};
-use crate::pages::Route;
-
 use super::session_card::*;
+use crate::{
+    api::types::{DeviceType, Oauth2Session as Oauth2SessionData},
+    pages::Route,
+};
 
 fn session_display_name(session: &Oauth2SessionData) -> String {
     if let Some(ref name) = session.display_name {

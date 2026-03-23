@@ -168,9 +168,11 @@ macro_rules! symetric_jwt_test {
             #[test]
             fn verify_jwt() {
                 let jwt: Jwt<'_, Payload> = Jwt::try_from($jwt).unwrap();
-                let key =
-                    pasion_jose::jwa::SymmetricKey::new_for_alg(oct_key(), &JsonWebSignatureAlg::$alg)
-                        .unwrap();
+                let key = pasion_jose::jwa::SymmetricKey::new_for_alg(
+                    oct_key(),
+                    &JsonWebSignatureAlg::$alg,
+                )
+                .unwrap();
                 jwt.verify(&key).unwrap();
             }
 

@@ -3,7 +3,8 @@
 //! QQ Connect uses a non-standard OAuth2 flow:
 //! - Token endpoint returns URL-encoded by default (use `fmt=json` for JSON)
 //! - A separate `/me` endpoint is needed to get the user's OpenID
-//! - UserInfo endpoint requires `openid` and `oauth_consumer_key` as query params
+//! - UserInfo endpoint requires `openid` and `oauth_consumer_key` as query
+//!   params
 
 use std::collections::HashMap;
 
@@ -88,7 +89,8 @@ pub async fn request_access_token(
     Ok(response)
 }
 
-/// Strip JSONP `callback(...)` wrapper if present, returning the inner JSON string.
+/// Strip JSONP `callback(...)` wrapper if present, returning the inner JSON
+/// string.
 fn strip_jsonp(text: &str) -> &str {
     let trimmed = text.trim();
     if trimmed.starts_with("callback") {
@@ -114,8 +116,7 @@ pub async fn fetch_openid(
 ) -> Result<QQOpenIdResponse, UserInfoError> {
     tracing::debug!("Fetching QQ OpenID...");
 
-    let mut url = Url::parse(QQ_ME_ENDPOINT)
-        .expect("QQ_ME_ENDPOINT is a valid URL");
+    let mut url = Url::parse(QQ_ME_ENDPOINT).expect("QQ_ME_ENDPOINT is a valid URL");
     url.query_pairs_mut()
         .append_pair("access_token", access_token)
         .append_pair("fmt", "json");
@@ -133,11 +134,9 @@ pub async fn fetch_openid(
     let json_str = strip_jsonp(&response_text);
 
     // Check for error response first (QQ uses "error" + "error_description" fields)
-    let raw: Value = serde_json::from_str(json_str).map_err(|e| {
-        UserInfoError::ProviderError {
-            code: -1,
-            msg: format!("Failed to parse QQ /me response: {e}"),
-        }
+    let raw: Value = serde_json::from_str(json_str).map_err(|e| UserInfoError::ProviderError {
+        code: -1,
+        msg: format!("Failed to parse QQ /me response: {e}"),
     })?;
     if let Some(code) = raw.get("error").and_then(|v| v.as_i64()) {
         let msg = raw
@@ -151,12 +150,11 @@ pub async fn fetch_openid(
         });
     }
 
-    let response: QQOpenIdResponse = serde_json::from_value(raw).map_err(|e| {
-        UserInfoError::ProviderError {
+    let response: QQOpenIdResponse =
+        serde_json::from_value(raw).map_err(|e| UserInfoError::ProviderError {
             code: -1,
             msg: format!("Failed to parse QQ OpenID response: {e}"),
-        }
-    })?;
+        })?;
 
     Ok(response)
 }
@@ -175,8 +173,7 @@ pub async fn fetch_userinfo(
 ) -> Result<HashMap<String, Value>, UserInfoError> {
     tracing::debug!("Fetching QQ user info...");
 
-    let mut url = Url::parse(QQ_USERINFO_ENDPOINT)
-        .expect("QQ_USERINFO_ENDPOINT is a valid URL");
+    let mut url = Url::parse(QQ_USERINFO_ENDPOINT).expect("QQ_USERINFO_ENDPOINT is a valid URL");
     url.query_pairs_mut()
         .append_pair("access_token", access_token)
         .append_pair("oauth_consumer_key", client_id)

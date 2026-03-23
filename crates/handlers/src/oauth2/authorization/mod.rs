@@ -1,21 +1,19 @@
-use pasion_data_model::{AuthorizationCode, BoxClock, BoxRng, Pkce, SystemClock};
-use pasion_router::{PostAuthAction, UrlBuilder};
-use pasion_salvo_utils::{
-    GenericError, InternalError, SessionInfoExt,
-    cookies::CookieJar,
-    sentry::SentryEventID,
-};
-use pasion_storage::{
-    BoxRepository, BoxRepositoryFactory,
-    oauth2::{OAuth2AuthorizationGrantRepository, OAuth2ClientRepository},
-};
-use pasion_templates::Templates;
 use oauth2_types::{
     errors::{ClientError, ClientErrorCode},
     pkce,
     requests::{AuthorizationRequest, GrantType, Prompt, ResponseMode},
     response_type::ResponseType,
 };
+use pasion_data_model::{AuthorizationCode, BoxClock, BoxRng, Pkce, SystemClock};
+use pasion_router::{PostAuthAction, UrlBuilder};
+use pasion_salvo_utils::{
+    GenericError, InternalError, SessionInfoExt, cookies::CookieJar, sentry::SentryEventID,
+};
+use pasion_storage::{
+    BoxRepository, BoxRepositoryFactory,
+    oauth2::{OAuth2AuthorizationGrantRepository, OAuth2ClientRepository},
+};
+use pasion_templates::Templates;
 use rand::{Rng, SeedableRng, distributions::Alphanumeric, thread_rng};
 use rand_chacha::ChaChaRng;
 use salvo::prelude::*;
@@ -121,10 +119,7 @@ pub async fn get(req: &mut Request, depot: &Depot, res: &mut Response) {
     }
 }
 
-async fn handle_get(
-    req: &mut Request,
-    depot: &Depot,
-) -> Result<(Response, CookieJar), RouteError> {
+async fn handle_get(req: &mut Request, depot: &Depot) -> Result<(Response, CookieJar), RouteError> {
     let templates = depot
         .get::<Templates>("templates")
         .expect("Templates not found in depot");
@@ -151,7 +146,9 @@ async fn handle_get(
     let locale = crate::preferred_language(req, depot);
 
     // Parse form parameters
-    let params: Params = req.parse_queries().map_err(|e| RouteError::Internal(Box::new(e)))?;
+    let params: Params = req
+        .parse_queries()
+        .map_err(|e| RouteError::Internal(Box::new(e)))?;
 
     // Get cookie jar
     let cookie_jar = cookie_manager.cookie_jar_from_headers(req.headers());

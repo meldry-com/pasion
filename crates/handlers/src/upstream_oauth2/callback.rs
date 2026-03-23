@@ -1,20 +1,17 @@
-use std::collections::HashMap;
-use std::sync::LazyLock;
+use std::{collections::HashMap, sync::LazyLock};
 
-use pasion_salvo_utils::{GenericError, InternalError, cookies::CookieJar};
-use pasion_data_model::{
-    Clock, UpstreamOAuthProvider, UpstreamOAuthProviderResponseMode,
-};
-use pasion_jose::claims::TokenHash;
-use pasion_oidc_client::requests::jose::JwtVerificationData;
-use pasion_oidc_client::types::client_credentials::ClientCredentials;
-use pasion_storage::upstream_oauth2::{
-    UpstreamOAuthLinkRepository, UpstreamOAuthProviderRepository,
-    UpstreamOAuthSessionRepository,
-};
-use pasion_templates::FormPostContext;
 use oauth2_types::{errors::ClientErrorCode, requests::AccessTokenRequest};
 use opentelemetry::{Key, KeyValue, metrics::Counter};
+use pasion_data_model::{Clock, UpstreamOAuthProvider, UpstreamOAuthProviderResponseMode};
+use pasion_jose::claims::TokenHash;
+use pasion_oidc_client::{
+    requests::jose::JwtVerificationData, types::client_credentials::ClientCredentials,
+};
+use pasion_salvo_utils::{GenericError, InternalError, cookies::CookieJar};
+use pasion_storage::upstream_oauth2::{
+    UpstreamOAuthLinkRepository, UpstreamOAuthProviderRepository, UpstreamOAuthSessionRepository,
+};
+use pasion_templates::FormPostContext;
 use salvo::prelude::*;
 use serde::{Deserialize, Serialize};
 use serde_json::json;
@@ -27,9 +24,7 @@ use super::{
     client_credentials_for_provider,
     template::{AttributeMappingContext, environment},
 };
-use crate::{
-    METER, impl_from_error_for_route,
-};
+use crate::{METER, impl_from_error_for_route};
 
 static CALLBACK_COUNTER: LazyLock<Counter<u64>> = LazyLock::new(|| {
     METER
@@ -152,12 +147,13 @@ impl Scribe for RouteError {
 }
 
 #[handler]
-#[tracing::instrument(
-    name = "handlers.upstream_oauth2.callback.handler",
-    skip_all,
-)]
+#[tracing::instrument(name = "handlers.upstream_oauth2.callback.handler", skip_all)]
 #[allow(clippy::too_many_arguments)]
-pub async fn handler(req: &mut Request, depot: &mut Depot, res: &mut Response) -> Result<(), RouteError> {
+pub async fn handler(
+    req: &mut Request,
+    depot: &mut Depot,
+    res: &mut Response,
+) -> Result<(), RouteError> {
     let provider_id: Ulid = req.param("id").ok_or(RouteError::ProviderNotFound)?;
     let mut rng = crate::rest::make_rng();
     let clock = crate::rest::make_clock();
@@ -309,7 +305,10 @@ pub async fn handler(req: &mut Request, depot: &mut Depot, res: &mut Response) -
     // Token exchange + claims extraction, branching on provider type
     let (id_token_raw, id_token_claims, context, userinfo) = match &client_credentials {
         // ── QQ Connect ──────────────────────────────────────────────
-        ClientCredentials::QQConnect { client_id, client_secret } => {
+        ClientCredentials::QQConnect {
+            client_id,
+            client_secret,
+        } => {
             // 1. Exchange code for access token
             let token_response = pasion_oidc_client::requests::qq_connect::request_access_token(
                 &client,
@@ -360,13 +359,20 @@ pub async fn handler(req: &mut Request, depot: &mut Depot, res: &mut Response) -
         }
 
         // ── Feishu / Lark ────────────────────────────────────────────
-        ClientCredentials::Feishu { client_id, client_secret }
-        | ClientCredentials::Lark { client_id, client_secret } => {
-            let app_token_endpoint = if matches!(&client_credentials, ClientCredentials::Lark { .. }) {
-                pasion_oidc_client::requests::feishu::LARK_APP_TOKEN_ENDPOINT
-            } else {
-                pasion_oidc_client::requests::feishu::FEISHU_APP_TOKEN_ENDPOINT
-            };
+        ClientCredentials::Feishu {
+            client_id,
+            client_secret,
+        }
+        | ClientCredentials::Lark {
+            client_id,
+            client_secret,
+        } => {
+            let app_token_endpoint =
+                if matches!(&client_credentials, ClientCredentials::Lark { .. }) {
+                    pasion_oidc_client::requests::feishu::LARK_APP_TOKEN_ENDPOINT
+                } else {
+                    pasion_oidc_client::requests::feishu::FEISHU_APP_TOKEN_ENDPOINT
+                };
 
             // 1. Get app_access_token
             let app_token = pasion_oidc_client::requests::feishu::get_app_access_token(
@@ -419,7 +425,10 @@ pub async fn handler(req: &mut Request, depot: &mut Depot, res: &mut Response) -
         }
 
         // ── DingTalk ──────────────────────────────────────────────────
-        ClientCredentials::DingTalk { client_id, client_secret } => {
+        ClientCredentials::DingTalk {
+            client_id,
+            client_secret,
+        } => {
             // 1. Exchange code for access token
             let token_response = pasion_oidc_client::requests::dingtalk::request_access_token(
                 &client,
@@ -461,7 +470,10 @@ pub async fn handler(req: &mut Request, depot: &mut Depot, res: &mut Response) -
         }
 
         // ── WeChat ──────────────────────────────────────────────────
-        ClientCredentials::WeChat { client_id, client_secret } => {
+        ClientCredentials::WeChat {
+            client_id,
+            client_secret,
+        } => {
             // 1. Exchange code for access token (includes openid)
             let token_response = pasion_oidc_client::requests::wechat::request_access_token(
                 &client,
@@ -509,7 +521,10 @@ pub async fn handler(req: &mut Request, depot: &mut Depot, res: &mut Response) -
         }
 
         // ── WeCom (企业微信) ────────────────────────────────────────
-        ClientCredentials::WeCom { client_id, client_secret } => {
+        ClientCredentials::WeCom {
+            client_id,
+            client_secret,
+        } => {
             // 1. Get corp access_token
             let corp_token = pasion_oidc_client::requests::wecom::get_corp_access_token(
                 &client,
@@ -519,12 +534,9 @@ pub async fn handler(req: &mut Request, depot: &mut Depot, res: &mut Response) -
             .await?;
 
             // 2. Get user identity from authorization code
-            let identity = pasion_oidc_client::requests::wecom::get_user_identity(
-                &client,
-                &corp_token,
-                &code,
-            )
-            .await?;
+            let identity =
+                pasion_oidc_client::requests::wecom::get_user_identity(&client, &corp_token, &code)
+                    .await?;
 
             // Determine the subject (UserId for members, OpenId for external)
             let subject_id = identity
@@ -581,11 +593,13 @@ pub async fn handler(req: &mut Request, depot: &mut Depot, res: &mut Response) -
                 &client,
                 client_credentials,
                 lazy_metadata.token_endpoint().await?,
-                AccessTokenRequest::AuthorizationCode(oauth2_types::requests::AuthorizationCodeGrant {
-                    code: code.clone(),
-                    redirect_uri: Some(redirect_uri),
-                    code_verifier: session.code_challenge_verifier.clone(),
-                }),
+                AccessTokenRequest::AuthorizationCode(
+                    oauth2_types::requests::AuthorizationCodeGrant {
+                        code: code.clone(),
+                        redirect_uri: Some(redirect_uri),
+                        code_verifier: session.code_challenge_verifier.clone(),
+                    },
+                ),
                 clock.now(),
                 &mut rng,
             )
@@ -597,8 +611,11 @@ pub async fn handler(req: &mut Request, depot: &mut Depot, res: &mut Response) -
             let mut context = AttributeMappingContext::new();
             if let Some(id_token) = token_response.id_token.as_ref() {
                 jwks = Some(
-                    pasion_oidc_client::requests::jose::fetch_jwks(&client, lazy_metadata.jwks_uri().await?)
-                        .await?,
+                    pasion_oidc_client::requests::jose::fetch_jwks(
+                        &client,
+                        lazy_metadata.jwks_uri().await?,
+                    )
+                    .await?,
                 );
 
                 let id_token_verification_data = JwtVerificationData {
@@ -617,10 +634,10 @@ pub async fn handler(req: &mut Request, depot: &mut Depot, res: &mut Response) -
 
                 let (_headers, mut claims) = id_token.into_parts();
 
-                id_token_claims = Some(
-                    serde_json::to_value(&claims)
-                        .expect("serializing a HashMap<String, Value> into a Value should never fail"),
-                );
+                id_token_claims =
+                    Some(serde_json::to_value(&claims).expect(
+                        "serializing a HashMap<String, Value> into a Value should never fail",
+                    ));
 
                 pasion_jose::claims::AT_HASH
                     .extract_optional_with_options(
@@ -697,7 +714,12 @@ pub async fn handler(req: &mut Request, depot: &mut Depot, res: &mut Response) -
                 context = context.with_userinfo_claims(ui.clone());
             }
 
-            (token_response.id_token, id_token_claims, context.build(), userinfo)
+            (
+                token_response.id_token,
+                id_token_claims,
+                context.build(),
+                userinfo,
+            )
         }
     };
 
@@ -769,8 +791,6 @@ pub async fn handler(req: &mut Request, depot: &mut Depot, res: &mut Response) -
     repo.save().await?;
 
     cookie_jar.write_to_response(res);
-    res.render(
-        url_builder.redirect(&pasion_router::UpstreamOAuth2Link::new(link.id)),
-    );
+    res.render(url_builder.redirect(&pasion_router::UpstreamOAuth2Link::new(link.id)));
     Ok(())
 }

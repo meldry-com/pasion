@@ -13,6 +13,7 @@ use std::{
 
 use chrono::{DateTime, Duration, Utc};
 use http::{Method, Uri, Version};
+use oauth2_types::scope::{OPENID, Scope};
 use pasion_data_model::{
     AuthorizationGrant, BrowserSession, Client, CompatSsoLogin, CompatSsoLoginState,
     DeviceCodeGrant, MatrixUser, UpstreamOAuthLink, UpstreamOAuthProvider,
@@ -25,7 +26,6 @@ use pasion_i18n::DataLocale;
 use pasion_iana::jose::JsonWebSignatureAlg;
 use pasion_policy::{Violation, ViolationCode};
 use pasion_router::{Account, PostAuthAction, UrlBuilder};
-use oauth2_types::scope::{OPENID, Scope};
 use rand::{
     Rng, SeedableRng,
     distributions::{Alphanumeric, DistString},
@@ -405,10 +405,7 @@ impl AppContext {
         let prefix = url_builder.prefix().unwrap_or_default();
         let api_endpoint = format!("{prefix}/api/v1");
         Self {
-            app_config: AppConfig {
-                root,
-                api_endpoint,
-            },
+            app_config: AppConfig { root, api_endpoint },
         }
     }
 }

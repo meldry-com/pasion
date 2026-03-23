@@ -37,8 +37,8 @@ impl LockedMasDatabase {
             })
     }
 
-    /// Releases the advisory lock on the Pasion database, returning the underlying
-    /// connection.
+    /// Releases the advisory lock on the Pasion database, returning the
+    /// underlying connection.
     ///
     /// # Errors
     ///

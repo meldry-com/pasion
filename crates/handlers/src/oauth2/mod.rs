@@ -5,9 +5,11 @@
 //! - [`authorization`] — Authorization endpoint (authorization code grant)
 //! - [`token`] — Token endpoint (exchange codes / credentials for tokens)
 //! - [`registration`] — Dynamic client registration (RFC 7591)
-//! - [`discovery`] — OpenID Connect Discovery (`/.well-known/openid-configuration`)
+//! - [`discovery`] — OpenID Connect Discovery
+//!   (`/.well-known/openid-configuration`)
 //! - [`keys`] — JSON Web Key Set (`/.well-known/jwks.json`)
-//! - [`userinfo`] — UserInfo endpoint (returns claims about the authenticated user)
+//! - [`userinfo`] — UserInfo endpoint (returns claims about the authenticated
+//!   user)
 //! - [`introspection`] — Token introspection (RFC 7662)
 //! - [`revoke`] — Token revocation (RFC 7009)
 //! - [`device`] — Device authorization grant (RFC 8628)

@@ -1,6 +1,9 @@
 use std::{collections::HashMap, error::Error};
 
-use headers::{Header, HeaderMapExt, HeaderName, authorization::{Bearer, Credentials}};
+use headers::{
+    Header, HeaderMapExt, HeaderName,
+    authorization::{Bearer, Credentials},
+};
 use http::{HeaderMap, HeaderValue, StatusCode, header::WWW_AUTHENTICATE};
 use pasion_data_model::{Clock, Session};
 use pasion_storage::{
@@ -286,7 +289,8 @@ impl<F: DeserializeOwned + Send> UserAuthorization<F> {
     /// Extract user authorization from a Salvo request
     pub async fn extract_from_request(req: &mut Request) -> Result<Self, UserAuthorizationError> {
         // Take the Authorization header
-        let token_from_header = if let Some(header) = req.headers().get(http::header::AUTHORIZATION) {
+        let token_from_header = if let Some(header) = req.headers().get(http::header::AUTHORIZATION)
+        {
             let bytes = header.as_bytes();
             if bytes.len() >= 7 && bytes[..7].eq_ignore_ascii_case(b"Bearer ") {
                 if let Some(decoded) = Bearer::decode(header) {

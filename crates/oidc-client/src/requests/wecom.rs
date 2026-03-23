@@ -129,7 +129,8 @@ pub async fn get_user_identity(
 ///
 /// `GET https://qyapi.weixin.qq.com/cgi-bin/user/get?access_token=TOKEN&userid=USERID`
 ///
-/// Returns claims including `name`, `email`, `mobile`, `avatar`, `position`, etc.
+/// Returns claims including `name`, `email`, `mobile`, `avatar`, `position`,
+/// etc.
 #[tracing::instrument(skip_all)]
 pub async fn fetch_userinfo(
     http_client: &reqwest::Client,

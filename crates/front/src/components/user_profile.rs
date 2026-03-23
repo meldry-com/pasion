@@ -1,6 +1,5 @@
 use dioxus::prelude::*;
 
-
 #[component]
 pub fn AddEmailForm(user_id: String, on_add: Option<EventHandler<String>>) -> Element {
     let mut email_value = use_signal(String::new);

@@ -21,17 +21,17 @@ use ulid::Ulid;
 use uuid::{NonNilUuid, Uuid};
 
 use crate::{
-    HashMap, ProgressCounter, RandomState, PalpoReader,
+    HashMap, PalpoReader, ProgressCounter, RandomState,
     mas_writer::{
         self, MasNewCompatAccessToken, MasNewCompatRefreshToken, MasNewCompatSession,
         MasNewEmailThreepid, MasNewUnsupportedThreepid, MasNewUpstreamOauthLink, MasNewUser,
         MasNewUserPassword, MasWriteBuffer, MasWriter,
     },
-    progress::{EntityType, Progress},
     palpo_reader::{
-        self, ExtractLocalpartError, FullUserId, PalpoAccessToken, PalpoDevice,
-        PalpoExternalId, PalpoRefreshableTokenPair, PalpoThreepid, PalpoUser,
+        self, ExtractLocalpartError, FullUserId, PalpoAccessToken, PalpoDevice, PalpoExternalId,
+        PalpoRefreshableTokenPair, PalpoThreepid, PalpoUser,
     },
+    progress::{EntityType, Progress},
 };
 
 #[derive(Debug, Error, ContextInto)]
@@ -166,8 +166,7 @@ pub async fn migrate(
     let (mas, state) = migrate_threepids(&mut palpo, mas, rng, state, progress_counter).await?;
 
     let progress_counter = progress.migrating_data(EntityType::ExternalIds, counts.external_ids);
-    let (mas, state) =
-        migrate_external_ids(&mut palpo, mas, rng, state, progress_counter).await?;
+    let (mas, state) = migrate_external_ids(&mut palpo, mas, rng, state, progress_counter).await?;
 
     let progress_counter = progress.migrating_data(
         EntityType::NonRefreshableAccessTokens,

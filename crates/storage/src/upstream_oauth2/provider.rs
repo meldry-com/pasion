@@ -1,6 +1,7 @@
 use std::marker::PhantomData;
 
 use async_trait::async_trait;
+use oauth2_types::scope::Scope;
 use pasion_data_model::{
     Clock, UpstreamOAuthProvider, UpstreamOAuthProviderClaimsImports,
     UpstreamOAuthProviderDiscoveryMode, UpstreamOAuthProviderOnBackchannelLogout,
@@ -8,7 +9,6 @@ use pasion_data_model::{
     UpstreamOAuthProviderTokenAuthMethod,
 };
 use pasion_iana::jose::JsonWebSignatureAlg;
-use oauth2_types::scope::Scope;
 use rand_core::RngCore;
 use ulid::Ulid;
 use url::Url;

@@ -664,7 +664,10 @@ impl CompatLoginSsoComplete {
     pub fn new(id: Ulid, action: Option<CompatLoginSsoAction>) -> Self {
         Self {
             id,
-            query: action.map(|action| CompatLoginSsoActionParams { action, unstable_action: action }),
+            query: action.map(|action| CompatLoginSsoActionParams {
+                action,
+                unstable_action: action,
+            }),
         }
     }
 }

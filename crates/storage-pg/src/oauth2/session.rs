@@ -2,13 +2,13 @@ use std::net::IpAddr;
 
 use async_trait::async_trait;
 use chrono::{DateTime, Utc};
+use oauth2_types::scope::{Scope, ScopeToken};
 use pasion_data_model::{BrowserSession, Client, Clock, Session, SessionState, User};
 use pasion_storage::{
     Page, Pagination,
     oauth2::{OAuth2SessionFilter, OAuth2SessionRepository},
     pagination::Node,
 };
-use oauth2_types::scope::{Scope, ScopeToken};
 use rand::RngCore;
 use sea_query::{
     Condition, Expr, PgFunc, PostgresQueryBuilder, Query, SimpleExpr, enum_def,

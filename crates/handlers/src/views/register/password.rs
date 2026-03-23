@@ -1,16 +1,14 @@
 use std::{str::FromStr, sync::Arc};
 
-use salvo::prelude::*;
-use salvo::writing::Text;
 use lettre::Address;
+use pasion_data_model::CaptchaConfig;
+use pasion_i18n::DataLocale;
+use pasion_matrix::HomeserverConnection;
 use pasion_salvo_utils::{
     InternalError, SessionInfoExt,
     cookies::CookieJar,
     csrf::{CsrfExt, CsrfToken, ProtectedForm},
 };
-use pasion_data_model::CaptchaConfig;
-use pasion_i18n::DataLocale;
-use pasion_matrix::HomeserverConnection;
 use pasion_storage::{
     RepositoryAccess,
     queue::{QueueJobRepositoryExt as _, SendEmailAuthenticationCodeJob},
@@ -20,15 +18,14 @@ use pasion_templates::{
     FieldError, FormError, FormState, PasswordRegisterContext, RegisterFormField, TemplateContext,
     Templates, ToFormState,
 };
+use salvo::{prelude::*, writing::Text};
 use serde::{Deserialize, Serialize};
 use zeroize::Zeroizing;
 
 use super::cookie::UserRegistrationSessions;
 use crate::{
-    RequesterFingerprint, SiteConfig,
-    captcha::Form as CaptchaForm, passwords::PasswordManager,
-    rest,
-    views::shared::OptionalPostAuthAction,
+    RequesterFingerprint, SiteConfig, captcha::Form as CaptchaForm, passwords::PasswordManager,
+    rest, views::shared::OptionalPostAuthAction,
 };
 
 #[derive(Debug, Deserialize, Serialize)]
@@ -57,7 +54,11 @@ pub struct QueryParams {
 }
 
 #[handler]
-pub async fn get(req: &mut Request, depot: &Depot, res: &mut Response) -> Result<(), InternalError> {
+pub async fn get(
+    req: &mut Request,
+    depot: &Depot,
+    res: &mut Response,
+) -> Result<(), InternalError> {
     let mut rng = rest::make_rng();
     let clock = rest::make_clock();
     let locale = crate::preferred_language(req, depot);
@@ -75,15 +76,16 @@ pub async fn get(req: &mut Request, depot: &Depot, res: &mut Response) -> Result
 
     if maybe_session.is_some() {
         let reply = query.action.go_next(&url_builder);
-            cookie_jar.write_to_response(res);
+        cookie_jar.write_to_response(res);
         res.render(reply);
         return Ok(());
     }
 
     if !site_config.password_registration_enabled {
         // If password-based registration is disabled, redirect to the login page here
-            res.render(url_builder
-            .redirect(&pasion_router::Login::from(query.action.post_auth_action)));
+        res.render(
+            url_builder.redirect(&pasion_router::Login::from(query.action.post_auth_action)),
+        );
         return Ok(());
     }
 
@@ -113,7 +115,11 @@ pub async fn get(req: &mut Request, depot: &Depot, res: &mut Response) -> Result
 }
 
 #[handler]
-pub async fn post(req: &mut Request, depot: &Depot, res: &mut Response) -> Result<(), InternalError> {
+pub async fn post(
+    req: &mut Request,
+    depot: &Depot,
+    res: &mut Response,
+) -> Result<(), InternalError> {
     let mut rng = rest::make_rng();
     let clock = rest::make_clock();
     let locale = crate::preferred_language(req, depot);
@@ -125,19 +131,31 @@ pub async fn post(req: &mut Request, depot: &Depot, res: &mut Response) -> Resul
     let http_client = rest::get_http_client(depot)?;
     let limiter = rest::get_limiter(depot)?;
     let policy_factory = rest::get_policy_factory(depot)?;
-    let mut policy = policy_factory.instantiate().await.map_err(InternalError::from_anyhow)?;
+    let mut policy = policy_factory
+        .instantiate()
+        .await
+        .map_err(InternalError::from_anyhow)?;
     let mut repo = rest::get_repo_factory(depot)?.create().await?;
     let activity_tracker = rest::extract_bound_activity_tracker(req, depot);
-    let requester = activity_tracker.ip().map(RequesterFingerprint::new).unwrap_or(RequesterFingerprint::EMPTY);
-    let user_agent = req.headers().get("user-agent").and_then(|h| h.to_str().ok()).map(|s| s.to_owned());
+    let requester = activity_tracker
+        .ip()
+        .map(RequesterFingerprint::new)
+        .unwrap_or(RequesterFingerprint::EMPTY);
+    let user_agent = req
+        .headers()
+        .get("user-agent")
+        .and_then(|h| h.to_str().ok())
+        .map(|s| s.to_owned());
     let query: OptionalPostAuthAction = req.parse_queries().unwrap_or_default();
     let cookie_jar = rest::extract_cookie_jar(req, depot)?;
-    let form: ProtectedForm<RegisterForm> = req.parse_form().await
+    let form: ProtectedForm<RegisterForm> = req
+        .parse_form()
+        .await
         .map_err(|e| InternalError::from_anyhow(e.into()))?;
 
     let ip_address = activity_tracker.ip();
     if !site_config.password_registration_enabled {
-            res.status_code(StatusCode::METHOD_NOT_ALLOWED);
+        res.status_code(StatusCode::METHOD_NOT_ALLOWED);
         return Ok(());
     }
 
@@ -320,7 +338,7 @@ pub async fn post(req: &mut Request, depot: &Depot, res: &mut Response) -> Resul
         )
         .await?;
 
-            cookie_jar.write_to_response(res);
+        cookie_jar.write_to_response(res);
         res.render(Text::Html(content));
         return Ok(());
     }

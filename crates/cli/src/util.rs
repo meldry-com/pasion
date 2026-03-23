@@ -167,7 +167,9 @@ pub fn captcha_config_from_config(
     };
 
     let service = match service {
-        pasion_config::CaptchaServiceKind::RecaptchaV2 => pasion_data_model::CaptchaService::RecaptchaV2,
+        pasion_config::CaptchaServiceKind::RecaptchaV2 => {
+            pasion_data_model::CaptchaService::RecaptchaV2
+        }
         pasion_config::CaptchaServiceKind::CloudflareTurnstile => {
             pasion_data_model::CaptchaService::CloudflareTurnstile
         }
@@ -484,14 +486,12 @@ pub async fn homeserver_connection_from_config(
     http_client: reqwest::Client,
 ) -> anyhow::Result<Arc<dyn HomeserverConnection>> {
     Ok(match config.kind {
-        HomeserverKind::Palpo | HomeserverKind::PalpoModern => {
-            Arc::new(PalpoConnection::new(
-                config.homeserver.clone(),
-                config.endpoint.clone(),
-                config.secret().await?,
-                http_client,
-            ))
-        }
+        HomeserverKind::Palpo | HomeserverKind::PalpoModern => Arc::new(PalpoConnection::new(
+            config.homeserver.clone(),
+            config.endpoint.clone(),
+            config.secret().await?,
+            http_client,
+        )),
         HomeserverKind::PalpoReadOnly => {
             let connection = PalpoConnection::new(
                 config.homeserver.clone(),

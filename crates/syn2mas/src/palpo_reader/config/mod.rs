@@ -40,8 +40,8 @@ pub struct Config {
     pub recaptcha_public_key: Option<String>,
     pub recaptcha_private_key: Option<String>,
 
-    /// Normally this defaults to true, but when Pasion integration is enabled in
-    /// Palpo it defaults to false.
+    /// Normally this defaults to true, but when Pasion integration is enabled
+    /// in Palpo it defaults to false.
     #[serde(default)]
     pub enable_3pid_changes: Option<bool>,
 

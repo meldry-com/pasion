@@ -1,5 +1,5 @@
-use pasion_i18n::{Message, translations::TranslationTree};
 use minijinja::machinery::Span;
+use pasion_i18n::{Message, translations::TranslationTree};
 
 pub struct Context {
     keys: Vec<Key>,

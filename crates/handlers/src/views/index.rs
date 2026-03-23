@@ -1,7 +1,6 @@
-use salvo::prelude::*;
-use salvo::writing::Text;
 use pasion_salvo_utils::{InternalError, cookies::CookieJar, csrf::CsrfExt};
 use pasion_templates::{IndexContext, TemplateContext, Templates};
+use salvo::{prelude::*, writing::Text};
 
 use crate::{
     rest,
@@ -9,7 +8,11 @@ use crate::{
 };
 
 #[handler]
-pub async fn get(req: &mut Request, depot: &Depot, res: &mut Response) -> Result<(), InternalError> {
+pub async fn get(
+    req: &mut Request,
+    depot: &Depot,
+    res: &mut Response,
+) -> Result<(), InternalError> {
     let mut rng = rest::make_rng();
     let clock = rest::make_clock();
     let locale = crate::preferred_language(req, depot);
@@ -29,7 +32,10 @@ pub async fn get(req: &mut Request, depot: &Depot, res: &mut Response) -> Result
             maybe_session,
             ..
         } => (cookie_jar, maybe_session),
-        SessionOrFallback::Fallback { response } => { *res = response; return Ok(()); }
+        SessionOrFallback::Fallback { response } => {
+            *res = response;
+            return Ok(());
+        }
     };
 
     let (csrf_token, cookie_jar) = cookie_jar.csrf_token(&clock, &mut rng);

@@ -1,16 +1,15 @@
 use std::sync::{Arc, LazyLock};
 
-use salvo::prelude::*;
-use salvo::writing::Text;
+use opentelemetry::{Key, KeyValue, metrics::Counter};
+use pasion_data_model::{Clock, oauth2::LoginHint};
+use pasion_i18n::DataLocale;
+use pasion_matrix::HomeserverConnection;
+use pasion_router::UpstreamOAuth2Authorize;
 use pasion_salvo_utils::{
     InternalError, SessionInfoExt,
     cookies::CookieJar,
     csrf::{CsrfExt, ProtectedForm},
 };
-use pasion_data_model::{Clock, oauth2::LoginHint};
-use pasion_i18n::DataLocale;
-use pasion_matrix::HomeserverConnection;
-use pasion_router::UpstreamOAuth2Authorize;
 use pasion_storage::{
     RepositoryAccess,
     upstream_oauth2::UpstreamOAuthProviderRepository,
@@ -20,8 +19,8 @@ use pasion_templates::{
     AccountInactiveContext, FieldError, FormError, FormState, LoginContext, LoginFormField,
     PostAuthContext, PostAuthContextInner, TemplateContext, Templates, ToFormState,
 };
-use opentelemetry::{Key, KeyValue, metrics::Counter};
 use rand::Rng;
+use salvo::{prelude::*, writing::Text};
 use serde::{Deserialize, Serialize};
 use zeroize::Zeroizing;
 
@@ -53,7 +52,11 @@ impl ToFormState for LoginForm {
 }
 
 #[handler]
-pub async fn get(req: &mut Request, depot: &Depot, res: &mut Response) -> Result<(), InternalError> {
+pub async fn get(
+    req: &mut Request,
+    depot: &Depot,
+    res: &mut Response,
+) -> Result<(), InternalError> {
     let mut rng = rest::make_rng();
     let clock = rest::make_clock();
     let locale = crate::preferred_language(req, depot);
@@ -76,7 +79,10 @@ pub async fn get(req: &mut Request, depot: &Depot, res: &mut Response) -> Result
             maybe_session,
             ..
         } => (cookie_jar, maybe_session),
-        SessionOrFallback::Fallback { response } => { *res = response; return Ok(()); }
+        SessionOrFallback::Fallback { response } => {
+            *res = response;
+            return Ok(());
+        }
     };
 
     if let Some(session) = maybe_session {
@@ -85,7 +91,7 @@ pub async fn get(req: &mut Request, depot: &Depot, res: &mut Response) -> Result
             .await;
 
         let reply = query.go_next(&url_builder);
-            cookie_jar.write_to_response(res);
+        cookie_jar.write_to_response(res);
         res.render(reply);
         return Ok(());
     }
@@ -103,7 +109,7 @@ pub async fn get(req: &mut Request, depot: &Depot, res: &mut Response) -> Result
             destination = destination.and_then(action);
         }
 
-            cookie_jar.write_to_response(res);
+        cookie_jar.write_to_response(res);
         res.render(url_builder.redirect(&destination));
         return Ok(());
     }
@@ -125,7 +131,11 @@ pub async fn get(req: &mut Request, depot: &Depot, res: &mut Response) -> Result
 }
 
 #[handler]
-pub async fn post(req: &mut Request, depot: &Depot, res: &mut Response) -> Result<(), InternalError> {
+pub async fn post(
+    req: &mut Request,
+    depot: &Depot,
+    res: &mut Response,
+) -> Result<(), InternalError> {
     let mut rng = rest::make_rng();
     let clock = rest::make_clock();
     let locale = crate::preferred_language(req, depot);
@@ -137,16 +147,25 @@ pub async fn post(req: &mut Request, depot: &Depot, res: &mut Response) -> Resul
     let homeserver = rest::get_homeserver(depot)?;
     let mut repo = rest::get_repo_factory(depot)?.create().await?;
     let activity_tracker = rest::extract_bound_activity_tracker(req, depot);
-    let requester = activity_tracker.ip().map(RequesterFingerprint::new).unwrap_or(RequesterFingerprint::EMPTY);
+    let requester = activity_tracker
+        .ip()
+        .map(RequesterFingerprint::new)
+        .unwrap_or(RequesterFingerprint::EMPTY);
     let query: OptionalPostAuthAction = req.parse_queries().unwrap_or_default();
     let cookie_jar = rest::extract_cookie_jar(req, depot)?;
-    let user_agent = req.headers().get("user-agent").and_then(|h| h.to_str().ok()).map(|s| s.to_owned());
-    let form: ProtectedForm<LoginForm> = req.parse_form().await
+    let user_agent = req
+        .headers()
+        .get("user-agent")
+        .and_then(|h| h.to_str().ok())
+        .map(|s| s.to_owned());
+    let form: ProtectedForm<LoginForm> = req
+        .parse_form()
+        .await
         .map_err(|e| InternalError::from_anyhow(e.into()))?;
 
     if !site_config.password_login_enabled {
         // XXX: is it necessary to have better errors here?
-            res.status_code(StatusCode::METHOD_NOT_ALLOWED);
+        res.status_code(StatusCode::METHOD_NOT_ALLOWED);
         return Ok(());
     }
 
@@ -310,7 +329,7 @@ pub async fn post(req: &mut Request, depot: &Depot, res: &mut Response) -> Resul
             .with_csrf(csrf_token.form_value())
             .with_language(locale);
         let content = templates.render_account_deactivated(&ctx)?;
-            cookie_jar.write_to_response(res);
+        cookie_jar.write_to_response(res);
         res.render(Text::Html(content));
         return Ok(());
     }
@@ -323,7 +342,7 @@ pub async fn post(req: &mut Request, depot: &Depot, res: &mut Response) -> Resul
             .with_csrf(csrf_token.form_value())
             .with_language(locale);
         let content = templates.render_account_locked(&ctx)?;
-            cookie_jar.write_to_response(res);
+        cookie_jar.write_to_response(res);
         res.render(Text::Html(content));
         return Ok(());
     }
@@ -451,6 +470,7 @@ mod test {
         Request, StatusCode,
         header::{CONTENT_TYPE, LOCATION},
     };
+    use oauth2_types::scope::OPENID;
     use pasion_data_model::{
         UpstreamOAuthProviderClaimsImports, UpstreamOAuthProviderOnBackchannelLogout,
         UpstreamOAuthProviderTokenAuthMethod,
@@ -462,7 +482,6 @@ mod test {
         upstream_oauth2::{UpstreamOAuthProviderParams, UpstreamOAuthProviderRepository},
     };
     use pasion_templates::escape_html;
-    use oauth2_types::scope::OPENID;
     use sqlx::PgPool;
     use zeroize::Zeroizing;
 

@@ -1,7 +1,6 @@
-use salvo::prelude::*;
-use salvo::http::StatusCode;
 use pasion_salvo_utils::record_error;
 use pasion_storage::{Page, user::UserFilter};
+use salvo::{http::StatusCode, prelude::*};
 use schemars::JsonSchema;
 use serde::Deserialize;
 
@@ -94,7 +93,6 @@ impl std::fmt::Display for FilterParams {
 pub enum RouteError {
     #[error(transparent)]
     Internal(Box<dyn std::error::Error + Send + Sync + 'static>),
-
 }
 
 impl_from_error_for_route!(pasion_storage::RepositoryError);
@@ -122,7 +120,8 @@ impl Scribe for RouteError {
 #[tracing::instrument(name = "handler.admin.v1.users.list", skip_all)]
 pub async fn handler(
     req: &mut Request,
-    depot: &Depot) -> Result<Json<PaginatedResponse<User>>, RouteError> {
+    depot: &Depot,
+) -> Result<Json<PaginatedResponse<User>>, RouteError> {
     let call_context = extract_call_context(req, depot).await?;
     let crate::admin::call_context::CallContext { mut repo, .. } = call_context;
     let (pagination, include_count) = extract_pagination(req)?;

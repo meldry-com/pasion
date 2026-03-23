@@ -1,11 +1,5 @@
 use std::sync::{Arc, LazyLock};
 
-use pasion_data_model::{BoxClock, BoxRng, SystemClock};
-use pasion_iana::oauth::OAuthClientAuthenticationMethod;
-use pasion_keystore::Encrypter;
-use pasion_policy::{EvaluationResult, Policy, PolicyFactory};
-use pasion_salvo_utils::{record_error, sentry::SentryEventID};
-use pasion_storage::{BoxRepository, BoxRepositoryFactory, oauth2::OAuth2ClientRepository};
 use oauth2_types::{
     errors::{ClientError, ClientErrorCode},
     registration::{
@@ -14,8 +8,18 @@ use oauth2_types::{
     },
 };
 use opentelemetry::{Key, KeyValue, metrics::Counter};
+use pasion_data_model::{BoxClock, BoxRng, SystemClock};
+use pasion_iana::oauth::OAuthClientAuthenticationMethod;
+use pasion_keystore::Encrypter;
+use pasion_policy::{EvaluationResult, Policy, PolicyFactory};
+use pasion_salvo_utils::{record_error, sentry::SentryEventID};
+use pasion_storage::{BoxRepository, BoxRepositoryFactory, oauth2::OAuth2ClientRepository};
 use psl::Psl;
-use rand::{SeedableRng, distributions::{Alphanumeric, DistString}, thread_rng};
+use rand::{
+    SeedableRng,
+    distributions::{Alphanumeric, DistString},
+    thread_rng,
+};
 use rand_chacha::ChaChaRng;
 use salvo::prelude::*;
 use serde::Serialize;
@@ -218,12 +222,18 @@ async fn handle_post(req: &mut Request, depot: &Depot) -> Result<RouteResponse, 
     let mut rng: BoxRng = Box::new(ChaChaRng::from_rng(thread_rng()).expect("Failed to seed rng"));
 
     let mut repo: BoxRepository = repo_factory.create().await?;
-    let mut policy: Policy = policy_factory.instantiate().await.map_err(|e| RouteError::Internal(Box::new(e)))?;
+    let mut policy: Policy = policy_factory
+        .instantiate()
+        .await
+        .map_err(|e| RouteError::Internal(Box::new(e)))?;
 
     let user_agent: Option<String> = req.header("user-agent");
 
     // Parse the JSON body
-    let body: ClientMetadata = req.parse_json().await.map_err(|e| RouteError::InvalidJson(e.to_string()))?;
+    let body: ClientMetadata = req
+        .parse_json()
+        .await
+        .map_err(|e| RouteError::InvalidJson(e.to_string()))?;
 
     // Sort the properties to ensure a stable serialisation order for hashing
     let body = body.sorted();

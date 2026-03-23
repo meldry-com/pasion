@@ -3,19 +3,18 @@ pub mod model;
 use std::sync::Arc;
 
 use arc_swap::ArcSwap;
-use pasion_data_model::{SessionLimitConfig, Ulid};
 use opa_wasm::{
     Runtime,
     wasmtime::{Config, Engine, Module, OptLevel, Store},
 };
+use pasion_data_model::{SessionLimitConfig, Ulid};
 use serde::Serialize;
 use thiserror::Error;
 use tokio::io::{AsyncRead, AsyncReadExt};
 
 pub use self::model::{
-    AuthorizationGrantInput, ClientRegistrationInput, Code as ViolationCode,
-    EmailInput, EvaluationResult, GrantType, RegisterInput, RegistrationMethod, Requester,
-    Violation,
+    AuthorizationGrantInput, ClientRegistrationInput, Code as ViolationCode, EmailInput,
+    EvaluationResult, GrantType, RegisterInput, RegistrationMethod, Requester, Violation,
 };
 
 #[derive(Debug, Error)]
@@ -454,7 +453,6 @@ impl Policy {
 
         Ok(res)
     }
-
 }
 
 #[cfg(test)]

@@ -1,12 +1,12 @@
 use std::{collections::HashMap, net::IpAddr};
 
 use chrono::{DateTime, Utc};
-use pasion_storage::{
-    BoxRepositoryFactory, RepositoryAccess, RepositoryError, user::BrowserSessionRepository,
-};
 use opentelemetry::{
     Key, KeyValue,
     metrics::{Counter, Gauge, Histogram},
+};
+use pasion_storage::{
+    BoxRepositoryFactory, RepositoryAccess, RepositoryError, user::BrowserSessionRepository,
 };
 use tokio_util::sync::CancellationToken;
 use ulid::Ulid;

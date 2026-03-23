@@ -1,6 +1,16 @@
 use std::sync::{Arc, LazyLock};
 
 use chrono::Duration;
+use oauth2_types::{
+    errors::{ClientError, ClientErrorCode},
+    pkce::CodeChallengeError,
+    requests::{
+        AccessTokenRequest, AccessTokenResponse, AuthorizationCodeGrant, ClientCredentialsGrant,
+        DeviceCodeGrant, GrantType, RefreshTokenGrant,
+    },
+    scope,
+};
+use opentelemetry::{Key, KeyValue, metrics::Counter};
 use pasion_data_model::{
     AuthorizationGrantStage, BoxClock, BoxRng, Client, Clock, Device, DeviceCodeGrantState,
     SiteConfig, SystemClock, TokenType,
@@ -25,16 +35,6 @@ use pasion_storage::{
     user::BrowserSessionRepository,
 };
 use pasion_templates::{DeviceNameContext, TemplateContext, Templates};
-use oauth2_types::{
-    errors::{ClientError, ClientErrorCode},
-    pkce::CodeChallengeError,
-    requests::{
-        AccessTokenRequest, AccessTokenResponse, AuthorizationCodeGrant, ClientCredentialsGrant,
-        DeviceCodeGrant, GrantType, RefreshTokenGrant,
-    },
-    scope,
-};
-use opentelemetry::{Key, KeyValue, metrics::Counter};
 use rand::{SeedableRng, thread_rng};
 use rand_chacha::ChaChaRng;
 use salvo::prelude::*;
@@ -224,7 +224,9 @@ impl Scribe for RouteError {
 
             Self::DeviceCodePending => {
                 res.status_code(StatusCode::FORBIDDEN);
-                res.render(Json(ClientError::from(ClientErrorCode::AuthorizationPending)));
+                res.render(Json(ClientError::from(
+                    ClientErrorCode::AuthorizationPending,
+                )));
             }
 
             Self::InvalidGrant(_)
@@ -240,7 +242,9 @@ impl Scribe for RouteError {
 
             Self::UnsupportedGrantType => {
                 res.status_code(StatusCode::BAD_REQUEST);
-                res.render(Json(ClientError::from(ClientErrorCode::UnsupportedGrantType)));
+                res.render(Json(ClientError::from(
+                    ClientErrorCode::UnsupportedGrantType,
+                )));
             }
         }
 
@@ -275,10 +279,7 @@ pub async fn post(req: &mut Request, depot: &Depot, res: &mut Response) {
     }
 }
 
-async fn handle_post(
-    req: &mut Request,
-    depot: &Depot,
-) -> Result<AccessTokenResponse, RouteError> {
+async fn handle_post(req: &mut Request, depot: &Depot) -> Result<AccessTokenResponse, RouteError> {
     let http_client = depot
         .get::<reqwest::Client>("http_client")
         .expect("reqwest::Client not found in depot");
@@ -315,7 +316,10 @@ async fn handle_post(
     let mut rng: BoxRng = Box::new(ChaChaRng::from_rng(thread_rng()).expect("Failed to seed rng"));
 
     let mut repo: BoxRepository = repo_factory.create().await?;
-    let policy: Policy = policy_factory.instantiate().await.map_err(|e| RouteError::Internal(Box::new(e)))?;
+    let policy: Policy = policy_factory
+        .instantiate()
+        .await
+        .map_err(|e| RouteError::Internal(Box::new(e)))?;
 
     let user_agent: Option<String> = req.header("user-agent");
 
@@ -338,8 +342,8 @@ async fn handle_post(
         .verify(http_client, encrypter, method, &client)
         .await
         .map_err(|err| {
-            // Classify the error differently, depending on whether it's an 'internal' error,
-            // or just because the client presented invalid credentials.
+            // Classify the error differently, depending on whether it's an 'internal'
+            // error, or just because the client presented invalid credentials.
             if err.is_internal() {
                 RouteError::ClientCredentialsVerification {
                     client_id: client.id,

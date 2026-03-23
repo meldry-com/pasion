@@ -1,12 +1,11 @@
-use salvo::prelude::*;
-use salvo::http::StatusCode;
-use pasion_salvo_utils::record_error;
+use oauth2_types::scope::Scope;
 use pasion_data_model::{
     BoxClock, Session, TokenFormatError, TokenType, User,
     personal::session::{PersonalSession, PersonalSessionOwner},
 };
+use pasion_salvo_utils::record_error;
 use pasion_storage::{BoxRepository, RepositoryError};
-use oauth2_types::scope::Scope;
+use salvo::{http::StatusCode, prelude::*};
 use ulid::Ulid;
 
 use super::response::ErrorResponse;

@@ -1,12 +1,12 @@
 use async_trait::async_trait;
 use chrono::{DateTime, Utc};
+use opentelemetry_semantic_conventions::trace::DB_QUERY_TEXT;
 use pasion_data_model::{Clock, UpstreamOAuthLink, UpstreamOAuthProvider, User};
 use pasion_storage::{
     Page, Pagination,
     pagination::Node,
     upstream_oauth2::{UpstreamOAuthLinkFilter, UpstreamOAuthLinkRepository},
 };
-use opentelemetry_semantic_conventions::trace::DB_QUERY_TEXT;
 use rand::RngCore;
 use sea_query::{Expr, PostgresQueryBuilder, Query, enum_def};
 use sea_query_binder::SqlxBinder;

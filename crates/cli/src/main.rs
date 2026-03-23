@@ -7,7 +7,8 @@
 //! # Architecture
 //!
 //! - [`app_state`] — Shared application state injected into every HTTP request
-//! - [`commands`] — CLI sub-command implementations (`server`, `config`, `manage`, …)
+//! - [`commands`] — CLI sub-command implementations (`server`, `config`,
+//!   `manage`, …)
 //! - [`server`] — Salvo router construction, middleware, and listener setup
 //! - [`telemetry`] — OpenTelemetry tracing + Prometheus metrics
 //! - [`lifecycle`] — Graceful shutdown and signal handling

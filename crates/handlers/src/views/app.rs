@@ -1,8 +1,7 @@
-use salvo::prelude::*;
-use salvo::writing::Text;
-use pasion_salvo_utils::{InternalError, cookies::CookieJar};
 use pasion_router::PostAuthAction;
+use pasion_salvo_utils::{InternalError, cookies::CookieJar};
 use pasion_templates::{AppContext, TemplateContext, Templates};
+use salvo::{prelude::*, writing::Text};
 use serde::Deserialize;
 
 use crate::{
@@ -17,7 +16,11 @@ pub struct Params {
 }
 
 #[handler]
-pub async fn get(req: &mut Request, depot: &Depot, res: &mut Response) -> Result<(), InternalError> {
+pub async fn get(
+    req: &mut Request,
+    depot: &Depot,
+    res: &mut Response,
+) -> Result<(), InternalError> {
     let mut rng = rest::make_rng();
     let clock = rest::make_clock();
     let locale = crate::preferred_language(req, depot);
@@ -38,12 +41,15 @@ pub async fn get(req: &mut Request, depot: &Depot, res: &mut Response) -> Result
             maybe_session,
             ..
         } => (cookie_jar, maybe_session),
-        SessionOrFallback::Fallback { response } => { *res = response; return Ok(()); }
+        SessionOrFallback::Fallback { response } => {
+            *res = response;
+            return Ok(());
+        }
     };
 
     // TODO: keep the full path, not just the action
     let Some(session) = maybe_session else {
-            cookie_jar.write_to_response(res);
+        cookie_jar.write_to_response(res);
         res.render(url_builder.redirect(&pasion_router::Login::and_then(
             PostAuthAction::manage_account(action),
         )));
@@ -66,7 +72,11 @@ pub async fn get(req: &mut Request, depot: &Depot, res: &mut Response) -> Result
 /// Used for a subset of the account management paths.
 /// Needed for e.g. account recovery.
 #[handler]
-pub async fn get_anonymous(req: &mut Request, depot: &Depot, res: &mut Response) -> Result<(), InternalError> {
+pub async fn get_anonymous(
+    req: &mut Request,
+    depot: &Depot,
+    res: &mut Response,
+) -> Result<(), InternalError> {
     let locale = crate::preferred_language(req, depot);
     let templates = rest::get_templates(depot)?;
     let url_builder = rest::get_url_builder(depot)?;

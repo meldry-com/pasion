@@ -3,11 +3,11 @@
 //! [Refresh Tokens]: https://openid.net/specs/openid-connect-core-1_0.html#RefreshTokens
 
 use chrono::{DateTime, Utc};
-use pasion_jose::claims::{self, TokenHash};
 use oauth2_types::{
     requests::{AccessTokenRequest, AccessTokenResponse, RefreshTokenGrant},
     scope::Scope,
 };
+use pasion_jose::claims::{self, TokenHash};
 use rand::Rng;
 use url::Url;
 
