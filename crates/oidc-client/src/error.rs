@@ -82,6 +82,15 @@ pub enum TokenRequestError {
 
     /// Error while injecting the client credentials into the request.
     Credentials(#[from] CredentialsError),
+
+    /// The provider returned a business-level error (e.g. QQ, Feishu).
+    #[error("Provider error (code={code}): {msg}")]
+    ProviderError {
+        /// The provider-specific error code.
+        code: i32,
+        /// The error message.
+        msg: String,
+    },
 }
 
 /// All possible errors when exchanging a code for an access token.
@@ -139,6 +148,15 @@ pub enum UserInfoError {
     /// The server returned an error
     #[error(transparent)]
     OAuth2(#[from] OAuth2Error),
+
+    /// The provider returned a business-level error (e.g. QQ, Feishu).
+    #[error("Provider error (code={code}): {msg}")]
+    ProviderError {
+        /// The provider-specific error code.
+        code: i32,
+        /// The error message.
+        msg: String,
+    },
 }
 
 /// All possible errors when requesting a JWKS.

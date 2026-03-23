@@ -1,3 +1,4 @@
+use std::collections::HashMap;
 use std::sync::LazyLock;
 
 use pasion_salvo_utils::{GenericError, InternalError, cookies::CookieJar};
@@ -6,6 +7,7 @@ use pasion_data_model::{
 };
 use pasion_jose::claims::TokenHash;
 use pasion_oidc_client::requests::jose::JwtVerificationData;
+use pasion_oidc_client::types::client_credentials::ClientCredentials;
 use pasion_storage::upstream_oauth2::{
     UpstreamOAuthLinkRepository, UpstreamOAuthProviderRepository,
     UpstreamOAuthSessionRepository,
@@ -304,134 +306,400 @@ pub async fn handler(req: &mut Request, depot: &mut Depot, res: &mut Response) -
 
     let redirect_uri = url_builder.upstream_oauth_callback(provider.id);
 
-    let token_response = pasion_oidc_client::requests::token::request_access_token(
-        &client,
-        client_credentials,
-        lazy_metadata.token_endpoint().await?,
-        AccessTokenRequest::AuthorizationCode(oauth2_types::requests::AuthorizationCodeGrant {
-            code: code.clone(),
-            redirect_uri: Some(redirect_uri),
-            code_verifier: session.code_challenge_verifier.clone(),
-        }),
-        clock.now(),
-        &mut rng,
-    )
-    .await?;
-
-    let mut jwks = None;
-    let mut id_token_claims = None;
-
-    let mut context = AttributeMappingContext::new();
-    if let Some(id_token) = token_response.id_token.as_ref() {
-        jwks = Some(
-            pasion_oidc_client::requests::jose::fetch_jwks(&client, lazy_metadata.jwks_uri().await?)
-                .await?,
-        );
-
-        let id_token_verification_data = JwtVerificationData {
-            issuer: provider.issuer.as_deref(),
-            jwks: jwks.as_ref().unwrap(),
-            signing_algorithm: &provider.id_token_signed_response_alg,
-            client_id: &provider.client_id,
-        };
-
-        // Decode and verify the ID token
-        let id_token = pasion_oidc_client::requests::jose::verify_id_token(
-            id_token,
-            id_token_verification_data,
-            None,
-            clock.now(),
-        )?;
-
-        let (_headers, mut claims) = id_token.into_parts();
-
-        // Save a copy of the claims for later; the claims extract methods
-        // remove them from the map, and we want to store the original claims.
-        // We anyway need this to be a serde_json::Value
-        id_token_claims = Some(
-            serde_json::to_value(&claims)
-                .expect("serializing a HashMap<String, Value> into a Value should never fail"),
-        );
-
-        // Access token hash must match.
-        pasion_jose::claims::AT_HASH
-            .extract_optional_with_options(
-                &mut claims,
-                TokenHash::new(
-                    id_token_verification_data.signing_algorithm,
-                    &token_response.access_token,
-                ),
+    // Token exchange + claims extraction, branching on provider type
+    let (id_token_raw, id_token_claims, context, userinfo) = match &client_credentials {
+        // ── QQ Connect ──────────────────────────────────────────────
+        ClientCredentials::QQConnect { client_id, client_secret } => {
+            // 1. Exchange code for access token
+            let token_response = pasion_oidc_client::requests::qq_connect::request_access_token(
+                &client,
+                lazy_metadata.token_endpoint().await?,
+                client_id,
+                client_secret,
+                &code,
+                &redirect_uri,
             )
-            .map_err(pasion_oidc_client::error::IdTokenError::from)?;
+            .await?;
 
-        // Code hash must match.
-        pasion_jose::claims::C_HASH
-            .extract_optional_with_options(
-                &mut claims,
-                TokenHash::new(id_token_verification_data.signing_algorithm, &code),
+            // 2. Fetch OpenID (user subject identifier)
+            let openid_response = pasion_oidc_client::requests::qq_connect::fetch_openid(
+                &client,
+                &token_response.access_token,
             )
-            .map_err(pasion_oidc_client::error::IdTokenError::from)?;
+            .await?;
 
-        // Nonce must match if present.
-        if let Some(nonce) = session.nonce.as_deref() {
-            pasion_jose::claims::NONCE
-                .extract_required_with_options(&mut claims, nonce)
-                .map_err(pasion_oidc_client::error::IdTokenError::from)?;
+            // 3. Fetch user info
+            let mut userinfo_claims = pasion_oidc_client::requests::qq_connect::fetch_userinfo(
+                &client,
+                &token_response.access_token,
+                client_id,
+                &openid_response.openid,
+            )
+            .await?;
+
+            // Inject openid as "sub" and "openid" for template access
+            userinfo_claims.insert(
+                "sub".to_owned(),
+                serde_json::Value::String(openid_response.openid.clone()),
+            );
+            userinfo_claims.insert(
+                "openid".to_owned(),
+                serde_json::Value::String(openid_response.openid),
+            );
+
+            let userinfo_value = serde_json::to_value(&userinfo_claims)
+                .expect("serializing a HashMap<String, Value> should never fail");
+
+            let mut context = AttributeMappingContext::new();
+            context = context.with_userinfo_claims(userinfo_value.clone());
+            if let Some(extra) = params.extra_callback_parameters.clone() {
+                context = context.with_extra_callback_parameters(extra);
+            }
+
+            (None, None, context.build(), Some(userinfo_value))
         }
 
-        context = context.with_id_token_claims(claims);
-    }
+        // ── Feishu / Lark ────────────────────────────────────────────
+        ClientCredentials::Feishu { client_id, client_secret }
+        | ClientCredentials::Lark { client_id, client_secret } => {
+            let app_token_endpoint = if matches!(&client_credentials, ClientCredentials::Lark { .. }) {
+                pasion_oidc_client::requests::feishu::LARK_APP_TOKEN_ENDPOINT
+            } else {
+                pasion_oidc_client::requests::feishu::FEISHU_APP_TOKEN_ENDPOINT
+            };
 
-    if let Some(extra_callback_parameters) = params.extra_callback_parameters.clone() {
-        context = context.with_extra_callback_parameters(extra_callback_parameters);
-    }
+            // 1. Get app_access_token
+            let app_token = pasion_oidc_client::requests::feishu::get_app_access_token(
+                &client,
+                app_token_endpoint,
+                client_id,
+                client_secret,
+            )
+            .await?;
 
-    let userinfo = if provider.fetch_userinfo {
-        Some(json!(match &provider.userinfo_signed_response_alg {
-            Some(signing_algorithm) => {
-                let jwks = match jwks {
-                    Some(jwks) => jwks,
-                    None => {
-                        pasion_oidc_client::requests::jose::fetch_jwks(
+            // 2. Exchange code using app_access_token as Bearer
+            let feishu_response = pasion_oidc_client::requests::feishu::request_access_token(
+                &client,
+                lazy_metadata.token_endpoint().await?,
+                &app_token,
+                &code,
+            )
+            .await?;
+
+            // 3. Optionally fetch full userinfo
+            let userinfo = if provider.fetch_userinfo {
+                let ui = pasion_oidc_client::requests::feishu::fetch_userinfo(
+                    &client,
+                    lazy_metadata.userinfo_endpoint().await?,
+                    &feishu_response.access_token,
+                )
+                .await?;
+                Some(
+                    serde_json::to_value(&ui)
+                        .expect("serializing a HashMap<String, Value> should never fail"),
+                )
+            } else {
+                None
+            };
+
+            // Token response contains user info (open_id, name, email, etc.)
+            let token_claims = feishu_response.to_claims_map();
+
+            let mut context = AttributeMappingContext::new();
+            // Token response user data as id_token_claims context
+            context = context.with_id_token_claims(token_claims);
+            if let Some(ref ui) = userinfo {
+                context = context.with_userinfo_claims(ui.clone());
+            }
+            if let Some(extra) = params.extra_callback_parameters.clone() {
+                context = context.with_extra_callback_parameters(extra);
+            }
+
+            (None, None, context.build(), userinfo)
+        }
+
+        // ── DingTalk ──────────────────────────────────────────────────
+        ClientCredentials::DingTalk { client_id, client_secret } => {
+            // 1. Exchange code for access token
+            let token_response = pasion_oidc_client::requests::dingtalk::request_access_token(
+                &client,
+                lazy_metadata.token_endpoint().await?,
+                client_id,
+                client_secret,
+                &code,
+            )
+            .await?;
+
+            // 2. Fetch user info
+            let userinfo = if provider.fetch_userinfo {
+                let ui = pasion_oidc_client::requests::dingtalk::fetch_userinfo(
+                    &client,
+                    lazy_metadata.userinfo_endpoint().await?,
+                    &token_response.access_token,
+                )
+                .await?;
+                Some(
+                    serde_json::to_value(&ui)
+                        .expect("serializing a HashMap<String, Value> should never fail"),
+                )
+            } else {
+                None
+            };
+
+            let token_claims = token_response.to_claims_map();
+
+            let mut context = AttributeMappingContext::new();
+            context = context.with_id_token_claims(token_claims);
+            if let Some(ref ui) = userinfo {
+                context = context.with_userinfo_claims(ui.clone());
+            }
+            if let Some(extra) = params.extra_callback_parameters.clone() {
+                context = context.with_extra_callback_parameters(extra);
+            }
+
+            (None, None, context.build(), userinfo)
+        }
+
+        // ── WeChat ──────────────────────────────────────────────────
+        ClientCredentials::WeChat { client_id, client_secret } => {
+            // 1. Exchange code for access token (includes openid)
+            let token_response = pasion_oidc_client::requests::wechat::request_access_token(
+                &client,
+                lazy_metadata.token_endpoint().await?,
+                client_id,
+                client_secret,
+                &code,
+            )
+            .await?;
+
+            // 2. Fetch user info using openid
+            let mut userinfo_claims = pasion_oidc_client::requests::wechat::fetch_userinfo(
+                &client,
+                &token_response.access_token,
+                &token_response.openid,
+            )
+            .await?;
+
+            // Inject openid/unionid as "sub" for template access
+            userinfo_claims.insert(
+                "sub".to_owned(),
+                serde_json::Value::String(token_response.openid.clone()),
+            );
+            userinfo_claims.insert(
+                "openid".to_owned(),
+                serde_json::Value::String(token_response.openid),
+            );
+            if let Some(ref unionid) = token_response.unionid {
+                userinfo_claims.insert(
+                    "unionid".to_owned(),
+                    serde_json::Value::String(unionid.clone()),
+                );
+            }
+
+            let userinfo_value = serde_json::to_value(&userinfo_claims)
+                .expect("serializing a HashMap<String, Value> should never fail");
+
+            let mut context = AttributeMappingContext::new();
+            context = context.with_userinfo_claims(userinfo_value.clone());
+            if let Some(extra) = params.extra_callback_parameters.clone() {
+                context = context.with_extra_callback_parameters(extra);
+            }
+
+            (None, None, context.build(), Some(userinfo_value))
+        }
+
+        // ── WeCom (企业微信) ────────────────────────────────────────
+        ClientCredentials::WeCom { client_id, client_secret } => {
+            // 1. Get corp access_token
+            let corp_token = pasion_oidc_client::requests::wecom::get_corp_access_token(
+                &client,
+                client_id,
+                client_secret,
+            )
+            .await?;
+
+            // 2. Get user identity from authorization code
+            let identity = pasion_oidc_client::requests::wecom::get_user_identity(
+                &client,
+                &corp_token,
+                &code,
+            )
+            .await?;
+
+            // Determine the subject (UserId for members, OpenId for external)
+            let subject_id = identity
+                .user_id
+                .as_deref()
+                .or(identity.open_id.as_deref())
+                .unwrap_or("")
+                .to_owned();
+
+            // 3. Fetch full user profile if we have a userid and userinfo is enabled
+            let userinfo = if provider.fetch_userinfo {
+                if let Some(ref userid) = identity.user_id {
+                    let ui = pasion_oidc_client::requests::wecom::fetch_userinfo(
+                        &client,
+                        &corp_token,
+                        userid,
+                    )
+                    .await?;
+                    Some(
+                        serde_json::to_value(&ui)
+                            .expect("serializing a HashMap<String, Value> should never fail"),
+                    )
+                } else {
+                    None
+                }
+            } else {
+                None
+            };
+
+            let mut claims = HashMap::new();
+            claims.insert("sub".to_owned(), serde_json::Value::String(subject_id));
+            if let Some(ref uid) = identity.user_id {
+                claims.insert("userid".to_owned(), serde_json::Value::String(uid.clone()));
+            }
+            if let Some(ref oid) = identity.open_id {
+                claims.insert("openid".to_owned(), serde_json::Value::String(oid.clone()));
+            }
+
+            let mut context = AttributeMappingContext::new();
+            context = context.with_id_token_claims(claims);
+            if let Some(ref ui) = userinfo {
+                context = context.with_userinfo_claims(ui.clone());
+            }
+            if let Some(extra) = params.extra_callback_parameters.clone() {
+                context = context.with_extra_callback_parameters(extra);
+            }
+
+            (None, None, context.build(), userinfo)
+        }
+
+        // ── Standard OIDC flow ──────────────────────────────────────
+        _ => {
+            let token_response = pasion_oidc_client::requests::token::request_access_token(
+                &client,
+                client_credentials,
+                lazy_metadata.token_endpoint().await?,
+                AccessTokenRequest::AuthorizationCode(oauth2_types::requests::AuthorizationCodeGrant {
+                    code: code.clone(),
+                    redirect_uri: Some(redirect_uri),
+                    code_verifier: session.code_challenge_verifier.clone(),
+                }),
+                clock.now(),
+                &mut rng,
+            )
+            .await?;
+
+            let mut jwks = None;
+            let mut id_token_claims = None;
+
+            let mut context = AttributeMappingContext::new();
+            if let Some(id_token) = token_response.id_token.as_ref() {
+                jwks = Some(
+                    pasion_oidc_client::requests::jose::fetch_jwks(&client, lazy_metadata.jwks_uri().await?)
+                        .await?,
+                );
+
+                let id_token_verification_data = JwtVerificationData {
+                    issuer: provider.issuer.as_deref(),
+                    jwks: jwks.as_ref().unwrap(),
+                    signing_algorithm: &provider.id_token_signed_response_alg,
+                    client_id: &provider.client_id,
+                };
+
+                let id_token = pasion_oidc_client::requests::jose::verify_id_token(
+                    id_token,
+                    id_token_verification_data,
+                    None,
+                    clock.now(),
+                )?;
+
+                let (_headers, mut claims) = id_token.into_parts();
+
+                id_token_claims = Some(
+                    serde_json::to_value(&claims)
+                        .expect("serializing a HashMap<String, Value> into a Value should never fail"),
+                );
+
+                pasion_jose::claims::AT_HASH
+                    .extract_optional_with_options(
+                        &mut claims,
+                        TokenHash::new(
+                            id_token_verification_data.signing_algorithm,
+                            &token_response.access_token,
+                        ),
+                    )
+                    .map_err(pasion_oidc_client::error::IdTokenError::from)?;
+
+                pasion_jose::claims::C_HASH
+                    .extract_optional_with_options(
+                        &mut claims,
+                        TokenHash::new(id_token_verification_data.signing_algorithm, &code),
+                    )
+                    .map_err(pasion_oidc_client::error::IdTokenError::from)?;
+
+                if let Some(nonce) = session.nonce.as_deref() {
+                    pasion_jose::claims::NONCE
+                        .extract_required_with_options(&mut claims, nonce)
+                        .map_err(pasion_oidc_client::error::IdTokenError::from)?;
+                }
+
+                context = context.with_id_token_claims(claims);
+            }
+
+            if let Some(extra_callback_parameters) = params.extra_callback_parameters.clone() {
+                context = context.with_extra_callback_parameters(extra_callback_parameters);
+            }
+
+            let userinfo = if provider.fetch_userinfo {
+                Some(json!(match &provider.userinfo_signed_response_alg {
+                    Some(signing_algorithm) => {
+                        let jwks = match jwks {
+                            Some(jwks) => jwks,
+                            None => {
+                                pasion_oidc_client::requests::jose::fetch_jwks(
+                                    &client,
+                                    lazy_metadata.jwks_uri().await?,
+                                )
+                                .await?
+                            }
+                        };
+
+                        pasion_oidc_client::requests::userinfo::fetch_userinfo(
                             &client,
-                            lazy_metadata.jwks_uri().await?,
+                            lazy_metadata.userinfo_endpoint().await?,
+                            token_response.access_token.as_str(),
+                            Some(JwtVerificationData {
+                                issuer: provider.issuer.as_deref(),
+                                jwks: &jwks,
+                                signing_algorithm,
+                                client_id: &provider.client_id,
+                            }),
                         )
                         .await?
                     }
-                };
+                    None => {
+                        pasion_oidc_client::requests::userinfo::fetch_userinfo(
+                            &client,
+                            lazy_metadata.userinfo_endpoint().await?,
+                            token_response.access_token.as_str(),
+                            None,
+                        )
+                        .await?
+                    }
+                }))
+            } else {
+                None
+            };
 
-                pasion_oidc_client::requests::userinfo::fetch_userinfo(
-                    &client,
-                    lazy_metadata.userinfo_endpoint().await?,
-                    token_response.access_token.as_str(),
-                    Some(JwtVerificationData {
-                        issuer: provider.issuer.as_deref(),
-                        jwks: &jwks,
-                        signing_algorithm,
-                        client_id: &provider.client_id,
-                    }),
-                )
-                .await?
+            if let Some(ref ui) = userinfo {
+                context = context.with_userinfo_claims(ui.clone());
             }
-            None => {
-                pasion_oidc_client::requests::userinfo::fetch_userinfo(
-                    &client,
-                    lazy_metadata.userinfo_endpoint().await?,
-                    token_response.access_token.as_str(),
-                    None,
-                )
-                .await?
-            }
-        }))
-    } else {
-        None
+
+            (token_response.id_token, id_token_claims, context.build(), userinfo)
+        }
     };
-
-    if let Some(userinfo) = userinfo.clone() {
-        context = context.with_userinfo_claims(userinfo);
-    }
-
-    let context = context.build();
 
     let env = environment();
 
@@ -487,7 +755,7 @@ pub async fn handler(req: &mut Request, depot: &mut Depot, res: &mut Response) -
             &clock,
             session,
             &link,
-            token_response.id_token,
+            id_token_raw,
             id_token_claims,
             params.extra_callback_parameters,
             userinfo,

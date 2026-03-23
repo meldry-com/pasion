@@ -253,6 +253,24 @@ pub async fn config_sync(
                 pasion_config::UpstreamOAuth2TokenAuthMethod::SignInWithApple => {
                     pasion_data_model::UpstreamOAuthProviderTokenAuthMethod::SignInWithApple
                 }
+                pasion_config::UpstreamOAuth2TokenAuthMethod::QQConnect => {
+                    pasion_data_model::UpstreamOAuthProviderTokenAuthMethod::QQConnect
+                }
+                pasion_config::UpstreamOAuth2TokenAuthMethod::Feishu => {
+                    pasion_data_model::UpstreamOAuthProviderTokenAuthMethod::Feishu
+                }
+                pasion_config::UpstreamOAuth2TokenAuthMethod::Lark => {
+                    pasion_data_model::UpstreamOAuthProviderTokenAuthMethod::Lark
+                }
+                pasion_config::UpstreamOAuth2TokenAuthMethod::DingTalk => {
+                    pasion_data_model::UpstreamOAuthProviderTokenAuthMethod::DingTalk
+                }
+                pasion_config::UpstreamOAuth2TokenAuthMethod::WeChat => {
+                    pasion_data_model::UpstreamOAuthProviderTokenAuthMethod::WeChat
+                }
+                pasion_config::UpstreamOAuth2TokenAuthMethod::WeCom => {
+                    pasion_data_model::UpstreamOAuthProviderTokenAuthMethod::WeCom
+                }
             };
 
             let response_mode = provider

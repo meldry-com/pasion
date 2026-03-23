@@ -66,7 +66,13 @@ impl ConfigurationSection for UpstreamOAuth2Config {
                 }
                 TokenAuthMethod::ClientSecretBasic
                 | TokenAuthMethod::ClientSecretPost
-                | TokenAuthMethod::ClientSecretJwt => {
+                | TokenAuthMethod::ClientSecretJwt
+                | TokenAuthMethod::QQConnect
+                | TokenAuthMethod::Feishu
+                | TokenAuthMethod::Lark
+                | TokenAuthMethod::DingTalk
+                | TokenAuthMethod::WeChat
+                | TokenAuthMethod::WeCom => {
                     if provider.client_secret.is_none() {
                         return Err(annotate(figment::Error::missing_field("client_secret")).into());
                     }
@@ -77,7 +83,13 @@ impl ConfigurationSection for UpstreamOAuth2Config {
                 TokenAuthMethod::None
                 | TokenAuthMethod::ClientSecretBasic
                 | TokenAuthMethod::ClientSecretPost
-                | TokenAuthMethod::SignInWithApple => {
+                | TokenAuthMethod::SignInWithApple
+                | TokenAuthMethod::QQConnect
+                | TokenAuthMethod::Feishu
+                | TokenAuthMethod::Lark
+                | TokenAuthMethod::DingTalk
+                | TokenAuthMethod::WeChat
+                | TokenAuthMethod::WeCom => {
                     if provider.token_endpoint_auth_signing_alg.is_some() {
                         return Err(annotate(figment::Error::custom(
                             "Unexpected field `token_endpoint_auth_signing_alg` for the selected authentication method",
@@ -103,7 +115,17 @@ impl ConfigurationSection for UpstreamOAuth2Config {
                     }
                 }
 
-                _ => {
+                TokenAuthMethod::None
+                | TokenAuthMethod::ClientSecretBasic
+                | TokenAuthMethod::ClientSecretPost
+                | TokenAuthMethod::ClientSecretJwt
+                | TokenAuthMethod::PrivateKeyJwt
+                | TokenAuthMethod::QQConnect
+                | TokenAuthMethod::Feishu
+                | TokenAuthMethod::Lark
+                | TokenAuthMethod::DingTalk
+                | TokenAuthMethod::WeChat
+                | TokenAuthMethod::WeCom => {
                     if provider.sign_in_with_apple.is_some() {
                         return Err(annotate(figment::Error::custom(
                             "Unexpected field `sign_in_with_apple` for the selected authentication method",
@@ -189,6 +211,24 @@ pub enum TokenAuthMethod {
 
     /// `sign_in_with_apple`: a special method for Signin with Apple
     SignInWithApple,
+
+    /// `qq_connect`: a special method for QQ Connect OAuth2
+    QQConnect,
+
+    /// `feishu`: a special method for Feishu (Lark) OAuth2
+    Feishu,
+
+    /// `lark`: a special method for Lark (international Feishu) OAuth2
+    Lark,
+
+    /// `dingtalk`: a special method for DingTalk OAuth2
+    DingTalk,
+
+    /// `wechat`: a special method for WeChat Open Platform OAuth2
+    WeChat,
+
+    /// `wecom`: a special method for WeCom (企业微信) OAuth2
+    WeCom,
 }
 
 /// How to handle a claim
@@ -561,6 +601,12 @@ pub struct Provider {
     ///  - `gitlab`
     ///  - `twitter`
     ///  - `discord`
+    ///  - `qq`
+    ///  - `feishu`
+    ///  - `lark`
+    ///  - `dingtalk`
+    ///  - `wechat`
+    ///  - `wecom`
     #[serde(skip_serializing_if = "Option::is_none")]
     pub brand_name: Option<String>,
 

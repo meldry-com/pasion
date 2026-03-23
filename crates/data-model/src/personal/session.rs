@@ -5,7 +5,7 @@ use oauth2_types::scope::Scope;
 use serde::Serialize;
 use ulid::Ulid;
 
-use crate::{Client, Device, InvalidTransitionError, User};
+use crate::{Client, InvalidTransitionError, User};
 
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize)]
 pub enum SessionState {
@@ -129,8 +129,10 @@ impl PersonalSession {
     /// in other words: whether this session has a device.
     #[must_use]
     pub fn has_device(&self) -> bool {
-        self.scope
-            .iter()
-            .any(|scope_token| Device::from_scope_token(scope_token).is_some())
+        self.scope.iter().any(|scope_token| {
+            let s = scope_token.as_str();
+            s.starts_with("urn:matrix:client:device:")
+                || s.starts_with("urn:matrix:org.matrix.msc2967.client:device:")
+        })
     }
 }

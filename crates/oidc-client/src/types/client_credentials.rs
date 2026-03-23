@@ -106,6 +106,62 @@ pub enum ClientCredentials {
         /// The Apple Team ID
         team_id: String,
     },
+
+    /// QQ Connect: client_id and client_secret sent in the request body.
+    /// The actual token exchange uses a QQ-specific flow handled separately.
+    QQConnect {
+        /// The unique ID for the client (QQ AppID).
+        client_id: String,
+
+        /// The secret of the client (QQ AppKey).
+        client_secret: String,
+    },
+
+    /// Feishu (Lark): uses app_access_token as Bearer auth for token exchange.
+    /// The actual token exchange uses a Feishu-specific flow handled separately.
+    Feishu {
+        /// The unique ID for the client (Feishu app_id).
+        client_id: String,
+
+        /// The secret of the client (Feishu app_secret).
+        client_secret: String,
+    },
+
+    /// Lark (international Feishu): same flow as Feishu with different endpoints.
+    Lark {
+        /// The unique ID for the client (Lark app_id).
+        client_id: String,
+
+        /// The secret of the client (Lark app_secret).
+        client_secret: String,
+    },
+
+    /// DingTalk: uses JSON body with clientId/clientSecret for token exchange.
+    DingTalk {
+        /// The unique ID for the client.
+        client_id: String,
+
+        /// The secret of the client.
+        client_secret: String,
+    },
+
+    /// WeChat Open Platform: uses appid/secret as query params.
+    WeChat {
+        /// The unique ID for the client (WeChat AppID).
+        client_id: String,
+
+        /// The secret of the client (WeChat AppSecret).
+        client_secret: String,
+    },
+
+    /// WeCom (企业微信): uses corpid/corpsecret for corp access token.
+    WeCom {
+        /// The unique ID for the client (WeCom CorpID).
+        client_id: String,
+
+        /// The secret of the client (WeCom CorpSecret).
+        client_secret: String,
+    },
 }
 
 impl ClientCredentials {
@@ -118,7 +174,13 @@ impl ClientCredentials {
             | ClientCredentials::ClientSecretPost { client_id, .. }
             | ClientCredentials::ClientSecretJwt { client_id, .. }
             | ClientCredentials::PrivateKeyJwt { client_id, .. }
-            | ClientCredentials::SignInWithApple { client_id, .. } => client_id,
+            | ClientCredentials::SignInWithApple { client_id, .. }
+            | ClientCredentials::QQConnect { client_id, .. }
+            | ClientCredentials::Feishu { client_id, .. }
+            | ClientCredentials::Lark { client_id, .. }
+            | ClientCredentials::DingTalk { client_id, .. }
+            | ClientCredentials::WeChat { client_id, .. }
+            | ClientCredentials::WeCom { client_id, .. } => client_id,
         }
     }
 
@@ -228,6 +290,37 @@ impl ClientCredentials {
                 })
             }
 
+            ClientCredentials::QQConnect {
+                client_id,
+                client_secret,
+            }
+            | ClientCredentials::Feishu {
+                client_id,
+                client_secret,
+            }
+            | ClientCredentials::Lark {
+                client_id,
+                client_secret,
+            }
+            | ClientCredentials::DingTalk {
+                client_id,
+                client_secret,
+            }
+            | ClientCredentials::WeChat {
+                client_id,
+                client_secret,
+            }
+            | ClientCredentials::WeCom {
+                client_id,
+                client_secret,
+            } => request.form(&RequestWithClientCredentials {
+                body: form,
+                client_id: Some(client_id),
+                client_secret: Some(client_secret),
+                client_assertion: None,
+                client_assertion_type: None,
+            }),
+
             ClientCredentials::SignInWithApple {
                 client_id,
                 key,
@@ -312,6 +405,30 @@ impl fmt::Debug for ClientCredentials {
                 .field("client_id", client_id)
                 .field("key_id", key_id)
                 .field("team_id", team_id)
+                .finish_non_exhaustive(),
+            Self::QQConnect { client_id, .. } => f
+                .debug_struct("QQConnect")
+                .field("client_id", client_id)
+                .finish_non_exhaustive(),
+            Self::Feishu { client_id, .. } => f
+                .debug_struct("Feishu")
+                .field("client_id", client_id)
+                .finish_non_exhaustive(),
+            Self::Lark { client_id, .. } => f
+                .debug_struct("Lark")
+                .field("client_id", client_id)
+                .finish_non_exhaustive(),
+            Self::DingTalk { client_id, .. } => f
+                .debug_struct("DingTalk")
+                .field("client_id", client_id)
+                .finish_non_exhaustive(),
+            Self::WeChat { client_id, .. } => f
+                .debug_struct("WeChat")
+                .field("client_id", client_id)
+                .finish_non_exhaustive(),
+            Self::WeCom { client_id, .. } => f
+                .debug_struct("WeCom")
+                .field("client_id", client_id)
                 .finish_non_exhaustive(),
         }
     }

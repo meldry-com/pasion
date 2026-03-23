@@ -168,6 +168,12 @@ pub enum TokenAuthMethod {
     ClientSecretJwt,
     PrivateKeyJwt,
     SignInWithApple,
+    QQConnect,
+    Feishu,
+    Lark,
+    DingTalk,
+    WeChat,
+    WeCom,
 }
 
 impl TokenAuthMethod {
@@ -180,6 +186,12 @@ impl TokenAuthMethod {
             Self::ClientSecretJwt => "client_secret_jwt",
             Self::PrivateKeyJwt => "private_key_jwt",
             Self::SignInWithApple => "sign_in_with_apple",
+            Self::QQConnect => "qq_connect",
+            Self::Feishu => "feishu",
+            Self::Lark => "lark",
+            Self::DingTalk => "dingtalk",
+            Self::WeChat => "wechat",
+            Self::WeCom => "wecom",
         }
     }
 }
@@ -201,6 +213,12 @@ impl std::str::FromStr for TokenAuthMethod {
             "client_secret_jwt" => Ok(Self::ClientSecretJwt),
             "private_key_jwt" => Ok(Self::PrivateKeyJwt),
             "sign_in_with_apple" => Ok(Self::SignInWithApple),
+            "qq_connect" => Ok(Self::QQConnect),
+            "feishu" => Ok(Self::Feishu),
+            "lark" => Ok(Self::Lark),
+            "dingtalk" => Ok(Self::DingTalk),
+            "wechat" => Ok(Self::WeChat),
+            "wecom" => Ok(Self::WeCom),
             s => Err(InvalidUpstreamOAuth2TokenAuthMethod(s.to_owned())),
         }
     }
