@@ -2,7 +2,7 @@
 
 use async_trait::async_trait;
 use chrono::{DateTime, Utc};
-use pasion_data_model::{BrowserSession, Clock, CompatSession, Device, Session, User};
+use pasion_data_model::{BrowserSession, Clock, Session, User};
 
 use crate::{Page, Pagination, repository_impl};
 
@@ -29,12 +29,9 @@ impl AppSessionState {
     }
 }
 
-/// An [`AppSession`] is either a [`CompatSession`] or an OAuth 2.0 [`Session`]
+/// An [`AppSession`] represents an OAuth 2.0 [`Session`]
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum AppSession {
-    /// A compatibility layer session
-    Compat(Box<CompatSession>),
-
     /// An OAuth 2.0 session
     OAuth2(Box<Session>),
 }
@@ -45,7 +42,7 @@ pub struct AppSessionFilter<'a> {
     user: Option<&'a User>,
     browser_session: Option<&'a BrowserSession>,
     state: Option<AppSessionState>,
-    device_id: Option<&'a Device>,
+    device_id: Option<&'a str>,
     last_active_before: Option<DateTime<Utc>>,
     last_active_after: Option<DateTime<Utc>>,
 }
@@ -85,14 +82,14 @@ impl<'a> AppSessionFilter<'a> {
 
     /// Set the device ID filter
     #[must_use]
-    pub fn for_device(mut self, device_id: &'a Device) -> Self {
+    pub fn for_device(mut self, device_id: &'a str) -> Self {
         self.device_id = Some(device_id);
         self
     }
 
     /// Get the device ID filter
     #[must_use]
-    pub fn device(&self) -> Option<&'a Device> {
+    pub fn device(&self) -> Option<&'a str> {
         self.device_id
     }
 
@@ -147,8 +144,8 @@ impl<'a> AppSessionFilter<'a> {
     }
 }
 
-/// A [`AppSessionRepository`] helps interacting with both [`CompatSession`] and
-/// OAuth 2.0 [`Session`] at the same time saved in the storage backend
+/// A [`AppSessionRepository`] helps interacting with
+/// OAuth 2.0 [`Session`] saved in the storage backend
 #[async_trait]
 pub trait AppSessionRepository: Send + Sync {
     /// The error type returned by the repository
@@ -196,7 +193,7 @@ pub trait AppSessionRepository: Send + Sync {
         &mut self,
         clock: &dyn Clock,
         user: &User,
-        device: &Device,
+        device: &str,
     ) -> Result<bool, Self::Error>;
 }
 
@@ -213,6 +210,6 @@ repository_impl!(AppSessionRepository:
         &mut self,
         clock: &dyn Clock,
         user: &User,
-        device: &Device,
+        device: &str,
     ) -> Result<bool, Self::Error>;
 );

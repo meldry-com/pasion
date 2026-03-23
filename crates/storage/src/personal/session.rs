@@ -4,7 +4,7 @@ use async_trait::async_trait;
 use chrono::{DateTime, Utc};
 use oauth2_types::scope::Scope;
 use pasion_data_model::{
-    Client, Clock, Device, User,
+    Client, Clock, User,
     personal::{
         PersonalAccessToken,
         session::{PersonalSession, PersonalSessionOwner},
@@ -190,7 +190,7 @@ pub struct PersonalSessionFilter<'a> {
     owner_user: Option<&'a User>,
     owner_oauth2_client: Option<&'a Client>,
     actor_user: Option<&'a User>,
-    device: Option<&'a Device>,
+    device: Option<&'a str>,
     state: Option<PersonalSessionState>,
     scope: Option<&'a Scope>,
     last_active_before: Option<DateTime<Utc>>,
@@ -332,7 +332,7 @@ impl<'a> PersonalSessionFilter<'a> {
 
     /// Only return sessions that have the given device in their scope
     #[must_use]
-    pub fn for_device(mut self, device: &'a Device) -> Self {
+    pub fn for_device(mut self, device: &'a str) -> Self {
         self.device = Some(device);
         self
     }
@@ -341,7 +341,7 @@ impl<'a> PersonalSessionFilter<'a> {
     ///
     /// Returns [`None`] if no device filter was set
     #[must_use]
-    pub fn device(&self) -> Option<&'a Device> {
+    pub fn device(&self) -> Option<&'a str> {
         self.device
     }
 

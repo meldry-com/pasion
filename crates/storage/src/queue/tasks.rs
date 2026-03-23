@@ -1,6 +1,6 @@
 use chrono::{DateTime, Utc};
 use pasion_data_model::{
-    BrowserSession, CompatSession, Device, Session, User, UserEmailAuthentication,
+    BrowserSession, Session, User, UserEmailAuthentication,
     UserRecoverySession,
 };
 use serde::{Deserialize, Serialize};
@@ -155,10 +155,10 @@ pub struct DeleteDeviceJob {
 impl DeleteDeviceJob {
     /// Create a new job to delete a device for a user on the homeserver.
     #[must_use]
-    pub fn new(user: &User, device: &Device) -> Self {
+    pub fn new(user: &User, device_id: &str) -> Self {
         Self {
             user_id: user.id,
-            device_id: device.as_str().to_owned(),
+            device_id: device_id.to_owned(),
         }
     }
 
@@ -512,6 +512,9 @@ impl InsertableJob for ExpireInactiveOAuthSessionsJob {
 }
 
 /// Expire inactive compatibility sessions
+///
+/// This job is deprecated since the compatibility layer has been removed.
+/// The struct is kept to consume any remaining jobs in the queue.
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct ExpireInactiveCompatSessionsJob {
     threshold: DateTime<Utc>,
@@ -547,20 +550,6 @@ impl ExpireInactiveCompatSessionsJob {
         } else {
             pagination
         }
-    }
-
-    /// Get the next job given the page returned by the database
-    #[must_use]
-    pub fn next(&self, page: &Page<CompatSession>) -> Option<Self> {
-        if !page.has_next_page {
-            return None;
-        }
-
-        let last_edge = page.edges.last()?;
-        Some(Self {
-            threshold: self.threshold,
-            after: Some(last_edge.cursor),
-        })
     }
 }
 

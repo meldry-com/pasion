@@ -32,7 +32,7 @@ mod macros;
 pub use self::{
     context::{
         AccountInactiveContext, ApiDocContext, AppContext, CompatLoginPolicyViolationContext,
-        CompatSsoContext, ConsentContext, DeviceConsentContext, DeviceLinkContext,
+        ConsentContext, DeviceConsentContext, DeviceLinkContext,
         DeviceLinkFormField, DeviceNameContext, EmailRecoveryContext, EmailVerificationContext,
         EmptyContext, ErrorContext, FormPostContext, IndexContext, LoginContext, LoginFormField,
         NotFoundContext, PasswordRegisterContext, PolicyViolationContext, PostAuthContext,
@@ -388,9 +388,6 @@ register_templates! {
 
     /// Render the compatibility login policy violation page
     pub fn render_compat_login_policy_violation(WithLanguage<WithCsrf<WithSession<CompatLoginPolicyViolationContext>>>) { "pages/compat_login_policy_violation.html" }
-
-    /// Render the legacy SSO login consent page
-    pub fn render_sso_login(WithLanguage<WithCsrf<WithSession<CompatSsoContext>>>) { "pages/sso.html" }
 
     /// Render the home page
     pub fn render_index(WithLanguage<WithCsrf<WithOptionalSession<IndexContext>>>) { "pages/index.html" }

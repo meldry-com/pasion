@@ -3,7 +3,7 @@ use std::net::IpAddr;
 use async_trait::async_trait;
 use chrono::{DateTime, Utc};
 use oauth2_types::scope::Scope;
-use pasion_data_model::{BrowserSession, Client, Clock, Device, Session, User};
+use pasion_data_model::{BrowserSession, Client, Clock, Session, User};
 use rand_core::RngCore;
 use ulid::Ulid;
 
@@ -44,7 +44,7 @@ pub struct OAuth2SessionFilter<'a> {
     any_user: Option<bool>,
     browser_session: Option<&'a BrowserSession>,
     browser_session_filter: Option<BrowserSessionFilter<'a>>,
-    device: Option<&'a Device>,
+    device: Option<&'a str>,
     client: Option<&'a Client>,
     client_kind: Option<ClientKind>,
     state: Option<OAuth2SessionState>,
@@ -236,7 +236,7 @@ impl<'a> OAuth2SessionFilter<'a> {
 
     /// Only return sessions that have the given device in their scope
     #[must_use]
-    pub fn for_device(mut self, device: &'a Device) -> Self {
+    pub fn for_device(mut self, device: &'a str) -> Self {
         self.device = Some(device);
         self
     }
@@ -245,7 +245,7 @@ impl<'a> OAuth2SessionFilter<'a> {
     ///
     /// Returns [`None`] if no device filter was set
     #[must_use]
-    pub fn device(&self) -> Option<&'a Device> {
+    pub fn device(&self) -> Option<&'a str> {
         self.device
     }
 }
