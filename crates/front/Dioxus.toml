@@ -1,9 +1,9 @@
 [application]
-name = "palpo-auth-front"
+name = "pasion-front"
 default_platform = "web"
 
 [web.app]
-title = "Palpo Auth Service"
+title = "Pasion"
 
 [web.resource]
 style = ["assets/main.css"]

@@ -196,7 +196,7 @@ pub fn EmailVerify(id: String) -> Element {
                 }
             }
         }
-        Some(Err(ref err)) => rsx! {
+        Some(Err(err)) => rsx! {
             Layout {
                 div { class: "alert alert-critical", "{err}" }
             }

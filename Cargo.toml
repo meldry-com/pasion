@@ -1,8 +1,7 @@
 [workspace]
 default-members = ["crates/cli"]
 members = ["crates/*"]
-exclude = ["front"]
-resolver = "2"
+resolver = "3"
 
 # Updated in the CI with a `sed` command
 package.version = "1.8.0"
@@ -702,6 +701,27 @@ version = "1.8.2"
 # Password strength estimation
 [workspace.dependencies.zxcvbn]
 version = "3.1.0"
+
+# --- Front-end (Dioxus WASM) dependencies ---
+
+# Dioxus UI framework
+[workspace.dependencies.dioxus]
+version = "0.6"
+features = ["web", "router"]
+
+# Browser timers for WASM
+[workspace.dependencies.gloo-timers]
+version = "0.3"
+features = ["futures"]
+
+# Web platform bindings
+[workspace.dependencies.web-sys]
+version = "0.3"
+features = ["Window", "Location", "Url", "UrlSearchParams"]
+
+# JavaScript interop
+[workspace.dependencies.js-sys]
+version = "0.3"
 
 [profile.release]
 codegen-units = 1 # Reduce the number of codegen units to increase optimizations

@@ -37,7 +37,7 @@ pub fn AddEmailForm(user_id: String, on_add: Option<EventHandler<String>>) -> El
                             match data.status {
                                 crate::api::types::AddEmailStatus::Added => {
                                     email_value.set(String::new());
-                                    if let (Some(handler), Some(ref email_obj)) = (on_add, &data.email) {
+                                    if let (Some(handler), Some(email_obj)) = (on_add, &data.email) {
                                         handler.call(email_obj.id.clone());
                                     }
                                 }
