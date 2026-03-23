@@ -2,6 +2,8 @@
 # Usage: just <recipe>
 # See all recipes: just --list
 
+set windows-shell := ["powershell.exe", "-NoLogo", "-Command"]
+
 # Default recipe: show available commands
 default:
     @just --list
@@ -18,21 +20,15 @@ backend-config config="config.yaml":
 
 # Start the frontend dev server (Dioxus hot-reload)
 frontend:
-    cd crates/front && dx serve
+    dx serve -p pasion-front
 
 # Start the frontend in hot-reload mode
 frontend-hot:
-    cd crates/front && dx serve --hot-reload
+    dx serve -p pasion-front --hot-reload
 
 # Build the frontend for production
 frontend-build:
-    cd crates/front && dx build --release
-
-# Start both backend and frontend (requires config file)
-dev config="config.yaml":
-    @echo "Starting backend and frontend..."
-    @just backend-config {{config}} &
-    @just frontend
+    dx build -p pasion-front --release
 
 # ── Build ────────────────────────────────────────────────────
 
