@@ -332,80 +332,7 @@ pub fn build_router(
 
 fn build_human_router(router: Router, _templates: Templates) -> Router {
     router
-        // Account routes
-        .push(Router::with_path("/account").get(account_redirect_handler))
-        .push(
-            Router::with_path(pasion_router::Account::route())
-                .get(pasion_handlers::views::app::get),
-        )
-        .push(
-            Router::with_path(pasion_router::AccountWildcard::route())
-                .get(pasion_handlers::views::app::get),
-        )
-        .push(
-            Router::with_path(pasion_router::AccountRecoveryFinish::route())
-                .get(pasion_handlers::views::app::get_anonymous),
-        )
-        .push(
-            Router::with_path(pasion_router::ChangePasswordDiscovery::route())
-                .get(change_password_redirect_handler),
-        )
-        // Index
-        .push(
-            Router::with_path(pasion_router::Index::route())
-                .get(pasion_handlers::views::index::get),
-        )
-        // Login/Logout
-        .push(
-            Router::with_path(pasion_router::Login::route())
-                .get(pasion_handlers::views::login::get)
-                .post(pasion_handlers::views::login::post),
-        )
-        .push(
-            Router::with_path(pasion_router::Logout::route())
-                .post(pasion_handlers::views::logout::post),
-        )
-        // Registration
-        .push(
-            Router::with_path(pasion_router::Register::route())
-                .get(pasion_handlers::views::register::get),
-        )
-        .push(
-            Router::with_path(pasion_router::PasswordRegister::route())
-                .get(pasion_handlers::views::register::password::get)
-                .post(pasion_handlers::views::register::password::post),
-        )
-        .push(
-            Router::with_path(pasion_router::RegisterVerifyEmail::route())
-                .get(pasion_handlers::views::register::steps::verify_email::get)
-                .post(pasion_handlers::views::register::steps::verify_email::post),
-        )
-        .push(
-            Router::with_path(pasion_router::RegisterToken::route())
-                .get(pasion_handlers::views::register::steps::registration_token::get)
-                .post(pasion_handlers::views::register::steps::registration_token::post),
-        )
-        .push(
-            Router::with_path(pasion_router::RegisterDisplayName::route())
-                .get(pasion_handlers::views::register::steps::display_name::get)
-                .post(pasion_handlers::views::register::steps::display_name::post),
-        )
-        .push(
-            Router::with_path(pasion_router::RegisterFinish::route())
-                .get(pasion_handlers::views::register::steps::finish::get),
-        )
-        // Account recovery
-        .push(
-            Router::with_path(pasion_router::AccountRecoveryStart::route())
-                .get(pasion_handlers::views::recovery::start::get)
-                .post(pasion_handlers::views::recovery::start::post),
-        )
-        .push(
-            Router::with_path(pasion_router::AccountRecoveryProgress::route())
-                .get(pasion_handlers::views::recovery::progress::get)
-                .post(pasion_handlers::views::recovery::progress::post),
-        )
-        // OAuth2 authorization
+        // ── OAuth2 protocol endpoints (server-side redirects, MUST stay) ──
         .push(
             Router::with_path(pasion_router::OAuth2AuthorizationEndpoint::route())
                 .get(pasion_handlers::oauth2::authorization::get),
@@ -415,7 +342,7 @@ fn build_human_router(router: Router, _templates: Templates) -> Router {
                 .get(pasion_handlers::oauth2::authorization::consent::get)
                 .post(pasion_handlers::oauth2::authorization::consent::post),
         )
-        // Upstream OAuth2
+        // ── Upstream OAuth2 (server-side redirect & callback) ──
         .push(
             Router::with_path(pasion_router::UpstreamOAuth2Authorize::route())
                 .get(pasion_handlers::upstream_oauth2::authorize::get),
@@ -434,15 +361,32 @@ fn build_human_router(router: Router, _templates: Templates) -> Router {
             Router::with_path(pasion_router::UpstreamOAuth2BackchannelLogout::route())
                 .post(pasion_handlers::upstream_oauth2::backchannel_logout::post),
         )
-        // Device code
+        // ── Well-known redirect ──
         .push(
-            Router::with_path(pasion_router::DeviceCodeLink::route())
-                .get(pasion_handlers::oauth2::device::link::get),
+            Router::with_path(pasion_router::ChangePasswordDiscovery::route())
+                .get(change_password_redirect_handler),
+        )
+        // ── SPA shell: all user-facing pages are rendered by the Dioxus frontend ──
+        // In production these serve the SPA HTML shell; the client-side router
+        // handles the actual page rendering. Login, register, recovery, account
+        // management are all handled by the SPA + REST API.
+        .push(
+            Router::with_path(pasion_router::Index::route())
+                .get(pasion_handlers::views::app::get_anonymous),
+        )
+        .push(Router::with_path("/login").get(pasion_handlers::views::app::get_anonymous))
+        .push(Router::with_path("/register").get(pasion_handlers::views::app::get_anonymous))
+        .push(Router::with_path("/register/{*rest}").get(pasion_handlers::views::app::get_anonymous))
+        .push(Router::with_path("/recover").get(pasion_handlers::views::app::get_anonymous))
+        .push(Router::with_path("/recover/{*rest}").get(pasion_handlers::views::app::get_anonymous))
+        .push(Router::with_path("/account").get(account_redirect_handler))
+        .push(
+            Router::with_path(pasion_router::Account::route())
+                .get(pasion_handlers::views::app::get_anonymous),
         )
         .push(
-            Router::with_path(pasion_router::DeviceCodeConsent::route())
-                .get(pasion_handlers::oauth2::device::consent::get)
-                .post(pasion_handlers::oauth2::device::consent::post),
+            Router::with_path(pasion_router::AccountWildcard::route())
+                .get(pasion_handlers::views::app::get_anonymous),
         )
 }
 
@@ -554,6 +498,53 @@ fn build_rest_api_router(router: Router) -> Router {
         .push(
             Router::with_path("/api/v1/user-emails/<id>")
                 .delete(pasion_handlers::rest::emails::remove_email),
+        )
+        // Registration
+        .push(
+            Router::with_path("/api/v1/auth/register")
+                .post(pasion_handlers::rest::register::post_register),
+        )
+        .push(
+            Router::with_path("/api/v1/auth/register/<id>")
+                .get(pasion_handlers::rest::register::get_registration),
+        )
+        .push(
+            Router::with_path("/api/v1/auth/register/<id>/verify-email")
+                .post(pasion_handlers::rest::register::post_verify_email),
+        )
+        .push(
+            Router::with_path("/api/v1/auth/register/<id>/display-name")
+                .post(pasion_handlers::rest::register::post_display_name),
+        )
+        .push(
+            Router::with_path("/api/v1/auth/register/<id>/finish")
+                .post(pasion_handlers::rest::register::post_finish),
+        )
+        // Account recovery
+        .push(
+            Router::with_path("/api/v1/auth/recovery/start")
+                .post(pasion_handlers::rest::recovery::post_recovery_start),
+        )
+        .push(
+            Router::with_path("/api/v1/auth/recovery/<id>")
+                .get(pasion_handlers::rest::recovery::get_recovery),
+        )
+        .push(
+            Router::with_path("/api/v1/auth/recovery/<id>/resend")
+                .post(pasion_handlers::rest::recovery::post_recovery_resend),
+        )
+        // Auth (login, logout, providers)
+        .push(
+            Router::with_path("/api/v1/auth/login")
+                .post(pasion_handlers::rest::auth::login),
+        )
+        .push(
+            Router::with_path("/api/v1/auth/logout")
+                .post(pasion_handlers::rest::auth::logout),
+        )
+        .push(
+            Router::with_path("/api/v1/auth/providers")
+                .get(pasion_handlers::rest::auth::providers),
         )
 }
 

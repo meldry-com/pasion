@@ -21,8 +21,10 @@ pub fn AccountPage() -> Element {
             let user = match result.viewer.as_user() {
                 Some(u) => u,
                 None => {
+                    let nav = navigator();
+                    nav.push(Route::Login {});
                     return rsx! {
-                        Layout { p { "Not authenticated." } }
+                        Layout { p { "Redirecting to login..." } }
                     };
                 }
             };

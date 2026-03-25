@@ -5,10 +5,14 @@ pub mod client_detail;
 pub mod device_redirect;
 pub mod email_in_use;
 pub mod email_verify;
+pub mod login;
 pub mod password_change;
 pub mod password_change_success;
 pub mod password_recovery;
 pub mod plan;
+pub mod recovery_progress;
+pub mod recovery_start;
+pub mod register;
 pub mod reset_cross_signing;
 pub mod session_detail;
 pub mod sessions;
@@ -21,10 +25,14 @@ use device_redirect::DeviceRedirect;
 use dioxus::prelude::*;
 use email_in_use::EmailInUse;
 use email_verify::EmailVerify;
+use login::Login;
 use password_change::PasswordChange;
 use password_change_success::PasswordChangeSuccess;
 use password_recovery::PasswordRecovery;
 use plan::Plan;
+use recovery_progress::RecoveryProgress;
+use recovery_start::RecoveryStart;
+use register::{Register, RegisterDisplayName, RegisterFinish, RegisterVerifyEmail};
 use reset_cross_signing::ResetCrossSigning;
 use session_detail::SessionDetail;
 use sessions::Sessions;
@@ -32,11 +40,26 @@ use sessions::Sessions;
 use crate::components::{error::NotFound, layout::Layout};
 
 /// Application route definition.
-/// Mirrors the TanStack Router file-based routes from the React frontend.
 #[derive(Debug, Clone, Routable, PartialEq)]
 #[rustfmt::skip]
 pub enum Route {
-    // Account layout with nested routes
+    // Auth pages (public)
+    #[route("/login")]
+    Login {},
+    #[route("/register")]
+    Register {},
+    #[route("/register/:id/verify-email")]
+    RegisterVerifyEmail { id: String },
+    #[route("/register/:id/display-name")]
+    RegisterDisplayName { id: String },
+    #[route("/register/:id/finish")]
+    RegisterFinish { id: String },
+    #[route("/recover")]
+    RecoveryStart {},
+    #[route("/recover/:id")]
+    RecoveryProgress { id: String },
+
+    // Account layout with nested routes (authenticated)
     #[layout(AccountLayout)]
         #[route("/")]
         AccountSettings {},

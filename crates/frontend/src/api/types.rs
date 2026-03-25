@@ -521,3 +521,132 @@ pub struct ResendEmailAuthCodePayload {
 }
 
 pub type ResendEmailAuthCodeResult = ResendEmailAuthCodePayload;
+
+// ── Auth API types ────────────────────────────────────────────
+
+#[derive(Debug, Clone, PartialEq, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct LoginRequest {
+    pub username: String,
+    pub password: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct LoginResponse {
+    pub status: String,
+    #[serde(default)]
+    pub error: Option<String>,
+    #[serde(default)]
+    pub redirect: Option<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct LogoutResponse {
+    pub status: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct UpstreamProvider {
+    pub id: String,
+    #[serde(default)]
+    pub human_name: Option<String>,
+    #[serde(default)]
+    pub brand_name: Option<String>,
+    pub authorize_url: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ProvidersResponse {
+    pub providers: Vec<UpstreamProvider>,
+    pub password_login_enabled: bool,
+    pub password_registration_enabled: bool,
+}
+
+// ── Registration API types ────────────────────────────────────
+
+#[derive(Debug, Clone, PartialEq, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct RegisterRequest {
+    pub username: String,
+    #[serde(default)]
+    pub email: Option<String>,
+    pub password: String,
+    pub password_confirm: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct RegisterResponse {
+    pub status: String,
+    #[serde(default)]
+    pub id: Option<String>,
+    #[serde(default)]
+    pub next_step: Option<String>,
+    #[serde(default)]
+    pub error: Option<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct RegisterStatusResponse {
+    pub id: String,
+    pub username: String,
+    #[serde(default)]
+    pub email_pending: bool,
+    pub next_step: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct VerifyEmailRequest {
+    pub code: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct DisplayNameRequest {
+    #[serde(default)]
+    pub display_name: Option<String>,
+    #[serde(default)]
+    pub skip: Option<bool>,
+}
+
+#[derive(Debug, Clone, PartialEq, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct StepResponse {
+    pub status: String,
+    #[serde(default)]
+    pub next_step: Option<String>,
+    #[serde(default)]
+    pub error: Option<String>,
+}
+
+// ── Recovery API types ────────────────────────────────────────
+
+#[derive(Debug, Clone, PartialEq, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct RecoveryStartRequest {
+    pub email: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct RecoveryStartResponse {
+    pub status: String,
+    #[serde(default)]
+    pub id: Option<String>,
+    #[serde(default)]
+    pub error: Option<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct RecoveryStatusResponse {
+    pub id: String,
+    pub email: String,
+    pub status: String,
+}

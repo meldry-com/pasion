@@ -787,6 +787,72 @@ a:hover {
     gap: var(--space-6x);
 }
 
+/* ── Login / Register / Recovery pages ─────────────────────── */
+.login-page {
+    display: flex;
+    justify-content: center;
+    align-items: flex-start;
+    padding: var(--space-10x) var(--space-4x);
+    min-height: 60vh;
+}
+
+.login-container {
+    width: 100%;
+    max-width: 400px;
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-6x);
+}
+
+.login-title {
+    text-align: center;
+}
+
+.login-divider {
+    display: flex;
+    align-items: center;
+    gap: var(--space-4x);
+    color: var(--color-text-secondary);
+    font-size: var(--font-size-sm);
+}
+
+.login-divider::before,
+.login-divider::after {
+    content: "";
+    flex: 1;
+    height: 1px;
+    background: var(--color-border);
+}
+
+.login-providers {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-2x);
+}
+
+.login-links {
+    text-align: right;
+    font-size: var(--font-size-sm);
+}
+
+.login-register {
+    text-align: center;
+    font-size: var(--font-size-sm);
+    color: var(--color-text-secondary);
+}
+
+.btn-block {
+    width: 100%;
+    text-align: center;
+    justify-content: center;
+}
+
+.text-secondary {
+    color: var(--color-text-secondary);
+    font-size: var(--font-size-sm);
+    line-height: 1.5;
+}
+
 /* Responsive */
 @media screen and (max-width: 480px) {
     .dialog-content {

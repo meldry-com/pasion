@@ -40,9 +40,12 @@ use crate::{
     passwords::PasswordManager,
 };
 
+pub mod auth;
 pub mod emails;
 pub mod oauth2_clients;
 pub mod password;
+pub mod recovery;
+pub mod register;
 pub mod sessions;
 pub mod site_config;
 pub mod users;

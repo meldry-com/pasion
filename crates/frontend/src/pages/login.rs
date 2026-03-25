@@ -1,0 +1,199 @@
+use dioxus::prelude::*;
+
+use crate::{
+    api::types::{LoginResponse, ProvidersResponse},
+    components::{layout::Layout, loading::LoadingSpinner},
+    pages::Route,
+};
+
+#[component]
+pub fn Login() -> Element {
+    let providers_data =
+        use_resource(|| async { crate::api::api_get::<ProvidersResponse>("/auth/providers").await });
+    let binding = providers_data.read();
+
+    match &*binding {
+        Some(Ok(data)) => rsx! {
+            Layout {
+                LoginForm {
+                    providers: data.clone(),
+                }
+            }
+        },
+        Some(Err(e)) => rsx! {
+            Layout {
+                LoginFormBasic { error_msg: Some(e.clone()) }
+            }
+        },
+        None => rsx! {
+            Layout {
+                LoginFormBasic { error_msg: None }
+            }
+        },
+    }
+}
+
+#[component]
+fn LoginFormBasic(error_msg: Option<String>) -> Element {
+    rsx! {
+        LoginForm {
+            providers: ProvidersResponse {
+                providers: vec![],
+                password_login_enabled: true,
+                password_registration_enabled: false,
+            },
+        }
+    }
+}
+
+#[component]
+fn LoginForm(providers: ProvidersResponse) -> Element {
+    let mut username = use_signal(String::new);
+    let mut password = use_signal(String::new);
+    let mut submitting = use_signal(|| false);
+    let mut error = use_signal(|| None::<String>);
+    let nav = navigator();
+    let has_providers = !providers.providers.is_empty();
+    let password_enabled = providers.password_login_enabled;
+    let registration_enabled = providers.password_registration_enabled;
+
+    rsx! {
+        div { class: "login-page",
+            div { class: "login-container",
+                h1 { class: "heading-md login-title", "Sign in" }
+
+                if let Some(ref err) = *error.read() {
+                    div { class: "alert alert-critical",
+                        p { "{err}" }
+                    }
+                }
+
+                if password_enabled {
+                    form {
+                        class: "form-root",
+                        onsubmit: move |e| {
+                            e.stop_propagation();
+                            let user = username.to_string();
+                            let pass = password.to_string();
+
+                            if user.is_empty() || pass.is_empty() {
+                                error.set(Some("Please enter your username and password.".to_string()));
+                                return;
+                            }
+
+                            submitting.set(true);
+                            error.set(None);
+                            let nav = nav.clone();
+
+                            spawn(async move {
+                                let result = crate::api::api_post::<LoginResponse>(
+                                    "/auth/login",
+                                    serde_json::json!({
+                                        "username": user,
+                                        "password": pass,
+                                    }),
+                                ).await;
+                                submitting.set(false);
+                                match result {
+                                    Ok(resp) if resp.status == "success" => {
+                                        nav.push(Route::AccountSettings {});
+                                    }
+                                    Ok(resp) => {
+                                        let msg = match resp.error.as_deref() {
+                                            Some("invalid_credentials") => "Invalid username or password.",
+                                            Some("rate_limited") => "Too many attempts. Please try again later.",
+                                            Some("account_deactivated") => "This account has been deactivated.",
+                                            Some("account_locked") => "This account has been locked.",
+                                            Some("password_login_disabled") => "Password login is not available.",
+                                            Some(other) => other,
+                                            None => "Login failed.",
+                                        };
+                                        error.set(Some(msg.to_string()));
+                                    }
+                                    Err(e) => {
+                                        error.set(Some(e));
+                                    }
+                                }
+                            });
+                        },
+
+                        div { class: "form-field",
+                            label { class: "form-label", "Username" }
+                            input {
+                                class: "form-input",
+                                r#type: "text",
+                                autocomplete: "username",
+                                required: true,
+                                placeholder: "Username or email",
+                                value: "{username}",
+                                oninput: move |e| username.set(e.value()),
+                            }
+                        }
+
+                        div { class: "form-field",
+                            label { class: "form-label", "Password" }
+                            input {
+                                class: "form-input",
+                                r#type: "password",
+                                autocomplete: "current-password",
+                                required: true,
+                                placeholder: "Password",
+                                value: "{password}",
+                                oninput: move |e| password.set(e.value()),
+                            }
+                        }
+
+                        button {
+                            class: "btn btn-primary btn-block",
+                            r#type: "submit",
+                            disabled: submitting(),
+                            if submitting() {
+                                LoadingSpinner { inline: true }
+                            }
+                            "Sign in"
+                        }
+                    }
+
+                    div { class: "login-links",
+                        Link { class: "link", to: Route::RecoveryStart {},
+                            "Forgot password?"
+                        }
+                    }
+                }
+
+                if has_providers && password_enabled {
+                    div { class: "login-divider",
+                        span { "or" }
+                    }
+                }
+
+                if has_providers {
+                    div { class: "login-providers",
+                        for provider in providers.providers.iter() {
+                            a {
+                                class: "btn btn-secondary btn-block",
+                                href: "{provider.authorize_url}",
+                                {provider.human_name.clone().unwrap_or_else(|| format!("Sign in with {}", provider.id))}
+                            }
+                        }
+                    }
+                }
+
+                if !password_enabled && !has_providers {
+                    div { class: "alert alert-warning",
+                        p { "No login methods are currently available." }
+                    }
+                }
+
+                if registration_enabled {
+                    div { class: "login-register",
+                        span { "Don't have an account? " }
+                        Link { class: "link", to: Route::Register {},
+                            "Create account"
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
