@@ -254,20 +254,17 @@ fn AccountDeleteButton(
                     }
 
                     // Erase data checkbox
-                    label {
-                        class: "flex items-center gap-2",
-                        style: "cursor: pointer; margin: 8px 0;",
+                    label { class: "checkbox-label",
                         input {
                             r#type: "checkbox",
                             checked: erase_data(),
                             onchange: move |e| erase_data.set(e.checked()),
                         }
-                        span { class: "text-md", "Erase all my data" }
+                        "Erase all my data"
                     }
 
                     if erase_data() {
                         div { class: "alert alert-critical",
-                            style: "margin-bottom: 8px;",
                             p { class: "alert-title", "Warning" }
                             p { "All your messages and media will be permanently deleted from the server. This cannot be reversed." }
                         }

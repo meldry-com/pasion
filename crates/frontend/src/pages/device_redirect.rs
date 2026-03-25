@@ -2,7 +2,7 @@ use dioxus::prelude::*;
 
 use crate::{
     api::types::{AppSession, ViewerResponse},
-    components::{layout::Layout, loading::LoadingScreen},
+    components::{layout::Layout, loading::LoadingScreen, page_heading::PageHeading},
     pages::Route,
 };
 
@@ -28,7 +28,16 @@ pub fn DeviceRedirect(route: Vec<String>) -> Element {
                 None => {
                     return rsx! {
                         Layout {
-                            p { "Not authenticated." }
+                            div { class: "flex flex-col gap-10",
+                                PageHeading {
+                                    icon: "🔒".to_string(),
+                                    title: "Not authenticated".to_string(),
+                                    subtitle: "Please sign in to view device information.".to_string(),
+                                }
+                                Link { class: "btn btn-primary", to: Route::Login {},
+                                    "Sign in"
+                                }
+                            }
                         }
                     };
                 }
@@ -48,11 +57,13 @@ pub fn DeviceRedirect(route: Vec<String>) -> Element {
 
             rsx! {
                 Layout {
-                    div { class: "flex flex-col gap-4",
-                        p { "Device not found." }
-                        Link {
-                            class: "text-sm text-secondary",
-                            to: Route::Sessions {},
+                    div { class: "flex flex-col gap-10",
+                        PageHeading {
+                            icon: "?".to_string(),
+                            title: "Device not found".to_string(),
+                            subtitle: "The device you are looking for could not be found.".to_string(),
+                        }
+                        Link { class: "btn btn-primary", to: Route::Sessions {},
                             "Back to sessions"
                         }
                     }
@@ -61,7 +72,16 @@ pub fn DeviceRedirect(route: Vec<String>) -> Element {
         }
         Some(Err(e)) => rsx! {
             Layout {
-                div { class: "alert alert-critical", "{e}" }
+                div { class: "flex flex-col gap-10",
+                    PageHeading {
+                        icon: "!".to_string(),
+                        title: "Error".to_string(),
+                        subtitle: e.clone(),
+                    }
+                    Link { class: "btn btn-primary", to: Route::Sessions {},
+                        "Back to sessions"
+                    }
+                }
             }
         },
         None => rsx! { LoadingScreen {} },

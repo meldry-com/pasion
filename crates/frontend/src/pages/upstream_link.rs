@@ -74,9 +74,9 @@ pub fn UpstreamLink(id: String) -> Element {
         },
         Some(Err(e)) => rsx! {
             Layout {
-                div { class: "upstream-link-page",
-                    div { class: "upstream-link-container",
-                        h1 { class: "heading-md", "Error" }
+                div { class: "login-page",
+                    div { class: "login-container",
+                        h1 { class: "heading-md login-title", "Error" }
                         div { class: "alert alert-critical",
                             p { "Failed to load link information: {e}" }
                         }
@@ -139,27 +139,27 @@ fn LinkStateView(id: String, state: LinkState) -> Element {
             }
         },
         LinkState::AccountDeactivated { username } => rsx! {
-            div { class: "upstream-link-page",
-                div { class: "upstream-link-container",
-                    h1 { class: "heading-md", "Account Deactivated" }
-                    p { "The account " strong { "{username}" } " has been deactivated." }
-                    p { "Please contact your administrator for assistance." }
+            div { class: "login-page",
+                div { class: "login-container",
+                    h1 { class: "heading-md login-title", "Account Deactivated" }
+                    p { class: "text-secondary", "The account " strong { "{username}" } " has been deactivated." }
+                    p { class: "text-secondary", "Please contact your administrator for assistance." }
                 }
             }
         },
         LinkState::AccountLocked { username } => rsx! {
-            div { class: "upstream-link-page",
-                div { class: "upstream-link-container",
-                    h1 { class: "heading-md", "Account Locked" }
-                    p { "The account " strong { "{username}" } " has been locked." }
-                    p { "Please contact your administrator for assistance." }
+            div { class: "login-page",
+                div { class: "login-container",
+                    h1 { class: "heading-md login-title", "Account Locked" }
+                    p { class: "text-secondary", "The account " strong { "{username}" } " has been locked." }
+                    p { class: "text-secondary", "Please contact your administrator for assistance." }
                 }
             }
         },
         LinkState::Error { code, description } => rsx! {
-            div { class: "upstream-link-page",
-                div { class: "upstream-link-container",
-                    h1 { class: "heading-md", "Error: {code}" }
+            div { class: "login-page",
+                div { class: "login-container",
+                    h1 { class: "heading-md login-title", "Error: {code}" }
                     div { class: "alert alert-critical",
                         p { "{description}" }
                     }
@@ -183,10 +183,10 @@ fn SuggestLinkView(
     let provider = provider_name.unwrap_or_else(|| "the external provider".to_string());
 
     rsx! {
-        div { class: "upstream-link-page",
-            div { class: "upstream-link-container",
-                h1 { class: "heading-md", "Link Account" }
-                p {
+        div { class: "login-page",
+            div { class: "login-container",
+                h1 { class: "heading-md login-title", "Link Account" }
+                p { class: "text-secondary",
                     "Would you like to link your account with "
                     strong { "{provider}" }
                     if let Some(ref subject) = upstream_subject {
@@ -202,7 +202,7 @@ fn SuggestLinkView(
                 }
 
                 button {
-                    class: "cpd-button",
+                    class: "btn btn-primary btn-block",
                     r#type: "button",
                     disabled: *submitting.read(),
                     onclick: {
@@ -246,16 +246,16 @@ fn SuggestLinkView(
 #[component]
 fn LinkMismatchView(existing_username: String) -> Element {
     rsx! {
-        div { class: "upstream-link-page",
-            div { class: "upstream-link-container",
-                h1 { class: "heading-md", "Account Mismatch" }
-                p {
+        div { class: "login-page",
+            div { class: "login-container",
+                h1 { class: "heading-md login-title", "Account Mismatch" }
+                p { class: "text-secondary",
                     "This external account is already linked to another user: "
                     strong { "{existing_username}" }
                     "."
                 }
-                p { "Please log out and sign in with the correct account, or contact your administrator." }
-                a { href: "/", class: "cpd-button", "Go to Home" }
+                p { class: "text-secondary", "Please log out and sign in with the correct account, or contact your administrator." }
+                a { href: "/", class: "btn btn-primary btn-block", "Go to Home" }
             }
         }
     }
@@ -287,10 +287,10 @@ fn RegisterView(
     let provider = provider_name.unwrap_or_else(|| "external provider".to_string());
 
     rsx! {
-        div { class: "upstream-link-page",
-            div { class: "upstream-link-container",
-                h1 { class: "heading-md", "Create Account" }
-                p { "Complete your registration with {provider}." }
+        div { class: "login-page",
+            div { class: "login-container",
+                h1 { class: "heading-md login-title", "Create Account" }
+                p { class: "text-secondary", "Complete your registration with {provider}." }
 
                 if let Some(ref err) = *error.read() {
                     div { class: "alert alert-critical",
@@ -349,13 +349,13 @@ fn RegisterView(
                     },
 
                     // Username field
-                    div { class: "cpd-field",
-                        label { r#for: "username", "Username" }
+                    div { class: "form-field",
+                        label { class: "form-label", r#for: "username", "Username" }
                         input {
                             id: "username",
                             name: "username",
                             r#type: "text",
-                            class: "cpd-text-input",
+                            class: "form-input",
                             required: true,
                             disabled: username_forced,
                             value: "{username}",
@@ -363,7 +363,7 @@ fn RegisterView(
                         }
                         if let Some(ref fe) = *field_errors.read() {
                             if let Some(err) = fe.get("username") {
-                                span { class: "cpd-field-message cpd-field-message--critical",
+                                span { class: "form-error",
                                     "{err}"
                                 }
                             }
@@ -372,46 +372,46 @@ fn RegisterView(
 
                     // Display name import checkbox
                     if suggested_display_name.is_some() && !display_name_forced {
-                        div { class: "cpd-field",
-                            label {
+                        div { class: "form-field",
+                            label { class: "checkbox-label",
                                 input {
                                     r#type: "checkbox",
                                     checked: *import_display_name.read(),
                                     onchange: move |e| import_display_name.set(e.checked()),
                                 }
-                                " Import display name"
+                                "Import display name"
                             }
                         }
                     }
 
                     // Email import checkbox
                     if suggested_email.is_some() && !email_forced {
-                        div { class: "cpd-field",
-                            label {
+                        div { class: "form-field",
+                            label { class: "checkbox-label",
                                 input {
                                     r#type: "checkbox",
                                     checked: *import_email.read(),
                                     onchange: move |e| import_email.set(e.checked()),
                                 }
-                                " Import email address"
+                                "Import email address"
                             }
                         }
                     }
 
                     // Terms of service checkbox
                     if has_tos {
-                        div { class: "cpd-field",
-                            label {
+                        div { class: "form-field",
+                            label { class: "checkbox-label",
                                 input {
                                     r#type: "checkbox",
                                     checked: *accept_terms.read(),
                                     onchange: move |e| accept_terms.set(e.checked()),
                                 }
-                                " I accept the Terms of Service"
+                                "I accept the Terms of Service"
                             }
                             if let Some(ref fe) = *field_errors.read() {
                                 if let Some(err) = fe.get("accept_terms") {
-                                    span { class: "cpd-field-message cpd-field-message--critical",
+                                    span { class: "form-error",
                                         "{err}"
                                     }
                                 }
@@ -420,7 +420,7 @@ fn RegisterView(
                     }
 
                     button {
-                        class: "cpd-button",
+                        class: "btn btn-primary btn-block",
                         r#type: "submit",
                         disabled: *submitting.read(),
                         if *submitting.read() { "Registering..." } else { "Register" }

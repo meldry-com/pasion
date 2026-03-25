@@ -56,16 +56,16 @@ fn ClientDetailView(
         div { class: "flex flex-col gap-6",
             // Back link
             Link {
-                class: "text-sm text-secondary",
+                class: "text-sm",
                 to: Route::Sessions {},
-                "Back to sessions"
+                "← Back to sessions"
             }
 
             // Header with optional logo
             div { class: "flex items-center gap-4",
                 if let Some(ref uri) = logo_uri {
                     img {
-                        class: "w-12 h-12 rounded",
+                        class: "client-logo",
                         src: "{uri}",
                         alt: "{name}",
                     }
@@ -74,47 +74,50 @@ fn ClientDetailView(
             }
 
             // Client info
-            div { class: "flex flex-col gap-2",
-                div { class: "flex flex-col gap-1",
-                    span { class: "text-sm text-secondary", "Client ID" }
-                    span { class: "text-sm", "{client_id}" }
+            ul { class: "session-metadata",
+                li {
+                    div { class: "key", "Client ID" }
+                    div { class: "value", "{client_id}" }
                 }
 
                 if let Some(ref uri) = client_uri {
-                    div { class: "flex flex-col gap-1",
-                        span { class: "text-sm text-secondary", "Client URI" }
-                        a {
-                            class: "text-sm text-link",
-                            href: "{uri}",
-                            target: "_blank",
-                            rel: "noopener noreferrer",
-                            "{uri}"
+                    li {
+                        div { class: "key", "Client URI" }
+                        div { class: "value",
+                            a {
+                                href: "{uri}",
+                                target: "_blank",
+                                rel: "noopener noreferrer",
+                                "{uri}"
+                            }
                         }
                     }
                 }
 
                 if let Some(ref uri) = tos_uri {
-                    div { class: "flex flex-col gap-1",
-                        span { class: "text-sm text-secondary", "Terms of Service" }
-                        a {
-                            class: "text-sm text-link",
-                            href: "{uri}",
-                            target: "_blank",
-                            rel: "noopener noreferrer",
-                            "{uri}"
+                    li {
+                        div { class: "key", "Terms of Service" }
+                        div { class: "value",
+                            a {
+                                href: "{uri}",
+                                target: "_blank",
+                                rel: "noopener noreferrer",
+                                "{uri}"
+                            }
                         }
                     }
                 }
 
                 if let Some(ref uri) = policy_uri {
-                    div { class: "flex flex-col gap-1",
-                        span { class: "text-sm text-secondary", "Privacy Policy" }
-                        a {
-                            class: "text-sm text-link",
-                            href: "{uri}",
-                            target: "_blank",
-                            rel: "noopener noreferrer",
-                            "{uri}"
+                    li {
+                        div { class: "key", "Privacy Policy" }
+                        div { class: "value",
+                            a {
+                                href: "{uri}",
+                                target: "_blank",
+                                rel: "noopener noreferrer",
+                                "{uri}"
+                            }
                         }
                     }
                 }
