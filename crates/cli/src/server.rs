@@ -347,10 +347,10 @@ fn build_human_router(router: Router, _templates: Templates) -> Router {
                 .get(pasion_handlers::upstream_oauth2::callback::handler)
                 .post(pasion_handlers::upstream_oauth2::callback::handler),
         )
+        // Upstream link page is now served by the SPA frontend
         .push(
             Router::with_path(pasion_router::UpstreamOAuth2Link::route())
-                .get(pasion_handlers::upstream_oauth2::link::get)
-                .post(pasion_handlers::upstream_oauth2::link::post),
+                .get(pasion_handlers::spa::get),
         )
         .push(
             Router::with_path(pasion_router::UpstreamOAuth2BackchannelLogout::route())
@@ -366,24 +366,24 @@ fn build_human_router(router: Router, _templates: Templates) -> Router {
         // handles the actual page rendering.
         .push(
             Router::with_path(pasion_router::Index::route())
-                .get(pasion_handlers::views::app::get_anonymous),
+                .get(pasion_handlers::spa::get),
         )
-        .push(Router::with_path("/login").get(pasion_handlers::views::app::get_anonymous))
-        .push(Router::with_path("/register").get(pasion_handlers::views::app::get_anonymous))
-        .push(Router::with_path("/register/{*rest}").get(pasion_handlers::views::app::get_anonymous))
-        .push(Router::with_path("/recover").get(pasion_handlers::views::app::get_anonymous))
-        .push(Router::with_path("/recover/{*rest}").get(pasion_handlers::views::app::get_anonymous))
-        .push(Router::with_path("/consent/{*rest}").get(pasion_handlers::views::app::get_anonymous))
-        .push(Router::with_path("/link").get(pasion_handlers::views::app::get_anonymous))
-        .push(Router::with_path("/device/{*rest}").get(pasion_handlers::views::app::get_anonymous))
+        .push(Router::with_path("/login").get(pasion_handlers::spa::get))
+        .push(Router::with_path("/register").get(pasion_handlers::spa::get))
+        .push(Router::with_path("/register/{*rest}").get(pasion_handlers::spa::get))
+        .push(Router::with_path("/recover").get(pasion_handlers::spa::get))
+        .push(Router::with_path("/recover/{*rest}").get(pasion_handlers::spa::get))
+        .push(Router::with_path("/consent/{*rest}").get(pasion_handlers::spa::get))
+        .push(Router::with_path("/link").get(pasion_handlers::spa::get))
+        .push(Router::with_path("/device/{*rest}").get(pasion_handlers::spa::get))
         .push(Router::with_path("/account").get(account_redirect_handler))
         .push(
             Router::with_path(pasion_router::Account::route())
-                .get(pasion_handlers::views::app::get_anonymous),
+                .get(pasion_handlers::spa::get),
         )
         .push(
             Router::with_path(pasion_router::AccountWildcard::route())
-                .get(pasion_handlers::views::app::get_anonymous),
+                .get(pasion_handlers::spa::get),
         )
 }
 
@@ -558,6 +558,12 @@ fn build_rest_api_router(router: Router) -> Router {
             Router::with_path("/api/v1/device-consent/<id>")
                 .get(pasion_handlers::rest::consent::device_consent_get)
                 .post(pasion_handlers::rest::consent::device_consent_post),
+        )
+        // Upstream OAuth2 link (SPA)
+        .push(
+            Router::with_path("/api/v1/upstream-oauth2/link/<id>")
+                .get(pasion_handlers::rest::upstream_oauth2::get_link)
+                .post(pasion_handlers::rest::upstream_oauth2::post_link),
         )
 }
 

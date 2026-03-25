@@ -7,11 +7,13 @@
 //! - [`health`] — Health-check endpoint
 //! - [`oauth2`] — OAuth 2.0 / OpenID Connect endpoints (token, authorization,
 //!   discovery, userinfo, etc.)
-//! - [`rest`] — REST API endpoints for the account management frontend
+//! - [`rest`] — REST API endpoints for the account management frontend (JSON)
+//! - [`spa`] — SPA shell handler (serves the Dioxus frontend HTML wrapper)
 //! - [`upstream_oauth2`] — Upstream SSO / federated identity provider flows
-//! - [`views`] — Server-rendered HTML pages (login, registration, consent,
-//!   etc.)
 //! - [`passwords`] — Password hashing and verification utilities
+//!
+//! All user-facing pages are rendered by the Dioxus frontend (`crates/frontend`).
+//! The backend serves only REST API endpoints and the SPA shell.
 
 #![deny(clippy::future_not_send)]
 #![allow(
@@ -36,12 +38,25 @@ pub mod health;
 pub mod oauth2;
 /// Password hashing, verification, and complexity checking.
 pub mod passwords;
+/// Post-authentication action utilities (shared across handlers).
+pub mod post_auth;
 /// REST API endpoints consumed by the account-management frontend.
 pub mod rest;
+/// SPA shell serving (renders the Dioxus frontend HTML wrapper).
+pub mod spa;
 /// Upstream (federated) OAuth 2.0 / OIDC provider integration.
 pub mod upstream_oauth2;
-/// Server-rendered HTML views (login, registration, consent pages).
-pub mod views;
+/// Cookie management for user registration sessions.
+pub mod user_registration_cookie;
+
+/// Legacy server-rendered HTML views.
+///
+/// These handlers are no longer used in production routing (the Dioxus SPA
+/// handles all user-facing pages). They are retained only for test
+/// infrastructure compatibility. New code should use the REST API endpoints
+/// in [`rest`] instead.
+#[cfg(test)]
+pub(crate) mod views;
 
 mod activity_tracker;
 mod captcha;

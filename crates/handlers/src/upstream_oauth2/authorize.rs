@@ -10,7 +10,7 @@ use thiserror::Error;
 use ulid::Ulid;
 
 use super::{UpstreamSessionsCookie, cache::LazyProviderInfos};
-use crate::{impl_from_error_for_route, views::shared::OptionalPostAuthAction};
+use crate::{impl_from_error_for_route, post_auth::OptionalPostAuthAction};
 
 #[derive(Debug, Error)]
 pub enum RouteError {

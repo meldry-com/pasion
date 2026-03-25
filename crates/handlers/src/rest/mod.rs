@@ -49,6 +49,7 @@ pub mod recovery;
 pub mod register;
 pub mod sessions;
 pub mod site_config;
+pub mod upstream_oauth2;
 pub mod users;
 pub mod viewer;
 

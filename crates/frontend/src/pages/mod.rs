@@ -19,6 +19,7 @@ pub mod register;
 pub mod reset_cross_signing;
 pub mod session_detail;
 pub mod sessions;
+pub mod upstream_link;
 
 // Re-export page components for the router
 use account_settings::AccountSettings;
@@ -42,6 +43,7 @@ use register::{Register, RegisterDisplayName, RegisterFinish, RegisterVerifyEmai
 use reset_cross_signing::ResetCrossSigning;
 use session_detail::SessionDetail;
 use sessions::Sessions;
+use upstream_link::UpstreamLink;
 
 use crate::components::{error::NotFound, layout::Layout};
 
@@ -104,6 +106,10 @@ pub enum Route {
     ClientDetail { id: String },
     #[route("/devices/:..route")]
     DeviceRedirect { route: Vec<String> },
+
+    // Upstream OAuth2 link
+    #[route("/upstream/link/:id")]
+    UpstreamLink { id: String },
 
     // Catch-all 404
     #[route("/:..route")]

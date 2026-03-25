@@ -39,7 +39,8 @@ use super::{
 };
 use crate::{
     BoundActivityTracker, METER, SiteConfig, impl_from_error_for_route,
-    views::{register::UserRegistrationSessionsCookie, shared::OptionalPostAuthAction},
+    post_auth::OptionalPostAuthAction,
+    user_registration_cookie::UserRegistrationSessions as UserRegistrationSessionsCookie,
 };
 
 static LOGIN_COUNTER: LazyLock<Counter<u64>> = LazyLock::new(|| {

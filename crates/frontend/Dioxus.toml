@@ -26,12 +26,3 @@ backend = "http://localhost:8080/upstream"
 
 [[web.proxy]]
 backend = "http://localhost:8080/authorize"
-
-[[web.proxy]]
-backend = "http://localhost:8080/.well-known"
-
-[[web.proxy]]
-backend = "http://localhost:8080/oauth2"
-
-[[web.proxy]]
-backend = "http://localhost:8080/health"

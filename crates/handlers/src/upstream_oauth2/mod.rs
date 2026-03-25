@@ -13,11 +13,11 @@ pub mod authorize;
 pub mod backchannel_logout;
 pub mod cache;
 pub mod callback;
-mod cookie;
+pub(crate) mod cookie;
 pub mod link;
-mod template;
+pub(crate) mod template;
 
-use self::cookie::UpstreamSessions as UpstreamSessionsCookie;
+pub(crate) use self::cookie::UpstreamSessions as UpstreamSessionsCookie;
 
 #[derive(Debug, Error)]
 #[allow(clippy::enum_variant_names)]
