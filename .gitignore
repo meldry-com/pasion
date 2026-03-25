@@ -11,3 +11,4 @@ target
 _*.*
 .cladue
 config.dev.yaml
+*.log

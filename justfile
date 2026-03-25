@@ -40,7 +40,7 @@ backend-config config="config.yaml":
 
 # Start the frontend dev server (Dioxus hot-reload)
 frontend:
-    dx serve -p pasion-frontend
+    dx serve -p pasion-frontend --port 8182
 
 # Start the frontend in hot-reload mode
 frontend-hot:
