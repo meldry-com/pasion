@@ -4,8 +4,7 @@
 //! Tasks are grouped by domain:
 //!
 //! - [`tokens`]: OAuth token cleanup (access and refresh tokens)
-//! - [`sessions`]: Session cleanup (compat, `OAuth2`, user sessions and their
-//!   IPs)
+//! - [`sessions`]: Session cleanup (`OAuth2`, user sessions and their IPs)
 //! - [`oauth`]: OAuth grants and upstream OAuth cleanup
 //! - [`user`]: User-related cleanup (registrations, recovery, email auth)
 //! - [`misc`]: Miscellaneous cleanup (queue jobs, policy data)

@@ -87,7 +87,6 @@ impl Options {
                     &url_builder,
                     // Use strict mode in template checks
                     true,
-                    stabilise,
                 )
                 .await?;
                 let all_renders = templates.check_render(now, &rng)?;

@@ -3,7 +3,7 @@ use std::sync::Arc;
 use anyhow::Context;
 use chrono::Duration;
 use oauth2_types::scope::Scope;
-use pasion_data_model::{BoxRng, Device, TokenType};
+use pasion_data_model::{BoxRng, TokenType};
 use pasion_matrix::HomeserverConnection;
 use pasion_salvo_utils::record_error;
 use salvo::{http::StatusCode, prelude::*};
@@ -147,7 +147,11 @@ pub async fn handler(
         repo.user().acquire_lock_for_sync(&actor_user).await?;
 
         for scope in &*session.scope {
-            if let Some(device) = Device::from_scope_token(scope) {
+            let s = scope.as_str();
+            let device_id = s
+                .strip_prefix("urn:matrix:client:device:")
+                .or_else(|| s.strip_prefix("urn:matrix:org.matrix.msc2967.client:device:"));
+            if let Some(device_id) = device_id {
                 // NOTE: We haven't relinquished the repo at this point,
                 // so we are holding a transaction across the homeserver
                 // operation.
@@ -155,7 +159,7 @@ pub async fn handler(
                 // Given this is an administrative endpoint, this is a tolerable
                 // compromise for now.
                 homeserver
-                    .upsert_device(&actor_user.username, device.as_str(), None)
+                    .upsert_device(&actor_user.username, device_id, None)
                     .await
                     .context("Failed to provision device")
                     .map_err(|e| RouteError::Internal(e.into()))?;

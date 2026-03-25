@@ -3,18 +3,13 @@
 use async_trait::async_trait;
 use oauth2_types::scope::{Scope, ScopeToken};
 use opentelemetry_semantic_conventions::trace::DB_QUERY_TEXT;
-use pasion_data_model::{
-    Clock, CompatSession, CompatSessionState, Device, Session, SessionState, User,
-};
+use pasion_data_model::{Clock, Session, SessionState, User};
 use pasion_storage::{
     Page, Pagination,
     app_session::{AppSession, AppSessionFilter, AppSessionRepository, AppSessionState},
-    compat::CompatSessionFilter,
     oauth2::OAuth2SessionFilter,
 };
-use sea_query::{
-    Alias, ColumnRef, CommonTableExpression, Expr, PostgresQueryBuilder, Query, UnionType,
-};
+use sea_query::{Alias, ColumnRef, CommonTableExpression, Expr, PostgresQueryBuilder, Query};
 use sea_query_binder::SqlxBinder;
 use sqlx::PgConnection;
 use tracing::Instrument;
@@ -25,7 +20,7 @@ use crate::{
     DatabaseError, ExecuteExt,
     errors::DatabaseInconsistencyError,
     filter::StatementExt,
-    iden::{CompatSessions, OAuth2Sessions},
+    iden::OAuth2Sessions,
     pagination::QueryBuilderExt,
 };
 
@@ -58,17 +53,14 @@ mod priv_ {
     #[enum_def]
     pub(super) struct AppSessionLookup {
         pub(super) cursor: Uuid,
-        pub(super) compat_session_id: Option<Uuid>,
         pub(super) oauth2_session_id: Option<Uuid>,
         pub(super) oauth2_client_id: Option<Uuid>,
         pub(super) user_session_id: Option<Uuid>,
         pub(super) user_id: Option<Uuid>,
         pub(super) scope_list: Option<Vec<String>>,
-        pub(super) device_id: Option<String>,
         pub(super) human_name: Option<String>,
         pub(super) created_at: DateTime<Utc>,
         pub(super) finished_at: Option<DateTime<Utc>>,
-        pub(super) is_palpo_admin: Option<bool>,
         pub(super) user_agent: Option<String>,
         pub(super) last_active_at: Option<DateTime<Utc>>,
         pub(super) last_active_ip: Option<IpAddr>,
@@ -87,21 +79,16 @@ impl TryFrom<AppSessionLookup> for AppSession {
     type Error = DatabaseError;
 
     fn try_from(value: AppSessionLookup) -> Result<Self, Self::Error> {
-        // This is annoying to do, but we have to match on all the fields to determine
-        // whether it's a compat session or an oauth2 session
         let AppSessionLookup {
             cursor,
-            compat_session_id,
             oauth2_session_id,
             oauth2_client_id,
             user_session_id,
             user_id,
             scope_list,
-            device_id,
             human_name,
             created_at,
             finished_at,
-            is_palpo_admin,
             user_agent,
             last_active_at,
             last_active_ip,
@@ -109,66 +96,8 @@ impl TryFrom<AppSessionLookup> for AppSession {
 
         let user_session_id = user_session_id.map(Ulid::from);
 
-        match (
-            compat_session_id,
-            oauth2_session_id,
-            oauth2_client_id,
-            user_id,
-            scope_list,
-            device_id,
-            is_palpo_admin,
-        ) {
-            (
-                Some(compat_session_id),
-                None,
-                None,
-                Some(user_id),
-                None,
-                device_id_opt,
-                Some(is_palpo_admin),
-            ) => {
-                let id = compat_session_id.into();
-                let device = device_id_opt
-                    .map(Device::try_from)
-                    .transpose()
-                    .map_err(|e| {
-                        DatabaseInconsistencyError::on("compat_sessions")
-                            .column("device_id")
-                            .row(id)
-                            .source(e)
-                    })?;
-
-                let state = match finished_at {
-                    None => CompatSessionState::Valid,
-                    Some(finished_at) => CompatSessionState::Finished { finished_at },
-                };
-
-                let session = CompatSession {
-                    id,
-                    state,
-                    user_id: user_id.into(),
-                    device,
-                    human_name,
-                    user_session_id,
-                    created_at,
-                    is_palpo_admin,
-                    user_agent,
-                    last_active_at,
-                    last_active_ip,
-                };
-
-                Ok(AppSession::Compat(Box::new(session)))
-            }
-
-            (
-                None,
-                Some(oauth2_session_id),
-                Some(oauth2_client_id),
-                user_id,
-                Some(scope_list),
-                None,
-                None,
-            ) => {
+        match (oauth2_session_id, oauth2_client_id, scope_list) {
+            (Some(oauth2_session_id), Some(oauth2_client_id), Some(scope_list)) => {
                 let id = oauth2_session_id.into();
                 let scope: Result<Scope, _> =
                     scope_list.iter().map(|s| s.parse::<ScopeToken>()).collect();
@@ -179,7 +108,7 @@ impl TryFrom<AppSessionLookup> for AppSession {
                         .source(e)
                 })?;
 
-                let state = match value.finished_at {
+                let state = match finished_at {
                     None => SessionState::Valid,
                     Some(finished_at) => SessionState::Finished { finished_at },
                 };
@@ -208,54 +137,6 @@ impl TryFrom<AppSessionLookup> for AppSession {
     }
 }
 
-/// Split a [`AppSessionFilter`] into two separate filters: a
-/// [`CompatSessionFilter`] and an [`OAuth2SessionFilter`].
-fn split_filter(
-    filter: AppSessionFilter<'_>,
-) -> (CompatSessionFilter<'_>, OAuth2SessionFilter<'_>) {
-    let mut compat_filter = CompatSessionFilter::new();
-    let mut oauth2_filter = OAuth2SessionFilter::new();
-
-    if let Some(user) = filter.user() {
-        compat_filter = compat_filter.for_user(user);
-        oauth2_filter = oauth2_filter.for_user(user);
-    }
-
-    match filter.state() {
-        Some(AppSessionState::Active) => {
-            compat_filter = compat_filter.active_only();
-            oauth2_filter = oauth2_filter.active_only();
-        }
-        Some(AppSessionState::Finished) => {
-            compat_filter = compat_filter.finished_only();
-            oauth2_filter = oauth2_filter.finished_only();
-        }
-        None => {}
-    }
-
-    if let Some(device) = filter.device() {
-        compat_filter = compat_filter.for_device(device);
-        oauth2_filter = oauth2_filter.for_device(device);
-    }
-
-    if let Some(browser_session) = filter.browser_session() {
-        compat_filter = compat_filter.for_browser_session(browser_session);
-        oauth2_filter = oauth2_filter.for_browser_session(browser_session);
-    }
-
-    if let Some(last_active_before) = filter.last_active_before() {
-        compat_filter = compat_filter.with_last_active_before(last_active_before);
-        oauth2_filter = oauth2_filter.with_last_active_before(last_active_before);
-    }
-
-    if let Some(last_active_after) = filter.last_active_after() {
-        compat_filter = compat_filter.with_last_active_after(last_active_after);
-        oauth2_filter = oauth2_filter.with_last_active_after(last_active_after);
-    }
-
-    (compat_filter, oauth2_filter)
-}
-
 #[async_trait]
 impl AppSessionRepository for PgAppSessionRepository<'_> {
     type Error = DatabaseError;
@@ -273,14 +154,13 @@ impl AppSessionRepository for PgAppSessionRepository<'_> {
         filter: AppSessionFilter<'_>,
         pagination: Pagination,
     ) -> Result<Page<AppSession>, Self::Error> {
-        let (compat_filter, oauth2_filter) = split_filter(filter);
+        let oauth2_filter = to_oauth2_filter(filter);
 
         let mut oauth2_session_select = Query::select()
             .expr_as(
                 Expr::col((OAuth2Sessions::Table, OAuth2Sessions::OAuth2SessionId)),
                 AppSessionLookupIden::Cursor,
             )
-            .expr_as(Expr::cust("NULL"), AppSessionLookupIden::CompatSessionId)
             .expr_as(
                 Expr::col((OAuth2Sessions::Table, OAuth2Sessions::OAuth2SessionId)),
                 AppSessionLookupIden::Oauth2SessionId,
@@ -301,7 +181,6 @@ impl AppSessionRepository for PgAppSessionRepository<'_> {
                 Expr::col((OAuth2Sessions::Table, OAuth2Sessions::ScopeList)),
                 AppSessionLookupIden::ScopeList,
             )
-            .expr_as(Expr::cust("NULL"), AppSessionLookupIden::DeviceId)
             .expr_as(
                 Expr::col((OAuth2Sessions::Table, OAuth2Sessions::HumanName)),
                 AppSessionLookupIden::HumanName,
@@ -314,7 +193,6 @@ impl AppSessionRepository for PgAppSessionRepository<'_> {
                 Expr::col((OAuth2Sessions::Table, OAuth2Sessions::FinishedAt)),
                 AppSessionLookupIden::FinishedAt,
             )
-            .expr_as(Expr::cust("NULL"), AppSessionLookupIden::IsPalpoAdmin)
             .expr_as(
                 Expr::col((OAuth2Sessions::Table, OAuth2Sessions::UserAgent)),
                 AppSessionLookupIden::UserAgent,
@@ -331,68 +209,8 @@ impl AppSessionRepository for PgAppSessionRepository<'_> {
             .apply_filter(oauth2_filter)
             .clone();
 
-        let compat_session_select = Query::select()
-            .expr_as(
-                Expr::col((CompatSessions::Table, CompatSessions::CompatSessionId)),
-                AppSessionLookupIden::Cursor,
-            )
-            .expr_as(
-                Expr::col((CompatSessions::Table, CompatSessions::CompatSessionId)),
-                AppSessionLookupIden::CompatSessionId,
-            )
-            .expr_as(Expr::cust("NULL"), AppSessionLookupIden::Oauth2SessionId)
-            .expr_as(Expr::cust("NULL"), AppSessionLookupIden::Oauth2ClientId)
-            .expr_as(
-                Expr::col((CompatSessions::Table, CompatSessions::UserSessionId)),
-                AppSessionLookupIden::UserSessionId,
-            )
-            .expr_as(
-                Expr::col((CompatSessions::Table, CompatSessions::UserId)),
-                AppSessionLookupIden::UserId,
-            )
-            .expr_as(Expr::cust("NULL"), AppSessionLookupIden::ScopeList)
-            .expr_as(
-                Expr::col((CompatSessions::Table, CompatSessions::DeviceId)),
-                AppSessionLookupIden::DeviceId,
-            )
-            .expr_as(
-                Expr::col((CompatSessions::Table, CompatSessions::HumanName)),
-                AppSessionLookupIden::HumanName,
-            )
-            .expr_as(
-                Expr::col((CompatSessions::Table, CompatSessions::CreatedAt)),
-                AppSessionLookupIden::CreatedAt,
-            )
-            .expr_as(
-                Expr::col((CompatSessions::Table, CompatSessions::FinishedAt)),
-                AppSessionLookupIden::FinishedAt,
-            )
-            .expr_as(
-                Expr::col((CompatSessions::Table, CompatSessions::IsPalpoAdmin)),
-                AppSessionLookupIden::IsPalpoAdmin,
-            )
-            .expr_as(
-                Expr::col((CompatSessions::Table, CompatSessions::UserAgent)),
-                AppSessionLookupIden::UserAgent,
-            )
-            .expr_as(
-                Expr::col((CompatSessions::Table, CompatSessions::LastActiveAt)),
-                AppSessionLookupIden::LastActiveAt,
-            )
-            .expr_as(
-                Expr::col((CompatSessions::Table, CompatSessions::LastActiveIp)),
-                AppSessionLookupIden::LastActiveIp,
-            )
-            .from(CompatSessions::Table)
-            .apply_filter(compat_filter)
-            .clone();
-
         let common_table_expression = CommonTableExpression::new()
-            .query(
-                oauth2_session_select
-                    .union(UnionType::All, compat_session_select)
-                    .clone(),
-            )
+            .query(oauth2_session_select.clone())
             .table_name(Alias::new("sessions"))
             .clone();
 
@@ -425,25 +243,15 @@ impl AppSessionRepository for PgAppSessionRepository<'_> {
         err,
     )]
     async fn count(&mut self, filter: AppSessionFilter<'_>) -> Result<usize, Self::Error> {
-        let (compat_filter, oauth2_filter) = split_filter(filter);
+        let oauth2_filter = to_oauth2_filter(filter);
         let mut oauth2_session_select = Query::select()
             .expr(Expr::cust("1"))
             .from(OAuth2Sessions::Table)
             .apply_filter(oauth2_filter)
             .clone();
 
-        let compat_session_select = Query::select()
-            .expr(Expr::cust("1"))
-            .from(CompatSessions::Table)
-            .apply_filter(compat_filter)
-            .clone();
-
         let common_table_expression = CommonTableExpression::new()
-            .query(
-                oauth2_session_select
-                    .union(UnionType::All, compat_session_select)
-                    .clone(),
-            )
+            .query(oauth2_session_select.clone())
             .table_name(Alias::new("sessions"))
             .clone();
 
@@ -471,7 +279,7 @@ impl AppSessionRepository for PgAppSessionRepository<'_> {
         fields(
             db.query.text,
             %user.id,
-            %device_id = device.as_str()
+            %device
         ),
         skip_all,
         err,
@@ -480,60 +288,72 @@ impl AppSessionRepository for PgAppSessionRepository<'_> {
         &mut self,
         clock: &dyn Clock,
         user: &User,
-        device: &Device,
+        device: &str,
     ) -> Result<bool, Self::Error> {
-        let mut affected = false;
-        // TODO need to invoke this from all the oauth2 login sites
+        let finished_at = clock.now();
+        let stable_scope = format!("urn:matrix:client:device:{device}");
+        let unstable_scope = format!("urn:matrix:org.matrix.msc2967.client:device:{device}");
+
         let span = tracing::info_span!(
-            "db.app_session.finish_sessions_to_replace_device.compat_sessions",
+            "db.app_session.finish_sessions_to_replace_device.oauth2_sessions",
             { DB_QUERY_TEXT } = tracing::field::Empty,
         );
-        let finished_at = clock.now();
-        let compat_affected = sqlx::query!(
-            "
-                UPDATE compat_sessions SET finished_at = $3 WHERE user_id = $1 AND device_id = $2 AND finished_at IS NULL
-            ",
-            Uuid::from(user.id),
-            device.as_str(),
-            finished_at
+        let oauth2_affected = sqlx::query(
+            "UPDATE oauth2_sessions
+             SET finished_at = $4
+             WHERE user_id = $1
+               AND ($2 = ANY(scope_list) OR $3 = ANY(scope_list))
+               AND finished_at IS NULL",
         )
-        .record(&span)
+        .bind(Uuid::from(user.id))
+        .bind(&stable_scope)
+        .bind(&unstable_scope)
+        .bind(finished_at)
+        .traced()
         .execute(&mut *self.conn)
         .instrument(span)
         .await?
         .rows_affected();
-        affected |= compat_affected > 0;
 
-        if let Ok([stable_device_as_scope_token, unstable_device_as_scope_token]) =
-            device.to_scope_token()
-        {
-            let span = tracing::info_span!(
-                "db.app_session.finish_sessions_to_replace_device.oauth2_sessions",
-                { DB_QUERY_TEXT } = tracing::field::Empty,
-            );
-            let oauth2_affected = sqlx::query!(
-                "
-                    UPDATE oauth2_sessions
-                    SET finished_at = $4
-                    WHERE user_id = $1
-                      AND ($2 = ANY(scope_list) OR $3 = ANY(scope_list))
-                      AND finished_at IS NULL
-                ",
-                Uuid::from(user.id),
-                stable_device_as_scope_token.as_str(),
-                unstable_device_as_scope_token.as_str(),
-                finished_at
-            )
-            .record(&span)
-            .execute(&mut *self.conn)
-            .instrument(span)
-            .await?
-            .rows_affected();
-            affected |= oauth2_affected > 0;
-        }
-
-        Ok(affected)
+        Ok(oauth2_affected > 0)
     }
+}
+
+/// Convert an [`AppSessionFilter`] to an [`OAuth2SessionFilter`].
+fn to_oauth2_filter(filter: AppSessionFilter<'_>) -> OAuth2SessionFilter<'_> {
+    let mut oauth2_filter = OAuth2SessionFilter::new();
+
+    if let Some(user) = filter.user() {
+        oauth2_filter = oauth2_filter.for_user(user);
+    }
+
+    match filter.state() {
+        Some(AppSessionState::Active) => {
+            oauth2_filter = oauth2_filter.active_only();
+        }
+        Some(AppSessionState::Finished) => {
+            oauth2_filter = oauth2_filter.finished_only();
+        }
+        None => {}
+    }
+
+    if let Some(device) = filter.device() {
+        oauth2_filter = oauth2_filter.for_device(device);
+    }
+
+    if let Some(browser_session) = filter.browser_session() {
+        oauth2_filter = oauth2_filter.for_browser_session(browser_session);
+    }
+
+    if let Some(last_active_before) = filter.last_active_before() {
+        oauth2_filter = oauth2_filter.with_last_active_before(last_active_before);
+    }
+
+    if let Some(last_active_after) = filter.last_active_after() {
+        oauth2_filter = oauth2_filter.with_last_active_after(last_active_after);
+    }
+
+    oauth2_filter
 }
 
 #[cfg(test)]
@@ -543,7 +363,7 @@ mod tests {
         requests::GrantType,
         scope::{OPENID, Scope},
     };
-    use pasion_data_model::{Device, clock::MockClock};
+    use pasion_data_model::clock::MockClock;
     use pasion_storage::{
         Pagination, RepositoryAccess,
         app_session::{AppSession, AppSessionFilter},
@@ -584,59 +404,6 @@ mod tests {
         let finished_list = repo.app_session().list(finished, pagination).await.unwrap();
         assert!(finished_list.edges.is_empty());
 
-        // Start a compat session for that user
-        let device = Device::generate(&mut rng);
-        let compat_session = repo
-            .compat_session()
-            .add(&mut rng, &clock, &user, device.clone(), None, false, None)
-            .await
-            .unwrap();
-
-        assert_eq!(repo.app_session().count(all).await.unwrap(), 1);
-        assert_eq!(repo.app_session().count(active).await.unwrap(), 1);
-        assert_eq!(repo.app_session().count(finished).await.unwrap(), 0);
-
-        let full_list = repo.app_session().list(all, pagination).await.unwrap();
-        assert_eq!(full_list.edges.len(), 1);
-        assert_eq!(
-            full_list.edges[0].node,
-            AppSession::Compat(Box::new(compat_session.clone()))
-        );
-        let active_list = repo.app_session().list(active, pagination).await.unwrap();
-        assert_eq!(active_list.edges.len(), 1);
-        assert_eq!(
-            active_list.edges[0].node,
-            AppSession::Compat(Box::new(compat_session.clone()))
-        );
-        let finished_list = repo.app_session().list(finished, pagination).await.unwrap();
-        assert!(finished_list.edges.is_empty());
-
-        // Finish the session
-        let compat_session = repo
-            .compat_session()
-            .finish(&clock, compat_session)
-            .await
-            .unwrap();
-
-        assert_eq!(repo.app_session().count(all).await.unwrap(), 1);
-        assert_eq!(repo.app_session().count(active).await.unwrap(), 0);
-        assert_eq!(repo.app_session().count(finished).await.unwrap(), 1);
-
-        let full_list = repo.app_session().list(all, pagination).await.unwrap();
-        assert_eq!(full_list.edges.len(), 1);
-        assert_eq!(
-            full_list.edges[0].node,
-            AppSession::Compat(Box::new(compat_session.clone()))
-        );
-        let active_list = repo.app_session().list(active, pagination).await.unwrap();
-        assert!(active_list.edges.is_empty());
-        let finished_list = repo.app_session().list(finished, pagination).await.unwrap();
-        assert_eq!(finished_list.edges.len(), 1);
-        assert_eq!(
-            finished_list.edges[0].node,
-            AppSession::Compat(Box::new(compat_session.clone()))
-        );
-
         // Start an OAuth2 session
         let client = repo
             .oauth2_client()
@@ -664,10 +431,11 @@ mod tests {
             .await
             .unwrap();
 
-        let device2 = Device::generate(&mut rng);
+        let device_id = "AABBCCDDEE";
+        let stable_scope = format!("urn:matrix:client:device:{device_id}");
         let scope: Scope = [OPENID]
             .into_iter()
-            .chain(device2.to_scope_token().unwrap().into_iter())
+            .chain([stable_scope.parse().unwrap()])
             .collect();
 
         // We're moving the clock forward by 1 minute between each session to ensure
@@ -680,18 +448,14 @@ mod tests {
             .await
             .unwrap();
 
-        assert_eq!(repo.app_session().count(all).await.unwrap(), 2);
+        assert_eq!(repo.app_session().count(all).await.unwrap(), 1);
         assert_eq!(repo.app_session().count(active).await.unwrap(), 1);
-        assert_eq!(repo.app_session().count(finished).await.unwrap(), 1);
+        assert_eq!(repo.app_session().count(finished).await.unwrap(), 0);
 
         let full_list = repo.app_session().list(all, pagination).await.unwrap();
-        assert_eq!(full_list.edges.len(), 2);
+        assert_eq!(full_list.edges.len(), 1);
         assert_eq!(
             full_list.edges[0].node,
-            AppSession::Compat(Box::new(compat_session.clone()))
-        );
-        assert_eq!(
-            full_list.edges[1].node,
             AppSession::OAuth2(Box::new(oauth_session.clone()))
         );
 
@@ -703,11 +467,7 @@ mod tests {
         );
 
         let finished_list = repo.app_session().list(finished, pagination).await.unwrap();
-        assert_eq!(finished_list.edges.len(), 1);
-        assert_eq!(
-            finished_list.edges[0].node,
-            AppSession::Compat(Box::new(compat_session.clone()))
-        );
+        assert!(finished_list.edges.is_empty());
 
         // Finish the session
         let oauth_session = repo
@@ -716,18 +476,14 @@ mod tests {
             .await
             .unwrap();
 
-        assert_eq!(repo.app_session().count(all).await.unwrap(), 2);
+        assert_eq!(repo.app_session().count(all).await.unwrap(), 1);
         assert_eq!(repo.app_session().count(active).await.unwrap(), 0);
-        assert_eq!(repo.app_session().count(finished).await.unwrap(), 2);
+        assert_eq!(repo.app_session().count(finished).await.unwrap(), 1);
 
         let full_list = repo.app_session().list(all, pagination).await.unwrap();
-        assert_eq!(full_list.edges.len(), 2);
+        assert_eq!(full_list.edges.len(), 1);
         assert_eq!(
             full_list.edges[0].node,
-            AppSession::Compat(Box::new(compat_session.clone()))
-        );
-        assert_eq!(
-            full_list.edges[1].node,
             AppSession::OAuth2(Box::new(oauth_session.clone()))
         );
 
@@ -735,27 +491,14 @@ mod tests {
         assert!(active_list.edges.is_empty());
 
         let finished_list = repo.app_session().list(finished, pagination).await.unwrap();
-        assert_eq!(finished_list.edges.len(), 2);
+        assert_eq!(finished_list.edges.len(), 1);
         assert_eq!(
             finished_list.edges[0].node,
-            AppSession::Compat(Box::new(compat_session.clone()))
-        );
-        assert_eq!(
-            full_list.edges[1].node,
             AppSession::OAuth2(Box::new(oauth_session.clone()))
         );
 
         // Query by device
-        let filter = AppSessionFilter::new().for_device(&device);
-        assert_eq!(repo.app_session().count(filter).await.unwrap(), 1);
-        let list = repo.app_session().list(filter, pagination).await.unwrap();
-        assert_eq!(list.edges.len(), 1);
-        assert_eq!(
-            list.edges[0].node,
-            AppSession::Compat(Box::new(compat_session.clone()))
-        );
-
-        let filter = AppSessionFilter::new().for_device(&device2);
+        let filter = AppSessionFilter::new().for_device(device_id);
         assert_eq!(repo.app_session().count(filter).await.unwrap(), 1);
         let list = repo.app_session().list(filter, pagination).await.unwrap();
         assert_eq!(list.edges.len(), 1);

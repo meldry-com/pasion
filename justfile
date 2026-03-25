@@ -10,9 +10,29 @@ default:
 
 # ── Development ──────────────────────────────────────────────
 
+# One-click: start PostgreSQL + backend with dev config
+dev:
+    docker compose -f .devcontainer/docker-compose.yml up -d postgres
+    @echo "Waiting for PostgreSQL..."
+    @until docker compose -f .devcontainer/docker-compose.yml exec -T postgres pg_isready -U pasion > /dev/null 2>&1; do sleep 1; done
+    @if [ ! -f config.dev.yaml ]; then just config-dev-generate; fi
+    cargo run -p pasion -- server -c config.dev.yaml
+
+# Stop dev services (PostgreSQL)
+dev-down:
+    docker compose -f .devcontainer/docker-compose.yml down
+
+# Generate a dev config pointing to the local Docker PostgreSQL
+config-dev-generate:
+    cargo run -p pasion -- config generate > config.dev.yaml.tmp
+    sed -i 's|uri: postgresql://|uri: postgresql://pasion:pasion@localhost/pasion|' config.dev.yaml.tmp
+    mv config.dev.yaml.tmp config.dev.yaml
+    @echo "Created config.dev.yaml"
+
 # Start the backend server (auto-migrates DB)
 backend *ARGS:
-    cargo run -p pasion -- server {{ARGS}}
+    if (!(Test-Path config.dev.yaml)) { just config-dev-generate }
+    cargo run -p pasion -- server -c config.dev.yaml {{ARGS}}
 
 # Start the backend with a config file
 backend-config config="config.yaml":
@@ -20,15 +40,15 @@ backend-config config="config.yaml":
 
 # Start the frontend dev server (Dioxus hot-reload)
 frontend:
-    dx serve -p pasion-front
+    dx serve -p pasion-frontend
 
 # Start the frontend in hot-reload mode
 frontend-hot:
-    dx serve -p pasion-front --hot-reload
+    dx serve -p pasion-frontend --hot-reload
 
 # Build the frontend for production
 frontend-build:
-    dx build -p pasion-front --release
+    dx build -p pasion-frontend --release
 
 # ── Build ────────────────────────────────────────────────────
 

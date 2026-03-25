@@ -5,7 +5,7 @@ use std::net::IpAddr;
 
 use chrono::{DateTime, Utc};
 use pasion_data_model::{
-    BrowserSession, Clock, CompatSession, Session, personal::session::PersonalSession,
+    BrowserSession, Clock, Session, personal::session::PersonalSession,
 };
 use pasion_storage::BoxRepositoryFactory;
 use tokio_util::{sync::CancellationToken, task::TaskTracker};
@@ -19,7 +19,6 @@ static MESSAGE_QUEUE_SIZE: usize = 1000;
 #[derive(Clone, Copy, Debug, PartialOrd, PartialEq, Eq, Hash)]
 enum SessionKind {
     OAuth2,
-    Compat,
     /// Session associated with personal access tokens
     Personal,
     Browser,
@@ -29,7 +28,6 @@ impl SessionKind {
     const fn as_str(self) -> &'static str {
         match self {
             SessionKind::OAuth2 => "oauth2",
-            SessionKind::Compat => "compat",
             SessionKind::Personal => "personal",
             SessionKind::Browser => "browser",
         }
@@ -126,28 +124,6 @@ impl ActivityTracker {
 
         if let Err(e) = res {
             tracing::error!("Failed to record Personal session: {}", e);
-        }
-    }
-
-    /// Record activity in a compat session.
-    pub async fn record_compat_session(
-        &self,
-        clock: &dyn Clock,
-        compat_session: &CompatSession,
-        ip: Option<IpAddr>,
-    ) {
-        let res = self
-            .channel
-            .send(Message::Record {
-                kind: SessionKind::Compat,
-                id: compat_session.id,
-                date_time: clock.now(),
-                ip,
-            })
-            .await;
-
-        if let Err(e) = res {
-            tracing::error!("Failed to record compat session: {}", e);
         }
     }
 

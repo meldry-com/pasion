@@ -313,6 +313,7 @@ pub async fn post(
                 &templates,
                 &homeserver,
                 &site_config,
+                res,
             )
             .await;
         }

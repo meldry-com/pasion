@@ -1,5 +1,5 @@
 [application]
-name = "pasion-front"
+name = "pasion-frontend"
 default_platform = "web"
 
 [web.app]
@@ -14,3 +14,6 @@ style = ["assets/main.css"]
 [web.watcher]
 reload_html = true
 watch_path = ["src", "assets"]
+
+[server]
+port = 8182

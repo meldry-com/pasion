@@ -133,7 +133,7 @@ pub async fn get_viewer(
     let clock = make_clock();
 
     let activity_tracker = extract_bound_activity_tracker(req, depot);
-    let session_info = extract_session_info(depot);
+    let session_info = extract_session_info(req, depot);
 
     let repo = repo_factory.create().await?;
     let (requester, mut repo) =

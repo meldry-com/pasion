@@ -24,25 +24,6 @@ fn is_default_path(value: &Utf8PathBuf) -> bool {
 }
 
 #[cfg(not(any(feature = "docker", feature = "dist")))]
-fn default_assets_path() -> Utf8PathBuf {
-    "./frontend/dist/manifest.json".into()
-}
-
-#[cfg(feature = "docker")]
-fn default_assets_path() -> Utf8PathBuf {
-    "/usr/local/share/pasion/manifest.json".into()
-}
-
-#[cfg(feature = "dist")]
-fn default_assets_path() -> Utf8PathBuf {
-    "./share/manifest.json".into()
-}
-
-fn is_default_assets_path(value: &Utf8PathBuf) -> bool {
-    *value == default_assets_path()
-}
-
-#[cfg(not(any(feature = "docker", feature = "dist")))]
 fn default_translations_path() -> Utf8PathBuf {
     "./translations/".into()
 }
@@ -69,14 +50,6 @@ pub struct TemplatesConfig {
     #[schemars(with = "Option<String>")]
     pub path: Utf8PathBuf,
 
-    /// Path to the assets manifest
-    #[serde(
-        default = "default_assets_path",
-        skip_serializing_if = "is_default_assets_path"
-    )]
-    #[schemars(with = "Option<String>")]
-    pub assets_manifest: Utf8PathBuf,
-
     /// Path to the translations
     #[serde(
         default = "default_translations_path",
@@ -90,7 +63,6 @@ impl Default for TemplatesConfig {
     fn default() -> Self {
         Self {
             path: default_path(),
-            assets_manifest: default_assets_path(),
             translations_path: default_translations_path(),
         }
     }
@@ -100,7 +72,6 @@ impl TemplatesConfig {
     /// Returns true if all fields are at their default values
     pub(crate) fn is_default(&self) -> bool {
         is_default_path(&self.path)
-            && is_default_assets_path(&self.assets_manifest)
             && is_default_translations_path(&self.translations_path)
     }
 }

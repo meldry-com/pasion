@@ -41,7 +41,7 @@ pub async fn set_password(
     let mut rng = make_rng();
 
     let activity_tracker = extract_bound_activity_tracker(req, depot);
-    let session_info = extract_session_info(depot);
+    let session_info = extract_session_info(req, depot);
 
     let repo = repo_factory.create().await?;
     let (requester, mut repo) =
@@ -262,7 +262,7 @@ pub async fn resend_recovery_email(
     let mut rng = make_rng();
 
     let activity_tracker = extract_bound_activity_tracker(req, depot);
-    let session_info = extract_session_info(depot);
+    let session_info = extract_session_info(req, depot);
 
     let repo = repo_factory.create().await?;
     let (requester, mut repo) =

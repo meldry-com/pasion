@@ -158,8 +158,6 @@ impl Options {
             &url_builder,
             // Don't use strict mode in production yet
             false,
-            // Don't stabilise in production
-            false,
         )
         .await?;
         shutdown.register_reloadable(&templates);

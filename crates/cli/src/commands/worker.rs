@@ -52,8 +52,6 @@ impl Options {
             &url_builder,
             // Don't use strict mode on task workers for now
             false,
-            // Don't stabilise in production
-            false,
         )
         .await?;
 

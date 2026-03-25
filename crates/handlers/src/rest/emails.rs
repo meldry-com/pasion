@@ -116,7 +116,7 @@ pub async fn start_email_auth(
     let mut rng = make_rng();
 
     let activity_tracker = extract_bound_activity_tracker(req, depot);
-    let session_info = extract_session_info(depot);
+    let session_info = extract_session_info(req, depot);
 
     let repo = repo_factory.create().await?;
     let (requester, mut repo) =
@@ -174,7 +174,7 @@ pub async fn start_email_auth(
     // Create authentication session
     let auth = repo
         .user_email()
-        .add_authentication_for_session(&mut rng, &clock, &input.email, browser_session)
+        .add_authentication_for_session(&mut rng, &clock, input.email.clone(), browser_session)
         .await?;
 
     // Schedule email sending
@@ -182,7 +182,7 @@ pub async fn start_email_auth(
         .schedule_job(
             &mut rng,
             &clock,
-            SendEmailAuthenticationCodeJob::new(&auth, &input.language),
+            SendEmailAuthenticationCodeJob::new(&auth, input.language.clone()),
         )
         .await?;
 
@@ -226,7 +226,7 @@ pub async fn complete_email_auth(
     let mut rng = make_rng();
 
     let activity_tracker = extract_bound_activity_tracker(req, depot);
-    let session_info = extract_session_info(depot);
+    let session_info = extract_session_info(req, depot);
 
     let repo = repo_factory.create().await?;
     let (requester, mut repo) =
@@ -280,7 +280,7 @@ pub async fn complete_email_auth(
 
     // Complete authentication
     repo.user_email()
-        .complete_authentication_with_code(&clock, auth.clone(), code)
+        .complete_authentication_with_code(&clock, auth.clone(), &code)
         .await?;
 
     // Check if email is already in use
@@ -331,7 +331,7 @@ pub async fn resend_email_auth_code(
     let mut rng = make_rng();
 
     let activity_tracker = extract_bound_activity_tracker(req, depot);
-    let session_info = extract_session_info(depot);
+    let session_info = extract_session_info(req, depot);
 
     let repo = repo_factory.create().await?;
     let (requester, mut repo) =
@@ -367,7 +367,7 @@ pub async fn resend_email_auth_code(
         .schedule_job(
             &mut rng,
             &clock,
-            SendEmailAuthenticationCodeJob::new(&auth, &input.language),
+            SendEmailAuthenticationCodeJob::new(&auth, input.language.clone()),
         )
         .await?;
 
@@ -406,7 +406,7 @@ pub async fn remove_email(
     let mut rng = make_rng();
 
     let activity_tracker = extract_bound_activity_tracker(req, depot);
-    let session_info = extract_session_info(depot);
+    let session_info = extract_session_info(req, depot);
 
     let repo = repo_factory.create().await?;
     let (requester, mut repo) =

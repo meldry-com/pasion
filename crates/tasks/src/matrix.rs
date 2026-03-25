@@ -2,11 +2,9 @@ use std::collections::HashSet;
 
 use anyhow::Context;
 use async_trait::async_trait;
-use pasion_data_model::Device;
 use pasion_matrix::ProvisionRequest;
 use pasion_storage::{
     Pagination, RepositoryAccess,
-    compat::CompatSessionFilter,
     oauth2::OAuth2SessionFilter,
     personal::PersonalSessionFilter,
     queue::{
@@ -186,31 +184,6 @@ impl RunnableJob for SyncDevicesJob {
 
         let mut devices = HashSet::new();
 
-        // Cycle through all the compat sessions of the user, and grab the devices
-        let mut cursor = Pagination::first(5000);
-        loop {
-            let page = repo
-                .compat_session()
-                .list(
-                    CompatSessionFilter::new().for_user(&user).active_only(),
-                    cursor,
-                )
-                .await
-                .map_err(JobError::retry)?;
-
-            for edge in page.edges {
-                let (compat_session, _) = edge.node;
-                if let Some(ref device) = compat_session.device {
-                    devices.insert(device.as_str().to_owned());
-                }
-                cursor = cursor.after(edge.cursor);
-            }
-
-            if !page.has_next_page {
-                break;
-            }
-        }
-
         // Cycle though all the oauth2 sessions of the user, and grab the devices
         let mut cursor = Pagination::first(5000);
         loop {
@@ -225,8 +198,8 @@ impl RunnableJob for SyncDevicesJob {
 
             for edge in page.edges {
                 for scope in &*edge.node.scope {
-                    if let Some(device) = Device::from_scope_token(scope) {
-                        devices.insert(device.as_str().to_owned());
+                    if let Some(device_id) = device_id_from_scope_token(scope) {
+                        devices.insert(device_id.to_owned());
                     }
                 }
 
@@ -255,8 +228,8 @@ impl RunnableJob for SyncDevicesJob {
             for edge in page.edges {
                 let (session, _) = &edge.node;
                 for scope in &*session.scope {
-                    if let Some(device) = Device::from_scope_token(scope) {
-                        devices.insert(device.as_str().to_owned());
+                    if let Some(device_id) = device_id_from_scope_token(scope) {
+                        devices.insert(device_id.to_owned());
                     }
                 }
 
@@ -279,4 +252,16 @@ impl RunnableJob for SyncDevicesJob {
 
         Ok(())
     }
+}
+
+/// Stable and unstable Matrix device scope prefixes.
+const STABLE_DEVICE_SCOPE_PREFIX: &str = "urn:matrix:client:device:";
+const UNSTABLE_DEVICE_SCOPE_PREFIX: &str = "urn:matrix:org.matrix.msc2967.client:device:";
+
+/// Extract a device ID from a scope token string, if it matches one of the
+/// known device scope prefixes.
+fn device_id_from_scope_token(token: &oauth2_types::scope::ScopeToken) -> Option<&str> {
+    let s = token.as_str();
+    s.strip_prefix(STABLE_DEVICE_SCOPE_PREFIX)
+        .or_else(|| s.strip_prefix(UNSTABLE_DEVICE_SCOPE_PREFIX))
 }

@@ -13,7 +13,6 @@ use pasion_oidc_client::{
 use pasion_salvo_utils::record_error;
 use pasion_storage::{
     Pagination,
-    compat::CompatSessionFilter,
     oauth2::OAuth2SessionFilter,
     queue::{QueueJobRepositoryExt as _, SyncDevicesJob},
     upstream_oauth2::UpstreamOAuthSessionFilter,
@@ -279,17 +278,8 @@ pub async fn post(req: &mut Request, depot: &mut Depot) -> Result<(), RouteError
                 .finish_bulk(&clock, oauth2_session_filter)
                 .await?;
 
-            let compat_session_filter = CompatSessionFilter::new()
-                .active_only()
-                .for_browser_sessions(browser_session_filter);
-
-            let compat_sessions_affected = repo
-                .compat_session()
-                .finish_bulk(&clock, compat_session_filter)
-                .await?;
-
             tracing::info!(
-                "Finished {browser_sessions_affected} browser sessions, {oauth2_sessions_affected} OAuth 2.0 sessions and {compat_sessions_affected} compatibility sessions"
+                "Finished {browser_sessions_affected} browser sessions and {oauth2_sessions_affected} OAuth 2.0 sessions"
             );
 
             for user_id in user_ids {

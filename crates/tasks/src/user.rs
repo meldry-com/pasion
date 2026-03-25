@@ -2,7 +2,6 @@ use anyhow::Context;
 use async_trait::async_trait;
 use pasion_storage::{
     RepositoryAccess,
-    compat::CompatSessionFilter,
     oauth2::OAuth2SessionFilter,
     personal::PersonalSessionFilter,
     queue::{DeactivateUserJob, ReactivateUserJob},
@@ -66,16 +65,6 @@ impl RunnableJob for DeactivateUserJob {
         info!(affected = n, "Killed all OAuth 2.0 sessions for user");
 
         let n = repo
-            .compat_session()
-            .finish_bulk(
-                clock,
-                CompatSessionFilter::new().for_user(&user).active_only(),
-            )
-            .await
-            .map_err(JobError::retry)?;
-        info!(affected = n, "Killed all compatibility sessions for user");
-
-        let n = repo
             .personal_session()
             .revoke_bulk(
                 clock,
@@ -87,7 +76,7 @@ impl RunnableJob for DeactivateUserJob {
             .map_err(JobError::retry)?;
         info!(
             affected = n,
-            "Killed all compatibility sessions acting as user"
+            "Killed all personal sessions acting as user"
         );
 
         let n = repo
@@ -102,7 +91,7 @@ impl RunnableJob for DeactivateUserJob {
             .map_err(JobError::retry)?;
         info!(
             affected = n,
-            "Killed all compatibility sessions owned by user"
+            "Killed all personal sessions owned by user"
         );
 
         // Delete all the email addresses for the user

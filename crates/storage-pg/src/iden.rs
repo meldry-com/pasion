@@ -46,35 +46,6 @@ pub enum UserEmails {
 }
 
 #[derive(sea_query::Iden)]
-pub enum CompatSessions {
-    Table,
-    CompatSessionId,
-    UserId,
-    DeviceId,
-    HumanName,
-    UserSessionId,
-    CreatedAt,
-    FinishedAt,
-    IsPalpoAdmin,
-    UserAgent,
-    LastActiveAt,
-    LastActiveIp,
-}
-
-#[derive(sea_query::Iden)]
-pub enum CompatSsoLogins {
-    Table,
-    CompatSsoLoginId,
-    RedirectUri,
-    LoginToken,
-    CompatSessionId,
-    UserSessionId,
-    CreatedAt,
-    FulfilledAt,
-    ExchangedAt,
-}
-
-#[derive(sea_query::Iden)]
 #[iden = "oauth2_sessions"]
 pub enum OAuth2Sessions {
     Table,

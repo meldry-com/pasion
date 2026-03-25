@@ -9,12 +9,11 @@ use figment::Figment;
 use pasion_config::{
     ConfigurationSection, ConfigurationSectionExt, DatabaseConfig, MatrixConfig, PasswordsConfig,
 };
-use pasion_data_model::{Clock, Device, SystemClock, TokenType, Ulid, UpstreamOAuthProvider, User};
+use pasion_data_model::{Clock, SystemClock, Ulid, UpstreamOAuthProvider, User};
 use pasion_email::Address;
 use pasion_matrix::HomeserverConnection;
 use pasion_storage::{
     Pagination, RepositoryAccess,
-    compat::{CompatAccessTokenRepository, CompatSessionFilter, CompatSessionRepository},
     oauth2::OAuth2SessionFilter,
     queue::{
         DeactivateUserJob, ProvisionUserJob, QueueJobRepositoryExt as _, ReactivateUserJob,
@@ -90,20 +89,6 @@ enum Subcommand {
 
     /// List all users with admin privileges
     ListAdminUsers,
-
-    /// Issue a compatibility token
-    IssueCompatibilityToken {
-        /// User for which to issue the token
-        username: String,
-
-        /// Device ID to set in the token. If not specified, a random device ID
-        /// will be generated.
-        device_id: Option<String>,
-
-        /// Whether that token should be admin
-        #[arg(long = "yes-i-want-to-grant-admin-privileges")]
-        admin: bool,
-    },
 
     /// Create a new user registration token
     IssueUserRegistrationToken {
@@ -398,78 +383,6 @@ impl Options {
                 Ok(ExitCode::SUCCESS)
             }
 
-            SC::IssueCompatibilityToken {
-                username,
-                admin,
-                device_id,
-            } => {
-                let database_config = DatabaseConfig::extract_or_default(figment)
-                    .map_err(anyhow::Error::from_boxed)?;
-                let matrix_config =
-                    MatrixConfig::extract(figment).map_err(anyhow::Error::from_boxed)?;
-                let http_client = pasion_http::reqwest_client();
-                let homeserver =
-                    homeserver_connection_from_config(&matrix_config, http_client).await?;
-                let mut conn = database_connection_from_config(&database_config).await?;
-                let txn = conn.begin().await?;
-                let mut repo = PgRepository::from_conn(txn);
-
-                let user = repo
-                    .user()
-                    .find_by_username(&username)
-                    .await?
-                    .context("User not found")?;
-
-                let device = if let Some(device_id) = device_id {
-                    device_id.into()
-                } else {
-                    Device::generate(&mut rng)
-                };
-
-                if let Err(e) = homeserver
-                    .upsert_device(&user.username, device.as_str(), None)
-                    .await
-                {
-                    error!(
-                        error = &*e,
-                        "Could not create the device on the homeserver, aborting"
-                    );
-
-                    // Schedule a device sync job to remove the potential leftover device
-                    repo.queue_job()
-                        .schedule_job(&mut rng, &clock, SyncDevicesJob::new(&user))
-                        .await?;
-
-                    repo.into_inner().commit().await?;
-                    return Ok(ExitCode::FAILURE);
-                }
-
-                let compat_session = repo
-                    .compat_session()
-                    .add(&mut rng, &clock, &user, device, None, admin, None)
-                    .await?;
-
-                let token = TokenType::CompatAccessToken.generate(&mut rng);
-
-                let compat_access_token = repo
-                    .compat_access_token()
-                    .add(&mut rng, &clock, &compat_session, token, None)
-                    .await?;
-
-                repo.into_inner().commit().await?;
-
-                info!(
-                    %compat_access_token.id,
-                    %compat_session.id,
-                    compat_session.device = compat_session.device.map(tracing::field::display),
-                    %user.id,
-                    %user.username,
-                    "Compatibility token issued: {}", compat_access_token.token
-                );
-
-                Ok(ExitCode::SUCCESS)
-            }
-
             SC::IssueUserRegistrationToken {
                 token,
                 usage_limit,
@@ -552,19 +465,6 @@ impl Options {
                     .await?
                     .context("User not found")?;
 
-                let filter = CompatSessionFilter::new().for_user(&user).active_only();
-                let affected = if dry_run {
-                    repo.compat_session().count(filter).await?
-                } else {
-                    repo.compat_session().finish_bulk(&clock, filter).await?
-                };
-
-                match affected {
-                    0 => info!("No active compatibility sessions to end"),
-                    1 => info!("Ended 1 active compatibility session"),
-                    _ => info!("Ended {affected} active compatibility sessions"),
-                }
-
                 let filter = OAuth2SessionFilter::new().for_user(&user).active_only();
                 let affected = if dry_run {
                     repo.oauth2_session().count(filter).await?
@@ -573,7 +473,7 @@ impl Options {
                 };
 
                 match affected {
-                    0 => info!("No active compatibility sessions to end"),
+                    0 => info!("No active OAuth 2.0 sessions to end"),
                     1 => info!("Ended 1 active OAuth 2.0 session"),
                     _ => info!("Ended {affected} active OAuth 2.0 sessions"),
                 }

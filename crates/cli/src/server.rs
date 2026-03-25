@@ -1,8 +1,9 @@
 use std::{
     net::{IpAddr, Ipv4Addr, Ipv6Addr, SocketAddr, TcpListener, ToSocketAddrs},
-    os::unix::net::UnixListener,
     time::Duration,
 };
+#[cfg(unix)]
+use std::os::unix::net::UnixListener;
 
 use anyhow::Context;
 use headers::{CacheControl, HeaderMapExt as _, UserAgent};
@@ -204,8 +205,10 @@ pub async fn log_context_middleware(
     ctrl: &mut FlowCtrl,
 ) {
     let method = otel_http_method(req.method());
-    let _guard = LogContext::enter(method);
-    ctrl.call_next(req, depot, res).await;
+    let ctx = LogContext::new(method);
+    pasion_context::CURRENT_LOG_CONTEXT
+        .scope(ctx, ctrl.call_next(req, depot, res))
+        .await;
 }
 
 /// Cache control middleware for static files
@@ -234,6 +237,24 @@ pub async fn cache_control_middleware(
     res.headers_mut().typed_insert(cache_control);
 }
 
+/// A Salvo handler that injects [`AppState`] into the depot for every request.
+#[derive(Clone)]
+struct InjectAppState(AppState);
+
+#[salvo::async_trait]
+impl Handler for InjectAppState {
+    async fn handle(
+        &self,
+        req: &mut Request,
+        depot: &mut Depot,
+        res: &mut Response,
+        ctrl: &mut FlowCtrl,
+    ) {
+        depot.insert("app_state", self.0.clone());
+        ctrl.call_next(req, depot, res).await;
+    }
+}
+
 pub fn build_router(
     state: AppState,
     resources: &[HttpResource],
@@ -246,9 +267,7 @@ pub fn build_router(
     let mut router = Router::new();
 
     // Add state injection middleware at the top level
-    router = router.hoop_when(true, move |depot: &mut Depot| {
-        depot.insert("app_state", state.clone());
-    });
+    router = router.hoop(InjectAppState(state));
 
     // Build sub-routers for each resource
     for resource in resources {
@@ -551,7 +570,7 @@ fn build_admin_router(router: Router) -> Router {
 }
 
 #[handler]
-async fn account_redirect_handler(depot: &Depot) -> impl Writer {
+async fn account_redirect_handler(depot: &Depot) -> impl Writer + use<> {
     use crate::app_state::DepotExt;
 
     let url_builder = depot.get_url_builder().cloned();
@@ -565,7 +584,7 @@ async fn account_redirect_handler(depot: &Depot) -> impl Writer {
 }
 
 #[handler]
-async fn change_password_redirect_handler(depot: &Depot) -> impl Writer {
+async fn change_password_redirect_handler(depot: &Depot) -> impl Writer + use<> {
     use crate::app_state::DepotExt;
 
     let url_builder = depot.get_url_builder().cloned();
@@ -641,9 +660,15 @@ pub fn build_listeners(
                 listener.try_into()?
             }
 
+            #[cfg(unix)]
             HttpBindConfig::Unix { socket } => {
                 let listener = UnixListener::bind(socket).context("could not bind socket")?;
                 listener.try_into()?
+            }
+
+            #[cfg(not(unix))]
+            HttpBindConfig::Unix { .. } => {
+                anyhow::bail!("UNIX domain sockets are not supported on this platform");
             }
 
             HttpBindConfig::FileDescriptor {
@@ -657,6 +682,7 @@ pub fn build_listeners(
                 listener.try_into()?
             }
 
+            #[cfg(unix)]
             HttpBindConfig::FileDescriptor {
                 fd,
                 kind: UnixOrTcp::Unix,
@@ -666,6 +692,14 @@ pub fn build_listeners(
                     .context("no unix socket found on file descriptor")?;
                 listener.set_nonblocking(true)?;
                 listener.try_into()?
+            }
+
+            #[cfg(not(unix))]
+            HttpBindConfig::FileDescriptor {
+                kind: UnixOrTcp::Unix,
+                ..
+            } => {
+                anyhow::bail!("UNIX domain socket file descriptors are not supported on this platform");
             }
         };
 

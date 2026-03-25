@@ -38,7 +38,7 @@ pub async fn set_display_name(
     let clock = make_clock();
 
     let activity_tracker = extract_bound_activity_tracker(req, depot);
-    let session_info = extract_session_info(depot);
+    let session_info = extract_session_info(req, depot);
 
     let repo = repo_factory.create().await?;
     let (requester, mut repo) =
@@ -111,7 +111,7 @@ pub async fn allow_cross_signing_reset(
     let clock = make_clock();
 
     let activity_tracker = extract_bound_activity_tracker(req, depot);
-    let session_info = extract_session_info(depot);
+    let session_info = extract_session_info(req, depot);
 
     let repo = repo_factory.create().await?;
     let (requester, mut repo) =
@@ -174,7 +174,7 @@ pub async fn deactivate_user(
     let mut rng = make_rng();
 
     let activity_tracker = extract_bound_activity_tracker(req, depot);
-    let session_info = extract_session_info(depot);
+    let session_info = extract_session_info(req, depot);
 
     let repo = repo_factory.create().await?;
     let (requester, mut repo) =

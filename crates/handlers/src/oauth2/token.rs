@@ -12,7 +12,7 @@ use oauth2_types::{
 };
 use opentelemetry::{Key, KeyValue, metrics::Counter};
 use pasion_data_model::{
-    AuthorizationGrantStage, BoxClock, BoxRng, Client, Clock, Device, DeviceCodeGrantState,
+    AuthorizationGrantStage, BoxClock, BoxRng, Client, Clock, DeviceCodeGrantState,
     SiteConfig, SystemClock, TokenType,
 };
 use pasion_i18n::DataLocale;
@@ -604,11 +604,15 @@ async fn authorization_code_grant(
 
     // Look for device to provision
     for scope in &*session.scope {
-        if let Some(device) = Device::from_scope_token(scope) {
+        let s = scope.as_str();
+        let device_id = s
+            .strip_prefix("urn:matrix:client:device:")
+            .or_else(|| s.strip_prefix("urn:matrix:org.matrix.msc2967.client:device:"));
+        if let Some(device_id) = device_id {
             homeserver
                 .upsert_device(
                     &browser_session.user.username,
-                    device.as_str(),
+                    device_id,
                     Some(&device_name),
                 )
                 .await
@@ -983,9 +987,13 @@ async fn device_code_grant(
 
     // Look for device to provision
     for scope in &*session.scope {
-        if let Some(device) = Device::from_scope_token(scope) {
+        let s = scope.as_str();
+        let device_id = s
+            .strip_prefix("urn:matrix:client:device:")
+            .or_else(|| s.strip_prefix("urn:matrix:org.matrix.msc2967.client:device:"));
+        if let Some(device_id) = device_id {
             homeserver
-                .upsert_device(&browser_session.user.username, device.as_str(), None)
+                .upsert_device(&browser_session.user.username, device_id, None)
                 .await
                 .map_err(RouteError::ProvisionDeviceFailed)?;
         }

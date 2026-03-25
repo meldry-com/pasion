@@ -549,8 +549,8 @@ pub struct DateFilter {
 pub fn extract_bound_activity_tracker(req: &Request, depot: &Depot) -> BoundActivityTracker {
     let activity_tracker = depot
         .get::<crate::ActivityTracker>("activity_tracker")
-        .cloned()
-        .unwrap_or_else(|| crate::ActivityTracker::new(100));
+        .expect("ActivityTracker not found in depot")
+        .clone();
 
     let trusted_proxies = depot
         .get::<Vec<ipnetwork::IpNetwork>>("trusted_proxies")
@@ -587,11 +587,10 @@ fn infer_client_ip(req: &Request, trusted_proxies: &[ipnetwork::IpNetwork]) -> O
 
 // ── Cookie jar extraction helper ───────────────────────────────
 
-pub fn extract_session_info(depot: &Depot) -> SessionInfo {
-    let cookie_jar = depot
-        .get::<CookieJar>("cookie_jar")
-        .cloned()
-        .unwrap_or_default();
+pub fn extract_session_info(req: &Request, depot: &Depot) -> SessionInfo {
+    let Ok(cookie_jar) = CookieJar::extract_from_request(req, depot) else {
+        return SessionInfo::default();
+    };
     let (session_info, _) = cookie_jar.session_info();
     session_info
 }

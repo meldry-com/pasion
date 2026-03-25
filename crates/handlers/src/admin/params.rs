@@ -104,7 +104,7 @@ impl Scribe for PaginationRejection {
 }
 
 pub fn extract_pagination(
-    req: &Request,
+    req: &mut Request,
 ) -> Result<(pasion_storage::Pagination, IncludeCount), PaginationRejection> {
     let params: PaginationParams = req.parse_queries().unwrap_or(PaginationParams {
         before: None,

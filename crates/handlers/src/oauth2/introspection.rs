@@ -10,7 +10,7 @@ use oauth2_types::{
 };
 use opentelemetry::{Key, KeyValue, metrics::Counter};
 use pasion_data_model::{
-    BoxClock, Clock, Device, SystemClock, TokenFormatError, TokenType,
+    BoxClock, Clock, SystemClock, TokenFormatError, TokenType,
     personal::session::PersonalSessionOwner,
 };
 use pasion_iana::oauth::{OAuthClientAuthenticationMethod, OAuthTokenTypeHint};
@@ -23,7 +23,6 @@ use pasion_salvo_utils::{
 };
 use pasion_storage::{
     BoxRepository, BoxRepositoryFactory,
-    compat::{CompatAccessTokenRepository, CompatRefreshTokenRepository, CompatSessionRepository},
     oauth2::{OAuth2AccessTokenRepository, OAuth2RefreshTokenRepository, OAuth2SessionRepository},
     user::UserRepository,
 };
@@ -82,14 +81,6 @@ pub enum RouteError {
     #[error("unknown oauth session {0}")]
     CantLoadOAuthSession(Ulid),
 
-    /// The compat session is not valid.
-    #[error("invalid compat session {0}")]
-    InvalidCompatSession(Ulid),
-
-    /// The compat session could not be found in the database.
-    #[error("unknown compat session {0}")]
-    CantLoadCompatSession(Ulid),
-
     /// The personal access token session is not valid.
     #[error("invalid personal access token session {0}")]
     InvalidPersonalSession(Ulid),
@@ -97,10 +88,6 @@ pub enum RouteError {
     /// The personal access token session could not be found in the database.
     #[error("unknown personal access token session {0}")]
     CantLoadPersonalSession(Ulid),
-
-    /// The Device ID in the compat session can't be encoded as a scope
-    #[error("device ID contains characters that are not allowed in a scope")]
-    CantEncodeDeviceID(#[from] pasion_data_model::ToScopeTokenError),
 
     #[error("invalid user {0}")]
     InvalidUser(Ulid),
@@ -130,7 +117,6 @@ impl Scribe for RouteError {
 
         match self {
             e @ (Self::Internal(_)
-            | Self::CantLoadCompatSession(_)
             | Self::CantLoadOAuthSession(_)
             | Self::CantLoadPersonalSession(_)
             | Self::CantLoadUser(_)
@@ -164,11 +150,9 @@ impl Scribe for RouteError {
             | Self::UnexpectedTokenType
             | Self::InvalidToken(_)
             | Self::InvalidUser(_)
-            | Self::InvalidCompatSession(_)
             | Self::InvalidOAuthSession(_)
             | Self::InvalidPersonalSession(_)
-            | Self::InvalidTokenFormat(_)
-            | Self::CantEncodeDeviceID(_) => {
+            | Self::InvalidTokenFormat(_) => {
                 INTROSPECTION_COUNTER.add(1, &[KeyValue::new(ACTIVE.clone(), false)]);
                 res.render(Json(INACTIVE));
             }
@@ -225,11 +209,21 @@ fn normalize_scope(mut scope: Scope) -> Scope {
             to_add.insert(UNSTABLE_API_SCOPE);
         } else if token == &UNSTABLE_API_SCOPE {
             to_add.insert(STABLE_API_SCOPE);
-        } else if let Some(device) = Device::from_scope_token(token) {
-            let tokens = device
-                .to_scope_token()
-                .expect("from/to scope token rountrip should never fail");
-            to_add.extend(tokens);
+        } else {
+            let s = token.as_str();
+            let device_id = s
+                .strip_prefix("urn:matrix:client:device:")
+                .or_else(|| s.strip_prefix("urn:matrix:org.matrix.msc2967.client:device:"));
+            if let Some(device_id) = device_id {
+                if let (Ok(stable), Ok(unstable)) = (
+                    format!("urn:matrix:client:device:{device_id}").parse::<ScopeToken>(),
+                    format!("urn:matrix:org.matrix.msc2967.client:device:{device_id}")
+                        .parse::<ScopeToken>(),
+                ) {
+                    to_add.insert(stable);
+                    to_add.insert(unstable);
+                }
+            }
         }
     }
     scope.append(&mut to_add);
@@ -315,18 +309,6 @@ async fn handle_post(
     {
         return Err(RouteError::UnexpectedTokenType);
     }
-
-    // Not all device IDs can be encoded as scope. On OAuth 2.0 sessions, we
-    // don't have this problem, as the device ID *is* already encoded as a scope.
-    // But on compatibility sessions, it's possible to have device IDs with
-    // spaces in them, or other weird characters.
-    // In those cases, we prefer explicitly giving out the device ID as a separate
-    // field. The client introspecting tells us whether it supports having the
-    // device ID as a separate field through this header.
-    let supports_explicit_device_id = req
-        .header::<String>("X-Pasion-Supports-Device-Id")
-        .map(|v| v == "1")
-        .unwrap_or(false);
 
     // XXX: we should get the IP from the client introspecting the token
     let ip = None;
@@ -484,170 +466,11 @@ async fn handle_post(
             }
         }
 
-        TokenType::CompatAccessToken => {
-            let access_token = repo
-                .compat_access_token()
-                .find_by_token(token)
-                .await?
-                .ok_or(RouteError::UnknownToken(TokenType::CompatAccessToken))?;
-
-            if !access_token.is_valid(clock.now()) {
-                return Err(RouteError::InvalidToken(TokenType::CompatAccessToken));
-            }
-
-            let session = repo
-                .compat_session()
-                .lookup(access_token.session_id)
-                .await?
-                .ok_or(RouteError::CantLoadCompatSession(access_token.session_id))?;
-
-            if !session.is_valid() {
-                return Err(RouteError::InvalidCompatSession(session.id));
-            }
-
-            let user = repo
-                .user()
-                .lookup(session.user_id)
-                .await?
-                .ok_or(RouteError::CantLoadUser(session.user_id))?;
-
-            if !user.is_valid() {
-                return Err(RouteError::InvalidUser(user.id))?;
-            }
-
-            // Grant the palpo admin scope if the session has the admin flag set.
-            let palpo_admin_scope_opt = session.is_palpo_admin.then_some(PALPO_ADMIN_SCOPE);
-
-            // If the client supports explicitly giving the device ID in the response, skip
-            // encoding it in the scope
-            let device_scope_opt = if supports_explicit_device_id {
-                None
-            } else {
-                session
-                    .device
-                    .as_ref()
-                    .map(Device::to_scope_token)
-                    .transpose()?
-            };
-
-            let scope = [STABLE_API_SCOPE, UNSTABLE_API_SCOPE]
-                .into_iter()
-                .chain(device_scope_opt.into_iter().flatten())
-                .chain(palpo_admin_scope_opt)
-                .collect();
-
-            activity_tracker
-                .record_compat_session(&clock, &session, ip)
-                .await;
-
-            INTROSPECTION_COUNTER.add(
-                1,
-                &[
-                    KeyValue::new(KIND, "compat_access_token"),
-                    KeyValue::new(ACTIVE, true),
-                ],
-            );
-
-            IntrospectionResponse {
-                active: true,
-                scope: Some(scope),
-                client_id: Some("legacy".into()),
-                username: Some(user.username),
-                token_type: Some(OAuthTokenTypeHint::AccessToken),
-                exp: access_token.expires_at,
-                expires_in: access_token
-                    .expires_at
-                    .map(|expires_at| expires_at.signed_duration_since(clock.now())),
-                iat: Some(access_token.created_at),
-                nbf: Some(access_token.created_at),
-                sub: Some(user.sub),
-                aud: None,
-                iss: None,
-                jti: None,
-                device_id: session.device.map(Device::into),
-            }
-        }
-
-        TokenType::CompatRefreshToken => {
-            let refresh_token = repo
-                .compat_refresh_token()
-                .find_by_token(token)
-                .await?
-                .ok_or(RouteError::UnknownToken(TokenType::CompatRefreshToken))?;
-
-            if !refresh_token.is_valid() {
-                return Err(RouteError::InvalidToken(TokenType::CompatRefreshToken));
-            }
-
-            let session = repo
-                .compat_session()
-                .lookup(refresh_token.session_id)
-                .await?
-                .ok_or(RouteError::CantLoadCompatSession(refresh_token.session_id))?;
-
-            if !session.is_valid() {
-                return Err(RouteError::InvalidCompatSession(session.id));
-            }
-
-            let user = repo
-                .user()
-                .lookup(session.user_id)
-                .await?
-                .ok_or(RouteError::CantLoadUser(session.user_id))?;
-
-            if !user.is_valid() {
-                return Err(RouteError::InvalidUser(user.id))?;
-            }
-
-            // Grant the palpo admin scope if the session has the admin flag set.
-            let palpo_admin_scope_opt = session.is_palpo_admin.then_some(PALPO_ADMIN_SCOPE);
-
-            // If the client supports explicitly giving the device ID in the response, skip
-            // encoding it in the scope
-            let device_scope_opt = if supports_explicit_device_id {
-                None
-            } else {
-                session
-                    .device
-                    .as_ref()
-                    .map(Device::to_scope_token)
-                    .transpose()?
-            };
-
-            let scope = [STABLE_API_SCOPE, UNSTABLE_API_SCOPE]
-                .into_iter()
-                .chain(device_scope_opt.into_iter().flatten())
-                .chain(palpo_admin_scope_opt)
-                .collect();
-
-            activity_tracker
-                .record_compat_session(&clock, &session, ip)
-                .await;
-
-            INTROSPECTION_COUNTER.add(
-                1,
-                &[
-                    KeyValue::new(KIND, "compat_refresh_token"),
-                    KeyValue::new(ACTIVE, true),
-                ],
-            );
-
-            IntrospectionResponse {
-                active: true,
-                scope: Some(scope),
-                client_id: Some("legacy".into()),
-                username: Some(user.username),
-                token_type: Some(OAuthTokenTypeHint::RefreshToken),
-                exp: None,
-                expires_in: None,
-                iat: Some(refresh_token.created_at),
-                nbf: Some(refresh_token.created_at),
-                sub: Some(user.sub),
-                aud: None,
-                iss: None,
-                jti: None,
-                device_id: session.device.map(Device::into),
-            }
+        // Compat tokens are no longer supported; the compat layer has been removed.
+        // Treat them as inactive.
+        TokenType::CompatAccessToken | TokenType::CompatRefreshToken => {
+            INTROSPECTION_COUNTER.add(1, &[KeyValue::new(ACTIVE, false)]);
+            INACTIVE
         }
 
         TokenType::PersonalAccessToken => {

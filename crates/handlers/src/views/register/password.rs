@@ -134,7 +134,7 @@ pub async fn post(
     let mut policy = policy_factory
         .instantiate()
         .await
-        .map_err(InternalError::from_anyhow)?;
+        .map_err(|e| InternalError::from_anyhow(e.into()))?;
     let mut repo = rest::get_repo_factory(depot)?.create().await?;
     let activity_tracker = rest::extract_bound_activity_tracker(req, depot);
     let requester = activity_tracker

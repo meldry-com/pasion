@@ -2,7 +2,6 @@ use anyhow::Context;
 use pasion_router::{PostAuthAction, Route, UrlBuilder};
 use pasion_storage::{
     RepositoryAccess,
-    compat::CompatSsoLoginRepository,
     oauth2::OAuth2AuthorizationGrantRepository,
     upstream_oauth2::{UpstreamOAuthLinkRepository, UpstreamOAuthProviderRepository},
 };
@@ -65,14 +64,11 @@ impl OptionalPostAuthAction {
                 PostAuthContextInner::ContinueDeviceCodeGrant { grant }
             }
 
-            PostAuthAction::ContinueCompatSsoLogin { id } => {
-                let login = repo
-                    .compat_sso_login()
-                    .lookup(id)
-                    .await?
-                    .context("Failed to load compat SSO login")?;
-                let login = Box::new(login);
-                PostAuthContextInner::ContinueCompatSsoLogin { login }
+            PostAuthAction::ContinueCompatSsoLogin { .. } => {
+                // Compat SSO login is no longer supported; the compat layer
+                // has been removed. Return None so callers fall through to the
+                // default post-auth redirect.
+                return Ok(None);
             }
 
             PostAuthAction::ChangePassword => PostAuthContextInner::ChangePassword,

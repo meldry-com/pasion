@@ -24,6 +24,7 @@ dotenvy.workspace = true
 figment.workspace = true
 futures-util.workspace = true
 headers.workspace = true
+http.workspace = true
 http-body-util.workspace = true
 hyper.workspace = true
 ipnetwork.workspace = true
@@ -33,7 +34,6 @@ rand.workspace = true
 rand_chacha.workspace = true
 reqwest.workspace = true
 rustls.workspace = true
-sd-notify.workspace = true
 serde_json.workspace = true
 serde_yaml.workspace = true
 sqlx.workspace = true
@@ -80,6 +80,9 @@ pasion-tasks.workspace = true
 pasion-templates.workspace = true
 
 syn2mas.workspace = true
+
+[target.'cfg(unix)'.dependencies]
+sd-notify.workspace = true
 
 [build-dependencies]
 anyhow.workspace = true

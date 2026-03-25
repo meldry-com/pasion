@@ -24,7 +24,7 @@ use self::callback::CallbackDestination;
 use crate::{BoundActivityTracker, impl_from_error_for_route};
 
 mod callback;
-pub(crate) mod consent;
+pub mod consent;
 
 #[derive(Debug, Error)]
 pub enum RouteError {

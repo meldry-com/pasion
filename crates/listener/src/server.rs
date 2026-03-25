@@ -159,6 +159,7 @@ where
             span.record("network.peer.address", tracing::field::display(addr.ip()));
             span.record("network.peer.port", addr.port());
         }
+        #[cfg(unix)]
         SocketAddr::Unix(ref addr) => {
             span.record("network.peer.address", tracing::field::debug(addr));
         }

@@ -126,8 +126,7 @@ fn init_tracer(config: &TracingConfig) -> anyhow::Result<()> {
 
         TracingExporterKind::Otlp => {
             let mut exporter = opentelemetry_otlp::SpanExporter::builder()
-                .with_http()
-                .with_http_client(pasion_http::reqwest_client());
+                .with_http();
             if let Some(endpoint) = &config.endpoint {
                 exporter = exporter.with_endpoint(endpoint.as_str());
             }
@@ -162,8 +161,7 @@ fn otlp_metric_reader(
     endpoint: Option<&url::Url>,
 ) -> anyhow::Result<PeriodicReader<opentelemetry_otlp::MetricExporter>> {
     let mut exporter = opentelemetry_otlp::MetricExporter::builder()
-        .with_http()
-        .with_http_client(pasion_http::reqwest_client());
+        .with_http();
     if let Some(endpoint) = endpoint {
         exporter = exporter.with_endpoint(endpoint.to_string());
     }

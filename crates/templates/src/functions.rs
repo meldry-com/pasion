@@ -4,13 +4,11 @@
 //! Additional functions, tests and filters used in templates
 
 use std::{
-    collections::{BTreeMap, HashMap, HashSet},
-    fmt::{Formatter, Write as _},
+    collections::{BTreeMap, HashMap},
+    fmt::Formatter,
     str::FromStr,
-    sync::{Arc, Mutex, atomic::AtomicUsize},
+    sync::{Arc, atomic::AtomicUsize},
 };
-
-use camino::{Utf8Path, Utf8PathBuf};
 use minijinja::{
     Error, ErrorKind, State, Value, escape_formatter,
     machinery::make_string_output,
@@ -18,13 +16,11 @@ use minijinja::{
 };
 use pasion_i18n::{Argument, ArgumentList, DataLocale, Translator, sprintf::FormattedMessagePart};
 use pasion_router::UrlBuilder;
-use pasion_spa::ViteManifest;
 use url::Url;
 
 pub fn register(
     env: &mut minijinja::Environment,
     url_builder: UrlBuilder,
-    vite_manifest: Option<ViteManifest>,
     translator: Arc<Translator>,
 ) {
     env.set_unknown_method_callback(minijinja_contrib::pycompat::unknown_method_callback);
@@ -38,17 +34,7 @@ pub fn register(
     env.add_filter("id_color_hash", filter_id_color_hash);
     env.add_function("add_params_to_url", function_add_params_to_url);
     env.add_function("counter", || Ok(Value::from_object(Counter::default())));
-    if let Some(vite_manifest) = vite_manifest {
-        env.add_global(
-            "include_asset",
-            Value::from_object(IncludeAsset {
-                url_builder: url_builder.clone(),
-                vite_manifest,
-            }),
-        );
-    } else {
-        env.add_global("include_asset", Value::from_object(FakeIncludeAsset {}));
-    }
+    env.add_global("include_asset", Value::from_object(FakeIncludeAsset {}));
     env.add_global(
         "translator",
         Value::from_object(TranslatorFunc { translator }),
@@ -410,179 +396,6 @@ impl<T: chrono::Timelike> pasion_i18n::icu_datetime::input::IsoTimeInput for Tim
     fn nanosecond(&self) -> Option<pasion_i18n::icu_calendar::types::NanoSecond> {
         let nanosecond: usize = chrono::Timelike::nanosecond(&self.0).try_into().ok()?;
         nanosecond.try_into().ok()
-    }
-}
-
-#[derive(Default, Debug)]
-struct IncludedAssetsTrackerInner {
-    preloaded: HashSet<Utf8PathBuf>,
-    included: HashSet<Utf8PathBuf>,
-}
-
-impl IncludedAssetsTrackerInner {
-    /// Mark an asset as preloaded. Returns true if it was not already marked.
-    fn mark_preloaded(&mut self, asset: &Utf8Path) -> bool {
-        self.preloaded.insert(asset.to_owned())
-    }
-
-    /// Mark an asset as included. Returns true if it was not already marked.
-    fn mark_included(&mut self, asset: &Utf8Path) -> bool {
-        self.preloaded.insert(asset.to_owned());
-        self.included.insert(asset.to_owned())
-    }
-}
-
-/// Helper to track included assets during a template render
-#[derive(Default, Debug)]
-struct IncludedAssetsTracker {
-    inner: Mutex<IncludedAssetsTrackerInner>,
-}
-
-impl IncludedAssetsTracker {
-    fn lock(&self) -> std::sync::MutexGuard<'_, IncludedAssetsTrackerInner> {
-        // There is no reason for this mutex to ever get poisoned, so it's fine
-        // to unwrap here
-        self.inner.lock().unwrap()
-    }
-}
-
-impl Object for IncludedAssetsTracker {}
-
-struct IncludeAsset {
-    url_builder: UrlBuilder,
-    vite_manifest: ViteManifest,
-}
-
-impl std::fmt::Debug for IncludeAsset {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        f.debug_struct("IncludeAsset")
-            .field("url_builder", &self.url_builder.assets_base())
-            .field("vite_manifest", &"..")
-            .finish()
-    }
-}
-
-impl std::fmt::Display for IncludeAsset {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.write_str("include_asset")
-    }
-}
-
-impl Object for IncludeAsset {
-    fn call(self: &Arc<Self>, state: &State, args: &[Value]) -> Result<Value, Error> {
-        let (path,): (&str,) = from_args(args)?;
-        let path: &Utf8Path = path.into();
-
-        let assets_base: &Utf8Path = self.url_builder.assets_base().into();
-
-        // We store the list of assets we've already included and already preloaded in a
-        // 'temp' object. Those live throughout the template render and reset on each
-        // new render.
-        let tracker =
-            state.get_or_set_temp_object("included_assets_tracker", IncludedAssetsTracker::default);
-        let mut tracker = tracker.lock();
-
-        // Grab the main asset and its imports from the manifest
-        let (main, imported) = self.vite_manifest.find_assets(path).map_err(|e| {
-            Error::new(
-                ErrorKind::InvalidOperation,
-                format!("Invalid assets manifest while calling function `include_asset` with path = {path:?}: {e}"),
-            )
-        })?;
-
-        // We'll accumulate the output in this string
-        let mut output = String::new();
-        match main.file_type() {
-            pasion_spa::FileType::Script => {
-                let integrity = main.integrity_attr();
-                let src = main.src(assets_base);
-                if tracker.mark_included(&src) {
-                    writeln!(
-                        output,
-                        r#"<script type="module" src="{src}" crossorigin{integrity}></script>"#
-                    )
-                    .unwrap();
-                }
-            }
-            pasion_spa::FileType::Stylesheet => {
-                let integrity = main.integrity_attr();
-                let src = main.src(assets_base);
-                if tracker.mark_included(&src) {
-                    writeln!(
-                        output,
-                        r#"<link rel="stylesheet" href="{src}" crossorigin{integrity} />"#
-                    )
-                    .unwrap();
-                }
-            }
-
-            pasion_spa::FileType::Json => {
-                // When a JSON is included at the top level (a translation), we preload it
-                let integrity = main.integrity_attr();
-                let src = main.src(assets_base);
-                if tracker.mark_preloaded(&src) {
-                    writeln!(
-                        output,
-                        r#"<link rel="preload" href="{src}" as="fetch" crossorigin{integrity} />"#,
-                    )
-                    .unwrap();
-                }
-            }
-
-            file_type => {
-                return Err(Error::new(
-                    ErrorKind::InvalidOperation,
-                    format!(
-                        "The target asset is a {file_type:?} file, which is not supported by `include_asset`"
-                    ),
-                ));
-            }
-        }
-
-        for asset in imported {
-            let integrity = asset.integrity_attr();
-            let src = asset.src(assets_base);
-            match asset.file_type() {
-                pasion_spa::FileType::Stylesheet => {
-                    // Imported stylesheets are inserted directly, not just preloaded
-                    if tracker.mark_included(&src) {
-                        writeln!(
-                            output,
-                            r#"<link rel="stylesheet" href="{src}" crossorigin{integrity} />"#
-                        )
-                        .unwrap();
-                    }
-                }
-                pasion_spa::FileType::Script => {
-                    if tracker.mark_preloaded(&src) {
-                        writeln!(
-                            output,
-                            r#"<link rel="modulepreload" href="{src}" crossorigin{integrity} />"#,
-                        )
-                        .unwrap();
-                    }
-                }
-                pasion_spa::FileType::Png => {
-                    if tracker.mark_preloaded(&src) {
-                        writeln!(
-                            output,
-                            r#"<link rel="preload" href="{src}" as="image" fetchpriority="low" crossorigin{integrity} />"#,
-                        )
-                        .unwrap();
-                    }
-                }
-                pasion_spa::FileType::Woff
-                | pasion_spa::FileType::Woff2
-                | pasion_spa::FileType::Json => {
-                    // Skip pre-loading fonts and JSON (translations) as it will
-                    // lead to many wasted preloads. For translations, we only
-                    // include them as preload if they are included on the
-                    // top-level
-                }
-            }
-        }
-
-        Ok(Value::from_safe_string(output.trim_end().to_owned()))
     }
 }
 

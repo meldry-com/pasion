@@ -7,7 +7,7 @@ use tracing::{Instrument, info_span};
 pub async fn get(depot: &Depot) -> Result<String, InternalError> {
     let pool = depot
         .get::<PgPool>("pg_pool")
-        .map_err(|_| anyhow::anyhow!("PgPool not found in depot"))?;
+        .map_err(|_| InternalError::from_anyhow(anyhow::anyhow!("PgPool not found in depot")))?;
 
     let mut conn = pool.acquire().await?;
 

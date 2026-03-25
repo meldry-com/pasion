@@ -131,22 +131,19 @@ impl Filter for OAuth2SessionFilter<'_> {
                 }
             }))
             .add_option(self.device().map(|device| -> SimpleExpr {
-                if let Ok([stable_scope_token, unstable_scope_token]) = device.to_scope_token() {
-                    Condition::any()
-                        .add(
-                            Expr::val(stable_scope_token.to_string()).eq(PgFunc::any(Expr::col((
-                                OAuth2Sessions::Table,
-                                OAuth2Sessions::ScopeList,
-                            )))),
-                        )
-                        .add(Expr::val(unstable_scope_token.to_string()).eq(PgFunc::any(
-                            Expr::col((OAuth2Sessions::Table, OAuth2Sessions::ScopeList)),
-                        )))
-                        .into()
-                } else {
-                    // If the device ID can't be encoded as a scope token, match no rows
-                    Expr::val(false).into()
-                }
+                let stable = format!("urn:matrix:client:device:{device}");
+                let unstable = format!("urn:matrix:org.matrix.msc2967.client:device:{device}");
+                Condition::any()
+                    .add(
+                        Expr::val(stable).eq(PgFunc::any(Expr::col((
+                            OAuth2Sessions::Table,
+                            OAuth2Sessions::ScopeList,
+                        )))),
+                    )
+                    .add(Expr::val(unstable).eq(PgFunc::any(
+                        Expr::col((OAuth2Sessions::Table, OAuth2Sessions::ScopeList)),
+                    )))
+                    .into()
             }))
             .add_option(self.browser_session().map(|browser_session| {
                 Expr::col((OAuth2Sessions::Table, OAuth2Sessions::UserSessionId))

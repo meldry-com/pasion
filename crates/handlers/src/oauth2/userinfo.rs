@@ -6,7 +6,6 @@ use pasion_jose::{
 use pasion_keystore::Keystore;
 use pasion_router::UrlBuilder;
 use pasion_salvo_utils::{
-    jwt::JwtResponse,
     record_error,
     sentry::SentryEventID,
     user_authorization::{AuthorizationVerificationError, UserAuthorization},
@@ -95,7 +94,11 @@ pub async fn get(req: &mut Request, depot: &Depot, res: &mut Response) {
                 res.render(Json(user_info));
             }
             UserinfoResponse::Jwt(token) => {
-                res.render(JwtResponse(token));
+                res.headers_mut().insert(
+                    http::header::CONTENT_TYPE,
+                    http::HeaderValue::from_static("application/jwt"),
+                );
+                res.render(Text::Plain(token));
             }
         },
         Err(e) => e.render(res),
@@ -127,7 +130,10 @@ async fn handle_get(req: &mut Request, depot: &Depot) -> Result<UserinfoResponse
 
     let mut repo: BoxRepository = repo_factory.create().await?;
 
-    let user_authorization = UserAuthorization::extract_from_request(req)?;
+    let user_authorization = UserAuthorization::<()>::extract_from_request(req).await.map_err(|e| match e {
+        pasion_salvo_utils::user_authorization::UserAuthorizationError::Internal(e) => RouteError::Internal(e),
+        _ => RouteError::Unauthorized,
+    })?;
     let session = user_authorization.protected(&mut repo, &clock).await?;
 
     // This endpoint requires the `openid` scope.
@@ -179,7 +185,7 @@ async fn handle_get(req: &mut Request, depot: &Depot) -> Result<UserinfoResponse
         };
 
         let token = Jwt::sign_with_rng(&mut rng, header, signed_user_info, &signer)?;
-        Ok(UserinfoResponse::Jwt(token))
+        Ok(UserinfoResponse::Jwt(token.into_string()))
     } else {
         Ok(UserinfoResponse::Json(user_info))
     }

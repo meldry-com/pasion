@@ -14,7 +14,6 @@ use super::{
 pub enum SessionDetailResponse {
     BrowserSession(BrowserSessionDetail),
     Oauth2Session(Oauth2SessionDetail),
-    CompatSession(CompatSessionDetail),
 }
 
 #[derive(Serialize)]
@@ -59,26 +58,6 @@ pub struct Oauth2ClientBrief {
     pub logo_uri: Option<String>,
 }
 
-#[derive(Serialize)]
-#[serde(rename_all = "camelCase")]
-pub struct CompatSessionDetail {
-    pub id: String,
-    pub device_id: Option<String>,
-    pub display_name: Option<String>,
-    pub user_agent: Option<UserAgentInfo>,
-    pub last_active_ip: Option<String>,
-    pub last_active_at: Option<String>,
-    pub created_at: Option<String>,
-    pub sso_login: Option<SsoLoginData>,
-}
-
-#[derive(Serialize)]
-#[serde(rename_all = "camelCase")]
-pub struct SsoLoginData {
-    pub id: String,
-    pub redirect_uri: String,
-}
-
 // ── GET /api/v1/sessions/:id ───────────────────────────────────
 
 #[handler]
@@ -94,7 +73,7 @@ pub async fn get_session(
     let clock = make_clock();
 
     let activity_tracker = extract_bound_activity_tracker(req, depot);
-    let session_info = extract_session_info(depot);
+    let session_info = extract_session_info(req, depot);
 
     let repo = repo_factory.create().await?;
     let (requester, mut repo) =
@@ -162,37 +141,6 @@ pub async fn get_session(
                 created_at: Some(session.created_at.to_rfc3339()),
             })
         }
-        NodeType::CompatSession => {
-            let session = repo
-                .compat_session()
-                .lookup(ulid)
-                .await?
-                .ok_or(RouteError::NotFound)?;
-
-            if !requester.is_owner_or_admin(Some(session.user_id)) {
-                return Err(RouteError::Unauthorized);
-            }
-
-            let sso_login = repo
-                .compat_sso_login()
-                .find_for_session(&session)
-                .await?
-                .map(|l| SsoLoginData {
-                    id: NodeType::CompatSsoLogin.serialize(l.id),
-                    redirect_uri: l.redirect_uri.to_string(),
-                });
-
-            SessionDetailResponse::CompatSession(CompatSessionDetail {
-                id: NodeType::CompatSession.serialize(session.id),
-                device_id: session.device.as_ref().map(|d| d.to_string()),
-                display_name: None,
-                user_agent: session.user_agent.as_deref().map(parse_user_agent),
-                last_active_ip: session.last_active_ip.map(|ip| ip.to_string()),
-                last_active_at: session.last_active_at.map(|t| t.to_rfc3339()),
-                created_at: Some(session.created_at.to_rfc3339()),
-                sso_login,
-            })
-        }
         _ => return Err(RouteError::BadRequest("not a session id".into())),
     };
 
@@ -222,7 +170,7 @@ pub async fn end_browser_session(
     let clock = make_clock();
 
     let activity_tracker = extract_bound_activity_tracker(req, depot);
-    let session_info = extract_session_info(depot);
+    let session_info = extract_session_info(req, depot);
 
     let repo = repo_factory.create().await?;
     let (requester, mut repo) =
@@ -261,7 +209,7 @@ pub async fn end_oauth2_session(
     let mut rng = make_rng();
 
     let activity_tracker = extract_bound_activity_tracker(req, depot);
-    let session_info = extract_session_info(depot);
+    let session_info = extract_session_info(req, depot);
 
     let repo = repo_factory.create().await?;
     let (requester, mut repo) =
@@ -287,52 +235,6 @@ pub async fn end_oauth2_session(
     }
 
     repo.oauth2_session().finish(&clock, session).await?;
-    repo.save().await?;
-
-    Ok(Json(EndSessionResponse { status: "ENDED" }))
-}
-
-// ── DELETE /api/v1/compat-sessions/:id ─────────────────────────
-
-#[handler]
-pub async fn end_compat_session(
-    req: &mut Request,
-    depot: &Depot,
-) -> Result<Json<EndSessionResponse>, RouteError> {
-    let id = req
-        .param::<String>("id")
-        .ok_or(RouteError::BadRequest("missing id".into()))?;
-    let ulid = NodeType::CompatSession.extract_ulid(&id)?;
-
-    let repo_factory = get_repo_factory(depot)?;
-    let clock = make_clock();
-    let mut rng = make_rng();
-
-    let activity_tracker = extract_bound_activity_tracker(req, depot);
-    let session_info = extract_session_info(depot);
-
-    let repo = repo_factory.create().await?;
-    let (requester, mut repo) =
-        get_requester(&clock, &activity_tracker, repo, &session_info).await?;
-
-    let session = repo
-        .compat_session()
-        .lookup(ulid)
-        .await?
-        .ok_or(RouteError::NotFound)?;
-
-    if !requester.is_owner_or_admin(Some(session.user_id)) {
-        return Err(RouteError::Unauthorized);
-    }
-
-    let user = repo.user().lookup(session.user_id).await?;
-    if let Some(user) = user {
-        repo.queue_job()
-            .schedule_job(&mut rng, &clock, SyncDevicesJob::new(&user))
-            .await?;
-    }
-
-    repo.compat_session().finish(&clock, session).await?;
     repo.save().await?;
 
     Ok(Json(EndSessionResponse { status: "ENDED" }))
@@ -371,7 +273,7 @@ pub async fn set_oauth2_session_name(
     let clock = make_clock();
 
     let activity_tracker = extract_bound_activity_tracker(req, depot);
-    let session_info = extract_session_info(depot);
+    let session_info = extract_session_info(req, depot);
 
     let repo = repo_factory.create().await?;
     let (requester, mut repo) =
@@ -414,60 +316,3 @@ pub async fn set_oauth2_session_name(
     Ok(Json(SetSessionNameResponse { status: "UPDATED" }))
 }
 
-// ── PUT /api/v1/compat-sessions/:id/name ───────────────────────
-
-#[handler]
-pub async fn set_compat_session_name(
-    req: &mut Request,
-    depot: &Depot,
-) -> Result<Json<SetSessionNameResponse>, RouteError> {
-    let id = req
-        .param::<String>("id")
-        .ok_or(RouteError::BadRequest("missing id".into()))?;
-    let ulid = NodeType::CompatSession.extract_ulid(&id)?;
-
-    let input: SetSessionNameInput = req
-        .parse_json::<SetSessionNameInput>()
-        .await
-        .map_err(|_| RouteError::BadRequest("invalid json body".into()))?;
-
-    let repo_factory = get_repo_factory(depot)?;
-    let homeserver = get_homeserver(depot)?;
-    let clock = make_clock();
-
-    let activity_tracker = extract_bound_activity_tracker(req, depot);
-    let session_info = extract_session_info(depot);
-
-    let repo = repo_factory.create().await?;
-    let (requester, mut repo) =
-        get_requester(&clock, &activity_tracker, repo, &session_info).await?;
-
-    let session = repo
-        .compat_session()
-        .lookup(ulid)
-        .await?
-        .ok_or(RouteError::NotFound)?;
-
-    if !requester.is_owner_or_admin(Some(session.user_id)) {
-        return Err(RouteError::Unauthorized);
-    }
-
-    let session = repo
-        .compat_session()
-        .set_human_name(session, input.human_name.clone())
-        .await?;
-
-    // Update device display name on homeserver
-    if let (Some(name), Some(device)) = (&input.human_name, &session.device) {
-        let user = repo.user().lookup(session.user_id).await?;
-        if let Some(user) = user {
-            let _ = homeserver
-                .update_device_display_name(&user.username, &device.to_string(), name)
-                .await;
-        }
-    }
-
-    repo.save().await?;
-
-    Ok(Json(SetSessionNameResponse { status: "UPDATED" }))
-}

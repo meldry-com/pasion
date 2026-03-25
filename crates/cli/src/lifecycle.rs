@@ -3,7 +3,6 @@ use std::{process::ExitCode, time::Duration};
 use futures_util::future::{BoxFuture, Either};
 use pasion_handlers::ActivityTracker;
 use pasion_templates::Templates;
-use tokio::signal::unix::{Signal, SignalKind};
 use tokio_util::{sync::CancellationToken, task::TaskTracker};
 
 /// A helper to manage the lifecycle of the service, inclusing handling graceful
@@ -22,14 +21,17 @@ use tokio_util::{sync::CancellationToken, task::TaskTracker};
 /// that it knows when the soft shutdown is over and worked.
 ///
 /// It also integrates with [`sd_notify`] to notify the service manager of the
-/// state of the service.
+/// state of the service (Unix only).
 pub struct LifecycleManager {
     hard_shutdown_token: CancellationToken,
     soft_shutdown_token: CancellationToken,
     task_tracker: TaskTracker,
-    sigterm: Signal,
-    sigint: Signal,
-    sighup: Signal,
+    #[cfg(unix)]
+    sigterm: tokio::signal::unix::Signal,
+    #[cfg(unix)]
+    sigint: tokio::signal::unix::Signal,
+    #[cfg(unix)]
+    sighup: tokio::signal::unix::Signal,
     timeout: Duration,
     reload_handlers: Vec<Box<dyn Fn() -> BoxFuture<'static, ()>>>,
 }
@@ -56,7 +58,8 @@ impl Reloadable for Templates {
     }
 }
 
-/// A wrapper around [`sd_notify::notify`] that logs any errors
+/// A wrapper around [`sd_notify::notify`] that logs any errors (no-op on non-Unix)
+#[cfg(unix)]
 fn notify(states: &[sd_notify::NotifyState]) {
     if let Err(e) = sd_notify::notify(false, states) {
         tracing::error!(
@@ -65,6 +68,9 @@ fn notify(states: &[sd_notify::NotifyState]) {
         );
     }
 }
+
+#[cfg(not(unix))]
+fn notify(_states: &[&str]) {}
 
 impl LifecycleManager {
     /// Create a new shutdown manager, installing the signal handlers
@@ -75,20 +81,28 @@ impl LifecycleManager {
     pub fn new() -> Result<Self, std::io::Error> {
         let hard_shutdown_token = CancellationToken::new();
         let soft_shutdown_token = hard_shutdown_token.child_token();
-        let sigterm = tokio::signal::unix::signal(SignalKind::terminate())?;
-        let sigint = tokio::signal::unix::signal(SignalKind::interrupt())?;
-        let sighup = tokio::signal::unix::signal(SignalKind::hangup())?;
         let timeout = Duration::from_secs(60);
         let task_tracker = TaskTracker::new();
 
+        #[cfg(unix)]
+        let sigterm = tokio::signal::unix::signal(tokio::signal::unix::SignalKind::terminate())?;
+        #[cfg(unix)]
+        let sigint = tokio::signal::unix::signal(tokio::signal::unix::SignalKind::interrupt())?;
+        #[cfg(unix)]
+        let sighup = tokio::signal::unix::signal(tokio::signal::unix::SignalKind::hangup())?;
+
+        #[cfg(unix)]
         notify(&[sd_notify::NotifyState::MainPid(std::process::id())]);
 
         Ok(Self {
             hard_shutdown_token,
             soft_shutdown_token,
             task_tracker,
+            #[cfg(unix)]
             sigterm,
+            #[cfg(unix)]
             sigint,
+            #[cfg(unix)]
             sighup,
             timeout,
             reload_handlers: Vec::new(),
@@ -124,9 +138,11 @@ impl LifecycleManager {
 
     /// Run until we finish completely shutting down.
     pub async fn run(mut self) -> ExitCode {
+        #[cfg(unix)]
         notify(&[sd_notify::NotifyState::Ready]);
 
         // This will be `Some` if we have the watchdog enabled, and `None` if not
+        #[cfg(unix)]
         let mut watchdog_interval = {
             let mut watchdog_usec = 0;
             if sd_notify::watchdog_enabled(false, &mut watchdog_usec) {
@@ -140,61 +156,80 @@ impl LifecycleManager {
 
         // Wait for a first shutdown signal and trigger the soft shutdown
         let likely_crashed = loop {
-            // This makes a Future that will either yield the watchdog tick if enabled, or a
-            // pending Future if not
-            let watchdog_tick = if let Some(watchdog_interval) = &mut watchdog_interval {
-                Either::Left(watchdog_interval.tick())
-            } else {
-                Either::Right(futures_util::future::pending())
-            };
+            #[cfg(unix)]
+            {
+                // This makes a Future that will either yield the watchdog tick if enabled, or a
+                // pending Future if not
+                let watchdog_tick = if let Some(watchdog_interval) = &mut watchdog_interval {
+                    Either::Left(watchdog_interval.tick())
+                } else {
+                    Either::Right(futures_util::future::pending())
+                };
 
-            tokio::select! {
-                () = self.soft_shutdown_token.cancelled() => {
-                    tracing::warn!("Another task triggered a shutdown, it likely crashed! Shutting down");
-                    break true;
-                },
+                tokio::select! {
+                    () = self.soft_shutdown_token.cancelled() => {
+                        tracing::warn!("Another task triggered a shutdown, it likely crashed! Shutting down");
+                        break true;
+                    },
 
-                _ = self.sigterm.recv() => {
-                    tracing::info!("Shutdown signal received (SIGTERM), shutting down");
-                    break false;
-                },
+                    _ = self.sigterm.recv() => {
+                        tracing::info!("Shutdown signal received (SIGTERM), shutting down");
+                        break false;
+                    },
 
-                _ = self.sigint.recv() => {
-                    tracing::info!("Shutdown signal received (SIGINT), shutting down");
-                    break false;
-                },
+                    _ = self.sigint.recv() => {
+                        tracing::info!("Shutdown signal received (SIGINT), shutting down");
+                        break false;
+                    },
 
-                _ = watchdog_tick => {
-                    notify(&[
-                        sd_notify::NotifyState::Watchdog,
-                    ]);
-                },
+                    _ = watchdog_tick => {
+                        notify(&[
+                            sd_notify::NotifyState::Watchdog,
+                        ]);
+                    },
 
-                _ = self.sighup.recv() => {
-                    tracing::info!("Reload signal received (SIGHUP), reloading");
+                    _ = self.sighup.recv() => {
+                        tracing::info!("Reload signal received (SIGHUP), reloading");
 
-                    notify(&[
-                        sd_notify::NotifyState::Reloading,
-                        sd_notify::NotifyState::monotonic_usec_now()
-                            .expect("Failed to read monotonic clock")
-                    ]);
+                        notify(&[
+                            sd_notify::NotifyState::Reloading,
+                            sd_notify::NotifyState::monotonic_usec_now()
+                                .expect("Failed to read monotonic clock")
+                        ]);
 
-                    // XXX: if one handler takes a long time, it will block the
-                    // rest of the shutdown process, which is not ideal. We
-                    // should probably have a timeout here
-                    futures_util::future::join_all(
-                        self.reload_handlers
-                            .iter()
-                            .map(|handler| handler())
-                    ).await;
+                        // XXX: if one handler takes a long time, it will block the
+                        // rest of the shutdown process, which is not ideal. We
+                        // should probably have a timeout here
+                        futures_util::future::join_all(
+                            self.reload_handlers
+                                .iter()
+                                .map(|handler| handler())
+                        ).await;
 
-                    notify(&[sd_notify::NotifyState::Ready]);
+                        notify(&[sd_notify::NotifyState::Ready]);
 
-                    tracing::info!("Reloading done");
-                },
+                        tracing::info!("Reloading done");
+                    },
+                }
+            }
+
+            #[cfg(not(unix))]
+            {
+                tokio::select! {
+                    () = self.soft_shutdown_token.cancelled() => {
+                        tracing::warn!("Another task triggered a shutdown, it likely crashed! Shutting down");
+                        break true;
+                    },
+
+                    _ = tokio::signal::ctrl_c() => {
+                        tracing::info!("Shutdown signal received (Ctrl+C), shutting down");
+                        break false;
+                    },
+                }
             }
         };
 
+        #[cfg(unix)]
         notify(&[sd_notify::NotifyState::Stopping]);
 
         self.soft_shutdown_token.cancel();
@@ -202,12 +237,27 @@ impl LifecycleManager {
 
         // Start the timeout
         let timeout = tokio::time::sleep(self.timeout);
+
+        #[cfg(unix)]
         tokio::select! {
             _ = self.sigterm.recv() => {
                 tracing::warn!("Second shutdown signal received (SIGTERM), abort");
             },
             _ = self.sigint.recv() => {
                 tracing::warn!("Second shutdown signal received (SIGINT), abort");
+            },
+            () = timeout => {
+                tracing::warn!("Shutdown timeout reached, abort");
+            },
+            () = self.task_tracker.wait() => {
+                // This is the "happy path", we have gracefully shutdown
+            },
+        }
+
+        #[cfg(not(unix))]
+        tokio::select! {
+            _ = tokio::signal::ctrl_c() => {
+                tracing::warn!("Second shutdown signal received (Ctrl+C), abort");
             },
             () = timeout => {
                 tracing::warn!("Shutdown timeout reached, abort");

@@ -48,7 +48,6 @@ pasion-matrix-palpo = { path = "./crates/matrix-palpo/", version = "=1.8.0" }
 pasion-oidc-client = { path = "./crates/oidc-client/", version = "=1.8.0" }
 pasion-policy = { path = "./crates/policy/", version = "=1.8.0" }
 pasion-router = { path = "./crates/router/", version = "=1.8.0" }
-pasion-spa = { path = "./crates/spa/", version = "=1.8.0" }
 pasion-storage = { path = "./crates/storage/", version = "=1.8.0" }
 pasion-storage-pg = { path = "./crates/storage-pg/", version = "=1.8.0" }
 pasion-tasks = { path = "./crates/tasks/", version = "=1.8.0" }
@@ -514,7 +513,7 @@ version = "1.14.0"
 [workspace.dependencies.rustls-platform-verifier]
 version = "0.6.2"
 
-# systemd service status notification
+# systemd service status notification (Unix only)
 [workspace.dependencies.sd-notify]
 version = "0.5.0"
 

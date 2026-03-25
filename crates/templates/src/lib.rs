@@ -14,7 +14,6 @@ use camino::{Utf8Path, Utf8PathBuf};
 use minijinja::{UndefinedBehavior, Value};
 use pasion_i18n::Translator;
 use pasion_router::UrlBuilder;
-use pasion_spa::ViteManifest;
 use rand::Rng;
 use serde::Serialize;
 use thiserror::Error;
@@ -67,7 +66,6 @@ pub struct Templates {
     url_builder: UrlBuilder,
     branding: SiteBranding,
     features: SiteFeatures,
-    vite_manifest_path: Option<Utf8PathBuf>,
     translations_path: Utf8PathBuf,
     path: Utf8PathBuf,
     /// Whether template rendering is in strict mode (for testing,
@@ -81,14 +79,6 @@ pub enum TemplateLoadingError {
     /// I/O error
     #[error(transparent)]
     IO(#[from] std::io::Error),
-
-    /// Failed to read the assets manifest
-    #[error("failed to read the assets manifest")]
-    ViteManifestIO(#[source] std::io::Error),
-
-    /// Failed to deserialize the assets manifest
-    #[error("invalid assets manifest")]
-    ViteManifest(#[from] serde_json::Error),
 
     /// Failed to load the translations
     #[error("failed to load the translations")]
@@ -138,11 +128,6 @@ fn is_hidden(entry: &DirEntry) -> bool {
 impl Templates {
     /// Load the templates from the given config
     ///
-    /// # Parameters
-    ///
-    /// - `vite_manifest_path`: None if we are rendering resources for
-    ///   reproducibility, in which case a dummy Vite manifest will be used.
-    ///
     /// # Errors
     ///
     /// Returns an error if the templates could not be loaded from disk.
@@ -154,7 +139,6 @@ impl Templates {
     pub async fn load(
         path: Utf8PathBuf,
         url_builder: UrlBuilder,
-        vite_manifest_path: Option<Utf8PathBuf>,
         translations_path: Utf8PathBuf,
         branding: SiteBranding,
         features: SiteFeatures,
@@ -163,7 +147,6 @@ impl Templates {
         let (translator, environment) = Self::load_(
             &path,
             url_builder.clone(),
-            vite_manifest_path.as_deref(),
             &translations_path,
             branding.clone(),
             features,
@@ -175,7 +158,6 @@ impl Templates {
             translator: Arc::new(ArcSwap::new(translator)),
             path,
             url_builder,
-            vite_manifest_path,
             translations_path,
             branding,
             features,
@@ -186,7 +168,6 @@ impl Templates {
     async fn load_(
         path: &Utf8Path,
         url_builder: UrlBuilder,
-        vite_manifest_path: Option<&Utf8Path>,
         translations_path: &Utf8Path,
         branding: SiteBranding,
         features: SiteFeatures,
@@ -194,22 +175,6 @@ impl Templates {
     ) -> Result<(Arc<Translator>, Arc<minijinja::Environment<'static>>), TemplateLoadingError> {
         let path = path.to_owned();
         let span = tracing::Span::current();
-
-        // Read the assets manifest from disk
-        let vite_manifest = if let Some(vite_manifest_path) = vite_manifest_path {
-            let raw_vite_manifest = tokio::fs::read(vite_manifest_path)
-                .await
-                .map_err(TemplateLoadingError::ViteManifestIO)?;
-
-            Some(
-                serde_json::from_slice::<ViteManifest>(&raw_vite_manifest)
-                    .map_err(TemplateLoadingError::ViteManifest)?,
-            )
-        } else {
-            None
-        };
-
-        // Parse it
 
         let translations_path = translations_path.to_owned();
         let translator =
@@ -248,10 +213,13 @@ impl Templates {
 
                         if ext == "html" || ext == "txt" || ext == "subject" {
                             let relative = path.strip_prefix(&root)?;
-                            debug!(%relative, "Registering template");
+                            // Normalize path separators to forward slashes for
+                            // cross-platform compatibility (Windows uses backslashes)
+                            let key = relative.as_str().replace('\\', "/");
+                            debug!(%key, "Registering template");
                             let template = std::fs::read_to_string(&path)?;
-                            env.add_template_owned(relative.as_str().to_owned(), template)?;
-                            loaded.insert(relative.as_str().to_owned());
+                            env.add_template_owned(key.clone(), template)?;
+                            loaded.insert(key);
                         }
                     }
                 }
@@ -267,7 +235,6 @@ impl Templates {
         self::functions::register(
             &mut env,
             url_builder,
-            vite_manifest,
             Arc::clone(&translator),
         );
 
@@ -298,7 +265,6 @@ impl Templates {
         let (translator, environment) = Self::load_(
             &self.path,
             self.url_builder.clone(),
-            self.vite_manifest_path.as_deref(),
             &self.translations_path,
             self.branding.clone(),
             self.features,
@@ -506,32 +472,24 @@ mod tests {
             account_recovery: true,
             login_with_email_allowed: true,
         };
-        let vite_manifest_path =
-            Utf8Path::new(env!("CARGO_MANIFEST_DIR")).join("../../frontend/dist/manifest.json");
         let translations_path =
             Utf8Path::new(env!("CARGO_MANIFEST_DIR")).join("../../translations");
 
-        for use_real_vite_manifest in [true, false] {
-            let templates = Templates::load(
-                path.clone(),
-                url_builder.clone(),
-                // Check both renders against the real vite manifest and the 'dummy' vite manifest
-                // used for reproducible renders.
-                use_real_vite_manifest.then_some(vite_manifest_path.clone()),
-                translations_path.clone(),
-                branding.clone(),
-                features,
-                // Use strict mode in tests
-                true,
-            )
-            .await
-            .unwrap();
+        let templates = Templates::load(
+            path.clone(),
+            url_builder.clone(),
+            translations_path.clone(),
+            branding.clone(),
+            features,
+            true,
+        )
+        .await
+        .unwrap();
 
-            // Check the renders are deterministic, when given the same rng
-            let render1 = templates.check_render(now, &rng).unwrap();
-            let render2 = templates.check_render(now, &rng).unwrap();
+        // Check the renders are deterministic, when given the same rng
+        let render1 = templates.check_render(now, &rng).unwrap();
+        let render2 = templates.check_render(now, &rng).unwrap();
 
-            assert_eq!(render1, render2);
-        }
+        assert_eq!(render1, render2);
     }
 }

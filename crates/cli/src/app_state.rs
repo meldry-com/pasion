@@ -123,7 +123,7 @@ pub async fn inject_app_state(
     ctrl: &mut FlowCtrl,
 ) {
     // The AppState should already be in depot from the router setup
-    let state: AppState = match depot.get::<AppState>("app_state").cloned() {
+    let state: AppState = match depot.get::<AppState>("app_state").ok().cloned() {
         Some(state) => state,
         None => {
             res.status_code(StatusCode::INTERNAL_SERVER_ERROR);
@@ -188,75 +188,75 @@ pub trait DepotExt {
 
 impl DepotExt for Depot {
     fn get_pg_pool(&self) -> Option<&PgPool> {
-        self.get::<PgPool>("pg_pool")
+        self.get::<PgPool>("pg_pool").ok()
     }
 
     fn get_box_repository_factory(&self) -> Option<&BoxRepositoryFactory> {
-        self.get::<BoxRepositoryFactory>("box_repository_factory")
+        self.get::<BoxRepositoryFactory>("box_repository_factory").ok()
     }
 
     fn get_templates(&self) -> Option<&Templates> {
-        self.get::<Templates>("templates")
+        self.get::<Templates>("templates").ok()
     }
 
     fn get_translator(&self) -> Option<&Arc<Translator>> {
-        self.get::<Arc<Translator>>("translator")
+        self.get::<Arc<Translator>>("translator").ok()
     }
 
     fn get_keystore(&self) -> Option<&Keystore> {
-        self.get::<Keystore>("keystore")
+        self.get::<Keystore>("keystore").ok()
     }
 
     fn get_encrypter(&self) -> Option<&Encrypter> {
-        self.get::<Encrypter>("encrypter")
+        self.get::<Encrypter>("encrypter").ok()
     }
 
     fn get_url_builder(&self) -> Option<&UrlBuilder> {
-        self.get::<UrlBuilder>("url_builder")
+        self.get::<UrlBuilder>("url_builder").ok()
     }
 
     fn get_http_client(&self) -> Option<&reqwest::Client> {
-        self.get::<reqwest::Client>("http_client")
+        self.get::<reqwest::Client>("http_client").ok()
     }
 
     fn get_password_manager(&self) -> Option<&PasswordManager> {
-        self.get::<PasswordManager>("password_manager")
+        self.get::<PasswordManager>("password_manager").ok()
     }
 
     fn get_cookie_manager(&self) -> Option<&CookieManager> {
-        self.get::<CookieManager>("cookie_manager")
+        self.get::<CookieManager>("cookie_manager").ok()
     }
 
     fn get_metadata_cache(&self) -> Option<&MetadataCache> {
-        self.get::<MetadataCache>("metadata_cache")
+        self.get::<MetadataCache>("metadata_cache").ok()
     }
 
     fn get_site_config(&self) -> Option<&SiteConfig> {
-        self.get::<SiteConfig>("site_config")
+        self.get::<SiteConfig>("site_config").ok()
     }
 
     fn get_limiter(&self) -> Option<&Limiter> {
-        self.get::<Limiter>("limiter")
+        self.get::<Limiter>("limiter").ok()
     }
 
     fn get_policy_factory(&self) -> Option<&Arc<PolicyFactory>> {
-        self.get::<Arc<PolicyFactory>>("policy_factory")
+        self.get::<Arc<PolicyFactory>>("policy_factory").ok()
     }
 
     fn get_homeserver_connection(&self) -> Option<&Arc<dyn HomeserverConnection>> {
-        self.get::<Arc<dyn HomeserverConnection>>("homeserver_connection")
+        self.get::<Arc<dyn HomeserverConnection>>("homeserver_connection").ok()
     }
 
     fn get_app_version(&self) -> Option<&AppVersion> {
-        self.get::<AppVersion>("app_version")
+        self.get::<AppVersion>("app_version").ok()
     }
 
     fn get_activity_tracker(&self) -> Option<&ActivityTracker> {
-        self.get::<ActivityTracker>("activity_tracker")
+        self.get::<ActivityTracker>("activity_tracker").ok()
     }
 
     fn get_trusted_proxies(&self) -> Option<&Vec<IpNetwork>> {
-        self.get::<Vec<IpNetwork>>("trusted_proxies")
+        self.get::<Vec<IpNetwork>>("trusted_proxies").ok()
     }
 }
 
@@ -279,8 +279,8 @@ pub fn extract_rng() -> BoxRng {
 /// Extract Policy from depot
 pub async fn extract_policy(depot: &Depot) -> Result<Policy, pasion_policy::InstantiateError> {
     let policy_factory = depot.get_policy_factory().ok_or_else(|| {
-        pasion_policy::InstantiateError::Instantiate(
-            anyhow::anyhow!("PolicyFactory not found in depot").into(),
+        pasion_policy::InstantiateError::Runtime(
+            anyhow::anyhow!("PolicyFactory not found in depot"),
         )
     })?;
     policy_factory.instantiate().await
@@ -290,8 +290,11 @@ pub async fn extract_policy(depot: &Depot) -> Result<Policy, pasion_policy::Inst
 pub async fn extract_repository(
     depot: &Depot,
 ) -> Result<BoxRepository, pasion_storage::RepositoryError> {
-    let app_state = depot.get::<AppState>("app_state").ok_or_else(|| {
-        pasion_storage::RepositoryError::from(anyhow::anyhow!("AppState not found in depot"))
+    let app_state = depot.get::<AppState>("app_state").ok().ok_or_else(|| {
+        pasion_storage::RepositoryError::from_error(std::io::Error::new(
+            std::io::ErrorKind::NotFound,
+            "AppState not found in depot",
+        ))
     })?;
     app_state.repository_factory.create().await
 }
@@ -351,7 +354,7 @@ pub fn extract_bound_activity_tracker(req: &Request, depot: &Depot) -> BoundActi
     let activity_tracker = depot
         .get_activity_tracker()
         .cloned()
-        .unwrap_or_else(|| ActivityTracker::new(100));
+        .expect("ActivityTracker not found in depot; inject_app_state middleware must run first");
 
     let trusted_proxies = depot
         .get_trusted_proxies()

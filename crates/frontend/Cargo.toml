@@ -1,5 +1,5 @@
 [package]
-name = "pasion-front"
+name = "pasion-frontend"
 version.workspace = true
 authors.workspace = true
 edition.workspace = true

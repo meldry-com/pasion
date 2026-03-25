@@ -56,7 +56,6 @@ impl Worker {
         // Record stuff on the counter so that the metrics are initialized
         for kind in &[
             SessionKind::OAuth2,
-            SessionKind::Compat,
             SessionKind::Browser,
         ] {
             message_counter.add(
@@ -217,7 +216,6 @@ impl Worker {
 
         let mut browser_sessions = Vec::new();
         let mut oauth2_sessions = Vec::new();
-        let mut compat_sessions = Vec::new();
         let mut personal_sessions = Vec::new();
 
         for ((kind, id), record) in pending_records {
@@ -227,9 +225,6 @@ impl Worker {
                 }
                 SessionKind::OAuth2 => {
                     oauth2_sessions.push((*id, record.end_time, record.ip));
-                }
-                SessionKind::Compat => {
-                    compat_sessions.push((*id, record.end_time, record.ip));
                 }
                 SessionKind::Personal => {
                     personal_sessions.push((*id, record.end_time, record.ip));
@@ -247,9 +242,6 @@ impl Worker {
             .await?;
         repo.oauth2_session()
             .record_batch_activity(oauth2_sessions)
-            .await?;
-        repo.compat_session()
-            .record_batch_activity(compat_sessions)
             .await?;
         repo.personal_session()
             .record_batch_activity(personal_sessions)

@@ -1,7 +1,7 @@
 use std::net::IpAddr;
 
 use pasion_data_model::{
-    BrowserSession, Clock, CompatSession, Session, personal::session::PersonalSession,
+    BrowserSession, Clock, Session, personal::session::PersonalSession,
 };
 
 use crate::activity_tracker::ActivityTracker;
@@ -37,13 +37,6 @@ impl Bound {
     pub async fn record_personal_session(&self, clock: &dyn Clock, session: &PersonalSession) {
         self.tracker
             .record_personal_session(clock, session, self.ip)
-            .await;
-    }
-
-    /// Record activity in a compatibility session.
-    pub async fn record_compat_session(&self, clock: &dyn Clock, session: &CompatSession) {
-        self.tracker
-            .record_compat_session(clock, session, self.ip)
             .await;
     }
 

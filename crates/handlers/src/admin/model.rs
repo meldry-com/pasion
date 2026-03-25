@@ -1,12 +1,9 @@
 use std::net::IpAddr;
 
 use chrono::{DateTime, Utc};
-use pasion_data_model::{
-    Device,
-    personal::{
-        PersonalAccessToken as DataModelPersonalAccessToken,
-        session::{PersonalSession as DataModelPersonalSession, PersonalSessionOwner},
-    },
+use pasion_data_model::personal::{
+    PersonalAccessToken as DataModelPersonalAccessToken,
+    session::{PersonalSession as DataModelPersonalSession, PersonalSessionOwner},
 };
 use schemars::JsonSchema;
 use serde::Serialize;
