@@ -28,9 +28,6 @@ backend = "http://localhost:8080/upstream"
 backend = "http://localhost:8080/authorize"
 
 [[web.proxy]]
-backend = "http://localhost:8080/consent"
-
-[[web.proxy]]
 backend = "http://localhost:8080/.well-known"
 
 [[web.proxy]]

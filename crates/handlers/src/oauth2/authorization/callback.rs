@@ -14,6 +14,17 @@ use serde::Serialize;
 use thiserror::Error;
 use url::Url;
 
+/// Information about the redirect URL and mode, returned by
+/// [`CallbackDestination::redirect_url`] for use in JSON API responses.
+#[derive(Debug, Clone, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct RedirectInfo {
+    /// The fully-constructed redirect URL.
+    pub url: String,
+    /// The OAuth 2.0 response mode (`"query"`, `"fragment"`, or `"form_post"`).
+    pub response_mode: &'static str,
+}
+
 #[derive(Debug, Clone)]
 enum CallbackDestinationMode {
     Query {
@@ -96,6 +107,76 @@ impl CallbackDestination {
             safe_redirect_uri: redirect_uri,
             state,
         })
+    }
+
+    /// Build the final redirect URL as a string (for use in REST API JSON
+    /// responses). For `query` and `fragment` modes this is the full URL with
+    /// parameters attached. For `form_post` mode it returns the base
+    /// redirect URI; the SPA is responsible for building and submitting the
+    /// POST form with the supplied parameters.
+    pub fn redirect_url<T: Serialize>(
+        &self,
+        params: &T,
+    ) -> Result<RedirectInfo, CallbackDestinationError> {
+        #[derive(Serialize)]
+        struct AllParams<'s, T> {
+            #[serde(flatten, skip_serializing_if = "Option::is_none")]
+            existing: Option<&'s HashMap<String, String>>,
+
+            #[serde(skip_serializing_if = "Option::is_none")]
+            state: Option<String>,
+
+            #[serde(flatten)]
+            params: T,
+        }
+
+        match &self.mode {
+            CallbackDestinationMode::Query { existing_params } => {
+                let merged = AllParams {
+                    existing: Some(existing_params),
+                    state: self.state.clone(),
+                    params,
+                };
+                let new_qs = serde_urlencoded::to_string(merged)?;
+                let mut url = self.safe_redirect_uri.clone();
+                url.set_query(Some(&new_qs));
+                Ok(RedirectInfo {
+                    url: url.to_string(),
+                    response_mode: "query",
+                })
+            }
+            CallbackDestinationMode::Fragment => {
+                let merged = AllParams {
+                    existing: None,
+                    state: self.state.clone(),
+                    params,
+                };
+                let new_qs = serde_urlencoded::to_string(merged)?;
+                let mut url = self.safe_redirect_uri.clone();
+                url.set_fragment(Some(&new_qs));
+                Ok(RedirectInfo {
+                    url: url.to_string(),
+                    response_mode: "fragment",
+                })
+            }
+            CallbackDestinationMode::FormPost => {
+                // For form_post, the SPA must POST the params to the URI.
+                // We return the base URI; the caller can include the params
+                // alongside it.
+                let merged = AllParams {
+                    existing: None,
+                    state: self.state.clone(),
+                    params,
+                };
+                let new_qs = serde_urlencoded::to_string(merged)?;
+                let mut url = self.safe_redirect_uri.clone();
+                url.set_query(Some(&new_qs));
+                Ok(RedirectInfo {
+                    url: url.to_string(),
+                    response_mode: "form_post",
+                })
+            }
+        }
     }
 
     pub fn go<T: Serialize + Send + Sync>(

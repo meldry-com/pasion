@@ -41,6 +41,7 @@ use crate::{
 };
 
 pub mod auth;
+pub mod consent;
 pub mod emails;
 pub mod oauth2_clients;
 pub mod password;

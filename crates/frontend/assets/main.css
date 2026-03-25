@@ -841,6 +841,26 @@ a:hover {
     color: var(--color-text-secondary);
 }
 
+.consent-logo {
+    text-align: center;
+}
+
+.consent-logo img {
+    border-radius: var(--radius-md);
+}
+
+.consent-scopes ul {
+    padding-left: var(--space-6x);
+    margin: var(--space-2x) 0;
+    line-height: 1.8;
+}
+
+.consent-actions {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-2x);
+}
+
 .btn-block {
     width: 100%;
     text-align: center;

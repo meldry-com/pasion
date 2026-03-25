@@ -2,6 +2,9 @@ pub mod account;
 pub mod account_settings;
 pub mod browser_sessions;
 pub mod client_detail;
+pub mod consent;
+pub mod device_consent;
+pub mod device_link;
 pub mod device_redirect;
 pub mod email_in_use;
 pub mod email_verify;
@@ -21,6 +24,9 @@ pub mod sessions;
 use account_settings::AccountSettings;
 use browser_sessions::BrowserSessions;
 use client_detail::ClientDetail;
+use consent::Consent;
+use device_consent::DeviceConsent;
+use device_link::DeviceLink;
 use device_redirect::DeviceRedirect;
 use dioxus::prelude::*;
 use email_in_use::EmailInUse;
@@ -58,6 +64,14 @@ pub enum Route {
     RecoveryStart {},
     #[route("/recover/:id")]
     RecoveryProgress { id: String },
+
+    // OAuth2 consent & device code (public, require session)
+    #[route("/consent/:grant_id")]
+    Consent { grant_id: String },
+    #[route("/link")]
+    DeviceLink {},
+    #[route("/device/:id")]
+    DeviceConsent { id: String },
 
     // Account layout with nested routes (authenticated)
     #[layout(AccountLayout)]

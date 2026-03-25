@@ -337,11 +337,6 @@ fn build_human_router(router: Router, _templates: Templates) -> Router {
             Router::with_path(pasion_router::OAuth2AuthorizationEndpoint::route())
                 .get(pasion_handlers::oauth2::authorization::get),
         )
-        .push(
-            Router::with_path(pasion_router::Consent::route())
-                .get(pasion_handlers::oauth2::authorization::consent::get)
-                .post(pasion_handlers::oauth2::authorization::consent::post),
-        )
         // ── Upstream OAuth2 (server-side redirect & callback) ──
         .push(
             Router::with_path(pasion_router::UpstreamOAuth2Authorize::route())
@@ -368,8 +363,7 @@ fn build_human_router(router: Router, _templates: Templates) -> Router {
         )
         // ── SPA shell: all user-facing pages are rendered by the Dioxus frontend ──
         // In production these serve the SPA HTML shell; the client-side router
-        // handles the actual page rendering. Login, register, recovery, account
-        // management are all handled by the SPA + REST API.
+        // handles the actual page rendering.
         .push(
             Router::with_path(pasion_router::Index::route())
                 .get(pasion_handlers::views::app::get_anonymous),
@@ -379,6 +373,9 @@ fn build_human_router(router: Router, _templates: Templates) -> Router {
         .push(Router::with_path("/register/{*rest}").get(pasion_handlers::views::app::get_anonymous))
         .push(Router::with_path("/recover").get(pasion_handlers::views::app::get_anonymous))
         .push(Router::with_path("/recover/{*rest}").get(pasion_handlers::views::app::get_anonymous))
+        .push(Router::with_path("/consent/{*rest}").get(pasion_handlers::views::app::get_anonymous))
+        .push(Router::with_path("/link").get(pasion_handlers::views::app::get_anonymous))
+        .push(Router::with_path("/device/{*rest}").get(pasion_handlers::views::app::get_anonymous))
         .push(Router::with_path("/account").get(account_redirect_handler))
         .push(
             Router::with_path(pasion_router::Account::route())
@@ -545,6 +542,22 @@ fn build_rest_api_router(router: Router) -> Router {
         .push(
             Router::with_path("/api/v1/auth/providers")
                 .get(pasion_handlers::rest::auth::providers),
+        )
+        // OAuth2 consent (SPA)
+        .push(
+            Router::with_path("/api/v1/oauth2/consent/<grant_id>")
+                .get(pasion_handlers::rest::consent::oauth2_consent_get)
+                .post(pasion_handlers::rest::consent::oauth2_consent_post),
+        )
+        // Device code link & consent (SPA)
+        .push(
+            Router::with_path("/api/v1/device-link")
+                .get(pasion_handlers::rest::consent::device_link_get),
+        )
+        .push(
+            Router::with_path("/api/v1/device-consent/<id>")
+                .get(pasion_handlers::rest::consent::device_consent_get)
+                .post(pasion_handlers::rest::consent::device_consent_post),
         )
 }
 

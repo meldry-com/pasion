@@ -650,3 +650,67 @@ pub struct RecoveryStatusResponse {
     pub email: String,
     pub status: String,
 }
+
+// ── OAuth2 Consent API types ──────────────────────────────────
+
+#[derive(Debug, Clone, PartialEq, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ConsentClientInfo {
+    pub id: String,
+    pub client_id: String,
+    #[serde(default)]
+    pub client_name: Option<String>,
+    #[serde(default)]
+    pub client_uri: Option<String>,
+    #[serde(default)]
+    pub logo_uri: Option<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ConsentUserInfo {
+    pub mxid: String,
+    #[serde(default)]
+    pub display_name: Option<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ConsentDataResponse {
+    pub grant_id: String,
+    pub client: ConsentClientInfo,
+    pub scope: String,
+    pub user: ConsentUserInfo,
+    #[serde(default)]
+    pub policy_violation: bool,
+    #[serde(default)]
+    pub status: Option<String>,
+    #[serde(default)]
+    pub error: Option<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ConsentSubmitResponse {
+    pub status: String,
+    #[serde(default)]
+    pub redirect_url: Option<String>,
+    #[serde(default)]
+    pub error: Option<String>,
+}
+
+// ── Device Code API types ─────────────────────────────────────
+
+#[derive(Debug, Clone, PartialEq, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct DeviceLinkResponse {
+    pub status: String,
+    #[serde(default)]
+    pub grant_id: Option<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct DeviceConsentResponse {
+    pub status: String,
+}
