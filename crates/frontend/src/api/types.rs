@@ -569,7 +569,6 @@ pub struct ProvidersResponse {
 // ── Registration API types ────────────────────────────────────
 
 #[derive(Debug, Clone, PartialEq, Deserialize, Serialize)]
-#[serde(rename_all = "camelCase")]
 pub struct RegisterRequest {
     pub username: String,
     #[serde(default)]
@@ -579,7 +578,6 @@ pub struct RegisterRequest {
 }
 
 #[derive(Debug, Clone, PartialEq, Deserialize, Serialize)]
-#[serde(rename_all = "camelCase")]
 pub struct RegisterResponse {
     pub status: String,
     #[serde(default)]
@@ -591,7 +589,6 @@ pub struct RegisterResponse {
 }
 
 #[derive(Debug, Clone, PartialEq, Deserialize, Serialize)]
-#[serde(rename_all = "camelCase")]
 pub struct RegisterStatusResponse {
     pub id: String,
     pub username: String,
@@ -601,13 +598,11 @@ pub struct RegisterStatusResponse {
 }
 
 #[derive(Debug, Clone, PartialEq, Deserialize, Serialize)]
-#[serde(rename_all = "camelCase")]
 pub struct VerifyEmailRequest {
     pub code: String,
 }
 
 #[derive(Debug, Clone, PartialEq, Deserialize, Serialize)]
-#[serde(rename_all = "camelCase")]
 pub struct DisplayNameRequest {
     #[serde(default)]
     pub display_name: Option<String>,
@@ -616,7 +611,6 @@ pub struct DisplayNameRequest {
 }
 
 #[derive(Debug, Clone, PartialEq, Deserialize, Serialize)]
-#[serde(rename_all = "camelCase")]
 pub struct StepResponse {
     pub status: String,
     #[serde(default)]

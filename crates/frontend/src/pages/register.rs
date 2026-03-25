@@ -98,9 +98,9 @@ fn RegisterPage(providers: ProvidersResponse) -> Element {
                                     "/auth/register",
                                     serde_json::json!({
                                         "username": user,
-                                        "email": if em.is_empty() { None } else { Some(em) },
+                                        "email": if em.is_empty() { serde_json::Value::Null } else { serde_json::Value::String(em) },
                                         "password": pw,
-                                        "passwordConfirm": pw2,
+                                        "password_confirm": pw2,
                                     }),
                                 ).await;
                                 submitting.set(false);
@@ -323,7 +323,7 @@ pub fn RegisterDisplayName(id: String) -> Element {
                             spawn(async move {
                                 let result = crate::api::api_post::<StepResponse>(
                                     &format!("/auth/register/{rid}/display-name"),
-                                    serde_json::json!({ "displayName": name }),
+                                    serde_json::json!({ "display_name": name }),
                                 ).await;
                                 submitting.set(false);
                                 match result {

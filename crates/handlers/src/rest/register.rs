@@ -73,7 +73,7 @@ fn steps_completed(registration: &UserRegistration, email_verified: bool) -> Vec
 pub struct RegisterInput {
     pub username: String,
     #[serde(default)]
-    pub email: String,
+    pub email: Option<String>,
     pub password: String,
     pub password_confirm: String,
 }
@@ -149,15 +149,23 @@ pub async fn post_register(
     }
 
     // Email checks (only when required by config)
+    let email_str = input.email.clone().unwrap_or_default();
     let email = if site_config.password_registration_email_required {
-        if input.email.is_empty() {
+        if email_str.is_empty() {
             errors.push("email_required".into());
             None
-        } else if Address::from_str(&input.email).is_err() {
+        } else if Address::from_str(&email_str).is_err() {
             errors.push("email_invalid".into());
             None
         } else {
-            Some(input.email.clone())
+            Some(email_str)
+        }
+    } else if !email_str.is_empty() {
+        if Address::from_str(&email_str).is_err() {
+            errors.push("email_invalid".into());
+            None
+        } else {
+            Some(email_str)
         }
     } else {
         None

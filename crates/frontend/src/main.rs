@@ -8,12 +8,15 @@ use dioxus::prelude::*;
 
 use crate::pages::Route;
 
+const MAIN_CSS: Asset = asset!("/assets/main.css");
+
 fn main() {
     dioxus::launch(app);
 }
 
 fn app() -> Element {
     rsx! {
+        document::Link { rel: "stylesheet", href: MAIN_CSS }
         Router::<Route> {}
     }
 }
