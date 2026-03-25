@@ -17,3 +17,6 @@ watch_path = ["src", "assets"]
 
 [server]
 port = 8182
+
+[[web.proxy]]
+backend = "http://localhost:8080/api"
