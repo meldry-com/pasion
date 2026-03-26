@@ -97,39 +97,14 @@ pub async fn post_register(
     let input: RegisterInput = req
         .parse_json()
         .await
-        .map_err(|e| {
-            tracing::error!("parse_json error for /auth/register: {e:?}");
-            RouteError::BadRequest(format!("invalid json body: {e}"))
-        })?;
+        .map_err(|_| RouteError::BadRequest("invalid json body".into()))?;
 
-    tracing::info!("post_register: parsed input for user={}", input.username);
-
-    let site_config = get_site_config(depot).map_err(|e| {
-        tracing::error!("post_register: get_site_config failed: {e:?}");
-        e
-    })?;
-    let password_manager = get_password_manager(depot).map_err(|e| {
-        tracing::error!("post_register: get_password_manager failed: {e:?}");
-        e
-    })?;
-    let homeserver = get_homeserver(depot).map_err(|e| {
-        tracing::error!("post_register: get_homeserver failed: {e:?}");
-        e
-    })?;
-    let policy_factory = get_policy_factory(depot).map_err(|e| {
-        tracing::error!("post_register: get_policy_factory failed: {e:?}");
-        e
-    })?;
-    let limiter = get_limiter(depot).map_err(|e| {
-        tracing::error!("post_register: get_limiter failed: {e:?}");
-        e
-    })?;
-    let repo_factory = get_repo_factory(depot).map_err(|e| {
-        tracing::error!("post_register: get_repo_factory failed: {e:?}");
-        e
-    })?;
-
-    tracing::info!("post_register: all depot extractions succeeded");
+    let site_config = get_site_config(depot)?;
+    let password_manager = get_password_manager(depot)?;
+    let homeserver = get_homeserver(depot)?;
+    let policy_factory = get_policy_factory(depot)?;
+    let limiter = get_limiter(depot)?;
+    let repo_factory = get_repo_factory(depot)?;
 
     let clock = make_clock();
     let mut rng = make_rng();
@@ -146,8 +121,6 @@ pub async fn post_register(
         .map(|s| s.to_owned());
     let ip_address = activity_tracker.ip();
 
-    tracing::info!("post_register: registration_enabled={}", site_config.password_registration_enabled);
-
     if !site_config.password_registration_enabled {
         return Ok(Json(RegisterResponse {
             status: "error",
@@ -157,10 +130,7 @@ pub async fn post_register(
         }));
     }
 
-    let mut repo = repo_factory.create().await.map_err(|e| {
-        tracing::error!("post_register: repo create failed: {e:?}");
-        RouteError::Internal(e.into())
-    })?;
+    let mut repo = repo_factory.create().await?;
 
     // ── Validate inputs ────────────────────────────────────────
     let mut errors: Vec<String> = Vec::new();
@@ -170,12 +140,17 @@ pub async fn post_register(
         errors.push("username_required".into());
     } else if repo.user().exists(&input.username).await? {
         errors.push("username_exists".into());
-    } else if !homeserver
-        .is_localpart_available(&input.username)
-        .await
-        .map_err(|e| RouteError::Internal(e.into()))?
-    {
-        errors.push("username_exists".into());
+    } else {
+        match homeserver.is_localpart_available(&input.username).await {
+            Ok(false) => errors.push("username_exists".into()),
+            Ok(true) => {}
+            Err(e) => {
+                tracing::warn!(
+                    error = &*e as &dyn std::error::Error,
+                    "Failed to check localpart availability, skipping homeserver check"
+                );
+            }
+        }
     }
 
     // Email checks (only when required by config)
@@ -664,15 +639,23 @@ pub async fn post_finish(
         }));
     }
 
-    if !homeserver
+    match homeserver
         .is_localpart_available(&registration.username)
         .await
-        .map_err(|e| RouteError::Internal(e.into()))?
     {
-        return Ok(Json(FinishRegistrationResponse {
-            status: "error",
-            error: Some("username_not_available".into()),
-        }));
+        Ok(false) => {
+            return Ok(Json(FinishRegistrationResponse {
+                status: "error",
+                error: Some("username_not_available".into()),
+            }));
+        }
+        Ok(true) => {}
+        Err(e) => {
+            tracing::warn!(
+                error = &*e as &dyn std::error::Error,
+                "Failed to check localpart availability during finish, skipping homeserver check"
+            );
+        }
     }
 
     // Check registration token if required
