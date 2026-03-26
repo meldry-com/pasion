@@ -294,7 +294,7 @@ pub fn build_router(
                 undocumented_oauth2_access: _,
             } => build_rest_api_router(router),
             pasion_config::HttpResource::Assets { path } => router.push(
-                Router::with_path(&format!("{}/<**path>", pasion_router::StaticAsset::route()))
+                Router::with_path(&format!("{}/{{**path}}", pasion_router::StaticAsset::route()))
                     .hoop(cache_control_middleware)
                     .get(
                         StaticDir::new([path.clone()])
@@ -370,12 +370,12 @@ fn build_human_router(router: Router, _templates: Templates) -> Router {
         )
         .push(Router::with_path("/login").get(pasion_handlers::spa::get))
         .push(Router::with_path("/register").get(pasion_handlers::spa::get))
-        .push(Router::with_path("/register/{*rest}").get(pasion_handlers::spa::get))
+        .push(Router::with_path("/register/{**rest}").get(pasion_handlers::spa::get))
         .push(Router::with_path("/recover").get(pasion_handlers::spa::get))
-        .push(Router::with_path("/recover/{*rest}").get(pasion_handlers::spa::get))
-        .push(Router::with_path("/consent/{*rest}").get(pasion_handlers::spa::get))
+        .push(Router::with_path("/recover/{**rest}").get(pasion_handlers::spa::get))
+        .push(Router::with_path("/consent/{**rest}").get(pasion_handlers::spa::get))
         .push(Router::with_path("/link").get(pasion_handlers::spa::get))
-        .push(Router::with_path("/device/{*rest}").get(pasion_handlers::spa::get))
+        .push(Router::with_path("/device/{**rest}").get(pasion_handlers::spa::get))
         .push(Router::with_path("/account").get(account_redirect_handler))
         .push(
             Router::with_path(pasion_router::Account::route())
@@ -428,24 +428,24 @@ fn build_rest_api_router(router: Router) -> Router {
         .push(Router::with_path("/api/v1/site-config").get(pasion_handlers::rest::site_config::get))
         // Sessions
         .push(
-            Router::with_path("/api/v1/sessions/<id>")
+            Router::with_path("/api/v1/sessions/{id}")
                 .get(pasion_handlers::rest::sessions::get_session),
         )
         .push(
-            Router::with_path("/api/v1/browser-sessions/<id>")
+            Router::with_path("/api/v1/browser-sessions/{id}")
                 .delete(pasion_handlers::rest::sessions::end_browser_session),
         )
         .push(
-            Router::with_path("/api/v1/oauth2-sessions/<id>")
+            Router::with_path("/api/v1/oauth2-sessions/{id}")
                 .delete(pasion_handlers::rest::sessions::end_oauth2_session),
         )
         .push(
-            Router::with_path("/api/v1/oauth2-sessions/<id>/name")
+            Router::with_path("/api/v1/oauth2-sessions/{id}/name")
                 .put(pasion_handlers::rest::sessions::set_oauth2_session_name),
         )
         // OAuth2 clients
         .push(
-            Router::with_path("/api/v1/oauth2-clients/<id>")
+            Router::with_path("/api/v1/oauth2-clients/{id}")
                 .get(pasion_handlers::rest::oauth2_clients::get_client),
         )
         // Password
@@ -480,20 +480,20 @@ fn build_rest_api_router(router: Router) -> Router {
                 .post(pasion_handlers::rest::emails::start_email_auth),
         )
         .push(
-            Router::with_path("/api/v1/email-auth/<id>")
+            Router::with_path("/api/v1/email-auth/{id}")
                 .get(pasion_handlers::rest::emails::get_email_auth),
         )
         .push(
-            Router::with_path("/api/v1/email-auth/<id>/complete")
+            Router::with_path("/api/v1/email-auth/{id}/complete")
                 .post(pasion_handlers::rest::emails::complete_email_auth),
         )
         .push(
-            Router::with_path("/api/v1/email-auth/<id>/resend")
+            Router::with_path("/api/v1/email-auth/{id}/resend")
                 .post(pasion_handlers::rest::emails::resend_email_auth_code),
         )
         // User emails
         .push(
-            Router::with_path("/api/v1/user-emails/<id>")
+            Router::with_path("/api/v1/user-emails/{id}")
                 .delete(pasion_handlers::rest::emails::remove_email),
         )
         // Registration
@@ -502,19 +502,19 @@ fn build_rest_api_router(router: Router) -> Router {
                 .post(pasion_handlers::rest::register::post_register),
         )
         .push(
-            Router::with_path("/api/v1/auth/register/<id>")
+            Router::with_path("/api/v1/auth/register/{id}")
                 .get(pasion_handlers::rest::register::get_registration),
         )
         .push(
-            Router::with_path("/api/v1/auth/register/<id>/verify-email")
+            Router::with_path("/api/v1/auth/register/{id}/verify-email")
                 .post(pasion_handlers::rest::register::post_verify_email),
         )
         .push(
-            Router::with_path("/api/v1/auth/register/<id>/display-name")
+            Router::with_path("/api/v1/auth/register/{id}/display-name")
                 .post(pasion_handlers::rest::register::post_display_name),
         )
         .push(
-            Router::with_path("/api/v1/auth/register/<id>/finish")
+            Router::with_path("/api/v1/auth/register/{id}/finish")
                 .post(pasion_handlers::rest::register::post_finish),
         )
         // Account recovery
@@ -523,11 +523,11 @@ fn build_rest_api_router(router: Router) -> Router {
                 .post(pasion_handlers::rest::recovery::post_recovery_start),
         )
         .push(
-            Router::with_path("/api/v1/auth/recovery/<id>")
+            Router::with_path("/api/v1/auth/recovery/{id}")
                 .get(pasion_handlers::rest::recovery::get_recovery),
         )
         .push(
-            Router::with_path("/api/v1/auth/recovery/<id>/resend")
+            Router::with_path("/api/v1/auth/recovery/{id}/resend")
                 .post(pasion_handlers::rest::recovery::post_recovery_resend),
         )
         // Auth (login, logout, providers)
@@ -545,7 +545,7 @@ fn build_rest_api_router(router: Router) -> Router {
         )
         // OAuth2 consent (SPA)
         .push(
-            Router::with_path("/api/v1/oauth2/consent/<grant_id>")
+            Router::with_path("/api/v1/oauth2/consent/{grant_id}")
                 .get(pasion_handlers::rest::consent::oauth2_consent_get)
                 .post(pasion_handlers::rest::consent::oauth2_consent_post),
         )
@@ -555,13 +555,13 @@ fn build_rest_api_router(router: Router) -> Router {
                 .get(pasion_handlers::rest::consent::device_link_get),
         )
         .push(
-            Router::with_path("/api/v1/device-consent/<id>")
+            Router::with_path("/api/v1/device-consent/{id}")
                 .get(pasion_handlers::rest::consent::device_consent_get)
                 .post(pasion_handlers::rest::consent::device_consent_post),
         )
         // Upstream OAuth2 link (SPA)
         .push(
-            Router::with_path("/api/v1/upstream-oauth2/link/<id>")
+            Router::with_path("/api/v1/upstream-oauth2/link/{id}")
                 .get(pasion_handlers::rest::upstream_oauth2::get_link)
                 .post(pasion_handlers::rest::upstream_oauth2::post_link),
         )
@@ -571,7 +571,7 @@ fn build_admin_router(router: Router) -> Router {
     // Admin API routes - these would need OpenAPI integration
     // For now, we'll set up the basic structure
     router.push(
-        Router::with_path("/api/admin/v1/<**path>")
+        Router::with_path("/api/admin/v1/{**path}")
             .get(admin_api_placeholder)
             .post(admin_api_placeholder)
             .put(admin_api_placeholder)

@@ -97,14 +97,39 @@ pub async fn post_register(
     let input: RegisterInput = req
         .parse_json()
         .await
-        .map_err(|_| RouteError::BadRequest("invalid json body".into()))?;
+        .map_err(|e| {
+            tracing::error!("parse_json error for /auth/register: {e:?}");
+            RouteError::BadRequest(format!("invalid json body: {e}"))
+        })?;
 
-    let site_config = get_site_config(depot)?;
-    let password_manager = get_password_manager(depot)?;
-    let homeserver = get_homeserver(depot)?;
-    let policy_factory = get_policy_factory(depot)?;
-    let limiter = get_limiter(depot)?;
-    let repo_factory = get_repo_factory(depot)?;
+    tracing::info!("post_register: parsed input for user={}", input.username);
+
+    let site_config = get_site_config(depot).map_err(|e| {
+        tracing::error!("post_register: get_site_config failed: {e:?}");
+        e
+    })?;
+    let password_manager = get_password_manager(depot).map_err(|e| {
+        tracing::error!("post_register: get_password_manager failed: {e:?}");
+        e
+    })?;
+    let homeserver = get_homeserver(depot).map_err(|e| {
+        tracing::error!("post_register: get_homeserver failed: {e:?}");
+        e
+    })?;
+    let policy_factory = get_policy_factory(depot).map_err(|e| {
+        tracing::error!("post_register: get_policy_factory failed: {e:?}");
+        e
+    })?;
+    let limiter = get_limiter(depot).map_err(|e| {
+        tracing::error!("post_register: get_limiter failed: {e:?}");
+        e
+    })?;
+    let repo_factory = get_repo_factory(depot).map_err(|e| {
+        tracing::error!("post_register: get_repo_factory failed: {e:?}");
+        e
+    })?;
+
+    tracing::info!("post_register: all depot extractions succeeded");
 
     let clock = make_clock();
     let mut rng = make_rng();
@@ -121,6 +146,8 @@ pub async fn post_register(
         .map(|s| s.to_owned());
     let ip_address = activity_tracker.ip();
 
+    tracing::info!("post_register: registration_enabled={}", site_config.password_registration_enabled);
+
     if !site_config.password_registration_enabled {
         return Ok(Json(RegisterResponse {
             status: "error",
@@ -130,7 +157,10 @@ pub async fn post_register(
         }));
     }
 
-    let mut repo = repo_factory.create().await?;
+    let mut repo = repo_factory.create().await.map_err(|e| {
+        tracing::error!("post_register: repo create failed: {e:?}");
+        RouteError::Internal(e.into())
+    })?;
 
     // ── Validate inputs ────────────────────────────────────────
     let mut errors: Vec<String> = Vec::new();

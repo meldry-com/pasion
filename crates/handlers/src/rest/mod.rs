@@ -188,7 +188,12 @@ impl_from_error_for_route!(self::RouteError: RepositoryError);
 impl Scribe for RouteError {
     fn render(self, res: &mut Response) {
         match self {
-            Self::Internal(_) | Self::LoadFailed => {
+            Self::Internal(ref e) => {
+                tracing::error!("RouteError::Internal: {e:?}");
+                res.status_code(StatusCode::INTERNAL_SERVER_ERROR);
+                res.render(Json(serde_json::json!({"error": "internal_error", "detail": format!("{e}")})));
+            }
+            Self::LoadFailed => {
                 res.status_code(StatusCode::INTERNAL_SERVER_ERROR);
                 res.render(Json(serde_json::json!({"error": "internal_error"})));
             }
