@@ -32,6 +32,7 @@ pub fn RecoveryStart() -> Element {
                     form {
                         class: "form-root",
                         onsubmit: move |e| {
+                            e.prevent_default();
                             e.stop_propagation();
                             let em = email.to_string();
                             if em.is_empty() {

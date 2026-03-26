@@ -83,6 +83,7 @@ pub fn EmailVerify(id: String) -> Element {
                             form {
                                 class: "form-root",
                                 onsubmit: move |evt| {
+                                    evt.prevent_default();
                                     evt.stop_propagation();
                                     let code_val = code.to_string();
                                     if code_val.is_empty() {

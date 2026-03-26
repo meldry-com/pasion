@@ -303,6 +303,7 @@ fn RegisterView(
                     onsubmit: {
                         let id = id.clone();
                         move |e| {
+                            e.prevent_default();
                             e.stop_propagation();
                             let id = id.clone();
                             let user = username.to_string();

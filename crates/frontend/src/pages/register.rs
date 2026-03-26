@@ -70,6 +70,7 @@ fn RegisterPage(providers: ProvidersResponse) -> Element {
                     form {
                         class: "form-root",
                         onsubmit: move |e| {
+                            e.prevent_default();
                             e.stop_propagation();
                             let user = username.to_string();
                             let em = email.to_string();
@@ -225,6 +226,7 @@ pub fn RegisterVerifyEmail(id: String) -> Element {
                     form {
                         class: "form-root",
                         onsubmit: move |e| {
+                            e.prevent_default();
                             e.stop_propagation();
                             let c = code.to_string();
                             if c.is_empty() {
@@ -313,6 +315,7 @@ pub fn RegisterDisplayName(id: String) -> Element {
                     form {
                         class: "form-root",
                         onsubmit: move |e| {
+                            e.prevent_default();
                             e.stop_propagation();
                             let name = display_name.to_string();
                             submitting.set(true);

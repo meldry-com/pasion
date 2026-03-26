@@ -211,6 +211,7 @@ pub fn PasswordRecovery() -> Element {
                     onsubmit: {
                         let ticket_val = ticket_for_submit.clone();
                         move |e: FormEvent| {
+                            e.prevent_default();
                             e.stop_propagation();
                             let new_pw = new_password.to_string();
                             let new_pw2 = new_password_again.to_string();

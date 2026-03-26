@@ -32,6 +32,7 @@ pub fn DeviceLink() -> Element {
                     form {
                         class: "form-root",
                         onsubmit: move |e| {
+                            e.prevent_default();
                             e.stop_propagation();
                             let c = code.to_string();
                             if c.is_empty() {

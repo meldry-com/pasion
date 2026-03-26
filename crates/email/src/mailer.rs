@@ -111,8 +111,11 @@ impl Mailer {
         to: Mailbox,
         context: &WithLanguage<EmailVerificationContext>,
     ) -> Result<(), Error> {
+        println!("[EMAIL] prepare verification email to={to}, code={}", context.code());
         let message = self.prepare_verification_email(to, context)?;
+        println!("[EMAIL] sending verification email...");
         self.transport.send(message).await?;
+        println!("[EMAIL] verification email sent OK");
         Ok(())
     }
 
@@ -136,8 +139,11 @@ impl Mailer {
         to: Mailbox,
         context: &WithLanguage<EmailRecoveryContext>,
     ) -> Result<(), Error> {
+        println!("[EMAIL] prepare recovery email to={to}");
         let message = self.prepare_recovery_email(to, context)?;
+        println!("[EMAIL] sending recovery email...");
         self.transport.send(message).await?;
+        println!("[EMAIL] recovery email sent OK");
         Ok(())
     }
 

@@ -72,6 +72,7 @@ fn LoginForm(providers: ProvidersResponse) -> Element {
                     form {
                         class: "form-root",
                         onsubmit: move |e| {
+                            e.prevent_default();
                             e.stop_propagation();
                             let user = username.to_string();
                             let pass = password.to_string();

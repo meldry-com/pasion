@@ -63,6 +63,7 @@ fn PasswordChangeForm(user_id: String) -> Element {
             form {
                 class: "form-root",
                 onsubmit: move |e| {
+                    e.prevent_default();
                     e.stop_propagation();
                     let current = current_password.to_string();
                     let new_pw = new_password.to_string();

@@ -282,6 +282,7 @@ fn EditSessionName(
                             let sid = session_id.clone();
                             let st = session_type.clone();
                             move |evt: FormEvent| {
+                                evt.prevent_default();
                                 evt.stop_propagation();
                                 let sid = sid.clone();
                                 let st = st.clone();

@@ -122,17 +122,29 @@ impl AsyncTransport for Transport {
     type Error = Error;
 
     async fn send_raw(&self, envelope: &Envelope, email: &[u8]) -> Result<Self::Ok, Self::Error> {
+        let from = envelope.from().map(|a| a.to_string()).unwrap_or_default();
+        let to: Vec<String> = envelope.to().iter().map(|a| a.to_string()).collect();
+        println!("[EMAIL] send_raw called: from={from}, to={to:?}");
+
         match self.inner.as_ref() {
             TransportInner::Blackhole => {
+                println!("[EMAIL] transport=blackhole, email NOT sent");
                 tracing::warn!(
                     "An email was supposed to be sent but no email backend is configured"
                 );
             }
             TransportInner::Smtp(t) => {
-                t.send_raw(envelope, email).await?;
+                println!("[EMAIL] transport=smtp, sending email...");
+                if let Err(e) = t.send_raw(envelope, email).await {
+                    println!("[EMAIL] smtp send FAILED: {e}");
+                    return Err(Error::Smtp(e));
+                }
+                println!("[EMAIL] smtp send SUCCESS");
             }
             TransportInner::Sendmail(t) => {
+                println!("[EMAIL] transport=sendmail, sending email...");
                 t.send_raw(envelope, email).await?;
+                println!("[EMAIL] sendmail send SUCCESS");
             }
         }
 
