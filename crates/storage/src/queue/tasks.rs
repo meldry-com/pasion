@@ -1,7 +1,7 @@
 use chrono::{DateTime, Utc};
 use pasion_data_model::{
     BrowserSession, Session, User, UserEmailAuthentication,
-    UserRecoverySession,
+    UserPhoneAuthentication, UserRecoverySession,
 };
 use serde::{Deserialize, Serialize};
 use ulid::Ulid;
@@ -62,6 +62,40 @@ impl SendEmailAuthenticationCodeJob {
 
 impl InsertableJob for SendEmailAuthenticationCodeJob {
     const QUEUE_NAME: &'static str = "send-email-authentication-code";
+}
+
+/// A job to send a phone authentication code via SMS.
+#[derive(Serialize, Deserialize, Debug, Clone)]
+pub struct SendSmsAuthenticationCodeJob {
+    user_phone_authentication_id: Ulid,
+    language: String,
+}
+
+impl SendSmsAuthenticationCodeJob {
+    /// Create a new job to send a phone authentication code via SMS.
+    #[must_use]
+    pub fn new(user_phone_authentication: &UserPhoneAuthentication, language: String) -> Self {
+        Self {
+            user_phone_authentication_id: user_phone_authentication.id,
+            language,
+        }
+    }
+
+    /// The language to use for the SMS.
+    #[must_use]
+    pub fn language(&self) -> &str {
+        &self.language
+    }
+
+    /// The ID of the phone authentication to send the code for.
+    #[must_use]
+    pub fn user_phone_authentication_id(&self) -> Ulid {
+        self.user_phone_authentication_id
+    }
+}
+
+impl InsertableJob for SendSmsAuthenticationCodeJob {
+    const QUEUE_NAME: &'static str = "send-sms-authentication-code";
 }
 
 /// A job to provision the user on the homeserver.

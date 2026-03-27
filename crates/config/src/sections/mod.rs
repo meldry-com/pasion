@@ -17,6 +17,7 @@ mod passwords;
 mod policy;
 mod rate_limiting;
 mod secrets;
+pub mod sms;
 mod telemetry;
 mod templates;
 mod upstream_oauth2;
@@ -29,6 +30,7 @@ pub use self::{
     database::{DatabaseConfig, PgSslMode},
     email::{EmailConfig, EmailSmtpMode, EmailTransportKind},
     experimental::ExperimentalConfig,
+    sms::{SmsConfig, SmsTransportKind},
     http::{
         BindConfig as HttpBindConfig, HttpConfig, ListenerConfig as HttpListenerConfig,
         Resource as HttpResource, TlsConfig as HttpTlsConfig, UnixOrTcp,
@@ -84,6 +86,10 @@ pub struct RootConfig {
     #[serde(default)]
     pub email: EmailConfig,
 
+    /// Configuration related to sending SMS messages
+    #[serde(default, skip_serializing_if = "SmsConfig::is_default")]
+    pub sms: SmsConfig,
+
     /// Application secrets
     pub secrets: SecretsConfig,
 
@@ -136,6 +142,7 @@ impl ConfigurationSection for RootConfig {
         self.telemetry.validate(figment)?;
         self.templates.validate(figment)?;
         self.email.validate(figment)?;
+        self.sms.validate(figment)?;
         self.passwords.validate(figment)?;
         self.secrets.validate(figment)?;
         self.matrix.validate(figment)?;
@@ -168,6 +175,7 @@ impl RootConfig {
             telemetry: TelemetryConfig::default(),
             templates: TemplatesConfig::default(),
             email: EmailConfig::default(),
+            sms: SmsConfig::default(),
             passwords: PasswordsConfig::default(),
             secrets: SecretsConfig::generate(&mut rng).await?,
             matrix: MatrixConfig::generate(&mut rng),
@@ -192,6 +200,7 @@ impl RootConfig {
             templates: TemplatesConfig::default(),
             passwords: PasswordsConfig::default(),
             email: EmailConfig::default(),
+            sms: SmsConfig::default(),
             secrets: SecretsConfig::test(),
             matrix: MatrixConfig::test(),
             policy: PolicyConfig::default(),
@@ -220,6 +229,9 @@ pub struct AppConfig {
 
     #[serde(default)]
     pub email: EmailConfig,
+
+    #[serde(default)]
+    pub sms: SmsConfig,
 
     pub secrets: SecretsConfig,
 
@@ -256,6 +268,7 @@ impl ConfigurationSection for AppConfig {
         self.database.validate(figment)?;
         self.templates.validate(figment)?;
         self.email.validate(figment)?;
+        self.sms.validate(figment)?;
         self.passwords.validate(figment)?;
         self.secrets.validate(figment)?;
         self.matrix.validate(figment)?;

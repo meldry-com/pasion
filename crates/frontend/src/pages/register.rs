@@ -47,6 +47,7 @@ pub fn Register() -> Element {
 fn RegisterPage(providers: ProvidersResponse) -> Element {
     let mut username = use_signal(String::new);
     let mut email = use_signal(String::new);
+    let mut phone = use_signal(String::new);
     let new_password = use_signal(String::new);
     let new_password_again = use_signal(String::new);
     let mut submitting = use_signal(|| false);
@@ -74,6 +75,7 @@ fn RegisterPage(providers: ProvidersResponse) -> Element {
                             e.stop_propagation();
                             let user = username.to_string();
                             let em = email.to_string();
+                            let ph = phone.to_string();
                             let pw = new_password.to_string();
                             let pw2 = new_password_again.to_string();
 
@@ -100,6 +102,7 @@ fn RegisterPage(providers: ProvidersResponse) -> Element {
                                     serde_json::json!({
                                         "username": user,
                                         "email": if em.is_empty() { serde_json::Value::Null } else { serde_json::Value::String(em) },
+                                        "phone": if ph.is_empty() { serde_json::Value::Null } else { serde_json::Value::String(ph) },
                                         "password": pw,
                                         "password_confirm": pw2,
                                     }),
@@ -111,6 +114,9 @@ fn RegisterPage(providers: ProvidersResponse) -> Element {
                                             match resp.next_step.as_deref() {
                                                 Some("verify_email") => {
                                                     nav.push(Route::RegisterVerifyEmail { id });
+                                                }
+                                                Some("verify_phone") => {
+                                                    nav.push(Route::RegisterVerifyPhone { id });
                                                 }
                                                 Some("display_name") => {
                                                     nav.push(Route::RegisterDisplayName { id });
@@ -152,6 +158,18 @@ fn RegisterPage(providers: ProvidersResponse) -> Element {
                                 placeholder: "your@email.com",
                                 value: "{email}",
                                 oninput: move |e| email.set(e.value()),
+                            }
+                        }
+
+                        div { class: "form-field",
+                            label { class: "form-label", "Phone (optional)" }
+                            input {
+                                class: "form-input",
+                                r#type: "tel",
+                                autocomplete: "tel",
+                                placeholder: "+1234567890",
+                                value: "{phone}",
+                                oninput: move |e| phone.set(e.value()),
                             }
                         }
 
@@ -248,6 +266,95 @@ pub fn RegisterVerifyEmail(id: String) -> Element {
                                 match result {
                                     Ok(resp) if resp.status == "success" => {
                                         match resp.next_step.as_deref() {
+                                            Some("display_name") => { nav.push(Route::RegisterDisplayName { id: rid }); }
+                                            _ => { nav.push(Route::RegisterFinish { id: rid }); }
+                                        }
+                                    }
+                                    Ok(resp) => {
+                                        error.set(Some(resp.error.unwrap_or_else(|| "Invalid code.".to_string())));
+                                    }
+                                    Err(e) => error.set(Some(e)),
+                                }
+                            });
+                        },
+
+                        div { class: "form-field",
+                            label { class: "form-label", "Verification code" }
+                            input {
+                                class: "form-input",
+                                r#type: "text",
+                                autocomplete: "one-time-code",
+                                required: true,
+                                placeholder: "6-digit code",
+                                value: "{code}",
+                                oninput: move |e| code.set(e.value()),
+                            }
+                        }
+
+                        button {
+                            class: "btn btn-primary btn-block",
+                            r#type: "submit",
+                            disabled: submitting(),
+                            if submitting() {
+                                LoadingSpinner { inline: true }
+                            }
+                            "Verify"
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+/// Phone verification step during registration.
+#[component]
+pub fn RegisterVerifyPhone(id: String) -> Element {
+    let mut code = use_signal(String::new);
+    let mut submitting = use_signal(|| false);
+    let mut error = use_signal(|| None::<String>);
+    let nav = navigator();
+    let reg_id = id.clone();
+
+    rsx! {
+        Layout {
+            div { class: "login-page",
+                div { class: "login-container",
+                    h1 { class: "heading-md login-title", "Verify your phone" }
+                    p { class: "text-secondary", "We sent a verification code to your phone number. Please enter it below." }
+
+                    if let Some(ref err) = *error.read() {
+                        div { class: "alert alert-critical",
+                            p { "{err}" }
+                        }
+                    }
+
+                    form {
+                        class: "form-root",
+                        onsubmit: move |e| {
+                            e.prevent_default();
+                            e.stop_propagation();
+                            let c = code.to_string();
+                            if c.is_empty() {
+                                error.set(Some("Please enter the verification code.".to_string()));
+                                return;
+                            }
+
+                            submitting.set(true);
+                            error.set(None);
+                            let nav = nav.clone();
+                            let rid = reg_id.clone();
+
+                            spawn(async move {
+                                let result = crate::api::api_post::<StepResponse>(
+                                    &format!("/auth/register/{rid}/verify-phone"),
+                                    serde_json::json!({ "code": c }),
+                                ).await;
+                                submitting.set(false);
+                                match result {
+                                    Ok(resp) if resp.status == "success" => {
+                                        match resp.next_step.as_deref() {
+                                            Some("verify_email") => { nav.push(Route::RegisterVerifyEmail { id: rid }); }
                                             Some("display_name") => { nav.push(Route::RegisterDisplayName { id: rid }); }
                                             _ => { nav.push(Route::RegisterFinish { id: rid }); }
                                         }

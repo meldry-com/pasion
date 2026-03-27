@@ -2,7 +2,7 @@ use std::net::IpAddr;
 
 use chrono::{DateTime, Utc};
 use rand::Rng;
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 use ulid::Ulid;
 use url::Url;
 
@@ -270,6 +270,7 @@ pub struct UserRegistration {
     pub display_name: Option<String>,
     pub terms_url: Option<Url>,
     pub email_authentication_id: Option<Ulid>,
+    pub phone_authentication_id: Option<Ulid>,
     pub user_registration_token_id: Option<Ulid>,
     pub password: Option<UserRegistrationPassword>,
     pub upstream_oauth_authorization_session_id: Option<Ulid>,
@@ -278,4 +279,33 @@ pub struct UserRegistration {
     pub user_agent: Option<String>,
     pub created_at: DateTime<Utc>,
     pub completed_at: Option<DateTime<Utc>>,
+}
+
+/// A phone number associated with a user
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct UserPhone {
+    pub id: Ulid,
+    pub user_id: Ulid,
+    pub phone: String,
+    pub created_at: DateTime<Utc>,
+}
+
+/// An authentication session for a phone number
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct UserPhoneAuthentication {
+    pub id: Ulid,
+    pub user_registration_id: Option<Ulid>,
+    pub phone: String,
+    pub created_at: DateTime<Utc>,
+    pub completed_at: Option<DateTime<Utc>>,
+}
+
+/// A verification code for phone authentication
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct UserPhoneAuthenticationCode {
+    pub id: Ulid,
+    pub user_phone_authentication_id: Ulid,
+    pub code: String,
+    pub created_at: DateTime<Utc>,
+    pub expires_at: DateTime<Utc>,
 }

@@ -87,7 +87,7 @@ impl HomeserverConnection for PalpoConnection {
         }
 
         let encoded_localpart = urlencoding::encode(localpart);
-        let url = format!("_palpo/mas/query_user?localpart={encoded_localpart}");
+        let url = format!("_palpo/admin/query_user?localpart={encoded_localpart}");
         let response = self
             .get(&url)
             .send_traced()
@@ -164,7 +164,7 @@ impl HomeserverConnection for PalpoConnection {
         });
 
         let response = self
-            .post("_palpo/mas/provision_user")
+            .post("_palpo/admin/provision_user")
             .json(&body)
             .send_traced()
             .await
@@ -201,7 +201,7 @@ impl HomeserverConnection for PalpoConnection {
         }
 
         let encoded_localpart = urlencoding::encode(localpart);
-        let url = format!("_palpo/mas/is_localpart_available?localpart={encoded_localpart}");
+        let url = format!("_palpo/admin/is_localpart_available?localpart={encoded_localpart}");
         let response = self
             .get(&url)
             .send_traced()
@@ -257,7 +257,7 @@ impl HomeserverConnection for PalpoConnection {
         };
 
         let response = self
-            .post("_palpo/mas/upsert_device")
+            .post("_palpo/admin/upsert_device")
             .json(&body)
             .send_traced()
             .await
@@ -301,7 +301,7 @@ impl HomeserverConnection for PalpoConnection {
         };
 
         let response = self
-            .post("_palpo/mas/update_device_display_name")
+            .post("_palpo/admin/update_device_display_name")
             .json(&body)
             .send_traced()
             .await
@@ -338,7 +338,7 @@ impl HomeserverConnection for PalpoConnection {
         };
 
         let response = self
-            .post("_palpo/mas/delete_device")
+            .post("_palpo/admin/delete_device")
             .json(&body)
             .send_traced()
             .await
@@ -376,7 +376,7 @@ impl HomeserverConnection for PalpoConnection {
         let body = Request { localpart, devices };
 
         let response = self
-            .post("_palpo/mas/sync_devices")
+            .post("_palpo/admin/sync_devices")
             .json(&body)
             .send_traced()
             .await
@@ -410,7 +410,7 @@ impl HomeserverConnection for PalpoConnection {
         let body = Request { localpart, erase };
 
         let response = self
-            .post("_palpo/mas/delete_user")
+            .post("_palpo/admin/delete_user")
             .json(&body)
             .send_traced()
             .await
@@ -442,7 +442,7 @@ impl HomeserverConnection for PalpoConnection {
         let body = Request { localpart };
 
         let response = self
-            .post("_palpo/mas/reactivate_user")
+            .post("_palpo/admin/reactivate_user")
             .json(&body)
             .send_traced()
             .await
@@ -482,7 +482,7 @@ impl HomeserverConnection for PalpoConnection {
         };
 
         let response = self
-            .post("_palpo/mas/set_displayname")
+            .post("_palpo/admin/set_displayname")
             .json(&body)
             .send_traced()
             .await
@@ -514,7 +514,7 @@ impl HomeserverConnection for PalpoConnection {
         let body = Request { localpart };
 
         let response = self
-            .post("_palpo/mas/unset_displayname")
+            .post("_palpo/admin/unset_displayname")
             .json(&body)
             .send_traced()
             .await
@@ -546,7 +546,7 @@ impl HomeserverConnection for PalpoConnection {
         let body = Request { localpart };
 
         let response = self
-            .post("_palpo/mas/allow_cross_signing_reset")
+            .post("_palpo/admin/allow_cross_signing_reset")
             .json(&body)
             .send_traced()
             .await

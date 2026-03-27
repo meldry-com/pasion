@@ -3,8 +3,8 @@ use std::net::IpAddr;
 use async_trait::async_trait;
 use chrono::{DateTime, Utc};
 use pasion_data_model::{
-    Clock, UpstreamOAuthAuthorizationSession, UserEmailAuthentication, UserRegistration,
-    UserRegistrationPassword, UserRegistrationToken,
+    Clock, UpstreamOAuthAuthorizationSession, UserEmailAuthentication,
+    UserPhoneAuthentication, UserRegistration, UserRegistrationPassword, UserRegistrationToken,
 };
 use pasion_storage::user::UserRegistrationRepository;
 use rand::RngCore;
@@ -38,6 +38,7 @@ struct UserRegistrationLookup {
     display_name: Option<String>,
     terms_url: Option<String>,
     email_authentication_id: Option<Uuid>,
+    phone_authentication_id: Option<Uuid>,
     user_registration_token_id: Option<Uuid>,
     hashed_password: Option<String>,
     hashed_password_version: Option<i32>,
@@ -94,6 +95,7 @@ impl TryFrom<UserRegistrationLookup> for UserRegistration {
             display_name: value.display_name,
             terms_url,
             email_authentication_id: value.email_authentication_id.map(Ulid::from),
+            phone_authentication_id: value.phone_authentication_id.map(Ulid::from),
             user_registration_token_id: value.user_registration_token_id.map(Ulid::from),
             password,
             upstream_oauth_authorization_session_id: value
@@ -130,6 +132,7 @@ impl UserRegistrationRepository for PgUserRegistrationRepository<'_> {
                      , display_name
                      , terms_url
                      , email_authentication_id
+                     , phone_authentication_id
                      , user_registration_token_id
                      , hashed_password
                      , hashed_password_version
@@ -206,6 +209,7 @@ impl UserRegistrationRepository for PgUserRegistrationRepository<'_> {
             display_name: None,
             terms_url: None,
             email_authentication_id: None,
+            phone_authentication_id: None,
             user_registration_token_id: None,
             password: None,
             upstream_oauth_authorization_session_id: None,
@@ -314,6 +318,42 @@ impl UserRegistrationRepository for PgUserRegistrationRepository<'_> {
         DatabaseError::ensure_affected_rows(&res, 1)?;
 
         user_registration.email_authentication_id = Some(user_email_authentication.id);
+
+        Ok(user_registration)
+    }
+
+    #[tracing::instrument(
+        name = "db.user_registration.set_phone_authentication",
+        skip_all,
+        fields(
+            db.query.text,
+            %user_registration.id,
+            %user_phone_authentication.id,
+            %user_phone_authentication.phone,
+        ),
+        err,
+    )]
+    async fn set_phone_authentication(
+        &mut self,
+        mut user_registration: UserRegistration,
+        user_phone_authentication: &UserPhoneAuthentication,
+    ) -> Result<UserRegistration, Self::Error> {
+        let res = sqlx::query!(
+            r#"
+                UPDATE user_registrations
+                SET phone_authentication_id = $2
+                WHERE user_registration_id = $1 AND completed_at IS NULL
+            "#,
+            Uuid::from(user_registration.id),
+            Uuid::from(user_phone_authentication.id),
+        )
+        .traced()
+        .execute(&mut *self.conn)
+        .await?;
+
+        DatabaseError::ensure_affected_rows(&res, 1)?;
+
+        user_registration.phone_authentication_id = Some(user_phone_authentication.id);
 
         Ok(user_registration)
     }

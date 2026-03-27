@@ -19,8 +19,8 @@ use pasion_storage::{
     },
     user::{
         BrowserSessionRepository, UserEmailRepository, UserPasswordRepository,
-        UserRecoveryRepository, UserRegistrationRepository, UserRegistrationTokenRepository,
-        UserRepository, UserTermsRepository,
+        UserPhoneRepository, UserRecoveryRepository, UserRegistrationRepository,
+        UserRegistrationTokenRepository, UserRepository, UserTermsRepository,
     },
 };
 use sqlx::{PgConnection, PgPool, Postgres, Transaction};
@@ -47,8 +47,8 @@ use crate::{
     },
     user::{
         PgBrowserSessionRepository, PgUserEmailRepository, PgUserPasswordRepository,
-        PgUserRecoveryRepository, PgUserRegistrationRepository, PgUserRegistrationTokenRepository,
-        PgUserRepository, PgUserTermsRepository,
+        PgUserPhoneRepository, PgUserRecoveryRepository, PgUserRegistrationRepository,
+        PgUserRegistrationTokenRepository, PgUserRepository, PgUserTermsRepository,
     },
 };
 
@@ -214,6 +214,10 @@ where
 
     fn user_email<'c>(&'c mut self) -> Box<dyn UserEmailRepository<Error = Self::Error> + 'c> {
         Box::new(PgUserEmailRepository::new(self.conn.as_mut()))
+    }
+
+    fn user_phone<'c>(&'c mut self) -> Box<dyn UserPhoneRepository<Error = Self::Error> + 'c> {
+        Box::new(PgUserPhoneRepository::new(self.conn.as_mut()))
     }
 
     fn user_password<'c>(

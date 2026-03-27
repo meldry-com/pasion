@@ -12,3 +12,4 @@ _*.*
 .cladue
 config.dev.yaml
 *.log
+.sqlx

@@ -61,7 +61,7 @@ impl Reloadable for Templates {
 /// A wrapper around [`sd_notify::notify`] that logs any errors (no-op on non-Unix)
 #[cfg(unix)]
 fn notify(states: &[sd_notify::NotifyState]) {
-    if let Err(e) = sd_notify::notify(false, states) {
+    if let Err(e) = sd_notify::notify(states) {
         tracing::error!(
             error = &e as &dyn std::error::Error,
             "Failed to notify service manager"
@@ -144,11 +144,8 @@ impl LifecycleManager {
         // This will be `Some` if we have the watchdog enabled, and `None` if not
         #[cfg(unix)]
         let mut watchdog_interval = {
-            let mut watchdog_usec = 0;
-            if sd_notify::watchdog_enabled(false, &mut watchdog_usec) {
-                Some(tokio::time::interval(Duration::from_micros(
-                    watchdog_usec / 2,
-                )))
+            if let Some(watchdog_duration) = sd_notify::watchdog_enabled() {
+                Some(tokio::time::interval(watchdog_duration / 2))
             } else {
                 None
             }

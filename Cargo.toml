@@ -34,6 +34,7 @@ pasion-config = { path = "./crates/config/", version = "=1.8.0" }
 pasion-context = { path = "./crates/context/", version = "=1.8.0" }
 pasion-data-model = { path = "./crates/data-model/", version = "=1.8.0" }
 pasion-email = { path = "./crates/email/", version = "=1.8.0" }
+pasion-sms = { path = "./crates/sms/", version = "=1.8.0" }
 pasion-handlers = { path = "./crates/handlers/", version = "=1.8.0" }
 pasion-http = { path = "./crates/http/", version = "=1.8.0" }
 pasion-i18n = { path = "./crates/i18n/", version = "=1.8.0" }
@@ -54,6 +55,7 @@ pasion-tasks = { path = "./crates/tasks/", version = "=1.8.0" }
 pasion-templates = { path = "./crates/templates/", version = "=1.8.0" }
 oauth2-types = { path = "./crates/oauth2-types/", version = "=1.8.0" }
 syn2mas = { path = "./crates/syn2mas", version = "=1.8.0" }
+pasion-frontend = { path = "./crates/frontend/", version = "=1.8.0" }
 
 # Salvo web framework
 [workspace.dependencies.salvo]
@@ -93,6 +95,10 @@ features = ["std"]
 [workspace.dependencies.argon2]
 version = "0.5.3"
 features = ["password-hash", "std"]
+
+# Base64 encoding/decoding
+[workspace.dependencies.base64]
+version = "0.22.1"
 
 # Constant-time base64
 [workspace.dependencies.base64ct]

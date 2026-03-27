@@ -5712,6 +5712,20 @@ dependencies = [
 ]
 
 [[package]]
+name = "pasion-sms"
+version = "1.8.0"
+dependencies = [
+ "async-trait",
+ "base64",
+ "reqwest 0.13.2",
+ "serde",
+ "serde_json",
+ "thiserror 2.0.18",
+ "tracing",
+ "url",
+]
+
+[[package]]
 name = "pasion-storage"
 version = "1.8.0"
 dependencies = [

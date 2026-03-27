@@ -21,6 +21,7 @@ use crate::{
 
 mod email;
 mod password;
+mod phone;
 mod recovery;
 mod registration;
 mod registration_token;
@@ -32,7 +33,8 @@ mod tests;
 
 pub use self::{
     email::PgUserEmailRepository, password::PgUserPasswordRepository,
-    recovery::PgUserRecoveryRepository, registration::PgUserRegistrationRepository,
+    phone::PgUserPhoneRepository, recovery::PgUserRecoveryRepository,
+    registration::PgUserRegistrationRepository,
     registration_token::PgUserRegistrationTokenRepository, session::PgBrowserSessionRepository,
     terms::PgUserTermsRepository,
 };

@@ -39,7 +39,7 @@ use password_recovery::PasswordRecovery;
 use plan::Plan;
 use recovery_progress::RecoveryProgress;
 use recovery_start::RecoveryStart;
-use register::{Register, RegisterDisplayName, RegisterFinish, RegisterVerifyEmail};
+use register::{Register, RegisterDisplayName, RegisterFinish, RegisterVerifyEmail, RegisterVerifyPhone};
 use reset_cross_signing::ResetCrossSigning;
 use session_detail::SessionDetail;
 use sessions::Sessions;
@@ -58,6 +58,8 @@ pub enum Route {
     Register {},
     #[route("/register/:id/verify-email")]
     RegisterVerifyEmail { id: String },
+    #[route("/register/:id/verify-phone")]
+    RegisterVerifyPhone { id: String },
     #[route("/register/:id/display-name")]
     RegisterDisplayName { id: String },
     #[route("/register/:id/finish")]

@@ -8,52 +8,7 @@
 ARG DEBIAN_VERSION=12
 ARG DEBIAN_VERSION_NAME=bookworm
 ARG RUSTC_VERSION=1.89.0
-ARG NODEJS_VERSION=24.11.0
-# Keep in sync with .github/actions/build-policies/action.yml and policies/Makefile
-ARG OPA_VERSION=1.8.0 
 ARG CARGO_AUDITABLE_VERSION=0.7.0
-
-##########################################
-## Build stage that builds the frontend ##
-##########################################
-FROM --platform=${BUILDPLATFORM} docker.io/library/node:${NODEJS_VERSION}-${DEBIAN_VERSION_NAME} AS frontend
-
-WORKDIR /app/frontend
-
-COPY ./frontend/.npmrc ./frontend/package.json ./frontend/package-lock.json /app/frontend/
-# Network access: to fetch dependencies
-RUN --network=default \
-  npm ci
-
-COPY ./frontend/ /app/frontend/
-COPY ./templates/ /app/templates/
-RUN --network=none \
-  npm run build
-
-# Move the built files
-RUN --network=none \
-  mkdir -p /share/assets && \
-  cp ./dist/manifest.json /share/manifest.json && \
-  rm -f ./dist/index.html* ./dist/manifest.json* && \
-  cp ./dist/* /share/assets/
-
-##############################################
-## Build stage that builds the OPA policies ##
-##############################################
-FROM --platform=${BUILDPLATFORM} docker.io/library/buildpack-deps:${DEBIAN_VERSION_NAME} AS policy
-
-ARG BUILDOS
-ARG BUILDARCH
-ARG OPA_VERSION
-
-# Download Open Policy Agent
-ADD --chmod=755 https://github.com/open-policy-agent/opa/releases/download/v${OPA_VERSION}/opa_${BUILDOS}_${BUILDARCH}_static /usr/local/bin/opa
-
-WORKDIR /app/policies
-COPY ./policies /app/policies
-RUN --network=none  \
-  make -B && \
-  chmod a+r ./policy.wasm
 
 ########################################
 ## Build stage that builds the binary ##
@@ -119,21 +74,21 @@ RUN --network=default \
   cargo auditable build \
     --locked \
     --release \
-    --bin mas-cli \
+    --bin pasion \
     --no-default-features \
     --features docker \
     --target x86_64-unknown-linux-gnu \
     --target aarch64-unknown-linux-gnu \
-  && mv "target/x86_64-unknown-linux-gnu/release/mas-cli" /usr/local/bin/mas-cli-amd64 \
-  && mv "target/aarch64-unknown-linux-gnu/release/mas-cli" /usr/local/bin/mas-cli-arm64
+  && mv "target/x86_64-unknown-linux-gnu/release/pasion" /usr/local/bin/pasion-amd64 \
+  && mv "target/aarch64-unknown-linux-gnu/release/pasion" /usr/local/bin/pasion-arm64
 
 #######################################
-## Prepare /usr/local/share/mas-cli/ ##
+## Prepare /usr/local/share/pasion/ ##
 #######################################
 FROM --platform=${BUILDPLATFORM} scratch AS share
 
-COPY --from=frontend /share /share
-COPY --from=policy /app/policies/policy.wasm /share/policy.wasm
+# policy.wasm is pre-built and checked into the repo
+COPY ./policies/policy.wasm /share/policy.wasm
 COPY ./templates/ /share/templates
 COPY ./translations/ /share/translations
 
@@ -143,11 +98,11 @@ COPY ./translations/ /share/translations
 FROM gcr.io/distroless/cc-debian${DEBIAN_VERSION}:debug-nonroot AS debug
 
 ARG TARGETARCH
-COPY --from=builder /usr/local/bin/mas-cli-${TARGETARCH} /usr/local/bin/mas-cli
-COPY --from=share /share /usr/local/share/mas-cli
+COPY --from=builder /usr/local/bin/pasion-${TARGETARCH} /usr/local/bin/pasion
+COPY --from=share /share /usr/local/share/pasion
 
 WORKDIR /
-ENTRYPOINT ["/usr/local/bin/mas-cli"]
+ENTRYPOINT ["/usr/local/bin/pasion"]
 
 ###################
 ## Runtime stage ##
@@ -155,8 +110,8 @@ ENTRYPOINT ["/usr/local/bin/mas-cli"]
 FROM gcr.io/distroless/cc-debian${DEBIAN_VERSION}:nonroot
 
 ARG TARGETARCH
-COPY --from=builder /usr/local/bin/mas-cli-${TARGETARCH} /usr/local/bin/mas-cli
-COPY --from=share /share /usr/local/share/mas-cli
+COPY --from=builder /usr/local/bin/pasion-${TARGETARCH} /usr/local/bin/pasion
+COPY --from=share /share /usr/local/share/pasion
 
 WORKDIR /
-ENTRYPOINT ["/usr/local/bin/mas-cli"]
+ENTRYPOINT ["/usr/local/bin/pasion"]

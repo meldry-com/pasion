@@ -2,8 +2,8 @@ use std::net::IpAddr;
 
 use async_trait::async_trait;
 use pasion_data_model::{
-    Clock, UpstreamOAuthAuthorizationSession, UserEmailAuthentication, UserRegistration,
-    UserRegistrationToken,
+    Clock, UpstreamOAuthAuthorizationSession, UserEmailAuthentication,
+    UserPhoneAuthentication, UserRegistration, UserRegistrationToken,
 };
 use rand_core::RngCore;
 use ulid::Ulid;
@@ -113,6 +113,25 @@ pub trait UserRegistrationRepository: Send + Sync {
         &mut self,
         user_registration: UserRegistration,
         email_authentication: &UserEmailAuthentication,
+    ) -> Result<UserRegistration, Self::Error>;
+
+    /// Set the phone authentication of a [`UserRegistration`]
+    ///
+    /// Returns the updated [`UserRegistration`]
+    ///
+    /// # Parameters
+    ///
+    /// * `user_registration`: The [`UserRegistration`] to update
+    /// * `phone_authentication`: The [`UserPhoneAuthentication`] to set
+    ///
+    /// # Errors
+    ///
+    /// Returns [`Self::Error`] if the underlying repository fails or if the
+    /// registration is already completed
+    async fn set_phone_authentication(
+        &mut self,
+        user_registration: UserRegistration,
+        phone_authentication: &UserPhoneAuthentication,
     ) -> Result<UserRegistration, Self::Error>;
 
     /// Set the password of a [`UserRegistration`]
@@ -242,6 +261,11 @@ repository_impl!(UserRegistrationRepository:
         &mut self,
         user_registration: UserRegistration,
         email_authentication: &UserEmailAuthentication,
+    ) -> Result<UserRegistration, Self::Error>;
+    async fn set_phone_authentication(
+        &mut self,
+        user_registration: UserRegistration,
+        phone_authentication: &UserPhoneAuthentication,
     ) -> Result<UserRegistration, Self::Error>;
     async fn set_password(
         &mut self,
