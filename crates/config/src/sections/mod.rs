@@ -30,7 +30,6 @@ pub use self::{
     database::{DatabaseConfig, PgSslMode},
     email::{EmailConfig, EmailSmtpMode, EmailTransportKind},
     experimental::ExperimentalConfig,
-    sms::{SmsConfig, SmsTransportKind},
     http::{
         BindConfig as HttpBindConfig, HttpConfig, ListenerConfig as HttpListenerConfig,
         Resource as HttpResource, TlsConfig as HttpTlsConfig, UnixOrTcp,
@@ -42,6 +41,7 @@ pub use self::{
     policy::PolicyConfig,
     rate_limiting::RateLimitingConfig,
     secrets::SecretsConfig,
+    sms::{SmsConfig, SmsTransportKind},
     telemetry::{
         MetricsConfig, MetricsExporterKind, Propagator, TelemetryConfig, TracingConfig,
         TracingExporterKind,

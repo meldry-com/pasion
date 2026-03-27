@@ -2,8 +2,8 @@ use std::net::IpAddr;
 
 use async_trait::async_trait;
 use pasion_data_model::{
-    Clock, UpstreamOAuthAuthorizationSession, UserEmailAuthentication,
-    UserPhoneAuthentication, UserRegistration, UserRegistrationToken,
+    Clock, UpstreamOAuthAuthorizationSession, UserEmailAuthentication, UserPhoneAuthentication,
+    UserRegistration, UserRegistrationToken,
 };
 use rand_core::RngCore;
 use ulid::Ulid;

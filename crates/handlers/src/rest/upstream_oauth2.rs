@@ -8,9 +8,7 @@ use std::sync::LazyLock;
 
 use minijinja::Environment;
 use opentelemetry::{Key, KeyValue, metrics::Counter};
-use pasion_data_model::{
-    UpstreamOAuthAuthorizationSession, UserRegistration,
-};
+use pasion_data_model::{UpstreamOAuthAuthorizationSession, UserRegistration};
 use pasion_jose::jwt::Jwt;
 use pasion_matrix::HomeserverConnection;
 use pasion_salvo_utils::SessionInfoExt;
@@ -68,18 +66,14 @@ const DEFAULT_EMAIL_TEMPLATE: &str = "{{ user.email }}";
 #[serde(tag = "state", rename_all = "snake_case")]
 pub enum LinkState {
     /// Redirect: session already linked and matches current user, or auto-login succeeded.
-    Redirect {
-        redirect_url: String,
-    },
+    Redirect { redirect_url: String },
     /// User is logged in, upstream not linked: suggest linking.
     SuggestLink {
         provider_name: Option<String>,
         upstream_subject: Option<String>,
     },
     /// User is logged in, but upstream is linked to a different user.
-    LinkMismatch {
-        existing_username: String,
-    },
+    LinkMismatch { existing_username: String },
     /// No session, no link: show registration form.
     Register {
         suggested_username: Option<String>,
@@ -92,18 +86,11 @@ pub enum LinkState {
         has_tos: bool,
     },
     /// Account is deactivated.
-    AccountDeactivated {
-        username: String,
-    },
+    AccountDeactivated { username: String },
     /// Account is locked.
-    AccountLocked {
-        username: String,
-    },
+    AccountLocked { username: String },
     /// An error occurred.
-    Error {
-        code: String,
-        description: String,
-    },
+    Error { code: String, description: String },
 }
 
 #[derive(Serialize)]
@@ -193,7 +180,10 @@ pub async fn get_link(
         .map(|s| s.to_owned());
     let url_builder = get_url_builder(depot)?;
     let policy_factory = get_policy_factory(depot)?;
-    let mut policy = policy_factory.instantiate().await.map_err(|e| RouteError::Internal(e.into()))?;
+    let mut policy = policy_factory
+        .instantiate()
+        .await
+        .map_err(|e| RouteError::Internal(e.into()))?;
     let site_config = get_site_config(depot)?;
 
     let sessions_cookie = UpstreamSessionsCookie::load(&cookie_jar);
@@ -250,9 +240,7 @@ pub async fn get_link(
 
             cookie_jar.write_to_response(res);
             res.render(Json(LinkResponse {
-                state: LinkState::Redirect {
-                    redirect_url,
-                },
+                state: LinkState::Redirect { redirect_url },
             }));
             return Ok(());
         }
@@ -348,7 +336,10 @@ pub async fn get_link(
 
         (None, None) => {
             // Not linked, not logged in — show registration
-            let id_token = upstream_session.id_token().map(Jwt::try_from).transpose()
+            let id_token = upstream_session
+                .id_token()
+                .map(Jwt::try_from)
+                .transpose()
                 .map_err(|e| RouteError::Internal(e.into()))?;
 
             let provider = repo
@@ -381,7 +372,12 @@ pub async fn get_link(
                     .template
                     .as_deref()
                     .unwrap_or(DEFAULT_DISPLAYNAME_TEMPLATE);
-                render_attribute_template(&env, template, &context, provider.claims_imports.displayname.is_required())?
+                render_attribute_template(
+                    &env,
+                    template,
+                    &context,
+                    provider.claims_imports.displayname.is_required(),
+                )?
             };
 
             let suggested_email = if provider.claims_imports.email.ignore() {
@@ -393,7 +389,12 @@ pub async fn get_link(
                     .template
                     .as_deref()
                     .unwrap_or(DEFAULT_EMAIL_TEMPLATE);
-                render_attribute_template(&env, template, &context, provider.claims_imports.email.is_required())?
+                render_attribute_template(
+                    &env,
+                    template,
+                    &context,
+                    provider.claims_imports.email.is_required(),
+                )?
             };
 
             let suggested_username = if provider.claims_imports.localpart.ignore() {
@@ -405,7 +406,12 @@ pub async fn get_link(
                     .template
                     .as_deref()
                     .unwrap_or(DEFAULT_LOCALPART_TEMPLATE);
-                render_attribute_template(&env, template, &context, provider.claims_imports.localpart.is_required())?
+                render_attribute_template(
+                    &env,
+                    template,
+                    &context,
+                    provider.claims_imports.localpart.is_required(),
+                )?
             };
 
             // If skip_confirmation is configured, auto-register
@@ -489,7 +495,10 @@ pub async fn post_link(
         .and_then(|v| v.to_str().ok())
         .map(|s| s.to_owned());
     let policy_factory = get_policy_factory(depot)?;
-    let mut policy = policy_factory.instantiate().await.map_err(|e| RouteError::Internal(e.into()))?;
+    let mut policy = policy_factory
+        .instantiate()
+        .await
+        .map_err(|e| RouteError::Internal(e.into()))?;
     let activity_tracker = extract_bound_activity_tracker(req, depot);
     let homeserver = get_homeserver(depot)?;
     let url_builder = get_url_builder(depot)?;
@@ -613,7 +622,12 @@ pub async fn post_link(
                     .template
                     .as_deref()
                     .unwrap_or(DEFAULT_DISPLAYNAME_TEMPLATE);
-                render_attribute_template(&env, template, &context, provider.claims_imports.displayname.is_required())?
+                render_attribute_template(
+                    &env,
+                    template,
+                    &context,
+                    provider.claims_imports.displayname.is_required(),
+                )?
             } else {
                 None
             };
@@ -625,7 +639,12 @@ pub async fn post_link(
                     .template
                     .as_deref()
                     .unwrap_or(DEFAULT_EMAIL_TEMPLATE);
-                render_attribute_template(&env, template, &context, provider.claims_imports.email.is_required())?
+                render_attribute_template(
+                    &env,
+                    template,
+                    &context,
+                    provider.claims_imports.email.is_required(),
+                )?
             } else {
                 None
             };
@@ -681,13 +700,21 @@ pub async fn post_link(
                     Some("username") => {
                         field_errors.insert(
                             "username".into(),
-                            serde_json::json!(if violation.msg.is_empty() { "policy_violation" } else { &violation.msg }),
+                            serde_json::json!(if violation.msg.is_empty() {
+                                "policy_violation"
+                            } else {
+                                &violation.msg
+                            }),
                         );
                     }
                     _ => {
                         field_errors.insert(
                             "_form".into(),
-                            serde_json::json!(if violation.msg.is_empty() { "policy_violation" } else { &violation.msg }),
+                            serde_json::json!(if violation.msg.is_empty() {
+                                "policy_violation"
+                            } else {
+                                &violation.msg
+                            }),
                         );
                     }
                 }

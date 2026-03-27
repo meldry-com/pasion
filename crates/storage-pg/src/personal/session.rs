@@ -641,15 +641,14 @@ impl Filter for PersonalSessionFilter<'_> {
                 let stable = format!("urn:matrix:client:device:{device}");
                 let unstable = format!("urn:matrix:org.matrix.msc2967.client:device:{device}");
                 Condition::any()
-                    .add(
-                        Expr::val(stable).eq(PgFunc::any(Expr::col((
-                            PersonalSessions::Table,
-                            PersonalSessions::ScopeList,
-                        )))),
-                    )
-                    .add(Expr::val(unstable).eq(PgFunc::any(
-                        Expr::col((PersonalSessions::Table, PersonalSessions::ScopeList)),
-                    )))
+                    .add(Expr::val(stable).eq(PgFunc::any(Expr::col((
+                        PersonalSessions::Table,
+                        PersonalSessions::ScopeList,
+                    )))))
+                    .add(Expr::val(unstable).eq(PgFunc::any(Expr::col((
+                        PersonalSessions::Table,
+                        PersonalSessions::ScopeList,
+                    )))))
                     .into()
             }))
             .add_option(self.state().map(|state| match state {

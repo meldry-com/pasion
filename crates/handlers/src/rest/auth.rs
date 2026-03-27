@@ -19,14 +19,11 @@ use serde::{Deserialize, Serialize};
 use zeroize::Zeroizing;
 
 use super::{
-    NodeType, RouteError, extract_bound_activity_tracker, extract_cookie_jar,
-    extract_session_info, get_homeserver, get_limiter, get_password_manager, get_repo_factory,
-    get_site_config, make_clock, make_rng,
+    NodeType, RouteError, extract_bound_activity_tracker, extract_cookie_jar, extract_session_info,
+    get_homeserver, get_limiter, get_password_manager, get_repo_factory, get_site_config,
+    make_clock, make_rng,
 };
-use crate::{
-    METER, RequesterFingerprint,
-    passwords::PasswordVerificationResult,
-};
+use crate::{METER, RequesterFingerprint, passwords::PasswordVerificationResult};
 
 // ── Metrics ────────────────────────────────────────────────────
 
@@ -117,11 +114,7 @@ async fn get_user_by_email_or_by_username<R: RepositoryAccess>(
 /// Authenticate a user with username and password, returning viewer info and
 /// setting a session cookie on success.
 #[handler]
-pub async fn login(
-    req: &mut Request,
-    depot: &Depot,
-    res: &mut Response,
-) -> Result<(), RouteError> {
+pub async fn login(req: &mut Request, depot: &Depot, res: &mut Response) -> Result<(), RouteError> {
     let mut rng = make_rng();
     let clock = make_clock();
     let password_manager = get_password_manager(depot)?;
@@ -188,7 +181,10 @@ pub async fn login(
 
     // Check rate limit
     if let Err(e) = limiter.check_password(requester, &user) {
-        tracing::warn!(error = &e as &dyn std::error::Error, "REST login: rate limited");
+        tracing::warn!(
+            error = &e as &dyn std::error::Error,
+            "REST login: rate limited"
+        );
         PASSWORD_LOGIN_COUNTER.add(1, &[KeyValue::new(RESULT, "error")]);
         res.status_code(StatusCode::TOO_MANY_REQUESTS);
         res.render(Json(LoginResponse {
@@ -363,9 +359,7 @@ pub async fn logout(
 /// List all enabled upstream OAuth providers and site configuration flags
 /// relevant to the login/registration UI.
 #[handler]
-pub async fn providers(
-    depot: &Depot,
-) -> Result<Json<ProvidersResponse>, RouteError> {
+pub async fn providers(depot: &Depot) -> Result<Json<ProvidersResponse>, RouteError> {
     let site_config = get_site_config(depot)?;
     let mut repo = get_repo_factory(depot)?.create().await?;
 

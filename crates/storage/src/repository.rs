@@ -16,9 +16,9 @@ use crate::{
         UpstreamOAuthSessionRepository,
     },
     user::{
-        BrowserSessionRepository, UserEmailRepository, UserPasswordRepository,
-        UserPhoneRepository, UserRecoveryRepository, UserRegistrationRepository,
-        UserRegistrationTokenRepository, UserRepository, UserTermsRepository,
+        BrowserSessionRepository, UserEmailRepository, UserPasswordRepository, UserPhoneRepository,
+        UserRecoveryRepository, UserRegistrationRepository, UserRegistrationTokenRepository,
+        UserRepository, UserTermsRepository,
     },
 };
 

@@ -111,7 +111,10 @@ impl Mailer {
         to: Mailbox,
         context: &WithLanguage<EmailVerificationContext>,
     ) -> Result<(), Error> {
-        println!("[EMAIL] prepare verification email to={to}, code={}", context.code());
+        println!(
+            "[EMAIL] prepare verification email to={to}, code={}",
+            context.code()
+        );
         let message = self.prepare_verification_email(to, context)?;
         println!("[EMAIL] sending verification email...");
         self.transport.send(message).await?;

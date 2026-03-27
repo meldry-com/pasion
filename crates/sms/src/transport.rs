@@ -97,9 +97,7 @@ impl SmsTransport {
         match self.inner.as_ref() {
             SmsTransportInner::Blackhole => {
                 println!("[SMS] transport=blackhole, SMS NOT sent");
-                tracing::warn!(
-                    "An SMS was supposed to be sent but no SMS backend is configured"
-                );
+                tracing::warn!("An SMS was supposed to be sent but no SMS backend is configured");
             }
 
             SmsTransportInner::Twilio {

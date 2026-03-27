@@ -3,9 +3,7 @@ use dioxus::prelude::*;
 use crate::{
     api::types::{ProvidersResponse, RegisterResponse, StepResponse},
     components::{
-        layout::Layout,
-        loading::LoadingSpinner,
-        password_input::PasswordCreationDoubleInput,
+        layout::Layout, loading::LoadingSpinner, password_input::PasswordCreationDoubleInput,
     },
     pages::Route,
 };
@@ -14,8 +12,9 @@ use crate::{
 /// provider buttons.
 #[component]
 pub fn Register() -> Element {
-    let providers_data =
-        use_resource(|| async { crate::api::api_get::<ProvidersResponse>("/auth/providers").await });
+    let providers_data = use_resource(|| async {
+        crate::api::api_get::<ProvidersResponse>("/auth/providers").await
+    });
     let binding = providers_data.read();
 
     match &*binding {

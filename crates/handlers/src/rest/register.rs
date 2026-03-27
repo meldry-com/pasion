@@ -12,12 +12,12 @@ use pasion_data_model::UserRegistration;
 use pasion_matrix::HomeserverConnection;
 use pasion_salvo_utils::SessionInfoExt;
 use pasion_storage::{
+    RepositoryAccess,
     queue::{
         ProvisionUserJob, QueueJobRepositoryExt as _, SendEmailAuthenticationCodeJob,
         SendSmsAuthenticationCodeJob,
     },
     user::{UserEmailFilter, UserEmailRepository, UserPhoneRepository, UserRepository},
-    RepositoryAccess,
 };
 use salvo::prelude::*;
 use serde::{Deserialize, Serialize};
@@ -25,16 +25,20 @@ use ulid::Ulid;
 use zeroize::Zeroizing;
 
 use super::{
-    RouteError, extract_bound_activity_tracker, extract_cookie_jar,
-    get_homeserver, get_limiter, get_password_manager, get_policy_factory, get_repo_factory,
-    get_site_config, make_clock, make_rng,
+    RouteError, extract_bound_activity_tracker, extract_cookie_jar, get_homeserver, get_limiter,
+    get_password_manager, get_policy_factory, get_repo_factory, get_site_config, make_clock,
+    make_rng,
 };
 use crate::RequesterFingerprint;
 
 // ── Shared helpers ─────────────────────────────────────────────
 
 /// Determine the next step for a registration based on its current state.
-fn next_step(registration: &UserRegistration, email_verified: bool, phone_verified: bool) -> &'static str {
+fn next_step(
+    registration: &UserRegistration,
+    email_verified: bool,
+    phone_verified: bool,
+) -> &'static str {
     // If there is a phone authentication that is not yet completed, verify it first
     if registration.phone_authentication_id.is_some() && !phone_verified {
         return "verify_phone";
@@ -54,7 +58,11 @@ fn next_step(registration: &UserRegistration, email_verified: bool, phone_verifi
 }
 
 /// Build the list of steps that have been completed so far.
-fn steps_completed(registration: &UserRegistration, email_verified: bool, phone_verified: bool) -> Vec<&'static str> {
+fn steps_completed(
+    registration: &UserRegistration,
+    email_verified: bool,
+    phone_verified: bool,
+) -> Vec<&'static str> {
     let mut steps = Vec::new();
     steps.push("register"); // the initial registration step is always done
 
@@ -480,9 +488,9 @@ pub async fn post_verify_email(
         }));
     }
 
-    let email_authentication_id = registration
-        .email_authentication_id
-        .ok_or_else(|| RouteError::BadRequest("no email authentication for this registration".into()))?;
+    let email_authentication_id = registration.email_authentication_id.ok_or_else(|| {
+        RouteError::BadRequest("no email authentication for this registration".into())
+    })?;
 
     let email_authentication = repo
         .user_email()
@@ -587,9 +595,9 @@ pub async fn post_verify_phone(
         }));
     }
 
-    let phone_authentication_id = registration
-        .phone_authentication_id
-        .ok_or_else(|| RouteError::BadRequest("no phone authentication for this registration".into()))?;
+    let phone_authentication_id = registration.phone_authentication_id.ok_or_else(|| {
+        RouteError::BadRequest("no phone authentication for this registration".into())
+    })?;
 
     let phone_authentication = repo
         .user_phone()
@@ -813,12 +821,12 @@ pub async fn post_finish(
                 .user_registration_token()
                 .lookup(registration_token_id)
                 .await?
-                .ok_or_else(|| RouteError::Internal(
-                    Box::new(std::io::Error::new(
+                .ok_or_else(|| {
+                    RouteError::Internal(Box::new(std::io::Error::new(
                         std::io::ErrorKind::Other,
                         "Could not load the registration token",
-                    )),
-                ))?;
+                    )))
+                })?;
 
             if !registration_token.is_valid(clock.now()) {
                 return Ok(Json(FinishRegistrationResponse {
@@ -845,12 +853,12 @@ pub async fn post_finish(
                 .user_email()
                 .lookup_authentication(email_authentication_id)
                 .await?
-                .ok_or_else(|| RouteError::Internal(
-                    Box::new(std::io::Error::new(
+                .ok_or_else(|| {
+                    RouteError::Internal(Box::new(std::io::Error::new(
                         std::io::ErrorKind::Other,
                         "Could not load the email authentication",
-                    )),
-                ))?;
+                    )))
+                })?;
 
             if email_authentication.completed_at.is_none() {
                 return Ok(Json(FinishRegistrationResponse {

@@ -71,8 +71,7 @@ impl Default for TemplatesConfig {
 impl TemplatesConfig {
     /// Returns true if all fields are at their default values
     pub(crate) fn is_default(&self) -> bool {
-        is_default_path(&self.path)
-            && is_default_translations_path(&self.translations_path)
+        is_default_path(&self.path) && is_default_translations_path(&self.translations_path)
     }
 }
 

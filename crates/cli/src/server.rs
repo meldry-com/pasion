@@ -1,15 +1,14 @@
+#[cfg(unix)]
+use std::os::unix::net::UnixListener;
 use std::{
     net::{IpAddr, Ipv4Addr, Ipv6Addr, SocketAddr, TcpListener, ToSocketAddrs},
     time::Duration,
 };
-#[cfg(unix)]
-use std::os::unix::net::UnixListener;
 
 use anyhow::Context;
 use headers::{CacheControl, HeaderMapExt as _, UserAgent};
 use http::{Method, StatusCode, Version, header::USER_AGENT};
 use listenfd::ListenFd;
-use opentelemetry::{Key, KeyValue};
 use opentelemetry_http::HeaderExtractor;
 use opentelemetry_semantic_conventions::trace::{
     HTTP_REQUEST_METHOD, HTTP_RESPONSE_STATUS_CODE, HTTP_ROUTE, NETWORK_PROTOCOL_NAME,
@@ -22,12 +21,9 @@ use pasion_router::Route;
 use pasion_templates::Templates;
 use rustls::ServerConfig;
 use salvo::{prelude::*, serve_static::StaticDir};
-use tracing::Span;
 use tracing_opentelemetry::OpenTelemetrySpanExt;
 
 use crate::app_state::{AppState, inject_app_state};
-
-const MAS_LISTENER_NAME: Key = Key::from_static_str("mas.listener.name");
 
 #[inline]
 fn otel_http_method(method: &Method) -> &'static str {
@@ -294,13 +290,16 @@ pub fn build_router(
                 undocumented_oauth2_access: _,
             } => build_rest_api_router(router),
             pasion_config::HttpResource::Assets { path } => router.push(
-                Router::with_path(&format!("{}/{{**path}}", pasion_router::StaticAsset::route()))
-                    .hoop(cache_control_middleware)
-                    .get(
-                        StaticDir::new([path.clone()])
-                            .include_dot_files(false)
-                            .auto_list(false),
-                    ),
+                Router::with_path(&format!(
+                    "{}/{{**path}}",
+                    pasion_router::StaticAsset::route()
+                ))
+                .hoop(cache_control_middleware)
+                .get(
+                    StaticDir::new([path.clone()])
+                        .include_dot_files(false)
+                        .auto_list(false),
+                ),
             ),
             pasion_config::HttpResource::OAuth => build_oauth_router(router),
             pasion_config::HttpResource::Compat => {
@@ -364,10 +363,7 @@ fn build_human_router(router: Router, _templates: Templates) -> Router {
         // ── SPA shell: all user-facing pages are rendered by the Dioxus frontend ──
         // In production these serve the SPA HTML shell; the client-side router
         // handles the actual page rendering.
-        .push(
-            Router::with_path(pasion_router::Index::route())
-                .get(pasion_handlers::spa::get),
-        )
+        .push(Router::with_path(pasion_router::Index::route()).get(pasion_handlers::spa::get))
         .push(Router::with_path("/login").get(pasion_handlers::spa::get))
         .push(Router::with_path("/register").get(pasion_handlers::spa::get))
         .push(Router::with_path("/register/{**rest}").get(pasion_handlers::spa::get))
@@ -377,10 +373,7 @@ fn build_human_router(router: Router, _templates: Templates) -> Router {
         .push(Router::with_path("/link").get(pasion_handlers::spa::get))
         .push(Router::with_path("/device/{**rest}").get(pasion_handlers::spa::get))
         .push(Router::with_path("/account").get(account_redirect_handler))
-        .push(
-            Router::with_path(pasion_router::Account::route())
-                .get(pasion_handlers::spa::get),
-        )
+        .push(Router::with_path(pasion_router::Account::route()).get(pasion_handlers::spa::get))
         .push(
             Router::with_path(pasion_router::AccountWildcard::route())
                 .get(pasion_handlers::spa::get),
@@ -535,17 +528,10 @@ fn build_rest_api_router(router: Router) -> Router {
                 .post(pasion_handlers::rest::recovery::post_recovery_resend),
         )
         // Auth (login, logout, providers)
+        .push(Router::with_path("/api/v1/auth/login").post(pasion_handlers::rest::auth::login))
+        .push(Router::with_path("/api/v1/auth/logout").post(pasion_handlers::rest::auth::logout))
         .push(
-            Router::with_path("/api/v1/auth/login")
-                .post(pasion_handlers::rest::auth::login),
-        )
-        .push(
-            Router::with_path("/api/v1/auth/logout")
-                .post(pasion_handlers::rest::auth::logout),
-        )
-        .push(
-            Router::with_path("/api/v1/auth/providers")
-                .get(pasion_handlers::rest::auth::providers),
+            Router::with_path("/api/v1/auth/providers").get(pasion_handlers::rest::auth::providers),
         )
         // OAuth2 consent (SPA)
         .push(
@@ -639,6 +625,25 @@ pub fn build_tls_server_config(config: &HttpTlsConfig) -> Result<ServerConfig, a
     Ok(config)
 }
 
+fn bind_description(bind: &HttpBindConfig) -> String {
+    match bind {
+        HttpBindConfig::Listen { host, port } => match host {
+            Some(host) => format!("TCP listener {host}:{port}"),
+            None => format!("TCP listener [::]:{port} or 0.0.0.0:{port}"),
+        },
+        HttpBindConfig::Address { address } => format!("TCP listener {address}"),
+        HttpBindConfig::Unix { socket } => format!("UNIX socket {socket}"),
+        HttpBindConfig::FileDescriptor {
+            fd,
+            kind: UnixOrTcp::Tcp,
+        } => format!("TCP listener on file descriptor {fd}"),
+        HttpBindConfig::FileDescriptor {
+            fd,
+            kind: UnixOrTcp::Unix,
+        } => format!("UNIX listener on file descriptor {fd}"),
+    }
+}
+
 pub fn build_listeners(
     fd_manager: &mut ListenFd,
     configs: &[HttpBindConfig],
@@ -646,12 +651,15 @@ pub fn build_listeners(
     let mut listeners = Vec::with_capacity(configs.len());
 
     for bind in configs {
+        let bind_description = bind_description(bind);
         let listener = match bind {
             HttpBindConfig::Listen { host, port } => {
                 let addrs = match host.as_deref() {
                     Some(host) => (host, *port)
                         .to_socket_addrs()
-                        .context("could not parse listener host")?
+                        .with_context(|| {
+                            format!("could not parse listener host for {bind_description}")
+                        })?
                         .collect(),
 
                     None => vec![
@@ -660,7 +668,8 @@ pub fn build_listeners(
                     ],
                 };
 
-                let listener = TcpListener::bind(&addrs[..]).context("could not bind address")?;
+                let listener = TcpListener::bind(&addrs[..])
+                    .with_context(|| format!("could not bind {bind_description}"))?;
                 listener.set_nonblocking(true)?;
                 listener.try_into()?
             }
@@ -668,15 +677,17 @@ pub fn build_listeners(
             HttpBindConfig::Address { address } => {
                 let addr: SocketAddr = address
                     .parse()
-                    .context("could not parse listener address")?;
-                let listener = TcpListener::bind(addr).context("could not bind address")?;
+                    .with_context(|| format!("could not parse listener address {address}"))?;
+                let listener = TcpListener::bind(addr)
+                    .with_context(|| format!("could not bind {bind_description}"))?;
                 listener.set_nonblocking(true)?;
                 listener.try_into()?
             }
 
             #[cfg(unix)]
             HttpBindConfig::Unix { socket } => {
-                let listener = UnixListener::bind(socket).context("could not bind socket")?;
+                let listener = UnixListener::bind(socket)
+                    .with_context(|| format!("could not bind {bind_description}"))?;
                 listener.try_into()?
             }
 
@@ -691,7 +702,7 @@ pub fn build_listeners(
             } => {
                 let listener = fd_manager
                     .take_tcp_listener(*fd)?
-                    .context("no listener found on file descriptor")?;
+                    .with_context(|| format!("no listener found for {bind_description}"))?;
                 listener.set_nonblocking(true)?;
                 listener.try_into()?
             }
@@ -703,7 +714,7 @@ pub fn build_listeners(
             } => {
                 let listener = fd_manager
                     .take_unix_listener(*fd)?
-                    .context("no unix socket found on file descriptor")?;
+                    .with_context(|| format!("no listener found for {bind_description}"))?;
                 listener.set_nonblocking(true)?;
                 listener.try_into()?
             }
@@ -713,7 +724,9 @@ pub fn build_listeners(
                 kind: UnixOrTcp::Unix,
                 ..
             } => {
-                anyhow::bail!("UNIX domain socket file descriptors are not supported on this platform");
+                anyhow::bail!(
+                    "UNIX domain socket file descriptors are not supported on this platform"
+                );
             }
         };
 
@@ -721,4 +734,32 @@ pub fn build_listeners(
     }
 
     Ok(listeners)
+}
+
+#[cfg(test)]
+mod tests {
+    use std::net::TcpListener;
+
+    use super::build_listeners;
+    use pasion_config::HttpBindConfig;
+
+    #[test]
+    fn bind_error_mentions_requested_address() {
+        let occupied = TcpListener::bind("127.0.0.1:0").unwrap();
+        let port = occupied.local_addr().unwrap().port();
+        let mut fd_manager = listenfd::ListenFd::from_env();
+
+        let error = match build_listeners(
+            &mut fd_manager,
+            &[HttpBindConfig::Address {
+                address: format!("127.0.0.1:{port}"),
+            }],
+        ) {
+            Ok(_) => panic!("expected listener bind to fail"),
+            Err(error) => error,
+        };
+
+        let message = format!("{error:#}");
+        assert!(message.contains(&format!("127.0.0.1:{port}")), "{message}");
+    }
 }

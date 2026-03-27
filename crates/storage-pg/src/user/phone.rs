@@ -1,8 +1,7 @@
 use async_trait::async_trait;
 use chrono::{DateTime, Utc};
 use pasion_data_model::{
-    Clock, User, UserPhone, UserPhoneAuthentication, UserPhoneAuthenticationCode,
-    UserRegistration,
+    Clock, User, UserPhone, UserPhoneAuthentication, UserPhoneAuthenticationCode, UserRegistration,
 };
 use pasion_storage::user::UserPhoneRepository;
 use rand::RngCore;

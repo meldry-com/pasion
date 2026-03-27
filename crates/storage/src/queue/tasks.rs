@@ -1,7 +1,7 @@
 use chrono::{DateTime, Utc};
 use pasion_data_model::{
-    BrowserSession, Session, User, UserEmailAuthentication,
-    UserPhoneAuthentication, UserRecoverySession,
+    BrowserSession, Session, User, UserEmailAuthentication, UserPhoneAuthentication,
+    UserRecoverySession,
 };
 use serde::{Deserialize, Serialize};
 use ulid::Ulid;

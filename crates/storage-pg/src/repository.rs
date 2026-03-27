@@ -18,9 +18,9 @@ use pasion_storage::{
         UpstreamOAuthSessionRepository,
     },
     user::{
-        BrowserSessionRepository, UserEmailRepository, UserPasswordRepository,
-        UserPhoneRepository, UserRecoveryRepository, UserRegistrationRepository,
-        UserRegistrationTokenRepository, UserRepository, UserTermsRepository,
+        BrowserSessionRepository, UserEmailRepository, UserPasswordRepository, UserPhoneRepository,
+        UserRecoveryRepository, UserRegistrationRepository, UserRegistrationTokenRepository,
+        UserRepository, UserTermsRepository,
     },
 };
 use sqlx::{PgConnection, PgPool, Postgres, Transaction};

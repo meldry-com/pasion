@@ -7,12 +7,12 @@ use std::{
     task::{Context, Poll, ready},
 };
 
+#[cfg(unix)]
+use tokio::net::{UnixListener, UnixStream};
 use tokio::{
     io::{AsyncRead, AsyncWrite},
     net::{TcpListener, TcpStream},
 };
-#[cfg(unix)]
-use tokio::net::{UnixListener, UnixStream};
 
 pub enum SocketAddr {
     #[cfg(unix)]
@@ -198,10 +198,7 @@ impl UnixOrTcpListener {
                 let socket = socket2::SockRef::from(&stream);
                 socket.set_keepalive(true)?;
 
-                Poll::Ready(Ok((
-                    remote_addr.into(),
-                    UnixOrTcpConnection::unix(stream),
-                )))
+                Poll::Ready(Ok((remote_addr.into(), UnixOrTcpConnection::unix(stream))))
             }
             Self::Tcp(listener) => {
                 let (stream, remote_addr) = ready!(listener.poll_accept(cx)?);
@@ -210,10 +207,7 @@ impl UnixOrTcpListener {
                 socket.set_keepalive(true)?;
                 socket.set_tcp_nodelay(true)?;
 
-                Poll::Ready(Ok((
-                    remote_addr.into(),
-                    UnixOrTcpConnection::tcp(stream),
-                )))
+                Poll::Ready(Ok((remote_addr.into(), UnixOrTcpConnection::tcp(stream))))
             }
         }
     }

@@ -13,7 +13,6 @@ use pasion_handlers::{ActivityTracker, CookieManager, Limiter, MetadataCache};
 use pasion_listener::server::Server;
 use pasion_router::UrlBuilder;
 use pasion_storage_pg::PgRepositoryFactory;
-use salvo::prelude::*;
 use tracing::{info, info_span, warn};
 
 use crate::{
@@ -241,82 +240,94 @@ impl Options {
 
         let mut fd_manager = listenfd::ListenFd::from_env();
 
-        let servers: Vec<Server<_>> = listeners_config
-            .into_iter()
-            .map(|config| {
-                // Let's first grab all the listeners
-                let listeners = crate::server::build_listeners(&mut fd_manager, &config.binds)?;
+        let mut servers = Vec::new();
+        let mut listening_announcements = Vec::with_capacity(listeners_config.len());
 
-                // Load the TLS config
-                let tls_config = if let Some(tls_config) = config.tls.as_ref() {
-                    let tls_config = crate::server::build_tls_server_config(tls_config)?;
-                    Some(Arc::new(tls_config))
-                } else {
-                    None
-                };
+        for config in listeners_config {
+            let listener_name = config.name.clone();
+            let listener_label = listener_name.as_deref().unwrap_or("<unnamed>");
 
-                // and build the router
-                let router = crate::server::build_router(
-                    state.clone(),
-                    &config.resources,
-                    config.prefix.as_deref(),
-                    config.name.as_deref(),
-                );
+            // Let's first grab all the listeners
+            let listeners = crate::server::build_listeners(&mut fd_manager, &config.binds)
+                .with_context(|| format!("could not initialize listener `{listener_label}`"))?;
 
-                // Create a Salvo service and hyper handler from the router
-                let salvo_service = salvo::Service::new(router);
-                let hyper_handler = salvo_service.hyper_handler(
-                    salvo::conn::SocketAddr::Unknown,
-                    salvo::conn::SocketAddr::Unknown,
-                    http::uri::Scheme::HTTP,
-                    None,
-                    None,
-                );
-                let handler = move |req: hyper::Request<hyper::body::Incoming>| {
-                    use hyper::service::Service;
-                    hyper_handler.call(req)
-                };
+            // Load the TLS config
+            let tls_config = if let Some(tls_config) = config.tls.as_ref() {
+                let tls_config = crate::server::build_tls_server_config(tls_config)?;
+                Some(Arc::new(tls_config))
+            } else {
+                None
+            };
 
+            // and build the router
+            let router = crate::server::build_router(
+                state.clone(),
+                &config.resources,
+                config.prefix.as_deref(),
+                config.name.as_deref(),
+            );
 
-                // Display some informations about where we'll be serving connections
-                let proto = if config.tls.is_some() { "https" } else { "http" };
-                let prefix = config.prefix.unwrap_or_default();
-                let addresses= listeners
-                    .iter()
-                    .map(|listener| {
-                        if let Ok(addr) = listener.local_addr() {
-                            format!("{proto}://{addr:?}{prefix}")
-                        } else {
-                            warn!("Could not get local address for listener, something might be wrong!");
-                            format!("{proto}://???{prefix}")
-                        }
-                    })
-                    .join(", ");
+            // Create a Salvo service and hyper handler from the router
+            let salvo_service = salvo::Service::new(router);
+            let hyper_handler = salvo_service.hyper_handler(
+                salvo::conn::SocketAddr::Unknown,
+                salvo::conn::SocketAddr::Unknown,
+                http::uri::Scheme::HTTP,
+                None,
+                None,
+            );
+            let handler = move |req: hyper::Request<hyper::body::Incoming>| {
+                use hyper::service::Service;
+                hyper_handler.call(req)
+            };
 
-                let additional = if config.proxy_protocol {
-                    "(with Proxy Protocol)"
-                } else {
-                    ""
-                };
-
-                info!(
-                    "Listening on {addresses} with resources {resources:?} {additional}",
-                    resources = &config.resources
-                );
-
-                anyhow::Ok(listeners.into_iter().map(move |listener| {
-                    let mut server = Server::new(listener, handler.clone());
-                    if let Some(tls_config) = &tls_config {
-                        server = server.with_tls(tls_config.clone());
+            // Only announce listeners after every bind has succeeded.
+            let proto = if config.tls.is_some() {
+                "https"
+            } else {
+                "http"
+            };
+            let prefix = config.prefix.clone().unwrap_or_default();
+            let addresses = listeners
+                .iter()
+                .map(|listener| {
+                    if let Ok(addr) = listener.local_addr() {
+                        format!("{proto}://{addr:?}{prefix}")
+                    } else {
+                        warn!(
+                            "Could not get local address for listener, something might be wrong!"
+                        );
+                        format!("{proto}://???{prefix}")
                     }
-                    if config.proxy_protocol {
-                        server = server.with_proxy();
-                    }
-                    server
-                }))
-            })
-            .flatten_ok()
-            .collect::<Result<Vec<_>, _>>()?;
+                })
+                .join(", ");
+            let resources = format!("{:?}", &config.resources);
+            let announcement = if config.proxy_protocol {
+                format!("Listening on {addresses} with resources {resources} (with Proxy Protocol)")
+            } else {
+                format!("Listening on {addresses} with resources {resources}")
+            };
+            listening_announcements.push((listener_name, announcement));
+
+            servers.extend(listeners.into_iter().map(move |listener| {
+                let mut server = Server::new(listener, handler.clone());
+                if let Some(tls_config) = &tls_config {
+                    server = server.with_tls(tls_config.clone());
+                }
+                if config.proxy_protocol {
+                    server = server.with_proxy();
+                }
+                server
+            }));
+        }
+
+        for (listener_name, announcement) in listening_announcements {
+            if let Some(listener_name) = listener_name.as_deref() {
+                info!(listener = listener_name, "{announcement}");
+            } else {
+                info!("{announcement}");
+            }
+        }
 
         span.exit();
 

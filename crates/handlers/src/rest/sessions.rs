@@ -315,4 +315,3 @@ pub async fn set_oauth2_session_name(
 
     Ok(Json(SetSessionNameResponse { status: "UPDATED" }))
 }
-

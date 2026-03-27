@@ -2,10 +2,7 @@ use dioxus::prelude::*;
 
 use crate::{
     api::types::{ConsentDataResponse, ConsentSubmitResponse},
-    components::{
-        layout::Layout,
-        loading::LoadingScreen,
-    },
+    components::{layout::Layout, loading::LoadingScreen},
     pages::Route,
 };
 
@@ -15,9 +12,7 @@ pub fn Consent(grant_id: String) -> Element {
     let gid = grant_id.clone();
     let data = use_resource(move || {
         let id = gid.clone();
-        async move {
-            crate::api::api_get::<ConsentDataResponse>(&format!("/oauth2/consent/{id}")).await
-        }
+        async move { crate::api::api_get::<ConsentDataResponse>(&format!("/oauth2/consent/{id}")).await }
     });
     let binding = data.read();
 
@@ -167,7 +162,9 @@ fn scope_description(scope: &str) -> String {
         "email" => "View your email address".to_string(),
         "phone" => "View your phone number".to_string(),
         "address" => "View your address".to_string(),
-        "urn:matrix:org.matrix.msc2967.client:api:*" => "Access the Matrix API on your behalf".to_string(),
+        "urn:matrix:org.matrix.msc2967.client:api:*" => {
+            "Access the Matrix API on your behalf".to_string()
+        }
         "urn:matrix:org.matrix.msc2967.client:device:*" => "Manage your devices".to_string(),
         other if other.starts_with("urn:mas:admin") => "Administrative access".to_string(),
         other => other.to_string(),

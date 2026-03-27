@@ -54,10 +54,7 @@ impl Worker {
             .build();
 
         // Record stuff on the counter so that the metrics are initialized
-        for kind in &[
-            SessionKind::OAuth2,
-            SessionKind::Browser,
-        ] {
+        for kind in &[SessionKind::OAuth2, SessionKind::Browser] {
             message_counter.add(
                 0,
                 &[

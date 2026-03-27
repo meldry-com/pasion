@@ -17,11 +17,8 @@ use ulid::Ulid;
 use uuid::Uuid;
 
 use crate::{
-    DatabaseError, ExecuteExt,
-    errors::DatabaseInconsistencyError,
-    filter::StatementExt,
-    iden::OAuth2Sessions,
-    pagination::QueryBuilderExt,
+    DatabaseError, ExecuteExt, errors::DatabaseInconsistencyError, filter::StatementExt,
+    iden::OAuth2Sessions, pagination::QueryBuilderExt,
 };
 
 /// An implementation of [`AppSessionRepository`] for a PostgreSQL connection

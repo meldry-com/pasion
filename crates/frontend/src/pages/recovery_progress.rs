@@ -2,7 +2,10 @@ use dioxus::prelude::*;
 
 use crate::{
     api::types::RecoveryStatusResponse,
-    components::{layout::Layout, loading::{LoadingScreen, LoadingSpinner}},
+    components::{
+        layout::Layout,
+        loading::{LoadingScreen, LoadingSpinner},
+    },
     pages::Route,
 };
 

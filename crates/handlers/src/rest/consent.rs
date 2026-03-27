@@ -290,8 +290,8 @@ pub async fn oauth2_consent_post(
         .await?
         .ok_or(RouteError::NotFound)?;
 
-    let callback_destination = CallbackDestination::try_from(&grant)
-        .map_err(|e| RouteError::Internal(Box::new(e)))?;
+    let callback_destination =
+        CallbackDestination::try_from(&grant).map_err(|e| RouteError::Internal(Box::new(e)))?;
 
     if !matches!(grant.stage, AuthorizationGrantStage::Pending) {
         return Err(RouteError::BadRequest("grant is not pending".into()));
@@ -309,8 +309,7 @@ pub async fn oauth2_consent_post(
         .await
         .map_err(|e| RouteError::Internal(Box::new(e)))?;
 
-    let session_counts =
-        count_user_sessions_for_limiting(&mut repo, &browser_session.user).await?;
+    let session_counts = count_user_sessions_for_limiting(&mut repo, &browser_session.user).await?;
 
     let eval_result = policy
         .evaluate_authorization_grant(pasion_policy::AuthorizationGrantInput {
@@ -359,17 +358,20 @@ pub async fn oauth2_consent_post(
             .get_last_authentication(&browser_session)
             .await?;
 
-        params.id_token = Some(generate_id_token(
-            &mut rng,
-            &clock,
-            &url_builder,
-            &key_store,
-            &client,
-            Some(&grant),
-            &browser_session,
-            None,
-            last_authentication.as_ref(),
-        ).map_err(|e| RouteError::Internal(Box::new(e)))?);
+        params.id_token = Some(
+            generate_id_token(
+                &mut rng,
+                &clock,
+                &url_builder,
+                &key_store,
+                &client,
+                Some(&grant),
+                &browser_session,
+                None,
+                last_authentication.as_ref(),
+            )
+            .map_err(|e| RouteError::Internal(Box::new(e)))?,
+        );
     }
 
     // Include auth code if present
@@ -408,7 +410,9 @@ pub async fn device_link_get(
     let clock = make_clock();
     let mut repo = get_repo_factory(depot)?.create().await?;
 
-    let query: DeviceLinkQuery = req.parse_queries().unwrap_or(DeviceLinkQuery { code: None });
+    let query: DeviceLinkQuery = req
+        .parse_queries()
+        .unwrap_or(DeviceLinkQuery { code: None });
 
     let Some(code) = query.code else {
         res.render(Json(DeviceLinkResponse {

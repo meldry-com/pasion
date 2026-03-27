@@ -3,8 +3,8 @@ use std::net::IpAddr;
 use async_trait::async_trait;
 use chrono::{DateTime, Utc};
 use pasion_data_model::{
-    Clock, UpstreamOAuthAuthorizationSession, UserEmailAuthentication,
-    UserPhoneAuthentication, UserRegistration, UserRegistrationPassword, UserRegistrationToken,
+    Clock, UpstreamOAuthAuthorizationSession, UserEmailAuthentication, UserPhoneAuthentication,
+    UserRegistration, UserRegistrationPassword, UserRegistrationToken,
 };
 use pasion_storage::user::UserRegistrationRepository;
 use rand::RngCore;

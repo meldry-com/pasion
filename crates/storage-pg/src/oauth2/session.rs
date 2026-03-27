@@ -134,15 +134,14 @@ impl Filter for OAuth2SessionFilter<'_> {
                 let stable = format!("urn:matrix:client:device:{device}");
                 let unstable = format!("urn:matrix:org.matrix.msc2967.client:device:{device}");
                 Condition::any()
-                    .add(
-                        Expr::val(stable).eq(PgFunc::any(Expr::col((
-                            OAuth2Sessions::Table,
-                            OAuth2Sessions::ScopeList,
-                        )))),
-                    )
-                    .add(Expr::val(unstable).eq(PgFunc::any(
-                        Expr::col((OAuth2Sessions::Table, OAuth2Sessions::ScopeList)),
-                    )))
+                    .add(Expr::val(stable).eq(PgFunc::any(Expr::col((
+                        OAuth2Sessions::Table,
+                        OAuth2Sessions::ScopeList,
+                    )))))
+                    .add(Expr::val(unstable).eq(PgFunc::any(Expr::col((
+                        OAuth2Sessions::Table,
+                        OAuth2Sessions::ScopeList,
+                    )))))
                     .into()
             }))
             .add_option(self.browser_session().map(|browser_session| {

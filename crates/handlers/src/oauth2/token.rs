@@ -12,8 +12,8 @@ use oauth2_types::{
 };
 use opentelemetry::{Key, KeyValue, metrics::Counter};
 use pasion_data_model::{
-    AuthorizationGrantStage, BoxClock, BoxRng, Client, Clock, DeviceCodeGrantState,
-    SiteConfig, SystemClock, TokenType,
+    AuthorizationGrantStage, BoxClock, BoxRng, Client, Clock, DeviceCodeGrantState, SiteConfig,
+    SystemClock, TokenType,
 };
 use pasion_i18n::DataLocale;
 use pasion_keystore::{Encrypter, Keystore};

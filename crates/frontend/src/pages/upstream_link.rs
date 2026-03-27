@@ -111,9 +111,7 @@ fn LinkStateView(id: String, state: LinkState) -> Element {
                 upstream_subject,
             }
         },
-        LinkState::LinkMismatch {
-            existing_username,
-        } => rsx! {
+        LinkState::LinkMismatch { existing_username } => rsx! {
             LinkMismatchView { existing_username }
         },
         LinkState::Register {

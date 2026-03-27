@@ -74,10 +74,7 @@ impl RunnableJob for DeactivateUserJob {
             )
             .await
             .map_err(JobError::retry)?;
-        info!(
-            affected = n,
-            "Killed all personal sessions acting as user"
-        );
+        info!(affected = n, "Killed all personal sessions acting as user");
 
         let n = repo
             .personal_session()
@@ -89,10 +86,7 @@ impl RunnableJob for DeactivateUserJob {
             )
             .await
             .map_err(JobError::retry)?;
-        info!(
-            affected = n,
-            "Killed all personal sessions owned by user"
-        );
+        info!(affected = n, "Killed all personal sessions owned by user");
 
         // Delete all the email addresses for the user
         let n = repo

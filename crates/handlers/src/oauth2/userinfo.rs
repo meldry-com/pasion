@@ -130,10 +130,14 @@ async fn handle_get(req: &mut Request, depot: &Depot) -> Result<UserinfoResponse
 
     let mut repo: BoxRepository = repo_factory.create().await?;
 
-    let user_authorization = UserAuthorization::<()>::extract_from_request(req).await.map_err(|e| match e {
-        pasion_salvo_utils::user_authorization::UserAuthorizationError::Internal(e) => RouteError::Internal(e),
-        _ => RouteError::Unauthorized,
-    })?;
+    let user_authorization = UserAuthorization::<()>::extract_from_request(req)
+        .await
+        .map_err(|e| match e {
+            pasion_salvo_utils::user_authorization::UserAuthorizationError::Internal(e) => {
+                RouteError::Internal(e)
+            }
+            _ => RouteError::Unauthorized,
+        })?;
     let session = user_authorization.protected(&mut repo, &clock).await?;
 
     // This endpoint requires the `openid` scope.

@@ -15,9 +15,8 @@ use chrono::{DateTime, Duration, Utc};
 use http::{Method, Uri, Version};
 use oauth2_types::scope::{OPENID, Scope};
 use pasion_data_model::{
-    AuthorizationGrant, BrowserSession, Client,
-    DeviceCodeGrant, MatrixUser, UpstreamOAuthLink, UpstreamOAuthProvider,
-    UpstreamOAuthProviderClaimsImports, UpstreamOAuthProviderDiscoveryMode,
+    AuthorizationGrant, BrowserSession, Client, DeviceCodeGrant, MatrixUser, UpstreamOAuthLink,
+    UpstreamOAuthProvider, UpstreamOAuthProviderClaimsImports, UpstreamOAuthProviderDiscoveryMode,
     UpstreamOAuthProviderOnBackchannelLogout, UpstreamOAuthProviderPkceMode,
     UpstreamOAuthProviderTokenAuthMethod, User, UserEmailAuthentication,
     UserEmailAuthenticationCode, UserRecoverySession, UserRegistration,

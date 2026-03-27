@@ -8,8 +8,9 @@ use crate::{
 
 #[component]
 pub fn Login() -> Element {
-    let providers_data =
-        use_resource(|| async { crate::api::api_get::<ProvidersResponse>("/auth/providers").await });
+    let providers_data = use_resource(|| async {
+        crate::api::api_get::<ProvidersResponse>("/auth/providers").await
+    });
     let binding = providers_data.read();
 
     match &*binding {

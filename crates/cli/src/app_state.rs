@@ -5,8 +5,7 @@ use opentelemetry::KeyValue;
 use pasion_context::LogContext;
 use pasion_data_model::{AppVersion, BoxClock, BoxRng, SiteConfig, SystemClock};
 use pasion_handlers::{
-    ActivityTracker, BoundActivityTracker, CookieManager, Limiter, MetadataCache,
-    RequesterFingerprint, passwords::PasswordManager,
+    ActivityTracker, CookieManager, Limiter, MetadataCache, passwords::PasswordManager,
 };
 use pasion_i18n::Translator;
 use pasion_keystore::{Encrypter, Keystore};
@@ -192,7 +191,8 @@ impl DepotExt for Depot {
     }
 
     fn get_box_repository_factory(&self) -> Option<&BoxRepositoryFactory> {
-        self.get::<BoxRepositoryFactory>("box_repository_factory").ok()
+        self.get::<BoxRepositoryFactory>("box_repository_factory")
+            .ok()
     }
 
     fn get_templates(&self) -> Option<&Templates> {
@@ -244,7 +244,8 @@ impl DepotExt for Depot {
     }
 
     fn get_homeserver_connection(&self) -> Option<&Arc<dyn HomeserverConnection>> {
-        self.get::<Arc<dyn HomeserverConnection>>("homeserver_connection").ok()
+        self.get::<Arc<dyn HomeserverConnection>>("homeserver_connection")
+            .ok()
     }
 
     fn get_app_version(&self) -> Option<&AppVersion> {
@@ -279,9 +280,9 @@ pub fn extract_rng() -> BoxRng {
 /// Extract Policy from depot
 pub async fn extract_policy(depot: &Depot) -> Result<Policy, pasion_policy::InstantiateError> {
     let policy_factory = depot.get_policy_factory().ok_or_else(|| {
-        pasion_policy::InstantiateError::Runtime(
-            anyhow::anyhow!("PolicyFactory not found in depot"),
-        )
+        pasion_policy::InstantiateError::Runtime(anyhow::anyhow!(
+            "PolicyFactory not found in depot"
+        ))
     })?;
     policy_factory.instantiate().await
 }
@@ -347,42 +348,4 @@ fn infer_client_ip(req: &Request, trusted_proxies: &[IpNetwork]) -> Option<IpAdd
         .copied();
 
     client_ip.or(fallback)
-}
-
-/// Extract BoundActivityTracker from request and depot
-pub fn extract_bound_activity_tracker(req: &Request, depot: &Depot) -> BoundActivityTracker {
-    let activity_tracker = depot
-        .get_activity_tracker()
-        .cloned()
-        .expect("ActivityTracker not found in depot; inject_app_state middleware must run first");
-
-    let trusted_proxies = depot
-        .get_trusted_proxies()
-        .map(|v| v.as_slice())
-        .unwrap_or(&[]);
-
-    let ip = infer_client_ip(req, trusted_proxies);
-    tracing::debug!(ip = ?ip, "Inferred client IP address");
-    activity_tracker.bind(ip)
-}
-
-/// Extract RequesterFingerprint from request and depot
-pub fn extract_requester_fingerprint(req: &Request, depot: &Depot) -> RequesterFingerprint {
-    let trusted_proxies = depot
-        .get_trusted_proxies()
-        .map(|v| v.as_slice())
-        .unwrap_or(&[]);
-
-    let ip = infer_client_ip(req, trusted_proxies);
-
-    if let Some(ip) = ip {
-        RequesterFingerprint::new(ip)
-    } else {
-        // If we can't infer the IP address, we'll just use an empty fingerprint and
-        // warn about it
-        tracing::warn!(
-            "Could not infer client IP address for an operation which rate-limits based on IP addresses"
-        );
-        RequesterFingerprint::EMPTY
-    }
 }

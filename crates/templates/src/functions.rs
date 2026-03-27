@@ -3,12 +3,6 @@
 
 //! Additional functions, tests and filters used in templates
 
-use std::{
-    collections::{BTreeMap, HashMap},
-    fmt::Formatter,
-    str::FromStr,
-    sync::{Arc, atomic::AtomicUsize},
-};
 use minijinja::{
     Error, ErrorKind, State, Value, escape_formatter,
     machinery::make_string_output,
@@ -16,6 +10,12 @@ use minijinja::{
 };
 use pasion_i18n::{Argument, ArgumentList, DataLocale, Translator, sprintf::FormattedMessagePart};
 use pasion_router::UrlBuilder;
+use std::{
+    collections::{BTreeMap, HashMap},
+    fmt::Formatter,
+    str::FromStr,
+    sync::{Arc, atomic::AtomicUsize},
+};
 use url::Url;
 
 pub fn register(
