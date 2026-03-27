@@ -21,7 +21,7 @@ use serde::Deserialize;
 use thiserror::Error;
 
 use self::callback::CallbackDestination;
-use crate::{BoundActivityTracker, impl_from_error_for_route};
+use crate::impl_from_error_for_route;
 
 pub(crate) mod callback;
 pub mod consent;
@@ -127,11 +127,9 @@ async fn handle_get(req: &mut Request, depot: &Depot) -> Result<(Response, Cooki
         .get::<UrlBuilder>("url_builder")
         .expect("UrlBuilder not found in depot");
     let repo_factory = depot
-        .get::<BoxRepositoryFactory>("repository_factory")
+        .get::<BoxRepositoryFactory>("box_repository_factory")
         .expect("BoxRepositoryFactory not found in depot");
-    let activity_tracker = depot
-        .get::<BoundActivityTracker>("activity_tracker")
-        .expect("BoundActivityTracker not found in depot");
+    let activity_tracker = crate::rest::extract_bound_activity_tracker(req, depot);
     let cookie_manager = depot
         .get::<pasion_salvo_utils::cookies::CookieManager>("cookie_manager")
         .expect("CookieManager not found in depot");

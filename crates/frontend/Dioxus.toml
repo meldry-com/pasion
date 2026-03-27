@@ -19,10 +19,10 @@ watch_path = ["src", "assets"]
 port = 8182
 
 [[web.proxy]]
-backend = "http://localhost:8080/api"
+backend = "http://localhost:8090/api"
 
 [[web.proxy]]
-backend = "http://localhost:8080/upstream"
+backend = "http://localhost:8090/upstream"
 
 [[web.proxy]]
-backend = "http://localhost:8080/authorize"
+backend = "http://localhost:8090/authorize"

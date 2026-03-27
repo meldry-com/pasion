@@ -20,7 +20,7 @@ use salvo::prelude::*;
 use thiserror::Error;
 use ulid::Ulid;
 
-use crate::{BoundActivityTracker, impl_from_error_for_route};
+use crate::impl_from_error_for_route;
 
 #[derive(Debug, Error)]
 pub(crate) enum RouteError {
@@ -131,11 +131,9 @@ async fn handle_post(req: &mut Request, depot: &Depot) -> Result<(), RouteError>
         .get::<Encrypter>("encrypter")
         .expect("Encrypter not found in depot");
     let repo_factory = depot
-        .get::<BoxRepositoryFactory>("repository_factory")
+        .get::<BoxRepositoryFactory>("box_repository_factory")
         .expect("BoxRepositoryFactory not found in depot");
-    let activity_tracker = depot
-        .get::<BoundActivityTracker>("activity_tracker")
-        .expect("BoundActivityTracker not found in depot");
+    let activity_tracker = crate::rest::extract_bound_activity_tracker(req, depot);
 
     let clock: BoxClock = Box::new(SystemClock::default());
     #[allow(clippy::disallowed_methods)]

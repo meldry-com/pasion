@@ -14,7 +14,7 @@ use url::Url;
 use super::ConfigurationSection;
 
 fn default_public_base() -> Url {
-    "http://[::]:8080".parse().unwrap()
+    "http://[::]:8090".parse().unwrap()
 }
 
 #[cfg(not(any(feature = "docker", feature = "dist")))]
@@ -92,10 +92,10 @@ pub enum BindConfig {
     Address {
         /// Host and port on which to listen
         #[schemars(
-            example = &"[::1]:8080",
-            example = &"[::]:8080",
-            example = &"127.0.0.1:8080",
-            example = &"0.0.0.0:8080",
+            example = &"[::1]:8090",
+            example = &"[::]:8090",
+            example = &"127.0.0.1:8090",
+            example = &"0.0.0.0:8090",
         )]
         address: String,
     },
@@ -368,7 +368,7 @@ impl Default for HttpConfig {
                     tls: None,
                     proxy_protocol: false,
                     binds: vec![BindConfig::Address {
-                        address: "[::]:8080".into(),
+                        address: "[::]:8090".into(),
                     }],
                 },
                 ListenerConfig {
@@ -379,7 +379,7 @@ impl Default for HttpConfig {
                     proxy_protocol: false,
                     binds: vec![BindConfig::Listen {
                         host: Some("localhost".to_owned()),
-                        port: 8081,
+                        port: 8091,
                     }],
                 },
             ],

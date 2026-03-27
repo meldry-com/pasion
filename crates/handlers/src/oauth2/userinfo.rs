@@ -19,7 +19,7 @@ use serde_with::skip_serializing_none;
 use thiserror::Error;
 use ulid::Ulid;
 
-use crate::{BoundActivityTracker, impl_from_error_for_route};
+use crate::impl_from_error_for_route;
 
 #[skip_serializing_none]
 #[derive(Serialize)]
@@ -118,11 +118,9 @@ async fn handle_get(req: &mut Request, depot: &Depot) -> Result<UserinfoResponse
         .get::<Keystore>("keystore")
         .expect("Keystore not found in depot");
     let repo_factory = depot
-        .get::<BoxRepositoryFactory>("repository_factory")
+        .get::<BoxRepositoryFactory>("box_repository_factory")
         .expect("BoxRepositoryFactory not found in depot");
-    let activity_tracker = depot
-        .get::<BoundActivityTracker>("activity_tracker")
-        .expect("BoundActivityTracker not found in depot");
+    let activity_tracker = crate::rest::extract_bound_activity_tracker(req, depot);
 
     let clock: BoxClock = Box::new(SystemClock::default());
     #[allow(clippy::disallowed_methods)]

@@ -28,7 +28,7 @@ use thiserror::Error;
 use tracing::info;
 use url::Url;
 
-use crate::{BoundActivityTracker, METER, impl_from_error_for_route};
+use crate::{METER, impl_from_error_for_route};
 
 static REGISTRATION_COUNTER: LazyLock<Counter<u64>> = LazyLock::new(|| {
     METER
@@ -208,14 +208,12 @@ async fn handle_post(req: &mut Request, depot: &Depot) -> Result<RouteResponse, 
         .get::<Encrypter>("encrypter")
         .expect("Encrypter not found in depot");
     let repo_factory = depot
-        .get::<BoxRepositoryFactory>("repository_factory")
+        .get::<BoxRepositoryFactory>("box_repository_factory")
         .expect("BoxRepositoryFactory not found in depot");
     let policy_factory = depot
         .get::<Arc<PolicyFactory>>("policy_factory")
         .expect("PolicyFactory not found in depot");
-    let activity_tracker = depot
-        .get::<BoundActivityTracker>("activity_tracker")
-        .expect("BoundActivityTracker not found in depot");
+    let activity_tracker = crate::rest::extract_bound_activity_tracker(req, depot);
 
     let clock: BoxClock = Box::new(SystemClock::default());
     #[allow(clippy::disallowed_methods)]

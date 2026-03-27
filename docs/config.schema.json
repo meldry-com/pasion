@@ -39,7 +39,7 @@
             ],
             "binds": [
               {
-                "address": "[::]:8080"
+                "address": "[::]:8090"
               }
             ],
             "proxy_protocol": false
@@ -54,7 +54,7 @@
             "binds": [
               {
                 "host": "localhost",
-                "port": 8081
+                "port": 8091
               }
             ],
             "proxy_protocol": false
@@ -68,8 +68,8 @@
           "fd00::/8",
           "::1/128"
         ],
-        "public_base": "http://[::]:8080/",
-        "issuer": "http://[::]:8080/"
+        "public_base": "http://[::]:8090/",
+        "issuer": "http://[::]:8090/"
       },
       "allOf": [
         {
@@ -945,10 +945,10 @@
               "description": "Host and port on which to listen",
               "type": "string",
               "examples": [
-                "[::1]:8080",
-                "[::]:8080",
-                "127.0.0.1:8080",
-                "0.0.0.0:8080"
+                "[::1]:8090",
+                "[::]:8090",
+                "127.0.0.1:8090",
+                "0.0.0.0:8090"
               ]
             }
           },

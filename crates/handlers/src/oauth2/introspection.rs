@@ -255,7 +255,7 @@ async fn handle_post(
         .get::<Arc<dyn HomeserverConnection>>("homeserver_connection")
         .expect("HomeserverConnection not found in depot");
     let repo_factory = depot
-        .get::<BoxRepositoryFactory>("repository_factory")
+        .get::<BoxRepositoryFactory>("box_repository_factory")
         .expect("BoxRepositoryFactory not found in depot");
     let activity_tracker = depot
         .get::<ActivityTracker>("activity_tracker")

@@ -302,11 +302,9 @@ async fn handle_post(req: &mut Request, depot: &Depot) -> Result<AccessTokenResp
         .get::<Templates>("templates")
         .expect("Templates not found in depot");
     let repo_factory = depot
-        .get::<BoxRepositoryFactory>("repository_factory")
+        .get::<BoxRepositoryFactory>("box_repository_factory")
         .expect("BoxRepositoryFactory not found in depot");
-    let activity_tracker = depot
-        .get::<BoundActivityTracker>("activity_tracker")
-        .expect("BoundActivityTracker not found in depot");
+    let activity_tracker = crate::rest::extract_bound_activity_tracker(req, depot);
     let policy_factory = depot
         .get::<Arc<pasion_policy::PolicyFactory>>("policy_factory")
         .expect("PolicyFactory not found in depot");
