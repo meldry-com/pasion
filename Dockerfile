@@ -9,6 +9,31 @@ ARG DEBIAN_VERSION=12
 ARG DEBIAN_VERSION_NAME=bookworm
 ARG RUSTC_VERSION=1.89.0
 ARG CARGO_AUDITABLE_VERSION=0.7.0
+ARG DIOXUS_CLI_VERSION=0.7.3
+
+############################################
+## Build stage that builds the frontend   ##
+############################################
+FROM --platform=${BUILDPLATFORM} docker.io/library/rust:${RUSTC_VERSION}-${DEBIAN_VERSION_NAME} AS frontend
+
+ARG DIOXUS_CLI_VERSION
+
+# Install wasm target and Dioxus CLI
+# Network access: to fetch dependencies
+RUN --network=default \
+  rustup target add wasm32-unknown-unknown && \
+  cargo install --locked dioxus-cli@${DIOXUS_CLI_VERSION}
+
+WORKDIR /app
+COPY ./ /app
+
+# Build the WASM frontend
+# Network access: to fetch dependencies
+RUN --network=default \
+  --mount=type=cache,target=/root/.cargo/registry \
+  --mount=type=cache,target=/app/target \
+  dx build -p pasion-frontend --release \
+  && cp -r target/dx/pasion-frontend/release/web/public /frontend-dist
 
 ########################################
 ## Build stage that builds the binary ##
@@ -91,7 +116,7 @@ FROM --platform=${BUILDPLATFORM} scratch AS share
 COPY ./policies/policy.wasm /share/policy.wasm
 COPY ./templates/ /share/templates
 COPY ./translations/ /share/translations
-COPY ./dist/ /share/assets
+COPY --from=frontend /frontend-dist/ /share/assets
 
 ##################################
 ## Runtime stage, debug variant ##

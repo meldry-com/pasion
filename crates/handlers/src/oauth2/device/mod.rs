@@ -1,3 +1,5 @@
 pub mod authorize;
-pub mod consent;
-pub mod link;
+#[cfg(test)]
+pub(crate) mod consent;
+#[cfg(test)]
+pub(crate) mod link;

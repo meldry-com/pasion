@@ -1,20 +1,21 @@
 name: Build the frontend assets
-description: Installs Node.js and builds the frontend assets from the frontend directory
+description: Installs Rust wasm target and Dioxus CLI, then builds the frontend WASM app
 
 runs:
   using: composite
   steps:
-    - name: Install Node
-      uses: actions/setup-node@v6.0.0
-      with:
-        node-version: "24"
-
-    - name: Install dependencies
-      run: npm ci
-      working-directory: ./frontend
+    - name: Install wasm32 target
+      run: rustup target add wasm32-unknown-unknown
       shell: sh
 
-    - name: Build the frontend assets
-      run: npm run build
-      working-directory: ./frontend
+    - name: Install Dioxus CLI
+      run: cargo install --locked dioxus-cli@0.7.3
+      shell: sh
+
+    - name: Build the frontend
+      run: dx build -p pasion-frontend --release
+      shell: sh
+
+    - name: Copy dist output
+      run: rm -rf dist && cp -r target/dx/pasion-frontend/release/web/public dist
       shell: sh
