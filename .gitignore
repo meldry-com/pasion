@@ -1,6 +1,9 @@
 # Rust
 target
 
+# Frontend build output
+dist
+
 # Editors
 .idea
 .nova

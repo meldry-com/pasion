@@ -17,7 +17,7 @@ use pasion_storage::{
         ProvisionUserJob, QueueJobRepositoryExt as _, SendEmailAuthenticationCodeJob,
         SendSmsAuthenticationCodeJob,
     },
-    user::{UserEmailFilter, UserEmailRepository, UserPhoneRepository, UserRepository},
+    user::{UserEmailFilter, UserEmailRepository, UserFilter, UserPhoneRepository, UserRepository},
 };
 use salvo::prelude::*;
 use serde::{Deserialize, Serialize};
@@ -908,10 +908,16 @@ pub async fn post_finish(
     }
 
     // Create the user
-    let user = repo
+    let mut user = repo
         .user()
         .add(&mut rng, &clock, registration.username.clone())
         .await?;
+
+    // If this is the first user, automatically grant admin privileges
+    let user_count = repo.user().count(UserFilter::new()).await?;
+    if user_count == 1 {
+        user = repo.user().set_can_request_admin(user, true).await?;
+    }
 
     // Create a browser session to log the user in
     let user_session = repo

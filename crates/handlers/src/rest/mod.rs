@@ -43,6 +43,7 @@ use crate::{
 pub mod auth;
 pub mod consent;
 pub mod emails;
+pub mod linked_accounts;
 pub mod oauth2_clients;
 pub mod password;
 pub mod recovery;

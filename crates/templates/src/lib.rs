@@ -308,10 +308,7 @@ pub enum TemplateError {
 }
 
 register_templates! {
-    /// Render the not found fallback page
-    pub fn render_not_found(WithLanguage<NotFoundContext>) { "pages/404.html" }
-
-    /// Render the frontend app
+    /// Render the frontend app (Dioxus SPA shell)
     pub fn render_app(WithLanguage<AppContext>) { "app.html" }
 
     /// Render the Swagger API reference
@@ -320,61 +317,10 @@ register_templates! {
     /// Render the Swagger OAuth callback page
     pub fn render_swagger_callback(ApiDocContext) { "swagger/oauth2-redirect.html" }
 
-    /// Render the login page
-    pub fn render_login(WithLanguage<WithCsrf<LoginContext>>) { "pages/login.html" }
-
-    /// Render the registration page
-    pub fn render_register(WithLanguage<WithCsrf<RegisterContext>>) { "pages/register/index.html" }
-
-    /// Render the password registration page
-    pub fn render_password_register(WithLanguage<WithCsrf<WithCaptcha<PasswordRegisterContext>>>) { "pages/register/password.html" }
-
-    /// Render the email verification page
-    pub fn render_register_steps_verify_email(WithLanguage<WithCsrf<RegisterStepsVerifyEmailContext>>) { "pages/register/steps/verify_email.html" }
-
-    /// Render the email in use page
-    pub fn render_register_steps_email_in_use(WithLanguage<RegisterStepsEmailInUseContext>) { "pages/register/steps/email_in_use.html" }
-
-    /// Render the display name page
-    pub fn render_register_steps_display_name(WithLanguage<WithCsrf<RegisterStepsDisplayNameContext>>) { "pages/register/steps/display_name.html" }
-
-    /// Render the registration token page
-    pub fn render_register_steps_registration_token(WithLanguage<WithCsrf<RegisterStepsRegistrationTokenContext>>) { "pages/register/steps/registration_token.html" }
-
-    /// Render the client consent page
-    pub fn render_consent(WithLanguage<WithCsrf<WithSession<ConsentContext>>>) { "pages/consent.html" }
-
-    /// Render the policy violation page
-    pub fn render_policy_violation(WithLanguage<WithCsrf<WithSession<PolicyViolationContext>>>) { "pages/policy_violation.html" }
-
-    /// Render the compatibility login policy violation page
-    pub fn render_compat_login_policy_violation(WithLanguage<WithCsrf<WithSession<CompatLoginPolicyViolationContext>>>) { "pages/compat_login_policy_violation.html" }
-
-    /// Render the home page
-    pub fn render_index(WithLanguage<WithCsrf<WithOptionalSession<IndexContext>>>) { "pages/index.html" }
-
-    /// Render the account recovery start page
-    pub fn render_recovery_start(WithLanguage<WithCsrf<RecoveryStartContext>>) { "pages/recovery/start.html" }
-
-    /// Render the account recovery start page
-    pub fn render_recovery_progress(WithLanguage<WithCsrf<RecoveryProgressContext>>) { "pages/recovery/progress.html" }
-
-    /// Render the account recovery finish page
-    pub fn render_recovery_finish(WithLanguage<WithCsrf<RecoveryFinishContext>>) { "pages/recovery/finish.html" }
-
-    /// Render the account recovery link expired page
-    pub fn render_recovery_expired(WithLanguage<WithCsrf<RecoveryExpiredContext>>) { "pages/recovery/expired.html" }
-
-    /// Render the account recovery link consumed page
-    pub fn render_recovery_consumed(WithLanguage<EmptyContext>) { "pages/recovery/consumed.html" }
-
-    /// Render the account recovery disabled page
-    pub fn render_recovery_disabled(WithLanguage<EmptyContext>) { "pages/recovery/disabled.html" }
-
-    /// Render the form used by the `form_post` response mode
+    /// Render the form used by the `form_post` response mode (OAuth2 protocol)
     pub fn render_form_post<#[sample(EmptyContext)] T: Serialize>(WithLanguage<FormPostContext<T>>) { "form_post.html" }
 
-    /// Render the HTML error page
+    /// Render the HTML error page (server-side fallback)
     pub fn render_error(ErrorContext) { "pages/error.html" }
 
     /// Render the email recovery email (plain text variant)
@@ -394,21 +340,6 @@ register_templates! {
 
     /// Render the email verification subject
     pub fn render_email_verification_subject(WithLanguage<EmailVerificationContext>) { "emails/verification.subject" }
-
-    /// Render the upstream link mismatch message
-    pub fn render_upstream_oauth2_link_mismatch(WithLanguage<WithCsrf<WithSession<UpstreamExistingLinkContext>>>) { "pages/upstream_oauth2/link_mismatch.html" }
-
-    /// Render the upstream suggest link message
-    pub fn render_upstream_oauth2_suggest_link(WithLanguage<WithCsrf<WithSession<UpstreamSuggestLink>>>) { "pages/upstream_oauth2/suggest_link.html" }
-
-    /// Render the upstream register screen
-    pub fn render_upstream_oauth2_do_register(WithLanguage<WithCsrf<UpstreamRegister>>) { "pages/upstream_oauth2/do_register.html" }
-
-    /// Render the device code link page
-    pub fn render_device_link(WithLanguage<DeviceLinkContext>) { "pages/device_link.html" }
-
-    /// Render the device code consent page
-    pub fn render_device_consent(WithLanguage<WithCsrf<WithSession<DeviceConsentContext>>>) { "pages/device_consent.html" }
 
     /// Render the 'account deactivated' page
     pub fn render_account_deactivated(WithLanguage<WithCsrf<AccountInactiveContext>>) { "pages/account/deactivated.html" }

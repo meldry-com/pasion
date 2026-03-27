@@ -289,18 +289,29 @@ pub fn build_router(
                 playground: _,
                 undocumented_oauth2_access: _,
             } => build_rest_api_router(router),
-            pasion_config::HttpResource::Assets { path } => router.push(
-                Router::with_path(&format!(
-                    "{}/{{**path}}",
-                    pasion_router::StaticAsset::route()
-                ))
-                .hoop(cache_control_middleware)
-                .get(
-                    StaticDir::new([path.clone()])
-                        .include_dot_files(false)
-                        .auto_list(false),
+            pasion_config::HttpResource::Assets { path } => router
+                .push(
+                    Router::with_path(&format!(
+                        "{}/{{**path}}",
+                        pasion_router::StaticAsset::route()
+                    ))
+                    .hoop(cache_control_middleware)
+                    .get(
+                        StaticDir::new([path.clone()])
+                            .include_dot_files(false)
+                            .auto_list(false),
+                    ),
+                )
+                // Serve WASM files at /wasm/ to match Dioxus default asset paths
+                .push(
+                    Router::with_path("/wasm/{**path}")
+                        .hoop(cache_control_middleware)
+                        .get(
+                            StaticDir::new([path.join("wasm")])
+                                .include_dot_files(false)
+                                .auto_list(false),
+                        ),
                 ),
-            ),
             pasion_config::HttpResource::OAuth => build_oauth_router(router),
             pasion_config::HttpResource::Compat => {
                 // Compat layer removed — pass through
@@ -548,6 +559,15 @@ fn build_rest_api_router(router: Router) -> Router {
             Router::with_path("/api/v1/device-consent/{id}")
                 .get(pasion_handlers::rest::consent::device_consent_get)
                 .post(pasion_handlers::rest::consent::device_consent_post),
+        )
+        // Linked accounts (view/unlink upstream OAuth providers)
+        .push(
+            Router::with_path("/api/v1/linked-accounts")
+                .get(pasion_handlers::rest::linked_accounts::list_linked_accounts),
+        )
+        .push(
+            Router::with_path("/api/v1/linked-accounts/{id}")
+                .delete(pasion_handlers::rest::linked_accounts::unlink_account),
         )
         // Upstream OAuth2 link (SPA)
         .push(

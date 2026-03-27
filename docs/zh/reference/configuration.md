@@ -35,7 +35,7 @@ http:
         - name: compat       # 旧版 Matrix 登录兼容层
         - name: graphql      # GraphQL API
         - name: assets       # 静态资源
-          path: /path/to/frontend/dist/
+          path: /path/to/dist/
         - name: health       # 健康检查端点
 
   # 信任的代理 IP 范围

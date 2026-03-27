@@ -79,8 +79,8 @@ Building from the source requires:
    npm run build
    cd ..
    ```
-   This will produce a `frontend/dist` directory containing the built frontend assets.
-   This folder, along with the `frontend/dist/manifest.json` file, can be relocated, as long as the configuration file is updated accordingly.
+   This will produce a `dist` directory containing the built frontend assets.
+   This folder, along with the `dist/manifest.json` file, can be relocated, as long as the configuration file is updated accordingly.
 1. Build the Open Policy Agent policies
    ```sh
    cd policies

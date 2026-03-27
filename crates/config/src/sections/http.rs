@@ -19,7 +19,7 @@ fn default_public_base() -> Url {
 
 #[cfg(not(any(feature = "docker", feature = "dist")))]
 fn http_listener_assets_path_default() -> Utf8PathBuf {
-    "./frontend/dist/".into()
+    "./dist/".into()
 }
 
 #[cfg(feature = "docker")]

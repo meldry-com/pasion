@@ -46,9 +46,10 @@ frontend:
 frontend-hot:
     dx serve -p pasion-frontend --hot-reload
 
-# Build the frontend for production
+# Build the frontend for production (output → dist/)
 frontend-build:
     dx build -p pasion-frontend --release
+    {{ if os() == "windows" { "if (Test-Path dist) { Remove-Item -Recurse -Force dist }; Copy-Item -Recurse target/dx/pasion-frontend/release/web/public dist" } else { "rm -rf dist && cp -r target/dx/pasion-frontend/release/web/public dist" } }}
 
 # ── Build ────────────────────────────────────────────────────
 

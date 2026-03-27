@@ -78,7 +78,7 @@ http:
 
 ```nginx
 location /assets/ {
-    alias /path/to/pasion/frontend/dist/;
+    alias /path/to/pasion/dist/;
     expires 1y;
     add_header Cache-Control "public, immutable";
 }

@@ -8,7 +8,7 @@ use pasion_router::PostAuthAction;
 use pasion_salvo_utils::{InternalError, SessionInfoExt as _, cookies::CookieJar};
 use pasion_storage::{
     queue::{ProvisionUserJob, QueueJobRepositoryExt as _},
-    user::UserEmailFilter,
+    user::{UserEmailFilter, UserFilter},
 };
 use pasion_templates::{RegisterStepsEmailInUseContext, TemplateContext as _, Templates};
 use salvo::{prelude::*, writing::Text};
@@ -251,10 +251,17 @@ pub async fn get(
         .save(cookie_jar, &clock);
 
     // Now we can start the user creation
-    let user = repo
+    let mut user = repo
         .user()
         .add(&mut rng, &clock, registration.username)
         .await?;
+
+    // If this is the first user, automatically grant admin privileges
+    let user_count = repo.user().count(UserFilter::new()).await?;
+    if user_count == 1 {
+        user = repo.user().set_can_request_admin(user, true).await?;
+    }
+
     // Also create a browser session which will log the user in
     let user_session = repo
         .browser_session()

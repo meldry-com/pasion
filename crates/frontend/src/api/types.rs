@@ -36,6 +36,8 @@ pub struct User {
     #[serde(default)]
     pub emails: Option<EmailConnection>,
     #[serde(default)]
+    pub linked_accounts: Option<Vec<LinkedAccount>>,
+    #[serde(default)]
     pub browser_sessions: Option<BrowserSessionConnection>,
     #[serde(default)]
     pub app_sessions: Option<AppSessionConnection>,
@@ -46,6 +48,29 @@ pub struct User {
 pub struct MatrixUser {
     pub mxid: String,
     pub display_name: Option<String>,
+}
+
+// ── Linked accounts ───────────────────────────────────────────
+
+#[derive(Debug, Clone, PartialEq, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct LinkedAccount {
+    pub id: String,
+    pub provider_id: String,
+    #[serde(default)]
+    pub provider_name: Option<String>,
+    #[serde(default)]
+    pub provider_brand: Option<String>,
+    pub subject: String,
+    #[serde(default)]
+    pub human_account_name: Option<String>,
+    pub created_at: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct UnlinkResponse {
+    pub status: String,
 }
 
 // ── Session types ──────────────────────────────────────────────

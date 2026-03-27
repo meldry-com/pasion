@@ -1,8 +1,6 @@
 target/
 crates/*/target
 crates/*/node_modules
-frontend/node_modules
-frontend/dist
 docs/
 .devcontainer/
 .github/

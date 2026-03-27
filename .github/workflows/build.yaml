@@ -71,8 +71,8 @@ jobs:
         run: |
           mkdir -p assets-dist/share
           cp policies/policy.wasm assets-dist/share/policy.wasm
-          cp frontend/dist/manifest.json assets-dist/share/manifest.json
-          cp -r frontend/dist/ assets-dist/share/assets
+          cp dist/manifest.json assets-dist/share/manifest.json
+          cp -r dist/ assets-dist/share/assets
           cp -r templates/ assets-dist/share/templates
           cp -r translations/ assets-dist/share/translations
           cp LICENSE assets-dist/LICENSE

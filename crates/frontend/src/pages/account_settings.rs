@@ -1,7 +1,7 @@
 use dioxus::prelude::*;
 
 use crate::{
-    api::types::ViewerResponse,
+    api::types::{LinkedAccount, ProvidersResponse, ViewerResponse},
     components::{
         collapsible::CollapsibleSection,
         loading::LoadingScreen,
@@ -42,6 +42,10 @@ pub fn AccountSettings() -> Element {
                 .unwrap_or_default();
             let email_count = user.emails.as_ref().map(|ec| ec.total_count).unwrap_or(0);
             let has_password = user.has_password.unwrap_or(false);
+            let linked_accounts: Vec<LinkedAccount> = user
+                .linked_accounts
+                .clone()
+                .unwrap_or_default();
             let email_change_allowed = result.site_config.email_change_allowed;
             let password_login_enabled = result.site_config.password_login_enabled;
             let account_deactivation_allowed = result.site_config.account_deactivation_allowed;
@@ -81,6 +85,10 @@ pub fn AccountSettings() -> Element {
                         }
                         Separator { kind: SeparatorKind::Section }
                     }
+
+                    // Linked accounts section
+                    LinkedAccountsSection { accounts: linked_accounts.clone() }
+                    Separator { kind: SeparatorKind::Section }
 
                     // E2EE section
                     CollapsibleSection { title: "Encryption".to_string(),
@@ -174,6 +182,120 @@ fn SignOutButton(session_id: String) -> Element {
                         class: "btn btn-tertiary",
                         onclick: move |_| show_dialog.set(false),
                         "Cancel"
+                    }
+                }
+            }
+        }
+    }
+}
+
+// ── Linked accounts section ─────────────────────────────────────
+
+#[component]
+fn LinkedAccountsSection(accounts: Vec<LinkedAccount>) -> Element {
+    let mut accounts_signal = use_signal(|| accounts.clone());
+    let mut unlinking_id = use_signal(|| None::<String>);
+    let mut error = use_signal(|| None::<String>);
+
+    // Fetch available providers to show "Link" buttons for unlinked ones
+    let providers_data = use_resource(|| async {
+        crate::api::api_get::<ProvidersResponse>("/auth/providers").await
+    });
+
+    rsx! {
+        CollapsibleSection { title: "Linked accounts".to_string(), default_open: true,
+            p { class: "text-md text-secondary",
+                "Connect external accounts to enable additional sign-in methods."
+            }
+
+            // Show currently linked accounts
+            if accounts_signal.read().is_empty() {
+                p { class: "text-md text-secondary", style: "font-style: italic;",
+                    "No external accounts linked."
+                }
+            } else {
+                div { class: "flex flex-col gap-3",
+                    for account in accounts_signal.read().iter() {
+                        {
+                            let account_id = account.id.clone();
+                            let display_name = account.human_account_name.clone()
+                                .or_else(|| Some(account.subject.clone()))
+                                .unwrap_or_default();
+                            let provider_label = account.provider_name.clone()
+                                .or_else(|| account.provider_brand.clone())
+                                .unwrap_or_else(|| "External provider".to_string());
+                            rsx! {
+                                div {
+                                    class: "flex items-center justify-between p-3 rounded-lg border",
+                                    div { class: "flex flex-col gap-1",
+                                        span { class: "text-md font-semibold", "{provider_label}" }
+                                        span { class: "text-sm text-secondary", "{display_name}" }
+                                    }
+                                    button {
+                                        class: "btn btn-destructive btn-sm",
+                                        disabled: unlinking_id.read().is_some(),
+                                        onclick: {
+                                            let aid = account_id.clone();
+                                            move |_| {
+                                                let aid = aid.clone();
+                                                unlinking_id.set(Some(aid.clone()));
+                                                error.set(None);
+                                                spawn(async move {
+                                                    let result = crate::api::api_delete::<crate::api::types::UnlinkResponse>(
+                                                        &format!("/linked-accounts/{}", aid),
+                                                    ).await;
+                                                    match result {
+                                                        Ok(_) => {
+                                                            accounts_signal.write().retain(|a| a.id != aid);
+                                                        }
+                                                        Err(e) => {
+                                                            error.set(Some(e));
+                                                        }
+                                                    }
+                                                    unlinking_id.set(None);
+                                                });
+                                            }
+                                        },
+                                        if unlinking_id.read().as_deref() == Some(&account_id) {
+                                            span { class: "loading-spinner inline" }
+                                        }
+                                        "Unlink"
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+
+            if let Some(ref err) = *error.read() {
+                div { class: "alert alert-critical mt-2", "{err}" }
+            }
+
+            // Show available providers that can be linked
+            if let Some(Ok(providers)) = &*providers_data.read() {
+                {
+                    let linked_provider_ids: Vec<String> = accounts_signal.read()
+                        .iter()
+                        .map(|a| a.provider_id.clone())
+                        .collect();
+                    let unlinked: Vec<_> = providers.providers.iter()
+                        .filter(|p| !linked_provider_ids.contains(&p.id))
+                        .collect();
+                    if !unlinked.is_empty() {
+                        rsx! {
+                            div { class: "flex flex-wrap gap-2 mt-3",
+                                for provider in unlinked.iter() {
+                                    a {
+                                        class: "btn btn-secondary btn-sm",
+                                        href: "{provider.authorize_url}",
+                                        "Link {provider.human_name.clone().unwrap_or_else(|| provider.id.clone())}"
+                                    }
+                                }
+                            }
+                        }
+                    } else {
+                        rsx! {}
                     }
                 }
             }
