@@ -182,7 +182,6 @@ experimental_features:
 | `pasion manage promote-user` | 提升用户为管理员 |
 | `pasion worker -c config.yaml` | 单独运行后台任务 worker |
 | `pasion doctor -c config.yaml` | 诊断部署健康状态 |
-| `pasion syn2mas` | 从 Palpo 内置认证迁移到 Pasion |
 
 ### 服务启动选项
 

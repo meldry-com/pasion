@@ -43,17 +43,17 @@ Pasion 设计为轻量级、易于嵌入的服务，仅依赖 PostgreSQL 数据�
 - [`thiserror`](https://docs.rs/thiserror/) — 定义自定义错误类型
 - [`anyhow`](https://docs.rs/anyhow/) — 错误链传播
 
-### 数据库：`sqlx`
+### 数据库：`diesel`
 
-通过 [`sqlx`](https://github.com/launchbadge/sqlx) 与数据库交互，支持编译时 SQL 查询检查。
+通过 [`diesel`](https://diesel.rs/) 和 [`diesel-async`](https://docs.rs/diesel-async/) 与数据库交互，使用 [`deadpool`](https://docs.rs/deadpool/) 管理连接池。数据库迁移由 `diesel_migrations` 处理。
 
 ### Web 框架：`salvo`
 
 HTTP 层使用 [Salvo](https://salvo.rs/) 框架处理请求路由和中间件。
 
-### 模板引擎：`tera`
+### 模板引擎：`minijinja`
 
-[Tera](https://tera.netlify.app/) 用于渲染登录、注册等页面模板。
+[MiniJinja](https://github.com/mitsuhiko/minijinja) 用于渲染登录、注册等页面模板。它是 Jinja2 模板语言的 Rust 实现，语法与 Python 的 Jinja2 基本一致。
 
 ### 密码学：RustCrypto
 

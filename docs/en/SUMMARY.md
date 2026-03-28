@@ -14,7 +14,6 @@
 - [Configuring a reverse proxy](./setup/reverse-proxy.md)
 - [Configure an upstream SSO provider](./setup/sso.md)
 - [Running the service](./setup/running.md)
-- [Migrating an existing homeserver](./setup/migration.md)
 
 # Topics
 
@@ -33,7 +32,6 @@
     - [`database`](./reference/cli/database.md)
     - [`manage`](./reference/cli/manage.md)
     - [`server`](./reference/cli/server.md)
-    - [`syn2mas`](./reference/cli/syn2mas.md)
     - [`worker`](./reference/cli/worker.md)
     - [`templates`](./reference/cli/templates.md)
     - [`doctor`](./reference/cli/doctor.md)

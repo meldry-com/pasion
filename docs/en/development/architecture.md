@@ -96,18 +96,15 @@ It allows for quickly adding additional context around an error while it is bein
 
 Both crates work well together and complement each other.
 
-### Database interactions: `sqlx`
+### Database interactions: `diesel`
 
-Interactions with the database are done through [`sqlx`](https://github.com/launchbadge/sqlx), an async, pure-Rust SQL library with compile-time check of queries.
-It also handles schema migrations.
+Interactions with the database are done through [`diesel`](https://diesel.rs/) with [`diesel-async`](https://docs.rs/diesel-async/) for async support and [`deadpool`](https://docs.rs/deadpool/) for connection pooling.
+Schema migrations are managed by `diesel_migrations`.
 
-### Templates: `tera`
+### Templates: `minijinja`
 
-[Tera](https://tera.netlify.app/) was chosen as template engine for its simplicity as well as its ability to load templates at runtime.
-The builtin templates are embedded in the final binary through some macro magic.
-
-The downside of Tera compared to compile-time template engines is the possibility of runtime crashes.
-This can however be somewhat mitigated with unit tests.
+[MiniJinja](https://github.com/mitsuhiko/minijinja) is used as the template engine. It is a Rust implementation of the Jinja2 template language, offering runtime template loading and a syntax familiar to Python developers.
+The `minijinja-contrib` crate provides additional filters for Python compatibility.
 
 ### Crates from *RustCrypto*
 

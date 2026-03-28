@@ -83,7 +83,6 @@ pasion-storage-pg.workspace = true
 pasion-tasks.workspace = true
 pasion-templates.workspace = true
 
-syn2mas.workspace = true
 tokio-postgres.workspace = true
 uuid.workspace = true
 

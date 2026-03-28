@@ -14,7 +14,6 @@
 - [配置反向代理](./setup/reverse-proxy.md)
 - [配置上游 SSO 提供商](./setup/sso.md)
 - [运行服务](./setup/running.md)
-- [从现有 Homeserver 迁移](./setup/migration.md)
 
 # 专题
 

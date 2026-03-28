@@ -39,10 +39,6 @@ enum Subcommand {
         /// If not specified, the config will be written to stdout
         #[clap(short, long)]
         output: Option<Utf8PathBuf>,
-
-        /// Existing Palpo configuration used to generate the Pasion config
-        #[arg(short, long, action = clap::ArgAction::Append)]
-        palpo_config: Vec<Utf8PathBuf>,
     },
 
     /// Sync the clients and providers from the config file to the database
@@ -85,23 +81,12 @@ impl Options {
                 info!("Configuration file looks good");
             }
 
-            SC::Generate {
-                output,
-                palpo_config,
-            } => {
+            SC::Generate { output } => {
                 let _span = info_span!("cli.config.generate").entered();
-                let clock = SystemClock::default();
 
                 // XXX: we should disallow SeedableRng::from_entropy
                 let mut rng = rand_chacha::ChaChaRng::from_entropy();
-                let mut config = RootConfig::generate(&mut rng).await?;
-
-                if !palpo_config.is_empty() {
-                    info!("Adjusting Pasion config to match Palpo config from {palpo_config:?}");
-                    let palpo_config = syn2mas::palpo_config::Config::load(&palpo_config)
-                        .map_err(anyhow::Error::from_boxed)?;
-                    config = palpo_config.adjust_pasion_config(config, &mut rng, clock.now());
-                }
+                let config = RootConfig::generate(&mut rng).await?;
 
                 let config = serde_yaml::to_string(&config)?;
                 if let Some(output) = output {

@@ -182,7 +182,6 @@ experimental_features:
 | `pasion manage promote-user` | Promote a user to admin |
 | `pasion worker -c config.yaml` | Run background task worker separately |
 | `pasion doctor -c config.yaml` | Check deployment health |
-| `pasion syn2mas` | Migrate from Palpo built-in auth to Pasion |
 
 ### Server Options
 
