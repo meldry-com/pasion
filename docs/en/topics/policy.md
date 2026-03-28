@@ -7,9 +7,184 @@ A decision of the policy engine is deterministically made based on three compone
  - A static configuration
  - The action to be performed
 
-The policy is a [Open Policy Agent (OPA)](https://www.openpolicyagent.org/) policy compiled into WebAssembly.
-Pasion ships with a default policy which should be sufficient for most deployments.
+Pasion supports multiple policy engine backends through an abstraction layer, allowing you to choose the best tool for your needs:
+
+| Backend | Language | Performance | Flexibility | Feature Flag |
+|---------|----------|-------------|-------------|--------------|
+| **OPA/WASM** (default) | Rego | Excellent (native WASM) | High | *(always available)* |
+| **Cedar** | Cedar | Excellent (native Rust) | Medium | `cedar` |
+| **Remote HTTP** | Any | Depends on network | Maximum | `remote` |
+
+## OPA/WASM backend (default)
+
+The default backend uses [Open Policy Agent (OPA)](https://www.openpolicyagent.org/) policies compiled into WebAssembly.
+Pasion ships with a default OPA policy which should be sufficient for most deployments.
 It can be replaced with a custom policy if needed, which can be useful to implement custom authorization logic without recompiling the service.
+
+### Configuration
+
+```yaml
+policy:
+  engine: opa  # This is the default, can be omitted
+  wasm_module: ./policies/policy.wasm
+  data:
+    admin_users:
+      - person1
+```
+
+## Cedar backend
+
+[Amazon Cedar](https://www.cedarpolicy.com/) is a policy language designed for simplicity and performance. Since Cedar is natively written in Rust, it integrates directly into Pasion with no WebAssembly overhead.
+
+Cedar is a good choice when:
+- You want a simpler, more readable policy language than Rego
+- Your team is already familiar with Cedar from AWS services
+- You prefer a purely declarative approach to authorization
+
+### Enabling Cedar
+
+Cedar requires the `cedar` feature flag at compile time:
+
+```bash
+cargo build --features cedar
+# Or in Docker:
+cargo build --features cedar,docker
+```
+
+### Configuration
+
+```yaml
+policy:
+  engine: cedar
+  cedar_policy_file: ./policies/policies.cedar
+```
+
+### Writing Cedar policies
+
+Cedar evaluates authorization requests of the form `(principal, action, resource, context)`. Pasion maps policy evaluations as:
+
+- **Principal**: `Requester::"anonymous"`
+- **Action**: `Action::"register"`, `Action::"add_email"`, `Action::"register_client"`, `Action::"authorize"`
+- **Resource**: `Resource::"default"`
+- **Context**: The evaluation input data (username, email, client metadata, etc.)
+
+Example Cedar policy file:
+
+```cedar
+// Allow all registrations by default (Cedar defaults to deny)
+permit(
+    principal,
+    action == Action::"register",
+    resource
+);
+
+// Block registration with short usernames
+forbid(
+    principal,
+    action == Action::"register",
+    resource
+) when {
+    context.username.size() < 3
+};
+
+// Allow all email additions
+permit(
+    principal,
+    action == Action::"add_email",
+    resource
+);
+
+// Allow all client registrations
+permit(
+    principal,
+    action == Action::"register_client",
+    resource
+);
+
+// Allow all authorization grants
+permit(
+    principal,
+    action == Action::"authorize",
+    resource
+);
+```
+
+## Remote HTTP backend
+
+The remote HTTP backend delegates all policy evaluation to an external HTTP service. This is the most flexible approach: you can implement your policy logic in any language (Python, Go, Node.js, etc.), use AI models, or integrate with existing authorization systems.
+
+### Enabling Remote
+
+Remote requires the `remote` feature flag at compile time:
+
+```bash
+cargo build --features remote
+```
+
+### Configuration
+
+```yaml
+policy:
+  engine: remote
+  remote_endpoint: http://localhost:8181
+```
+
+### Protocol
+
+The remote service must expose the following endpoints:
+
+| Endpoint | Purpose |
+|----------|---------|
+| `POST /evaluate/register` | User registration policy |
+| `POST /evaluate/email` | Email addition policy |
+| `POST /evaluate/client_registration` | Client registration policy |
+| `POST /evaluate/authorization_grant` | Authorization grant policy |
+| `POST /data` | Dynamic data update (optional) |
+
+**Request**: JSON body containing the evaluation input (same structure as the internal Rust types).
+
+**Response**: JSON with a `violations` array:
+
+```json
+{
+    "violations": [
+        {
+            "msg": "Username too short",
+            "field": "username",
+            "code": "username-too-short",
+            "redirect_uri": null
+        }
+    ]
+}
+```
+
+An empty `violations` array means the request is allowed.
+
+### Example remote service (Python)
+
+```python
+from flask import Flask, request, jsonify
+
+app = Flask(__name__)
+
+@app.route("/evaluate/register", methods=["POST"])
+def evaluate_register():
+    data = request.json
+    violations = []
+
+    if len(data.get("username", "")) < 3:
+        violations.append({
+            "msg": "Username too short",
+            "field": "username",
+            "code": "username-too-short"
+        })
+
+    return jsonify({"violations": violations})
+```
+
+## Custom backend
+
+You can implement your own policy backend by implementing the `PolicyProviderFactory` and `PolicyEvaluator` traits from `pasion-policy`, and constructing a `PolicyFactory` via `PolicyFactory::from_provider()`.
 
 ## Actions
 
@@ -68,7 +243,7 @@ This is especially important as in the future it will make it possible to implem
 To understand the authorization process and how sessions are created, refer to the [authorization and sessions](./authorization.md) section.
 
 
-[`register.rego`]: https://github.com/taidge/pasion/blob/main/policies/register/register.rego 
-[`email.rego`]: https://github.com/taidge/pasion/blob/main/policies/email/email.rego 
-[`client_registration.rego`]: https://github.com/taidge/pasion/blob/main/policies/client_registration/client_registration.rego 
+[`register.rego`]: https://github.com/taidge/pasion/blob/main/policies/register/register.rego
+[`email.rego`]: https://github.com/taidge/pasion/blob/main/policies/email/email.rego
+[`client_registration.rego`]: https://github.com/taidge/pasion/blob/main/policies/client_registration/client_registration.rego
 [`authorization_grant.rego`]: https://github.com/taidge/pasion/blob/main/policies/authorization_grant/authorization_grant.rego

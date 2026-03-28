@@ -386,10 +386,24 @@ captcha:
 
 ## `policy`
 
-Policy settings
+Policy engine configuration. Pasion supports multiple policy backends: OPA/WASM (default), Cedar, and Remote HTTP. See the [policy engine topic](../topics/policy.md) for detailed documentation on each backend.
+
+### `policy.engine`
+
+The policy engine backend to use. Defaults to `opa`.
+
+| Value | Description | Feature Flag |
+|-------|-------------|--------------|
+| `opa` | OPA Rego policies compiled to WASM (default) | *(always available)* |
+| `cedar` | Amazon Cedar policies evaluated natively | `cedar` |
+| `remote` | Delegate to an external HTTP service | `remote` |
+
+### OPA backend configuration
 
 ```yaml
 policy:
+  engine: opa  # default, can be omitted
+
   # Path to the WASM module
   # Default in Docker distribution: `/usr/local/share/pasion/policy.wasm`
   # Default in pre-built binaries: `./share/policy.wasm`
@@ -498,6 +512,30 @@ policy:
         regexes: ["Chrome 1.*;"]
         prefixes: ["Mozilla/"]
         suffixes: ["Safari/605.1.15"]
+```
+
+### Cedar backend configuration
+
+Requires the `cedar` feature flag at compile time.
+
+```yaml
+policy:
+  engine: cedar
+
+  # Path to the Cedar policy file
+  cedar_policy_file: ./policies/policies.cedar
+```
+
+### Remote HTTP backend configuration
+
+Requires the `remote` feature flag at compile time.
+
+```yaml
+policy:
+  engine: remote
+
+  # Base URL of the remote policy service
+  remote_endpoint: http://localhost:8181
 ```
 
 ## `rate_limiting`

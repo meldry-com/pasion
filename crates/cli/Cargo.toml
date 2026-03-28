@@ -100,3 +100,7 @@ dist = ["pasion-config/dist"]
 
 # Features used in the Docker image
 docker = ["pasion-config/docker"]
+
+# Policy engine backends
+cedar = ["pasion-policy/cedar"]
+remote = ["pasion-policy/remote"]

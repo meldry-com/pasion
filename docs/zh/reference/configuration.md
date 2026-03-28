@@ -139,4 +139,41 @@ captcha:
   secret_key: "你的密钥"
 ```
 
-更多配置选项请参阅[完整英文参考文档](../../reference/configuration.md)。
+### `policy` — 策略引擎
+
+Pasion 支持多种策略引擎后端。详细文档请参阅[策略引擎](../topics/policy.md)。
+
+#### OPA 后端（默认）
+
+```yaml
+policy:
+  engine: opa  # 默认值，可省略
+  wasm_module: ./policies/policy.wasm
+  data:
+    admin_users:
+      - person1
+    allowed_domains:
+      - "example.com"
+```
+
+#### Cedar 后端
+
+需要编译时启用 `cedar` 特性标志。
+
+```yaml
+policy:
+  engine: cedar
+  cedar_policy_file: ./policies/policies.cedar
+```
+
+#### Remote HTTP 后端
+
+需要编译时启用 `remote` 特性标志。
+
+```yaml
+policy:
+  engine: remote
+  remote_endpoint: http://localhost:8181
+```
+
+更多配置选项请参阅[完整英文参考文档](../../en/reference/configuration.md)。

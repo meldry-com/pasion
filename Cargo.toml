@@ -373,6 +373,10 @@ features = ["pycompat"]
 [workspace.dependencies.nonzero_ext]
 version = "0.3.0"
 
+# Cedar policy language (Amazon Cedar)
+[workspace.dependencies.cedar-policy]
+version = "4"
+
 # Open Policy Agent support through WASM
 [workspace.dependencies.opa-wasm]
 version = "0.1.9"

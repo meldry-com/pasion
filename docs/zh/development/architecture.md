@@ -19,6 +19,7 @@ Pasion 设计为轻量级、易于嵌入的服务，仅依赖 PostgreSQL 数据�
 | `pasion-data-model` | 数据库对象模型 |
 | `pasion-email` | 邮件发送抽象层 |
 | `pasion-handlers` | HTTP 请求处理逻辑 |
+| `pasion-policy` | 策略引擎抽象层，支持多种后端（OPA/WASM、Cedar、Remote HTTP） |
 | `pasion-jose` | JWT/JWS/JWE/JWK 加密操作 |
 | `pasion-storage` | 存储后端抽象 |
 | `pasion-storage-pg` | PostgreSQL 存储实现 |

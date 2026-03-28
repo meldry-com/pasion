@@ -38,7 +38,7 @@ pub use self::{
     passwords::{
         Algorithm as PasswordAlgorithm, HashingScheme as PasswordHashingScheme, PasswordsConfig,
     },
-    policy::PolicyConfig,
+    policy::{PolicyConfig, PolicyEngine},
     rate_limiting::RateLimitingConfig,
     secrets::SecretsConfig,
     sms::{SmsConfig, SmsTransportKind},

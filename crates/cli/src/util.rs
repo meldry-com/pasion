@@ -7,7 +7,7 @@ use diesel_async::pooled_connection::AsyncDieselConnectionManager;
 use pasion_config::{
     AccountConfig, BrandingConfig, CaptchaConfig, DatabaseConfig, EmailConfig, EmailSmtpMode,
     EmailTransportKind, ExperimentalConfig, HomeserverKind, MatrixConfig, PasswordsConfig,
-    PolicyConfig, TemplatesConfig,
+    PolicyConfig, PolicyEngine, TemplatesConfig,
 };
 use pasion_context::LogContext;
 use pasion_data_model::{SessionExpirationConfig, SessionLimitConfig, SiteConfig};
@@ -130,32 +130,75 @@ pub async fn policy_factory_from_config(
     matrix_config: &MatrixConfig,
     experimental_config: &ExperimentalConfig,
 ) -> Result<PolicyFactory, anyhow::Error> {
-    let policy_file = tokio::fs::File::open(&config.wasm_module)
-        .await
-        .context("failed to open OPA WASM policy file")?;
+    match config.engine {
+        PolicyEngine::Opa => {
+            let policy_file = tokio::fs::File::open(&config.wasm_module)
+                .await
+                .context("failed to open OPA WASM policy file")?;
 
-    let entrypoints = pasion_policy::Entrypoints {
-        register: config.register_entrypoint.clone(),
-        client_registration: config.client_registration_entrypoint.clone(),
-        authorization_grant: config.authorization_grant_entrypoint.clone(),
-        email: config.email_entrypoint.clone(),
-    };
+            let entrypoints = pasion_policy::Entrypoints {
+                register: config.register_entrypoint.clone(),
+                client_registration: config.client_registration_entrypoint.clone(),
+                authorization_grant: config.authorization_grant_entrypoint.clone(),
+                email: config.email_entrypoint.clone(),
+            };
 
-    let session_limit_config =
-        experimental_config
-            .session_limit
-            .as_ref()
-            .map(|c| SessionLimitConfig {
-                soft_limit: c.soft_limit,
-                hard_limit: c.hard_limit,
-            });
+            let session_limit_config =
+                experimental_config
+                    .session_limit
+                    .as_ref()
+                    .map(|c| SessionLimitConfig {
+                        soft_limit: c.soft_limit,
+                        hard_limit: c.hard_limit,
+                    });
 
-    let data = pasion_policy::Data::new(matrix_config.homeserver.clone(), session_limit_config)
-        .with_rest(config.data.clone());
+            let data =
+                pasion_policy::Data::new(matrix_config.homeserver.clone(), session_limit_config)
+                    .with_rest(config.data.clone());
 
-    PolicyFactory::load(policy_file, data, entrypoints)
-        .await
-        .context("failed to load the policy")
+            PolicyFactory::load(policy_file, data, entrypoints)
+                .await
+                .context("failed to load the OPA policy")
+        }
+
+        PolicyEngine::Cedar => {
+            #[cfg(feature = "cedar")]
+            {
+                let path = config
+                    .cedar_policy_file
+                    .as_ref()
+                    .context("cedar_policy_file must be set when using the Cedar engine")?;
+                PolicyFactory::load_cedar_from_file(path.as_str())
+                    .await
+                    .context("failed to load Cedar policy")
+            }
+
+            #[cfg(not(feature = "cedar"))]
+            anyhow::bail!(
+                "Cedar policy engine is not available. \
+                 Recompile with the `cedar` feature to enable it."
+            )
+        }
+
+        PolicyEngine::Remote => {
+            #[cfg(feature = "remote")]
+            {
+                let endpoint = config
+                    .remote_endpoint
+                    .as_ref()
+                    .context("remote_endpoint must be set when using the Remote engine")?;
+                let client = reqwest::Client::new();
+                PolicyFactory::load_remote(endpoint.clone(), client)
+                    .context("failed to create remote policy factory")
+            }
+
+            #[cfg(not(feature = "remote"))]
+            anyhow::bail!(
+                "Remote policy engine is not available. \
+                 Recompile with the `remote` feature to enable it."
+            )
+        }
+    }
 }
 
 pub fn captcha_config_from_config(

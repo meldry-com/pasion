@@ -26,6 +26,7 @@ This includes:
  - [`pasion-data-model`][pasion-data-model]: Models of objects that live in the database, regardless of the storage backend
  - [`pasion-email`][pasion-email]: High-level email sending abstraction
  - [`pasion-handlers`][pasion-handlers]: Main HTTP application logic
+ - [`pasion-policy`][pasion-policy]: Policy engine abstraction layer supporting multiple backends (OPA/WASM, Cedar, Remote HTTP)
  - [`pasion-iana`][pasion-iana]: Auto-generated enums from IANA registries
  - [`pasion-iana-codegen`][pasion-iana-codegen]: Code generator for the `pasion-iana` crate
  - [`pasion-jose`][pasion-jose]: JWT/JWS/JWE/JWK abstraction
@@ -39,6 +40,7 @@ This includes:
 [pasion-data-model]: ../rustdoc/pasion_data_model/index.html
 [pasion-email]: ../rustdoc/pasion_email/index.html
 [pasion-handlers]: ../rustdoc/pasion_handlers/index.html
+[pasion-policy]: ../rustdoc/pasion_policy/index.html
 [pasion-iana]: ../rustdoc/pasion_iana/index.html
 [pasion-iana-codegen]: ../rustdoc/pasion_iana_codegen/index.html
 [pasion-jose]: ../rustdoc/pasion_jose/index.html
