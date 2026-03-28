@@ -22,8 +22,9 @@ pub async fn get(
     let locale = crate::preferred_language(req, depot);
     let templates = rest::get_templates(depot)?;
     let url_builder = rest::get_url_builder(depot)?;
+    let script_src = rest::get_frontend_script_src(depot)?;
 
-    let ctx = AppContext::from_url_builder(&url_builder).with_language(locale);
+    let ctx = AppContext::new(&url_builder, &script_src).with_language(locale);
     let content = templates.render_app(&ctx)?;
 
     res.render(Text::Html(content));

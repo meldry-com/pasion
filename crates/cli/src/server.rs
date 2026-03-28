@@ -25,6 +25,25 @@ use tracing_opentelemetry::OpenTelemetrySpanExt;
 
 use crate::app_state::{AppState, inject_app_state};
 
+/// Scan the Dioxus build output directory for the hashed frontend JS entry
+/// point. Returns a URL path like `/assets/pasion-frontend-dxh<hash>.js`.
+pub fn discover_frontend_script(assets_root: &camino::Utf8Path) -> Option<String> {
+    let assets_dir = assets_root.join("assets");
+    let dir = std::fs::read_dir(&assets_dir).ok()?;
+    for entry in dir.flatten() {
+        let name = entry.file_name();
+        let name = name.to_string_lossy();
+        if name.starts_with("pasion-frontend-") && name.ends_with(".js") {
+            return Some(format!("/assets/{name}"));
+        }
+    }
+    // Fallback: check for non-hashed name
+    if assets_dir.join("pasion-frontend.js").exists() {
+        return Some("/assets/pasion-frontend.js".into());
+    }
+    None
+}
+
 #[inline]
 fn otel_http_method(method: &Method) -> &'static str {
     match method {
@@ -297,20 +316,10 @@ pub fn build_router(
                     ))
                     .hoop(cache_control_middleware)
                     .get(
-                        StaticDir::new([path.clone()])
+                        StaticDir::new([path.join("assets")])
                             .include_dot_files(false)
                             .auto_list(false),
                     ),
-                )
-                // Serve WASM files at /wasm/ to match Dioxus default asset paths
-                .push(
-                    Router::with_path("/wasm/{**path}")
-                        .hoop(cache_control_middleware)
-                        .get(
-                            StaticDir::new([path.join("wasm")])
-                                .include_dot_files(false)
-                                .auto_list(false),
-                        ),
                 ),
             pasion_config::HttpResource::OAuth => build_oauth_router(router),
             pasion_config::HttpResource::Compat => {

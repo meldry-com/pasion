@@ -263,6 +263,10 @@ pub fn get_templates(depot: &Depot) -> Result<pasion_templates::Templates, Route
     depot_get(depot, "templates")
 }
 
+pub fn get_frontend_script_src(depot: &Depot) -> Result<String, RouteError> {
+    depot_get(depot, "frontend_script_src")
+}
+
 pub fn get_translator(depot: &Depot) -> Result<Arc<pasion_i18n::Translator>, RouteError> {
     depot_get(depot, "translator")
 }

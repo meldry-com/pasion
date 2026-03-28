@@ -42,6 +42,7 @@ pub struct AppState {
     pub activity_tracker: ActivityTracker,
     pub trusted_proxies: Vec<IpNetwork>,
     pub limiter: Limiter,
+    pub frontend_script_src: String,
 }
 
 impl AppState {
@@ -157,6 +158,7 @@ pub async fn inject_app_state(
     depot.insert("app_version", AppVersion(VERSION));
     depot.insert("activity_tracker", state.activity_tracker.clone());
     depot.insert("trusted_proxies", state.trusted_proxies.clone());
+    depot.insert("frontend_script_src", state.frontend_script_src.clone());
 
     ctrl.call_next(req, depot, res).await;
 }

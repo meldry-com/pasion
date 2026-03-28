@@ -5,7 +5,8 @@ use clap::Parser;
 use figment::Figment;
 use itertools::Itertools;
 use pasion_config::{
-    AppConfig, ClientsConfig, ConfigurationSection, ConfigurationSectionExt, UpstreamOAuth2Config,
+    AppConfig, ClientsConfig, ConfigurationSection, ConfigurationSectionExt,
+    HttpResource, UpstreamOAuth2Config,
 };
 use pasion_context::LogContext;
 use pasion_data_model::SystemClock;
@@ -186,6 +187,20 @@ impl Options {
 
         let listeners_config = config.http.listeners.clone();
 
+        // Discover the hashed frontend script path from the Dioxus build output
+        let frontend_script_src = listeners_config
+            .iter()
+            .flat_map(|l| &l.resources)
+            .find_map(|r| {
+                if let HttpResource::Assets { path } = r {
+                    crate::server::discover_frontend_script(path)
+                } else {
+                    None
+                }
+            })
+            .unwrap_or_else(|| "/assets/pasion-frontend.js".into());
+        info!(frontend_script_src, "Discovered frontend script path");
+
         let password_manager = password_manager_from_config(&config.passwords).await?;
 
         // The upstream OIDC metadata cache
@@ -232,6 +247,7 @@ impl Options {
                 activity_tracker,
                 trusted_proxies,
                 limiter,
+                frontend_script_src,
             };
             s.init_metrics();
             s.init_metadata_cache();

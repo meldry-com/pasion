@@ -388,6 +388,7 @@ impl TemplateContext for IndexContext {
 pub struct AppConfig {
     root: String,
     api_endpoint: String,
+    script_src: String,
 }
 
 /// Context used by the `app.html` template
@@ -397,14 +398,19 @@ pub struct AppContext {
 }
 
 impl AppContext {
-    /// Constructs the context given the [`UrlBuilder`]
+    /// Constructs the context given the [`UrlBuilder`] and the frontend script
+    /// path (discovered from the Dioxus build output at startup).
     #[must_use]
-    pub fn from_url_builder(url_builder: &UrlBuilder) -> Self {
+    pub fn new(url_builder: &UrlBuilder, script_src: &str) -> Self {
         let root = url_builder.relative_url_for(&Account::default());
         let prefix = url_builder.prefix().unwrap_or_default();
         let api_endpoint = format!("{prefix}/api/v1");
         Self {
-            app_config: AppConfig { root, api_endpoint },
+            app_config: AppConfig {
+                root,
+                api_endpoint,
+                script_src: script_src.to_owned(),
+            },
         }
     }
 }
@@ -419,7 +425,7 @@ impl TemplateContext for AppContext {
         Self: Sized,
     {
         let url_builder = UrlBuilder::new("https://example.com/".parse().unwrap(), None, None);
-        sample_list(vec![Self::from_url_builder(&url_builder)])
+        sample_list(vec![Self::new(&url_builder, "/assets/pasion-frontend.js")])
     }
 }
 
