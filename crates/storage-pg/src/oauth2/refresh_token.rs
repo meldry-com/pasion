@@ -1,29 +1,32 @@
 use async_trait::async_trait;
 use chrono::{DateTime, Utc};
+use diesel::prelude::*;
+use diesel_async::RunQueryDsl;
 use pasion_data_model::{AccessToken, Clock, RefreshToken, RefreshTokenState, Session};
-use pasion_storage::oauth2::OAuth2RefreshTokenRepository;
 use rand::RngCore;
-use sqlx::PgConnection;
 use ulid::Ulid;
 use uuid::Uuid;
 
-use crate::{DatabaseError, DatabaseInconsistencyError, tracing::ExecuteExt};
+use crate::{DatabaseError, DatabaseInconsistencyError, schema::oauth2_refresh_tokens};
 
 /// An implementation of [`OAuth2RefreshTokenRepository`] for a PostgreSQL
 /// connection
 pub struct PgOAuth2RefreshTokenRepository<'c> {
-    conn: &'c mut PgConnection,
+    conn: &'c mut diesel_async::AsyncPgConnection,
 }
 
 impl<'c> PgOAuth2RefreshTokenRepository<'c> {
     /// Create a new [`PgOAuth2RefreshTokenRepository`] from an active
     /// PostgreSQL connection
-    pub fn new(conn: &'c mut PgConnection) -> Self {
+    pub fn new(conn: &'c mut diesel_async::AsyncPgConnection) -> Self {
         Self { conn }
     }
 }
 
-struct OAuth2RefreshTokenLookup {
+/// Row type for loading refresh tokens from the database
+#[derive(Debug, Clone, Queryable, Selectable)]
+#[diesel(table_name = oauth2_refresh_tokens)]
+struct OAuth2RefreshTokenRow {
     oauth2_refresh_token_id: Uuid,
     refresh_token: String,
     created_at: DateTime<Utc>,
@@ -34,10 +37,10 @@ struct OAuth2RefreshTokenLookup {
     next_oauth2_refresh_token_id: Option<Uuid>,
 }
 
-impl TryFrom<OAuth2RefreshTokenLookup> for RefreshToken {
+impl TryFrom<OAuth2RefreshTokenRow> for RefreshToken {
     type Error = DatabaseInconsistencyError;
 
-    fn try_from(value: OAuth2RefreshTokenLookup) -> Result<Self, Self::Error> {
+    fn try_from(value: OAuth2RefreshTokenRow) -> Result<Self, Self::Error> {
         let id = value.oauth2_refresh_token_id.into();
         let state = match (
             value.revoked_at,
@@ -72,40 +75,45 @@ impl TryFrom<OAuth2RefreshTokenLookup> for RefreshToken {
     }
 }
 
+/// Insertable row for creating a new refresh token
+#[derive(Insertable)]
+#[diesel(table_name = oauth2_refresh_tokens)]
+struct NewOAuth2RefreshToken {
+    oauth2_refresh_token_id: Uuid,
+    oauth2_session_id: Uuid,
+    oauth2_access_token_id: Uuid,
+    refresh_token: String,
+    created_at: DateTime<Utc>,
+}
+
+/// Row type for cleanup query results via raw SQL
+#[derive(Debug, QueryableByName)]
+struct CleanupResult {
+    #[diesel(sql_type = diesel::sql_types::BigInt)]
+    count: i64,
+    #[diesel(sql_type = diesel::sql_types::Nullable<diesel::sql_types::Timestamptz>)]
+    last_ts: Option<DateTime<Utc>>,
+}
+
 #[async_trait]
-impl OAuth2RefreshTokenRepository for PgOAuth2RefreshTokenRepository<'_> {
+impl pasion_storage::oauth2::OAuth2RefreshTokenRepository
+    for PgOAuth2RefreshTokenRepository<'_>
+{
     type Error = DatabaseError;
 
     #[tracing::instrument(
         name = "db.oauth2_refresh_token.lookup",
         skip_all,
-        fields(
-            db.query.text,
-            refresh_token.id = %id,
-        ),
+        fields(refresh_token.id = %id),
         err,
     )]
     async fn lookup(&mut self, id: Ulid) -> Result<Option<RefreshToken>, Self::Error> {
-        let res = sqlx::query_as!(
-            OAuth2RefreshTokenLookup,
-            r#"
-                SELECT oauth2_refresh_token_id
-                     , refresh_token
-                     , created_at
-                     , consumed_at
-                     , revoked_at
-                     , oauth2_access_token_id
-                     , oauth2_session_id
-                     , next_oauth2_refresh_token_id
-                FROM oauth2_refresh_tokens
-
-                WHERE oauth2_refresh_token_id = $1
-            "#,
-            Uuid::from(id),
-        )
-        .traced()
-        .fetch_optional(&mut *self.conn)
-        .await?;
+        let res = oauth2_refresh_tokens::table
+            .find(Uuid::from(id))
+            .select(OAuth2RefreshTokenRow::as_select())
+            .first::<OAuth2RefreshTokenRow>(self.conn)
+            .await
+            .optional()?;
 
         let Some(res) = res else { return Ok(None) };
 
@@ -115,35 +123,18 @@ impl OAuth2RefreshTokenRepository for PgOAuth2RefreshTokenRepository<'_> {
     #[tracing::instrument(
         name = "db.oauth2_refresh_token.find_by_token",
         skip_all,
-        fields(
-            db.query.text,
-        ),
         err,
     )]
     async fn find_by_token(
         &mut self,
         refresh_token: &str,
     ) -> Result<Option<RefreshToken>, Self::Error> {
-        let res = sqlx::query_as!(
-            OAuth2RefreshTokenLookup,
-            r#"
-                SELECT oauth2_refresh_token_id
-                     , refresh_token
-                     , created_at
-                     , consumed_at
-                     , revoked_at
-                     , oauth2_access_token_id
-                     , oauth2_session_id
-                     , next_oauth2_refresh_token_id
-                FROM oauth2_refresh_tokens
-
-                WHERE refresh_token = $1
-            "#,
-            refresh_token,
-        )
-        .traced()
-        .fetch_optional(&mut *self.conn)
-        .await?;
+        let res = oauth2_refresh_tokens::table
+            .filter(oauth2_refresh_tokens::refresh_token.eq(refresh_token))
+            .select(OAuth2RefreshTokenRow::as_select())
+            .first::<OAuth2RefreshTokenRow>(self.conn)
+            .await
+            .optional()?;
 
         let Some(res) = res else { return Ok(None) };
 
@@ -154,7 +145,6 @@ impl OAuth2RefreshTokenRepository for PgOAuth2RefreshTokenRepository<'_> {
         name = "db.oauth2_refresh_token.add",
         skip_all,
         fields(
-            db.query.text,
             %session.id,
             client.id = %session.client_id,
             refresh_token.id,
@@ -173,23 +163,18 @@ impl OAuth2RefreshTokenRepository for PgOAuth2RefreshTokenRepository<'_> {
         let id = Ulid::from_datetime_with_source(created_at.into(), rng);
         tracing::Span::current().record("refresh_token.id", tracing::field::display(id));
 
-        sqlx::query!(
-            r#"
-                INSERT INTO oauth2_refresh_tokens
-                    (oauth2_refresh_token_id, oauth2_session_id, oauth2_access_token_id,
-                     refresh_token, created_at)
-                VALUES
-                    ($1, $2, $3, $4, $5)
-            "#,
-            Uuid::from(id),
-            Uuid::from(session.id),
-            Uuid::from(access_token.id),
-            refresh_token,
+        let new_row = NewOAuth2RefreshToken {
+            oauth2_refresh_token_id: Uuid::from(id),
+            oauth2_session_id: Uuid::from(session.id),
+            oauth2_access_token_id: Uuid::from(access_token.id),
+            refresh_token: refresh_token.clone(),
             created_at,
-        )
-        .traced()
-        .execute(&mut *self.conn)
-        .await?;
+        };
+
+        diesel::insert_into(oauth2_refresh_tokens::table)
+            .values(&new_row)
+            .execute(self.conn)
+            .await?;
 
         Ok(RefreshToken {
             id,
@@ -205,7 +190,6 @@ impl OAuth2RefreshTokenRepository for PgOAuth2RefreshTokenRepository<'_> {
         name = "db.oauth2_refresh_token.consume",
         skip_all,
         fields(
-            db.query.text,
             %refresh_token.id,
             session.id = %refresh_token.session_id,
         ),
@@ -218,22 +202,18 @@ impl OAuth2RefreshTokenRepository for PgOAuth2RefreshTokenRepository<'_> {
         replaced_by: &RefreshToken,
     ) -> Result<RefreshToken, Self::Error> {
         let consumed_at = clock.now();
-        let res = sqlx::query!(
-            r#"
-                UPDATE oauth2_refresh_tokens
-                SET consumed_at = $2,
-                    next_oauth2_refresh_token_id = $3
-                WHERE oauth2_refresh_token_id = $1
-            "#,
-            Uuid::from(refresh_token.id),
-            consumed_at,
-            Uuid::from(replaced_by.id),
+        let rows_affected = diesel::update(
+            oauth2_refresh_tokens::table.find(Uuid::from(refresh_token.id)),
         )
-        .traced()
-        .execute(&mut *self.conn)
+        .set((
+            oauth2_refresh_tokens::consumed_at.eq(Some(consumed_at)),
+            oauth2_refresh_tokens::next_oauth2_refresh_token_id
+                .eq(Some(Uuid::from(replaced_by.id))),
+        ))
+        .execute(self.conn)
         .await?;
 
-        DatabaseError::ensure_affected_rows(&res, 1)?;
+        DatabaseError::ensure_affected_rows_usize(rows_affected, 1)?;
 
         refresh_token
             .consume(consumed_at, replaced_by)
@@ -244,7 +224,6 @@ impl OAuth2RefreshTokenRepository for PgOAuth2RefreshTokenRepository<'_> {
         name = "db.oauth2_refresh_token.revoke",
         skip_all,
         fields(
-            db.query.text,
             %refresh_token.id,
             session.id = %refresh_token.session_id,
         ),
@@ -256,20 +235,14 @@ impl OAuth2RefreshTokenRepository for PgOAuth2RefreshTokenRepository<'_> {
         refresh_token: RefreshToken,
     ) -> Result<RefreshToken, Self::Error> {
         let revoked_at = clock.now();
-        let res = sqlx::query!(
-            r#"
-                UPDATE oauth2_refresh_tokens
-                SET revoked_at = $2
-                WHERE oauth2_refresh_token_id = $1
-            "#,
-            Uuid::from(refresh_token.id),
-            revoked_at,
+        let rows_affected = diesel::update(
+            oauth2_refresh_tokens::table.find(Uuid::from(refresh_token.id)),
         )
-        .traced()
-        .execute(&mut *self.conn)
+        .set(oauth2_refresh_tokens::revoked_at.eq(Some(revoked_at)))
+        .execute(self.conn)
         .await?;
 
-        DatabaseError::ensure_affected_rows(&res, 1)?;
+        DatabaseError::ensure_affected_rows_usize(rows_affected, 1)?;
 
         refresh_token
             .revoke(revoked_at)
@@ -279,9 +252,6 @@ impl OAuth2RefreshTokenRepository for PgOAuth2RefreshTokenRepository<'_> {
     #[tracing::instrument(
         name = "db.oauth2_refresh_token.cleanup_revoked",
         skip_all,
-        fields(
-            db.query.text,
-        ),
         err,
     )]
     async fn cleanup_revoked(
@@ -290,7 +260,9 @@ impl OAuth2RefreshTokenRepository for PgOAuth2RefreshTokenRepository<'_> {
         until: DateTime<Utc>,
         limit: usize,
     ) -> Result<(usize, Option<DateTime<Utc>>), Self::Error> {
-        let res = sqlx::query!(
+        let limit_i64 = i64::try_from(limit).unwrap_or(i64::MAX);
+
+        let res: CleanupResult = diesel::sql_query(
             r#"
                 WITH
                     to_delete AS (
@@ -312,30 +284,26 @@ impl OAuth2RefreshTokenRepository for PgOAuth2RefreshTokenRepository<'_> {
                     )
 
                 SELECT
-                    COUNT(*) as "count!",
-                    MAX(revoked_at) as last_revoked_at
+                    COUNT(*) as count,
+                    MAX(revoked_at) as last_ts
                 FROM deleted
             "#,
-            since,
-            until,
-            i64::try_from(limit).unwrap_or(i64::MAX),
         )
-        .traced()
-        .fetch_one(&mut *self.conn)
+        .bind::<diesel::sql_types::Nullable<diesel::sql_types::Timestamptz>, _>(since)
+        .bind::<diesel::sql_types::Timestamptz, _>(until)
+        .bind::<diesel::sql_types::BigInt, _>(limit_i64)
+        .get_result(self.conn)
         .await?;
 
         Ok((
             res.count.try_into().unwrap_or(usize::MAX),
-            res.last_revoked_at,
+            res.last_ts,
         ))
     }
 
     #[tracing::instrument(
         name = "db.oauth2_refresh_token.cleanup_consumed",
         skip_all,
-        fields(
-            db.query.text,
-        ),
         err,
     )]
     async fn cleanup_consumed(
@@ -344,12 +312,9 @@ impl OAuth2RefreshTokenRepository for PgOAuth2RefreshTokenRepository<'_> {
         until: DateTime<Utc>,
         limit: usize,
     ) -> Result<(usize, Option<DateTime<Utc>>), Self::Error> {
-        // We only consider a token as consumed if also the next token has its
-        // `consumed_at` set. This makes the query a bit expensive to compute,
-        // but is optimised to two index scans and a nested join using the
-        // `oauth2_refresh_token_not_consumed_idx` and
-        // `oauth2_refresh_token_consumed_at_idx` indexes.
-        let res = sqlx::query!(
+        let limit_i64 = i64::try_from(limit).unwrap_or(i64::MAX);
+
+        let res: CleanupResult = diesel::sql_query(
             r#"
                 WITH
                     to_delete AS (
@@ -373,21 +338,20 @@ impl OAuth2RefreshTokenRepository for PgOAuth2RefreshTokenRepository<'_> {
                     )
 
                 SELECT
-                    COUNT(*) as "count!",
-                    MAX(consumed_at) as last_consumed_at
+                    COUNT(*) as count,
+                    MAX(consumed_at) as last_ts
                 FROM deleted
             "#,
-            since,
-            until,
-            i64::try_from(limit).unwrap_or(i64::MAX),
         )
-        .traced()
-        .fetch_one(&mut *self.conn)
+        .bind::<diesel::sql_types::Nullable<diesel::sql_types::Timestamptz>, _>(since)
+        .bind::<diesel::sql_types::Timestamptz, _>(until)
+        .bind::<diesel::sql_types::BigInt, _>(limit_i64)
+        .get_result(self.conn)
         .await?;
 
         Ok((
             res.count.try_into().unwrap_or(usize::MAX),
-            res.last_consumed_at,
+            res.last_ts,
         ))
     }
 }

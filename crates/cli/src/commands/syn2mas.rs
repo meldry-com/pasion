@@ -14,7 +14,9 @@ use sqlx::{Connection, Either, PgConnection, postgres::PgConnectOptions, types::
 use syn2mas::{LockedMasDatabase, MasWriter, PalpoReader, Progress, ProgressStage, palpo_config};
 use tracing::{Instrument, error, info};
 
-use crate::util::{DatabaseConnectOptions, database_connection_from_config_with_options};
+use crate::util::{
+    DatabaseConnectOptions, database_connection_from_config_with_options, diesel_pool_from_config,
+};
 
 /// The exit code used by `syn2mas check` and `syn2mas migrate` when there are
 /// errors preventing migration.
@@ -123,14 +125,18 @@ impl Options {
             // First perform a config sync
             // This is crucial to ensure we register upstream OAuth providers
             // in the Pasion database
-            let config = SyncConfig::extract(figment).map_err(anyhow::Error::from_boxed)?;
+            let sync_config = SyncConfig::extract(figment).map_err(anyhow::Error::from_boxed)?;
             let clock = SystemClock::default();
-            let encrypter = config.secrets.encrypter().await?;
+            let encrypter = sync_config.secrets.encrypter().await?;
+
+            // Use a diesel pool connection for config sync
+            let diesel_pool = diesel_pool_from_config(&sync_config.database).await?;
+            let diesel_conn = diesel_pool.get().await.context("could not get connection from pool")?;
 
             crate::sync::config_sync(
-                config.upstream_oauth2,
-                config.clients,
-                &mut mas_connection,
+                sync_config.upstream_oauth2,
+                sync_config.clients,
+                diesel_conn,
                 &encrypter,
                 &clock,
                 // Don't prune — we don't want to be unnecessarily destructive

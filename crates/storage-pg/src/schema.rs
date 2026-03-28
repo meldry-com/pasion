@@ -1,5 +1,6 @@
 // @generated automatically by Diesel CLI.
 // This file represents the current database schema used by Diesel's query builder.
+#![allow(missing_docs)]
 
 diesel::table! {
     users (user_id) {
@@ -214,7 +215,7 @@ diesel::table! {
         oauth2_session_id -> Uuid,
         user_session_id -> Nullable<Uuid>,
         oauth2_client_id -> Uuid,
-        user_id -> Uuid,
+        user_id -> Nullable<Uuid>,
         scope_list -> Array<Text>,
         created_at -> Timestamptz,
         finished_at -> Nullable<Timestamptz>,
@@ -270,6 +271,7 @@ diesel::table! {
         fulfilled_at -> Nullable<Timestamptz>,
         cancelled_at -> Nullable<Timestamptz>,
         exchanged_at -> Nullable<Timestamptz>,
+        login_hint -> Nullable<Text>,
         locale -> Nullable<Text>,
     }
 }
@@ -351,6 +353,9 @@ diesel::table! {
         consumed_at -> Nullable<Timestamptz>,
         id_token_claims -> Nullable<Jsonb>,
         user_session_id -> Nullable<Uuid>,
+        extra_callback_parameters -> Nullable<Jsonb>,
+        userinfo -> Nullable<Jsonb>,
+        unlinked_at -> Nullable<Timestamptz>,
     }
 }
 

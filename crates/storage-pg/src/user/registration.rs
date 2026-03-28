@@ -2,55 +2,75 @@ use std::net::IpAddr;
 
 use async_trait::async_trait;
 use chrono::{DateTime, Utc};
+use diesel::prelude::*;
+use diesel_async::RunQueryDsl;
 use pasion_data_model::{
     Clock, UpstreamOAuthAuthorizationSession, UserEmailAuthentication, UserPhoneAuthentication,
     UserRegistration, UserRegistrationPassword, UserRegistrationToken,
 };
-use pasion_storage::user::UserRegistrationRepository;
 use rand::RngCore;
-use sqlx::PgConnection;
 use ulid::Ulid;
-use url::Url;
 use uuid::Uuid;
 
-use crate::{DatabaseError, DatabaseInconsistencyError, ExecuteExt as _};
+use url::Url;
+
+use crate::{DatabaseError, DatabaseInconsistencyError, schema::user_registrations};
+use pasion_storage::user::UserRegistrationRepository;
 
 /// An implementation of [`UserRegistrationRepository`] for a PostgreSQL
 /// connection
 pub struct PgUserRegistrationRepository<'c> {
-    conn: &'c mut PgConnection,
+    conn: &'c mut diesel_async::AsyncPgConnection,
 }
 
 impl<'c> PgUserRegistrationRepository<'c> {
     /// Create a new [`PgUserRegistrationRepository`] from an active PostgreSQL
     /// connection
-    pub fn new(conn: &'c mut PgConnection) -> Self {
+    pub fn new(conn: &'c mut diesel_async::AsyncPgConnection) -> Self {
         Self { conn }
     }
 }
 
-struct UserRegistrationLookup {
+/// Row type returned from `diesel::sql_query` for the lookup query, which
+/// includes the `ip_address` column cast to text.
+#[derive(Debug, Clone, QueryableByName)]
+struct UserRegistrationLookupRow {
+    #[diesel(sql_type = diesel::sql_types::Uuid)]
     user_registration_id: Uuid,
-    ip_address: Option<IpAddr>,
+    #[diesel(sql_type = diesel::sql_types::Nullable<diesel::sql_types::Text>)]
+    ip_address_text: Option<String>,
+    #[diesel(sql_type = diesel::sql_types::Nullable<diesel::sql_types::Text>)]
     user_agent: Option<String>,
+    #[diesel(sql_type = diesel::sql_types::Nullable<diesel::sql_types::Jsonb>)]
     post_auth_action: Option<serde_json::Value>,
+    #[diesel(sql_type = diesel::sql_types::Text)]
     username: String,
+    #[diesel(sql_type = diesel::sql_types::Nullable<diesel::sql_types::Text>)]
     display_name: Option<String>,
+    #[diesel(sql_type = diesel::sql_types::Nullable<diesel::sql_types::Text>)]
     terms_url: Option<String>,
+    #[diesel(sql_type = diesel::sql_types::Nullable<diesel::sql_types::Uuid>)]
     email_authentication_id: Option<Uuid>,
+    #[diesel(sql_type = diesel::sql_types::Nullable<diesel::sql_types::Uuid>)]
     phone_authentication_id: Option<Uuid>,
+    #[diesel(sql_type = diesel::sql_types::Nullable<diesel::sql_types::Uuid>)]
     user_registration_token_id: Option<Uuid>,
+    #[diesel(sql_type = diesel::sql_types::Nullable<diesel::sql_types::Text>)]
     hashed_password: Option<String>,
+    #[diesel(sql_type = diesel::sql_types::Nullable<diesel::sql_types::Int4>)]
     hashed_password_version: Option<i32>,
+    #[diesel(sql_type = diesel::sql_types::Nullable<diesel::sql_types::Uuid>)]
     upstream_oauth_authorization_session_id: Option<Uuid>,
+    #[diesel(sql_type = diesel::sql_types::Timestamptz)]
     created_at: DateTime<Utc>,
+    #[diesel(sql_type = diesel::sql_types::Nullable<diesel::sql_types::Timestamptz>)]
     completed_at: Option<DateTime<Utc>>,
 }
 
-impl TryFrom<UserRegistrationLookup> for UserRegistration {
+impl TryFrom<UserRegistrationLookupRow> for UserRegistration {
     type Error = DatabaseInconsistencyError;
 
-    fn try_from(value: UserRegistrationLookup) -> Result<Self, Self::Error> {
+    fn try_from(value: UserRegistrationLookupRow) -> Result<Self, Self::Error> {
         let id = Ulid::from(value.user_registration_id);
 
         let password = match (value.hashed_password, value.hashed_password_version) {
@@ -86,9 +106,20 @@ impl TryFrom<UserRegistrationLookup> for UserRegistration {
                     .source(e)
             })?;
 
+        let ip_address: Option<IpAddr> = value
+            .ip_address_text
+            .map(|s| s.parse())
+            .transpose()
+            .map_err(|e| {
+                DatabaseInconsistencyError::on("user_registrations")
+                    .column("ip_address")
+                    .row(id)
+                    .source(e)
+            })?;
+
         Ok(UserRegistration {
             id,
-            ip_address: value.ip_address,
+            ip_address,
             user_agent: value.user_agent,
             post_auth_action: value.post_auth_action,
             username: value.username,
@@ -115,38 +146,36 @@ impl UserRegistrationRepository for PgUserRegistrationRepository<'_> {
         name = "db.user_registration.lookup",
         skip_all,
         fields(
-            db.query.text,
             user_registration.id = %id,
         ),
         err,
     )]
     async fn lookup(&mut self, id: Ulid) -> Result<Option<UserRegistration>, Self::Error> {
-        let res = sqlx::query_as!(
-            UserRegistrationLookup,
-            r#"
-                SELECT user_registration_id
-                     , ip_address as "ip_address: IpAddr"
-                     , user_agent
-                     , post_auth_action
-                     , username
-                     , display_name
-                     , terms_url
-                     , email_authentication_id
-                     , phone_authentication_id
-                     , user_registration_token_id
-                     , hashed_password
-                     , hashed_password_version
-                     , upstream_oauth_authorization_session_id
-                     , created_at
-                     , completed_at
-                FROM user_registrations
-                WHERE user_registration_id = $1
-            "#,
-            Uuid::from(id),
+        // Use raw SQL because the ip_address column is Inet, which requires
+        // the network-address diesel feature. We cast it to text instead.
+        let res: Option<UserRegistrationLookupRow> = diesel::sql_query(
+            "SELECT user_registration_id \
+                  , ip_address::text AS ip_address_text \
+                  , user_agent \
+                  , post_auth_action \
+                  , username \
+                  , display_name \
+                  , terms_url \
+                  , email_authentication_id \
+                  , phone_authentication_id \
+                  , user_registration_token_id \
+                  , hashed_password \
+                  , hashed_password_version \
+                  , upstream_oauth_authorization_session_id \
+                  , created_at \
+                  , completed_at \
+             FROM user_registrations \
+             WHERE user_registration_id = $1",
         )
-        .traced()
-        .fetch_optional(&mut *self.conn)
-        .await?;
+        .bind::<diesel::sql_types::Uuid, _>(Uuid::from(id))
+        .get_result(self.conn)
+        .await
+        .optional()?;
 
         let Some(res) = res else { return Ok(None) };
 
@@ -157,7 +186,6 @@ impl UserRegistrationRepository for PgUserRegistrationRepository<'_> {
         name = "db.user_registration.add",
         skip_all,
         fields(
-            db.query.text,
             user_registration.id,
         ),
         err,
@@ -175,27 +203,26 @@ impl UserRegistrationRepository for PgUserRegistrationRepository<'_> {
         let id = Ulid::from_datetime_with_source(created_at.into(), rng);
         tracing::Span::current().record("user_registration.id", tracing::field::display(id));
 
-        sqlx::query!(
-            r#"
-                INSERT INTO user_registrations
-                  ( user_registration_id
-                  , ip_address
-                  , user_agent
-                  , post_auth_action
-                  , username
-                  , created_at
-                  )
-                VALUES ($1, $2, $3, $4, $5, $6)
-            "#,
-            Uuid::from(id),
-            ip_address as Option<IpAddr>,
-            user_agent.as_deref(),
-            post_auth_action,
-            username,
-            created_at,
+        // Use raw SQL because the ip_address column is Inet type.
+        let ip_str = ip_address.map(|ip| ip.to_string());
+        diesel::sql_query(
+            "INSERT INTO user_registrations \
+               ( user_registration_id \
+               , ip_address \
+               , user_agent \
+               , post_auth_action \
+               , username \
+               , created_at \
+               ) \
+             VALUES ($1, $2::inet, $3, $4, $5, $6)",
         )
-        .traced()
-        .execute(&mut *self.conn)
+        .bind::<diesel::sql_types::Uuid, _>(Uuid::from(id))
+        .bind::<diesel::sql_types::Nullable<diesel::sql_types::Text>, _>(&ip_str)
+        .bind::<diesel::sql_types::Nullable<diesel::sql_types::Text>, _>(&user_agent)
+        .bind::<diesel::sql_types::Nullable<diesel::sql_types::Jsonb>, _>(&post_auth_action)
+        .bind::<diesel::sql_types::Text, _>(&username)
+        .bind::<diesel::sql_types::Timestamptz, _>(created_at)
+        .execute(self.conn)
         .await?;
 
         Ok(UserRegistration {
@@ -220,7 +247,6 @@ impl UserRegistrationRepository for PgUserRegistrationRepository<'_> {
         name = "db.user_registration.set_display_name",
         skip_all,
         fields(
-            db.query.text,
             user_registration.id = %user_registration.id,
             user_registration.display_name = display_name,
         ),
@@ -231,20 +257,16 @@ impl UserRegistrationRepository for PgUserRegistrationRepository<'_> {
         mut user_registration: UserRegistration,
         display_name: String,
     ) -> Result<UserRegistration, Self::Error> {
-        let res = sqlx::query!(
-            r#"
-                UPDATE user_registrations
-                SET display_name = $2
-                WHERE user_registration_id = $1 AND completed_at IS NULL
-            "#,
-            Uuid::from(user_registration.id),
-            display_name,
+        let rows_affected = diesel::update(
+            user_registrations::table
+                .find(Uuid::from(user_registration.id))
+                .filter(user_registrations::completed_at.is_null()),
         )
-        .traced()
-        .execute(&mut *self.conn)
+        .set(user_registrations::display_name.eq(Some(&display_name)))
+        .execute(self.conn)
         .await?;
 
-        DatabaseError::ensure_affected_rows(&res, 1)?;
+        DatabaseError::ensure_affected_rows_usize(rows_affected, 1)?;
 
         user_registration.display_name = Some(display_name);
 
@@ -255,7 +277,6 @@ impl UserRegistrationRepository for PgUserRegistrationRepository<'_> {
         name = "db.user_registration.set_terms_url",
         skip_all,
         fields(
-            db.query.text,
             user_registration.id = %user_registration.id,
             user_registration.terms_url = %terms_url,
         ),
@@ -266,20 +287,16 @@ impl UserRegistrationRepository for PgUserRegistrationRepository<'_> {
         mut user_registration: UserRegistration,
         terms_url: Url,
     ) -> Result<UserRegistration, Self::Error> {
-        let res = sqlx::query!(
-            r#"
-                UPDATE user_registrations
-                SET terms_url = $2
-                WHERE user_registration_id = $1 AND completed_at IS NULL
-            "#,
-            Uuid::from(user_registration.id),
-            terms_url.as_str(),
+        let rows_affected = diesel::update(
+            user_registrations::table
+                .find(Uuid::from(user_registration.id))
+                .filter(user_registrations::completed_at.is_null()),
         )
-        .traced()
-        .execute(&mut *self.conn)
+        .set(user_registrations::terms_url.eq(Some(terms_url.as_str())))
+        .execute(self.conn)
         .await?;
 
-        DatabaseError::ensure_affected_rows(&res, 1)?;
+        DatabaseError::ensure_affected_rows_usize(rows_affected, 1)?;
 
         user_registration.terms_url = Some(terms_url);
 
@@ -290,7 +307,6 @@ impl UserRegistrationRepository for PgUserRegistrationRepository<'_> {
         name = "db.user_registration.set_email_authentication",
         skip_all,
         fields(
-            db.query.text,
             %user_registration.id,
             %user_email_authentication.id,
             %user_email_authentication.email,
@@ -302,20 +318,19 @@ impl UserRegistrationRepository for PgUserRegistrationRepository<'_> {
         mut user_registration: UserRegistration,
         user_email_authentication: &UserEmailAuthentication,
     ) -> Result<UserRegistration, Self::Error> {
-        let res = sqlx::query!(
-            r#"
-                UPDATE user_registrations
-                SET email_authentication_id = $2
-                WHERE user_registration_id = $1 AND completed_at IS NULL
-            "#,
-            Uuid::from(user_registration.id),
-            Uuid::from(user_email_authentication.id),
+        let rows_affected = diesel::update(
+            user_registrations::table
+                .find(Uuid::from(user_registration.id))
+                .filter(user_registrations::completed_at.is_null()),
         )
-        .traced()
-        .execute(&mut *self.conn)
+        .set(
+            user_registrations::email_authentication_id
+                .eq(Some(Uuid::from(user_email_authentication.id))),
+        )
+        .execute(self.conn)
         .await?;
 
-        DatabaseError::ensure_affected_rows(&res, 1)?;
+        DatabaseError::ensure_affected_rows_usize(rows_affected, 1)?;
 
         user_registration.email_authentication_id = Some(user_email_authentication.id);
 
@@ -326,7 +341,6 @@ impl UserRegistrationRepository for PgUserRegistrationRepository<'_> {
         name = "db.user_registration.set_phone_authentication",
         skip_all,
         fields(
-            db.query.text,
             %user_registration.id,
             %user_phone_authentication.id,
             %user_phone_authentication.phone,
@@ -338,20 +352,19 @@ impl UserRegistrationRepository for PgUserRegistrationRepository<'_> {
         mut user_registration: UserRegistration,
         user_phone_authentication: &UserPhoneAuthentication,
     ) -> Result<UserRegistration, Self::Error> {
-        let res = sqlx::query!(
-            r#"
-                UPDATE user_registrations
-                SET phone_authentication_id = $2
-                WHERE user_registration_id = $1 AND completed_at IS NULL
-            "#,
-            Uuid::from(user_registration.id),
-            Uuid::from(user_phone_authentication.id),
+        let rows_affected = diesel::update(
+            user_registrations::table
+                .find(Uuid::from(user_registration.id))
+                .filter(user_registrations::completed_at.is_null()),
         )
-        .traced()
-        .execute(&mut *self.conn)
+        .set(
+            user_registrations::phone_authentication_id
+                .eq(Some(Uuid::from(user_phone_authentication.id))),
+        )
+        .execute(self.conn)
         .await?;
 
-        DatabaseError::ensure_affected_rows(&res, 1)?;
+        DatabaseError::ensure_affected_rows_usize(rows_affected, 1)?;
 
         user_registration.phone_authentication_id = Some(user_phone_authentication.id);
 
@@ -362,7 +375,6 @@ impl UserRegistrationRepository for PgUserRegistrationRepository<'_> {
         name = "db.user_registration.set_password",
         skip_all,
         fields(
-            db.query.text,
             user_registration.id = %user_registration.id,
             user_registration.hashed_password = hashed_password,
             user_registration.hashed_password_version = version,
@@ -375,21 +387,19 @@ impl UserRegistrationRepository for PgUserRegistrationRepository<'_> {
         hashed_password: String,
         version: u16,
     ) -> Result<UserRegistration, Self::Error> {
-        let res = sqlx::query!(
-            r#"
-                UPDATE user_registrations
-                SET hashed_password = $2, hashed_password_version = $3
-                WHERE user_registration_id = $1 AND completed_at IS NULL
-            "#,
-            Uuid::from(user_registration.id),
-            hashed_password,
-            i32::from(version),
+        let rows_affected = diesel::update(
+            user_registrations::table
+                .find(Uuid::from(user_registration.id))
+                .filter(user_registrations::completed_at.is_null()),
         )
-        .traced()
-        .execute(&mut *self.conn)
+        .set((
+            user_registrations::hashed_password.eq(Some(&hashed_password)),
+            user_registrations::hashed_password_version.eq(Some(i32::from(version))),
+        ))
+        .execute(self.conn)
         .await?;
 
-        DatabaseError::ensure_affected_rows(&res, 1)?;
+        DatabaseError::ensure_affected_rows_usize(rows_affected, 1)?;
 
         user_registration.password = Some(UserRegistrationPassword {
             hashed_password,
@@ -403,7 +413,6 @@ impl UserRegistrationRepository for PgUserRegistrationRepository<'_> {
         name = "db.user_registration.set_registration_token",
         skip_all,
         fields(
-            db.query.text,
             %user_registration.id,
             %user_registration_token.id,
         ),
@@ -414,20 +423,19 @@ impl UserRegistrationRepository for PgUserRegistrationRepository<'_> {
         mut user_registration: UserRegistration,
         user_registration_token: &UserRegistrationToken,
     ) -> Result<UserRegistration, Self::Error> {
-        let res = sqlx::query!(
-            r#"
-                UPDATE user_registrations
-                SET user_registration_token_id = $2
-                WHERE user_registration_id = $1 AND completed_at IS NULL
-            "#,
-            Uuid::from(user_registration.id),
-            Uuid::from(user_registration_token.id),
+        let rows_affected = diesel::update(
+            user_registrations::table
+                .find(Uuid::from(user_registration.id))
+                .filter(user_registrations::completed_at.is_null()),
         )
-        .traced()
-        .execute(&mut *self.conn)
+        .set(
+            user_registrations::user_registration_token_id
+                .eq(Some(Uuid::from(user_registration_token.id))),
+        )
+        .execute(self.conn)
         .await?;
 
-        DatabaseError::ensure_affected_rows(&res, 1)?;
+        DatabaseError::ensure_affected_rows_usize(rows_affected, 1)?;
 
         user_registration.user_registration_token_id = Some(user_registration_token.id);
 
@@ -438,7 +446,6 @@ impl UserRegistrationRepository for PgUserRegistrationRepository<'_> {
         name = "db.user_registration.set_upstream_oauth_authorization_session",
         skip_all,
         fields(
-            db.query.text,
             %user_registration.id,
             %upstream_oauth_authorization_session.id,
         ),
@@ -449,20 +456,19 @@ impl UserRegistrationRepository for PgUserRegistrationRepository<'_> {
         mut user_registration: UserRegistration,
         upstream_oauth_authorization_session: &UpstreamOAuthAuthorizationSession,
     ) -> Result<UserRegistration, Self::Error> {
-        let res = sqlx::query!(
-            r#"
-                UPDATE user_registrations
-                SET upstream_oauth_authorization_session_id = $2
-                WHERE user_registration_id = $1 AND completed_at IS NULL
-            "#,
-            Uuid::from(user_registration.id),
-            Uuid::from(upstream_oauth_authorization_session.id),
+        let rows_affected = diesel::update(
+            user_registrations::table
+                .find(Uuid::from(user_registration.id))
+                .filter(user_registrations::completed_at.is_null()),
         )
-        .traced()
-        .execute(&mut *self.conn)
+        .set(
+            user_registrations::upstream_oauth_authorization_session_id
+                .eq(Some(Uuid::from(upstream_oauth_authorization_session.id))),
+        )
+        .execute(self.conn)
         .await?;
 
-        DatabaseError::ensure_affected_rows(&res, 1)?;
+        DatabaseError::ensure_affected_rows_usize(rows_affected, 1)?;
 
         user_registration.upstream_oauth_authorization_session_id =
             Some(upstream_oauth_authorization_session.id);
@@ -474,7 +480,6 @@ impl UserRegistrationRepository for PgUserRegistrationRepository<'_> {
         name = "db.user_registration.complete",
         skip_all,
         fields(
-            db.query.text,
             user_registration.id = %user_registration.id,
         ),
         err,
@@ -485,20 +490,16 @@ impl UserRegistrationRepository for PgUserRegistrationRepository<'_> {
         mut user_registration: UserRegistration,
     ) -> Result<UserRegistration, Self::Error> {
         let completed_at = clock.now();
-        let res = sqlx::query!(
-            r#"
-                UPDATE user_registrations
-                SET completed_at = $2
-                WHERE user_registration_id = $1 AND completed_at IS NULL
-            "#,
-            Uuid::from(user_registration.id),
-            completed_at,
+        let rows_affected = diesel::update(
+            user_registrations::table
+                .find(Uuid::from(user_registration.id))
+                .filter(user_registrations::completed_at.is_null()),
         )
-        .traced()
-        .execute(&mut *self.conn)
+        .set(user_registrations::completed_at.eq(Some(completed_at)))
+        .execute(self.conn)
         .await?;
 
-        DatabaseError::ensure_affected_rows(&res, 1)?;
+        DatabaseError::ensure_affected_rows_usize(rows_affected, 1)?;
 
         user_registration.completed_at = Some(completed_at);
 
@@ -508,9 +509,6 @@ impl UserRegistrationRepository for PgUserRegistrationRepository<'_> {
     #[tracing::instrument(
         name = "db.user_registration.cleanup",
         skip_all,
-        fields(
-            db.query.text,
-        ),
         err,
     )]
     async fn cleanup(
@@ -519,38 +517,46 @@ impl UserRegistrationRepository for PgUserRegistrationRepository<'_> {
         until: Ulid,
         limit: usize,
     ) -> Result<(usize, Option<Ulid>), Self::Error> {
+        // Use raw SQL for the complex CTE-based DELETE.
         // `MAX(uuid)` isn't a thing in Postgres, so we can't just re-select the
         // deleted rows and do a MAX on the `user_registration_id`.
         // Instead, we do the aggregation on the client side, which is a little
         // less efficient, but good enough.
-        let res: Vec<Uuid> = sqlx::query_scalar!(
-            r#"
-                WITH to_delete AS (
-                    SELECT user_registration_id
-                    FROM user_registrations
-                    WHERE ($1::uuid IS NULL OR user_registration_id > $1)
-                    AND user_registration_id <= $2
-                    ORDER BY user_registration_id
-                    LIMIT $3
-                )
-                DELETE FROM user_registrations
-                USING to_delete
-                WHERE user_registrations.user_registration_id = to_delete.user_registration_id
-                RETURNING user_registrations.user_registration_id
-            "#,
-            since.map(Uuid::from),
-            Uuid::from(until),
-            i64::try_from(limit).unwrap_or(i64::MAX)
+        let res: Vec<UuidRow> = diesel::sql_query(
+            "WITH to_delete AS ( \
+                 SELECT user_registration_id \
+                 FROM user_registrations \
+                 WHERE ($1::uuid IS NULL OR user_registration_id > $1) \
+                 AND user_registration_id <= $2 \
+                 ORDER BY user_registration_id \
+                 LIMIT $3 \
+             ) \
+             DELETE FROM user_registrations \
+             USING to_delete \
+             WHERE user_registrations.user_registration_id = to_delete.user_registration_id \
+             RETURNING user_registrations.user_registration_id",
         )
-        .traced()
-        .fetch_all(&mut *self.conn)
+        .bind::<diesel::sql_types::Nullable<diesel::sql_types::Uuid>, _>(since.map(Uuid::from))
+        .bind::<diesel::sql_types::Uuid, _>(Uuid::from(until))
+        .bind::<diesel::sql_types::BigInt, _>(i64::try_from(limit).unwrap_or(i64::MAX))
+        .load(self.conn)
         .await?;
 
         let count = res.len();
-        let max_id = res.into_iter().max();
+        let max_id = res
+            .into_iter()
+            .map(|r| r.user_registration_id)
+            .max();
 
         Ok((count, max_id.map(Ulid::from)))
     }
+}
+
+/// Helper row type for extracting a single UUID from raw SQL queries.
+#[derive(Debug, Clone, QueryableByName)]
+struct UuidRow {
+    #[diesel(sql_type = diesel::sql_types::Uuid)]
+    user_registration_id: Uuid,
 }
 
 #[cfg(test)]

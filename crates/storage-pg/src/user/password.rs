@@ -1,29 +1,43 @@
 use async_trait::async_trait;
 use chrono::{DateTime, Utc};
+use diesel::prelude::*;
+use diesel_async::RunQueryDsl;
 use pasion_data_model::{Clock, Password, User};
 use pasion_storage::user::UserPasswordRepository;
 use rand::RngCore;
-use sqlx::PgConnection;
 use ulid::Ulid;
 use uuid::Uuid;
 
-use crate::{DatabaseError, DatabaseInconsistencyError, tracing::ExecuteExt};
+use crate::{DatabaseError, DatabaseInconsistencyError, schema::user_passwords};
 
 /// An implementation of [`UserPasswordRepository`] for a PostgreSQL connection
 pub struct PgUserPasswordRepository<'c> {
-    conn: &'c mut PgConnection,
+    conn: &'c mut diesel_async::AsyncPgConnection,
 }
 
 impl<'c> PgUserPasswordRepository<'c> {
     /// Create a new [`PgUserPasswordRepository`] from an active PostgreSQL
     /// connection
-    pub fn new(conn: &'c mut PgConnection) -> Self {
+    pub fn new(conn: &'c mut diesel_async::AsyncPgConnection) -> Self {
         Self { conn }
     }
 }
 
+#[derive(Debug, Queryable, Selectable)]
+#[diesel(table_name = user_passwords)]
 struct UserPasswordLookup {
     user_password_id: Uuid,
+    hashed_password: String,
+    version: i32,
+    upgraded_from_id: Option<Uuid>,
+    created_at: DateTime<Utc>,
+}
+
+#[derive(Insertable)]
+#[diesel(table_name = user_passwords)]
+struct NewUserPassword {
+    user_password_id: Uuid,
+    user_id: Uuid,
     hashed_password: String,
     version: i32,
     upgraded_from_id: Option<Uuid>,
@@ -38,31 +52,19 @@ impl UserPasswordRepository for PgUserPasswordRepository<'_> {
         name = "db.user_password.active",
         skip_all,
         fields(
-            db.query.text,
             %user.id,
             %user.username,
         ),
         err,
     )]
     async fn active(&mut self, user: &User) -> Result<Option<Password>, Self::Error> {
-        let res = sqlx::query_as!(
-            UserPasswordLookup,
-            r#"
-                SELECT up.user_password_id
-                     , up.hashed_password
-                     , up.version
-                     , up.upgraded_from_id
-                     , up.created_at
-                FROM user_passwords up
-                WHERE up.user_id = $1
-                ORDER BY up.created_at DESC
-                LIMIT 1
-            "#,
-            Uuid::from(user.id),
-        )
-        .traced()
-        .fetch_optional(&mut *self.conn)
-        .await?;
+        let res = user_passwords::table
+            .filter(user_passwords::user_id.eq(Uuid::from(user.id)))
+            .select(UserPasswordLookup::as_select())
+            .order(user_passwords::created_at.desc())
+            .first::<UserPasswordLookup>(self.conn)
+            .await
+            .optional()?;
 
         let Some(res) = res else { return Ok(None) };
 
@@ -92,7 +94,6 @@ impl UserPasswordRepository for PgUserPasswordRepository<'_> {
         name = "db.user_password.add",
         skip_all,
         fields(
-            db.query.text,
             %user.id,
             %user.username,
             user_password.id,
@@ -115,22 +116,19 @@ impl UserPasswordRepository for PgUserPasswordRepository<'_> {
 
         let upgraded_from_id = upgraded_from.map(|p| p.id);
 
-        sqlx::query!(
-            r#"
-                INSERT INTO user_passwords
-                    (user_password_id, user_id, hashed_password, version, upgraded_from_id, created_at)
-                VALUES ($1, $2, $3, $4, $5, $6)
-            "#,
-            Uuid::from(id),
-            Uuid::from(user.id),
-            hashed_password,
-            i32::from(version),
-            upgraded_from_id.map(Uuid::from),
+        let new_password = NewUserPassword {
+            user_password_id: Uuid::from(id),
+            user_id: Uuid::from(user.id),
+            hashed_password: hashed_password.clone(),
+            version: i32::from(version),
+            upgraded_from_id: upgraded_from_id.map(Uuid::from),
             created_at,
-        )
-        .traced()
-        .execute(&mut *self.conn)
-        .await?;
+        };
+
+        diesel::insert_into(user_passwords::table)
+            .values(&new_password)
+            .execute(self.conn)
+            .await?;
 
         Ok(Password {
             id,

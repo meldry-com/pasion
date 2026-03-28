@@ -3,6 +3,9 @@ use std::{collections::HashMap, sync::Arc};
 use async_trait::async_trait;
 use chrono::{DateTime, Duration, Utc};
 use cron::Schedule;
+use diesel::sql_query;
+use diesel::sql_types::Bool;
+use diesel_async::RunQueryDsl;
 use opentelemetry::{
     KeyValue,
     metrics::{Counter, Histogram, UpDownCounter},
@@ -16,10 +19,7 @@ use pasion_storage::{
 use pasion_storage_pg::{DatabaseError, PgRepository};
 use rand::{Rng, RngCore, distributions::Uniform};
 use serde::de::DeserializeOwned;
-use sqlx::{
-    Acquire, Either,
-    postgres::{PgAdvisoryLock, PgListener},
-};
+use sqlx::postgres::PgListener;
 use thiserror::Error;
 use tokio::{task::JoinSet, time::Instant};
 use tokio_util::sync::CancellationToken;
@@ -139,14 +139,8 @@ pub enum QueueRunnerError {
     #[error("Failed to setup listener")]
     SetupListener(#[source] sqlx::Error),
 
-    #[error("Failed to start transaction")]
-    StartTransaction(#[source] sqlx::Error),
-
-    #[error("Failed to commit transaction")]
-    CommitTransaction(#[source] sqlx::Error),
-
-    #[error("Failed to acquire leader lock")]
-    LeaderLock(#[source] sqlx::Error),
+    #[error("Failed to get connection from pool")]
+    Pool(#[source] Box<dyn std::error::Error + Send + Sync>),
 
     #[error(transparent)]
     Repository(#[from] RepositoryError),
@@ -159,6 +153,19 @@ pub enum QueueRunnerError {
 
     #[error("Worker is not the leader")]
     NotLeader,
+}
+
+/// Result of a `pg_try_advisory_lock` query
+#[derive(diesel::QueryableByName)]
+struct AdvisoryLockResult {
+    #[diesel(sql_type = Bool)]
+    acquired: bool,
+}
+
+/// Compute a stable advisory lock key from a string (same algorithm as sqlx)
+fn advisory_lock_key(name: &str) -> i64 {
+    const CRC_IEEE: crc::Crc<u32> = crc::Crc::<u32>::new(&crc::CRC_32_ISO_HDLC);
+    i64::from(CRC_IEEE.checksum(name.as_bytes()))
 }
 
 // When the worker waits for a notification, we still want to wake it up every
@@ -240,7 +247,7 @@ impl QueueWorker {
         let mut rng = state.rng();
         let clock = state.clock();
 
-        let mut listener = PgListener::connect_with(&state.pool())
+        let mut listener = PgListener::connect(state.database_url())
             .await
             .map_err(QueueRunnerError::SetupListener)?;
 
@@ -256,18 +263,15 @@ impl QueueWorker {
             .await
             .map_err(QueueRunnerError::SetupListener)?;
 
-        let txn = listener
-            .begin()
+        let conn = state
+            .pool()
+            .get()
             .await
-            .map_err(QueueRunnerError::StartTransaction)?;
-        let mut repo = PgRepository::from_conn(txn);
+            .map_err(|e| QueueRunnerError::Pool(Box::new(e)))?;
+        let mut repo = PgRepository::new(conn);
 
         let registration = repo.queue_worker().register(&mut rng, clock).await?;
         tracing::Span::current().record("worker.id", tracing::field::display(registration.id));
-        repo.into_inner()
-            .commit()
-            .await
-            .map_err(QueueRunnerError::CommitTransaction)?;
 
         tracing::info!(worker.id = %registration.id, "Registered worker");
         let now = clock.now();
@@ -375,22 +379,17 @@ impl QueueWorker {
     pub(crate) async fn setup_schedules(&mut self) -> Result<(), QueueRunnerError> {
         let schedules: Vec<_> = self.schedules.iter().map(|s| s.schedule_name).collect();
 
-        // Start a transaction on the existing PgListener connection
-        let txn = self
-            .listener
-            .begin()
+        let conn = self
+            .state
+            .pool()
+            .get()
             .await
-            .map_err(QueueRunnerError::StartTransaction)?;
+            .map_err(|e| QueueRunnerError::Pool(Box::new(e)))?;
 
-        let mut repo = PgRepository::from_conn(txn);
+        let mut repo = PgRepository::new(conn);
 
         // Setup the entries in the queue_schedules table
         repo.queue_schedule().setup(&schedules).await?;
-
-        repo.into_inner()
-            .commit()
-            .await
-            .map_err(QueueRunnerError::CommitTransaction)?;
 
         Ok(())
     }
@@ -423,14 +422,14 @@ impl QueueWorker {
         let clock = self.state.clock();
         let mut rng = self.state.rng();
 
-        // Start a transaction on the existing PgListener connection
-        let txn = self
-            .listener
-            .begin()
+        let conn = self
+            .state
+            .pool()
+            .get()
             .await
-            .map_err(QueueRunnerError::StartTransaction)?;
+            .map_err(|e| QueueRunnerError::Pool(Box::new(e)))?;
 
-        let mut repo = PgRepository::from_conn(txn);
+        let mut repo = PgRepository::new(conn);
 
         // Log about any job still running
         match self.tracker.running_jobs() {
@@ -455,11 +454,6 @@ impl QueueWorker {
         repo.queue_worker()
             .shutdown(clock, &self.registration)
             .await?;
-
-        repo.into_inner()
-            .commit()
-            .await
-            .map_err(QueueRunnerError::CommitTransaction)?;
 
         Ok(())
     }
@@ -520,13 +514,13 @@ impl QueueWorker {
         let mut rng = self.state.rng();
         let now = clock.now();
 
-        // Start a transaction on the existing PgListener connection
-        let txn = self
-            .listener
-            .begin()
+        let conn = self
+            .state
+            .pool()
+            .get()
             .await
-            .map_err(QueueRunnerError::StartTransaction)?;
-        let mut repo = PgRepository::from_conn(txn);
+            .map_err(|e| QueueRunnerError::Pool(Box::new(e)))?;
+        let mut repo = PgRepository::new(conn);
 
         // We send a heartbeat every minute, to avoid writing to the database too often
         // on a logged table
@@ -592,12 +586,8 @@ impl QueueWorker {
             }
         }
 
-        // After this point, we are locking the leader table, so it's important that we
-        // commit as soon as possible to not block the other workers for too long
-        repo.into_inner()
-            .commit()
-            .await
-            .map_err(QueueRunnerError::CommitTransaction)?;
+        // Connection is returned to the pool when repo is dropped
+        drop(repo);
 
         // Save the new leader state to log any change
         if leader != self.am_i_leader {
@@ -623,12 +613,12 @@ impl QueueWorker {
         let clock = self.state.clock();
         let mut rng = self.state.rng();
 
-        // Start a transaction on the existing PgListener connection
-        let txn = self
-            .listener
-            .begin()
+        let mut conn = self
+            .state
+            .pool()
+            .get()
             .await
-            .map_err(QueueRunnerError::StartTransaction)?;
+            .map_err(|e| QueueRunnerError::Pool(Box::new(e)))?;
 
         // The thing with the leader election is that it locks the table during the
         // election, preventing other workers from going through the loop.
@@ -638,28 +628,23 @@ impl QueueWorker {
         // would mean we would lock all the workers for the duration of the
         // duties, which is not ideal.
         //
-        // So we do the duties in a separate transaction, in which we take an advisory
+        // So we do the duties in a separate connection, in which we take an advisory
         // lock, so that in the very rare case where two workers think they are the
         // leader, we still don't have two workers doing the duties at the same time.
-        let lock = PgAdvisoryLock::new("leader-duties");
-
-        let locked = lock
-            .try_acquire(txn)
+        let lock_key = advisory_lock_key("leader-duties");
+        let lock_result: AdvisoryLockResult = sql_query(
+            format!("SELECT pg_try_advisory_lock({lock_key}) AS acquired")
+        )
+            .get_result(&mut *conn)
             .await
-            .map_err(QueueRunnerError::LeaderLock)?;
+            .map_err(DatabaseError::from)?;
 
-        let locked = match locked {
-            Either::Left(locked) => locked,
-            Either::Right(txn) => {
-                tracing::error!("Another worker has the leader lock, aborting");
-                txn.rollback()
-                    .await
-                    .map_err(QueueRunnerError::CommitTransaction)?;
-                return Ok(());
-            }
-        };
+        if !lock_result.acquired {
+            tracing::error!("Another worker has the leader lock, aborting");
+            return Ok(());
+        }
 
-        let mut repo = PgRepository::from_conn(locked);
+        let mut repo = PgRepository::new(conn);
 
         // Look at the state of schedules in the database
         let schedules_status = repo.queue_schedule().list().await?;
@@ -728,16 +713,11 @@ impl QueueWorker {
             n => tracing::info!("{n} scheduled jobs marked as available"),
         }
 
-        // Release the leader lock
-        let txn = repo
-            .into_inner()
-            .release_now()
-            .await
-            .map_err(QueueRunnerError::LeaderLock)?;
-
-        txn.commit()
-            .await
-            .map_err(QueueRunnerError::CommitTransaction)?;
+        // Release the advisory lock (it's session-level, so release explicitly)
+        let mut conn = repo.into_inner();
+        let _ = sql_query(format!("SELECT pg_advisory_unlock({lock_key})"))
+            .execute(&mut *conn)
+            .await;
 
         Ok(())
     }
@@ -759,13 +739,13 @@ impl QueueWorker {
         let clock = self.state.clock();
         let mut rng = self.state.rng();
 
-        // Grab the connection from the PgListener
-        let txn = self
-            .listener
-            .begin()
+        let conn = self
+            .state
+            .pool()
+            .get()
             .await
-            .map_err(QueueRunnerError::StartTransaction)?;
-        let mut repo = PgRepository::from_conn(txn);
+            .map_err(|e| QueueRunnerError::Pool(Box::new(e)))?;
+        let mut repo = PgRepository::new(conn);
 
         // Spawn all the jobs in the database
         let queues = self.tracker.queues();
@@ -800,11 +780,6 @@ impl QueueWorker {
         self.tracker
             .process_jobs(&mut rng, clock, &mut repo, true)
             .await?;
-
-        repo.into_inner()
-            .commit()
-            .await
-            .map_err(QueueRunnerError::CommitTransaction)?;
 
         Ok(())
     }

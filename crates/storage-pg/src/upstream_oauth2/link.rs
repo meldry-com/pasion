@@ -1,44 +1,38 @@
 use async_trait::async_trait;
 use chrono::{DateTime, Utc};
-use opentelemetry_semantic_conventions::trace::DB_QUERY_TEXT;
+use diesel::prelude::*;
+use diesel_async::RunQueryDsl;
 use pasion_data_model::{Clock, UpstreamOAuthLink, UpstreamOAuthProvider, User};
 use pasion_storage::{
     Page, Pagination,
-    pagination::Node,
+    pagination::{Node, PaginationDirection},
     upstream_oauth2::{UpstreamOAuthLinkFilter, UpstreamOAuthLinkRepository},
 };
 use rand::RngCore;
-use sea_query::{Expr, PostgresQueryBuilder, Query, enum_def};
-use sea_query_binder::SqlxBinder;
-use sqlx::PgConnection;
-use tracing::Instrument;
 use ulid::Ulid;
 use uuid::Uuid;
 
 use crate::{
     DatabaseError,
-    filter::{Filter, StatementExt},
-    iden::{UpstreamOAuthLinks, UpstreamOAuthProviders},
-    pagination::QueryBuilderExt,
-    tracing::ExecuteExt,
+    schema::{upstream_oauth_links, upstream_oauth_providers},
 };
 
 /// An implementation of [`UpstreamOAuthLinkRepository`] for a PostgreSQL
 /// connection
 pub struct PgUpstreamOAuthLinkRepository<'c> {
-    conn: &'c mut PgConnection,
+    conn: &'c mut diesel_async::AsyncPgConnection,
 }
 
 impl<'c> PgUpstreamOAuthLinkRepository<'c> {
     /// Create a new [`PgUpstreamOAuthLinkRepository`] from an active PostgreSQL
     /// connection
-    pub fn new(conn: &'c mut PgConnection) -> Self {
+    pub fn new(conn: &'c mut diesel_async::AsyncPgConnection) -> Self {
         Self { conn }
     }
 }
 
-#[derive(sqlx::FromRow)]
-#[enum_def]
+#[derive(Debug, Clone, Queryable, Selectable)]
+#[diesel(table_name = upstream_oauth_links)]
 struct LinkLookup {
     upstream_oauth_link_id: Uuid,
     upstream_oauth_provider_id: Uuid,
@@ -67,47 +61,16 @@ impl From<LinkLookup> for UpstreamOAuthLink {
     }
 }
 
-impl Filter for UpstreamOAuthLinkFilter<'_> {
-    fn generate_condition(&self, _has_joins: bool) -> impl sea_query::IntoCondition {
-        sea_query::Condition::all()
-            .add_option(self.user().map(|user| {
-                Expr::col((UpstreamOAuthLinks::Table, UpstreamOAuthLinks::UserId))
-                    .eq(Uuid::from(user.id))
-            }))
-            .add_option(self.provider().map(|provider| {
-                Expr::col((
-                    UpstreamOAuthLinks::Table,
-                    UpstreamOAuthLinks::UpstreamOAuthProviderId,
-                ))
-                .eq(Uuid::from(provider.id))
-            }))
-            .add_option(self.provider_enabled().map(|enabled| {
-                Expr::col((
-                    UpstreamOAuthLinks::Table,
-                    UpstreamOAuthLinks::UpstreamOAuthProviderId,
-                ))
-                .eq(Expr::any(
-                    Query::select()
-                        .expr(Expr::col((
-                            UpstreamOAuthProviders::Table,
-                            UpstreamOAuthProviders::UpstreamOAuthProviderId,
-                        )))
-                        .from(UpstreamOAuthProviders::Table)
-                        .and_where(
-                            Expr::col((
-                                UpstreamOAuthProviders::Table,
-                                UpstreamOAuthProviders::DisabledAt,
-                            ))
-                            .is_null()
-                            .eq(enabled),
-                        )
-                        .take(),
-                ))
-            }))
-            .add_option(self.subject().map(|subject| {
-                Expr::col((UpstreamOAuthLinks::Table, UpstreamOAuthLinks::Subject)).eq(subject)
-            }))
-    }
+/// Insertable row for creating a new upstream OAuth link
+#[derive(Insertable)]
+#[diesel(table_name = upstream_oauth_links)]
+struct NewLink {
+    upstream_oauth_link_id: Uuid,
+    upstream_oauth_provider_id: Uuid,
+    user_id: Option<Uuid>,
+    subject: String,
+    human_account_name: Option<String>,
+    created_at: DateTime<Utc>,
 }
 
 #[async_trait]
@@ -118,31 +81,18 @@ impl UpstreamOAuthLinkRepository for PgUpstreamOAuthLinkRepository<'_> {
         name = "db.upstream_oauth_link.lookup",
         skip_all,
         fields(
-            db.query.text,
             upstream_oauth_link.id = %id,
         ),
         err,
     )]
     async fn lookup(&mut self, id: Ulid) -> Result<Option<UpstreamOAuthLink>, Self::Error> {
-        let res = sqlx::query_as!(
-            LinkLookup,
-            r#"
-                SELECT
-                    upstream_oauth_link_id,
-                    upstream_oauth_provider_id,
-                    user_id,
-                    subject,
-                    human_account_name,
-                    created_at
-                FROM upstream_oauth_links
-                WHERE upstream_oauth_link_id = $1
-            "#,
-            Uuid::from(id),
-        )
-        .traced()
-        .fetch_optional(&mut *self.conn)
-        .await?
-        .map(Into::into);
+        let res = upstream_oauth_links::table
+            .find(Uuid::from(id))
+            .select(LinkLookup::as_select())
+            .first::<LinkLookup>(self.conn)
+            .await
+            .optional()?
+            .map(Into::into);
 
         Ok(res)
     }
@@ -151,7 +101,6 @@ impl UpstreamOAuthLinkRepository for PgUpstreamOAuthLinkRepository<'_> {
         name = "db.upstream_oauth_link.find_by_subject",
         skip_all,
         fields(
-            db.query.text,
             upstream_oauth_link.subject = subject,
             %upstream_oauth_provider.id,
             upstream_oauth_provider.issuer = upstream_oauth_provider.issuer,
@@ -164,27 +113,17 @@ impl UpstreamOAuthLinkRepository for PgUpstreamOAuthLinkRepository<'_> {
         upstream_oauth_provider: &UpstreamOAuthProvider,
         subject: &str,
     ) -> Result<Option<UpstreamOAuthLink>, Self::Error> {
-        let res = sqlx::query_as!(
-            LinkLookup,
-            r#"
-                SELECT
-                    upstream_oauth_link_id,
-                    upstream_oauth_provider_id,
-                    user_id,
-                    subject,
-                    human_account_name,
-                    created_at
-                FROM upstream_oauth_links
-                WHERE upstream_oauth_provider_id = $1
-                  AND subject = $2
-            "#,
-            Uuid::from(upstream_oauth_provider.id),
-            subject,
-        )
-        .traced()
-        .fetch_optional(&mut *self.conn)
-        .await?
-        .map(Into::into);
+        let res = upstream_oauth_links::table
+            .filter(
+                upstream_oauth_links::upstream_oauth_provider_id
+                    .eq(Uuid::from(upstream_oauth_provider.id)),
+            )
+            .filter(upstream_oauth_links::subject.eq(subject))
+            .select(LinkLookup::as_select())
+            .first::<LinkLookup>(self.conn)
+            .await
+            .optional()?
+            .map(Into::into);
 
         Ok(res)
     }
@@ -193,7 +132,6 @@ impl UpstreamOAuthLinkRepository for PgUpstreamOAuthLinkRepository<'_> {
         name = "db.upstream_oauth_link.add",
         skip_all,
         fields(
-            db.query.text,
             upstream_oauth_link.id,
             upstream_oauth_link.subject = subject,
             upstream_oauth_link.human_account_name = human_account_name,
@@ -215,26 +153,19 @@ impl UpstreamOAuthLinkRepository for PgUpstreamOAuthLinkRepository<'_> {
         let id = Ulid::from_datetime_with_source(created_at.into(), rng);
         tracing::Span::current().record("upstream_oauth_link.id", tracing::field::display(id));
 
-        sqlx::query!(
-            r#"
-                INSERT INTO upstream_oauth_links (
-                    upstream_oauth_link_id,
-                    upstream_oauth_provider_id,
-                    user_id,
-                    subject,
-                    human_account_name,
-                    created_at
-                ) VALUES ($1, $2, NULL, $3, $4, $5)
-            "#,
-            Uuid::from(id),
-            Uuid::from(upstream_oauth_provider.id),
-            &subject,
-            human_account_name.as_deref(),
+        let new_link = NewLink {
+            upstream_oauth_link_id: Uuid::from(id),
+            upstream_oauth_provider_id: Uuid::from(upstream_oauth_provider.id),
+            user_id: None,
+            subject: subject.clone(),
+            human_account_name: human_account_name.clone(),
             created_at,
-        )
-        .traced()
-        .execute(&mut *self.conn)
-        .await?;
+        };
+
+        diesel::insert_into(upstream_oauth_links::table)
+            .values(&new_link)
+            .execute(self.conn)
+            .await?;
 
         Ok(UpstreamOAuthLink {
             id,
@@ -250,7 +181,6 @@ impl UpstreamOAuthLinkRepository for PgUpstreamOAuthLinkRepository<'_> {
         name = "db.upstream_oauth_link.associate_to_user",
         skip_all,
         fields(
-            db.query.text,
             %upstream_oauth_link.id,
             %upstream_oauth_link.subject,
             %user.id,
@@ -263,17 +193,11 @@ impl UpstreamOAuthLinkRepository for PgUpstreamOAuthLinkRepository<'_> {
         upstream_oauth_link: &UpstreamOAuthLink,
         user: &User,
     ) -> Result<(), Self::Error> {
-        sqlx::query!(
-            r#"
-                UPDATE upstream_oauth_links
-                SET user_id = $1
-                WHERE upstream_oauth_link_id = $2
-            "#,
-            Uuid::from(user.id),
-            Uuid::from(upstream_oauth_link.id),
+        diesel::update(
+            upstream_oauth_links::table.find(Uuid::from(upstream_oauth_link.id)),
         )
-        .traced()
-        .execute(&mut *self.conn)
+        .set(upstream_oauth_links::user_id.eq(Some(Uuid::from(user.id))))
+        .execute(self.conn)
         .await?;
 
         Ok(())
@@ -282,9 +206,6 @@ impl UpstreamOAuthLinkRepository for PgUpstreamOAuthLinkRepository<'_> {
     #[tracing::instrument(
         name = "db.upstream_oauth_link.list",
         skip_all,
-        fields(
-            db.query.text,
-        ),
         err,
     )]
     async fn list(
@@ -292,55 +213,72 @@ impl UpstreamOAuthLinkRepository for PgUpstreamOAuthLinkRepository<'_> {
         filter: UpstreamOAuthLinkFilter<'_>,
         pagination: Pagination,
     ) -> Result<Page<UpstreamOAuthLink>, DatabaseError> {
-        let (sql, arguments) = Query::select()
-            .expr_as(
-                Expr::col((
-                    UpstreamOAuthLinks::Table,
-                    UpstreamOAuthLinks::UpstreamOAuthLinkId,
-                )),
-                LinkLookupIden::UpstreamOauthLinkId,
-            )
-            .expr_as(
-                Expr::col((
-                    UpstreamOAuthLinks::Table,
-                    UpstreamOAuthLinks::UpstreamOAuthProviderId,
-                )),
-                LinkLookupIden::UpstreamOauthProviderId,
-            )
-            .expr_as(
-                Expr::col((UpstreamOAuthLinks::Table, UpstreamOAuthLinks::UserId)),
-                LinkLookupIden::UserId,
-            )
-            .expr_as(
-                Expr::col((UpstreamOAuthLinks::Table, UpstreamOAuthLinks::Subject)),
-                LinkLookupIden::Subject,
-            )
-            .expr_as(
-                Expr::col((
-                    UpstreamOAuthLinks::Table,
-                    UpstreamOAuthLinks::HumanAccountName,
-                )),
-                LinkLookupIden::HumanAccountName,
-            )
-            .expr_as(
-                Expr::col((UpstreamOAuthLinks::Table, UpstreamOAuthLinks::CreatedAt)),
-                LinkLookupIden::CreatedAt,
-            )
-            .from(UpstreamOAuthLinks::Table)
-            .apply_filter(filter)
-            .generate_pagination(
-                (
-                    UpstreamOAuthLinks::Table,
-                    UpstreamOAuthLinks::UpstreamOAuthLinkId,
-                ),
-                pagination,
-            )
-            .build_sqlx(PostgresQueryBuilder);
+        let mut query = upstream_oauth_links::table
+            .select(LinkLookup::as_select())
+            .into_boxed();
 
-        let edges: Vec<LinkLookup> = sqlx::query_as_with(&sql, arguments)
-            .traced()
-            .fetch_all(&mut *self.conn)
-            .await?;
+        // Apply filters
+        if let Some(user) = filter.user() {
+            query = query.filter(upstream_oauth_links::user_id.eq(Uuid::from(user.id)));
+        }
+
+        if let Some(provider) = filter.provider() {
+            query = query.filter(
+                upstream_oauth_links::upstream_oauth_provider_id
+                    .eq(Uuid::from(provider.id)),
+            );
+        }
+
+        if let Some(enabled) = filter.provider_enabled() {
+            // Subquery to find provider IDs matching the enabled/disabled condition.
+            // We use `into_boxed()` so that both branches have the same type.
+            let subquery = if enabled {
+                upstream_oauth_providers::table
+                    .filter(upstream_oauth_providers::disabled_at.is_null())
+                    .select(upstream_oauth_providers::upstream_oauth_provider_id)
+                    .into_boxed()
+            } else {
+                upstream_oauth_providers::table
+                    .filter(upstream_oauth_providers::disabled_at.is_not_null())
+                    .select(upstream_oauth_providers::upstream_oauth_provider_id)
+                    .into_boxed()
+            };
+
+            query = query.filter(
+                upstream_oauth_links::upstream_oauth_provider_id.eq_any(subquery),
+            );
+        }
+
+        if let Some(subject) = filter.subject() {
+            query = query.filter(upstream_oauth_links::subject.eq(subject));
+        }
+
+        // Apply pagination
+        if let Some(after) = pagination.after {
+            query = query.filter(
+                upstream_oauth_links::upstream_oauth_link_id.gt(Uuid::from(after)),
+            );
+        }
+        if let Some(before) = pagination.before {
+            query = query.filter(
+                upstream_oauth_links::upstream_oauth_link_id.lt(Uuid::from(before)),
+            );
+        }
+
+        match pagination.direction {
+            PaginationDirection::Forward => {
+                query = query
+                    .order(upstream_oauth_links::upstream_oauth_link_id.asc())
+                    .limit((pagination.count + 1) as i64);
+            }
+            PaginationDirection::Backward => {
+                query = query
+                    .order(upstream_oauth_links::upstream_oauth_link_id.desc())
+                    .limit((pagination.count + 1) as i64);
+            }
+        }
+
+        let edges: Vec<LinkLookup> = query.load(self.conn).await?;
 
         let page = pagination.process(edges).map(UpstreamOAuthLink::from);
 
@@ -350,27 +288,47 @@ impl UpstreamOAuthLinkRepository for PgUpstreamOAuthLinkRepository<'_> {
     #[tracing::instrument(
         name = "db.upstream_oauth_link.count",
         skip_all,
-        fields(
-            db.query.text,
-        ),
         err,
     )]
     async fn count(&mut self, filter: UpstreamOAuthLinkFilter<'_>) -> Result<usize, Self::Error> {
-        let (sql, arguments) = Query::select()
-            .expr(
-                Expr::col((
-                    UpstreamOAuthLinks::Table,
-                    UpstreamOAuthLinks::UpstreamOAuthLinkId,
-                ))
-                .count(),
-            )
-            .from(UpstreamOAuthLinks::Table)
-            .apply_filter(filter)
-            .build_sqlx(PostgresQueryBuilder);
+        let mut query = upstream_oauth_links::table.into_boxed();
 
-        let count: i64 = sqlx::query_scalar_with(&sql, arguments)
-            .traced()
-            .fetch_one(&mut *self.conn)
+        if let Some(user) = filter.user() {
+            query = query.filter(upstream_oauth_links::user_id.eq(Uuid::from(user.id)));
+        }
+
+        if let Some(provider) = filter.provider() {
+            query = query.filter(
+                upstream_oauth_links::upstream_oauth_provider_id
+                    .eq(Uuid::from(provider.id)),
+            );
+        }
+
+        if let Some(enabled) = filter.provider_enabled() {
+            let subquery = if enabled {
+                upstream_oauth_providers::table
+                    .filter(upstream_oauth_providers::disabled_at.is_null())
+                    .select(upstream_oauth_providers::upstream_oauth_provider_id)
+                    .into_boxed()
+            } else {
+                upstream_oauth_providers::table
+                    .filter(upstream_oauth_providers::disabled_at.is_not_null())
+                    .select(upstream_oauth_providers::upstream_oauth_provider_id)
+                    .into_boxed()
+            };
+
+            query = query.filter(
+                upstream_oauth_links::upstream_oauth_provider_id.eq_any(subquery),
+            );
+        }
+
+        if let Some(subject) = filter.subject() {
+            query = query.filter(upstream_oauth_links::subject.eq(subject));
+        }
+
+        let count: i64 = query
+            .count()
+            .get_result(self.conn)
             .await?;
 
         count
@@ -382,7 +340,6 @@ impl UpstreamOAuthLinkRepository for PgUpstreamOAuthLinkRepository<'_> {
         name = "db.upstream_oauth_link.remove",
         skip_all,
         fields(
-            db.query.text,
             upstream_oauth_link.id,
             upstream_oauth_link.provider_id,
             %upstream_oauth_link.subject,
@@ -394,45 +351,32 @@ impl UpstreamOAuthLinkRepository for PgUpstreamOAuthLinkRepository<'_> {
         clock: &dyn Clock,
         upstream_oauth_link: UpstreamOAuthLink,
     ) -> Result<(), Self::Error> {
+        use crate::schema::upstream_oauth_authorization_sessions;
+
         // Unlink the authorization sessions first, as they have a foreign key
         // constraint on the links.
-        let span = tracing::info_span!(
-            "db.upstream_oauth_link.remove.unlink",
-            { DB_QUERY_TEXT } = tracing::field::Empty
-        );
-        sqlx::query!(
-            r#"
-                UPDATE upstream_oauth_authorization_sessions SET
-                    upstream_oauth_link_id = NULL,
-                    unlinked_at = $2
-                WHERE upstream_oauth_link_id = $1
-            "#,
-            Uuid::from(upstream_oauth_link.id),
-            clock.now()
+        diesel::update(
+            upstream_oauth_authorization_sessions::table
+                .filter(
+                    upstream_oauth_authorization_sessions::upstream_oauth_link_id
+                        .eq(Uuid::from(upstream_oauth_link.id)),
+                ),
         )
-        .record(&span)
-        .execute(&mut *self.conn)
-        .instrument(span)
+        .set((
+            upstream_oauth_authorization_sessions::upstream_oauth_link_id.eq(None::<Uuid>),
+            upstream_oauth_authorization_sessions::unlinked_at.eq(Some(clock.now())),
+        ))
+        .execute(self.conn)
         .await?;
 
         // Then delete the link itself
-        let span = tracing::info_span!(
-            "db.upstream_oauth_link.remove.delete",
-            { DB_QUERY_TEXT } = tracing::field::Empty
-        );
-        let res = sqlx::query!(
-            r#"
-                DELETE FROM upstream_oauth_links
-                WHERE upstream_oauth_link_id = $1
-            "#,
-            Uuid::from(upstream_oauth_link.id),
+        let rows_affected = diesel::delete(
+            upstream_oauth_links::table.find(Uuid::from(upstream_oauth_link.id)),
         )
-        .record(&span)
-        .execute(&mut *self.conn)
-        .instrument(span)
+        .execute(self.conn)
         .await?;
 
-        DatabaseError::ensure_affected_rows(&res, 1)?;
+        DatabaseError::ensure_affected_rows_usize(rows_affected, 1)?;
 
         Ok(())
     }
@@ -441,7 +385,6 @@ impl UpstreamOAuthLinkRepository for PgUpstreamOAuthLinkRepository<'_> {
         name = "db.upstream_oauth_link.cleanup_orphaned",
         skip_all,
         fields(
-            db.query.text,
             since = since.map(tracing::field::display),
             until = %until,
             limit = limit,
@@ -454,10 +397,9 @@ impl UpstreamOAuthLinkRepository for PgUpstreamOAuthLinkRepository<'_> {
         until: Ulid,
         limit: usize,
     ) -> Result<(usize, Option<Ulid>), Self::Error> {
-        // Use ULID cursor-based pagination for orphaned links only.
-        // We only delete links that have no user associated with them.
-        // `MAX(uuid)` isn't a thing in Postgres, so we aggregate on the client side.
-        let res: Vec<Uuid> = sqlx::query_scalar!(
+        // Use raw SQL for the CTE-based cleanup query since diesel doesn't
+        // natively support CTEs with DELETE ... USING ... RETURNING.
+        let res: Vec<Uuid> = diesel::sql_query(
             r#"
                 WITH
                   to_delete AS (
@@ -479,17 +421,26 @@ impl UpstreamOAuthLinkRepository for PgUpstreamOAuthLinkRepository<'_> {
                 WHERE upstream_oauth_links.upstream_oauth_link_id = to_delete.upstream_oauth_link_id
                 RETURNING upstream_oauth_links.upstream_oauth_link_id
             "#,
-            since.map(Uuid::from),
-            Uuid::from(until),
-            i64::try_from(limit).unwrap_or(i64::MAX)
         )
-        .traced()
-        .fetch_all(&mut *self.conn)
-        .await?;
+        .bind::<diesel::sql_types::Nullable<diesel::sql_types::Uuid>, _>(since.map(Uuid::from))
+        .bind::<diesel::sql_types::Uuid, _>(Uuid::from(until))
+        .bind::<diesel::sql_types::BigInt, _>(i64::try_from(limit).unwrap_or(i64::MAX))
+        .load::<CleanupResult>(self.conn)
+        .await?
+        .into_iter()
+        .map(|r| r.upstream_oauth_link_id)
+        .collect();
 
         let count = res.len();
         let max_id = res.into_iter().max();
 
         Ok((count, max_id.map(Ulid::from)))
     }
+}
+
+/// Helper struct for the cleanup_orphaned query result
+#[derive(QueryableByName)]
+struct CleanupResult {
+    #[diesel(sql_type = diesel::sql_types::Uuid)]
+    upstream_oauth_link_id: Uuid,
 }

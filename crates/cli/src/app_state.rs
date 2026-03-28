@@ -17,7 +17,8 @@ use pasion_storage_pg::PgRepositoryFactory;
 use pasion_templates::Templates;
 use rand::SeedableRng;
 use salvo::prelude::*;
-use sqlx::PgPool;
+use diesel_async::AsyncPgConnection;
+use diesel_async::pooled_connection::deadpool::Pool as DieselPool;
 use tracing::Instrument;
 
 use crate::{VERSION, telemetry::METER};
@@ -48,27 +49,28 @@ pub struct AppState {
 impl AppState {
     /// Init the metrics for the app state.
     pub fn init_metrics(&mut self) {
-        let pool = self.repository_factory.pool();
+        let pool = self.repository_factory.pool().clone();
         METER
             .i64_observable_up_down_counter("db.connections.usage")
             .with_description("The number of connections that are currently in `state` described by the state attribute.")
             .with_unit("{connection}")
             .with_callback(move |instrument| {
-                let idle = u32::try_from(pool.num_idle()).unwrap_or(u32::MAX);
-                let used = pool.size() - idle;
-                instrument.observe(i64::from(idle), &[KeyValue::new("state", "idle")]);
-                instrument.observe(i64::from(used), &[KeyValue::new("state", "used")]);
+                let status = pool.status();
+                let idle = status.available;
+                let used = status.size.saturating_sub(idle);
+                instrument.observe(idle as i64, &[KeyValue::new("state", "idle")]);
+                instrument.observe(used as i64, &[KeyValue::new("state", "used")]);
             })
             .build();
 
-        let pool = self.repository_factory.pool();
+        let pool = self.repository_factory.pool().clone();
         METER
             .i64_observable_up_down_counter("db.connections.max")
             .with_description("The maximum number of open connections allowed.")
             .with_unit("{connection}")
             .with_callback(move |instrument| {
-                let max_conn = pool.options().get_max_connections();
-                instrument.observe(i64::from(max_conn), &[]);
+                let status = pool.status();
+                instrument.observe(status.max_size as i64, &[]);
             })
             .build();
     }
@@ -134,7 +136,7 @@ pub async fn inject_app_state(
     };
 
     // Inject all components into depot with their type names as keys
-    depot.insert("pg_pool", state.repository_factory.pool());
+    depot.insert("pg_pool", state.repository_factory.pool().clone());
     depot.insert(
         "box_repository_factory",
         state.repository_factory.clone().boxed(),
@@ -167,7 +169,7 @@ pub async fn inject_app_state(
 /// Each getter returns `Option<&T>`, returning `None` if the component was not
 /// injected (e.g. if [`inject_app_state`] middleware did not run).
 pub trait DepotExt {
-    fn get_pg_pool(&self) -> Option<&PgPool>;
+    fn get_pg_pool(&self) -> Option<&DieselPool<AsyncPgConnection>>;
     fn get_box_repository_factory(&self) -> Option<&BoxRepositoryFactory>;
     fn get_templates(&self) -> Option<&Templates>;
     fn get_translator(&self) -> Option<&Arc<Translator>>;
@@ -188,8 +190,8 @@ pub trait DepotExt {
 }
 
 impl DepotExt for Depot {
-    fn get_pg_pool(&self) -> Option<&PgPool> {
-        self.get::<PgPool>("pg_pool").ok()
+    fn get_pg_pool(&self) -> Option<&DieselPool<AsyncPgConnection>> {
+        self.get::<DieselPool<AsyncPgConnection>>("pg_pool").ok()
     }
 
     fn get_box_repository_factory(&self) -> Option<&BoxRepositoryFactory> {

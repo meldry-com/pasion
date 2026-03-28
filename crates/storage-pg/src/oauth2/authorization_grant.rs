@@ -1,5 +1,7 @@
 use async_trait::async_trait;
 use chrono::{DateTime, Utc};
+use diesel::prelude::*;
+use diesel_async::RunQueryDsl;
 use oauth2_types::{requests::ResponseMode, scope::Scope};
 use pasion_data_model::{
     AuthorizationCode, AuthorizationGrant, AuthorizationGrantStage, Client, Clock, Pkce, Session,
@@ -7,28 +9,29 @@ use pasion_data_model::{
 use pasion_iana::oauth::PkceCodeChallengeMethod;
 use pasion_storage::oauth2::OAuth2AuthorizationGrantRepository;
 use rand::RngCore;
-use sqlx::PgConnection;
 use ulid::Ulid;
 use url::Url;
 use uuid::Uuid;
 
-use crate::{DatabaseError, DatabaseInconsistencyError, tracing::ExecuteExt};
+use crate::{DatabaseError, DatabaseInconsistencyError, schema::oauth2_authorization_grants};
 
 /// An implementation of [`OAuth2AuthorizationGrantRepository`] for a PostgreSQL
 /// connection
 pub struct PgOAuth2AuthorizationGrantRepository<'c> {
-    conn: &'c mut PgConnection,
+    conn: &'c mut diesel_async::AsyncPgConnection,
 }
 
 impl<'c> PgOAuth2AuthorizationGrantRepository<'c> {
     /// Create a new [`PgOAuth2AuthorizationGrantRepository`] from an active
     /// PostgreSQL connection
-    pub fn new(conn: &'c mut PgConnection) -> Self {
+    pub fn new(conn: &'c mut diesel_async::AsyncPgConnection) -> Self {
         Self { conn }
     }
 }
 
 #[allow(clippy::struct_excessive_bools)]
+#[derive(Debug, Clone, Queryable, Selectable)]
+#[diesel(table_name = oauth2_authorization_grants)]
 struct GrantLookup {
     oauth2_authorization_grant_id: Uuid,
     created_at: DateTime<Utc>,
@@ -161,6 +164,27 @@ impl TryFrom<GrantLookup> for AuthorizationGrant {
     }
 }
 
+/// Insertable row for creating a new authorization grant
+#[derive(Insertable)]
+#[diesel(table_name = oauth2_authorization_grants)]
+struct NewAuthorizationGrant {
+    oauth2_authorization_grant_id: Uuid,
+    oauth2_client_id: Uuid,
+    redirect_uri: String,
+    scope: String,
+    state: Option<String>,
+    nonce: Option<String>,
+    response_mode: String,
+    code_challenge: Option<String>,
+    code_challenge_method: Option<String>,
+    response_type_code: bool,
+    response_type_id_token: bool,
+    authorization_code: Option<String>,
+    login_hint: Option<String>,
+    locale: Option<String>,
+    created_at: DateTime<Utc>,
+}
+
 #[async_trait]
 impl OAuth2AuthorizationGrantRepository for PgOAuth2AuthorizationGrantRepository<'_> {
     type Error = DatabaseError;
@@ -169,7 +193,6 @@ impl OAuth2AuthorizationGrantRepository for PgOAuth2AuthorizationGrantRepository
         name = "db.oauth2_authorization_grant.add",
         skip_all,
         fields(
-            db.query.text,
             grant.id,
             grant.scope = %scope,
             %client.id,
@@ -194,58 +217,39 @@ impl OAuth2AuthorizationGrantRepository for PgOAuth2AuthorizationGrantRepository
         let code_challenge = code
             .as_ref()
             .and_then(|c| c.pkce.as_ref())
-            .map(|p| &p.challenge);
+            .map(|p| p.challenge.clone());
         let code_challenge_method = code
             .as_ref()
             .and_then(|c| c.pkce.as_ref())
             .map(|p| p.challenge_method.to_string());
-        let code_str = code.as_ref().map(|c| &c.code);
+        let code_str = code.as_ref().map(|c| c.code.clone());
 
         let created_at = clock.now();
         let id = Ulid::from_datetime_with_source(created_at.into(), rng);
         tracing::Span::current().record("grant.id", tracing::field::display(id));
 
-        sqlx::query!(
-            r#"
-                INSERT INTO oauth2_authorization_grants (
-                     oauth2_authorization_grant_id,
-                     oauth2_client_id,
-                     redirect_uri,
-                     scope,
-                     state,
-                     nonce,
-                     response_mode,
-                     code_challenge,
-                     code_challenge_method,
-                     response_type_code,
-                     response_type_id_token,
-                     authorization_code,
-                     login_hint,
-                     locale,
-                     created_at
-                )
-                VALUES
-                    ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)
-            "#,
-            Uuid::from(id),
-            Uuid::from(client.id),
-            redirect_uri.to_string(),
-            scope.to_string(),
-            state,
-            nonce,
-            response_mode.to_string(),
+        let new_grant = NewAuthorizationGrant {
+            oauth2_authorization_grant_id: Uuid::from(id),
+            oauth2_client_id: Uuid::from(client.id),
+            redirect_uri: redirect_uri.to_string(),
+            scope: scope.to_string(),
+            state: state.clone(),
+            nonce: nonce.clone(),
+            response_mode: response_mode.to_string(),
             code_challenge,
             code_challenge_method,
-            code.is_some(),
+            response_type_code: code.is_some(),
             response_type_id_token,
-            code_str,
-            login_hint,
-            locale,
+            authorization_code: code_str,
+            login_hint: login_hint.clone(),
+            locale: locale.clone(),
             created_at,
-        )
-        .traced()
-        .execute(&mut *self.conn)
-        .await?;
+        };
+
+        diesel::insert_into(oauth2_authorization_grants::table)
+            .values(&new_grant)
+            .execute(self.conn)
+            .await?;
 
         Ok(AuthorizationGrant {
             id,
@@ -268,44 +272,17 @@ impl OAuth2AuthorizationGrantRepository for PgOAuth2AuthorizationGrantRepository
         name = "db.oauth2_authorization_grant.lookup",
         skip_all,
         fields(
-            db.query.text,
             grant.id = %id,
         ),
         err,
     )]
     async fn lookup(&mut self, id: Ulid) -> Result<Option<AuthorizationGrant>, Self::Error> {
-        let res = sqlx::query_as!(
-            GrantLookup,
-            r#"
-                SELECT oauth2_authorization_grant_id
-                     , created_at
-                     , cancelled_at
-                     , fulfilled_at
-                     , exchanged_at
-                     , scope
-                     , state
-                     , redirect_uri
-                     , response_mode
-                     , nonce
-                     , oauth2_client_id
-                     , authorization_code
-                     , response_type_code
-                     , response_type_id_token
-                     , code_challenge
-                     , code_challenge_method
-                     , login_hint
-                     , locale
-                     , oauth2_session_id
-                FROM
-                    oauth2_authorization_grants
-
-                WHERE oauth2_authorization_grant_id = $1
-            "#,
-            Uuid::from(id),
-        )
-        .traced()
-        .fetch_optional(&mut *self.conn)
-        .await?;
+        let res = oauth2_authorization_grants::table
+            .find(Uuid::from(id))
+            .select(GrantLookup::as_select())
+            .first::<GrantLookup>(self.conn)
+            .await
+            .optional()?;
 
         let Some(res) = res else { return Ok(None) };
 
@@ -315,47 +292,18 @@ impl OAuth2AuthorizationGrantRepository for PgOAuth2AuthorizationGrantRepository
     #[tracing::instrument(
         name = "db.oauth2_authorization_grant.find_by_code",
         skip_all,
-        fields(
-            db.query.text,
-        ),
         err,
     )]
     async fn find_by_code(
         &mut self,
         code: &str,
     ) -> Result<Option<AuthorizationGrant>, Self::Error> {
-        let res = sqlx::query_as!(
-            GrantLookup,
-            r#"
-                SELECT oauth2_authorization_grant_id
-                     , created_at
-                     , cancelled_at
-                     , fulfilled_at
-                     , exchanged_at
-                     , scope
-                     , state
-                     , redirect_uri
-                     , response_mode
-                     , nonce
-                     , oauth2_client_id
-                     , authorization_code
-                     , response_type_code
-                     , response_type_id_token
-                     , code_challenge
-                     , code_challenge_method
-                     , login_hint
-                     , locale
-                     , oauth2_session_id
-                FROM
-                    oauth2_authorization_grants
-
-                WHERE authorization_code = $1
-            "#,
-            code,
-        )
-        .traced()
-        .fetch_optional(&mut *self.conn)
-        .await?;
+        let res = oauth2_authorization_grants::table
+            .filter(oauth2_authorization_grants::authorization_code.eq(code))
+            .select(GrantLookup::as_select())
+            .first::<GrantLookup>(self.conn)
+            .await
+            .optional()?;
 
         let Some(res) = res else { return Ok(None) };
 
@@ -366,7 +314,6 @@ impl OAuth2AuthorizationGrantRepository for PgOAuth2AuthorizationGrantRepository
         name = "db.oauth2_authorization_grant.fulfill",
         skip_all,
         fields(
-            db.query.text,
             %grant.id,
             client.id = %grant.client_id,
             %session.id,
@@ -380,22 +327,17 @@ impl OAuth2AuthorizationGrantRepository for PgOAuth2AuthorizationGrantRepository
         grant: AuthorizationGrant,
     ) -> Result<AuthorizationGrant, Self::Error> {
         let fulfilled_at = clock.now();
-        let res = sqlx::query!(
-            r#"
-                UPDATE oauth2_authorization_grants
-                SET fulfilled_at = $2
-                  , oauth2_session_id = $3
-                WHERE oauth2_authorization_grant_id = $1
-            "#,
-            Uuid::from(grant.id),
-            fulfilled_at,
-            Uuid::from(session.id),
+        let rows_affected = diesel::update(
+            oauth2_authorization_grants::table.find(Uuid::from(grant.id)),
         )
-        .traced()
-        .execute(&mut *self.conn)
+        .set((
+            oauth2_authorization_grants::fulfilled_at.eq(Some(fulfilled_at)),
+            oauth2_authorization_grants::oauth2_session_id.eq(Some(Uuid::from(session.id))),
+        ))
+        .execute(self.conn)
         .await?;
 
-        DatabaseError::ensure_affected_rows(&res, 1)?;
+        DatabaseError::ensure_affected_rows_usize(rows_affected, 1)?;
 
         // XXX: check affected rows & new methods
         let grant = grant
@@ -409,7 +351,6 @@ impl OAuth2AuthorizationGrantRepository for PgOAuth2AuthorizationGrantRepository
         name = "db.oauth2_authorization_grant.exchange",
         skip_all,
         fields(
-            db.query.text,
             %grant.id,
             client.id = %grant.client_id,
         ),
@@ -421,20 +362,14 @@ impl OAuth2AuthorizationGrantRepository for PgOAuth2AuthorizationGrantRepository
         grant: AuthorizationGrant,
     ) -> Result<AuthorizationGrant, Self::Error> {
         let exchanged_at = clock.now();
-        let res = sqlx::query!(
-            r#"
-                UPDATE oauth2_authorization_grants
-                SET exchanged_at = $2
-                WHERE oauth2_authorization_grant_id = $1
-            "#,
-            Uuid::from(grant.id),
-            exchanged_at,
+        let rows_affected = diesel::update(
+            oauth2_authorization_grants::table.find(Uuid::from(grant.id)),
         )
-        .traced()
-        .execute(&mut *self.conn)
+        .set(oauth2_authorization_grants::exchanged_at.eq(Some(exchanged_at)))
+        .execute(self.conn)
         .await?;
 
-        DatabaseError::ensure_affected_rows(&res, 1)?;
+        DatabaseError::ensure_affected_rows_usize(rows_affected, 1)?;
 
         let grant = grant
             .exchange(exchanged_at)
@@ -447,7 +382,6 @@ impl OAuth2AuthorizationGrantRepository for PgOAuth2AuthorizationGrantRepository
         name = "db.oauth2_authorization_grant.cleanup",
         skip_all,
         fields(
-            db.query.text,
             since = since.map(tracing::field::display),
             until = %until,
             limit = limit,
@@ -464,7 +398,7 @@ impl OAuth2AuthorizationGrantRepository for PgOAuth2AuthorizationGrantRepository
         // deleted rows and do a MAX on the `oauth2_authorization_grant_id`.
         // Instead, we do the aggregation on the client side, which is a little
         // less efficient, but good enough.
-        let res: Vec<Uuid> = sqlx::query_scalar!(
+        let res: Vec<Uuid> = diesel::sql_query(
             r#"
                 WITH to_delete AS (
                     SELECT oauth2_authorization_grant_id
@@ -479,17 +413,26 @@ impl OAuth2AuthorizationGrantRepository for PgOAuth2AuthorizationGrantRepository
                 WHERE oauth2_authorization_grants.oauth2_authorization_grant_id = to_delete.oauth2_authorization_grant_id
                 RETURNING oauth2_authorization_grants.oauth2_authorization_grant_id
             "#,
-            since.map(Uuid::from),
-            Uuid::from(until),
-            i64::try_from(limit).unwrap_or(i64::MAX)
         )
-        .traced()
-        .fetch_all(&mut *self.conn)
-        .await?;
+        .bind::<diesel::sql_types::Nullable<diesel::sql_types::Uuid>, _>(since.map(Uuid::from))
+        .bind::<diesel::sql_types::Uuid, _>(Uuid::from(until))
+        .bind::<diesel::sql_types::BigInt, _>(i64::try_from(limit).unwrap_or(i64::MAX))
+        .load::<UuidRow>(self.conn)
+        .await?
+        .into_iter()
+        .map(|r| r.oauth2_authorization_grant_id)
+        .collect();
 
         let count = res.len();
         let max_id = res.into_iter().max();
 
         Ok((count, max_id.map(Ulid::from)))
     }
+}
+
+/// Helper struct for loading UUID results from raw SQL queries
+#[derive(QueryableByName)]
+struct UuidRow {
+    #[diesel(sql_type = diesel::sql_types::Uuid)]
+    oauth2_authorization_grant_id: Uuid,
 }

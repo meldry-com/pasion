@@ -2,22 +2,17 @@
 //! repositories
 
 use async_trait::async_trait;
+use chrono::{DateTime, Utc};
+use diesel::prelude::*;
+use diesel_async::RunQueryDsl;
 use pasion_data_model::{Clock, User};
-use pasion_storage::user::{UserFilter, UserRepository};
+use pasion_storage::user::{UserFilter, UserRepository, UserState};
+use pasion_storage::{Pagination, pagination::PaginationDirection};
 use rand::RngCore;
-use sea_query::{Expr, PostgresQueryBuilder, Query, extension::postgres::PgExpr as _};
-use sea_query_binder::SqlxBinder;
-use sqlx::PgConnection;
 use ulid::Ulid;
 use uuid::Uuid;
 
-use crate::{
-    DatabaseError,
-    filter::{Filter, StatementExt},
-    iden::Users,
-    pagination::QueryBuilderExt,
-    tracing::ExecuteExt,
-};
+use crate::{DatabaseError, schema::users};
 
 mod email;
 mod password;
@@ -40,93 +35,58 @@ pub use self::{
 
 /// An implementation of [`UserRepository`] for a PostgreSQL connection
 pub struct PgUserRepository<'c> {
-    conn: &'c mut PgConnection,
+    conn: &'c mut diesel_async::AsyncPgConnection,
 }
 
 impl<'c> PgUserRepository<'c> {
     /// Create a new [`PgUserRepository`] from an active PostgreSQL connection
-    pub fn new(conn: &'c mut PgConnection) -> Self {
+    pub fn new(conn: &'c mut diesel_async::AsyncPgConnection) -> Self {
         Self { conn }
     }
 }
 
-mod priv_ {
-    // The enum_def macro generates a public enum, which we don't want, because it
-    // triggers the missing docs warning
-    #![allow(missing_docs)]
+/// Row type for loading users from the database
+#[derive(Debug, Clone, Queryable, Selectable)]
+#[diesel(table_name = users)]
+struct UserRow {
+    user_id: Uuid,
+    username: String,
+    created_at: DateTime<Utc>,
+    locked_at: Option<DateTime<Utc>>,
+    deactivated_at: Option<DateTime<Utc>>,
+    can_request_admin: bool,
+    is_guest: bool,
+}
 
-    use chrono::{DateTime, Utc};
-    use pasion_storage::pagination::Node;
-    use sea_query::enum_def;
-    use ulid::Ulid;
-    use uuid::Uuid;
-
-    #[derive(Debug, Clone, sqlx::FromRow)]
-    #[enum_def]
-    pub(super) struct UserLookup {
-        pub(super) user_id: Uuid,
-        pub(super) username: String,
-        pub(super) created_at: DateTime<Utc>,
-        pub(super) locked_at: Option<DateTime<Utc>>,
-        pub(super) deactivated_at: Option<DateTime<Utc>>,
-        pub(super) can_request_admin: bool,
-        pub(super) is_guest: bool,
-    }
-
-    impl Node<Ulid> for UserLookup {
-        fn cursor(&self) -> Ulid {
-            self.user_id.into()
-        }
+impl pasion_storage::pagination::Node<Ulid> for UserRow {
+    fn cursor(&self) -> Ulid {
+        self.user_id.into()
     }
 }
 
-use priv_::{UserLookup, UserLookupIden};
-
-impl From<UserLookup> for User {
-    fn from(value: UserLookup) -> Self {
-        let id = value.user_id.into();
+impl From<UserRow> for User {
+    fn from(row: UserRow) -> Self {
+        let id: Ulid = row.user_id.into();
         Self {
             id,
-            username: value.username,
+            username: row.username,
             sub: id.to_string(),
-            created_at: value.created_at,
-            locked_at: value.locked_at,
-            deactivated_at: value.deactivated_at,
-            can_request_admin: value.can_request_admin,
-            is_guest: value.is_guest,
+            created_at: row.created_at,
+            locked_at: row.locked_at,
+            deactivated_at: row.deactivated_at,
+            can_request_admin: row.can_request_admin,
+            is_guest: row.is_guest,
         }
     }
 }
 
-impl Filter for UserFilter<'_> {
-    fn generate_condition(&self, _has_joins: bool) -> impl sea_query::IntoCondition {
-        sea_query::Condition::all()
-            .add_option(self.state().map(|state| {
-                match state {
-                    pasion_storage::user::UserState::Deactivated => {
-                        Expr::col((Users::Table, Users::DeactivatedAt)).is_not_null()
-                    }
-                    pasion_storage::user::UserState::Locked => {
-                        Expr::col((Users::Table, Users::LockedAt)).is_not_null()
-                    }
-                    pasion_storage::user::UserState::Active => {
-                        Expr::col((Users::Table, Users::LockedAt))
-                            .is_null()
-                            .and(Expr::col((Users::Table, Users::DeactivatedAt)).is_null())
-                    }
-                }
-            }))
-            .add_option(self.can_request_admin().map(|can_request_admin| {
-                Expr::col((Users::Table, Users::CanRequestAdmin)).eq(can_request_admin)
-            }))
-            .add_option(
-                self.is_guest()
-                    .map(|is_guest| Expr::col((Users::Table, Users::IsGuest)).eq(is_guest)),
-            )
-            .add_option(self.search().map(|search| {
-                Expr::col((Users::Table, Users::Username)).ilike(format!("%{search}%"))
-            }))
-    }
+/// Insertable row for creating a new user
+#[derive(Insertable)]
+#[diesel(table_name = users)]
+struct NewUser {
+    user_id: Uuid,
+    username: String,
+    created_at: DateTime<Utc>,
 }
 
 #[async_trait]
@@ -136,81 +96,42 @@ impl UserRepository for PgUserRepository<'_> {
     #[tracing::instrument(
         name = "db.user.lookup",
         skip_all,
-        fields(
-            db.query.text,
-            user.id = %id,
-        ),
+        fields(user.id = %id),
         err,
     )]
     async fn lookup(&mut self, id: Ulid) -> Result<Option<User>, Self::Error> {
-        let res = sqlx::query_as!(
-            UserLookup,
-            r#"
-                SELECT user_id
-                     , username
-                     , created_at
-                     , locked_at
-                     , deactivated_at
-                     , can_request_admin
-                     , is_guest
-                FROM users
-                WHERE user_id = $1
-            "#,
-            Uuid::from(id),
-        )
-        .traced()
-        .fetch_optional(&mut *self.conn)
-        .await?;
+        let res = users::table
+            .find(Uuid::from(id))
+            .select(UserRow::as_select())
+            .first::<UserRow>(self.conn)
+            .await
+            .optional()?;
 
-        let Some(res) = res else { return Ok(None) };
-
-        Ok(Some(res.into()))
+        Ok(res.map(User::from))
     }
 
     #[tracing::instrument(
         name = "db.user.find_by_username",
         skip_all,
-        fields(
-            db.query.text,
-            user.username = username,
-        ),
+        fields(user.username = username),
         err,
     )]
     async fn find_by_username(&mut self, username: &str) -> Result<Option<User>, Self::Error> {
-        // We may have multiple users with the same username, but with a different
-        // casing. In this case, we want to return the one which matches the exact
-        // casing
-        let res = sqlx::query_as!(
-            UserLookup,
-            r#"
-                SELECT user_id
-                     , username
-                     , created_at
-                     , locked_at
-                     , deactivated_at
-                     , can_request_admin
-                     , is_guest
-                FROM users
-                WHERE LOWER(username) = LOWER($1)
-            "#,
-            username,
-        )
-        .traced()
-        .fetch_all(&mut *self.conn)
-        .await?;
+        use crate::lower;
+
+        let res: Vec<UserRow> = users::table
+            .filter(lower(users::username).eq(username.to_lowercase()))
+            .select(UserRow::as_select())
+            .load(self.conn)
+            .await?;
 
         match &res[..] {
-            // Happy path: there is only one user matching the username…
             [user] => Ok(Some(user.clone().into())),
-            // …or none.
             [] => Ok(None),
             list => {
-                // If there are multiple users with the same username, we want to
-                // return the one which matches the exact casing
-                if let Some(user) = list.iter().find(|user| user.username == username) {
+                if let Some(user) = list.iter().find(|u| u.username == username) {
                     Ok(Some(user.clone().into()))
                 } else {
-                    // If none match exactly, we prefer to return nothing
                     Ok(None)
                 }
             }
@@ -220,11 +141,7 @@ impl UserRepository for PgUserRepository<'_> {
     #[tracing::instrument(
         name = "db.user.add",
         skip_all,
-        fields(
-            db.query.text,
-            user.username = username,
-            user.id,
-        ),
+        fields(user.username = username, user.id),
         err,
     )]
     async fn add(
@@ -237,23 +154,20 @@ impl UserRepository for PgUserRepository<'_> {
         let id = Ulid::from_datetime_with_source(created_at.into(), rng);
         tracing::Span::current().record("user.id", tracing::field::display(id));
 
-        let res = sqlx::query!(
-            r#"
-                INSERT INTO users (user_id, username, created_at)
-                VALUES ($1, $2, $3)
-                ON CONFLICT (username) DO NOTHING
-            "#,
-            Uuid::from(id),
-            username,
+        let new_user = NewUser {
+            user_id: Uuid::from(id),
+            username: username.clone(),
             created_at,
-        )
-        .traced()
-        .execute(&mut *self.conn)
-        .await?;
+        };
 
-        // If the user already exists, want to return an error but not poison the
-        // transaction
-        DatabaseError::ensure_affected_rows(&res, 1)?;
+        let rows_affected = diesel::insert_into(users::table)
+            .values(&new_user)
+            .on_conflict(users::username)
+            .do_nothing()
+            .execute(self.conn)
+            .await?;
+
+        DatabaseError::ensure_affected_rows_usize(rows_affected, 1)?;
 
         Ok(User {
             id,
@@ -270,35 +184,26 @@ impl UserRepository for PgUserRepository<'_> {
     #[tracing::instrument(
         name = "db.user.exists",
         skip_all,
-        fields(
-            db.query.text,
-            user.username = username,
-        ),
+        fields(user.username = username),
         err,
     )]
     async fn exists(&mut self, username: &str) -> Result<bool, Self::Error> {
-        let exists = sqlx::query_scalar!(
-            r#"
-                SELECT EXISTS(
-                    SELECT 1 FROM users WHERE LOWER(username) = LOWER($1)
-                ) AS "exists!"
-            "#,
-            username
-        )
-        .traced()
-        .fetch_one(&mut *self.conn)
+        use diesel::dsl::{exists, select};
+        use crate::lower;
+
+        let result = select(exists(
+            users::table.filter(lower(users::username).eq(username.to_lowercase())),
+        ))
+        .get_result::<bool>(self.conn)
         .await?;
 
-        Ok(exists)
+        Ok(result)
     }
 
     #[tracing::instrument(
         name = "db.user.lock",
         skip_all,
-        fields(
-            db.query.text,
-            %user.id,
-        ),
+        fields(%user.id),
         err,
     )]
     async fn lock(&mut self, clock: &dyn Clock, mut user: User) -> Result<User, Self::Error> {
@@ -307,33 +212,20 @@ impl UserRepository for PgUserRepository<'_> {
         }
 
         let locked_at = clock.now();
-        let res = sqlx::query!(
-            r#"
-                UPDATE users
-                SET locked_at = $1
-                WHERE user_id = $2
-            "#,
-            locked_at,
-            Uuid::from(user.id),
-        )
-        .traced()
-        .execute(&mut *self.conn)
-        .await?;
+        let rows_affected = diesel::update(users::table.find(Uuid::from(user.id)))
+            .set(users::locked_at.eq(Some(locked_at)))
+            .execute(self.conn)
+            .await?;
 
-        DatabaseError::ensure_affected_rows(&res, 1)?;
-
+        DatabaseError::ensure_affected_rows_usize(rows_affected, 1)?;
         user.locked_at = Some(locked_at);
-
         Ok(user)
     }
 
     #[tracing::instrument(
         name = "db.user.unlock",
         skip_all,
-        fields(
-            db.query.text,
-            %user.id,
-        ),
+        fields(%user.id),
         err,
     )]
     async fn unlock(&mut self, mut user: User) -> Result<User, Self::Error> {
@@ -341,32 +233,20 @@ impl UserRepository for PgUserRepository<'_> {
             return Ok(user);
         }
 
-        let res = sqlx::query!(
-            r#"
-                UPDATE users
-                SET locked_at = NULL
-                WHERE user_id = $1
-            "#,
-            Uuid::from(user.id),
-        )
-        .traced()
-        .execute(&mut *self.conn)
-        .await?;
+        let rows_affected = diesel::update(users::table.find(Uuid::from(user.id)))
+            .set(users::locked_at.eq(None::<DateTime<Utc>>))
+            .execute(self.conn)
+            .await?;
 
-        DatabaseError::ensure_affected_rows(&res, 1)?;
-
+        DatabaseError::ensure_affected_rows_usize(rows_affected, 1)?;
         user.locked_at = None;
-
         Ok(user)
     }
 
     #[tracing::instrument(
         name = "db.user.deactivate",
         skip_all,
-        fields(
-            db.query.text,
-            %user.id,
-        ),
+        fields(%user.id),
         err,
     )]
     async fn deactivate(&mut self, clock: &dyn Clock, mut user: User) -> Result<User, Self::Error> {
@@ -375,34 +255,24 @@ impl UserRepository for PgUserRepository<'_> {
         }
 
         let deactivated_at = clock.now();
-        let res = sqlx::query!(
-            r#"
-                UPDATE users
-                SET deactivated_at = $2
-                WHERE user_id = $1
-                  AND deactivated_at IS NULL
-            "#,
-            Uuid::from(user.id),
-            deactivated_at,
+        let rows_affected = diesel::update(
+            users::table
+                .find(Uuid::from(user.id))
+                .filter(users::deactivated_at.is_null()),
         )
-        .traced()
-        .execute(&mut *self.conn)
+        .set(users::deactivated_at.eq(Some(deactivated_at)))
+        .execute(self.conn)
         .await?;
 
-        DatabaseError::ensure_affected_rows(&res, 1)?;
-
+        DatabaseError::ensure_affected_rows_usize(rows_affected, 1)?;
         user.deactivated_at = Some(deactivated_at);
-
         Ok(user)
     }
 
     #[tracing::instrument(
         name = "db.user.reactivate",
         skip_all,
-        fields(
-            db.query.text,
-            %user.id,
-        ),
+        fields(%user.id),
         err,
     )]
     async fn reactivate(&mut self, mut user: User) -> Result<User, Self::Error> {
@@ -410,33 +280,20 @@ impl UserRepository for PgUserRepository<'_> {
             return Ok(user);
         }
 
-        let res = sqlx::query!(
-            r#"
-                UPDATE users
-                SET deactivated_at = NULL
-                WHERE user_id = $1
-            "#,
-            Uuid::from(user.id),
-        )
-        .traced()
-        .execute(&mut *self.conn)
-        .await?;
+        let rows_affected = diesel::update(users::table.find(Uuid::from(user.id)))
+            .set(users::deactivated_at.eq(None::<DateTime<Utc>>))
+            .execute(self.conn)
+            .await?;
 
-        DatabaseError::ensure_affected_rows(&res, 1)?;
-
+        DatabaseError::ensure_affected_rows_usize(rows_affected, 1)?;
         user.deactivated_at = None;
-
         Ok(user)
     }
 
     #[tracing::instrument(
         name = "db.user.set_can_request_admin",
         skip_all,
-        fields(
-            db.query.text,
-            %user.id,
-            user.can_request_admin = can_request_admin,
-        ),
+        fields(%user.id, user.can_request_admin = can_request_admin),
         err,
     )]
     async fn set_can_request_admin(
@@ -444,101 +301,126 @@ impl UserRepository for PgUserRepository<'_> {
         mut user: User,
         can_request_admin: bool,
     ) -> Result<User, Self::Error> {
-        let res = sqlx::query!(
-            r#"
-                UPDATE users
-                SET can_request_admin = $2
-                WHERE user_id = $1
-            "#,
-            Uuid::from(user.id),
-            can_request_admin,
-        )
-        .traced()
-        .execute(&mut *self.conn)
-        .await?;
+        let rows_affected = diesel::update(users::table.find(Uuid::from(user.id)))
+            .set(users::can_request_admin.eq(can_request_admin))
+            .execute(self.conn)
+            .await?;
 
-        DatabaseError::ensure_affected_rows(&res, 1)?;
-
+        DatabaseError::ensure_affected_rows_usize(rows_affected, 1)?;
         user.can_request_admin = can_request_admin;
-
         Ok(user)
     }
 
     #[tracing::instrument(
         name = "db.user.list",
         skip_all,
-        fields(
-            db.query.text,
-        ),
         err,
     )]
     async fn list(
         &mut self,
         filter: UserFilter<'_>,
-        pagination: pasion_storage::Pagination,
+        pagination: Pagination,
     ) -> Result<pasion_storage::Page<User>, Self::Error> {
-        let (sql, arguments) = Query::select()
-            .expr_as(
-                Expr::col((Users::Table, Users::UserId)),
-                UserLookupIden::UserId,
-            )
-            .expr_as(
-                Expr::col((Users::Table, Users::Username)),
-                UserLookupIden::Username,
-            )
-            .expr_as(
-                Expr::col((Users::Table, Users::CreatedAt)),
-                UserLookupIden::CreatedAt,
-            )
-            .expr_as(
-                Expr::col((Users::Table, Users::LockedAt)),
-                UserLookupIden::LockedAt,
-            )
-            .expr_as(
-                Expr::col((Users::Table, Users::DeactivatedAt)),
-                UserLookupIden::DeactivatedAt,
-            )
-            .expr_as(
-                Expr::col((Users::Table, Users::CanRequestAdmin)),
-                UserLookupIden::CanRequestAdmin,
-            )
-            .expr_as(
-                Expr::col((Users::Table, Users::IsGuest)),
-                UserLookupIden::IsGuest,
-            )
-            .from(Users::Table)
-            .apply_filter(filter)
-            .generate_pagination((Users::Table, Users::UserId), pagination)
-            .build_sqlx(PostgresQueryBuilder);
+        let mut query = users::table
+            .select(UserRow::as_select())
+            .into_boxed();
 
-        let edges: Vec<UserLookup> = sqlx::query_as_with(&sql, arguments)
-            .traced()
-            .fetch_all(&mut *self.conn)
-            .await?;
+        // Apply filters
+        if let Some(state) = filter.state() {
+            match state {
+                UserState::Deactivated => {
+                    query = query.filter(users::deactivated_at.is_not_null());
+                }
+                UserState::Locked => {
+                    query = query.filter(users::locked_at.is_not_null());
+                }
+                UserState::Active => {
+                    query = query
+                        .filter(users::locked_at.is_null())
+                        .filter(users::deactivated_at.is_null());
+                }
+            }
+        }
 
-        let page = pagination.process(edges).map(User::from);
+        if let Some(can_request_admin) = filter.can_request_admin() {
+            query = query.filter(users::can_request_admin.eq(can_request_admin));
+        }
 
+        if let Some(is_guest) = filter.is_guest() {
+            query = query.filter(users::is_guest.eq(is_guest));
+        }
+
+        if let Some(search) = filter.search() {
+            let pattern = format!("%{search}%");
+            query = query.filter(users::username.ilike(pattern));
+        }
+
+        // Apply pagination
+        if let Some(after) = pagination.after {
+            query = query.filter(users::user_id.gt(Uuid::from(after)));
+        }
+        if let Some(before) = pagination.before {
+            query = query.filter(users::user_id.lt(Uuid::from(before)));
+        }
+
+        match pagination.direction {
+            PaginationDirection::Forward => {
+                query = query
+                    .order(users::user_id.asc())
+                    .limit((pagination.count + 1) as i64);
+            }
+            PaginationDirection::Backward => {
+                query = query
+                    .order(users::user_id.desc())
+                    .limit((pagination.count + 1) as i64);
+            }
+        }
+
+        let rows: Vec<UserRow> = query.load(self.conn).await?;
+        let page = pagination.process(rows).map(User::from);
         Ok(page)
     }
 
     #[tracing::instrument(
         name = "db.user.count",
         skip_all,
-        fields(
-            db.query.text,
-        ),
         err,
     )]
     async fn count(&mut self, filter: UserFilter<'_>) -> Result<usize, Self::Error> {
-        let (sql, arguments) = Query::select()
-            .expr(Expr::col((Users::Table, Users::UserId)).count())
-            .from(Users::Table)
-            .apply_filter(filter)
-            .build_sqlx(PostgresQueryBuilder);
+        let mut query = users::table.into_boxed();
 
-        let count: i64 = sqlx::query_scalar_with(&sql, arguments)
-            .traced()
-            .fetch_one(&mut *self.conn)
+        if let Some(state) = filter.state() {
+            match state {
+                UserState::Deactivated => {
+                    query = query.filter(users::deactivated_at.is_not_null());
+                }
+                UserState::Locked => {
+                    query = query.filter(users::locked_at.is_not_null());
+                }
+                UserState::Active => {
+                    query = query
+                        .filter(users::locked_at.is_null())
+                        .filter(users::deactivated_at.is_null());
+                }
+            }
+        }
+
+        if let Some(can_request_admin) = filter.can_request_admin() {
+            query = query.filter(users::can_request_admin.eq(can_request_admin));
+        }
+
+        if let Some(is_guest) = filter.is_guest() {
+            query = query.filter(users::is_guest.eq(is_guest));
+        }
+
+        if let Some(search) = filter.search() {
+            let pattern = format!("%{search}%");
+            query = query.filter(users::username.ilike(pattern));
+        }
+
+        let count: i64 = query
+            .count()
+            .get_result(self.conn)
             .await?;
 
         count
@@ -549,33 +431,16 @@ impl UserRepository for PgUserRepository<'_> {
     #[tracing::instrument(
         name = "db.user.acquire_lock_for_sync",
         skip_all,
-        fields(
-            db.query.text,
-            user.id = %user.id,
-        ),
+        fields(user.id = %user.id),
         err,
     )]
     async fn acquire_lock_for_sync(&mut self, user: &User) -> Result<(), Self::Error> {
-        // XXX: this lock isn't stictly scoped to users, but as we don't use many
-        // postgres advisory locks, it's fine for now. Later on, we could use row-level
-        // locks to make sure we don't get into trouble
-
-        // Convert the user ID to a u128 and grab the lower 64 bits
-        // As this includes 64bit of the random part of the ULID, it should be random
-        // enough to not collide
         let lock_id = (u128::from(user.id) & 0xffff_ffff_ffff_ffff) as i64;
 
-        // Use a PG advisory lock, which will be released when the transaction is
-        // committed or rolled back
-        sqlx::query!(
-            r#"
-                SELECT pg_advisory_xact_lock($1)
-            "#,
-            lock_id,
-        )
-        .traced()
-        .execute(&mut *self.conn)
-        .await?;
+        diesel::sql_query("SELECT pg_advisory_xact_lock($1)")
+            .bind::<diesel::sql_types::BigInt, _>(lock_id)
+            .execute(self.conn)
+            .await?;
 
         Ok(())
     }

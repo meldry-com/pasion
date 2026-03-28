@@ -1,137 +1,150 @@
 //! A module containing PostgreSQL implementation of repositories for sessions
 
 use async_trait::async_trait;
+use chrono::{DateTime, Utc};
+use diesel::prelude::*;
+use diesel_async::RunQueryDsl;
 use oauth2_types::scope::{Scope, ScopeToken};
-use opentelemetry_semantic_conventions::trace::DB_QUERY_TEXT;
 use pasion_data_model::{Clock, Session, SessionState, User};
 use pasion_storage::{
     Page, Pagination,
     app_session::{AppSession, AppSessionFilter, AppSessionRepository, AppSessionState},
-    oauth2::OAuth2SessionFilter,
+    pagination::PaginationDirection,
 };
-use sea_query::{Alias, ColumnRef, CommonTableExpression, Expr, PostgresQueryBuilder, Query};
-use sea_query_binder::SqlxBinder;
-use sqlx::PgConnection;
-use tracing::Instrument;
 use ulid::Ulid;
 use uuid::Uuid;
 
-use crate::{
-    DatabaseError, ExecuteExt, errors::DatabaseInconsistencyError, filter::StatementExt,
-    iden::OAuth2Sessions, pagination::QueryBuilderExt,
-};
+use crate::{DatabaseError, errors::DatabaseInconsistencyError, schema::oauth2_sessions};
 
 /// An implementation of [`AppSessionRepository`] for a PostgreSQL connection
 pub struct PgAppSessionRepository<'c> {
-    conn: &'c mut PgConnection,
+    conn: &'c mut diesel_async::AsyncPgConnection,
 }
 
 impl<'c> PgAppSessionRepository<'c> {
     /// Create a new [`PgAppSessionRepository`] from an active PostgreSQL
     /// connection
-    pub fn new(conn: &'c mut PgConnection) -> Self {
+    pub fn new(conn: &'c mut diesel_async::AsyncPgConnection) -> Self {
         Self { conn }
     }
 }
 
-mod priv_ {
-    // The enum_def macro generates a public enum, which we don't want, because it
-    // triggers the missing docs warning
-
-    use std::net::IpAddr;
-
-    use chrono::{DateTime, Utc};
-    use pasion_storage::pagination::Node;
-    use sea_query::enum_def;
-    use ulid::Ulid;
-    use uuid::Uuid;
-
-    #[derive(sqlx::FromRow)]
-    #[enum_def]
-    pub(super) struct AppSessionLookup {
-        pub(super) cursor: Uuid,
-        pub(super) oauth2_session_id: Option<Uuid>,
-        pub(super) oauth2_client_id: Option<Uuid>,
-        pub(super) user_session_id: Option<Uuid>,
-        pub(super) user_id: Option<Uuid>,
-        pub(super) scope_list: Option<Vec<String>>,
-        pub(super) human_name: Option<String>,
-        pub(super) created_at: DateTime<Utc>,
-        pub(super) finished_at: Option<DateTime<Utc>>,
-        pub(super) user_agent: Option<String>,
-        pub(super) last_active_at: Option<DateTime<Utc>>,
-        pub(super) last_active_ip: Option<IpAddr>,
-    }
-
-    impl Node<Ulid> for AppSessionLookup {
-        fn cursor(&self) -> Ulid {
-            self.cursor.into()
-        }
-    }
+/// Row type for loading an OAuth2 session as an app session
+#[derive(Debug, Clone, Queryable, Selectable)]
+#[diesel(table_name = oauth2_sessions)]
+struct AppSessionLookup {
+    oauth2_session_id: Uuid,
+    oauth2_client_id: Uuid,
+    user_session_id: Option<Uuid>,
+    user_id: Option<Uuid>,
+    scope_list: Vec<String>,
+    human_name: Option<String>,
+    created_at: DateTime<Utc>,
+    finished_at: Option<DateTime<Utc>>,
+    user_agent: Option<String>,
+    last_active_at: Option<DateTime<Utc>>,
+    last_active_ip: Option<ipnetwork::IpNetwork>,
 }
 
-use priv_::{AppSessionLookup, AppSessionLookupIden};
+impl pasion_storage::pagination::Node<Ulid> for AppSessionLookup {
+    fn cursor(&self) -> Ulid {
+        self.oauth2_session_id.into()
+    }
+}
 
 impl TryFrom<AppSessionLookup> for AppSession {
     type Error = DatabaseError;
 
     fn try_from(value: AppSessionLookup) -> Result<Self, Self::Error> {
-        let AppSessionLookup {
-            cursor,
-            oauth2_session_id,
-            oauth2_client_id,
-            user_session_id,
-            user_id,
-            scope_list,
-            human_name,
-            created_at,
-            finished_at,
-            user_agent,
-            last_active_at,
-            last_active_ip,
-        } = value;
+        let id: Ulid = value.oauth2_session_id.into();
 
-        let user_session_id = user_session_id.map(Ulid::from);
+        let scope: Result<Scope, _> = value
+            .scope_list
+            .iter()
+            .map(|s| s.parse::<ScopeToken>())
+            .collect();
+        let scope = scope.map_err(|e| {
+            DatabaseInconsistencyError::on("oauth2_sessions")
+                .column("scope")
+                .row(id)
+                .source(e)
+        })?;
 
-        match (oauth2_session_id, oauth2_client_id, scope_list) {
-            (Some(oauth2_session_id), Some(oauth2_client_id), Some(scope_list)) => {
-                let id = oauth2_session_id.into();
-                let scope: Result<Scope, _> =
-                    scope_list.iter().map(|s| s.parse::<ScopeToken>()).collect();
-                let scope = scope.map_err(|e| {
-                    DatabaseInconsistencyError::on("oauth2_sessions")
-                        .column("scope")
-                        .row(id)
-                        .source(e)
-                })?;
+        let state = match value.finished_at {
+            None => SessionState::Valid,
+            Some(finished_at) => SessionState::Finished { finished_at },
+        };
 
-                let state = match finished_at {
-                    None => SessionState::Valid,
-                    Some(finished_at) => SessionState::Finished { finished_at },
-                };
+        let session = Session {
+            id,
+            state,
+            created_at: value.created_at,
+            client_id: value.oauth2_client_id.into(),
+            user_id: value.user_id.map(Ulid::from),
+            user_session_id: value.user_session_id.map(Ulid::from),
+            scope,
+            user_agent: value.user_agent,
+            last_active_at: value.last_active_at,
+            last_active_ip: value.last_active_ip.map(|ip| ip.ip()),
+            human_name: value.human_name,
+        };
 
-                let session = Session {
-                    id,
-                    state,
-                    created_at,
-                    client_id: oauth2_client_id.into(),
-                    user_id: user_id.map(Ulid::from),
-                    user_session_id,
-                    scope,
-                    user_agent,
-                    last_active_at,
-                    last_active_ip,
-                    human_name,
-                };
-
-                Ok(AppSession::OAuth2(Box::new(session)))
-            }
-
-            _ => Err(DatabaseInconsistencyError::on("sessions")
-                .row(cursor.into())
-                .into()),
-        }
+        Ok(AppSession::OAuth2(Box::new(session)))
     }
+}
+
+/// Apply the [`AppSessionFilter`] to a boxed select query on oauth2_sessions.
+macro_rules! apply_app_session_filter {
+    ($query:expr, $filter:expr) => {{
+        let mut query = $query;
+        let filter = $filter;
+
+        if let Some(user) = filter.user() {
+            query = query.filter(oauth2_sessions::user_id.eq(Uuid::from(user.id)));
+        }
+
+        match filter.state() {
+            Some(AppSessionState::Active) => {
+                query = query.filter(oauth2_sessions::finished_at.is_null());
+            }
+            Some(AppSessionState::Finished) => {
+                query = query.filter(oauth2_sessions::finished_at.is_not_null());
+            }
+            None => {}
+        }
+
+        if let Some(device) = filter.device() {
+            let stable_scope = format!("urn:matrix:client:device:{device}");
+            let unstable_scope =
+                format!("urn:matrix:org.matrix.msc2967.client:device:{device}");
+            query = query.filter(
+                diesel::dsl::sql::<diesel::sql_types::Bool>("")
+                    .bind::<diesel::sql_types::Text, _>(stable_scope)
+                    .sql(" = ANY(")
+                    .sql("oauth2_sessions.scope_list")
+                    .sql(") OR ")
+                    .bind::<diesel::sql_types::Text, _>(unstable_scope)
+                    .sql(" = ANY(")
+                    .sql("oauth2_sessions.scope_list")
+                    .sql(")"),
+            );
+        }
+
+        if let Some(browser_session) = filter.browser_session() {
+            query = query
+                .filter(oauth2_sessions::user_session_id.eq(Uuid::from(browser_session.id)));
+        }
+
+        if let Some(last_active_before) = filter.last_active_before() {
+            query = query.filter(oauth2_sessions::last_active_at.lt(last_active_before));
+        }
+
+        if let Some(last_active_after) = filter.last_active_after() {
+            query = query.filter(oauth2_sessions::last_active_at.gt(last_active_after));
+        }
+
+        query
+    }};
 }
 
 #[async_trait]
@@ -140,9 +153,6 @@ impl AppSessionRepository for PgAppSessionRepository<'_> {
 
     #[tracing::instrument(
         name = "db.app_session.list",
-        fields(
-            db.query.text,
-        ),
         skip_all,
         err,
     )]
@@ -151,80 +161,34 @@ impl AppSessionRepository for PgAppSessionRepository<'_> {
         filter: AppSessionFilter<'_>,
         pagination: Pagination,
     ) -> Result<Page<AppSession>, Self::Error> {
-        let oauth2_filter = to_oauth2_filter(filter);
+        let mut query = oauth2_sessions::table
+            .select(AppSessionLookup::as_select())
+            .into_boxed();
 
-        let mut oauth2_session_select = Query::select()
-            .expr_as(
-                Expr::col((OAuth2Sessions::Table, OAuth2Sessions::OAuth2SessionId)),
-                AppSessionLookupIden::Cursor,
-            )
-            .expr_as(
-                Expr::col((OAuth2Sessions::Table, OAuth2Sessions::OAuth2SessionId)),
-                AppSessionLookupIden::Oauth2SessionId,
-            )
-            .expr_as(
-                Expr::col((OAuth2Sessions::Table, OAuth2Sessions::OAuth2ClientId)),
-                AppSessionLookupIden::Oauth2ClientId,
-            )
-            .expr_as(
-                Expr::col((OAuth2Sessions::Table, OAuth2Sessions::UserSessionId)),
-                AppSessionLookupIden::UserSessionId,
-            )
-            .expr_as(
-                Expr::col((OAuth2Sessions::Table, OAuth2Sessions::UserId)),
-                AppSessionLookupIden::UserId,
-            )
-            .expr_as(
-                Expr::col((OAuth2Sessions::Table, OAuth2Sessions::ScopeList)),
-                AppSessionLookupIden::ScopeList,
-            )
-            .expr_as(
-                Expr::col((OAuth2Sessions::Table, OAuth2Sessions::HumanName)),
-                AppSessionLookupIden::HumanName,
-            )
-            .expr_as(
-                Expr::col((OAuth2Sessions::Table, OAuth2Sessions::CreatedAt)),
-                AppSessionLookupIden::CreatedAt,
-            )
-            .expr_as(
-                Expr::col((OAuth2Sessions::Table, OAuth2Sessions::FinishedAt)),
-                AppSessionLookupIden::FinishedAt,
-            )
-            .expr_as(
-                Expr::col((OAuth2Sessions::Table, OAuth2Sessions::UserAgent)),
-                AppSessionLookupIden::UserAgent,
-            )
-            .expr_as(
-                Expr::col((OAuth2Sessions::Table, OAuth2Sessions::LastActiveAt)),
-                AppSessionLookupIden::LastActiveAt,
-            )
-            .expr_as(
-                Expr::col((OAuth2Sessions::Table, OAuth2Sessions::LastActiveIp)),
-                AppSessionLookupIden::LastActiveIp,
-            )
-            .from(OAuth2Sessions::Table)
-            .apply_filter(oauth2_filter)
-            .clone();
+        query = apply_app_session_filter!(query, filter);
 
-        let common_table_expression = CommonTableExpression::new()
-            .query(oauth2_session_select.clone())
-            .table_name(Alias::new("sessions"))
-            .clone();
+        // Apply pagination
+        if let Some(after) = pagination.after {
+            query = query.filter(oauth2_sessions::oauth2_session_id.gt(Uuid::from(after)));
+        }
+        if let Some(before) = pagination.before {
+            query = query.filter(oauth2_sessions::oauth2_session_id.lt(Uuid::from(before)));
+        }
 
-        let with_clause = Query::with().cte(common_table_expression).clone();
+        match pagination.direction {
+            PaginationDirection::Forward => {
+                query = query
+                    .order(oauth2_sessions::oauth2_session_id.asc())
+                    .limit((pagination.count + 1) as i64);
+            }
+            PaginationDirection::Backward => {
+                query = query
+                    .order(oauth2_sessions::oauth2_session_id.desc())
+                    .limit((pagination.count + 1) as i64);
+            }
+        }
 
-        let select = Query::select()
-            .column(ColumnRef::Asterisk)
-            .from(Alias::new("sessions"))
-            .generate_pagination(AppSessionLookupIden::Cursor, pagination)
-            .clone();
-
-        let (sql, arguments) = with_clause.query(select).build_sqlx(PostgresQueryBuilder);
-
-        let edges: Vec<AppSessionLookup> = sqlx::query_as_with(&sql, arguments)
-            .traced()
-            .fetch_all(&mut *self.conn)
-            .await?;
+        let edges: Vec<AppSessionLookup> = query.load(self.conn).await?;
 
         let page = pagination.process(edges).try_map(TryFrom::try_from)?;
 
@@ -233,38 +197,14 @@ impl AppSessionRepository for PgAppSessionRepository<'_> {
 
     #[tracing::instrument(
         name = "db.app_session.count",
-        fields(
-            db.query.text,
-        ),
         skip_all,
         err,
     )]
     async fn count(&mut self, filter: AppSessionFilter<'_>) -> Result<usize, Self::Error> {
-        let oauth2_filter = to_oauth2_filter(filter);
-        let mut oauth2_session_select = Query::select()
-            .expr(Expr::cust("1"))
-            .from(OAuth2Sessions::Table)
-            .apply_filter(oauth2_filter)
-            .clone();
+        let query = oauth2_sessions::table.into_boxed();
+        let query = apply_app_session_filter!(query, filter);
 
-        let common_table_expression = CommonTableExpression::new()
-            .query(oauth2_session_select.clone())
-            .table_name(Alias::new("sessions"))
-            .clone();
-
-        let with_clause = Query::with().cte(common_table_expression).clone();
-
-        let select = Query::select()
-            .expr(Expr::cust("COUNT(*)"))
-            .from(Alias::new("sessions"))
-            .clone();
-
-        let (sql, arguments) = with_clause.query(select).build_sqlx(PostgresQueryBuilder);
-
-        let count: i64 = sqlx::query_scalar_with(&sql, arguments)
-            .traced()
-            .fetch_one(&mut *self.conn)
-            .await?;
+        let count: i64 = query.count().get_result(self.conn).await?;
 
         count
             .try_into()
@@ -273,12 +213,11 @@ impl AppSessionRepository for PgAppSessionRepository<'_> {
 
     #[tracing::instrument(
         name = "db.app_session.finish_sessions_to_replace_device",
+        skip_all,
         fields(
-            db.query.text,
             %user.id,
             %device
         ),
-        skip_all,
         err,
     )]
     async fn finish_sessions_to_replace_device(
@@ -291,66 +230,22 @@ impl AppSessionRepository for PgAppSessionRepository<'_> {
         let stable_scope = format!("urn:matrix:client:device:{device}");
         let unstable_scope = format!("urn:matrix:org.matrix.msc2967.client:device:{device}");
 
-        let span = tracing::info_span!(
-            "db.app_session.finish_sessions_to_replace_device.oauth2_sessions",
-            { DB_QUERY_TEXT } = tracing::field::Empty,
-        );
-        let oauth2_affected = sqlx::query(
+        let oauth2_affected = diesel::sql_query(
             "UPDATE oauth2_sessions
              SET finished_at = $4
              WHERE user_id = $1
                AND ($2 = ANY(scope_list) OR $3 = ANY(scope_list))
                AND finished_at IS NULL",
         )
-        .bind(Uuid::from(user.id))
-        .bind(&stable_scope)
-        .bind(&unstable_scope)
-        .bind(finished_at)
-        .traced()
-        .execute(&mut *self.conn)
-        .instrument(span)
-        .await?
-        .rows_affected();
+        .bind::<diesel::sql_types::Uuid, _>(Uuid::from(user.id))
+        .bind::<diesel::sql_types::Text, _>(&stable_scope)
+        .bind::<diesel::sql_types::Text, _>(&unstable_scope)
+        .bind::<diesel::sql_types::Timestamptz, _>(finished_at)
+        .execute(self.conn)
+        .await?;
 
         Ok(oauth2_affected > 0)
     }
-}
-
-/// Convert an [`AppSessionFilter`] to an [`OAuth2SessionFilter`].
-fn to_oauth2_filter(filter: AppSessionFilter<'_>) -> OAuth2SessionFilter<'_> {
-    let mut oauth2_filter = OAuth2SessionFilter::new();
-
-    if let Some(user) = filter.user() {
-        oauth2_filter = oauth2_filter.for_user(user);
-    }
-
-    match filter.state() {
-        Some(AppSessionState::Active) => {
-            oauth2_filter = oauth2_filter.active_only();
-        }
-        Some(AppSessionState::Finished) => {
-            oauth2_filter = oauth2_filter.finished_only();
-        }
-        None => {}
-    }
-
-    if let Some(device) = filter.device() {
-        oauth2_filter = oauth2_filter.for_device(device);
-    }
-
-    if let Some(browser_session) = filter.browser_session() {
-        oauth2_filter = oauth2_filter.for_browser_session(browser_session);
-    }
-
-    if let Some(last_active_before) = filter.last_active_before() {
-        oauth2_filter = oauth2_filter.with_last_active_before(last_active_before);
-    }
-
-    if let Some(last_active_after) = filter.last_active_after() {
-        oauth2_filter = oauth2_filter.with_last_active_after(last_active_after);
-    }
-
-    oauth2_filter
 }
 
 #[cfg(test)]

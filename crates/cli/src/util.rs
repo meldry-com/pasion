@@ -1,6 +1,9 @@
 use std::{sync::Arc, time::Duration};
 
 use anyhow::Context;
+use diesel_async::AsyncPgConnection;
+use diesel_async::pooled_connection::deadpool::Pool as DieselPool;
+use diesel_async::pooled_connection::AsyncDieselConnectionManager;
 use pasion_config::{
     AccountConfig, BrandingConfig, CaptchaConfig, DatabaseConfig, EmailConfig, EmailSmtpMode,
     EmailTransportKind, ExperimentalConfig, HomeserverKind, MatrixConfig, PasswordsConfig,
@@ -377,6 +380,60 @@ pub async fn database_pool_from_config(config: &DatabaseConfig) -> Result<PgPool
         .connect_with(options)
         .await
         .context("could not connect to the database")
+}
+
+/// Build a connection string from the [`DatabaseConfig`] for use with diesel-async.
+///
+/// This mirrors the logic from [`database_connect_options_from_config`] but
+/// produces a plain URL string suitable for
+/// [`AsyncDieselConnectionManager`].
+pub fn database_url_from_config(config: &DatabaseConfig) -> Result<String, anyhow::Error> {
+    if let Some(uri) = config.uri.as_deref() {
+        return Ok(uri.to_owned());
+    }
+
+    let mut url = String::from("postgres://");
+    if let Some(username) = config.username.as_deref() {
+        url.push_str(username);
+        if let Some(password) = config.password.as_deref() {
+            url.push(':');
+            url.push_str(password);
+        }
+        url.push('@');
+    }
+    if let Some(host) = config.host.as_deref() {
+        url.push_str(host);
+    } else {
+        url.push_str("localhost");
+    }
+    if let Some(port) = config.port {
+        url.push(':');
+        url.push_str(&port.to_string());
+    }
+    if let Some(database) = config.database.as_deref() {
+        url.push('/');
+        url.push_str(database);
+    }
+    url.push_str("?application_name=pasion");
+
+    Ok(url)
+}
+
+/// Create a diesel-async deadpool connection pool from the configuration.
+///
+/// This pool is used by [`PgRepositoryFactory`] for all non-migration
+/// database access.
+#[tracing::instrument(name = "db.connect.diesel", skip_all)]
+pub async fn diesel_pool_from_config(
+    config: &DatabaseConfig,
+) -> Result<DieselPool<AsyncPgConnection>, anyhow::Error> {
+    let url = database_url_from_config(config)?;
+    let manager = AsyncDieselConnectionManager::<AsyncPgConnection>::new(url);
+    let pool = DieselPool::builder(manager)
+        .max_size(config.max_connections.get() as usize)
+        .build()
+        .context("could not build diesel connection pool")?;
+    Ok(pool)
 }
 
 pub struct DatabaseConnectOptions {

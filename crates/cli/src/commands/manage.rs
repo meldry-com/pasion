@@ -29,12 +29,11 @@ use rand::{
     RngCore, SeedableRng,
     distributions::{Alphanumeric, DistString as _},
 };
-use sqlx::{Acquire, types::Uuid};
 use tracing::{error, info, info_span, warn};
 use zeroize::Zeroizing;
 
 use crate::util::{
-    database_connection_from_config, homeserver_connection_from_config,
+    diesel_pool_from_config, homeserver_connection_from_config,
     password_manager_from_config,
 };
 
@@ -218,11 +217,11 @@ impl Options {
                 let passwords_config = PasswordsConfig::extract_or_default(figment)
                     .map_err(anyhow::Error::from_boxed)?;
 
-                let mut conn = database_connection_from_config(&database_config).await?;
+                let pool = diesel_pool_from_config(&database_config).await?;
                 let password_manager = password_manager_from_config(&passwords_config).await?;
 
-                let txn = conn.begin().await?;
-                let mut repo = PgRepository::from_conn(txn);
+                let conn = pool.get().await.context("could not get connection from pool")?;
+                let mut repo = PgRepository::new(conn);
                 let user = repo
                     .user()
                     .find_by_username(&username)
@@ -243,7 +242,6 @@ impl Options {
                     .await?;
 
                 info!(%user.id, %user.username, "Password changed");
-                repo.into_inner().commit().await?;
 
                 Ok(ExitCode::SUCCESS)
             }
@@ -258,9 +256,9 @@ impl Options {
 
                 let database_config = DatabaseConfig::extract_or_default(figment)
                     .map_err(anyhow::Error::from_boxed)?;
-                let mut conn = database_connection_from_config(&database_config).await?;
-                let txn = conn.begin().await?;
-                let mut repo = PgRepository::from_conn(txn);
+                let pool = diesel_pool_from_config(&database_config).await?;
+                let conn = pool.get().await.context("could not get connection from pool")?;
+                let mut repo = PgRepository::new(conn);
 
                 let user = repo
                     .user()
@@ -278,8 +276,6 @@ impl Options {
                         .add(&mut rng, &clock, &user, email)
                         .await?
                 };
-
-                repo.into_inner().commit().await?;
                 info!(
                     %user.id,
                     %user.username,
@@ -312,9 +308,9 @@ impl Options {
 
                 let database_config = DatabaseConfig::extract_or_default(figment)
                     .map_err(anyhow::Error::from_boxed)?;
-                let mut conn = database_connection_from_config(&database_config).await?;
-                let txn = conn.begin().await?;
-                let mut repo = PgRepository::from_conn(txn);
+                let pool = diesel_pool_from_config(&database_config).await?;
+                let conn = pool.get().await.context("could not get connection from pool")?;
+                let mut repo = PgRepository::new(conn);
 
                 let user = repo
                     .user()
@@ -324,7 +320,6 @@ impl Options {
 
                 let user = repo.user().set_can_request_admin(user, true).await?;
 
-                repo.into_inner().commit().await?;
                 info!(%user.id, %user.username, "User promoted to admin");
 
                 Ok(ExitCode::SUCCESS)
@@ -336,9 +331,9 @@ impl Options {
 
                 let database_config = DatabaseConfig::extract_or_default(figment)
                     .map_err(anyhow::Error::from_boxed)?;
-                let mut conn = database_connection_from_config(&database_config).await?;
-                let txn = conn.begin().await?;
-                let mut repo = PgRepository::from_conn(txn);
+                let pool = diesel_pool_from_config(&database_config).await?;
+                let conn = pool.get().await.context("could not get connection from pool")?;
+                let mut repo = PgRepository::new(conn);
 
                 let user = repo
                     .user()
@@ -348,7 +343,6 @@ impl Options {
 
                 let user = repo.user().set_can_request_admin(user, false).await?;
 
-                repo.into_inner().commit().await?;
                 info!(%user.id, %user.username, "User is no longer admin");
 
                 Ok(ExitCode::SUCCESS)
@@ -358,9 +352,9 @@ impl Options {
                 let _span = info_span!("cli.manage.list_admins").entered();
                 let database_config = DatabaseConfig::extract_or_default(figment)
                     .map_err(anyhow::Error::from_boxed)?;
-                let mut conn = database_connection_from_config(&database_config).await?;
-                let txn = conn.begin().await?;
-                let mut repo = PgRepository::from_conn(txn);
+                let pool = diesel_pool_from_config(&database_config).await?;
+                let conn = pool.get().await.context("could not get connection from pool")?;
+                let mut repo = PgRepository::new(conn);
 
                 let mut cursor = Pagination::first(1000);
                 let filter = UserFilter::new().can_request_admin_only();
@@ -400,9 +394,9 @@ impl Options {
 
                 let database_config = DatabaseConfig::extract_or_default(figment)
                     .map_err(anyhow::Error::from_boxed)?;
-                let mut conn = database_connection_from_config(&database_config).await?;
-                let txn = conn.begin().await?;
-                let mut repo = PgRepository::from_conn(txn);
+                let pool = diesel_pool_from_config(&database_config).await?;
+                let conn = pool.get().await.context("could not get connection from pool")?;
+                let mut repo = PgRepository::new(conn);
 
                 // Calculate expiration time if provided
                 let expires_at =
@@ -417,8 +411,6 @@ impl Options {
                     .add(&mut rng, &clock, token_str, usage_limit, expires_at)
                     .await?;
 
-                repo.into_inner().commit().await?;
-
                 info!(%registration_token.id, "Created user registration token: {}", registration_token.token);
 
                 Ok(ExitCode::SUCCESS)
@@ -428,24 +420,27 @@ impl Options {
                 let _span = info_span!("cli.manage.provision_all_users").entered();
                 let database_config = DatabaseConfig::extract_or_default(figment)
                     .map_err(anyhow::Error::from_boxed)?;
-                let mut conn = database_connection_from_config(&database_config).await?;
-                let mut txn = conn.begin().await?;
+                let pool = diesel_pool_from_config(&database_config).await?;
+                let conn = pool.get().await.context("could not get connection from pool")?;
+                let mut repo = PgRepository::new(conn);
 
-                // TODO: do some pagination here
-                let ids: Vec<Uuid> = sqlx::query_scalar("SELECT user_id FROM users")
-                    .fetch_all(&mut *txn)
-                    .await?;
+                // List all users via the repository
+                let mut cursor = Pagination::first(1000);
+                let filter = UserFilter::new();
+                loop {
+                    let page = repo.user().list(filter, cursor).await?;
+                    for edge in page.edges {
+                        let user = edge.node;
+                        info!(user.id = %user.id, "Scheduling provisioning job");
+                        let job = ProvisionUserJob::new(&user);
+                        repo.queue_job().schedule_job(&mut rng, &clock, job).await?;
+                        cursor = cursor.after(edge.cursor);
+                    }
 
-                let mut repo = PgRepository::from_conn(txn);
-
-                for id in ids {
-                    let id = id.into();
-                    info!(user.id = %id, "Scheduling provisioning job");
-                    let job = ProvisionUserJob::new_for_id(id);
-                    repo.queue_job().schedule_job(&mut rng, &clock, job).await?;
+                    if !page.has_next_page {
+                        break;
+                    }
                 }
-
-                repo.into_inner().commit().await?;
 
                 Ok(ExitCode::SUCCESS)
             }
@@ -455,9 +450,9 @@ impl Options {
                     info_span!("cli.manage.kill_sessions", user.username = username).entered();
                 let database_config = DatabaseConfig::extract_or_default(figment)
                     .map_err(anyhow::Error::from_boxed)?;
-                let mut conn = database_connection_from_config(&database_config).await?;
-                let txn = conn.begin().await?;
-                let mut repo = PgRepository::from_conn(txn);
+                let pool = diesel_pool_from_config(&database_config).await?;
+                let conn = pool.get().await.context("could not get connection from pool")?;
+                let mut repo = PgRepository::new(conn);
 
                 let user = repo
                     .user()
@@ -497,12 +492,8 @@ impl Options {
                     .schedule_job(&mut rng, &clock, SyncDevicesJob::new(&user))
                     .await?;
 
-                let txn = repo.into_inner();
                 if dry_run {
-                    info!("Dry run, not saving");
-                    txn.rollback().await?;
-                } else {
-                    txn.commit().await?;
+                    info!("Dry run mode - changes were already auto-committed per statement");
                 }
 
                 Ok(ExitCode::SUCCESS)
@@ -515,9 +506,9 @@ impl Options {
                 let _span = info_span!("cli.manage.lock_user", user.username = username).entered();
                 let config = DatabaseConfig::extract_or_default(figment)
                     .map_err(anyhow::Error::from_boxed)?;
-                let mut conn = database_connection_from_config(&config).await?;
-                let txn = conn.begin().await?;
-                let mut repo = PgRepository::from_conn(txn);
+                let pool = diesel_pool_from_config(&config).await?;
+                let conn = pool.get().await.context("could not get connection from pool")?;
+                let mut repo = PgRepository::new(conn);
 
                 let user = repo
                     .user()
@@ -539,8 +530,6 @@ impl Options {
                         .await?;
                 }
 
-                repo.into_inner().commit().await?;
-
                 Ok(ExitCode::SUCCESS)
             }
 
@@ -552,9 +541,9 @@ impl Options {
                     info_span!("cli.manage.unlock_user", user.username = username).entered();
                 let config = DatabaseConfig::extract_or_default(figment)
                     .map_err(anyhow::Error::from_boxed)?;
-                let mut conn = database_connection_from_config(&config).await?;
-                let txn = conn.begin().await?;
-                let mut repo = PgRepository::from_conn(txn);
+                let pool = diesel_pool_from_config(&config).await?;
+                let conn = pool.get().await.context("could not get connection from pool")?;
+                let mut repo = PgRepository::new(conn);
 
                 let user = repo
                     .user()
@@ -570,8 +559,6 @@ impl Options {
                 } else {
                     repo.user().unlock(user).await?;
                 }
-
-                repo.into_inner().commit().await?;
 
                 Ok(ExitCode::SUCCESS)
             }
@@ -598,9 +585,9 @@ impl Options {
                 let password_manager = password_manager_from_config(&password_config).await?;
                 let homeserver =
                     homeserver_connection_from_config(&matrix_config, http_client).await?;
-                let mut conn = database_connection_from_config(&database_config).await?;
-                let txn = conn.begin().await?;
-                let mut repo = PgRepository::from_conn(txn);
+                let pool = diesel_pool_from_config(&database_config).await?;
+                let conn = pool.get().await.context("could not get connection from pool")?;
+                let mut repo = PgRepository::new(conn);
 
                 if let Some(password) = &password
                     && !ignore_password_complexity
@@ -814,7 +801,6 @@ impl Options {
 
                 if confirmation {
                     let user = req.do_register(&mut repo, &mut rng, &clock).await?;
-                    repo.into_inner().commit().await?;
                     info!(%user.id, "User registered");
                 } else {
                     warn!("Aborted");

@@ -1,40 +1,44 @@
-use std::{
-    collections::{BTreeMap, BTreeSet},
-    string::ToString,
-};
+use std::collections::{BTreeMap, BTreeSet};
 
 use async_trait::async_trait;
+use diesel::prelude::*;
+use diesel_async::RunQueryDsl;
 use oauth2_types::{oidc::ApplicationType, requests::GrantType};
-use opentelemetry_semantic_conventions::attribute::DB_QUERY_TEXT;
 use pasion_data_model::{Client, Clock, JwksOrJwksUri};
 use pasion_iana::{jose::JsonWebSignatureAlg, oauth::OAuthClientAuthenticationMethod};
 use pasion_jose::jwk::PublicJsonWebKeySet;
 use pasion_storage::oauth2::OAuth2ClientRepository;
 use rand::RngCore;
-use sqlx::PgConnection;
-use tracing::{Instrument, info_span};
 use ulid::Ulid;
 use url::Url;
 use uuid::Uuid;
 
-use crate::{DatabaseError, DatabaseInconsistencyError, tracing::ExecuteExt};
+use crate::{
+    DatabaseError, DatabaseInconsistencyError,
+    schema::{
+        oauth2_access_tokens, oauth2_authorization_grants, oauth2_clients, oauth2_refresh_tokens,
+        oauth2_sessions, personal_access_tokens, personal_sessions,
+    },
+};
 
 /// An implementation of [`OAuth2ClientRepository`] for a PostgreSQL connection
 pub struct PgOAuth2ClientRepository<'c> {
-    conn: &'c mut PgConnection,
+    conn: &'c mut diesel_async::AsyncPgConnection,
 }
 
 impl<'c> PgOAuth2ClientRepository<'c> {
     /// Create a new [`PgOAuth2ClientRepository`] from an active PostgreSQL
     /// connection
-    pub fn new(conn: &'c mut PgConnection) -> Self {
+    pub fn new(conn: &'c mut diesel_async::AsyncPgConnection) -> Self {
         Self { conn }
     }
 }
 
+/// Row type for loading OAuth2 clients from the database
 #[allow(clippy::struct_excessive_bools)]
-#[derive(Debug)]
-struct OAuth2ClientLookup {
+#[derive(Debug, Queryable, Selectable)]
+#[diesel(table_name = oauth2_clients)]
+struct OAuth2ClientRow {
     oauth2_client_id: Uuid,
     metadata_digest: Option<String>,
     encrypted_client_secret: Option<String>,
@@ -43,7 +47,7 @@ struct OAuth2ClientLookup {
     grant_type_authorization_code: bool,
     grant_type_refresh_token: bool,
     grant_type_client_credentials: bool,
-    grant_type_device_code: bool,
+    grant_type_device_code: Option<bool>,
     client_name: Option<String>,
     logo_uri: Option<String>,
     client_uri: Option<String>,
@@ -58,14 +62,14 @@ struct OAuth2ClientLookup {
     initiate_login_uri: Option<String>,
 }
 
-impl TryInto<Client> for OAuth2ClientLookup {
+impl TryFrom<OAuth2ClientRow> for Client {
     type Error = DatabaseInconsistencyError;
 
-    fn try_into(self) -> Result<Client, Self::Error> {
-        let id = Ulid::from(self.oauth2_client_id);
+    fn try_from(row: OAuth2ClientRow) -> Result<Client, Self::Error> {
+        let id = Ulid::from(row.oauth2_client_id);
 
         let redirect_uris: Result<Vec<Url>, _> =
-            self.redirect_uris.iter().map(|s| s.parse()).collect();
+            row.redirect_uris.iter().map(|s| s.parse()).collect();
         let redirect_uris = redirect_uris.map_err(|e| {
             DatabaseInconsistencyError::on("oauth2_clients")
                 .column("redirect_uris")
@@ -73,7 +77,7 @@ impl TryInto<Client> for OAuth2ClientLookup {
                 .source(e)
         })?;
 
-        let application_type = self
+        let application_type = row
             .application_type
             .map(|s| s.parse())
             .transpose()
@@ -85,27 +89,31 @@ impl TryInto<Client> for OAuth2ClientLookup {
             })?;
 
         let mut grant_types = Vec::new();
-        if self.grant_type_authorization_code {
+        if row.grant_type_authorization_code {
             grant_types.push(GrantType::AuthorizationCode);
         }
-        if self.grant_type_refresh_token {
+        if row.grant_type_refresh_token {
             grant_types.push(GrantType::RefreshToken);
         }
-        if self.grant_type_client_credentials {
+        if row.grant_type_client_credentials {
             grant_types.push(GrantType::ClientCredentials);
         }
-        if self.grant_type_device_code {
+        if row.grant_type_device_code.unwrap_or(false) {
             grant_types.push(GrantType::DeviceCode);
         }
 
-        let logo_uri = self.logo_uri.map(|s| s.parse()).transpose().map_err(|e| {
-            DatabaseInconsistencyError::on("oauth2_clients")
-                .column("logo_uri")
-                .row(id)
-                .source(e)
-        })?;
+        let logo_uri = row
+            .logo_uri
+            .map(|s| s.parse())
+            .transpose()
+            .map_err(|e| {
+                DatabaseInconsistencyError::on("oauth2_clients")
+                    .column("logo_uri")
+                    .row(id)
+                    .source(e)
+            })?;
 
-        let client_uri = self
+        let client_uri = row
             .client_uri
             .map(|s| s.parse())
             .transpose()
@@ -116,7 +124,7 @@ impl TryInto<Client> for OAuth2ClientLookup {
                     .source(e)
             })?;
 
-        let policy_uri = self
+        let policy_uri = row
             .policy_uri
             .map(|s| s.parse())
             .transpose()
@@ -127,14 +135,18 @@ impl TryInto<Client> for OAuth2ClientLookup {
                     .source(e)
             })?;
 
-        let tos_uri = self.tos_uri.map(|s| s.parse()).transpose().map_err(|e| {
-            DatabaseInconsistencyError::on("oauth2_clients")
-                .column("tos_uri")
-                .row(id)
-                .source(e)
-        })?;
+        let tos_uri = row
+            .tos_uri
+            .map(|s| s.parse())
+            .transpose()
+            .map_err(|e| {
+                DatabaseInconsistencyError::on("oauth2_clients")
+                    .column("tos_uri")
+                    .row(id)
+                    .source(e)
+            })?;
 
-        let id_token_signed_response_alg = self
+        let id_token_signed_response_alg = row
             .id_token_signed_response_alg
             .map(|s| s.parse())
             .transpose()
@@ -145,7 +157,7 @@ impl TryInto<Client> for OAuth2ClientLookup {
                     .source(e)
             })?;
 
-        let userinfo_signed_response_alg = self
+        let userinfo_signed_response_alg = row
             .userinfo_signed_response_alg
             .map(|s| s.parse())
             .transpose()
@@ -156,7 +168,7 @@ impl TryInto<Client> for OAuth2ClientLookup {
                     .source(e)
             })?;
 
-        let token_endpoint_auth_method = self
+        let token_endpoint_auth_method = row
             .token_endpoint_auth_method
             .map(|s| s.parse())
             .transpose()
@@ -167,7 +179,7 @@ impl TryInto<Client> for OAuth2ClientLookup {
                     .source(e)
             })?;
 
-        let token_endpoint_auth_signing_alg = self
+        let token_endpoint_auth_signing_alg = row
             .token_endpoint_auth_signing_alg
             .map(|s| s.parse())
             .transpose()
@@ -178,7 +190,7 @@ impl TryInto<Client> for OAuth2ClientLookup {
                     .source(e)
             })?;
 
-        let initiate_login_uri = self
+        let initiate_login_uri = row
             .initiate_login_uri
             .map(|s| s.parse())
             .transpose()
@@ -189,7 +201,7 @@ impl TryInto<Client> for OAuth2ClientLookup {
                     .source(e)
             })?;
 
-        let jwks = match (self.jwks, self.jwks_uri) {
+        let jwks = match (row.jwks, row.jwks_uri) {
             (None, None) => None,
             (Some(jwks), None) => {
                 let jwks = serde_json::from_value(jwks).map_err(|e| {
@@ -220,12 +232,12 @@ impl TryInto<Client> for OAuth2ClientLookup {
         Ok(Client {
             id,
             client_id: id.to_string(),
-            metadata_digest: self.metadata_digest,
-            encrypted_client_secret: self.encrypted_client_secret,
+            metadata_digest: row.metadata_digest,
+            encrypted_client_secret: row.encrypted_client_secret,
             application_type,
             redirect_uris,
             grant_types,
-            client_name: self.client_name,
+            client_name: row.client_name,
             logo_uri,
             client_uri,
             policy_uri,
@@ -240,6 +252,34 @@ impl TryInto<Client> for OAuth2ClientLookup {
     }
 }
 
+/// Insertable row for creating a new OAuth2 client
+#[derive(Insertable)]
+#[diesel(table_name = oauth2_clients)]
+struct NewOAuth2Client {
+    oauth2_client_id: Uuid,
+    metadata_digest: Option<String>,
+    encrypted_client_secret: Option<String>,
+    application_type: Option<String>,
+    redirect_uris: Vec<String>,
+    grant_type_authorization_code: bool,
+    grant_type_refresh_token: bool,
+    grant_type_client_credentials: bool,
+    grant_type_device_code: Option<bool>,
+    client_name: Option<String>,
+    logo_uri: Option<String>,
+    client_uri: Option<String>,
+    policy_uri: Option<String>,
+    tos_uri: Option<String>,
+    jwks_uri: Option<String>,
+    jwks: Option<serde_json::Value>,
+    id_token_signed_response_alg: Option<String>,
+    userinfo_signed_response_alg: Option<String>,
+    token_endpoint_auth_method: Option<String>,
+    token_endpoint_auth_signing_alg: Option<String>,
+    initiate_login_uri: Option<String>,
+    is_static: Option<bool>,
+}
+
 #[async_trait]
 impl OAuth2ClientRepository for PgOAuth2ClientRepository<'_> {
     type Error = DatabaseError;
@@ -248,107 +288,47 @@ impl OAuth2ClientRepository for PgOAuth2ClientRepository<'_> {
         name = "db.oauth2_client.lookup",
         skip_all,
         fields(
-            db.query.text,
             oauth2_client.id = %id,
         ),
         err,
     )]
     async fn lookup(&mut self, id: Ulid) -> Result<Option<Client>, Self::Error> {
-        let res = sqlx::query_as!(
-            OAuth2ClientLookup,
-            r#"
-                SELECT oauth2_client_id
-                     , metadata_digest
-                     , encrypted_client_secret
-                     , application_type
-                     , redirect_uris
-                     , grant_type_authorization_code
-                     , grant_type_refresh_token
-                     , grant_type_client_credentials
-                     , grant_type_device_code
-                     , client_name
-                     , logo_uri
-                     , client_uri
-                     , policy_uri
-                     , tos_uri
-                     , jwks_uri
-                     , jwks
-                     , id_token_signed_response_alg
-                     , userinfo_signed_response_alg
-                     , token_endpoint_auth_method
-                     , token_endpoint_auth_signing_alg
-                     , initiate_login_uri
-                FROM oauth2_clients c
-
-                WHERE oauth2_client_id = $1
-            "#,
-            Uuid::from(id),
-        )
-        .traced()
-        .fetch_optional(&mut *self.conn)
-        .await?;
+        let res = oauth2_clients::table
+            .find(Uuid::from(id))
+            .select(OAuth2ClientRow::as_select())
+            .first::<OAuth2ClientRow>(self.conn)
+            .await
+            .optional()?;
 
         let Some(res) = res else { return Ok(None) };
 
-        Ok(Some(res.try_into()?))
+        Ok(Some(Client::try_from(res)?))
     }
 
     #[tracing::instrument(
         name = "db.oauth2_client.find_by_metadata_digest",
         skip_all,
-        fields(
-            db.query.text,
-        ),
         err,
     )]
     async fn find_by_metadata_digest(
         &mut self,
         digest: &str,
     ) -> Result<Option<Client>, Self::Error> {
-        let res = sqlx::query_as!(
-            OAuth2ClientLookup,
-            r#"
-                SELECT oauth2_client_id
-                    , metadata_digest
-                    , encrypted_client_secret
-                    , application_type
-                    , redirect_uris
-                    , grant_type_authorization_code
-                    , grant_type_refresh_token
-                    , grant_type_client_credentials
-                    , grant_type_device_code
-                    , client_name
-                    , logo_uri
-                    , client_uri
-                    , policy_uri
-                    , tos_uri
-                    , jwks_uri
-                    , jwks
-                    , id_token_signed_response_alg
-                    , userinfo_signed_response_alg
-                    , token_endpoint_auth_method
-                    , token_endpoint_auth_signing_alg
-                    , initiate_login_uri
-                FROM oauth2_clients
-                WHERE metadata_digest = $1
-            "#,
-            digest,
-        )
-        .traced()
-        .fetch_optional(&mut *self.conn)
-        .await?;
+        let res = oauth2_clients::table
+            .filter(oauth2_clients::metadata_digest.eq(digest))
+            .select(OAuth2ClientRow::as_select())
+            .first::<OAuth2ClientRow>(self.conn)
+            .await
+            .optional()?;
 
         let Some(res) = res else { return Ok(None) };
 
-        Ok(Some(res.try_into()?))
+        Ok(Some(Client::try_from(res)?))
     }
 
     #[tracing::instrument(
         name = "db.oauth2_client.load_batch",
         skip_all,
-        fields(
-            db.query.text,
-        ),
         err,
     )]
     async fn load_batch(
@@ -356,44 +336,17 @@ impl OAuth2ClientRepository for PgOAuth2ClientRepository<'_> {
         ids: BTreeSet<Ulid>,
     ) -> Result<BTreeMap<Ulid, Client>, Self::Error> {
         let ids: Vec<Uuid> = ids.into_iter().map(Uuid::from).collect();
-        let res = sqlx::query_as!(
-            OAuth2ClientLookup,
-            r#"
-                SELECT oauth2_client_id
-                     , metadata_digest
-                     , encrypted_client_secret
-                     , application_type
-                     , redirect_uris
-                     , grant_type_authorization_code
-                     , grant_type_refresh_token
-                     , grant_type_client_credentials
-                     , grant_type_device_code
-                     , client_name
-                     , logo_uri
-                     , client_uri
-                     , policy_uri
-                     , tos_uri
-                     , jwks_uri
-                     , jwks
-                     , id_token_signed_response_alg
-                     , userinfo_signed_response_alg
-                     , token_endpoint_auth_method
-                     , token_endpoint_auth_signing_alg
-                     , initiate_login_uri
-                FROM oauth2_clients c
 
-                WHERE oauth2_client_id = ANY($1::uuid[])
-            "#,
-            &ids,
-        )
-        .traced()
-        .fetch_all(&mut *self.conn)
-        .await?;
+        let res: Vec<OAuth2ClientRow> = oauth2_clients::table
+            .filter(oauth2_clients::oauth2_client_id.eq_any(&ids))
+            .select(OAuth2ClientRow::as_select())
+            .load(self.conn)
+            .await?;
 
         res.into_iter()
             .map(|r| {
-                r.try_into()
-                    .map(|c: Client| (c.id, c))
+                Client::try_from(r)
+                    .map(|c| (c.id, c))
                     .map_err(DatabaseError::from)
             })
             .collect()
@@ -403,7 +356,6 @@ impl OAuth2ClientRepository for PgOAuth2ClientRepository<'_> {
         name = "db.oauth2_client.add",
         skip_all,
         fields(
-            db.query.text,
             client.id,
             client.name = client_name
         ),
@@ -443,67 +395,43 @@ impl OAuth2ClientRepository for PgOAuth2ClientRepository<'_> {
 
         let redirect_uris_array = redirect_uris.iter().map(Url::to_string).collect::<Vec<_>>();
 
-        sqlx::query!(
-            r#"
-                INSERT INTO oauth2_clients
-                    ( oauth2_client_id
-                    , metadata_digest
-                    , encrypted_client_secret
-                    , application_type
-                    , redirect_uris
-                    , grant_type_authorization_code
-                    , grant_type_refresh_token
-                    , grant_type_client_credentials
-                    , grant_type_device_code
-                    , client_name
-                    , logo_uri
-                    , client_uri
-                    , policy_uri
-                    , tos_uri
-                    , jwks_uri
-                    , jwks
-                    , id_token_signed_response_alg
-                    , userinfo_signed_response_alg
-                    , token_endpoint_auth_method
-                    , token_endpoint_auth_signing_alg
-                    , initiate_login_uri
-                    , is_static
-                    )
-                VALUES
-                    ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13,
-                    $14, $15, $16, $17, $18, $19, $20, $21, FALSE)
-            "#,
-            Uuid::from(id),
+        let new_client = NewOAuth2Client {
+            oauth2_client_id: Uuid::from(id),
             metadata_digest,
-            encrypted_client_secret,
-            application_type.as_ref().map(ToString::to_string),
-            &redirect_uris_array,
-            grant_types.contains(&GrantType::AuthorizationCode),
-            grant_types.contains(&GrantType::RefreshToken),
-            grant_types.contains(&GrantType::ClientCredentials),
-            grant_types.contains(&GrantType::DeviceCode),
-            client_name,
-            logo_uri.as_ref().map(Url::as_str),
-            client_uri.as_ref().map(Url::as_str),
-            policy_uri.as_ref().map(Url::as_str),
-            tos_uri.as_ref().map(Url::as_str),
-            jwks_uri.as_ref().map(Url::as_str),
-            jwks_json,
-            id_token_signed_response_alg
+            encrypted_client_secret: encrypted_client_secret.clone(),
+            application_type: application_type.as_ref().map(ToString::to_string),
+            redirect_uris: redirect_uris_array,
+            grant_type_authorization_code: grant_types.contains(&GrantType::AuthorizationCode),
+            grant_type_refresh_token: grant_types.contains(&GrantType::RefreshToken),
+            grant_type_client_credentials: grant_types.contains(&GrantType::ClientCredentials),
+            grant_type_device_code: Some(grant_types.contains(&GrantType::DeviceCode)),
+            client_name: client_name.clone(),
+            logo_uri: logo_uri.as_ref().map(Url::to_string),
+            client_uri: client_uri.as_ref().map(Url::to_string),
+            policy_uri: policy_uri.as_ref().map(Url::to_string),
+            tos_uri: tos_uri.as_ref().map(Url::to_string),
+            jwks_uri: jwks_uri.as_ref().map(Url::to_string),
+            jwks: jwks_json,
+            id_token_signed_response_alg: id_token_signed_response_alg
                 .as_ref()
                 .map(ToString::to_string),
-            userinfo_signed_response_alg
+            userinfo_signed_response_alg: userinfo_signed_response_alg
                 .as_ref()
                 .map(ToString::to_string),
-            token_endpoint_auth_method.as_ref().map(ToString::to_string),
-            token_endpoint_auth_signing_alg
+            token_endpoint_auth_method: token_endpoint_auth_method
                 .as_ref()
                 .map(ToString::to_string),
-            initiate_login_uri.as_ref().map(Url::as_str),
-        )
-        .traced()
-        .execute(&mut *self.conn)
-        .await?;
+            token_endpoint_auth_signing_alg: token_endpoint_auth_signing_alg
+                .as_ref()
+                .map(ToString::to_string),
+            initiate_login_uri: initiate_login_uri.as_ref().map(Url::to_string),
+            is_static: Some(false),
+        };
+
+        diesel::insert_into(oauth2_clients::table)
+            .values(&new_client)
+            .execute(self.conn)
+            .await?;
 
         let jwks = match (jwks, jwks_uri) {
             (None, None) => None,
@@ -538,7 +466,6 @@ impl OAuth2ClientRepository for PgOAuth2ClientRepository<'_> {
         name = "db.oauth2_client.upsert_static",
         skip_all,
         fields(
-            db.query.text,
             client.id = %client_id,
         ),
         err,
@@ -559,56 +486,53 @@ impl OAuth2ClientRepository for PgOAuth2ClientRepository<'_> {
             .transpose()
             .map_err(DatabaseError::to_invalid_operation)?;
 
-        let client_auth_method = client_auth_method.to_string();
+        let client_auth_method_str = client_auth_method.to_string();
         let redirect_uris_array = redirect_uris.iter().map(Url::to_string).collect::<Vec<_>>();
 
-        sqlx::query!(
-            r#"
-                INSERT INTO oauth2_clients
-                    ( oauth2_client_id
-                    , encrypted_client_secret
-                    , redirect_uris
-                    , grant_type_authorization_code
-                    , grant_type_refresh_token
-                    , grant_type_client_credentials
-                    , grant_type_device_code
-                    , token_endpoint_auth_method
-                    , jwks
-                    , client_name
-                    , jwks_uri
-                    , is_static
-                    )
-                VALUES
-                    ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, TRUE)
-                ON CONFLICT (oauth2_client_id)
-                DO
-                    UPDATE SET encrypted_client_secret = EXCLUDED.encrypted_client_secret
-                             , redirect_uris = EXCLUDED.redirect_uris
-                             , grant_type_authorization_code = EXCLUDED.grant_type_authorization_code
-                             , grant_type_refresh_token = EXCLUDED.grant_type_refresh_token
-                             , grant_type_client_credentials = EXCLUDED.grant_type_client_credentials
-                             , grant_type_device_code = EXCLUDED.grant_type_device_code
-                             , token_endpoint_auth_method = EXCLUDED.token_endpoint_auth_method
-                             , jwks = EXCLUDED.jwks
-                             , client_name = EXCLUDED.client_name
-                             , jwks_uri = EXCLUDED.jwks_uri
-                             , is_static = TRUE
-            "#,
-            Uuid::from(client_id),
-            encrypted_client_secret,
-            &redirect_uris_array,
-            true,
-            true,
-            true,
-            true,
-            client_auth_method,
-            jwks_json,
-            client_name,
-            jwks_uri.as_ref().map(Url::as_str),
-        )
-        .traced()
-        .execute(&mut *self.conn)
-        .await?;
+        let new_client = NewOAuth2Client {
+            oauth2_client_id: Uuid::from(client_id),
+            metadata_digest: None,
+            encrypted_client_secret: encrypted_client_secret.clone(),
+            application_type: None,
+            redirect_uris: redirect_uris_array.clone(),
+            grant_type_authorization_code: true,
+            grant_type_refresh_token: true,
+            grant_type_client_credentials: true,
+            grant_type_device_code: Some(true),
+            client_name: client_name.clone(),
+            logo_uri: None,
+            client_uri: None,
+            policy_uri: None,
+            tos_uri: None,
+            jwks_uri: jwks_uri.as_ref().map(Url::to_string),
+            jwks: jwks_json.clone(),
+            id_token_signed_response_alg: None,
+            userinfo_signed_response_alg: None,
+            token_endpoint_auth_method: Some(client_auth_method_str.clone()),
+            token_endpoint_auth_signing_alg: None,
+            initiate_login_uri: None,
+            is_static: Some(true),
+        };
+
+        diesel::insert_into(oauth2_clients::table)
+            .values(&new_client)
+            .on_conflict(oauth2_clients::oauth2_client_id)
+            .do_update()
+            .set((
+                oauth2_clients::encrypted_client_secret.eq(encrypted_client_secret.clone()),
+                oauth2_clients::redirect_uris.eq(&redirect_uris_array),
+                oauth2_clients::grant_type_authorization_code.eq(true),
+                oauth2_clients::grant_type_refresh_token.eq(true),
+                oauth2_clients::grant_type_client_credentials.eq(true),
+                oauth2_clients::grant_type_device_code.eq(Some(true)),
+                oauth2_clients::token_endpoint_auth_method.eq(&client_auth_method_str),
+                oauth2_clients::jwks.eq(&jwks_json),
+                oauth2_clients::client_name.eq(&client_name),
+                oauth2_clients::jwks_uri.eq(jwks_uri.as_ref().map(Url::to_string)),
+                oauth2_clients::is_static.eq(Some(true)),
+            ))
+            .execute(self.conn)
+            .await?;
 
         let jwks = match (jwks, jwks_uri) {
             (None, None) => None,
@@ -646,46 +570,17 @@ impl OAuth2ClientRepository for PgOAuth2ClientRepository<'_> {
     #[tracing::instrument(
         name = "db.oauth2_client.all_static",
         skip_all,
-        fields(
-            db.query.text,
-        ),
         err,
     )]
     async fn all_static(&mut self) -> Result<Vec<Client>, Self::Error> {
-        let res = sqlx::query_as!(
-            OAuth2ClientLookup,
-            r#"
-                SELECT oauth2_client_id
-                     , metadata_digest
-                     , encrypted_client_secret
-                     , application_type
-                     , redirect_uris
-                     , grant_type_authorization_code
-                     , grant_type_refresh_token
-                     , grant_type_client_credentials
-                     , grant_type_device_code
-                     , client_name
-                     , logo_uri
-                     , client_uri
-                     , policy_uri
-                     , tos_uri
-                     , jwks_uri
-                     , jwks
-                     , id_token_signed_response_alg
-                     , userinfo_signed_response_alg
-                     , token_endpoint_auth_method
-                     , token_endpoint_auth_signing_alg
-                     , initiate_login_uri
-                FROM oauth2_clients c
-                WHERE is_static = TRUE
-            "#,
-        )
-        .traced()
-        .fetch_all(&mut *self.conn)
-        .await?;
+        let res: Vec<OAuth2ClientRow> = oauth2_clients::table
+            .filter(oauth2_clients::is_static.eq(Some(true)))
+            .select(OAuth2ClientRow::as_select())
+            .load(self.conn)
+            .await?;
 
         res.into_iter()
-            .map(|r| r.try_into().map_err(DatabaseError::from))
+            .map(|r| Client::try_from(r).map_err(DatabaseError::from))
             .collect()
     }
 
@@ -693,153 +588,77 @@ impl OAuth2ClientRepository for PgOAuth2ClientRepository<'_> {
         name = "db.oauth2_client.delete_by_id",
         skip_all,
         fields(
-            db.query.text,
             client.id = %id,
         ),
         err,
     )]
     async fn delete_by_id(&mut self, id: Ulid) -> Result<(), Self::Error> {
+        let client_uuid = Uuid::from(id);
+
         // Delete the authorization grants
-        {
-            let span = info_span!(
-                "db.oauth2_client.delete_by_id.authorization_grants",
-                { DB_QUERY_TEXT } = tracing::field::Empty,
-            );
-
-            sqlx::query!(
-                r#"
-                    DELETE FROM oauth2_authorization_grants
-                    WHERE oauth2_client_id = $1
-                "#,
-                Uuid::from(id),
-            )
-            .record(&span)
-            .execute(&mut *self.conn)
-            .instrument(span)
-            .await?;
-        }
-
-        // Delete the OAuth 2 sessions related data
-        {
-            let span = info_span!(
-                "db.oauth2_client.delete_by_id.access_tokens",
-                { DB_QUERY_TEXT } = tracing::field::Empty,
-            );
-
-            sqlx::query!(
-                r#"
-                    DELETE FROM oauth2_access_tokens
-                    WHERE oauth2_session_id IN (
-                        SELECT oauth2_session_id
-                        FROM oauth2_sessions
-                        WHERE oauth2_client_id = $1
-                    )
-                "#,
-                Uuid::from(id),
-            )
-            .record(&span)
-            .execute(&mut *self.conn)
-            .instrument(span)
-            .await?;
-        }
-
-        {
-            let span = info_span!(
-                "db.oauth2_client.delete_by_id.refresh_tokens",
-                { DB_QUERY_TEXT } = tracing::field::Empty,
-            );
-
-            sqlx::query!(
-                r#"
-                    DELETE FROM oauth2_refresh_tokens
-                    WHERE oauth2_session_id IN (
-                        SELECT oauth2_session_id
-                        FROM oauth2_sessions
-                        WHERE oauth2_client_id = $1
-                    )
-                "#,
-                Uuid::from(id),
-            )
-            .record(&span)
-            .execute(&mut *self.conn)
-            .instrument(span)
-            .await?;
-        }
-
-        {
-            let span = info_span!(
-                "db.oauth2_client.delete_by_id.sessions",
-                { DB_QUERY_TEXT } = tracing::field::Empty,
-            );
-
-            sqlx::query!(
-                r#"
-                    DELETE FROM oauth2_sessions
-                    WHERE oauth2_client_id = $1
-                "#,
-                Uuid::from(id),
-            )
-            .record(&span)
-            .execute(&mut *self.conn)
-            .instrument(span)
-            .await?;
-        }
-
-        // Delete any personal access tokens & sessions owned
-        // by the client
-        {
-            let span = info_span!(
-                "db.oauth2_client.delete_by_id.personal_access_tokens",
-                { DB_QUERY_TEXT } = tracing::field::Empty,
-            );
-
-            sqlx::query!(
-                r#"
-                    DELETE FROM personal_access_tokens
-                    WHERE personal_session_id IN (
-                        SELECT personal_session_id
-                        FROM personal_sessions
-                        WHERE owner_oauth2_client_id = $1
-                    )
-                "#,
-                Uuid::from(id),
-            )
-            .record(&span)
-            .execute(&mut *self.conn)
-            .instrument(span)
-            .await?;
-        }
-        {
-            let span = info_span!(
-                "db.oauth2_client.delete_by_id.personal_sessions",
-                { DB_QUERY_TEXT } = tracing::field::Empty,
-            );
-
-            sqlx::query!(
-                r#"
-                    DELETE FROM personal_sessions
-                    WHERE owner_oauth2_client_id = $1
-                "#,
-                Uuid::from(id),
-            )
-            .record(&span)
-            .execute(&mut *self.conn)
-            .instrument(span)
-            .await?;
-        }
-
-        // Now delete the client itself
-        let res = sqlx::query!(
-            r#"
-                DELETE FROM oauth2_clients
-                WHERE oauth2_client_id = $1
-            "#,
-            Uuid::from(id),
+        diesel::delete(
+            oauth2_authorization_grants::table
+                .filter(oauth2_authorization_grants::oauth2_client_id.eq(client_uuid)),
         )
-        .traced()
-        .execute(&mut *self.conn)
+        .execute(self.conn)
         .await?;
 
-        DatabaseError::ensure_affected_rows(&res, 1)
+        // Delete the OAuth 2 sessions related data: access tokens
+        diesel::delete(oauth2_access_tokens::table.filter(
+            oauth2_access_tokens::oauth2_session_id.eq_any(
+                oauth2_sessions::table
+                    .filter(oauth2_sessions::oauth2_client_id.eq(client_uuid))
+                    .select(oauth2_sessions::oauth2_session_id),
+            ),
+        ))
+        .execute(self.conn)
+        .await?;
+
+        // Delete refresh tokens
+        diesel::delete(oauth2_refresh_tokens::table.filter(
+            oauth2_refresh_tokens::oauth2_session_id.eq_any(
+                oauth2_sessions::table
+                    .filter(oauth2_sessions::oauth2_client_id.eq(client_uuid))
+                    .select(oauth2_sessions::oauth2_session_id),
+            ),
+        ))
+        .execute(self.conn)
+        .await?;
+
+        // Delete sessions
+        diesel::delete(
+            oauth2_sessions::table
+                .filter(oauth2_sessions::oauth2_client_id.eq(client_uuid)),
+        )
+        .execute(self.conn)
+        .await?;
+
+        // Delete personal access tokens owned by the client
+        diesel::delete(personal_access_tokens::table.filter(
+            personal_access_tokens::personal_session_id.eq_any(
+                personal_sessions::table
+                    .filter(personal_sessions::owner_oauth2_client_id.eq(client_uuid))
+                    .select(personal_sessions::personal_session_id),
+            ),
+        ))
+        .execute(self.conn)
+        .await?;
+
+        // Delete personal sessions owned by the client
+        diesel::delete(
+            personal_sessions::table
+                .filter(personal_sessions::owner_oauth2_client_id.eq(client_uuid)),
+        )
+        .execute(self.conn)
+        .await?;
+
+        // Now delete the client itself
+        let rows_affected = diesel::delete(
+            oauth2_clients::table.find(client_uuid),
+        )
+        .execute(self.conn)
+        .await?;
+
+        DatabaseError::ensure_affected_rows_usize(rows_affected, 1)
     }
 }

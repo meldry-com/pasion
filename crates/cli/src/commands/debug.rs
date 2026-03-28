@@ -10,7 +10,7 @@ use pasion_storage_pg::PgRepositoryFactory;
 use tracing::{info, info_span};
 
 use crate::util::{
-    database_pool_from_config, load_policy_factory_dynamic_data, policy_factory_from_config,
+    diesel_pool_from_config, load_policy_factory_dynamic_data, policy_factory_from_config,
 };
 
 #[derive(Parser, Debug)]
@@ -50,8 +50,8 @@ impl Options {
                 if with_dynamic_data {
                     let database_config =
                         DatabaseConfig::extract(figment).map_err(anyhow::Error::from_boxed)?;
-                    let pool = database_pool_from_config(&database_config).await?;
-                    let repository_factory = PgRepositoryFactory::new(pool.clone());
+                    let pool = diesel_pool_from_config(&database_config).await?;
+                    let repository_factory = PgRepositoryFactory::new(pool);
                     load_policy_factory_dynamic_data(&policy_factory, &repository_factory).await?;
                 }
 

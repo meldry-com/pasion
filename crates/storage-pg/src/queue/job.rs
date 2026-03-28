@@ -3,36 +3,44 @@
 
 use async_trait::async_trait;
 use chrono::{DateTime, Duration, Utc};
-use opentelemetry_semantic_conventions::trace::DB_QUERY_TEXT;
+use diesel::prelude::*;
+use diesel::sql_types::{Array, BigInt, Jsonb, Nullable, Text, Timestamptz, Uuid as DieselUuid};
+use diesel_async::RunQueryDsl;
 use pasion_data_model::Clock;
 use pasion_storage::queue::{Job, QueueJobRepository, Worker};
 use rand::RngCore;
-use sqlx::PgConnection;
-use tracing::Instrument;
 use ulid::Ulid;
 use uuid::Uuid;
 
-use crate::{DatabaseError, DatabaseInconsistencyError, ExecuteExt};
+use crate::schema::{queue_jobs, queue_schedules};
+use crate::{DatabaseError, DatabaseInconsistencyError};
 
 /// An implementation of [`QueueJobRepository`] for a PostgreSQL connection.
 pub struct PgQueueJobRepository<'c> {
-    conn: &'c mut PgConnection,
+    conn: &'c mut diesel_async::AsyncPgConnection,
 }
 
 impl<'c> PgQueueJobRepository<'c> {
     /// Create a new [`PgQueueJobRepository`] from an active PostgreSQL
     /// connection.
     #[must_use]
-    pub fn new(conn: &'c mut PgConnection) -> Self {
+    pub fn new(conn: &'c mut diesel_async::AsyncPgConnection) -> Self {
         Self { conn }
     }
 }
 
+/// Row returned from the reserve query (raw SQL with RETURNING).
+#[derive(Debug, QueryableByName)]
 struct JobReservationResult {
+    #[diesel(sql_type = DieselUuid)]
     queue_job_id: Uuid,
+    #[diesel(sql_type = Text)]
     queue_name: String,
+    #[diesel(sql_type = Jsonb)]
     payload: serde_json::Value,
+    #[diesel(sql_type = Jsonb)]
     metadata: serde_json::Value,
+    #[diesel(sql_type = diesel::sql_types::Integer)]
     attempt: i32,
 }
 
@@ -68,6 +76,32 @@ impl TryFrom<JobReservationResult> for Job {
     }
 }
 
+/// Insertable row for scheduling a new job immediately (status defaults to
+/// 'available' via the database).
+#[derive(Insertable)]
+#[diesel(table_name = queue_jobs)]
+struct NewJob {
+    queue_job_id: Uuid,
+    queue_name: String,
+    payload: serde_json::Value,
+    metadata: serde_json::Value,
+    created_at: DateTime<Utc>,
+}
+
+/// Insertable row for scheduling a job at a later time.
+#[derive(Insertable)]
+#[diesel(table_name = queue_jobs)]
+struct NewScheduledJob {
+    queue_job_id: Uuid,
+    queue_name: String,
+    payload: serde_json::Value,
+    metadata: serde_json::Value,
+    created_at: DateTime<Utc>,
+    scheduled_at: Option<DateTime<Utc>>,
+    schedule_name: Option<String>,
+    status: String,
+}
+
 #[async_trait]
 impl QueueJobRepository for PgQueueJobRepository<'_> {
     type Error = DatabaseError;
@@ -77,7 +111,6 @@ impl QueueJobRepository for PgQueueJobRepository<'_> {
         fields(
             queue_job.id,
             queue_job.queue_name = queue_name,
-            db.query.text,
         ),
         skip_all,
         err,
@@ -94,21 +127,18 @@ impl QueueJobRepository for PgQueueJobRepository<'_> {
         let id = Ulid::from_datetime_with_source(created_at.into(), rng);
         tracing::Span::current().record("queue_job.id", tracing::field::display(id));
 
-        sqlx::query!(
-            r#"
-                INSERT INTO queue_jobs
-                    (queue_job_id, queue_name, payload, metadata, created_at)
-                VALUES ($1, $2, $3, $4, $5)
-            "#,
-            Uuid::from(id),
-            queue_name,
+        let new_job = NewJob {
+            queue_job_id: Uuid::from(id),
+            queue_name: queue_name.to_owned(),
             payload,
             metadata,
             created_at,
-        )
-        .traced()
-        .execute(&mut *self.conn)
-        .await?;
+        };
+
+        diesel::insert_into(queue_jobs::table)
+            .values(&new_job)
+            .execute(self.conn)
+            .await?;
 
         Ok(())
     }
@@ -119,7 +149,6 @@ impl QueueJobRepository for PgQueueJobRepository<'_> {
             queue_job.id,
             queue_job.queue_name = queue_name,
             queue_job.scheduled_at = %scheduled_at,
-            db.query.text,
         ),
         skip_all,
         err,
@@ -138,48 +167,36 @@ impl QueueJobRepository for PgQueueJobRepository<'_> {
         let id = Ulid::from_datetime_with_source(created_at.into(), rng);
         tracing::Span::current().record("queue_job.id", tracing::field::display(id));
 
-        sqlx::query!(
-            r#"
-                INSERT INTO queue_jobs
-                    (queue_job_id, queue_name, payload, metadata, created_at, scheduled_at, schedule_name, status)
-                VALUES ($1, $2, $3, $4, $5, $6, $7, 'scheduled')
-            "#,
-            Uuid::from(id),
-            queue_name,
+        let new_job = NewScheduledJob {
+            queue_job_id: Uuid::from(id),
+            queue_name: queue_name.to_owned(),
             payload,
             metadata,
             created_at,
-            scheduled_at,
-            schedule_name,
-        )
-        .traced()
-        .execute(&mut *self.conn)
-        .await?;
+            scheduled_at: Some(scheduled_at),
+            schedule_name: schedule_name.map(ToOwned::to_owned),
+            status: "scheduled".to_owned(),
+        };
+
+        diesel::insert_into(queue_jobs::table)
+            .values(&new_job)
+            .execute(self.conn)
+            .await?;
 
         // If there was a schedule name supplied, update the queue_schedules table
         if let Some(schedule_name) = schedule_name {
-            let span = tracing::info_span!(
-                "db.queue_job.schedule_later.update_schedules",
-                { DB_QUERY_TEXT } = tracing::field::Empty,
-            );
-
-            let res = sqlx::query!(
-                r#"
-                    UPDATE queue_schedules
-                    SET last_scheduled_at = $1,
-                        last_scheduled_job_id = $2
-                    WHERE schedule_name = $3
-                "#,
-                scheduled_at,
-                Uuid::from(id),
-                schedule_name,
+            let rows_affected = diesel::update(
+                queue_schedules::table
+                    .filter(queue_schedules::schedule_name.eq(schedule_name)),
             )
-            .record(&span)
-            .execute(&mut *self.conn)
-            .instrument(span)
+            .set((
+                queue_schedules::last_scheduled_at.eq(Some(scheduled_at)),
+                queue_schedules::last_scheduled_job_id.eq(Some(Uuid::from(id))),
+            ))
+            .execute(self.conn)
             .await?;
 
-            DatabaseError::ensure_affected_rows(&res, 1)?;
+            DatabaseError::ensure_affected_rows_usize(rows_affected, 1)?;
         }
 
         Ok(())
@@ -188,9 +205,6 @@ impl QueueJobRepository for PgQueueJobRepository<'_> {
     #[tracing::instrument(
         name = "db.queue_job.reserve",
         skip_all,
-        fields(
-            db.query.text,
-        ),
         err,
     )]
     async fn reserve(
@@ -203,12 +217,9 @@ impl QueueJobRepository for PgQueueJobRepository<'_> {
         let now = clock.now();
         let max_count = i64::try_from(count).unwrap_or(i64::MAX);
         let queues: Vec<String> = queues.iter().map(|&s| s.to_owned()).collect();
-        let results = sqlx::query_as!(
-            JobReservationResult,
-            r#"
-                -- We first grab a few jobs that are available,
-                -- using a FOR UPDATE SKIP LOCKED so that this can be run concurrently
-                -- and we don't get multiple workers grabbing the same jobs
+
+        let results: Vec<JobReservationResult> = diesel::sql_query(
+            r"
                 WITH locked_jobs AS (
                     SELECT queue_job_id
                     FROM queue_jobs
@@ -220,7 +231,6 @@ impl QueueJobRepository for PgQueueJobRepository<'_> {
                     FOR UPDATE
                     SKIP LOCKED
                 )
-                -- then we update the status of those jobs to 'running', returning the job details
                 UPDATE queue_jobs
                 SET status = 'running', started_at = $3, started_by = $4
                 FROM locked_jobs
@@ -231,14 +241,13 @@ impl QueueJobRepository for PgQueueJobRepository<'_> {
                     queue_jobs.payload,
                     queue_jobs.metadata,
                     queue_jobs.attempt
-            "#,
-            &queues,
-            max_count,
-            now,
-            Uuid::from(worker.id),
+            ",
         )
-        .traced()
-        .fetch_all(&mut *self.conn)
+        .bind::<Array<Text>, _>(&queues)
+        .bind::<BigInt, _>(max_count)
+        .bind::<Timestamptz, _>(now)
+        .bind::<DieselUuid, _>(Uuid::from(worker.id))
+        .get_results(self.conn)
         .await?;
 
         let jobs = results
@@ -253,27 +262,25 @@ impl QueueJobRepository for PgQueueJobRepository<'_> {
         name = "db.queue_job.mark_as_completed",
         skip_all,
         fields(
-            db.query.text,
             job.id = %id,
         ),
         err,
     )]
     async fn mark_as_completed(&mut self, clock: &dyn Clock, id: Ulid) -> Result<(), Self::Error> {
         let now = clock.now();
-        let res = sqlx::query!(
-            r#"
-                UPDATE queue_jobs
-                SET status = 'completed', completed_at = $1
-                WHERE queue_job_id = $2 AND status = 'running'
-            "#,
-            now,
-            Uuid::from(id),
+        let rows_affected = diesel::update(
+            queue_jobs::table
+                .filter(queue_jobs::queue_job_id.eq(Uuid::from(id)))
+                .filter(queue_jobs::status.eq("running")),
         )
-        .traced()
-        .execute(&mut *self.conn)
+        .set((
+            queue_jobs::status.eq("completed"),
+            queue_jobs::completed_at.eq(Some(now)),
+        ))
+        .execute(self.conn)
         .await?;
 
-        DatabaseError::ensure_affected_rows(&res, 1)?;
+        DatabaseError::ensure_affected_rows_usize(rows_affected, 1)?;
 
         Ok(())
     }
@@ -282,7 +289,6 @@ impl QueueJobRepository for PgQueueJobRepository<'_> {
         name = "db.queue_job.mark_as_failed",
         skip_all,
         fields(
-            db.query.text,
             job.id = %id,
         ),
         err
@@ -294,26 +300,20 @@ impl QueueJobRepository for PgQueueJobRepository<'_> {
         reason: &str,
     ) -> Result<(), Self::Error> {
         let now = clock.now();
-        let res = sqlx::query!(
-            r#"
-                UPDATE queue_jobs
-                SET
-                    status = 'failed',
-                    failed_at = $1,
-                    failed_reason = $2
-                WHERE
-                    queue_job_id = $3
-                    AND status = 'running'
-            "#,
-            now,
-            reason,
-            Uuid::from(id),
+        let rows_affected = diesel::update(
+            queue_jobs::table
+                .filter(queue_jobs::queue_job_id.eq(Uuid::from(id)))
+                .filter(queue_jobs::status.eq("running")),
         )
-        .traced()
-        .execute(&mut *self.conn)
+        .set((
+            queue_jobs::status.eq("failed"),
+            queue_jobs::failed_at.eq(Some(now)),
+            queue_jobs::failed_reason.eq(Some(reason)),
+        ))
+        .execute(self.conn)
         .await?;
 
-        DatabaseError::ensure_affected_rows(&res, 1)?;
+        DatabaseError::ensure_affected_rows_usize(rows_affected, 1)?;
 
         Ok(())
     }
@@ -322,7 +322,6 @@ impl QueueJobRepository for PgQueueJobRepository<'_> {
         name = "db.queue_job.retry",
         skip_all,
         fields(
-            db.query.text,
             job.id = %id,
         ),
         err
@@ -338,15 +337,11 @@ impl QueueJobRepository for PgQueueJobRepository<'_> {
         let scheduled_at = now + delay;
         let new_id = Ulid::from_datetime_with_source(now.into(), rng);
 
-        let span = tracing::info_span!(
-            "db.queue_job.retry.insert_job",
-            { DB_QUERY_TEXT } = tracing::field::Empty
-        );
         // Create a new job with the same payload and metadata, but a new ID and
-        // increment the attempt
-        // We make sure we do this only for 'failed' jobs
-        let res = sqlx::query!(
-            r#"
+        // increment the attempt.
+        // We make sure we do this only for 'failed' jobs.
+        let rows_affected: usize = diesel::sql_query(
+            r"
                 INSERT INTO queue_jobs
                     (queue_job_id, queue_name, payload, metadata, created_at,
                      attempt, scheduled_at, schedule_name, status)
@@ -354,60 +349,39 @@ impl QueueJobRepository for PgQueueJobRepository<'_> {
                 FROM queue_jobs
                 WHERE queue_job_id = $4
                   AND status = 'failed'
-            "#,
-            Uuid::from(new_id),
-            now,
-            scheduled_at,
-            Uuid::from(id),
+            ",
         )
-        .record(&span)
-        .execute(&mut *self.conn)
-        .instrument(span)
+        .bind::<DieselUuid, _>(Uuid::from(new_id))
+        .bind::<Timestamptz, _>(now)
+        .bind::<Timestamptz, _>(scheduled_at)
+        .bind::<DieselUuid, _>(Uuid::from(id))
+        .execute(self.conn)
         .await?;
 
-        DatabaseError::ensure_affected_rows(&res, 1)?;
+        DatabaseError::ensure_affected_rows_usize(rows_affected, 1)?;
 
         // If that job was referenced by a schedule, update the schedule
-        let span = tracing::info_span!(
-            "db.queue_job.retry.update_schedule",
-            { DB_QUERY_TEXT } = tracing::field::Empty
-        );
-        sqlx::query!(
-            r#"
-                UPDATE queue_schedules
-                SET last_scheduled_at = $1,
-                    last_scheduled_job_id = $2
-                WHERE last_scheduled_job_id = $3
-            "#,
-            scheduled_at,
-            Uuid::from(new_id),
-            Uuid::from(id),
+        diesel::update(
+            queue_schedules::table
+                .filter(queue_schedules::last_scheduled_job_id.eq(Uuid::from(id))),
         )
-        .record(&span)
-        .execute(&mut *self.conn)
-        .instrument(span)
+        .set((
+            queue_schedules::last_scheduled_at.eq(Some(scheduled_at)),
+            queue_schedules::last_scheduled_job_id.eq(Some(Uuid::from(new_id))),
+        ))
+        .execute(self.conn)
         .await?;
 
         // Update the old job to point to the new attempt
-        let span = tracing::info_span!(
-            "db.queue_job.retry.update_old_job",
-            { DB_QUERY_TEXT } = tracing::field::Empty
-        );
-        let res = sqlx::query!(
-            r#"
-                UPDATE queue_jobs
-                SET next_attempt_id = $1
-                WHERE queue_job_id = $2
-            "#,
-            Uuid::from(new_id),
-            Uuid::from(id),
+        let rows_affected = diesel::update(
+            queue_jobs::table
+                .filter(queue_jobs::queue_job_id.eq(Uuid::from(id))),
         )
-        .record(&span)
-        .execute(&mut *self.conn)
-        .instrument(span)
+        .set(queue_jobs::next_attempt_id.eq(Some(Uuid::from(new_id))))
+        .execute(self.conn)
         .await?;
 
-        DatabaseError::ensure_affected_rows(&res, 1)?;
+        DatabaseError::ensure_affected_rows_usize(rows_affected, 1)?;
 
         Ok(())
     }
@@ -415,36 +389,26 @@ impl QueueJobRepository for PgQueueJobRepository<'_> {
     #[tracing::instrument(
         name = "db.queue_job.schedule_available_jobs",
         skip_all,
-        fields(
-            db.query.text,
-        ),
         err
     )]
     async fn schedule_available_jobs(&mut self, clock: &dyn Clock) -> Result<usize, Self::Error> {
         let now = clock.now();
-        let res = sqlx::query!(
-            r#"
-                UPDATE queue_jobs
-                SET status = 'available'
-                WHERE
-                    status = 'scheduled'
-                    AND scheduled_at <= $1
-            "#,
-            now,
+        let count = diesel::update(
+            queue_jobs::table
+                .filter(queue_jobs::status.eq("scheduled"))
+                .filter(queue_jobs::scheduled_at.le(Some(now))),
         )
-        .traced()
-        .execute(&mut *self.conn)
+        .set(queue_jobs::status.eq("available"))
+        .execute(self.conn)
         .await?;
 
-        let count = res.rows_affected();
-        Ok(usize::try_from(count).unwrap_or(usize::MAX))
+        Ok(count)
     }
 
     #[tracing::instrument(
         name = "db.queue_job.cleanup",
         skip_all,
         fields(
-            db.query.text,
             since = since.map(tracing::field::display),
             until = %until,
             limit = limit,
@@ -460,8 +424,8 @@ impl QueueJobRepository for PgQueueJobRepository<'_> {
         // Use ULID cursor-based pagination for completed and failed jobs.
         // We delete both completed and failed jobs in the same batch.
         // `MAX(uuid)` isn't a thing in Postgres, so we aggregate on the client side.
-        let res: Vec<Uuid> = sqlx::query_scalar!(
-            r#"
+        let res: Vec<UuidRow> = diesel::sql_query(
+            r"
                 WITH to_delete AS (
                     SELECT queue_job_id
                     FROM queue_jobs
@@ -475,18 +439,24 @@ impl QueueJobRepository for PgQueueJobRepository<'_> {
                 USING to_delete
                 WHERE queue_jobs.queue_job_id = to_delete.queue_job_id
                 RETURNING queue_jobs.queue_job_id
-            "#,
-            since.map(Uuid::from),
-            Uuid::from(until),
-            i64::try_from(limit).unwrap_or(i64::MAX)
+            ",
         )
-        .traced()
-        .fetch_all(&mut *self.conn)
+        .bind::<Nullable<DieselUuid>, _>(since.map(Uuid::from))
+        .bind::<DieselUuid, _>(Uuid::from(until))
+        .bind::<BigInt, _>(i64::try_from(limit).unwrap_or(i64::MAX))
+        .get_results(self.conn)
         .await?;
 
         let count = res.len();
-        let max_id = res.into_iter().max();
+        let max_id = res.into_iter().map(|r| r.queue_job_id).max();
 
         Ok((count, max_id.map(Ulid::from)))
     }
+}
+
+/// Helper struct for extracting a single UUID column from raw SQL results.
+#[derive(Debug, QueryableByName)]
+struct UuidRow {
+    #[diesel(sql_type = DieselUuid)]
+    queue_job_id: Uuid,
 }

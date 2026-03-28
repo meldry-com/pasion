@@ -1,48 +1,68 @@
 use async_trait::async_trait;
 use chrono::{DateTime, Utc};
+use diesel::prelude::*;
+use diesel_async::RunQueryDsl;
 use pasion_data_model::{
     Clock, User, UserPhone, UserPhoneAuthentication, UserPhoneAuthenticationCode, UserRegistration,
 };
 use pasion_storage::user::UserPhoneRepository;
 use rand::RngCore;
-use sqlx::PgConnection;
 use ulid::Ulid;
 use uuid::Uuid;
 
-use crate::{DatabaseError, tracing::ExecuteExt};
+use crate::{
+    DatabaseError,
+    schema::{user_phone_authentication_codes, user_phone_authentications, user_phones},
+};
 
 /// An implementation of [`UserPhoneRepository`] for a PostgreSQL connection
 pub struct PgUserPhoneRepository<'c> {
-    conn: &'c mut PgConnection,
+    conn: &'c mut diesel_async::AsyncPgConnection,
 }
 
 impl<'c> PgUserPhoneRepository<'c> {
     /// Create a new [`PgUserPhoneRepository`] from an active PostgreSQL
     /// connection
-    pub fn new(conn: &'c mut PgConnection) -> Self {
+    pub fn new(conn: &'c mut diesel_async::AsyncPgConnection) -> Self {
         Self { conn }
     }
 }
 
-struct UserPhoneLookup {
+/// Row type for loading user phones from the database
+#[derive(Debug, Clone, Queryable, Selectable)]
+#[diesel(table_name = user_phones)]
+struct UserPhoneRow {
     user_phone_id: Uuid,
     user_id: Uuid,
     phone: String,
     created_at: DateTime<Utc>,
 }
 
-impl From<UserPhoneLookup> for UserPhone {
-    fn from(e: UserPhoneLookup) -> UserPhone {
+impl From<UserPhoneRow> for UserPhone {
+    fn from(row: UserPhoneRow) -> UserPhone {
         UserPhone {
-            id: e.user_phone_id.into(),
-            user_id: e.user_id.into(),
-            phone: e.phone,
-            created_at: e.created_at,
+            id: row.user_phone_id.into(),
+            user_id: row.user_id.into(),
+            phone: row.phone,
+            created_at: row.created_at,
         }
     }
 }
 
-struct UserPhoneAuthenticationLookup {
+/// Insertable row for creating a new user phone
+#[derive(Insertable)]
+#[diesel(table_name = user_phones)]
+struct NewUserPhone {
+    user_phone_id: Uuid,
+    user_id: Uuid,
+    phone: String,
+    created_at: DateTime<Utc>,
+}
+
+/// Row type for loading user phone authentications from the database
+#[derive(Debug, Clone, Queryable, Selectable)]
+#[diesel(table_name = user_phone_authentications)]
+struct UserPhoneAuthenticationRow {
     user_phone_authentication_id: Uuid,
     user_registration_id: Option<Uuid>,
     phone: String,
@@ -50,19 +70,32 @@ struct UserPhoneAuthenticationLookup {
     completed_at: Option<DateTime<Utc>>,
 }
 
-impl From<UserPhoneAuthenticationLookup> for UserPhoneAuthentication {
-    fn from(value: UserPhoneAuthenticationLookup) -> Self {
+impl From<UserPhoneAuthenticationRow> for UserPhoneAuthentication {
+    fn from(row: UserPhoneAuthenticationRow) -> Self {
         UserPhoneAuthentication {
-            id: value.user_phone_authentication_id.into(),
-            user_registration_id: value.user_registration_id.map(Ulid::from),
-            phone: value.phone,
-            created_at: value.created_at,
-            completed_at: value.completed_at,
+            id: row.user_phone_authentication_id.into(),
+            user_registration_id: row.user_registration_id.map(Ulid::from),
+            phone: row.phone,
+            created_at: row.created_at,
+            completed_at: row.completed_at,
         }
     }
 }
 
-struct UserPhoneAuthenticationCodeLookup {
+/// Insertable row for creating a new user phone authentication
+#[derive(Insertable)]
+#[diesel(table_name = user_phone_authentications)]
+struct NewUserPhoneAuthentication {
+    user_phone_authentication_id: Uuid,
+    user_registration_id: Option<Uuid>,
+    phone: String,
+    created_at: DateTime<Utc>,
+}
+
+/// Row type for loading user phone authentication codes from the database
+#[derive(Debug, Clone, Queryable, Selectable)]
+#[diesel(table_name = user_phone_authentication_codes)]
+struct UserPhoneAuthenticationCodeRow {
     user_phone_authentication_code_id: Uuid,
     user_phone_authentication_id: Uuid,
     code: String,
@@ -70,16 +103,27 @@ struct UserPhoneAuthenticationCodeLookup {
     expires_at: DateTime<Utc>,
 }
 
-impl From<UserPhoneAuthenticationCodeLookup> for UserPhoneAuthenticationCode {
-    fn from(value: UserPhoneAuthenticationCodeLookup) -> Self {
+impl From<UserPhoneAuthenticationCodeRow> for UserPhoneAuthenticationCode {
+    fn from(row: UserPhoneAuthenticationCodeRow) -> Self {
         UserPhoneAuthenticationCode {
-            id: value.user_phone_authentication_code_id.into(),
-            user_phone_authentication_id: value.user_phone_authentication_id.into(),
-            code: value.code,
-            created_at: value.created_at,
-            expires_at: value.expires_at,
+            id: row.user_phone_authentication_code_id.into(),
+            user_phone_authentication_id: row.user_phone_authentication_id.into(),
+            code: row.code,
+            created_at: row.created_at,
+            expires_at: row.expires_at,
         }
     }
+}
+
+/// Insertable row for creating a new user phone authentication code
+#[derive(Insertable)]
+#[diesel(table_name = user_phone_authentication_codes)]
+struct NewUserPhoneAuthenticationCode {
+    user_phone_authentication_code_id: Uuid,
+    user_phone_authentication_id: Uuid,
+    code: String,
+    created_at: DateTime<Utc>,
+    expires_at: DateTime<Utc>,
 }
 
 #[async_trait]
@@ -90,60 +134,35 @@ impl UserPhoneRepository for PgUserPhoneRepository<'_> {
         name = "db.user_phone.lookup",
         skip_all,
         fields(
-            db.query.text,
             user_phone.id = %id,
         ),
         err,
     )]
     async fn lookup(&mut self, id: Ulid) -> Result<Option<UserPhone>, Self::Error> {
-        let res = sqlx::query_as!(
-            UserPhoneLookup,
-            r#"
-                SELECT user_phone_id
-                     , user_id
-                     , phone
-                     , created_at
-                FROM user_phones
-                WHERE user_phone_id = $1
-            "#,
-            Uuid::from(id),
-        )
-        .traced()
-        .fetch_optional(&mut *self.conn)
-        .await?;
+        let res = user_phones::table
+            .find(Uuid::from(id))
+            .select(UserPhoneRow::as_select())
+            .first::<UserPhoneRow>(self.conn)
+            .await
+            .optional()?;
 
-        let Some(user_phone) = res else {
-            return Ok(None);
-        };
-
-        Ok(Some(user_phone.into()))
+        Ok(res.map(UserPhone::from))
     }
 
     #[tracing::instrument(
         name = "db.user_phone.find_by_phone",
         skip_all,
         fields(
-            db.query.text,
             user_phone.phone = phone,
         ),
         err,
     )]
     async fn find_by_phone(&mut self, phone: &str) -> Result<Option<UserPhone>, Self::Error> {
-        let res = sqlx::query_as!(
-            UserPhoneLookup,
-            r#"
-                SELECT user_phone_id
-                     , user_id
-                     , phone
-                     , created_at
-                FROM user_phones
-                WHERE phone = $1
-            "#,
-            phone,
-        )
-        .traced()
-        .fetch_all(&mut *self.conn)
-        .await?;
+        let res: Vec<UserPhoneRow> = user_phones::table
+            .filter(user_phones::phone.eq(phone))
+            .select(UserPhoneRow::as_select())
+            .load(self.conn)
+            .await?;
 
         if res.len() != 1 {
             return Ok(None);
@@ -160,28 +179,17 @@ impl UserPhoneRepository for PgUserPhoneRepository<'_> {
         name = "db.user_phone.all",
         skip_all,
         fields(
-            db.query.text,
             %user.id,
         ),
         err,
     )]
     async fn all(&mut self, user: &User) -> Result<Vec<UserPhone>, Self::Error> {
-        let res = sqlx::query_as!(
-            UserPhoneLookup,
-            r#"
-                SELECT user_phone_id
-                     , user_id
-                     , phone
-                     , created_at
-                FROM user_phones
-                WHERE user_id = $1
-                ORDER BY phone ASC
-            "#,
-            Uuid::from(user.id),
-        )
-        .traced()
-        .fetch_all(&mut *self.conn)
-        .await?;
+        let res: Vec<UserPhoneRow> = user_phones::table
+            .filter(user_phones::user_id.eq(Uuid::from(user.id)))
+            .select(UserPhoneRow::as_select())
+            .order(user_phones::phone.asc())
+            .load(self.conn)
+            .await?;
 
         Ok(res.into_iter().map(Into::into).collect())
     }
@@ -190,7 +198,6 @@ impl UserPhoneRepository for PgUserPhoneRepository<'_> {
         name = "db.user_phone.add",
         skip_all,
         fields(
-            db.query.text,
             %user.id,
             user_phone.id,
             user_phone.phone = phone,
@@ -208,19 +215,17 @@ impl UserPhoneRepository for PgUserPhoneRepository<'_> {
         let id = Ulid::from_datetime_with_source(created_at.into(), rng);
         tracing::Span::current().record("user_phone.id", tracing::field::display(id));
 
-        sqlx::query!(
-            r#"
-                INSERT INTO user_phones (user_phone_id, user_id, phone, created_at)
-                VALUES ($1, $2, $3, $4)
-            "#,
-            Uuid::from(id),
-            Uuid::from(user.id),
-            &phone,
+        let new_phone = NewUserPhone {
+            user_phone_id: Uuid::from(id),
+            user_id: Uuid::from(user.id),
+            phone: phone.clone(),
             created_at,
-        )
-        .traced()
-        .execute(&mut *self.conn)
-        .await?;
+        };
+
+        diesel::insert_into(user_phones::table)
+            .values(&new_phone)
+            .execute(self.conn)
+            .await?;
 
         Ok(UserPhone {
             id,
@@ -234,7 +239,6 @@ impl UserPhoneRepository for PgUserPhoneRepository<'_> {
         name = "db.user_phone.remove",
         skip_all,
         fields(
-            db.query.text,
             user.id = %user_phone.user_id,
             %user_phone.id,
             %user_phone.phone,
@@ -242,18 +246,13 @@ impl UserPhoneRepository for PgUserPhoneRepository<'_> {
         err,
     )]
     async fn remove(&mut self, user_phone: UserPhone) -> Result<(), Self::Error> {
-        let res = sqlx::query!(
-            r#"
-                DELETE FROM user_phones
-                WHERE user_phone_id = $1
-            "#,
-            Uuid::from(user_phone.id),
+        let rows_affected = diesel::delete(
+            user_phones::table.find(Uuid::from(user_phone.id)),
         )
-        .traced()
-        .execute(&mut *self.conn)
+        .execute(self.conn)
         .await?;
 
-        DatabaseError::ensure_affected_rows(&res, 1)?;
+        DatabaseError::ensure_affected_rows_usize(rows_affected, 1)?;
 
         Ok(())
     }
@@ -262,7 +261,6 @@ impl UserPhoneRepository for PgUserPhoneRepository<'_> {
         name = "db.user_phone.add_authentication_for_registration",
         skip_all,
         fields(
-            db.query.text,
             %user_registration.id,
             user_phone_authentication.id,
             user_phone_authentication.phone = phone,
@@ -281,24 +279,17 @@ impl UserPhoneRepository for PgUserPhoneRepository<'_> {
         tracing::Span::current()
             .record("user_phone_authentication.id", tracing::field::display(id));
 
-        sqlx::query!(
-            r#"
-                INSERT INTO user_phone_authentications
-                  ( user_phone_authentication_id
-                  , user_registration_id
-                  , phone
-                  , created_at
-                  )
-                VALUES ($1, $2, $3, $4)
-            "#,
-            Uuid::from(id),
-            Uuid::from(user_registration.id),
-            &phone,
+        let new_auth = NewUserPhoneAuthentication {
+            user_phone_authentication_id: Uuid::from(id),
+            user_registration_id: Some(Uuid::from(user_registration.id)),
+            phone: phone.clone(),
             created_at,
-        )
-        .traced()
-        .execute(&mut *self.conn)
-        .await?;
+        };
+
+        diesel::insert_into(user_phone_authentications::table)
+            .values(&new_auth)
+            .execute(self.conn)
+            .await?;
 
         Ok(UserPhoneAuthentication {
             id,
@@ -313,7 +304,6 @@ impl UserPhoneRepository for PgUserPhoneRepository<'_> {
         name = "db.user_phone.add_authentication_code",
         skip_all,
         fields(
-            db.query.text,
             %user_phone_authentication.id,
             %user_phone_authentication.phone,
             user_phone_authentication_code.id,
@@ -337,26 +327,18 @@ impl UserPhoneRepository for PgUserPhoneRepository<'_> {
             tracing::field::display(id),
         );
 
-        sqlx::query!(
-            r#"
-                INSERT INTO user_phone_authentication_codes
-                  ( user_phone_authentication_code_id
-                  , user_phone_authentication_id
-                  , code
-                  , created_at
-                  , expires_at
-                  )
-                VALUES ($1, $2, $3, $4, $5)
-            "#,
-            Uuid::from(id),
-            Uuid::from(user_phone_authentication.id),
-            &code,
+        let new_code = NewUserPhoneAuthenticationCode {
+            user_phone_authentication_code_id: Uuid::from(id),
+            user_phone_authentication_id: Uuid::from(user_phone_authentication.id),
+            code: code.clone(),
             created_at,
             expires_at,
-        )
-        .traced()
-        .execute(&mut *self.conn)
-        .await?;
+        };
+
+        diesel::insert_into(user_phone_authentication_codes::table)
+            .values(&new_code)
+            .execute(self.conn)
+            .await?;
 
         Ok(UserPhoneAuthenticationCode {
             id,
@@ -371,7 +353,6 @@ impl UserPhoneRepository for PgUserPhoneRepository<'_> {
         name = "db.user_phone.lookup_authentication",
         skip_all,
         fields(
-            db.query.text,
             user_phone_authentication.id = %id,
         ),
         err,
@@ -380,22 +361,12 @@ impl UserPhoneRepository for PgUserPhoneRepository<'_> {
         &mut self,
         id: Ulid,
     ) -> Result<Option<UserPhoneAuthentication>, Self::Error> {
-        let res = sqlx::query_as!(
-            UserPhoneAuthenticationLookup,
-            r#"
-                SELECT user_phone_authentication_id
-                     , user_registration_id
-                     , phone
-                     , created_at
-                     , completed_at
-                FROM user_phone_authentications
-                WHERE user_phone_authentication_id = $1
-            "#,
-            Uuid::from(id),
-        )
-        .traced()
-        .fetch_optional(&mut *self.conn)
-        .await?;
+        let res = user_phone_authentications::table
+            .find(Uuid::from(id))
+            .select(UserPhoneAuthenticationRow::as_select())
+            .first::<UserPhoneAuthenticationRow>(self.conn)
+            .await
+            .optional()?;
 
         Ok(res.map(UserPhoneAuthentication::from))
     }
@@ -404,7 +375,6 @@ impl UserPhoneRepository for PgUserPhoneRepository<'_> {
         name = "db.user_phone.find_authentication_by_code",
         skip_all,
         fields(
-            db.query.text,
             %authentication.id,
             user_phone_authentication_code.code = code,
         ),
@@ -415,24 +385,16 @@ impl UserPhoneRepository for PgUserPhoneRepository<'_> {
         authentication: &UserPhoneAuthentication,
         code: &str,
     ) -> Result<Option<UserPhoneAuthenticationCode>, Self::Error> {
-        let res = sqlx::query_as!(
-            UserPhoneAuthenticationCodeLookup,
-            r#"
-                SELECT user_phone_authentication_code_id
-                     , user_phone_authentication_id
-                     , code
-                     , created_at
-                     , expires_at
-                FROM user_phone_authentication_codes
-                WHERE user_phone_authentication_id = $1
-                  AND code = $2
-            "#,
-            Uuid::from(authentication.id),
-            code,
-        )
-        .traced()
-        .fetch_optional(&mut *self.conn)
-        .await?;
+        let res = user_phone_authentication_codes::table
+            .filter(
+                user_phone_authentication_codes::user_phone_authentication_id
+                    .eq(Uuid::from(authentication.id)),
+            )
+            .filter(user_phone_authentication_codes::code.eq(code))
+            .select(UserPhoneAuthenticationCodeRow::as_select())
+            .first::<UserPhoneAuthenticationCodeRow>(self.conn)
+            .await
+            .optional()?;
 
         Ok(res.map(UserPhoneAuthenticationCode::from))
     }
@@ -441,7 +403,6 @@ impl UserPhoneRepository for PgUserPhoneRepository<'_> {
         name = "db.user_phone.complete_phone_authentication_with_code",
         skip_all,
         fields(
-            db.query.text,
             %user_phone_authentication.id,
             %user_phone_authentication.phone,
             %user_phone_authentication_code.id,
@@ -463,21 +424,16 @@ impl UserPhoneRepository for PgUserPhoneRepository<'_> {
         // We'll assume the caller has checked that completed_at is None, so in case
         // they haven't, the update will not affect any rows, which will raise
         // an error
-        let res = sqlx::query!(
-            r#"
-                UPDATE user_phone_authentications
-                SET completed_at = $2
-                WHERE user_phone_authentication_id = $1
-                  AND completed_at IS NULL
-            "#,
-            Uuid::from(user_phone_authentication.id),
-            completed_at,
+        let rows_affected = diesel::update(
+            user_phone_authentications::table
+                .find(Uuid::from(user_phone_authentication.id))
+                .filter(user_phone_authentications::completed_at.is_null()),
         )
-        .traced()
-        .execute(&mut *self.conn)
+        .set(user_phone_authentications::completed_at.eq(Some(completed_at)))
+        .execute(self.conn)
         .await?;
 
-        DatabaseError::ensure_affected_rows(&res, 1)?;
+        DatabaseError::ensure_affected_rows_usize(rows_affected, 1)?;
 
         user_phone_authentication.completed_at = Some(completed_at);
         Ok(user_phone_authentication)

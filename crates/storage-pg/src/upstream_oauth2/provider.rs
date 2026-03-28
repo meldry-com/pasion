@@ -1,46 +1,40 @@
 use async_trait::async_trait;
 use chrono::{DateTime, Utc};
-use opentelemetry_semantic_conventions::attribute::DB_QUERY_TEXT;
+use diesel::prelude::*;
+use diesel_async::RunQueryDsl;
 use pasion_data_model::{Clock, UpstreamOAuthProvider, UpstreamOAuthProviderClaimsImports};
 use pasion_storage::{
     Page, Pagination,
-    pagination::Node,
+    pagination::{Node, PaginationDirection},
     upstream_oauth2::{
         UpstreamOAuthProviderFilter, UpstreamOAuthProviderParams, UpstreamOAuthProviderRepository,
     },
 };
 use rand::RngCore;
-use sea_query::{Expr, PostgresQueryBuilder, Query, enum_def};
-use sea_query_binder::SqlxBinder;
-use sqlx::{PgConnection, types::Json};
-use tracing::{Instrument, info_span};
 use ulid::Ulid;
 use uuid::Uuid;
 
 use crate::{
     DatabaseError, DatabaseInconsistencyError,
-    filter::{Filter, StatementExt},
-    iden::UpstreamOAuthProviders,
-    pagination::QueryBuilderExt,
-    tracing::ExecuteExt,
+    schema::upstream_oauth_providers,
 };
 
 /// An implementation of [`UpstreamOAuthProviderRepository`] for a PostgreSQL
 /// connection
 pub struct PgUpstreamOAuthProviderRepository<'c> {
-    conn: &'c mut PgConnection,
+    conn: &'c mut diesel_async::AsyncPgConnection,
 }
 
 impl<'c> PgUpstreamOAuthProviderRepository<'c> {
     /// Create a new [`PgUpstreamOAuthProviderRepository`] from an active
     /// PostgreSQL connection
-    pub fn new(conn: &'c mut PgConnection) -> Self {
+    pub fn new(conn: &'c mut diesel_async::AsyncPgConnection) -> Self {
         Self { conn }
     }
 }
 
-#[derive(sqlx::FromRow)]
-#[enum_def]
+#[derive(Debug, Clone, Queryable, Selectable)]
+#[diesel(table_name = upstream_oauth_providers)]
 struct ProviderLookup {
     upstream_oauth_provider_id: Uuid,
     issuer: Option<String>,
@@ -56,7 +50,7 @@ struct ProviderLookup {
     userinfo_signed_response_alg: Option<String>,
     created_at: DateTime<Utc>,
     disabled_at: Option<DateTime<Utc>>,
-    claims_imports: Json<UpstreamOAuthProviderClaimsImports>,
+    claims_imports: Option<serde_json::Value>,
     jwks_uri_override: Option<String>,
     authorization_endpoint_override: Option<String>,
     token_endpoint_override: Option<String>,
@@ -64,9 +58,9 @@ struct ProviderLookup {
     discovery_mode: String,
     pkce_mode: String,
     response_mode: Option<String>,
-    additional_parameters: Option<Json<Vec<(String, String)>>>,
+    additional_parameters: Option<serde_json::Value>,
     forward_login_hint: bool,
-    on_backchannel_logout: String,
+    on_backchannel_logout: Option<String>,
 }
 
 impl Node<Ulid> for ProviderLookup {
@@ -190,17 +184,26 @@ impl TryFrom<ProviderLookup> for UpstreamOAuthProvider {
                     .source(e)
             })?;
 
-        let additional_authorization_parameters = value
+        let additional_authorization_parameters: Vec<(String, String)> = value
             .additional_parameters
-            .map(|Json(x)| x)
+            .map(|v| serde_json::from_value(v).unwrap_or_default())
             .unwrap_or_default();
 
-        let on_backchannel_logout = value.on_backchannel_logout.parse().map_err(|e| {
-            DatabaseInconsistencyError::on("upstream_oauth_providers")
-                .column("on_backchannel_logout")
-                .row(id)
-                .source(e)
-        })?;
+        let claims_imports: UpstreamOAuthProviderClaimsImports = value
+            .claims_imports
+            .map(|v| serde_json::from_value(v).unwrap_or_default())
+            .unwrap_or_default();
+
+        let on_backchannel_logout = value
+            .on_backchannel_logout
+            .unwrap_or_else(|| "do_nothing".to_owned())
+            .parse()
+            .map_err(|e| {
+                DatabaseInconsistencyError::on("upstream_oauth_providers")
+                    .column("on_backchannel_logout")
+                    .row(id)
+                    .source(e)
+            })?;
 
         Ok(UpstreamOAuthProvider {
             id,
@@ -217,7 +220,7 @@ impl TryFrom<ProviderLookup> for UpstreamOAuthProvider {
             userinfo_signed_response_alg,
             created_at: value.created_at,
             disabled_at: value.disabled_at,
-            claims_imports: value.claims_imports.0,
+            claims_imports,
             authorization_endpoint_override,
             token_endpoint_override,
             userinfo_endpoint_override,
@@ -232,17 +235,35 @@ impl TryFrom<ProviderLookup> for UpstreamOAuthProvider {
     }
 }
 
-impl Filter for UpstreamOAuthProviderFilter<'_> {
-    fn generate_condition(&self, _has_joins: bool) -> impl sea_query::IntoCondition {
-        sea_query::Condition::all().add_option(self.enabled().map(|enabled| {
-            Expr::col((
-                UpstreamOAuthProviders::Table,
-                UpstreamOAuthProviders::DisabledAt,
-            ))
-            .is_null()
-            .eq(enabled)
-        }))
-    }
+/// Insertable row for creating a new upstream OAuth provider
+#[derive(Insertable)]
+#[diesel(table_name = upstream_oauth_providers)]
+struct NewProvider {
+    upstream_oauth_provider_id: Uuid,
+    issuer: Option<String>,
+    human_name: Option<String>,
+    brand_name: Option<String>,
+    scope: String,
+    client_id: String,
+    encrypted_client_secret: Option<String>,
+    token_endpoint_signing_alg: Option<String>,
+    token_endpoint_auth_method: String,
+    id_token_signed_response_alg: String,
+    fetch_userinfo: bool,
+    userinfo_signed_response_alg: Option<String>,
+    claims_imports: Option<serde_json::Value>,
+    jwks_uri_override: Option<String>,
+    authorization_endpoint_override: Option<String>,
+    token_endpoint_override: Option<String>,
+    userinfo_endpoint_override: Option<String>,
+    discovery_mode: String,
+    pkce_mode: String,
+    response_mode: Option<String>,
+    additional_parameters: Option<serde_json::Value>,
+    forward_login_hint: bool,
+    ui_order: i32,
+    on_backchannel_logout: Option<String>,
+    created_at: DateTime<Utc>,
 }
 
 #[async_trait]
@@ -253,49 +274,17 @@ impl UpstreamOAuthProviderRepository for PgUpstreamOAuthProviderRepository<'_> {
         name = "db.upstream_oauth_provider.lookup",
         skip_all,
         fields(
-            db.query.text,
             upstream_oauth_provider.id = %id,
         ),
         err,
     )]
     async fn lookup(&mut self, id: Ulid) -> Result<Option<UpstreamOAuthProvider>, Self::Error> {
-        let res = sqlx::query_as!(
-            ProviderLookup,
-            r#"
-                SELECT
-                    upstream_oauth_provider_id,
-                    issuer,
-                    human_name,
-                    brand_name,
-                    scope,
-                    client_id,
-                    encrypted_client_secret,
-                    token_endpoint_signing_alg,
-                    token_endpoint_auth_method,
-                    id_token_signed_response_alg,
-                    fetch_userinfo,
-                    userinfo_signed_response_alg,
-                    created_at,
-                    disabled_at,
-                    claims_imports as "claims_imports: Json<UpstreamOAuthProviderClaimsImports>",
-                    jwks_uri_override,
-                    authorization_endpoint_override,
-                    token_endpoint_override,
-                    userinfo_endpoint_override,
-                    discovery_mode,
-                    pkce_mode,
-                    response_mode,
-                    additional_parameters as "additional_parameters: Json<Vec<(String, String)>>",
-                    forward_login_hint,
-                    on_backchannel_logout
-                FROM upstream_oauth_providers
-                WHERE upstream_oauth_provider_id = $1
-            "#,
-            Uuid::from(id),
-        )
-        .traced()
-        .fetch_optional(&mut *self.conn)
-        .await?;
+        let res = upstream_oauth_providers::table
+            .find(Uuid::from(id))
+            .select(ProviderLookup::as_select())
+            .first::<ProviderLookup>(self.conn)
+            .await
+            .optional()?;
 
         let res = res
             .map(UpstreamOAuthProvider::try_from)
@@ -309,7 +298,6 @@ impl UpstreamOAuthProviderRepository for PgUpstreamOAuthProviderRepository<'_> {
         name = "db.upstream_oauth_provider.add",
         skip_all,
         fields(
-            db.query.text,
             upstream_oauth_provider.id,
             upstream_oauth_provider.issuer = params.issuer,
             upstream_oauth_provider.client_id = %params.client_id,
@@ -326,78 +314,53 @@ impl UpstreamOAuthProviderRepository for PgUpstreamOAuthProviderRepository<'_> {
         let id = Ulid::from_datetime_with_source(created_at.into(), rng);
         tracing::Span::current().record("upstream_oauth_provider.id", tracing::field::display(id));
 
-        sqlx::query!(
-            r#"
-            INSERT INTO upstream_oauth_providers (
-                upstream_oauth_provider_id,
-                issuer,
-                human_name,
-                brand_name,
-                scope,
-                token_endpoint_auth_method,
-                token_endpoint_signing_alg,
-                id_token_signed_response_alg,
-                fetch_userinfo,
-                userinfo_signed_response_alg,
-                client_id,
-                encrypted_client_secret,
-                claims_imports,
-                authorization_endpoint_override,
-                token_endpoint_override,
-                userinfo_endpoint_override,
-                jwks_uri_override,
-                discovery_mode,
-                pkce_mode,
-                response_mode,
-                forward_login_hint,
-                on_backchannel_logout,
-                created_at
-            ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11,
-                      $12, $13, $14, $15, $16, $17, $18, $19, $20,
-                      $21, $22, $23)
-        "#,
-            Uuid::from(id),
-            params.issuer.as_deref(),
-            params.human_name.as_deref(),
-            params.brand_name.as_deref(),
-            params.scope.to_string(),
-            params.token_endpoint_auth_method.to_string(),
-            params
+        let new_provider = NewProvider {
+            upstream_oauth_provider_id: Uuid::from(id),
+            issuer: params.issuer.clone(),
+            human_name: params.human_name.clone(),
+            brand_name: params.brand_name.clone(),
+            scope: params.scope.to_string(),
+            client_id: params.client_id.clone(),
+            encrypted_client_secret: params.encrypted_client_secret.clone(),
+            token_endpoint_signing_alg: params
                 .token_endpoint_signing_alg
                 .as_ref()
                 .map(ToString::to_string),
-            params.id_token_signed_response_alg.to_string(),
-            params.fetch_userinfo,
-            params
+            token_endpoint_auth_method: params.token_endpoint_auth_method.to_string(),
+            id_token_signed_response_alg: params.id_token_signed_response_alg.to_string(),
+            fetch_userinfo: params.fetch_userinfo,
+            userinfo_signed_response_alg: params
                 .userinfo_signed_response_alg
                 .as_ref()
                 .map(ToString::to_string),
-            &params.client_id,
-            params.encrypted_client_secret.as_deref(),
-            Json(&params.claims_imports) as _,
-            params
+            claims_imports: serde_json::to_value(&params.claims_imports).ok(),
+            jwks_uri_override: params.jwks_uri_override.as_ref().map(ToString::to_string),
+            authorization_endpoint_override: params
                 .authorization_endpoint_override
                 .as_ref()
                 .map(ToString::to_string),
-            params
+            token_endpoint_override: params
                 .token_endpoint_override
                 .as_ref()
                 .map(ToString::to_string),
-            params
+            userinfo_endpoint_override: params
                 .userinfo_endpoint_override
                 .as_ref()
                 .map(ToString::to_string),
-            params.jwks_uri_override.as_ref().map(ToString::to_string),
-            params.discovery_mode.as_str(),
-            params.pkce_mode.as_str(),
-            params.response_mode.as_ref().map(ToString::to_string),
-            params.forward_login_hint,
-            params.on_backchannel_logout.as_str(),
+            discovery_mode: params.discovery_mode.as_str().to_owned(),
+            pkce_mode: params.pkce_mode.as_str().to_owned(),
+            response_mode: params.response_mode.as_ref().map(ToString::to_string),
+            additional_parameters: None,
+            forward_login_hint: params.forward_login_hint,
+            ui_order: 0,
+            on_backchannel_logout: Some(params.on_backchannel_logout.as_str().to_owned()),
             created_at,
-        )
-        .traced()
-        .execute(&mut *self.conn)
-        .await?;
+        };
+
+        diesel::insert_into(upstream_oauth_providers::table)
+            .values(&new_provider)
+            .execute(self.conn)
+            .await?;
 
         Ok(UpstreamOAuthProvider {
             id,
@@ -423,8 +386,8 @@ impl UpstreamOAuthProviderRepository for PgUpstreamOAuthProviderRepository<'_> {
             pkce_mode: params.pkce_mode,
             response_mode: params.response_mode,
             additional_authorization_parameters: params.additional_authorization_parameters,
-            on_backchannel_logout: params.on_backchannel_logout,
             forward_login_hint: params.forward_login_hint,
+            on_backchannel_logout: params.on_backchannel_logout,
         })
     }
 
@@ -432,73 +395,44 @@ impl UpstreamOAuthProviderRepository for PgUpstreamOAuthProviderRepository<'_> {
         name = "db.upstream_oauth_provider.delete_by_id",
         skip_all,
         fields(
-            db.query.text,
             upstream_oauth_provider.id = %id,
         ),
         err,
     )]
     async fn delete_by_id(&mut self, id: Ulid) -> Result<(), Self::Error> {
+        use crate::schema::{upstream_oauth_authorization_sessions, upstream_oauth_links};
+
         // Delete the authorization sessions first, as they have a foreign key
         // constraint on the links and the providers.
-        {
-            let span = info_span!(
-                "db.oauth2_client.delete_by_id.authorization_sessions",
-                upstream_oauth_provider.id = %id,
-                { DB_QUERY_TEXT } = tracing::field::Empty,
-            );
-            sqlx::query!(
-                r#"
-                    DELETE FROM upstream_oauth_authorization_sessions
-                    WHERE upstream_oauth_provider_id = $1
-                "#,
-                Uuid::from(id),
-            )
-            .record(&span)
-            .execute(&mut *self.conn)
-            .instrument(span)
-            .await?;
-        }
+        diesel::delete(
+            upstream_oauth_authorization_sessions::table
+                .filter(upstream_oauth_authorization_sessions::upstream_oauth_provider_id.eq(Uuid::from(id))),
+        )
+        .execute(self.conn)
+        .await?;
 
         // Delete the links next, as they have a foreign key constraint on the
         // providers.
-        {
-            let span = info_span!(
-                "db.oauth2_client.delete_by_id.links",
-                upstream_oauth_provider.id = %id,
-                { DB_QUERY_TEXT } = tracing::field::Empty,
-            );
-            sqlx::query!(
-                r#"
-                    DELETE FROM upstream_oauth_links
-                    WHERE upstream_oauth_provider_id = $1
-                "#,
-                Uuid::from(id),
-            )
-            .record(&span)
-            .execute(&mut *self.conn)
-            .instrument(span)
-            .await?;
-        }
-
-        let res = sqlx::query!(
-            r#"
-                DELETE FROM upstream_oauth_providers
-                WHERE upstream_oauth_provider_id = $1
-            "#,
-            Uuid::from(id),
+        diesel::delete(
+            upstream_oauth_links::table
+                .filter(upstream_oauth_links::upstream_oauth_provider_id.eq(Uuid::from(id))),
         )
-        .traced()
-        .execute(&mut *self.conn)
+        .execute(self.conn)
         .await?;
 
-        DatabaseError::ensure_affected_rows(&res, 1)
+        let rows_affected = diesel::delete(
+            upstream_oauth_providers::table.find(Uuid::from(id)),
+        )
+        .execute(self.conn)
+        .await?;
+
+        DatabaseError::ensure_affected_rows_usize(rows_affected, 1)
     }
 
     #[tracing::instrument(
-        name = "db.upstream_oauth_provider.add",
+        name = "db.upstream_oauth_provider.upsert",
         skip_all,
         fields(
-            db.query.text,
             upstream_oauth_provider.id = %id,
             upstream_oauth_provider.issuer = params.issuer,
             upstream_oauth_provider.client_id = %params.client_id,
@@ -513,110 +447,82 @@ impl UpstreamOAuthProviderRepository for PgUpstreamOAuthProviderRepository<'_> {
     ) -> Result<UpstreamOAuthProvider, Self::Error> {
         let created_at = clock.now();
 
-        let created_at = sqlx::query_scalar!(
-            r#"
-                INSERT INTO upstream_oauth_providers (
-                    upstream_oauth_provider_id,
-                    issuer,
-                    human_name,
-                    brand_name,
-                    scope,
-                    token_endpoint_auth_method,
-                    token_endpoint_signing_alg,
-                    id_token_signed_response_alg,
-                    fetch_userinfo,
-                    userinfo_signed_response_alg,
-                    client_id,
-                    encrypted_client_secret,
-                    claims_imports,
-                    authorization_endpoint_override,
-                    token_endpoint_override,
-                    userinfo_endpoint_override,
-                    jwks_uri_override,
-                    discovery_mode,
-                    pkce_mode,
-                    response_mode,
-                    additional_parameters,
-                    forward_login_hint,
-                    ui_order,
-                    on_backchannel_logout,
-                    created_at
-                ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10,
-                          $11, $12, $13, $14, $15, $16, $17, $18, $19, $20,
-                          $21, $22, $23, $24, $25)
-                ON CONFLICT (upstream_oauth_provider_id)
-                    DO UPDATE
-                    SET
-                        issuer = EXCLUDED.issuer,
-                        human_name = EXCLUDED.human_name,
-                        brand_name = EXCLUDED.brand_name,
-                        scope = EXCLUDED.scope,
-                        token_endpoint_auth_method = EXCLUDED.token_endpoint_auth_method,
-                        token_endpoint_signing_alg = EXCLUDED.token_endpoint_signing_alg,
-                        id_token_signed_response_alg = EXCLUDED.id_token_signed_response_alg,
-                        fetch_userinfo = EXCLUDED.fetch_userinfo,
-                        userinfo_signed_response_alg = EXCLUDED.userinfo_signed_response_alg,
-                        disabled_at = NULL,
-                        client_id = EXCLUDED.client_id,
-                        encrypted_client_secret = EXCLUDED.encrypted_client_secret,
-                        claims_imports = EXCLUDED.claims_imports,
-                        authorization_endpoint_override = EXCLUDED.authorization_endpoint_override,
-                        token_endpoint_override = EXCLUDED.token_endpoint_override,
-                        userinfo_endpoint_override = EXCLUDED.userinfo_endpoint_override,
-                        jwks_uri_override = EXCLUDED.jwks_uri_override,
-                        discovery_mode = EXCLUDED.discovery_mode,
-                        pkce_mode = EXCLUDED.pkce_mode,
-                        response_mode = EXCLUDED.response_mode,
-                        additional_parameters = EXCLUDED.additional_parameters,
-                        forward_login_hint = EXCLUDED.forward_login_hint,
-                        ui_order = EXCLUDED.ui_order,
-                        on_backchannel_logout = EXCLUDED.on_backchannel_logout
-                RETURNING created_at
-            "#,
-            Uuid::from(id),
-            params.issuer.as_deref(),
-            params.human_name.as_deref(),
-            params.brand_name.as_deref(),
-            params.scope.to_string(),
-            params.token_endpoint_auth_method.to_string(),
-            params
+        let new_provider = NewProvider {
+            upstream_oauth_provider_id: Uuid::from(id),
+            issuer: params.issuer.clone(),
+            human_name: params.human_name.clone(),
+            brand_name: params.brand_name.clone(),
+            scope: params.scope.to_string(),
+            client_id: params.client_id.clone(),
+            encrypted_client_secret: params.encrypted_client_secret.clone(),
+            token_endpoint_signing_alg: params
                 .token_endpoint_signing_alg
                 .as_ref()
                 .map(ToString::to_string),
-            params.id_token_signed_response_alg.to_string(),
-            params.fetch_userinfo,
-            params
+            token_endpoint_auth_method: params.token_endpoint_auth_method.to_string(),
+            id_token_signed_response_alg: params.id_token_signed_response_alg.to_string(),
+            fetch_userinfo: params.fetch_userinfo,
+            userinfo_signed_response_alg: params
                 .userinfo_signed_response_alg
                 .as_ref()
                 .map(ToString::to_string),
-            &params.client_id,
-            params.encrypted_client_secret.as_deref(),
-            Json(&params.claims_imports) as _,
-            params
+            claims_imports: serde_json::to_value(&params.claims_imports).ok(),
+            jwks_uri_override: params.jwks_uri_override.as_ref().map(ToString::to_string),
+            authorization_endpoint_override: params
                 .authorization_endpoint_override
                 .as_ref()
                 .map(ToString::to_string),
-            params
+            token_endpoint_override: params
                 .token_endpoint_override
                 .as_ref()
                 .map(ToString::to_string),
-            params
+            userinfo_endpoint_override: params
                 .userinfo_endpoint_override
                 .as_ref()
                 .map(ToString::to_string),
-            params.jwks_uri_override.as_ref().map(ToString::to_string),
-            params.discovery_mode.as_str(),
-            params.pkce_mode.as_str(),
-            params.response_mode.as_ref().map(ToString::to_string),
-            Json(&params.additional_authorization_parameters) as _,
-            params.forward_login_hint,
-            params.ui_order,
-            params.on_backchannel_logout.as_str(),
+            discovery_mode: params.discovery_mode.as_str().to_owned(),
+            pkce_mode: params.pkce_mode.as_str().to_owned(),
+            response_mode: params.response_mode.as_ref().map(ToString::to_string),
+            additional_parameters: serde_json::to_value(&params.additional_authorization_parameters).ok(),
+            forward_login_hint: params.forward_login_hint,
+            ui_order: params.ui_order,
+            on_backchannel_logout: Some(params.on_backchannel_logout.as_str().to_owned()),
             created_at,
-        )
-        .traced()
-        .fetch_one(&mut *self.conn)
-        .await?;
+        };
+
+        let created_at: DateTime<Utc> = diesel::insert_into(upstream_oauth_providers::table)
+            .values(&new_provider)
+            .on_conflict(upstream_oauth_providers::upstream_oauth_provider_id)
+            .do_update()
+            .set((
+                upstream_oauth_providers::issuer.eq(params.issuer.as_deref()),
+                upstream_oauth_providers::human_name.eq(params.human_name.as_deref()),
+                upstream_oauth_providers::brand_name.eq(params.brand_name.as_deref()),
+                upstream_oauth_providers::scope.eq(params.scope.to_string()),
+                upstream_oauth_providers::token_endpoint_auth_method.eq(params.token_endpoint_auth_method.to_string()),
+                upstream_oauth_providers::token_endpoint_signing_alg.eq(params.token_endpoint_signing_alg.as_ref().map(ToString::to_string)),
+                upstream_oauth_providers::id_token_signed_response_alg.eq(params.id_token_signed_response_alg.to_string()),
+                upstream_oauth_providers::fetch_userinfo.eq(params.fetch_userinfo),
+                upstream_oauth_providers::userinfo_signed_response_alg.eq(params.userinfo_signed_response_alg.as_ref().map(ToString::to_string)),
+                upstream_oauth_providers::disabled_at.eq(None::<DateTime<Utc>>),
+                upstream_oauth_providers::client_id.eq(&params.client_id),
+                upstream_oauth_providers::encrypted_client_secret.eq(params.encrypted_client_secret.as_deref()),
+                upstream_oauth_providers::claims_imports.eq(serde_json::to_value(&params.claims_imports).ok()),
+                upstream_oauth_providers::authorization_endpoint_override.eq(params.authorization_endpoint_override.as_ref().map(ToString::to_string)),
+                upstream_oauth_providers::token_endpoint_override.eq(params.token_endpoint_override.as_ref().map(ToString::to_string)),
+                upstream_oauth_providers::userinfo_endpoint_override.eq(params.userinfo_endpoint_override.as_ref().map(ToString::to_string)),
+                upstream_oauth_providers::jwks_uri_override.eq(params.jwks_uri_override.as_ref().map(ToString::to_string)),
+                upstream_oauth_providers::discovery_mode.eq(params.discovery_mode.as_str()),
+                upstream_oauth_providers::pkce_mode.eq(params.pkce_mode.as_str()),
+                upstream_oauth_providers::response_mode.eq(params.response_mode.as_ref().map(ToString::to_string)),
+                upstream_oauth_providers::additional_parameters.eq(serde_json::to_value(&params.additional_authorization_parameters).ok()),
+                upstream_oauth_providers::forward_login_hint.eq(params.forward_login_hint),
+                upstream_oauth_providers::ui_order.eq(params.ui_order),
+                upstream_oauth_providers::on_backchannel_logout.eq(Some(params.on_backchannel_logout.as_str())),
+            ))
+            .returning(upstream_oauth_providers::created_at)
+            .get_result(self.conn)
+            .await?;
 
         Ok(UpstreamOAuthProvider {
             id,
@@ -651,7 +557,6 @@ impl UpstreamOAuthProviderRepository for PgUpstreamOAuthProviderRepository<'_> {
         name = "db.upstream_oauth_provider.disable",
         skip_all,
         fields(
-            db.query.text,
             %upstream_oauth_provider.id,
         ),
         err,
@@ -662,20 +567,14 @@ impl UpstreamOAuthProviderRepository for PgUpstreamOAuthProviderRepository<'_> {
         mut upstream_oauth_provider: UpstreamOAuthProvider,
     ) -> Result<UpstreamOAuthProvider, Self::Error> {
         let disabled_at = clock.now();
-        let res = sqlx::query!(
-            r#"
-                UPDATE upstream_oauth_providers
-                SET disabled_at = $2
-                WHERE upstream_oauth_provider_id = $1
-            "#,
-            Uuid::from(upstream_oauth_provider.id),
-            disabled_at,
+        let rows_affected = diesel::update(
+            upstream_oauth_providers::table.find(Uuid::from(upstream_oauth_provider.id)),
         )
-        .traced()
-        .execute(&mut *self.conn)
+        .set(upstream_oauth_providers::disabled_at.eq(Some(disabled_at)))
+        .execute(self.conn)
         .await?;
 
-        DatabaseError::ensure_affected_rows(&res, 1)?;
+        DatabaseError::ensure_affected_rows_usize(rows_affected, 1)?;
 
         upstream_oauth_provider.disabled_at = Some(disabled_at);
 
@@ -685,9 +584,6 @@ impl UpstreamOAuthProviderRepository for PgUpstreamOAuthProviderRepository<'_> {
     #[tracing::instrument(
         name = "db.upstream_oauth_provider.list",
         skip_all,
-        fields(
-            db.query.text,
-        ),
         err,
     )]
     async fn list(
@@ -695,229 +591,75 @@ impl UpstreamOAuthProviderRepository for PgUpstreamOAuthProviderRepository<'_> {
         filter: UpstreamOAuthProviderFilter<'_>,
         pagination: Pagination,
     ) -> Result<Page<UpstreamOAuthProvider>, Self::Error> {
-        let (sql, arguments) = Query::select()
-            .expr_as(
-                Expr::col((
-                    UpstreamOAuthProviders::Table,
-                    UpstreamOAuthProviders::UpstreamOAuthProviderId,
-                )),
-                ProviderLookupIden::UpstreamOauthProviderId,
-            )
-            .expr_as(
-                Expr::col((
-                    UpstreamOAuthProviders::Table,
-                    UpstreamOAuthProviders::Issuer,
-                )),
-                ProviderLookupIden::Issuer,
-            )
-            .expr_as(
-                Expr::col((
-                    UpstreamOAuthProviders::Table,
-                    UpstreamOAuthProviders::HumanName,
-                )),
-                ProviderLookupIden::HumanName,
-            )
-            .expr_as(
-                Expr::col((
-                    UpstreamOAuthProviders::Table,
-                    UpstreamOAuthProviders::BrandName,
-                )),
-                ProviderLookupIden::BrandName,
-            )
-            .expr_as(
-                Expr::col((UpstreamOAuthProviders::Table, UpstreamOAuthProviders::Scope)),
-                ProviderLookupIden::Scope,
-            )
-            .expr_as(
-                Expr::col((
-                    UpstreamOAuthProviders::Table,
-                    UpstreamOAuthProviders::ClientId,
-                )),
-                ProviderLookupIden::ClientId,
-            )
-            .expr_as(
-                Expr::col((
-                    UpstreamOAuthProviders::Table,
-                    UpstreamOAuthProviders::EncryptedClientSecret,
-                )),
-                ProviderLookupIden::EncryptedClientSecret,
-            )
-            .expr_as(
-                Expr::col((
-                    UpstreamOAuthProviders::Table,
-                    UpstreamOAuthProviders::TokenEndpointSigningAlg,
-                )),
-                ProviderLookupIden::TokenEndpointSigningAlg,
-            )
-            .expr_as(
-                Expr::col((
-                    UpstreamOAuthProviders::Table,
-                    UpstreamOAuthProviders::TokenEndpointAuthMethod,
-                )),
-                ProviderLookupIden::TokenEndpointAuthMethod,
-            )
-            .expr_as(
-                Expr::col((
-                    UpstreamOAuthProviders::Table,
-                    UpstreamOAuthProviders::IdTokenSignedResponseAlg,
-                )),
-                ProviderLookupIden::IdTokenSignedResponseAlg,
-            )
-            .expr_as(
-                Expr::col((
-                    UpstreamOAuthProviders::Table,
-                    UpstreamOAuthProviders::FetchUserinfo,
-                )),
-                ProviderLookupIden::FetchUserinfo,
-            )
-            .expr_as(
-                Expr::col((
-                    UpstreamOAuthProviders::Table,
-                    UpstreamOAuthProviders::UserinfoSignedResponseAlg,
-                )),
-                ProviderLookupIden::UserinfoSignedResponseAlg,
-            )
-            .expr_as(
-                Expr::col((
-                    UpstreamOAuthProviders::Table,
-                    UpstreamOAuthProviders::CreatedAt,
-                )),
-                ProviderLookupIden::CreatedAt,
-            )
-            .expr_as(
-                Expr::col((
-                    UpstreamOAuthProviders::Table,
-                    UpstreamOAuthProviders::DisabledAt,
-                )),
-                ProviderLookupIden::DisabledAt,
-            )
-            .expr_as(
-                Expr::col((
-                    UpstreamOAuthProviders::Table,
-                    UpstreamOAuthProviders::ClaimsImports,
-                )),
-                ProviderLookupIden::ClaimsImports,
-            )
-            .expr_as(
-                Expr::col((
-                    UpstreamOAuthProviders::Table,
-                    UpstreamOAuthProviders::JwksUriOverride,
-                )),
-                ProviderLookupIden::JwksUriOverride,
-            )
-            .expr_as(
-                Expr::col((
-                    UpstreamOAuthProviders::Table,
-                    UpstreamOAuthProviders::TokenEndpointOverride,
-                )),
-                ProviderLookupIden::TokenEndpointOverride,
-            )
-            .expr_as(
-                Expr::col((
-                    UpstreamOAuthProviders::Table,
-                    UpstreamOAuthProviders::AuthorizationEndpointOverride,
-                )),
-                ProviderLookupIden::AuthorizationEndpointOverride,
-            )
-            .expr_as(
-                Expr::col((
-                    UpstreamOAuthProviders::Table,
-                    UpstreamOAuthProviders::UserinfoEndpointOverride,
-                )),
-                ProviderLookupIden::UserinfoEndpointOverride,
-            )
-            .expr_as(
-                Expr::col((
-                    UpstreamOAuthProviders::Table,
-                    UpstreamOAuthProviders::DiscoveryMode,
-                )),
-                ProviderLookupIden::DiscoveryMode,
-            )
-            .expr_as(
-                Expr::col((
-                    UpstreamOAuthProviders::Table,
-                    UpstreamOAuthProviders::PkceMode,
-                )),
-                ProviderLookupIden::PkceMode,
-            )
-            .expr_as(
-                Expr::col((
-                    UpstreamOAuthProviders::Table,
-                    UpstreamOAuthProviders::ResponseMode,
-                )),
-                ProviderLookupIden::ResponseMode,
-            )
-            .expr_as(
-                Expr::col((
-                    UpstreamOAuthProviders::Table,
-                    UpstreamOAuthProviders::AdditionalParameters,
-                )),
-                ProviderLookupIden::AdditionalParameters,
-            )
-            .expr_as(
-                Expr::col((
-                    UpstreamOAuthProviders::Table,
-                    UpstreamOAuthProviders::ForwardLoginHint,
-                )),
-                ProviderLookupIden::ForwardLoginHint,
-            )
-            .expr_as(
-                Expr::col((
-                    UpstreamOAuthProviders::Table,
-                    UpstreamOAuthProviders::OnBackchannelLogout,
-                )),
-                ProviderLookupIden::OnBackchannelLogout,
-            )
-            .from(UpstreamOAuthProviders::Table)
-            .apply_filter(filter)
-            .generate_pagination(
-                (
-                    UpstreamOAuthProviders::Table,
-                    UpstreamOAuthProviders::UpstreamOAuthProviderId,
-                ),
-                pagination,
-            )
-            .build_sqlx(PostgresQueryBuilder);
+        let mut query = upstream_oauth_providers::table
+            .select(ProviderLookup::as_select())
+            .into_boxed();
 
-        let edges: Vec<ProviderLookup> = sqlx::query_as_with(&sql, arguments)
-            .traced()
-            .fetch_all(&mut *self.conn)
-            .await?;
+        // Apply filters
+        if let Some(enabled) = filter.enabled() {
+            if enabled {
+                query = query.filter(upstream_oauth_providers::disabled_at.is_null());
+            } else {
+                query = query.filter(upstream_oauth_providers::disabled_at.is_not_null());
+            }
+        }
+
+        // Apply pagination
+        if let Some(after) = pagination.after {
+            query = query.filter(
+                upstream_oauth_providers::upstream_oauth_provider_id.gt(Uuid::from(after)),
+            );
+        }
+        if let Some(before) = pagination.before {
+            query = query.filter(
+                upstream_oauth_providers::upstream_oauth_provider_id.lt(Uuid::from(before)),
+            );
+        }
+
+        match pagination.direction {
+            PaginationDirection::Forward => {
+                query = query
+                    .order(upstream_oauth_providers::upstream_oauth_provider_id.asc())
+                    .limit((pagination.count + 1) as i64);
+            }
+            PaginationDirection::Backward => {
+                query = query
+                    .order(upstream_oauth_providers::upstream_oauth_provider_id.desc())
+                    .limit((pagination.count + 1) as i64);
+            }
+        }
+
+        let edges: Vec<ProviderLookup> = query.load(self.conn).await?;
 
         let page = pagination
             .process(edges)
             .try_map(UpstreamOAuthProvider::try_from)?;
 
-        return Ok(page);
+        Ok(page)
     }
 
     #[tracing::instrument(
         name = "db.upstream_oauth_provider.count",
         skip_all,
-        fields(
-            db.query.text,
-        ),
         err,
     )]
     async fn count(
         &mut self,
         filter: UpstreamOAuthProviderFilter<'_>,
     ) -> Result<usize, Self::Error> {
-        let (sql, arguments) = Query::select()
-            .expr(
-                Expr::col((
-                    UpstreamOAuthProviders::Table,
-                    UpstreamOAuthProviders::UpstreamOAuthProviderId,
-                ))
-                .count(),
-            )
-            .from(UpstreamOAuthProviders::Table)
-            .apply_filter(filter)
-            .build_sqlx(PostgresQueryBuilder);
+        let mut query = upstream_oauth_providers::table.into_boxed();
 
-        let count: i64 = sqlx::query_scalar_with(&sql, arguments)
-            .traced()
-            .fetch_one(&mut *self.conn)
+        if let Some(enabled) = filter.enabled() {
+            if enabled {
+                query = query.filter(upstream_oauth_providers::disabled_at.is_null());
+            } else {
+                query = query.filter(upstream_oauth_providers::disabled_at.is_not_null());
+            }
+        }
+
+        let count: i64 = query
+            .count()
+            .get_result(self.conn)
             .await?;
 
         count
@@ -928,49 +670,18 @@ impl UpstreamOAuthProviderRepository for PgUpstreamOAuthProviderRepository<'_> {
     #[tracing::instrument(
         name = "db.upstream_oauth_provider.all_enabled",
         skip_all,
-        fields(
-            db.query.text,
-        ),
         err,
     )]
     async fn all_enabled(&mut self) -> Result<Vec<UpstreamOAuthProvider>, Self::Error> {
-        let res = sqlx::query_as!(
-            ProviderLookup,
-            r#"
-                SELECT
-                    upstream_oauth_provider_id,
-                    issuer,
-                    human_name,
-                    brand_name,
-                    scope,
-                    client_id,
-                    encrypted_client_secret,
-                    token_endpoint_signing_alg,
-                    token_endpoint_auth_method,
-                    id_token_signed_response_alg,
-                    fetch_userinfo,
-                    userinfo_signed_response_alg,
-                    created_at,
-                    disabled_at,
-                    claims_imports as "claims_imports: Json<UpstreamOAuthProviderClaimsImports>",
-                    jwks_uri_override,
-                    authorization_endpoint_override,
-                    token_endpoint_override,
-                    userinfo_endpoint_override,
-                    discovery_mode,
-                    pkce_mode,
-                    response_mode,
-                    additional_parameters as "additional_parameters: Json<Vec<(String, String)>>",
-                    forward_login_hint,
-                    on_backchannel_logout
-                FROM upstream_oauth_providers
-                WHERE disabled_at IS NULL
-                ORDER BY ui_order ASC, upstream_oauth_provider_id ASC
-            "#,
-        )
-        .traced()
-        .fetch_all(&mut *self.conn)
-        .await?;
+        let res: Vec<ProviderLookup> = upstream_oauth_providers::table
+            .filter(upstream_oauth_providers::disabled_at.is_null())
+            .order((
+                upstream_oauth_providers::ui_order.asc(),
+                upstream_oauth_providers::upstream_oauth_provider_id.asc(),
+            ))
+            .select(ProviderLookup::as_select())
+            .load(self.conn)
+            .await?;
 
         let res: Result<Vec<_>, _> = res.into_iter().map(TryInto::try_into).collect();
         Ok(res?)

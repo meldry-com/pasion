@@ -2,66 +2,85 @@ use std::net::IpAddr;
 
 use async_trait::async_trait;
 use chrono::{DateTime, Utc};
+use diesel::prelude::*;
+use diesel_async::RunQueryDsl;
 use pasion_data_model::{
     Authentication, AuthenticationMethod, BrowserSession, Clock, Password,
     UpstreamOAuthAuthorizationSession, User,
 };
 use pasion_storage::{
     Page, Pagination,
-    pagination::Node,
+    pagination::{Node, PaginationDirection},
     user::{BrowserSessionFilter, BrowserSessionRepository},
 };
 use rand::RngCore;
-use sea_query::{Expr, PostgresQueryBuilder, Query};
-use sea_query_binder::SqlxBinder;
-use sqlx::PgConnection;
 use ulid::Ulid;
 use uuid::Uuid;
 
 use crate::{
     DatabaseError, DatabaseInconsistencyError,
-    filter::StatementExt,
-    iden::{UpstreamOAuthAuthorizationSessions, UserSessionAuthentications, UserSessions, Users},
-    pagination::QueryBuilderExt,
-    tracing::ExecuteExt,
+    schema::{
+        upstream_oauth_authorization_sessions, user_session_authentications, user_sessions, users,
+    },
 };
 
 /// An implementation of [`BrowserSessionRepository`] for a PostgreSQL
 /// connection
 pub struct PgBrowserSessionRepository<'c> {
-    conn: &'c mut PgConnection,
+    conn: &'c mut diesel_async::AsyncPgConnection,
 }
 
 impl<'c> PgBrowserSessionRepository<'c> {
     /// Create a new [`PgBrowserSessionRepository`] from an active PostgreSQL
     /// connection
-    pub fn new(conn: &'c mut PgConnection) -> Self {
+    pub fn new(conn: &'c mut diesel_async::AsyncPgConnection) -> Self {
         Self { conn }
     }
 }
 
-#[allow(clippy::struct_field_names)]
-#[derive(sqlx::FromRow)]
-#[sea_query::enum_def]
-struct SessionLookup {
+/// Row type for loading user_sessions columns
+#[derive(Debug, Clone, Queryable, Selectable)]
+#[diesel(table_name = user_sessions)]
+struct UserSessionRow {
     user_session_id: Uuid,
-    user_session_created_at: DateTime<Utc>,
-    user_session_finished_at: Option<DateTime<Utc>>,
-    user_session_user_agent: Option<String>,
-    user_session_last_active_at: Option<DateTime<Utc>>,
-    user_session_last_active_ip: Option<IpAddr>,
     user_id: Uuid,
-    user_username: String,
-    user_created_at: DateTime<Utc>,
-    user_locked_at: Option<DateTime<Utc>>,
-    user_deactivated_at: Option<DateTime<Utc>>,
-    user_can_request_admin: bool,
-    user_is_guest: bool,
+    created_at: DateTime<Utc>,
+    finished_at: Option<DateTime<Utc>>,
+    user_agent: Option<String>,
+    last_active_at: Option<DateTime<Utc>>,
+    last_active_ip: Option<ipnetwork::IpNetwork>,
+}
+
+/// Row type for loading users columns
+#[derive(Debug, Clone, Queryable, Selectable)]
+#[diesel(table_name = users)]
+struct UserRow {
+    user_id: Uuid,
+    username: String,
+    created_at: DateTime<Utc>,
+    locked_at: Option<DateTime<Utc>>,
+    can_request_admin: bool,
+    is_guest: bool,
+    deactivated_at: Option<DateTime<Utc>>,
+}
+
+/// Combined result from joining user_sessions + users.
+/// We construct this from the two row types after loading.
+#[derive(Debug, Clone)]
+struct SessionLookup {
+    session: UserSessionRow,
+    user: UserRow,
+}
+
+impl From<(UserSessionRow, UserRow)> for SessionLookup {
+    fn from((session, user): (UserSessionRow, UserRow)) -> Self {
+        Self { session, user }
+    }
 }
 
 impl Node<Ulid> for SessionLookup {
     fn cursor(&self) -> Ulid {
-        self.user_id.into()
+        self.session.user_session_id.into()
     }
 }
 
@@ -69,30 +88,33 @@ impl TryFrom<SessionLookup> for BrowserSession {
     type Error = DatabaseInconsistencyError;
 
     fn try_from(value: SessionLookup) -> Result<Self, Self::Error> {
-        let id = Ulid::from(value.user_id);
+        let id = Ulid::from(value.user.user_id);
         let user = User {
             id,
-            username: value.user_username,
+            username: value.user.username,
             sub: id.to_string(),
-            created_at: value.user_created_at,
-            locked_at: value.user_locked_at,
-            deactivated_at: value.user_deactivated_at,
-            can_request_admin: value.user_can_request_admin,
-            is_guest: value.user_is_guest,
+            created_at: value.user.created_at,
+            locked_at: value.user.locked_at,
+            deactivated_at: value.user.deactivated_at,
+            can_request_admin: value.user.can_request_admin,
+            is_guest: value.user.is_guest,
         };
 
         Ok(BrowserSession {
-            id: value.user_session_id.into(),
+            id: value.session.user_session_id.into(),
             user,
-            created_at: value.user_session_created_at,
-            finished_at: value.user_session_finished_at,
-            user_agent: value.user_session_user_agent,
-            last_active_at: value.user_session_last_active_at,
-            last_active_ip: value.user_session_last_active_ip,
+            created_at: value.session.created_at,
+            finished_at: value.session.finished_at,
+            user_agent: value.session.user_agent,
+            last_active_at: value.session.last_active_at,
+            last_active_ip: value.session.last_active_ip.map(|ip| ip.ip()),
         })
     }
 }
 
+/// Row type for loading a user session authentication
+#[derive(Debug, Clone, Queryable, Selectable)]
+#[diesel(table_name = user_session_authentications)]
 struct AuthenticationLookup {
     user_session_authentication_id: Uuid,
     created_at: DateTime<Utc>,
@@ -117,7 +139,9 @@ impl TryFrom<AuthenticationLookup> for Authentication {
             },
             (None, None) => AuthenticationMethod::Unknown,
             _ => {
-                return Err(DatabaseInconsistencyError::on("user_session_authentications").row(id));
+                return Err(
+                    DatabaseInconsistencyError::on("user_session_authentications").row(id),
+                );
             }
         };
 
@@ -129,50 +153,122 @@ impl TryFrom<AuthenticationLookup> for Authentication {
     }
 }
 
-impl crate::filter::Filter for BrowserSessionFilter<'_> {
-    fn generate_condition(&self, _has_joins: bool) -> impl sea_query::IntoCondition {
-        sea_query::Condition::all()
-            .add_option(self.user().map(|user| {
-                Expr::col((UserSessions::Table, UserSessions::UserId)).eq(Uuid::from(user.id))
-            }))
-            .add_option(self.state().map(|state| {
-                if state.is_active() {
-                    Expr::col((UserSessions::Table, UserSessions::FinishedAt)).is_null()
-                } else {
-                    Expr::col((UserSessions::Table, UserSessions::FinishedAt)).is_not_null()
-                }
-            }))
-            .add_option(self.last_active_after().map(|last_active_after| {
-                Expr::col((UserSessions::Table, UserSessions::LastActiveAt)).gt(last_active_after)
-            }))
-            .add_option(self.last_active_before().map(|last_active_before| {
-                Expr::col((UserSessions::Table, UserSessions::LastActiveAt)).lt(last_active_before)
-            }))
-            .add_option(self.authenticated_by_upstream_sessions().map(|filter| {
-                // For filtering by upstream sessions, we need to hop over the
-                // `user_session_authentications` table
-                let join_expr = Expr::col((
-                    UserSessionAuthentications::Table,
-                    UserSessionAuthentications::UpstreamOAuthAuthorizationSessionId,
-                ))
-                .eq(Expr::col((
-                    UpstreamOAuthAuthorizationSessions::Table,
-                    UpstreamOAuthAuthorizationSessions::UpstreamOAuthAuthorizationSessionId,
-                )));
+/// Insertable row for creating a new browser session
+#[derive(Insertable)]
+#[diesel(table_name = user_sessions)]
+struct NewUserSession {
+    user_session_id: Uuid,
+    user_id: Uuid,
+    created_at: DateTime<Utc>,
+    user_agent: Option<String>,
+}
 
-                Expr::col((UserSessions::Table, UserSessions::UserSessionId)).in_subquery(
-                    Query::select()
-                        .expr(Expr::col((
-                            UserSessionAuthentications::Table,
-                            UserSessionAuthentications::UserSessionId,
-                        )))
-                        .from(UserSessionAuthentications::Table)
-                        .inner_join(UpstreamOAuthAuthorizationSessions::Table, join_expr)
-                        .apply_filter(filter)
-                        .take(),
+/// Insertable row for creating a new session authentication (password)
+#[derive(Insertable)]
+#[diesel(table_name = user_session_authentications)]
+struct NewSessionAuthenticationPassword {
+    user_session_authentication_id: Uuid,
+    user_session_id: Uuid,
+    created_at: DateTime<Utc>,
+    user_password_id: Option<Uuid>,
+}
+
+/// Insertable row for creating a new session authentication (upstream)
+#[derive(Insertable)]
+#[diesel(table_name = user_session_authentications)]
+struct NewSessionAuthenticationUpstream {
+    user_session_authentication_id: Uuid,
+    user_session_id: Uuid,
+    created_at: DateTime<Utc>,
+    upstream_oauth_authorization_session_id: Option<Uuid>,
+}
+
+/// Result row for cleanup/batch queries using raw SQL
+#[derive(Debug, QueryableByName)]
+struct CleanupResult {
+    #[diesel(sql_type = diesel::sql_types::BigInt)]
+    count: i64,
+    #[diesel(sql_type = diesel::sql_types::Nullable<diesel::sql_types::Timestamptz>)]
+    last_ts: Option<DateTime<Utc>>,
+}
+
+/// Apply the common [`BrowserSessionFilter`] conditions to any diesel
+/// query that supports `.filter()` on `user_sessions` columns.
+macro_rules! apply_session_filter {
+    ($query:expr, $filter:expr) => {{
+        let mut q = $query;
+        if let Some(user) = $filter.user() {
+            q = q.filter(user_sessions::user_id.eq(Uuid::from(user.id)));
+        }
+        if let Some(state) = $filter.state() {
+            if state.is_active() {
+                q = q.filter(user_sessions::finished_at.is_null());
+            } else {
+                q = q.filter(user_sessions::finished_at.is_not_null());
+            }
+        }
+        if let Some(last_active_after) = $filter.last_active_after() {
+            q = q.filter(user_sessions::last_active_at.gt(last_active_after));
+        }
+        if let Some(last_active_before) = $filter.last_active_before() {
+            q = q.filter(user_sessions::last_active_at.lt(last_active_before));
+        }
+        if let Some(upstream_filter) = $filter.authenticated_by_upstream_sessions() {
+            let mut sub = user_session_authentications::table
+                .inner_join(
+                    upstream_oauth_authorization_sessions::table.on(
+                        user_session_authentications::upstream_oauth_authorization_session_id
+                            .eq(upstream_oauth_authorization_sessions::upstream_oauth_authorization_session_id
+                                .nullable()),
+                    ),
                 )
-            }))
-    }
+                .select(user_session_authentications::user_session_id)
+                .into_boxed();
+
+            if let Some(provider) = upstream_filter.provider() {
+                sub = sub.filter(
+                    upstream_oauth_authorization_sessions::upstream_oauth_provider_id
+                        .eq(Uuid::from(provider.id)),
+                );
+            }
+            q = q.filter(user_sessions::user_session_id.eq_any(sub));
+        }
+        q
+    }};
+}
+
+/// Load the session + user join using raw SQL to avoid diesel tuple
+/// compatibility issues. Returns the session row for the given ID or None.
+async fn load_session_lookup(
+    conn: &mut diesel_async::AsyncPgConnection,
+    session_id: Uuid,
+) -> Result<Option<SessionLookup>, DatabaseError> {
+    let session_row = user_sessions::table
+        .filter(user_sessions::user_session_id.eq(session_id))
+        .select(UserSessionRow::as_select())
+        .first::<UserSessionRow>(conn)
+        .await
+        .optional()?;
+
+    let Some(session_row) = session_row else {
+        return Ok(None);
+    };
+
+    let user_row = users::table
+        .filter(users::user_id.eq(session_row.user_id))
+        .select(UserRow::as_select())
+        .first::<UserRow>(conn)
+        .await
+        .optional()?;
+
+    let Some(user_row) = user_row else {
+        return Ok(None);
+    };
+
+    Ok(Some(SessionLookup {
+        session: session_row,
+        user: user_row,
+    }))
 }
 
 #[async_trait]
@@ -183,38 +279,12 @@ impl BrowserSessionRepository for PgBrowserSessionRepository<'_> {
         name = "db.browser_session.lookup",
         skip_all,
         fields(
-            db.query.text,
             user_session.id = %id,
         ),
         err,
     )]
     async fn lookup(&mut self, id: Ulid) -> Result<Option<BrowserSession>, Self::Error> {
-        let res = sqlx::query_as!(
-            SessionLookup,
-            r#"
-                SELECT s.user_session_id
-                     , s.created_at            AS "user_session_created_at"
-                     , s.finished_at           AS "user_session_finished_at"
-                     , s.user_agent            AS "user_session_user_agent"
-                     , s.last_active_at        AS "user_session_last_active_at"
-                     , s.last_active_ip        AS "user_session_last_active_ip: IpAddr"
-                     , u.user_id
-                     , u.username              AS "user_username"
-                     , u.created_at            AS "user_created_at"
-                     , u.locked_at             AS "user_locked_at"
-                     , u.deactivated_at        AS "user_deactivated_at"
-                     , u.can_request_admin     AS "user_can_request_admin"
-                     , u.is_guest              AS "user_is_guest"
-                FROM user_sessions s
-                INNER JOIN users u
-                    USING (user_id)
-                WHERE s.user_session_id = $1
-            "#,
-            Uuid::from(id),
-        )
-        .traced()
-        .fetch_optional(&mut *self.conn)
-        .await?;
+        let res = load_session_lookup(self.conn, Uuid::from(id)).await?;
 
         let Some(res) = res else { return Ok(None) };
 
@@ -225,7 +295,6 @@ impl BrowserSessionRepository for PgBrowserSessionRepository<'_> {
         name = "db.browser_session.add",
         skip_all,
         fields(
-            db.query.text,
             %user.id,
             user_session.id,
         ),
@@ -242,19 +311,17 @@ impl BrowserSessionRepository for PgBrowserSessionRepository<'_> {
         let id = Ulid::from_datetime_with_source(created_at.into(), rng);
         tracing::Span::current().record("user_session.id", tracing::field::display(id));
 
-        sqlx::query!(
-            r#"
-                INSERT INTO user_sessions (user_session_id, user_id, created_at, user_agent)
-                VALUES ($1, $2, $3, $4)
-            "#,
-            Uuid::from(id),
-            Uuid::from(user.id),
+        let new_session = NewUserSession {
+            user_session_id: Uuid::from(id),
+            user_id: Uuid::from(user.id),
             created_at,
-            user_agent.as_deref(),
-        )
-        .traced()
-        .execute(&mut *self.conn)
-        .await?;
+            user_agent: user_agent.clone(),
+        };
+
+        diesel::insert_into(user_sessions::table)
+            .values(&new_session)
+            .execute(self.conn)
+            .await?;
 
         let session = BrowserSession {
             id,
@@ -274,7 +341,6 @@ impl BrowserSessionRepository for PgBrowserSessionRepository<'_> {
         name = "db.browser_session.finish",
         skip_all,
         fields(
-            db.query.text,
             %user_session.id,
         ),
         err,
@@ -285,22 +351,17 @@ impl BrowserSessionRepository for PgBrowserSessionRepository<'_> {
         mut user_session: BrowserSession,
     ) -> Result<BrowserSession, Self::Error> {
         let finished_at = clock.now();
-        let res = sqlx::query!(
-            r#"
-                UPDATE user_sessions
-                SET finished_at = $1
-                WHERE user_session_id = $2
-            "#,
-            finished_at,
-            Uuid::from(user_session.id),
+        let rows_affected = diesel::update(
+            user_sessions::table
+                .filter(user_sessions::user_session_id.eq(Uuid::from(user_session.id))),
         )
-        .traced()
-        .execute(&mut *self.conn)
+        .set(user_sessions::finished_at.eq(Some(finished_at)))
+        .execute(self.conn)
         .await?;
 
         user_session.finished_at = Some(finished_at);
 
-        DatabaseError::ensure_affected_rows(&res, 1)?;
+        DatabaseError::ensure_affected_rows_usize(rows_affected, 1)?;
 
         Ok(user_session)
     }
@@ -308,9 +369,6 @@ impl BrowserSessionRepository for PgBrowserSessionRepository<'_> {
     #[tracing::instrument(
         name = "db.browser_session.finish_bulk",
         skip_all,
-        fields(
-            db.query.text,
-        ),
         err,
     )]
     async fn finish_bulk(
@@ -319,26 +377,21 @@ impl BrowserSessionRepository for PgBrowserSessionRepository<'_> {
         filter: BrowserSessionFilter<'_>,
     ) -> Result<usize, Self::Error> {
         let finished_at = clock.now();
-        let (sql, arguments) = sea_query::Query::update()
-            .table(UserSessions::Table)
-            .value(UserSessions::FinishedAt, finished_at)
-            .apply_filter(filter)
-            .build_sqlx(PostgresQueryBuilder);
 
-        let res = sqlx::query_with(&sql, arguments)
-            .traced()
-            .execute(&mut *self.conn)
+        let update = diesel::update(user_sessions::table).into_boxed();
+        let update = apply_session_filter!(update, filter);
+
+        let rows_affected = update
+            .set(user_sessions::finished_at.eq(Some(finished_at)))
+            .execute(self.conn)
             .await?;
 
-        Ok(res.rows_affected().try_into().unwrap_or(usize::MAX))
+        Ok(rows_affected)
     }
 
     #[tracing::instrument(
         name = "db.browser_session.list",
         skip_all,
-        fields(
-            db.query.text,
-        ),
         err,
     )]
     async fn list(
@@ -346,76 +399,63 @@ impl BrowserSessionRepository for PgBrowserSessionRepository<'_> {
         filter: BrowserSessionFilter<'_>,
         pagination: Pagination,
     ) -> Result<Page<BrowserSession>, Self::Error> {
-        let (sql, arguments) = sea_query::Query::select()
-            .expr_as(
-                Expr::col((UserSessions::Table, UserSessions::UserSessionId)),
-                SessionLookupIden::UserSessionId,
-            )
-            .expr_as(
-                Expr::col((UserSessions::Table, UserSessions::CreatedAt)),
-                SessionLookupIden::UserSessionCreatedAt,
-            )
-            .expr_as(
-                Expr::col((UserSessions::Table, UserSessions::FinishedAt)),
-                SessionLookupIden::UserSessionFinishedAt,
-            )
-            .expr_as(
-                Expr::col((UserSessions::Table, UserSessions::UserAgent)),
-                SessionLookupIden::UserSessionUserAgent,
-            )
-            .expr_as(
-                Expr::col((UserSessions::Table, UserSessions::LastActiveAt)),
-                SessionLookupIden::UserSessionLastActiveAt,
-            )
-            .expr_as(
-                Expr::col((UserSessions::Table, UserSessions::LastActiveIp)),
-                SessionLookupIden::UserSessionLastActiveIp,
-            )
-            .expr_as(
-                Expr::col((Users::Table, Users::UserId)),
-                SessionLookupIden::UserId,
-            )
-            .expr_as(
-                Expr::col((Users::Table, Users::Username)),
-                SessionLookupIden::UserUsername,
-            )
-            .expr_as(
-                Expr::col((Users::Table, Users::CreatedAt)),
-                SessionLookupIden::UserCreatedAt,
-            )
-            .expr_as(
-                Expr::col((Users::Table, Users::LockedAt)),
-                SessionLookupIden::UserLockedAt,
-            )
-            .expr_as(
-                Expr::col((Users::Table, Users::DeactivatedAt)),
-                SessionLookupIden::UserDeactivatedAt,
-            )
-            .expr_as(
-                Expr::col((Users::Table, Users::CanRequestAdmin)),
-                SessionLookupIden::UserCanRequestAdmin,
-            )
-            .expr_as(
-                Expr::col((Users::Table, Users::IsGuest)),
-                SessionLookupIden::UserIsGuest,
-            )
-            .from(UserSessions::Table)
-            .inner_join(
-                Users::Table,
-                Expr::col((UserSessions::Table, UserSessions::UserId))
-                    .equals((Users::Table, Users::UserId)),
-            )
-            .apply_filter(filter)
-            .generate_pagination(
-                (UserSessions::Table, UserSessions::UserSessionId),
-                pagination,
-            )
-            .build_sqlx(PostgresQueryBuilder);
+        // First, query the session IDs with filter + pagination
+        let query = user_sessions::table
+            .select(UserSessionRow::as_select())
+            .into_boxed();
 
-        let edges: Vec<SessionLookup> = sqlx::query_as_with(&sql, arguments)
-            .traced()
-            .fetch_all(&mut *self.conn)
+        let mut query = apply_session_filter!(query, filter);
+
+        // Apply pagination cursors
+        if let Some(after) = pagination.after {
+            query = query.filter(user_sessions::user_session_id.gt(Uuid::from(after)));
+        }
+        if let Some(before) = pagination.before {
+            query = query.filter(user_sessions::user_session_id.lt(Uuid::from(before)));
+        }
+
+        match pagination.direction {
+            PaginationDirection::Forward => {
+                query = query
+                    .order(user_sessions::user_session_id.asc())
+                    .limit((pagination.count + 1) as i64);
+            }
+            PaginationDirection::Backward => {
+                query = query
+                    .order(user_sessions::user_session_id.desc())
+                    .limit((pagination.count + 1) as i64);
+            }
+        }
+
+        let session_rows: Vec<UserSessionRow> = query.load(self.conn).await?;
+
+        // Collect unique user IDs and fetch the user rows
+        let user_ids: Vec<Uuid> = session_rows
+            .iter()
+            .map(|s| s.user_id)
+            .collect::<std::collections::HashSet<_>>()
+            .into_iter()
+            .collect();
+
+        let user_rows: Vec<UserRow> = users::table
+            .filter(users::user_id.eq_any(&user_ids))
+            .select(UserRow::as_select())
+            .load(self.conn)
             .await?;
+
+        let user_map: std::collections::HashMap<Uuid, UserRow> = user_rows
+            .into_iter()
+            .map(|u| (u.user_id, u))
+            .collect();
+
+        // Combine into SessionLookup entries
+        let edges: Vec<SessionLookup> = session_rows
+            .into_iter()
+            .filter_map(|session| {
+                let user = user_map.get(&session.user_id)?.clone();
+                Some(SessionLookup { session, user })
+            })
+            .collect();
 
         let page = pagination
             .process(edges)
@@ -427,22 +467,13 @@ impl BrowserSessionRepository for PgBrowserSessionRepository<'_> {
     #[tracing::instrument(
         name = "db.browser_session.count",
         skip_all,
-        fields(
-            db.query.text,
-        ),
         err,
     )]
     async fn count(&mut self, filter: BrowserSessionFilter<'_>) -> Result<usize, Self::Error> {
-        let (sql, arguments) = sea_query::Query::select()
-            .expr(Expr::col((UserSessions::Table, UserSessions::UserSessionId)).count())
-            .from(UserSessions::Table)
-            .apply_filter(filter)
-            .build_sqlx(PostgresQueryBuilder);
+        let query = user_sessions::table.into_boxed();
+        let query = apply_session_filter!(query, filter);
 
-        let count: i64 = sqlx::query_scalar_with(&sql, arguments)
-            .traced()
-            .fetch_one(&mut *self.conn)
-            .await?;
+        let count: i64 = query.count().get_result(self.conn).await?;
 
         count
             .try_into()
@@ -453,7 +484,6 @@ impl BrowserSessionRepository for PgBrowserSessionRepository<'_> {
         name = "db.browser_session.authenticate_with_password",
         skip_all,
         fields(
-            db.query.text,
             %user_session.id,
             %user_password.id,
             user_session_authentication.id,
@@ -474,20 +504,17 @@ impl BrowserSessionRepository for PgBrowserSessionRepository<'_> {
             tracing::field::display(id),
         );
 
-        sqlx::query!(
-            r#"
-                INSERT INTO user_session_authentications
-                    (user_session_authentication_id, user_session_id, created_at, user_password_id)
-                VALUES ($1, $2, $3, $4)
-            "#,
-            Uuid::from(id),
-            Uuid::from(user_session.id),
+        let new_auth = NewSessionAuthenticationPassword {
+            user_session_authentication_id: Uuid::from(id),
+            user_session_id: Uuid::from(user_session.id),
             created_at,
-            Uuid::from(user_password.id),
-        )
-        .traced()
-        .execute(&mut *self.conn)
-        .await?;
+            user_password_id: Some(Uuid::from(user_password.id)),
+        };
+
+        diesel::insert_into(user_session_authentications::table)
+            .values(&new_auth)
+            .execute(self.conn)
+            .await?;
 
         Ok(Authentication {
             id,
@@ -502,7 +529,6 @@ impl BrowserSessionRepository for PgBrowserSessionRepository<'_> {
         name = "db.browser_session.authenticate_with_upstream",
         skip_all,
         fields(
-            db.query.text,
             %user_session.id,
             %upstream_oauth_session.id,
             user_session_authentication.id,
@@ -523,20 +549,17 @@ impl BrowserSessionRepository for PgBrowserSessionRepository<'_> {
             tracing::field::display(id),
         );
 
-        sqlx::query!(
-            r#"
-                INSERT INTO user_session_authentications
-                    (user_session_authentication_id, user_session_id, created_at, upstream_oauth_authorization_session_id)
-                VALUES ($1, $2, $3, $4)
-            "#,
-            Uuid::from(id),
-            Uuid::from(user_session.id),
+        let new_auth = NewSessionAuthenticationUpstream {
+            user_session_authentication_id: Uuid::from(id),
+            user_session_id: Uuid::from(user_session.id),
             created_at,
-            Uuid::from(upstream_oauth_session.id),
-        )
-        .traced()
-        .execute(&mut *self.conn)
-        .await?;
+            upstream_oauth_authorization_session_id: Some(Uuid::from(upstream_oauth_session.id)),
+        };
+
+        diesel::insert_into(user_session_authentications::table)
+            .values(&new_auth)
+            .execute(self.conn)
+            .await?;
 
         Ok(Authentication {
             id,
@@ -551,7 +574,6 @@ impl BrowserSessionRepository for PgBrowserSessionRepository<'_> {
         name = "db.browser_session.get_last_authentication",
         skip_all,
         fields(
-            db.query.text,
             %user_session.id,
         ),
         err,
@@ -560,23 +582,15 @@ impl BrowserSessionRepository for PgBrowserSessionRepository<'_> {
         &mut self,
         user_session: &BrowserSession,
     ) -> Result<Option<Authentication>, Self::Error> {
-        let authentication = sqlx::query_as!(
-            AuthenticationLookup,
-            r#"
-                SELECT user_session_authentication_id
-                     , created_at
-                     , user_password_id
-                     , upstream_oauth_authorization_session_id
-                FROM user_session_authentications
-                WHERE user_session_id = $1
-                ORDER BY created_at DESC
-                LIMIT 1
-            "#,
-            Uuid::from(user_session.id),
-        )
-        .traced()
-        .fetch_optional(&mut *self.conn)
-        .await?;
+        let authentication = user_session_authentications::table
+            .filter(
+                user_session_authentications::user_session_id.eq(Uuid::from(user_session.id)),
+            )
+            .select(AuthenticationLookup::as_select())
+            .order(user_session_authentications::created_at.desc())
+            .first::<AuthenticationLookup>(self.conn)
+            .await
+            .optional()?;
 
         let Some(authentication) = authentication else {
             return Ok(None);
@@ -589,9 +603,6 @@ impl BrowserSessionRepository for PgBrowserSessionRepository<'_> {
     #[tracing::instrument(
         name = "db.browser_session.record_batch_activity",
         skip_all,
-        fields(
-            db.query.text,
-        ),
         err,
     )]
     async fn record_batch_activity(
@@ -603,15 +614,17 @@ impl BrowserSessionRepository for PgBrowserSessionRepository<'_> {
         activities.sort_unstable();
         let mut ids = Vec::with_capacity(activities.len());
         let mut last_activities = Vec::with_capacity(activities.len());
-        let mut ips = Vec::with_capacity(activities.len());
+        let mut ips: Vec<Option<ipnetwork::IpNetwork>> = Vec::with_capacity(activities.len());
 
         for (id, last_activity, ip) in activities {
             ids.push(Uuid::from(id));
             last_activities.push(last_activity);
-            ips.push(ip);
+            ips.push(ip.map(ipnetwork::IpNetwork::from));
         }
 
-        let res = sqlx::query!(
+        let expected = ids.len();
+
+        let rows_affected = diesel::sql_query(
             r#"
                 UPDATE user_sessions
                 SET last_active_at = GREATEST(t.last_active_at, user_sessions.last_active_at)
@@ -623,15 +636,16 @@ impl BrowserSessionRepository for PgBrowserSessionRepository<'_> {
                 ) AS t
                 WHERE user_sessions.user_session_id = t.user_session_id
             "#,
-            &ids,
-            &last_activities,
-            &ips as &[Option<IpAddr>],
         )
-        .traced()
-        .execute(&mut *self.conn)
+        .bind::<diesel::sql_types::Array<diesel::sql_types::Uuid>, _>(&ids)
+        .bind::<diesel::sql_types::Array<diesel::sql_types::Timestamptz>, _>(&last_activities)
+        .bind::<diesel::sql_types::Array<diesel::sql_types::Nullable<diesel::sql_types::Inet>>, _>(
+            &ips,
+        )
+        .execute(self.conn)
         .await?;
 
-        DatabaseError::ensure_affected_rows(&res, ids.len().try_into().unwrap_or(u64::MAX))?;
+        DatabaseError::ensure_affected_rows_usize(rows_affected, expected)?;
 
         Ok(())
     }
@@ -640,7 +654,6 @@ impl BrowserSessionRepository for PgBrowserSessionRepository<'_> {
         name = "db.browser_session.cleanup_finished",
         skip_all,
         fields(
-            db.query.text,
             since = since.map(tracing::field::display),
             until = %until,
             limit = limit,
@@ -653,7 +666,7 @@ impl BrowserSessionRepository for PgBrowserSessionRepository<'_> {
         until: DateTime<Utc>,
         limit: usize,
     ) -> Result<(usize, Option<DateTime<Utc>>), Self::Error> {
-        let res = sqlx::query!(
+        let res: CleanupResult = diesel::sql_query(
             r#"
                 WITH
                     to_delete AS (
@@ -685,19 +698,18 @@ impl BrowserSessionRepository for PgBrowserSessionRepository<'_> {
                         WHERE user_sessions.user_session_id = to_delete.user_session_id
                         RETURNING user_sessions.finished_at
                     )
-                SELECT COUNT(*) as "count!", MAX(finished_at) as last_finished_at FROM deleted_sessions
+                SELECT COUNT(*) AS count, MAX(finished_at) AS last_ts FROM deleted_sessions
             "#,
-            since,
-            until,
-            i64::try_from(limit).unwrap_or(i64::MAX),
         )
-        .traced()
-        .fetch_one(&mut *self.conn)
+        .bind::<diesel::sql_types::Nullable<diesel::sql_types::Timestamptz>, _>(since)
+        .bind::<diesel::sql_types::Timestamptz, _>(until)
+        .bind::<diesel::sql_types::BigInt, _>(i64::try_from(limit).unwrap_or(i64::MAX))
+        .get_result(self.conn)
         .await?;
 
         Ok((
             res.count.try_into().unwrap_or(usize::MAX),
-            res.last_finished_at,
+            res.last_ts,
         ))
     }
 
@@ -705,7 +717,6 @@ impl BrowserSessionRepository for PgBrowserSessionRepository<'_> {
         name = "db.browser_session.cleanup_inactive_ips",
         skip_all,
         fields(
-            db.query.text,
             since = since.map(tracing::field::display),
             threshold = %threshold,
             limit = limit,
@@ -718,7 +729,7 @@ impl BrowserSessionRepository for PgBrowserSessionRepository<'_> {
         threshold: DateTime<Utc>,
         limit: usize,
     ) -> Result<(usize, Option<DateTime<Utc>>), Self::Error> {
-        let res = sqlx::query!(
+        let res: CleanupResult = diesel::sql_query(
             r#"
                 WITH to_update AS (
                     SELECT user_session_id, last_active_at
@@ -738,19 +749,18 @@ impl BrowserSessionRepository for PgBrowserSessionRepository<'_> {
                     WHERE user_sessions.user_session_id = to_update.user_session_id
                     RETURNING user_sessions.last_active_at
                 )
-                SELECT COUNT(*) AS "count!", MAX(last_active_at) AS last_active_at FROM updated
+                SELECT COUNT(*) AS count, MAX(last_active_at) AS last_ts FROM updated
             "#,
-            since,
-            threshold,
-            i64::try_from(limit).unwrap_or(i64::MAX),
         )
-        .traced()
-        .fetch_one(&mut *self.conn)
+        .bind::<diesel::sql_types::Nullable<diesel::sql_types::Timestamptz>, _>(since)
+        .bind::<diesel::sql_types::Timestamptz, _>(threshold)
+        .bind::<diesel::sql_types::BigInt, _>(i64::try_from(limit).unwrap_or(i64::MAX))
+        .get_result(self.conn)
         .await?;
 
         Ok((
             res.count.try_into().unwrap_or(usize::MAX),
-            res.last_active_at,
+            res.last_ts,
         ))
     }
 }

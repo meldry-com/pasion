@@ -1,44 +1,40 @@
 use async_trait::async_trait;
 use chrono::{DateTime, Utc};
+use diesel::prelude::*;
+use diesel_async::RunQueryDsl;
 use pasion_data_model::{
     BrowserSession, Clock, UpstreamOAuthAuthorizationSession, User, UserEmail,
     UserEmailAuthentication, UserEmailAuthenticationCode, UserRegistration,
 };
 use pasion_storage::{
     Page, Pagination,
-    pagination::Node,
+    pagination::{Node, PaginationDirection},
     user::{UserEmailFilter, UserEmailRepository},
 };
 use rand::RngCore;
-use sea_query::{Expr, Func, PostgresQueryBuilder, Query, SimpleExpr, enum_def};
-use sea_query_binder::SqlxBinder;
-use sqlx::PgConnection;
 use ulid::Ulid;
 use uuid::Uuid;
 
 use crate::{
     DatabaseError,
-    filter::{Filter, StatementExt},
-    iden::UserEmails,
-    pagination::QueryBuilderExt,
-    tracing::ExecuteExt,
+    schema::{user_email_authentication_codes, user_email_authentications, user_emails},
 };
 
 /// An implementation of [`UserEmailRepository`] for a PostgreSQL connection
 pub struct PgUserEmailRepository<'c> {
-    conn: &'c mut PgConnection,
+    conn: &'c mut diesel_async::AsyncPgConnection,
 }
 
 impl<'c> PgUserEmailRepository<'c> {
     /// Create a new [`PgUserEmailRepository`] from an active PostgreSQL
     /// connection
-    pub fn new(conn: &'c mut PgConnection) -> Self {
+    pub fn new(conn: &'c mut diesel_async::AsyncPgConnection) -> Self {
         Self { conn }
     }
 }
 
-#[derive(Debug, Clone, sqlx::FromRow)]
-#[enum_def]
+#[derive(Debug, Clone, Queryable, Selectable)]
+#[diesel(table_name = user_emails)]
 struct UserEmailLookup {
     user_email_id: Uuid,
     user_id: Uuid,
@@ -63,6 +59,8 @@ impl From<UserEmailLookup> for UserEmail {
     }
 }
 
+#[derive(Debug, Clone, Queryable, Selectable)]
+#[diesel(table_name = user_email_authentications)]
 struct UserEmailAuthenticationLookup {
     user_email_authentication_id: Uuid,
     user_session_id: Option<Uuid>,
@@ -85,6 +83,8 @@ impl From<UserEmailAuthenticationLookup> for UserEmailAuthentication {
     }
 }
 
+#[derive(Debug, Clone, Queryable, Selectable)]
+#[diesel(table_name = user_email_authentication_codes)]
 struct UserEmailAuthenticationCodeLookup {
     user_email_authentication_code_id: Uuid,
     user_email_authentication_id: Uuid,
@@ -105,20 +105,36 @@ impl From<UserEmailAuthenticationCodeLookup> for UserEmailAuthenticationCode {
     }
 }
 
-impl Filter for UserEmailFilter<'_> {
-    fn generate_condition(&self, _has_joins: bool) -> impl sea_query::IntoCondition {
-        sea_query::Condition::all()
-            .add_option(self.user().map(|user| {
-                Expr::col((UserEmails::Table, UserEmails::UserId)).eq(Uuid::from(user.id))
-            }))
-            .add_option(self.email().map(|email| {
-                SimpleExpr::from(Func::lower(Expr::col((
-                    UserEmails::Table,
-                    UserEmails::Email,
-                ))))
-                .eq(Func::lower(email))
-            }))
-    }
+/// Insertable row for creating a new user email
+#[derive(Insertable)]
+#[diesel(table_name = user_emails)]
+struct NewUserEmail {
+    user_email_id: Uuid,
+    user_id: Uuid,
+    email: String,
+    created_at: DateTime<Utc>,
+}
+
+/// Insertable row for creating a new user email authentication
+#[derive(Insertable)]
+#[diesel(table_name = user_email_authentications)]
+struct NewUserEmailAuthentication {
+    user_email_authentication_id: Uuid,
+    user_session_id: Option<Uuid>,
+    user_registration_id: Option<Uuid>,
+    email: String,
+    created_at: DateTime<Utc>,
+}
+
+/// Insertable row for creating a new user email authentication code
+#[derive(Insertable)]
+#[diesel(table_name = user_email_authentication_codes)]
+struct NewUserEmailAuthenticationCode {
+    user_email_authentication_code_id: Uuid,
+    user_email_authentication_id: Uuid,
+    code: String,
+    created_at: DateTime<Utc>,
+    expires_at: DateTime<Utc>,
 }
 
 #[async_trait]
@@ -129,97 +145,60 @@ impl UserEmailRepository for PgUserEmailRepository<'_> {
         name = "db.user_email.lookup",
         skip_all,
         fields(
-            db.query.text,
             user_email.id = %id,
         ),
         err,
     )]
     async fn lookup(&mut self, id: Ulid) -> Result<Option<UserEmail>, Self::Error> {
-        let res = sqlx::query_as!(
-            UserEmailLookup,
-            r#"
-                SELECT user_email_id
-                     , user_id
-                     , email
-                     , created_at
-                FROM user_emails
+        let res = user_emails::table
+            .find(Uuid::from(id))
+            .select(UserEmailLookup::as_select())
+            .first::<UserEmailLookup>(self.conn)
+            .await
+            .optional()?;
 
-                WHERE user_email_id = $1
-            "#,
-            Uuid::from(id),
-        )
-        .traced()
-        .fetch_optional(&mut *self.conn)
-        .await?;
-
-        let Some(user_email) = res else {
-            return Ok(None);
-        };
-
-        Ok(Some(user_email.into()))
+        Ok(res.map(UserEmail::from))
     }
 
     #[tracing::instrument(
         name = "db.user_email.find",
         skip_all,
         fields(
-            db.query.text,
             %user.id,
             user_email.email = email,
         ),
         err,
     )]
     async fn find(&mut self, user: &User, email: &str) -> Result<Option<UserEmail>, Self::Error> {
-        let res = sqlx::query_as!(
-            UserEmailLookup,
-            r#"
-                SELECT user_email_id
-                     , user_id
-                     , email
-                     , created_at
-                FROM user_emails
+        use crate::lower;
 
-                WHERE user_id = $1 AND LOWER(email) = LOWER($2)
-            "#,
-            Uuid::from(user.id),
-            email,
-        )
-        .traced()
-        .fetch_optional(&mut *self.conn)
-        .await?;
+        let res = user_emails::table
+            .filter(user_emails::user_id.eq(Uuid::from(user.id)))
+            .filter(lower(user_emails::email).eq(email.to_lowercase()))
+            .select(UserEmailLookup::as_select())
+            .first::<UserEmailLookup>(self.conn)
+            .await
+            .optional()?;
 
-        let Some(user_email) = res else {
-            return Ok(None);
-        };
-
-        Ok(Some(user_email.into()))
+        Ok(res.map(UserEmail::from))
     }
 
     #[tracing::instrument(
         name = "db.user_email.find_by_email",
         skip_all,
         fields(
-            db.query.text,
             user_email.email = email,
         ),
         err,
     )]
     async fn find_by_email(&mut self, email: &str) -> Result<Option<UserEmail>, Self::Error> {
-        let res = sqlx::query_as!(
-            UserEmailLookup,
-            r#"
-                SELECT user_email_id
-                     , user_id
-                     , email
-                     , created_at
-                FROM user_emails
-                WHERE LOWER(email) = LOWER($1)
-            "#,
-            email,
-        )
-        .traced()
-        .fetch_all(&mut *self.conn)
-        .await?;
+        use crate::lower;
+
+        let res: Vec<UserEmailLookup> = user_emails::table
+            .filter(lower(user_emails::email).eq(email.to_lowercase()))
+            .select(UserEmailLookup::as_select())
+            .load(self.conn)
+            .await?;
 
         if res.len() != 1 {
             return Ok(None);
@@ -236,30 +215,17 @@ impl UserEmailRepository for PgUserEmailRepository<'_> {
         name = "db.user_email.all",
         skip_all,
         fields(
-            db.query.text,
             %user.id,
         ),
         err,
     )]
     async fn all(&mut self, user: &User) -> Result<Vec<UserEmail>, Self::Error> {
-        let res = sqlx::query_as!(
-            UserEmailLookup,
-            r#"
-                SELECT user_email_id
-                     , user_id
-                     , email
-                     , created_at
-                FROM user_emails
-
-                WHERE user_id = $1
-
-                ORDER BY email ASC
-            "#,
-            Uuid::from(user.id),
-        )
-        .traced()
-        .fetch_all(&mut *self.conn)
-        .await?;
+        let res: Vec<UserEmailLookup> = user_emails::table
+            .filter(user_emails::user_id.eq(Uuid::from(user.id)))
+            .select(UserEmailLookup::as_select())
+            .order(user_emails::email.asc())
+            .load(self.conn)
+            .await?;
 
         Ok(res.into_iter().map(Into::into).collect())
     }
@@ -267,9 +233,6 @@ impl UserEmailRepository for PgUserEmailRepository<'_> {
     #[tracing::instrument(
         name = "db.user_email.list",
         skip_all,
-        fields(
-            db.query.text,
-        ),
         err,
     )]
     async fn list(
@@ -277,33 +240,43 @@ impl UserEmailRepository for PgUserEmailRepository<'_> {
         filter: UserEmailFilter<'_>,
         pagination: Pagination,
     ) -> Result<Page<UserEmail>, DatabaseError> {
-        let (sql, arguments) = Query::select()
-            .expr_as(
-                Expr::col((UserEmails::Table, UserEmails::UserEmailId)),
-                UserEmailLookupIden::UserEmailId,
-            )
-            .expr_as(
-                Expr::col((UserEmails::Table, UserEmails::UserId)),
-                UserEmailLookupIden::UserId,
-            )
-            .expr_as(
-                Expr::col((UserEmails::Table, UserEmails::Email)),
-                UserEmailLookupIden::Email,
-            )
-            .expr_as(
-                Expr::col((UserEmails::Table, UserEmails::CreatedAt)),
-                UserEmailLookupIden::CreatedAt,
-            )
-            .from(UserEmails::Table)
-            .apply_filter(filter)
-            .generate_pagination((UserEmails::Table, UserEmails::UserEmailId), pagination)
-            .build_sqlx(PostgresQueryBuilder);
+        use crate::lower;
 
-        let edges: Vec<UserEmailLookup> = sqlx::query_as_with(&sql, arguments)
-            .traced()
-            .fetch_all(&mut *self.conn)
-            .await?;
+        let mut query = user_emails::table
+            .select(UserEmailLookup::as_select())
+            .into_boxed();
 
+        // Apply filters
+        if let Some(user) = filter.user() {
+            query = query.filter(user_emails::user_id.eq(Uuid::from(user.id)));
+        }
+
+        if let Some(email) = filter.email() {
+            query = query.filter(lower(user_emails::email).eq(email.to_lowercase()));
+        }
+
+        // Apply pagination
+        if let Some(after) = pagination.after {
+            query = query.filter(user_emails::user_email_id.gt(Uuid::from(after)));
+        }
+        if let Some(before) = pagination.before {
+            query = query.filter(user_emails::user_email_id.lt(Uuid::from(before)));
+        }
+
+        match pagination.direction {
+            PaginationDirection::Forward => {
+                query = query
+                    .order(user_emails::user_email_id.asc())
+                    .limit((pagination.count + 1) as i64);
+            }
+            PaginationDirection::Backward => {
+                query = query
+                    .order(user_emails::user_email_id.desc())
+                    .limit((pagination.count + 1) as i64);
+            }
+        }
+
+        let edges: Vec<UserEmailLookup> = query.load(self.conn).await?;
         let page = pagination.process(edges).map(UserEmail::from);
 
         Ok(page)
@@ -312,21 +285,24 @@ impl UserEmailRepository for PgUserEmailRepository<'_> {
     #[tracing::instrument(
         name = "db.user_email.count",
         skip_all,
-        fields(
-            db.query.text,
-        ),
         err,
     )]
     async fn count(&mut self, filter: UserEmailFilter<'_>) -> Result<usize, Self::Error> {
-        let (sql, arguments) = Query::select()
-            .expr(Expr::col((UserEmails::Table, UserEmails::UserEmailId)).count())
-            .from(UserEmails::Table)
-            .apply_filter(filter)
-            .build_sqlx(PostgresQueryBuilder);
+        use crate::lower;
 
-        let count: i64 = sqlx::query_scalar_with(&sql, arguments)
-            .traced()
-            .fetch_one(&mut *self.conn)
+        let mut query = user_emails::table.into_boxed();
+
+        if let Some(user) = filter.user() {
+            query = query.filter(user_emails::user_id.eq(Uuid::from(user.id)));
+        }
+
+        if let Some(email) = filter.email() {
+            query = query.filter(lower(user_emails::email).eq(email.to_lowercase()));
+        }
+
+        let count: i64 = query
+            .count()
+            .get_result(self.conn)
             .await?;
 
         count
@@ -338,7 +314,6 @@ impl UserEmailRepository for PgUserEmailRepository<'_> {
         name = "db.user_email.add",
         skip_all,
         fields(
-            db.query.text,
             %user.id,
             user_email.id,
             user_email.email = email,
@@ -356,19 +331,17 @@ impl UserEmailRepository for PgUserEmailRepository<'_> {
         let id = Ulid::from_datetime_with_source(created_at.into(), rng);
         tracing::Span::current().record("user_email.id", tracing::field::display(id));
 
-        sqlx::query!(
-            r#"
-                INSERT INTO user_emails (user_email_id, user_id, email, created_at)
-                VALUES ($1, $2, $3, $4)
-            "#,
-            Uuid::from(id),
-            Uuid::from(user.id),
-            &email,
+        let new_row = NewUserEmail {
+            user_email_id: Uuid::from(id),
+            user_id: Uuid::from(user.id),
+            email: email.clone(),
             created_at,
-        )
-        .traced()
-        .execute(&mut *self.conn)
-        .await?;
+        };
+
+        diesel::insert_into(user_emails::table)
+            .values(&new_row)
+            .execute(self.conn)
+            .await?;
 
         Ok(UserEmail {
             id,
@@ -382,7 +355,6 @@ impl UserEmailRepository for PgUserEmailRepository<'_> {
         name = "db.user_email.remove",
         skip_all,
         fields(
-            db.query.text,
             user.id = %user_email.user_id,
             %user_email.id,
             %user_email.email,
@@ -390,18 +362,13 @@ impl UserEmailRepository for PgUserEmailRepository<'_> {
         err,
     )]
     async fn remove(&mut self, user_email: UserEmail) -> Result<(), Self::Error> {
-        let res = sqlx::query!(
-            r#"
-                DELETE FROM user_emails
-                WHERE user_email_id = $1
-            "#,
-            Uuid::from(user_email.id),
+        let rows_affected = diesel::delete(
+            user_emails::table.find(Uuid::from(user_email.id)),
         )
-        .traced()
-        .execute(&mut *self.conn)
+        .execute(self.conn)
         .await?;
 
-        DatabaseError::ensure_affected_rows(&res, 1)?;
+        DatabaseError::ensure_affected_rows_usize(rows_affected, 1)?;
 
         Ok(())
     }
@@ -409,30 +376,45 @@ impl UserEmailRepository for PgUserEmailRepository<'_> {
     #[tracing::instrument(
         name = "db.user_email.remove_bulk",
         skip_all,
-        fields(
-            db.query.text,
-        ),
         err,
     )]
     async fn remove_bulk(&mut self, filter: UserEmailFilter<'_>) -> Result<usize, Self::Error> {
-        let (sql, arguments) = Query::delete()
-            .from_table(UserEmails::Table)
-            .apply_filter(filter)
-            .build_sqlx(PostgresQueryBuilder);
+        use crate::lower;
 
-        let res = sqlx::query_with(&sql, arguments)
-            .traced()
-            .execute(&mut *self.conn)
+        // Build a boxed select with the filter conditions, then use it as a
+        // subselect for the delete
+        let mut target = user_emails::table.into_boxed();
+
+        if let Some(user) = filter.user() {
+            target = target.filter(user_emails::user_id.eq(Uuid::from(user.id)));
+        }
+
+        if let Some(email) = filter.email() {
+            target = target.filter(lower(user_emails::email).eq(email.to_lowercase()));
+        }
+
+        let matching_ids: Vec<Uuid> = target
+            .select(user_emails::user_email_id)
+            .load(self.conn)
             .await?;
 
-        Ok(res.rows_affected().try_into().unwrap_or(usize::MAX))
+        if matching_ids.is_empty() {
+            return Ok(0);
+        }
+
+        let rows_affected = diesel::delete(
+            user_emails::table.filter(user_emails::user_email_id.eq_any(matching_ids)),
+        )
+        .execute(self.conn)
+        .await?;
+
+        Ok(rows_affected)
     }
 
     #[tracing::instrument(
         name = "db.user_email.add_authentication_for_session",
         skip_all,
         fields(
-            db.query.text,
             %session.id,
             user_email_authentication.id,
             user_email_authentication.email = email,
@@ -451,24 +433,18 @@ impl UserEmailRepository for PgUserEmailRepository<'_> {
         tracing::Span::current()
             .record("user_email_authentication.id", tracing::field::display(id));
 
-        sqlx::query!(
-            r#"
-                INSERT INTO user_email_authentications
-                  ( user_email_authentication_id
-                  , user_session_id
-                  , email
-                  , created_at
-                  )
-                VALUES ($1, $2, $3, $4)
-            "#,
-            Uuid::from(id),
-            Uuid::from(session.id),
-            &email,
+        let new_row = NewUserEmailAuthentication {
+            user_email_authentication_id: Uuid::from(id),
+            user_session_id: Some(Uuid::from(session.id)),
+            user_registration_id: None,
+            email: email.clone(),
             created_at,
-        )
-        .traced()
-        .execute(&mut *self.conn)
-        .await?;
+        };
+
+        diesel::insert_into(user_email_authentications::table)
+            .values(&new_row)
+            .execute(self.conn)
+            .await?;
 
         Ok(UserEmailAuthentication {
             id,
@@ -484,7 +460,6 @@ impl UserEmailRepository for PgUserEmailRepository<'_> {
         name = "db.user_email.add_authentication_for_registration",
         skip_all,
         fields(
-            db.query.text,
             %user_registration.id,
             user_email_authentication.id,
             user_email_authentication.email = email,
@@ -503,24 +478,18 @@ impl UserEmailRepository for PgUserEmailRepository<'_> {
         tracing::Span::current()
             .record("user_email_authentication.id", tracing::field::display(id));
 
-        sqlx::query!(
-            r#"
-                INSERT INTO user_email_authentications
-                  ( user_email_authentication_id
-                  , user_registration_id
-                  , email
-                  , created_at
-                  )
-                VALUES ($1, $2, $3, $4)
-            "#,
-            Uuid::from(id),
-            Uuid::from(user_registration.id),
-            &email,
+        let new_row = NewUserEmailAuthentication {
+            user_email_authentication_id: Uuid::from(id),
+            user_session_id: None,
+            user_registration_id: Some(Uuid::from(user_registration.id)),
+            email: email.clone(),
             created_at,
-        )
-        .traced()
-        .execute(&mut *self.conn)
-        .await?;
+        };
+
+        diesel::insert_into(user_email_authentications::table)
+            .values(&new_row)
+            .execute(self.conn)
+            .await?;
 
         Ok(UserEmailAuthentication {
             id,
@@ -536,7 +505,6 @@ impl UserEmailRepository for PgUserEmailRepository<'_> {
         name = "db.user_email.add_authentication_code",
         skip_all,
         fields(
-            db.query.text,
             %user_email_authentication.id,
             %user_email_authentication.email,
             user_email_authentication_code.id,
@@ -560,26 +528,18 @@ impl UserEmailRepository for PgUserEmailRepository<'_> {
             tracing::field::display(id),
         );
 
-        sqlx::query!(
-            r#"
-                INSERT INTO user_email_authentication_codes
-                  ( user_email_authentication_code_id
-                  , user_email_authentication_id
-                  , code
-                  , created_at
-                  , expires_at
-                  )
-                VALUES ($1, $2, $3, $4, $5)
-            "#,
-            Uuid::from(id),
-            Uuid::from(user_email_authentication.id),
-            &code,
+        let new_row = NewUserEmailAuthenticationCode {
+            user_email_authentication_code_id: Uuid::from(id),
+            user_email_authentication_id: Uuid::from(user_email_authentication.id),
+            code: code.clone(),
             created_at,
             expires_at,
-        )
-        .traced()
-        .execute(&mut *self.conn)
-        .await?;
+        };
+
+        diesel::insert_into(user_email_authentication_codes::table)
+            .values(&new_row)
+            .execute(self.conn)
+            .await?;
 
         Ok(UserEmailAuthenticationCode {
             id,
@@ -594,7 +554,6 @@ impl UserEmailRepository for PgUserEmailRepository<'_> {
         name = "db.user_email.lookup_authentication",
         skip_all,
         fields(
-            db.query.text,
             user_email_authentication.id = %id,
         ),
         err,
@@ -603,23 +562,12 @@ impl UserEmailRepository for PgUserEmailRepository<'_> {
         &mut self,
         id: Ulid,
     ) -> Result<Option<UserEmailAuthentication>, Self::Error> {
-        let res = sqlx::query_as!(
-            UserEmailAuthenticationLookup,
-            r#"
-                SELECT user_email_authentication_id
-                     , user_session_id
-                     , user_registration_id
-                     , email
-                     , created_at
-                     , completed_at
-                FROM user_email_authentications
-                WHERE user_email_authentication_id = $1
-            "#,
-            Uuid::from(id),
-        )
-        .traced()
-        .fetch_optional(&mut *self.conn)
-        .await?;
+        let res = user_email_authentications::table
+            .find(Uuid::from(id))
+            .select(UserEmailAuthenticationLookup::as_select())
+            .first::<UserEmailAuthenticationLookup>(self.conn)
+            .await
+            .optional()?;
 
         Ok(res.map(UserEmailAuthentication::from))
     }
@@ -628,7 +576,6 @@ impl UserEmailRepository for PgUserEmailRepository<'_> {
         name = "db.user_email.find_authentication_by_code",
         skip_all,
         fields(
-            db.query.text,
             %authentication.id,
             user_email_authentication_code.code = code,
         ),
@@ -639,24 +586,16 @@ impl UserEmailRepository for PgUserEmailRepository<'_> {
         authentication: &UserEmailAuthentication,
         code: &str,
     ) -> Result<Option<UserEmailAuthenticationCode>, Self::Error> {
-        let res = sqlx::query_as!(
-            UserEmailAuthenticationCodeLookup,
-            r#"
-                SELECT user_email_authentication_code_id
-                     , user_email_authentication_id
-                     , code
-                     , created_at
-                     , expires_at
-                FROM user_email_authentication_codes
-                WHERE user_email_authentication_id = $1
-                  AND code = $2
-            "#,
-            Uuid::from(authentication.id),
-            code,
-        )
-        .traced()
-        .fetch_optional(&mut *self.conn)
-        .await?;
+        let res = user_email_authentication_codes::table
+            .filter(
+                user_email_authentication_codes::user_email_authentication_id
+                    .eq(Uuid::from(authentication.id)),
+            )
+            .filter(user_email_authentication_codes::code.eq(code))
+            .select(UserEmailAuthenticationCodeLookup::as_select())
+            .first::<UserEmailAuthenticationCodeLookup>(self.conn)
+            .await
+            .optional()?;
 
         Ok(res.map(UserEmailAuthenticationCode::from))
     }
@@ -665,7 +604,6 @@ impl UserEmailRepository for PgUserEmailRepository<'_> {
         name = "db.user_email.complete_email_authentication_with_code",
         skip_all,
         fields(
-            db.query.text,
             %user_email_authentication.id,
             %user_email_authentication.email,
             %user_email_authentication_code.id,
@@ -687,21 +625,16 @@ impl UserEmailRepository for PgUserEmailRepository<'_> {
         // We'll assume the caller has checked that completed_at is None, so in case
         // they haven't, the update will not affect any rows, which will raise
         // an error
-        let res = sqlx::query!(
-            r#"
-                UPDATE user_email_authentications
-                SET completed_at = $2
-                WHERE user_email_authentication_id = $1
-                  AND completed_at IS NULL
-            "#,
-            Uuid::from(user_email_authentication.id),
-            completed_at,
+        let rows_affected = diesel::update(
+            user_email_authentications::table
+                .find(Uuid::from(user_email_authentication.id))
+                .filter(user_email_authentications::completed_at.is_null()),
         )
-        .traced()
-        .execute(&mut *self.conn)
+        .set(user_email_authentications::completed_at.eq(Some(completed_at)))
+        .execute(self.conn)
         .await?;
 
-        DatabaseError::ensure_affected_rows(&res, 1)?;
+        DatabaseError::ensure_affected_rows_usize(rows_affected, 1)?;
 
         user_email_authentication.completed_at = Some(completed_at);
         Ok(user_email_authentication)
@@ -711,7 +644,6 @@ impl UserEmailRepository for PgUserEmailRepository<'_> {
         name = "db.user_email.complete_email_authentication_with_upstream",
         skip_all,
         fields(
-            db.query.text,
             %user_email_authentication.id,
             %user_email_authentication.email,
             %upstream_oauth_authorization_session.id,
@@ -732,21 +664,16 @@ impl UserEmailRepository for PgUserEmailRepository<'_> {
         // We'll assume the caller has checked that completed_at is None, so in case
         // they haven't, the update will not affect any rows, which will raise
         // an error
-        let res = sqlx::query!(
-            r#"
-                UPDATE user_email_authentications
-                SET completed_at = $2
-                WHERE user_email_authentication_id = $1
-                  AND completed_at IS NULL
-            "#,
-            Uuid::from(user_email_authentication.id),
-            completed_at,
+        let rows_affected = diesel::update(
+            user_email_authentications::table
+                .find(Uuid::from(user_email_authentication.id))
+                .filter(user_email_authentications::completed_at.is_null()),
         )
-        .traced()
-        .execute(&mut *self.conn)
+        .set(user_email_authentications::completed_at.eq(Some(completed_at)))
+        .execute(self.conn)
         .await?;
 
-        DatabaseError::ensure_affected_rows(&res, 1)?;
+        DatabaseError::ensure_affected_rows_usize(rows_affected, 1)?;
 
         user_email_authentication.completed_at = Some(completed_at);
         Ok(user_email_authentication)
@@ -756,7 +683,6 @@ impl UserEmailRepository for PgUserEmailRepository<'_> {
         name = "db.user_email.cleanup_authentications",
         skip_all,
         fields(
-            db.query.text,
             since = since.map(tracing::field::display),
             until = %until,
             limit = limit,
@@ -772,7 +698,7 @@ impl UserEmailRepository for PgUserEmailRepository<'_> {
         // Use ULID cursor-based pagination. Since ULIDs contain a timestamp,
         // we can efficiently delete old authentications without needing an index.
         // `MAX(uuid)` isn't a thing in Postgres, so we aggregate on the client side.
-        let res: Vec<Uuid> = sqlx::query_scalar!(
+        let res: Vec<Uuid> = diesel::sql_query(
             r#"
                 WITH
                   to_delete AS (
@@ -794,17 +720,26 @@ impl UserEmailRepository for PgUserEmailRepository<'_> {
                 WHERE user_email_authentications.user_email_authentication_id = to_delete.user_email_authentication_id
                 RETURNING user_email_authentications.user_email_authentication_id
             "#,
-            since.map(Uuid::from),
-            Uuid::from(until),
-            i64::try_from(limit).unwrap_or(i64::MAX)
         )
-        .traced()
-        .fetch_all(&mut *self.conn)
-        .await?;
+        .bind::<diesel::sql_types::Nullable<diesel::sql_types::Uuid>, _>(since.map(Uuid::from))
+        .bind::<diesel::sql_types::Uuid, _>(Uuid::from(until))
+        .bind::<diesel::sql_types::BigInt, _>(i64::try_from(limit).unwrap_or(i64::MAX))
+        .load::<UuidRow>(self.conn)
+        .await?
+        .into_iter()
+        .map(|r| r.user_email_authentication_id)
+        .collect();
 
         let count = res.len();
         let max_id = res.into_iter().max();
 
         Ok((count, max_id.map(Ulid::from)))
     }
+}
+
+/// Helper struct for extracting UUID from raw SQL RETURNING clause
+#[derive(QueryableByName)]
+struct UuidRow {
+    #[diesel(sql_type = diesel::sql_types::Uuid)]
+    user_email_authentication_id: Uuid,
 }

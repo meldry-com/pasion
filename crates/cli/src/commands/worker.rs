@@ -11,8 +11,9 @@ use tracing::{info, info_span};
 use crate::{
     lifecycle::LifecycleManager,
     util::{
-        database_pool_from_config, homeserver_connection_from_config, mailer_from_config,
-        site_config_from_config, templates_from_config, test_mailer_in_background,
+        database_url_from_config, diesel_pool_from_config, homeserver_connection_from_config,
+        mailer_from_config, site_config_from_config, templates_from_config,
+        test_mailer_in_background,
     },
 };
 
@@ -27,7 +28,7 @@ impl Options {
 
         // Connect to the database
         info!("Connecting to the database");
-        let pool = database_pool_from_config(&config.database).await?;
+        let pool = diesel_pool_from_config(&config.database).await?;
 
         let url_builder = UrlBuilder::new(
             config.http.public_base.clone(),
@@ -61,11 +62,14 @@ impl Options {
         let http_client = pasion_http::reqwest_client();
         let conn = homeserver_connection_from_config(&config.matrix, http_client).await?;
 
+        let database_url = database_url_from_config(&config.database)?;
+
         drop(config);
 
         info!("Starting task scheduler");
         pasion_tasks::init_and_run(
             PgRepositoryFactory::new(pool.clone()),
+            database_url,
             SystemClock::default(),
             &mailer,
             conn,

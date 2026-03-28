@@ -6,11 +6,26 @@ use ulid::Ulid;
 #[derive(Debug, Error)]
 #[error(transparent)]
 pub enum DatabaseError {
-    /// An error which came from the database itself
+    /// An error which came from the database itself (sqlx)
     Driver {
         /// The underlying error from the database driver
         #[from]
         source: sqlx::Error,
+    },
+
+    /// An error from the diesel driver
+    #[error("Diesel error: {source}")]
+    Diesel {
+        /// The underlying diesel error
+        #[from]
+        source: diesel::result::Error,
+    },
+
+    /// An error from the async connection pool
+    #[error("Connection pool error: {source}")]
+    Pool {
+        /// The underlying pool error
+        source: Box<dyn std::error::Error + Send + Sync + 'static>,
     },
 
     /// An error which occured while converting the data from the database
@@ -43,6 +58,20 @@ impl DatabaseError {
         expected: u64,
     ) -> Result<(), DatabaseError> {
         let actual = result.rows_affected();
+        if actual == expected {
+            Ok(())
+        } else {
+            Err(DatabaseError::RowsAffected { expected, actual })
+        }
+    }
+
+    /// Diesel variant: `.execute()` returns `usize` directly.
+    pub(crate) fn ensure_affected_rows_usize(
+        actual: usize,
+        expected: usize,
+    ) -> Result<(), DatabaseError> {
+        let actual = u64::try_from(actual).unwrap_or(u64::MAX);
+        let expected = u64::try_from(expected).unwrap_or(u64::MAX);
         if actual == expected {
             Ok(())
         } else {

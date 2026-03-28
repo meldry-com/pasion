@@ -1,74 +1,41 @@
 use async_trait::async_trait;
 use chrono::{DateTime, Utc};
+use diesel::prelude::*;
+use diesel_async::RunQueryDsl;
 use pasion_data_model::{
     BrowserSession, Clock, UpstreamOAuthAuthorizationSession,
     UpstreamOAuthAuthorizationSessionState, UpstreamOAuthLink, UpstreamOAuthProvider,
 };
 use pasion_storage::{
     Page, Pagination,
-    pagination::Node,
+    pagination::{Node, PaginationDirection},
     upstream_oauth2::{UpstreamOAuthSessionFilter, UpstreamOAuthSessionRepository},
 };
 use rand::RngCore;
-use sea_query::{Expr, PostgresQueryBuilder, Query, enum_def, extension::postgres::PgExpr};
-use sea_query_binder::SqlxBinder;
-use sqlx::PgConnection;
 use ulid::Ulid;
 use uuid::Uuid;
 
 use crate::{
     DatabaseError, DatabaseInconsistencyError,
-    filter::{Filter, StatementExt},
-    iden::UpstreamOAuthAuthorizationSessions,
-    pagination::QueryBuilderExt,
-    tracing::ExecuteExt,
+    schema::upstream_oauth_authorization_sessions,
 };
-
-impl Filter for UpstreamOAuthSessionFilter<'_> {
-    fn generate_condition(&self, _has_joins: bool) -> impl sea_query::IntoCondition {
-        sea_query::Condition::all()
-            .add_option(self.provider().map(|provider| {
-                Expr::col((
-                    UpstreamOAuthAuthorizationSessions::Table,
-                    UpstreamOAuthAuthorizationSessions::UpstreamOAuthProviderId,
-                ))
-                .eq(Uuid::from(provider.id))
-            }))
-            .add_option(self.sub_claim().map(|sub| {
-                Expr::col((
-                    UpstreamOAuthAuthorizationSessions::Table,
-                    UpstreamOAuthAuthorizationSessions::IdTokenClaims,
-                ))
-                .cast_json_field("sub")
-                .eq(sub)
-            }))
-            .add_option(self.sid_claim().map(|sid| {
-                Expr::col((
-                    UpstreamOAuthAuthorizationSessions::Table,
-                    UpstreamOAuthAuthorizationSessions::IdTokenClaims,
-                ))
-                .cast_json_field("sid")
-                .eq(sid)
-            }))
-    }
-}
 
 /// An implementation of [`UpstreamOAuthSessionRepository`] for a PostgreSQL
 /// connection
 pub struct PgUpstreamOAuthSessionRepository<'c> {
-    conn: &'c mut PgConnection,
+    conn: &'c mut diesel_async::AsyncPgConnection,
 }
 
 impl<'c> PgUpstreamOAuthSessionRepository<'c> {
     /// Create a new [`PgUpstreamOAuthSessionRepository`] from an active
     /// PostgreSQL connection
-    pub fn new(conn: &'c mut PgConnection) -> Self {
+    pub fn new(conn: &'c mut diesel_async::AsyncPgConnection) -> Self {
         Self { conn }
     }
 }
 
-#[derive(sqlx::FromRow)]
-#[enum_def]
+#[derive(Debug, Clone, Queryable, Selectable)]
+#[diesel(table_name = upstream_oauth_authorization_sessions)]
 struct SessionLookup {
     upstream_oauth_authorization_session_id: Uuid,
     upstream_oauth_provider_id: Uuid,
@@ -181,6 +148,22 @@ impl TryFrom<SessionLookup> for UpstreamOAuthAuthorizationSession {
     }
 }
 
+/// Insertable row for creating a new upstream OAuth authorization session
+#[derive(Insertable)]
+#[diesel(table_name = upstream_oauth_authorization_sessions)]
+struct NewSession {
+    upstream_oauth_authorization_session_id: Uuid,
+    upstream_oauth_provider_id: Uuid,
+    state: String,
+    code_challenge_verifier: Option<String>,
+    nonce: Option<String>,
+    created_at: DateTime<Utc>,
+    completed_at: Option<DateTime<Utc>>,
+    consumed_at: Option<DateTime<Utc>>,
+    id_token: Option<String>,
+    userinfo: Option<serde_json::Value>,
+}
+
 #[async_trait]
 impl UpstreamOAuthSessionRepository for PgUpstreamOAuthSessionRepository<'_> {
     type Error = DatabaseError;
@@ -189,7 +172,6 @@ impl UpstreamOAuthSessionRepository for PgUpstreamOAuthSessionRepository<'_> {
         name = "db.upstream_oauth_authorization_session.lookup",
         skip_all,
         fields(
-            db.query.text,
             upstream_oauth_provider.id = %id,
         ),
         err,
@@ -198,32 +180,12 @@ impl UpstreamOAuthSessionRepository for PgUpstreamOAuthSessionRepository<'_> {
         &mut self,
         id: Ulid,
     ) -> Result<Option<UpstreamOAuthAuthorizationSession>, Self::Error> {
-        let res = sqlx::query_as!(
-            SessionLookup,
-            r#"
-                SELECT
-                    upstream_oauth_authorization_session_id,
-                    upstream_oauth_provider_id,
-                    upstream_oauth_link_id,
-                    state,
-                    code_challenge_verifier,
-                    nonce,
-                    id_token,
-                    id_token_claims,
-                    extra_callback_parameters,
-                    userinfo,
-                    created_at,
-                    completed_at,
-                    consumed_at,
-                    unlinked_at
-                FROM upstream_oauth_authorization_sessions
-                WHERE upstream_oauth_authorization_session_id = $1
-            "#,
-            Uuid::from(id),
-        )
-        .traced()
-        .fetch_optional(&mut *self.conn)
-        .await?;
+        let res = upstream_oauth_authorization_sessions::table
+            .find(Uuid::from(id))
+            .select(SessionLookup::as_select())
+            .first::<SessionLookup>(self.conn)
+            .await
+            .optional()?;
 
         let Some(res) = res else { return Ok(None) };
 
@@ -234,7 +196,6 @@ impl UpstreamOAuthSessionRepository for PgUpstreamOAuthSessionRepository<'_> {
         name = "db.upstream_oauth_authorization_session.add",
         skip_all,
         fields(
-            db.query.text,
             %upstream_oauth_provider.id,
             upstream_oauth_provider.issuer = upstream_oauth_provider.issuer,
             %upstream_oauth_provider.client_id,
@@ -258,31 +219,23 @@ impl UpstreamOAuthSessionRepository for PgUpstreamOAuthSessionRepository<'_> {
             tracing::field::display(id),
         );
 
-        sqlx::query!(
-            r#"
-                INSERT INTO upstream_oauth_authorization_sessions (
-                    upstream_oauth_authorization_session_id,
-                    upstream_oauth_provider_id,
-                    state,
-                    code_challenge_verifier,
-                    nonce,
-                    created_at,
-                    completed_at,
-                    consumed_at,
-                    id_token,
-                    userinfo
-                ) VALUES ($1, $2, $3, $4, $5, $6, NULL, NULL, NULL, NULL)
-            "#,
-            Uuid::from(id),
-            Uuid::from(upstream_oauth_provider.id),
-            &state_str,
-            code_challenge_verifier.as_deref(),
-            nonce,
+        let new_session = NewSession {
+            upstream_oauth_authorization_session_id: Uuid::from(id),
+            upstream_oauth_provider_id: Uuid::from(upstream_oauth_provider.id),
+            state: state_str.clone(),
+            code_challenge_verifier: code_challenge_verifier.clone(),
+            nonce: nonce.clone(),
             created_at,
-        )
-        .traced()
-        .execute(&mut *self.conn)
-        .await?;
+            completed_at: None,
+            consumed_at: None,
+            id_token: None,
+            userinfo: None,
+        };
+
+        diesel::insert_into(upstream_oauth_authorization_sessions::table)
+            .values(&new_session)
+            .execute(self.conn)
+            .await?;
 
         Ok(UpstreamOAuthAuthorizationSession {
             id,
@@ -299,7 +252,6 @@ impl UpstreamOAuthSessionRepository for PgUpstreamOAuthSessionRepository<'_> {
         name = "db.upstream_oauth_authorization_session.complete_with_link",
         skip_all,
         fields(
-            db.query.text,
             %upstream_oauth_authorization_session.id,
             %upstream_oauth_link.id,
         ),
@@ -317,27 +269,21 @@ impl UpstreamOAuthSessionRepository for PgUpstreamOAuthSessionRepository<'_> {
     ) -> Result<UpstreamOAuthAuthorizationSession, Self::Error> {
         let completed_at = clock.now();
 
-        sqlx::query!(
-            r#"
-                UPDATE upstream_oauth_authorization_sessions
-                SET upstream_oauth_link_id = $1
-                  , completed_at = $2
-                  , id_token = $3
-                  , id_token_claims = $4
-                  , extra_callback_parameters = $5
-                  , userinfo = $6
-                WHERE upstream_oauth_authorization_session_id = $7
-            "#,
-            Uuid::from(upstream_oauth_link.id),
-            completed_at,
-            id_token,
-            id_token_claims,
-            extra_callback_parameters,
-            userinfo,
-            Uuid::from(upstream_oauth_authorization_session.id),
+        diesel::update(
+            upstream_oauth_authorization_sessions::table
+                .find(Uuid::from(upstream_oauth_authorization_session.id)),
         )
-        .traced()
-        .execute(&mut *self.conn)
+        .set((
+            upstream_oauth_authorization_sessions::upstream_oauth_link_id
+                .eq(Some(Uuid::from(upstream_oauth_link.id))),
+            upstream_oauth_authorization_sessions::completed_at.eq(Some(completed_at)),
+            upstream_oauth_authorization_sessions::id_token.eq(&id_token),
+            upstream_oauth_authorization_sessions::id_token_claims.eq(&id_token_claims),
+            upstream_oauth_authorization_sessions::extra_callback_parameters
+                .eq(&extra_callback_parameters),
+            upstream_oauth_authorization_sessions::userinfo.eq(&userinfo),
+        ))
+        .execute(self.conn)
         .await?;
 
         let upstream_oauth_authorization_session = upstream_oauth_authorization_session
@@ -359,7 +305,6 @@ impl UpstreamOAuthSessionRepository for PgUpstreamOAuthSessionRepository<'_> {
         name = "db.upstream_oauth_authorization_session.consume",
         skip_all,
         fields(
-            db.query.text,
             %upstream_oauth_authorization_session.id,
         ),
         err,
@@ -371,19 +316,17 @@ impl UpstreamOAuthSessionRepository for PgUpstreamOAuthSessionRepository<'_> {
         browser_session: &BrowserSession,
     ) -> Result<UpstreamOAuthAuthorizationSession, Self::Error> {
         let consumed_at = clock.now();
-        sqlx::query!(
-            r#"
-                UPDATE upstream_oauth_authorization_sessions
-                SET consumed_at = $1,
-                    user_session_id = $2
-                WHERE upstream_oauth_authorization_session_id = $3
-            "#,
-            consumed_at,
-            Uuid::from(browser_session.id),
-            Uuid::from(upstream_oauth_authorization_session.id),
+
+        diesel::update(
+            upstream_oauth_authorization_sessions::table
+                .find(Uuid::from(upstream_oauth_authorization_session.id)),
         )
-        .traced()
-        .execute(&mut *self.conn)
+        .set((
+            upstream_oauth_authorization_sessions::consumed_at.eq(Some(consumed_at)),
+            upstream_oauth_authorization_sessions::user_session_id
+                .eq(Some(Uuid::from(browser_session.id))),
+        ))
+        .execute(self.conn)
         .await?;
 
         let upstream_oauth_authorization_session = upstream_oauth_authorization_session
@@ -396,9 +339,6 @@ impl UpstreamOAuthSessionRepository for PgUpstreamOAuthSessionRepository<'_> {
     #[tracing::instrument(
         name = "db.upstream_oauth_authorization_session.list",
         skip_all,
-        fields(
-            db.query.text,
-        ),
         err,
     )]
     async fn list(
@@ -406,120 +346,73 @@ impl UpstreamOAuthSessionRepository for PgUpstreamOAuthSessionRepository<'_> {
         filter: UpstreamOAuthSessionFilter<'_>,
         pagination: Pagination,
     ) -> Result<Page<UpstreamOAuthAuthorizationSession>, Self::Error> {
-        let (sql, arguments) = Query::select()
-            .expr_as(
-                Expr::col((
-                    UpstreamOAuthAuthorizationSessions::Table,
-                    UpstreamOAuthAuthorizationSessions::UpstreamOAuthAuthorizationSessionId,
-                )),
-                SessionLookupIden::UpstreamOauthAuthorizationSessionId,
-            )
-            .expr_as(
-                Expr::col((
-                    UpstreamOAuthAuthorizationSessions::Table,
-                    UpstreamOAuthAuthorizationSessions::UpstreamOAuthProviderId,
-                )),
-                SessionLookupIden::UpstreamOauthProviderId,
-            )
-            .expr_as(
-                Expr::col((
-                    UpstreamOAuthAuthorizationSessions::Table,
-                    UpstreamOAuthAuthorizationSessions::UpstreamOAuthLinkId,
-                )),
-                SessionLookupIden::UpstreamOauthLinkId,
-            )
-            .expr_as(
-                Expr::col((
-                    UpstreamOAuthAuthorizationSessions::Table,
-                    UpstreamOAuthAuthorizationSessions::State,
-                )),
-                SessionLookupIden::State,
-            )
-            .expr_as(
-                Expr::col((
-                    UpstreamOAuthAuthorizationSessions::Table,
-                    UpstreamOAuthAuthorizationSessions::CodeChallengeVerifier,
-                )),
-                SessionLookupIden::CodeChallengeVerifier,
-            )
-            .expr_as(
-                Expr::col((
-                    UpstreamOAuthAuthorizationSessions::Table,
-                    UpstreamOAuthAuthorizationSessions::Nonce,
-                )),
-                SessionLookupIden::Nonce,
-            )
-            .expr_as(
-                Expr::col((
-                    UpstreamOAuthAuthorizationSessions::Table,
-                    UpstreamOAuthAuthorizationSessions::IdToken,
-                )),
-                SessionLookupIden::IdToken,
-            )
-            .expr_as(
-                Expr::col((
-                    UpstreamOAuthAuthorizationSessions::Table,
-                    UpstreamOAuthAuthorizationSessions::IdTokenClaims,
-                )),
-                SessionLookupIden::IdTokenClaims,
-            )
-            .expr_as(
-                Expr::col((
-                    UpstreamOAuthAuthorizationSessions::Table,
-                    UpstreamOAuthAuthorizationSessions::ExtraCallbackParameters,
-                )),
-                SessionLookupIden::ExtraCallbackParameters,
-            )
-            .expr_as(
-                Expr::col((
-                    UpstreamOAuthAuthorizationSessions::Table,
-                    UpstreamOAuthAuthorizationSessions::Userinfo,
-                )),
-                SessionLookupIden::Userinfo,
-            )
-            .expr_as(
-                Expr::col((
-                    UpstreamOAuthAuthorizationSessions::Table,
-                    UpstreamOAuthAuthorizationSessions::CreatedAt,
-                )),
-                SessionLookupIden::CreatedAt,
-            )
-            .expr_as(
-                Expr::col((
-                    UpstreamOAuthAuthorizationSessions::Table,
-                    UpstreamOAuthAuthorizationSessions::CompletedAt,
-                )),
-                SessionLookupIden::CompletedAt,
-            )
-            .expr_as(
-                Expr::col((
-                    UpstreamOAuthAuthorizationSessions::Table,
-                    UpstreamOAuthAuthorizationSessions::ConsumedAt,
-                )),
-                SessionLookupIden::ConsumedAt,
-            )
-            .expr_as(
-                Expr::col((
-                    UpstreamOAuthAuthorizationSessions::Table,
-                    UpstreamOAuthAuthorizationSessions::UnlinkedAt,
-                )),
-                SessionLookupIden::UnlinkedAt,
-            )
-            .from(UpstreamOAuthAuthorizationSessions::Table)
-            .apply_filter(filter)
-            .generate_pagination(
-                (
-                    UpstreamOAuthAuthorizationSessions::Table,
-                    UpstreamOAuthAuthorizationSessions::UpstreamOAuthAuthorizationSessionId,
-                ),
-                pagination,
-            )
-            .build_sqlx(PostgresQueryBuilder);
+        let mut query = upstream_oauth_authorization_sessions::table
+            .select(SessionLookup::as_select())
+            .into_boxed();
 
-        let edges: Vec<SessionLookup> = sqlx::query_as_with(&sql, arguments)
-            .traced()
-            .fetch_all(&mut *self.conn)
-            .await?;
+        // Apply filters
+        if let Some(provider) = filter.provider() {
+            query = query.filter(
+                upstream_oauth_authorization_sessions::upstream_oauth_provider_id
+                    .eq(Uuid::from(provider.id)),
+            );
+        }
+
+        if let Some(sub) = filter.sub_claim() {
+            // Filter by the "sub" field in id_token_claims JSONB column
+            // Using the ->> operator: id_token_claims->>'sub' = sub
+            query = query.filter(
+                diesel::dsl::sql::<diesel::sql_types::Bool>(&format!(
+                    "id_token_claims->>'sub' = '{}'",
+                    sub.replace('\'', "''")
+                )),
+            );
+        }
+
+        if let Some(sid) = filter.sid_claim() {
+            // Filter by the "sid" field in id_token_claims JSONB column
+            query = query.filter(
+                diesel::dsl::sql::<diesel::sql_types::Bool>(&format!(
+                    "id_token_claims->>'sid' = '{}'",
+                    sid.replace('\'', "''")
+                )),
+            );
+        }
+
+        // Apply pagination
+        if let Some(after) = pagination.after {
+            query = query.filter(
+                upstream_oauth_authorization_sessions::upstream_oauth_authorization_session_id
+                    .gt(Uuid::from(after)),
+            );
+        }
+        if let Some(before) = pagination.before {
+            query = query.filter(
+                upstream_oauth_authorization_sessions::upstream_oauth_authorization_session_id
+                    .lt(Uuid::from(before)),
+            );
+        }
+
+        match pagination.direction {
+            PaginationDirection::Forward => {
+                query = query
+                    .order(
+                        upstream_oauth_authorization_sessions::upstream_oauth_authorization_session_id
+                            .asc(),
+                    )
+                    .limit((pagination.count + 1) as i64);
+            }
+            PaginationDirection::Backward => {
+                query = query
+                    .order(
+                        upstream_oauth_authorization_sessions::upstream_oauth_authorization_session_id
+                            .desc(),
+                    )
+                    .limit((pagination.count + 1) as i64);
+            }
+        }
+
+        let edges: Vec<SessionLookup> = query.load(self.conn).await?;
 
         let page = pagination
             .process(edges)
@@ -531,30 +424,42 @@ impl UpstreamOAuthSessionRepository for PgUpstreamOAuthSessionRepository<'_> {
     #[tracing::instrument(
         name = "db.upstream_oauth_authorization_session.count",
         skip_all,
-        fields(
-            db.query.text,
-        ),
         err,
     )]
     async fn count(
         &mut self,
         filter: UpstreamOAuthSessionFilter<'_>,
     ) -> Result<usize, Self::Error> {
-        let (sql, arguments) = Query::select()
-            .expr(
-                Expr::col((
-                    UpstreamOAuthAuthorizationSessions::Table,
-                    UpstreamOAuthAuthorizationSessions::UpstreamOAuthAuthorizationSessionId,
-                ))
-                .count(),
-            )
-            .from(UpstreamOAuthAuthorizationSessions::Table)
-            .apply_filter(filter)
-            .build_sqlx(PostgresQueryBuilder);
+        let mut query = upstream_oauth_authorization_sessions::table.into_boxed();
 
-        let count: i64 = sqlx::query_scalar_with(&sql, arguments)
-            .traced()
-            .fetch_one(&mut *self.conn)
+        if let Some(provider) = filter.provider() {
+            query = query.filter(
+                upstream_oauth_authorization_sessions::upstream_oauth_provider_id
+                    .eq(Uuid::from(provider.id)),
+            );
+        }
+
+        if let Some(sub) = filter.sub_claim() {
+            query = query.filter(
+                diesel::dsl::sql::<diesel::sql_types::Bool>(&format!(
+                    "id_token_claims->>'sub' = '{}'",
+                    sub.replace('\'', "''")
+                )),
+            );
+        }
+
+        if let Some(sid) = filter.sid_claim() {
+            query = query.filter(
+                diesel::dsl::sql::<diesel::sql_types::Bool>(&format!(
+                    "id_token_claims->>'sid' = '{}'",
+                    sid.replace('\'', "''")
+                )),
+            );
+        }
+
+        let count: i64 = query
+            .count()
+            .get_result(self.conn)
             .await?;
 
         count
@@ -566,7 +471,6 @@ impl UpstreamOAuthSessionRepository for PgUpstreamOAuthSessionRepository<'_> {
         name = "db.upstream_oauth_authorization_session.cleanup",
         skip_all,
         fields(
-            db.query.text,
             since = since.map(tracing::field::display),
             until = %until,
             limit = limit,
@@ -579,10 +483,9 @@ impl UpstreamOAuthSessionRepository for PgUpstreamOAuthSessionRepository<'_> {
         until: Ulid,
         limit: usize,
     ) -> Result<(usize, Option<Ulid>), Self::Error> {
-        // Use ULID cursor-based pagination for pending sessions only.
-        // We only delete sessions that are not yet completed.
-        // `MAX(uuid)` isn't a thing in Postgres, so we aggregate on the client side.
-        let res: Vec<Uuid> = sqlx::query_scalar!(
+        // Use raw SQL for the CTE-based cleanup query since diesel doesn't
+        // natively support CTEs with DELETE ... USING ... RETURNING.
+        let res: Vec<Uuid> = diesel::sql_query(
             r#"
                 WITH to_delete AS (
                     SELECT upstream_oauth_authorization_session_id
@@ -598,17 +501,26 @@ impl UpstreamOAuthSessionRepository for PgUpstreamOAuthSessionRepository<'_> {
                 WHERE upstream_oauth_authorization_sessions.upstream_oauth_authorization_session_id = to_delete.upstream_oauth_authorization_session_id
                 RETURNING upstream_oauth_authorization_sessions.upstream_oauth_authorization_session_id
             "#,
-            since.map(Uuid::from),
-            Uuid::from(until),
-            i64::try_from(limit).unwrap_or(i64::MAX)
         )
-        .traced()
-        .fetch_all(&mut *self.conn)
-        .await?;
+        .bind::<diesel::sql_types::Nullable<diesel::sql_types::Uuid>, _>(since.map(Uuid::from))
+        .bind::<diesel::sql_types::Uuid, _>(Uuid::from(until))
+        .bind::<diesel::sql_types::BigInt, _>(i64::try_from(limit).unwrap_or(i64::MAX))
+        .load::<CleanupResult>(self.conn)
+        .await?
+        .into_iter()
+        .map(|r| r.upstream_oauth_authorization_session_id)
+        .collect();
 
         let count = res.len();
         let max_id = res.into_iter().max();
 
         Ok((count, max_id.map(Ulid::from)))
     }
+}
+
+/// Helper struct for the cleanup_orphaned query result
+#[derive(QueryableByName)]
+struct CleanupResult {
+    #[diesel(sql_type = diesel::sql_types::Uuid)]
+    upstream_oauth_authorization_session_id: Uuid,
 }

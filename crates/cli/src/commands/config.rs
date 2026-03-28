@@ -10,7 +10,7 @@ use rand::SeedableRng;
 use tokio::io::AsyncWriteExt;
 use tracing::{info, info_span};
 
-use crate::util::database_connection_from_config;
+use crate::util::{database_connection_from_config, diesel_pool_from_config};
 
 #[derive(Parser, Debug)]
 pub(super) struct Options {
@@ -119,17 +119,21 @@ impl Options {
                 let clock = SystemClock::default();
                 let encrypter = config.secrets.encrypter().await?;
 
-                // Grab a connection to the database
-                let mut conn = database_connection_from_config(&config.database).await?;
+                // Grab a connection to the database for migrations (sqlx)
+                let mut sqlx_conn = database_connection_from_config(&config.database).await?;
 
-                pasion_storage_pg::migrate(&mut conn)
+                pasion_storage_pg::migrate(&mut sqlx_conn)
                     .await
                     .context("could not run migrations")?;
+
+                // Use a diesel pool connection for config sync
+                let diesel_pool = diesel_pool_from_config(&config.database).await?;
+                let conn = diesel_pool.get().await.context("could not get connection from pool")?;
 
                 crate::sync::config_sync(
                     config.upstream_oauth2,
                     config.clients,
-                    &mut conn,
+                    conn,
                     &encrypter,
                     &clock,
                     prune,

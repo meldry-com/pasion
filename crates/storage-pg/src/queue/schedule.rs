@@ -3,29 +3,36 @@
 
 use async_trait::async_trait;
 use chrono::{DateTime, Utc};
+use diesel::prelude::*;
+use diesel::sql_types::{Array, Bool, Nullable, Text, Timestamptz};
+use diesel_async::RunQueryDsl;
 use pasion_storage::queue::{QueueScheduleRepository, ScheduleStatus};
-use sqlx::PgConnection;
 
-use crate::{DatabaseError, ExecuteExt};
+use crate::DatabaseError;
 
 /// An implementation of [`QueueScheduleRepository`] for a PostgreSQL
 /// connection.
 pub struct PgQueueScheduleRepository<'c> {
-    conn: &'c mut PgConnection,
+    conn: &'c mut diesel_async::AsyncPgConnection,
 }
 
 impl<'c> PgQueueScheduleRepository<'c> {
     /// Create a new [`PgQueueScheduleRepository`] from an active PostgreSQL
     /// connection.
     #[must_use]
-    pub fn new(conn: &'c mut PgConnection) -> Self {
+    pub fn new(conn: &'c mut diesel_async::AsyncPgConnection) -> Self {
         Self { conn }
     }
 }
 
+/// Row returned from the schedule list query.
+#[derive(Debug, QueryableByName)]
 struct ScheduleLookup {
+    #[diesel(sql_type = Text)]
     schedule_name: String,
+    #[diesel(sql_type = Nullable<Timestamptz>)]
     last_scheduled_at: Option<DateTime<Utc>>,
+    #[diesel(sql_type = Nullable<Bool>)]
     last_scheduled_job_completed: Option<bool>,
 }
 
@@ -44,36 +51,35 @@ impl QueueScheduleRepository for PgQueueScheduleRepository<'_> {
     type Error = DatabaseError;
 
     async fn setup(&mut self, schedules: &[&'static str]) -> Result<(), Self::Error> {
-        sqlx::query!(
-            r#"
+        let schedule_names: Vec<String> = schedules.iter().map(|&s| s.to_owned()).collect();
+
+        diesel::sql_query(
+            r"
                 INSERT INTO queue_schedules (schedule_name)
                 SELECT * FROM UNNEST($1::text[]) AS t (schedule_name)
                 ON CONFLICT (schedule_name) DO NOTHING
-            "#,
-            &schedules.iter().map(|&s| s.to_owned()).collect::<Vec<_>>(),
+            ",
         )
-        .traced()
-        .execute(&mut *self.conn)
+        .bind::<Array<Text>, _>(&schedule_names)
+        .execute(self.conn)
         .await?;
 
         Ok(())
     }
 
     async fn list(&mut self) -> Result<Vec<ScheduleStatus>, Self::Error> {
-        let res = sqlx::query_as!(
-            ScheduleLookup,
-            r#"
+        let res: Vec<ScheduleLookup> = diesel::sql_query(
+            r"
                 SELECT
-                    queue_schedules.schedule_name as "schedule_name!",
+                    queue_schedules.schedule_name,
                     queue_schedules.last_scheduled_at,
                     queue_jobs.status IN ('completed', 'failed') as last_scheduled_job_completed
                 FROM queue_schedules
                 LEFT JOIN queue_jobs
                     ON queue_jobs.queue_job_id = queue_schedules.last_scheduled_job_id
-            "#
+            ",
         )
-        .traced()
-        .fetch_all(&mut *self.conn)
+        .get_results(self.conn)
         .await?;
 
         Ok(res.into_iter().map(Into::into).collect())

@@ -1,45 +1,42 @@
 use async_trait::async_trait;
 use chrono::{DateTime, Utc};
+use diesel::prelude::*;
+use diesel_async::RunQueryDsl;
 use pasion_data_model::{Clock, UserRegistrationToken};
 use pasion_storage::{
     Page, Pagination,
-    pagination::Node,
+    pagination::{Node, PaginationDirection},
     user::{UserRegistrationTokenFilter, UserRegistrationTokenRepository},
 };
 use rand::RngCore;
-use sea_query::{Condition, Expr, PostgresQueryBuilder, Query, enum_def};
-use sea_query_binder::SqlxBinder;
-use sqlx::PgConnection;
 use ulid::Ulid;
 use uuid::Uuid;
 
 use crate::{
     DatabaseInconsistencyError,
     errors::DatabaseError,
-    filter::{Filter, StatementExt},
-    iden::UserRegistrationTokens,
-    pagination::QueryBuilderExt,
-    tracing::ExecuteExt,
+    schema::user_registration_tokens,
 };
 
 /// An implementation of
 /// [`pasion_storage::user::UserRegistrationTokenRepository`] for a PostgreSQL
 /// connection
 pub struct PgUserRegistrationTokenRepository<'c> {
-    conn: &'c mut PgConnection,
+    conn: &'c mut diesel_async::AsyncPgConnection,
 }
 
 impl<'c> PgUserRegistrationTokenRepository<'c> {
     /// Create a new [`PgUserRegistrationTokenRepository`] from an active
     /// PostgreSQL connection
-    pub fn new(conn: &'c mut PgConnection) -> Self {
+    pub fn new(conn: &'c mut diesel_async::AsyncPgConnection) -> Self {
         Self { conn }
     }
 }
 
-#[derive(Debug, Clone, sqlx::FromRow)]
-#[enum_def]
-struct UserRegistrationTokenLookup {
+/// Row type for loading user registration tokens from the database
+#[derive(Debug, Clone, Queryable, Selectable)]
+#[diesel(table_name = user_registration_tokens)]
+struct UserRegistrationTokenRow {
     user_registration_token_id: Uuid,
     token: String,
     usage_limit: Option<i32>,
@@ -50,139 +47,16 @@ struct UserRegistrationTokenLookup {
     revoked_at: Option<DateTime<Utc>>,
 }
 
-impl Node<Ulid> for UserRegistrationTokenLookup {
+impl Node<Ulid> for UserRegistrationTokenRow {
     fn cursor(&self) -> Ulid {
         self.user_registration_token_id.into()
     }
 }
 
-impl Filter for UserRegistrationTokenFilter {
-    fn generate_condition(&self, _has_joins: bool) -> impl sea_query::IntoCondition {
-        sea_query::Condition::all()
-            .add_option(self.has_been_used().map(|has_been_used| {
-                if has_been_used {
-                    Expr::col((
-                        UserRegistrationTokens::Table,
-                        UserRegistrationTokens::TimesUsed,
-                    ))
-                    .gt(0)
-                } else {
-                    Expr::col((
-                        UserRegistrationTokens::Table,
-                        UserRegistrationTokens::TimesUsed,
-                    ))
-                    .eq(0)
-                }
-            }))
-            .add_option(self.is_revoked().map(|is_revoked| {
-                if is_revoked {
-                    Expr::col((
-                        UserRegistrationTokens::Table,
-                        UserRegistrationTokens::RevokedAt,
-                    ))
-                    .is_not_null()
-                } else {
-                    Expr::col((
-                        UserRegistrationTokens::Table,
-                        UserRegistrationTokens::RevokedAt,
-                    ))
-                    .is_null()
-                }
-            }))
-            .add_option(self.is_expired().map(|is_expired| {
-                if is_expired {
-                    Condition::all()
-                        .add(
-                            Expr::col((
-                                UserRegistrationTokens::Table,
-                                UserRegistrationTokens::ExpiresAt,
-                            ))
-                            .is_not_null(),
-                        )
-                        .add(
-                            Expr::col((
-                                UserRegistrationTokens::Table,
-                                UserRegistrationTokens::ExpiresAt,
-                            ))
-                            .lt(Expr::val(self.now())),
-                        )
-                } else {
-                    Condition::any()
-                        .add(
-                            Expr::col((
-                                UserRegistrationTokens::Table,
-                                UserRegistrationTokens::ExpiresAt,
-                            ))
-                            .is_null(),
-                        )
-                        .add(
-                            Expr::col((
-                                UserRegistrationTokens::Table,
-                                UserRegistrationTokens::ExpiresAt,
-                            ))
-                            .gte(Expr::val(self.now())),
-                        )
-                }
-            }))
-            .add_option(self.is_valid().map(|is_valid| {
-                let valid = Condition::all()
-                    // Has not reached its usage limit
-                    .add(
-                        Condition::any()
-                            .add(
-                                Expr::col((
-                                    UserRegistrationTokens::Table,
-                                    UserRegistrationTokens::UsageLimit,
-                                ))
-                                .is_null(),
-                            )
-                            .add(
-                                Expr::col((
-                                    UserRegistrationTokens::Table,
-                                    UserRegistrationTokens::TimesUsed,
-                                ))
-                                .lt(Expr::col((
-                                    UserRegistrationTokens::Table,
-                                    UserRegistrationTokens::UsageLimit,
-                                ))),
-                            ),
-                    )
-                    // Has not been revoked
-                    .add(
-                        Expr::col((
-                            UserRegistrationTokens::Table,
-                            UserRegistrationTokens::RevokedAt,
-                        ))
-                        .is_null(),
-                    )
-                    // Has not expired
-                    .add(
-                        Condition::any()
-                            .add(
-                                Expr::col((
-                                    UserRegistrationTokens::Table,
-                                    UserRegistrationTokens::ExpiresAt,
-                                ))
-                                .is_null(),
-                            )
-                            .add(
-                                Expr::col((
-                                    UserRegistrationTokens::Table,
-                                    UserRegistrationTokens::ExpiresAt,
-                                ))
-                                .gte(Expr::val(self.now())),
-                            ),
-                    );
-
-                if is_valid { valid } else { valid.not() }
-            }))
-    }
-}
-
-impl TryFrom<UserRegistrationTokenLookup> for UserRegistrationToken {
+impl TryFrom<UserRegistrationTokenRow> for UserRegistrationToken {
     type Error = DatabaseInconsistencyError;
 
-    fn try_from(res: UserRegistrationTokenLookup) -> Result<Self, Self::Error> {
+    fn try_from(res: UserRegistrationTokenRow) -> Result<Self, Self::Error> {
         let id = Ulid::from(res.user_registration_token_id);
 
         let usage_limit = res
@@ -216,6 +90,101 @@ impl TryFrom<UserRegistrationTokenLookup> for UserRegistrationToken {
     }
 }
 
+/// Insertable row for creating a new user registration token
+#[derive(Insertable)]
+#[diesel(table_name = user_registration_tokens)]
+struct NewUserRegistrationToken {
+    user_registration_token_id: Uuid,
+    token: String,
+    usage_limit: Option<i32>,
+    created_at: DateTime<Utc>,
+    expires_at: Option<DateTime<Utc>>,
+}
+
+/// Apply [`UserRegistrationTokenFilter`] to a boxed query.
+///
+/// This is a macro-like helper since the filter logic is identical for both
+/// `list` (which has a custom SELECT) and `count` (default SELECT), but those
+/// two produce different concrete boxed query types.  We use a generic function
+/// bounded on `BoxedDsl` output to avoid duplicating the filter code.
+macro_rules! apply_token_filter {
+    ($query:expr, $filter:expr) => {{
+        let mut query = $query;
+
+        if let Some(has_been_used) = $filter.has_been_used() {
+            if has_been_used {
+                query = query.filter(user_registration_tokens::times_used.gt(0));
+            } else {
+                query = query.filter(user_registration_tokens::times_used.eq(0));
+            }
+        }
+
+        if let Some(is_revoked) = $filter.is_revoked() {
+            if is_revoked {
+                query = query.filter(user_registration_tokens::revoked_at.is_not_null());
+            } else {
+                query = query.filter(user_registration_tokens::revoked_at.is_null());
+            }
+        }
+
+        if let Some(is_expired) = $filter.is_expired() {
+            let now = $filter.now();
+            if is_expired {
+                query = query.filter(
+                    user_registration_tokens::expires_at
+                        .is_not_null()
+                        .and(user_registration_tokens::expires_at.lt(now)),
+                );
+            } else {
+                query = query.filter(
+                    user_registration_tokens::expires_at
+                        .is_null()
+                        .or(user_registration_tokens::expires_at.ge(now)),
+                );
+            }
+        }
+
+        if let Some(is_valid) = $filter.is_valid() {
+            let now = $filter.now();
+            // A token is valid if:
+            // 1. usage_limit IS NULL OR times_used < usage_limit
+            // 2. revoked_at IS NULL
+            // 3. expires_at IS NULL OR expires_at >= now
+            if is_valid {
+                query = query
+                    .filter(
+                        user_registration_tokens::usage_limit
+                            .is_null()
+                            .or(user_registration_tokens::times_used
+                                .lt(user_registration_tokens::usage_limit.assume_not_null())),
+                    )
+                    .filter(user_registration_tokens::revoked_at.is_null())
+                    .filter(
+                        user_registration_tokens::expires_at
+                            .is_null()
+                            .or(user_registration_tokens::expires_at.ge(now)),
+                    );
+            } else {
+                // Not valid: at least one validity condition fails
+                query = query.filter(
+                    (user_registration_tokens::usage_limit
+                        .is_not_null()
+                        .and(
+                            user_registration_tokens::times_used
+                                .ge(user_registration_tokens::usage_limit.assume_not_null()),
+                        ))
+                    .or(user_registration_tokens::revoked_at.is_not_null())
+                    .or(user_registration_tokens::expires_at
+                        .is_not_null()
+                        .and(user_registration_tokens::expires_at.lt(now))),
+                );
+            }
+        }
+
+        query
+    }};
+}
+
 #[async_trait]
 impl UserRegistrationTokenRepository for PgUserRegistrationTokenRepository<'_> {
     type Error = DatabaseError;
@@ -223,9 +192,6 @@ impl UserRegistrationTokenRepository for PgUserRegistrationTokenRepository<'_> {
     #[tracing::instrument(
         name = "db.user_registration_token.list",
         skip_all,
-        fields(
-            db.query.text,
-        ),
         err,
     )]
     async fn list(
@@ -233,78 +199,40 @@ impl UserRegistrationTokenRepository for PgUserRegistrationTokenRepository<'_> {
         filter: UserRegistrationTokenFilter,
         pagination: Pagination,
     ) -> Result<Page<UserRegistrationToken>, Self::Error> {
-        let (sql, arguments) = Query::select()
-            .expr_as(
-                Expr::col((
-                    UserRegistrationTokens::Table,
-                    UserRegistrationTokens::UserRegistrationTokenId,
-                )),
-                UserRegistrationTokenLookupIden::UserRegistrationTokenId,
-            )
-            .expr_as(
-                Expr::col((UserRegistrationTokens::Table, UserRegistrationTokens::Token)),
-                UserRegistrationTokenLookupIden::Token,
-            )
-            .expr_as(
-                Expr::col((
-                    UserRegistrationTokens::Table,
-                    UserRegistrationTokens::UsageLimit,
-                )),
-                UserRegistrationTokenLookupIden::UsageLimit,
-            )
-            .expr_as(
-                Expr::col((
-                    UserRegistrationTokens::Table,
-                    UserRegistrationTokens::TimesUsed,
-                )),
-                UserRegistrationTokenLookupIden::TimesUsed,
-            )
-            .expr_as(
-                Expr::col((
-                    UserRegistrationTokens::Table,
-                    UserRegistrationTokens::CreatedAt,
-                )),
-                UserRegistrationTokenLookupIden::CreatedAt,
-            )
-            .expr_as(
-                Expr::col((
-                    UserRegistrationTokens::Table,
-                    UserRegistrationTokens::LastUsedAt,
-                )),
-                UserRegistrationTokenLookupIden::LastUsedAt,
-            )
-            .expr_as(
-                Expr::col((
-                    UserRegistrationTokens::Table,
-                    UserRegistrationTokens::ExpiresAt,
-                )),
-                UserRegistrationTokenLookupIden::ExpiresAt,
-            )
-            .expr_as(
-                Expr::col((
-                    UserRegistrationTokens::Table,
-                    UserRegistrationTokens::RevokedAt,
-                )),
-                UserRegistrationTokenLookupIden::RevokedAt,
-            )
-            .from(UserRegistrationTokens::Table)
-            .apply_filter(filter)
-            .generate_pagination(
-                (
-                    UserRegistrationTokens::Table,
-                    UserRegistrationTokens::UserRegistrationTokenId,
-                ),
-                pagination,
-            )
-            .build_sqlx(PostgresQueryBuilder);
+        let query = user_registration_tokens::table
+            .select(UserRegistrationTokenRow::as_select())
+            .into_boxed();
 
-        let edges: Vec<UserRegistrationTokenLookup> = sqlx::query_as_with(&sql, arguments)
-            .traced()
-            .fetch_all(&mut *self.conn)
-            .await?;
+        let mut query = apply_token_filter!(query, filter);
 
+        // Apply pagination cursors
+        if let Some(after) = pagination.after {
+            query = query.filter(
+                user_registration_tokens::user_registration_token_id.gt(Uuid::from(after)),
+            );
+        }
+        if let Some(before) = pagination.before {
+            query = query.filter(
+                user_registration_tokens::user_registration_token_id.lt(Uuid::from(before)),
+            );
+        }
+
+        match pagination.direction {
+            PaginationDirection::Forward => {
+                query = query
+                    .order(user_registration_tokens::user_registration_token_id.asc())
+                    .limit((pagination.count + 1) as i64);
+            }
+            PaginationDirection::Backward => {
+                query = query
+                    .order(user_registration_tokens::user_registration_token_id.desc())
+                    .limit((pagination.count + 1) as i64);
+            }
+        }
+
+        let rows: Vec<UserRegistrationTokenRow> = query.load(self.conn).await?;
         let page = pagination
-            .process(edges)
+            .process(rows)
             .try_map(UserRegistrationToken::try_from)?;
 
         Ok(page)
@@ -314,28 +242,15 @@ impl UserRegistrationTokenRepository for PgUserRegistrationTokenRepository<'_> {
         name = "db.user_registration_token.count",
         skip_all,
         fields(
-            db.query.text,
             user_registration_token.filter = ?filter,
         ),
         err,
     )]
     async fn count(&mut self, filter: UserRegistrationTokenFilter) -> Result<usize, Self::Error> {
-        let (sql, values) = Query::select()
-            .expr(
-                Expr::col((
-                    UserRegistrationTokens::Table,
-                    UserRegistrationTokens::UserRegistrationTokenId,
-                ))
-                .count(),
-            )
-            .from(UserRegistrationTokens::Table)
-            .apply_filter(filter)
-            .build_sqlx(PostgresQueryBuilder);
+        let query = user_registration_tokens::table.into_boxed();
+        let query = apply_token_filter!(query, filter);
 
-        let count: i64 = sqlx::query_scalar_with(&sql, values)
-            .traced()
-            .fetch_one(&mut *self.conn)
-            .await?;
+        let count: i64 = query.count().get_result(self.conn).await?;
 
         count
             .try_into()
@@ -346,31 +261,17 @@ impl UserRegistrationTokenRepository for PgUserRegistrationTokenRepository<'_> {
         name = "db.user_registration_token.lookup",
         skip_all,
         fields(
-            db.query.text,
             user_registration_token.id = %id,
         ),
         err,
     )]
     async fn lookup(&mut self, id: Ulid) -> Result<Option<UserRegistrationToken>, Self::Error> {
-        let res = sqlx::query_as!(
-            UserRegistrationTokenLookup,
-            r#"
-                SELECT user_registration_token_id,
-                       token,
-                       usage_limit,
-                       times_used,
-                       created_at,
-                       last_used_at,
-                       expires_at,
-                       revoked_at
-                FROM user_registration_tokens
-                WHERE user_registration_token_id = $1
-            "#,
-            Uuid::from(id)
-        )
-        .traced()
-        .fetch_optional(&mut *self.conn)
-        .await?;
+        let res = user_registration_tokens::table
+            .find(Uuid::from(id))
+            .select(UserRegistrationTokenRow::as_select())
+            .first::<UserRegistrationTokenRow>(self.conn)
+            .await
+            .optional()?;
 
         let Some(res) = res else {
             return Ok(None);
@@ -383,7 +284,6 @@ impl UserRegistrationTokenRepository for PgUserRegistrationTokenRepository<'_> {
         name = "db.user_registration_token.find_by_token",
         skip_all,
         fields(
-            db.query.text,
             token = %token,
         ),
         err,
@@ -392,25 +292,12 @@ impl UserRegistrationTokenRepository for PgUserRegistrationTokenRepository<'_> {
         &mut self,
         token: &str,
     ) -> Result<Option<UserRegistrationToken>, Self::Error> {
-        let res = sqlx::query_as!(
-            UserRegistrationTokenLookup,
-            r#"
-                SELECT user_registration_token_id,
-                       token,
-                       usage_limit,
-                       times_used,
-                       created_at,
-                       last_used_at,
-                       expires_at,
-                       revoked_at
-                FROM user_registration_tokens
-                WHERE token = $1
-            "#,
-            token
-        )
-        .traced()
-        .fetch_optional(&mut *self.conn)
-        .await?;
+        let res = user_registration_tokens::table
+            .filter(user_registration_tokens::token.eq(token))
+            .select(UserRegistrationTokenRow::as_select())
+            .first::<UserRegistrationTokenRow>(self.conn)
+            .await
+            .optional()?;
 
         let Some(res) = res else {
             return Ok(None);
@@ -423,7 +310,6 @@ impl UserRegistrationTokenRepository for PgUserRegistrationTokenRepository<'_> {
         name = "db.user_registration_token.add",
         skip_all,
         fields(
-            db.query.text,
             user_registration_token.token = %token,
         ),
         err,
@@ -431,7 +317,7 @@ impl UserRegistrationTokenRepository for PgUserRegistrationTokenRepository<'_> {
     async fn add(
         &mut self,
         rng: &mut (dyn RngCore + Send),
-        clock: &dyn pasion_data_model::Clock,
+        clock: &dyn Clock,
         token: String,
         usage_limit: Option<u32>,
         expires_at: Option<DateTime<Utc>>,
@@ -444,21 +330,18 @@ impl UserRegistrationTokenRepository for PgUserRegistrationTokenRepository<'_> {
             .transpose()
             .map_err(DatabaseError::to_invalid_operation)?;
 
-        sqlx::query!(
-            r#"
-                INSERT INTO user_registration_tokens
-                    (user_registration_token_id, token, usage_limit, created_at, expires_at)
-                VALUES ($1, $2, $3, $4, $5)
-            "#,
-            Uuid::from(id),
-            &token,
-            usage_limit_i32,
+        let new_token = NewUserRegistrationToken {
+            user_registration_token_id: Uuid::from(id),
+            token: token.clone(),
+            usage_limit: usage_limit_i32,
             created_at,
             expires_at,
-        )
-        .traced()
-        .execute(&mut *self.conn)
-        .await?;
+        };
+
+        diesel::insert_into(user_registration_tokens::table)
+            .values(&new_token)
+            .execute(self.conn)
+            .await?;
 
         Ok(UserRegistrationToken {
             id,
@@ -476,7 +359,6 @@ impl UserRegistrationTokenRepository for PgUserRegistrationTokenRepository<'_> {
         name = "db.user_registration_token.use_token",
         skip_all,
         fields(
-            db.query.text,
             user_registration_token.id = %token.id,
         ),
         err,
@@ -487,20 +369,23 @@ impl UserRegistrationTokenRepository for PgUserRegistrationTokenRepository<'_> {
         token: UserRegistrationToken,
     ) -> Result<UserRegistrationToken, Self::Error> {
         let now = clock.now();
-        let new_times_used = sqlx::query_scalar!(
-            r#"
-                UPDATE user_registration_tokens
-                SET times_used = times_used + 1,
-                    last_used_at = $2
-                WHERE user_registration_token_id = $1 AND revoked_at IS NULL
-                RETURNING times_used
-            "#,
-            Uuid::from(token.id),
-            now,
+
+        // Use raw SQL for the UPDATE ... RETURNING pattern with an expression
+        // (times_used = times_used + 1), since diesel's update builder does not
+        // directly support incrementing a column and returning in one step
+        // without a custom expression.
+        let new_times_used: i32 = diesel::sql_query(
+            "UPDATE user_registration_tokens \
+             SET times_used = times_used + 1, \
+                 last_used_at = $2 \
+             WHERE user_registration_token_id = $1 AND revoked_at IS NULL \
+             RETURNING times_used",
         )
-        .traced()
-        .fetch_one(&mut *self.conn)
-        .await?;
+        .bind::<diesel::sql_types::Uuid, _>(Uuid::from(token.id))
+        .bind::<diesel::sql_types::Timestamptz, _>(now)
+        .get_result::<TimesUsedRow>(self.conn)
+        .await
+        .map(|r| r.times_used)?;
 
         let new_times_used = new_times_used
             .try_into()
@@ -517,7 +402,6 @@ impl UserRegistrationTokenRepository for PgUserRegistrationTokenRepository<'_> {
         name = "db.user_registration_token.revoke",
         skip_all,
         fields(
-            db.query.text,
             user_registration_token.id = %token.id,
         ),
         err,
@@ -528,20 +412,13 @@ impl UserRegistrationTokenRepository for PgUserRegistrationTokenRepository<'_> {
         mut token: UserRegistrationToken,
     ) -> Result<UserRegistrationToken, Self::Error> {
         let revoked_at = clock.now();
-        let res = sqlx::query!(
-            r#"
-                UPDATE user_registration_tokens
-                SET revoked_at = $2
-                WHERE user_registration_token_id = $1
-            "#,
-            Uuid::from(token.id),
-            revoked_at,
-        )
-        .traced()
-        .execute(&mut *self.conn)
-        .await?;
+        let rows_affected =
+            diesel::update(user_registration_tokens::table.find(Uuid::from(token.id)))
+                .set(user_registration_tokens::revoked_at.eq(Some(revoked_at)))
+                .execute(self.conn)
+                .await?;
 
-        DatabaseError::ensure_affected_rows(&res, 1)?;
+        DatabaseError::ensure_affected_rows_usize(rows_affected, 1)?;
 
         token.revoked_at = Some(revoked_at);
 
@@ -552,7 +429,6 @@ impl UserRegistrationTokenRepository for PgUserRegistrationTokenRepository<'_> {
         name = "db.user_registration_token.unrevoke",
         skip_all,
         fields(
-            db.query.text,
             user_registration_token.id = %token.id,
         ),
         err,
@@ -561,19 +437,13 @@ impl UserRegistrationTokenRepository for PgUserRegistrationTokenRepository<'_> {
         &mut self,
         mut token: UserRegistrationToken,
     ) -> Result<UserRegistrationToken, Self::Error> {
-        let res = sqlx::query!(
-            r#"
-                UPDATE user_registration_tokens
-                SET revoked_at = NULL
-                WHERE user_registration_token_id = $1
-            "#,
-            Uuid::from(token.id),
-        )
-        .traced()
-        .execute(&mut *self.conn)
-        .await?;
+        let rows_affected =
+            diesel::update(user_registration_tokens::table.find(Uuid::from(token.id)))
+                .set(user_registration_tokens::revoked_at.eq(None::<DateTime<Utc>>))
+                .execute(self.conn)
+                .await?;
 
-        DatabaseError::ensure_affected_rows(&res, 1)?;
+        DatabaseError::ensure_affected_rows_usize(rows_affected, 1)?;
 
         token.revoked_at = None;
 
@@ -584,7 +454,6 @@ impl UserRegistrationTokenRepository for PgUserRegistrationTokenRepository<'_> {
         name = "db.user_registration_token.set_expiry",
         skip_all,
         fields(
-            db.query.text,
             user_registration_token.id = %token.id,
         ),
         err,
@@ -594,20 +463,13 @@ impl UserRegistrationTokenRepository for PgUserRegistrationTokenRepository<'_> {
         mut token: UserRegistrationToken,
         expires_at: Option<DateTime<Utc>>,
     ) -> Result<UserRegistrationToken, Self::Error> {
-        let res = sqlx::query!(
-            r#"
-                UPDATE user_registration_tokens
-                SET expires_at = $2
-                WHERE user_registration_token_id = $1
-            "#,
-            Uuid::from(token.id),
-            expires_at,
-        )
-        .traced()
-        .execute(&mut *self.conn)
-        .await?;
+        let rows_affected =
+            diesel::update(user_registration_tokens::table.find(Uuid::from(token.id)))
+                .set(user_registration_tokens::expires_at.eq(expires_at))
+                .execute(self.conn)
+                .await?;
 
-        DatabaseError::ensure_affected_rows(&res, 1)?;
+        DatabaseError::ensure_affected_rows_usize(rows_affected, 1)?;
 
         token.expires_at = expires_at;
 
@@ -618,7 +480,6 @@ impl UserRegistrationTokenRepository for PgUserRegistrationTokenRepository<'_> {
         name = "db.user_registration_token.set_usage_limit",
         skip_all,
         fields(
-            db.query.text,
             user_registration_token.id = %token.id,
         ),
         err,
@@ -633,25 +494,25 @@ impl UserRegistrationTokenRepository for PgUserRegistrationTokenRepository<'_> {
             .transpose()
             .map_err(DatabaseError::to_invalid_operation)?;
 
-        let res = sqlx::query!(
-            r#"
-                UPDATE user_registration_tokens
-                SET usage_limit = $2
-                WHERE user_registration_token_id = $1
-            "#,
-            Uuid::from(token.id),
-            usage_limit_i32,
-        )
-        .traced()
-        .execute(&mut *self.conn)
-        .await?;
+        let rows_affected =
+            diesel::update(user_registration_tokens::table.find(Uuid::from(token.id)))
+                .set(user_registration_tokens::usage_limit.eq(usage_limit_i32))
+                .execute(self.conn)
+                .await?;
 
-        DatabaseError::ensure_affected_rows(&res, 1)?;
+        DatabaseError::ensure_affected_rows_usize(rows_affected, 1)?;
 
         token.usage_limit = usage_limit;
 
         Ok(token)
     }
+}
+
+/// Helper row type for extracting `times_used` from a RETURNING clause.
+#[derive(Debug, Clone, QueryableByName)]
+struct TimesUsedRow {
+    #[diesel(sql_type = diesel::sql_types::Int4)]
+    times_used: i32,
 }
 
 #[cfg(test)]

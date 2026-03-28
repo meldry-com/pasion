@@ -1,8 +1,17 @@
 use opentelemetry_semantic_conventions::attribute::DB_QUERY_TEXT;
 use tracing::Span;
 
+/// Records a SQL statement string into the current tracing span as
+/// `db.query.text`. Used by new diesel-based repository code.
+#[allow(dead_code)]
+pub(crate) fn trace_query(sql: &str) {
+    Span::current().record(DB_QUERY_TEXT, sql);
+}
+
 /// An extension trait for [`sqlx::Execute`] that records the SQL statement as
-/// `db.query.text` in a tracing span
+/// `db.query.text` in a tracing span.
+///
+/// Kept for backward compatibility during the sqlx → diesel migration.
 pub trait ExecuteExt<'q, DB>: Sized {
     /// Records the statement as `db.query.text` in the current span
     #[must_use]

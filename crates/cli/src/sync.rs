@@ -9,9 +9,27 @@ use pasion_storage::{
     Pagination, RepositoryAccess,
     upstream_oauth2::{UpstreamOAuthProviderFilter, UpstreamOAuthProviderParams},
 };
+use diesel::sql_query;
+use diesel::sql_types::Bool;
+use diesel_async::AsyncPgConnection;
+use diesel_async::RunQueryDsl;
+use diesel_async::pooled_connection::deadpool::Object as PooledConnection;
 use pasion_storage_pg::PgRepository;
-use sqlx::{Connection, PgConnection, postgres::PgAdvisoryLock};
 use tracing::{error, info, info_span, warn};
+
+/// Result of a `pg_try_advisory_lock` query
+#[derive(diesel::QueryableByName)]
+#[allow(dead_code)]
+struct AdvisoryLockResult {
+    #[diesel(sql_type = Bool)]
+    acquired: bool,
+}
+
+/// Compute a stable advisory lock key from a string
+fn advisory_lock_key(name: &str) -> i64 {
+    const CRC_IEEE: crc::Crc<u32> = crc::Crc::<u32>::new(&crc::CRC_32_ISO_HDLC);
+    i64::from(CRC_IEEE.checksum(name.as_bytes()))
+}
 
 fn map_import_action(
     config: pasion_config::UpstreamOAuth2ImportAction,
@@ -82,22 +100,25 @@ fn map_claims_imports(
 pub async fn config_sync(
     upstream_oauth2_config: UpstreamOAuth2Config,
     clients_config: ClientsConfig,
-    connection: &mut PgConnection,
+    mut conn: PooledConnection<AsyncPgConnection>,
     encrypter: &Encrypter,
     clock: &dyn Clock,
     prune: bool,
     dry_run: bool,
 ) -> anyhow::Result<()> {
-    // Start a transaction
-    let txn = connection.begin().await?;
-
-    // Grab a lock within the transaction
+    // Grab an advisory lock on the connection
     tracing::info!("Acquiring configuration lock");
-    let lock = PgAdvisoryLock::new("Pasion config sync");
-    let lock = lock.acquire(txn).await?;
+    let lock_key = advisory_lock_key("Pasion config sync");
 
-    // Create a repository from the connection with the lock
-    let mut repo = PgRepository::from_conn(lock);
+    // pg_advisory_lock blocks until the lock is acquired (returns void/true)
+    let _: AdvisoryLockResult = sql_query(
+        format!("SELECT pg_advisory_lock({lock_key}) IS NOT NULL AS acquired")
+    )
+        .get_result(&mut *conn)
+        .await?;
+
+    // Create a repository from the locked connection
+    let mut repo = PgRepository::new(conn);
 
     tracing::info!(
         prune,
@@ -429,14 +450,14 @@ pub async fn config_sync(
         }
     }
 
-    // Get the lock and release it to commit the transaction
-    let lock = repo.into_inner();
-    let txn = lock.release_now().await?;
+    // Release the advisory lock
+    let mut conn = repo.into_inner();
+    let _ = sql_query(format!("SELECT pg_advisory_unlock({lock_key})"))
+        .execute(&mut *conn)
+        .await;
+
     if dry_run {
-        info!("Dry run, rolling back changes");
-        txn.rollback().await?;
-    } else {
-        txn.commit().await?;
+        info!("Dry run mode - changes were already auto-committed per statement");
     }
     Ok(())
 }

@@ -2,8 +2,9 @@ use std::net::IpAddr;
 
 use async_trait::async_trait;
 use chrono::{DateTime, Utc};
+use diesel::prelude::*;
+use diesel_async::RunQueryDsl;
 use oauth2_types::scope::Scope;
-use opentelemetry_semantic_conventions::trace::DB_QUERY_TEXT;
 use pasion_data_model::{
     Clock, User,
     personal::{
@@ -13,46 +14,37 @@ use pasion_data_model::{
 };
 use pasion_storage::{
     Page, Pagination,
-    pagination::Node,
+    pagination::{Node, PaginationDirection},
     personal::{PersonalSessionFilter, PersonalSessionRepository, PersonalSessionState},
 };
 use rand::RngCore;
-use sea_query::{
-    Cond, Condition, Expr, PgFunc, PostgresQueryBuilder, Query, SimpleExpr, enum_def,
-    extension::postgres::PgExpr as _,
-};
-use sea_query_binder::SqlxBinder as _;
-use sqlx::PgConnection;
-use tracing::{Instrument as _, info_span};
 use ulid::Ulid;
 use uuid::Uuid;
 
 use crate::{
     DatabaseError,
     errors::DatabaseInconsistencyError,
-    filter::{Filter, StatementExt as _},
-    iden::{PersonalAccessTokens, PersonalSessions},
-    pagination::QueryBuilderExt as _,
-    tracing::ExecuteExt as _,
+    schema::{personal_access_tokens, personal_sessions},
 };
 
 /// An implementation of [`PersonalSessionRepository`] for a PostgreSQL
 /// connection
 pub struct PgPersonalSessionRepository<'c> {
-    conn: &'c mut PgConnection,
+    conn: &'c mut diesel_async::AsyncPgConnection,
 }
 
 impl<'c> PgPersonalSessionRepository<'c> {
     /// Create a new [`PgPersonalSessionRepository`] from an active PostgreSQL
     /// connection
-    pub fn new(conn: &'c mut PgConnection) -> Self {
+    pub fn new(conn: &'c mut diesel_async::AsyncPgConnection) -> Self {
         Self { conn }
     }
 }
 
-#[derive(sqlx::FromRow)]
-#[enum_def]
-struct PersonalSessionLookup {
+/// Row type for loading a personal session from the database
+#[derive(Debug, Clone, Queryable, Selectable)]
+#[diesel(table_name = personal_sessions)]
+struct PersonalSessionRow {
     personal_session_id: Uuid,
     owner_user_id: Option<Uuid>,
     owner_oauth2_client_id: Option<Uuid>,
@@ -62,19 +54,19 @@ struct PersonalSessionLookup {
     created_at: DateTime<Utc>,
     revoked_at: Option<DateTime<Utc>>,
     last_active_at: Option<DateTime<Utc>>,
-    last_active_ip: Option<IpAddr>,
+    last_active_ip: Option<ipnetwork::IpNetwork>,
 }
 
-impl Node<Ulid> for PersonalSessionLookup {
+impl Node<Ulid> for PersonalSessionRow {
     fn cursor(&self) -> Ulid {
         self.personal_session_id.into()
     }
 }
 
-impl TryFrom<PersonalSessionLookup> for PersonalSession {
+impl TryFrom<PersonalSessionRow> for PersonalSession {
     type Error = DatabaseInconsistencyError;
 
-    fn try_from(value: PersonalSessionLookup) -> Result<Self, Self::Error> {
+    fn try_from(value: PersonalSessionRow) -> Result<Self, Self::Error> {
         let id = Ulid::from(value.personal_session_id);
         let scope: Result<Scope, _> = value.scope_list.iter().map(|s| s.parse()).collect();
         let scope = scope.map_err(|e| {
@@ -95,7 +87,6 @@ impl TryFrom<PersonalSessionLookup> for PersonalSession {
                 PersonalSessionOwner::OAuth2Client(Ulid::from(owner_oauth2_client_id))
             }
             _ => {
-                // should be impossible (CHECK constraint in Postgres prevents it)
                 return Err(DatabaseInconsistencyError::on("personal_sessions")
                     .column("owner_user_id, owner_oauth2_client_id")
                     .row(id));
@@ -111,14 +102,15 @@ impl TryFrom<PersonalSessionLookup> for PersonalSession {
             scope,
             created_at: value.created_at,
             last_active_at: value.last_active_at,
-            last_active_ip: value.last_active_ip,
+            last_active_ip: value.last_active_ip.map(|ip| ip.ip()),
         })
     }
 }
 
-#[derive(sqlx::FromRow)]
-#[enum_def]
-struct PersonalSessionAndAccessTokenLookup {
+/// Row type for loading a personal session joined with its active access token
+#[derive(Debug, Clone, Queryable)]
+struct PersonalSessionAndAccessTokenRow {
+    // personal_sessions fields
     personal_session_id: Uuid,
     owner_user_id: Option<Uuid>,
     owner_oauth2_client_id: Option<Uuid>,
@@ -128,27 +120,26 @@ struct PersonalSessionAndAccessTokenLookup {
     created_at: DateTime<Utc>,
     revoked_at: Option<DateTime<Utc>>,
     last_active_at: Option<DateTime<Utc>>,
-    last_active_ip: Option<IpAddr>,
-
-    // tokens
+    last_active_ip: Option<ipnetwork::IpNetwork>,
+    // personal_access_tokens fields (nullable because LEFT JOIN)
     personal_access_token_id: Option<Uuid>,
     token_created_at: Option<DateTime<Utc>>,
     token_expires_at: Option<DateTime<Utc>>,
 }
 
-impl Node<Ulid> for PersonalSessionAndAccessTokenLookup {
+impl Node<Ulid> for PersonalSessionAndAccessTokenRow {
     fn cursor(&self) -> Ulid {
         self.personal_session_id.into()
     }
 }
 
-impl TryFrom<PersonalSessionAndAccessTokenLookup>
+impl TryFrom<PersonalSessionAndAccessTokenRow>
     for (PersonalSession, Option<PersonalAccessToken>)
 {
     type Error = DatabaseInconsistencyError;
 
-    fn try_from(value: PersonalSessionAndAccessTokenLookup) -> Result<Self, Self::Error> {
-        let session = PersonalSession::try_from(PersonalSessionLookup {
+    fn try_from(value: PersonalSessionAndAccessTokenRow) -> Result<Self, Self::Error> {
+        let session = PersonalSession::try_from(PersonalSessionRow {
             personal_session_id: value.personal_session_id,
             owner_user_id: value.owner_user_id,
             owner_oauth2_client_id: value.owner_oauth2_client_id,
@@ -166,7 +157,6 @@ impl TryFrom<PersonalSessionAndAccessTokenLookup>
             Some(PersonalAccessToken {
                 id,
                 session_id: session.id,
-                // should not be possible
                 created_at: value.token_created_at.ok_or(
                     DatabaseInconsistencyError::on("personal_sessions")
                         .column("created_at")
@@ -183,6 +173,53 @@ impl TryFrom<PersonalSessionAndAccessTokenLookup>
     }
 }
 
+/// Insertable row for creating a new personal session
+#[derive(Insertable)]
+#[diesel(table_name = personal_sessions)]
+struct NewPersonalSession {
+    personal_session_id: Uuid,
+    owner_user_id: Option<Uuid>,
+    owner_oauth2_client_id: Option<Uuid>,
+    actor_user_id: Uuid,
+    human_name: String,
+    scope_list: Vec<String>,
+    created_at: DateTime<Utc>,
+}
+
+/// Build the tuple of columns selected from the LEFT JOIN of
+/// personal_sessions with personal_access_tokens.
+fn session_with_token_select() -> (
+    personal_sessions::personal_session_id,
+    personal_sessions::owner_user_id,
+    personal_sessions::owner_oauth2_client_id,
+    personal_sessions::actor_user_id,
+    personal_sessions::human_name,
+    personal_sessions::scope_list,
+    personal_sessions::created_at,
+    personal_sessions::revoked_at,
+    personal_sessions::last_active_at,
+    personal_sessions::last_active_ip,
+    diesel::dsl::Nullable<personal_access_tokens::personal_access_token_id>,
+    diesel::dsl::Nullable<personal_access_tokens::created_at>,
+    diesel::dsl::Nullable<personal_access_tokens::expires_at>,
+) {
+    (
+        personal_sessions::personal_session_id,
+        personal_sessions::owner_user_id,
+        personal_sessions::owner_oauth2_client_id,
+        personal_sessions::actor_user_id,
+        personal_sessions::human_name,
+        personal_sessions::scope_list,
+        personal_sessions::created_at,
+        personal_sessions::revoked_at,
+        personal_sessions::last_active_at,
+        personal_sessions::last_active_ip,
+        personal_access_tokens::personal_access_token_id.nullable(),
+        personal_access_tokens::created_at.nullable(),
+        personal_access_tokens::expires_at.nullable(),
+    )
+}
+
 #[async_trait]
 impl PersonalSessionRepository for PgPersonalSessionRepository<'_> {
     type Error = DatabaseError;
@@ -191,34 +228,17 @@ impl PersonalSessionRepository for PgPersonalSessionRepository<'_> {
         name = "db.personal_session.lookup",
         skip_all,
         fields(
-            db.query.text,
             session.id = %id,
         ),
         err,
     )]
     async fn lookup(&mut self, id: Ulid) -> Result<Option<PersonalSession>, Self::Error> {
-        let res = sqlx::query_as!(
-            PersonalSessionLookup,
-            r#"
-                SELECT personal_session_id
-                     , owner_user_id
-                     , owner_oauth2_client_id
-                     , actor_user_id
-                     , scope_list
-                     , created_at
-                     , revoked_at
-                     , human_name
-                     , last_active_at
-                     , last_active_ip as "last_active_ip: IpAddr"
-                FROM personal_sessions
-
-                WHERE personal_session_id = $1
-            "#,
-            Uuid::from(id),
-        )
-        .traced()
-        .fetch_optional(&mut *self.conn)
-        .await?;
+        let res = personal_sessions::table
+            .find(Uuid::from(id))
+            .select(PersonalSessionRow::as_select())
+            .first::<PersonalSessionRow>(self.conn)
+            .await
+            .optional()?;
 
         let Some(session) = res else { return Ok(None) };
 
@@ -229,7 +249,6 @@ impl PersonalSessionRepository for PgPersonalSessionRepository<'_> {
         name = "db.personal_session.add",
         skip_all,
         fields(
-            db.query.text,
             session.id,
             session.scope = %scope,
         ),
@@ -255,30 +274,20 @@ impl PersonalSessionRepository for PgPersonalSessionRepository<'_> {
             PersonalSessionOwner::OAuth2Client(ulid) => (None, Some(Uuid::from(ulid))),
         };
 
-        sqlx::query!(
-            r#"
-                INSERT INTO personal_sessions
-                    ( personal_session_id
-                    , owner_user_id
-                    , owner_oauth2_client_id
-                    , actor_user_id
-                    , human_name
-                    , scope_list
-                    , created_at
-                    )
-                VALUES ($1, $2, $3, $4, $5, $6, $7)
-            "#,
-            Uuid::from(id),
+        let new_session = NewPersonalSession {
+            personal_session_id: Uuid::from(id),
             owner_user_id,
             owner_oauth2_client_id,
-            Uuid::from(actor_user.id),
-            &human_name,
-            &scope_list,
+            actor_user_id: Uuid::from(actor_user.id),
+            human_name: human_name.clone(),
+            scope_list,
             created_at,
-        )
-        .traced()
-        .execute(&mut *self.conn)
-        .await?;
+        };
+
+        diesel::insert_into(personal_sessions::table)
+            .values(&new_session)
+            .execute(self.conn)
+            .await?;
 
         Ok(PersonalSession {
             id,
@@ -297,7 +306,6 @@ impl PersonalSessionRepository for PgPersonalSessionRepository<'_> {
         name = "db.personal_session.revoke",
         skip_all,
         fields(
-            db.query.text,
             %session.id,
             %session.scope,
         ),
@@ -310,42 +318,24 @@ impl PersonalSessionRepository for PgPersonalSessionRepository<'_> {
     ) -> Result<PersonalSession, Self::Error> {
         let revoked_at = clock.now();
 
-        {
-            // Revoke dependent PATs
-            let span = info_span!(
-                "db.personal_session.revoke.tokens",
-                { DB_QUERY_TEXT } = tracing::field::Empty,
-            );
-
-            sqlx::query!(
-                r#"
-                    UPDATE personal_access_tokens
-                    SET revoked_at = $2
-                    WHERE personal_session_id = $1 AND revoked_at IS NULL
-                "#,
-                Uuid::from(session.id),
-                revoked_at,
-            )
-            .record(&span)
-            .execute(&mut *self.conn)
-            .instrument(span)
-            .await?;
-        }
-
-        let res = sqlx::query!(
-            r#"
-                UPDATE personal_sessions
-                SET revoked_at = $2
-                WHERE personal_session_id = $1
-            "#,
-            Uuid::from(session.id),
-            revoked_at,
+        // Revoke dependent PATs
+        diesel::update(
+            personal_access_tokens::table
+                .filter(personal_access_tokens::personal_session_id.eq(Uuid::from(session.id)))
+                .filter(personal_access_tokens::revoked_at.is_null()),
         )
-        .traced()
-        .execute(&mut *self.conn)
+        .set(personal_access_tokens::revoked_at.eq(Some(revoked_at)))
+        .execute(self.conn)
         .await?;
 
-        DatabaseError::ensure_affected_rows(&res, 1)?;
+        let rows_affected = diesel::update(
+            personal_sessions::table.find(Uuid::from(session.id)),
+        )
+        .set(personal_sessions::revoked_at.eq(Some(revoked_at)))
+        .execute(self.conn)
+        .await?;
+
+        DatabaseError::ensure_affected_rows_usize(rows_affected, 1)?;
 
         session
             .finish(revoked_at)
@@ -355,9 +345,6 @@ impl PersonalSessionRepository for PgPersonalSessionRepository<'_> {
     #[tracing::instrument(
         name = "db.personal_session.revoke_bulk",
         skip_all,
-        fields(
-            db.query.text,
-        ),
         err,
     )]
     async fn revoke_bulk(
@@ -367,64 +354,104 @@ impl PersonalSessionRepository for PgPersonalSessionRepository<'_> {
     ) -> Result<usize, Self::Error> {
         let revoked_at = clock.now();
 
-        let (sql, arguments) = Query::update()
-            .table(PersonalSessions::Table)
-            .value(PersonalSessions::RevokedAt, revoked_at)
-            .and_where(
-                Expr::col((PersonalSessions::Table, PersonalSessions::PersonalSessionId))
-                    // Because filters apply to both the session and access token tables,
-                    // Use a subquery to make it possible to use a JOIN
-                    // onto the personal access token table.
-                    .in_subquery(
-                        Query::select()
-                            .expr(Expr::col((
-                                PersonalSessions::Table,
-                                PersonalSessions::PersonalSessionId,
-                            )))
-                            .from(PersonalSessions::Table)
-                            .left_join(
-                                PersonalAccessTokens::Table,
-                                Cond::all()
-                                    // Match session ID
-                                    .add(
-                                        Expr::col((
-                                            PersonalSessions::Table,
-                                            PersonalSessions::PersonalSessionId,
-                                        ))
-                                        .eq(Expr::col((
-                                            PersonalAccessTokens::Table,
-                                            PersonalAccessTokens::PersonalSessionId,
-                                        ))),
-                                    )
-                                    // Only choose the active access token for each session
-                                    .add(
-                                        Expr::col((
-                                            PersonalAccessTokens::Table,
-                                            PersonalAccessTokens::RevokedAt,
-                                        ))
-                                        .is_null(),
-                                    ),
-                            )
-                            .apply_filter(filter)
-                            .take(),
-                    ),
+        // Build a subquery to find the session IDs matching the filter.
+        // We need a LEFT JOIN to personal_access_tokens for filters that
+        // reference token fields (expires_before, expires_after, expires).
+        let mut sub = personal_sessions::table
+            .left_join(
+                personal_access_tokens::table.on(
+                    personal_sessions::personal_session_id
+                        .eq(personal_access_tokens::personal_session_id)
+                        .and(personal_access_tokens::revoked_at.is_null()),
+                ),
             )
-            .build_sqlx(PostgresQueryBuilder);
+            .select(personal_sessions::personal_session_id)
+            .into_boxed();
 
-        let res = sqlx::query_with(&sql, arguments)
-            .traced()
-            .execute(&mut *self.conn)
-            .await?;
+        // Apply session-level filters
+        if let Some(user) = filter.owner_user() {
+            sub = sub.filter(personal_sessions::owner_user_id.eq(Uuid::from(user.id)));
+        }
 
-        Ok(res.rows_affected().try_into().unwrap_or(usize::MAX))
+        if let Some(client) = filter.owner_oauth2_client() {
+            sub = sub
+                .filter(personal_sessions::owner_oauth2_client_id.eq(Uuid::from(client.id)));
+        }
+
+        if let Some(user) = filter.actor_user() {
+            sub = sub.filter(personal_sessions::actor_user_id.eq(Uuid::from(user.id)));
+        }
+
+        if let Some(device) = filter.device() {
+            let stable = format!("urn:matrix:client:device:{device}");
+            let unstable = format!("urn:matrix:org.matrix.msc2967.client:device:{device}");
+            sub = sub.filter(
+                diesel::dsl::sql::<diesel::sql_types::Bool>("")
+                    .bind::<diesel::sql_types::Text, _>(stable)
+                    .sql(" = ANY(")
+                    .sql("personal_sessions.scope_list")
+                    .sql(") OR ")
+                    .bind::<diesel::sql_types::Text, _>(unstable)
+                    .sql(" = ANY(")
+                    .sql("personal_sessions.scope_list")
+                    .sql(")"),
+            );
+        }
+
+        match filter.state() {
+            Some(PersonalSessionState::Active) => {
+                sub = sub.filter(personal_sessions::revoked_at.is_null());
+            }
+            Some(PersonalSessionState::Revoked) => {
+                sub = sub.filter(personal_sessions::revoked_at.is_not_null());
+            }
+            None => {}
+        }
+
+        if let Some(scope) = filter.scope() {
+            let scope_list: Vec<String> = scope.iter().map(|s| s.as_str().to_owned()).collect();
+            sub = sub.filter(personal_sessions::scope_list.contains(scope_list));
+        }
+
+        if let Some(last_active_before) = filter.last_active_before() {
+            sub = sub.filter(personal_sessions::last_active_at.lt(last_active_before));
+        }
+
+        if let Some(last_active_after) = filter.last_active_after() {
+            sub = sub.filter(personal_sessions::last_active_at.gt(last_active_after));
+        }
+
+        // Token-level filters
+        if let Some(expires_before) = filter.expires_before() {
+            sub = sub.filter(personal_access_tokens::expires_at.lt(expires_before));
+        }
+
+        if let Some(expires_after) = filter.expires_after() {
+            sub = sub.filter(personal_access_tokens::expires_at.gt(expires_after));
+        }
+
+        if let Some(expires) = filter.expires() {
+            if expires {
+                sub = sub.filter(personal_access_tokens::expires_at.is_not_null());
+            } else {
+                sub = sub.filter(personal_access_tokens::expires_at.is_null());
+            }
+        }
+
+        let rows_affected = diesel::update(
+            personal_sessions::table
+                .filter(personal_sessions::personal_session_id.eq_any(sub)),
+        )
+        .set(personal_sessions::revoked_at.eq(Some(revoked_at)))
+        .execute(self.conn)
+        .await?;
+
+        Ok(rows_affected)
     }
 
     #[tracing::instrument(
         name = "db.personal_session.list",
         skip_all,
-        fields(
-            db.query.text,
-        ),
         err,
     )]
     async fn list(
@@ -432,94 +459,111 @@ impl PersonalSessionRepository for PgPersonalSessionRepository<'_> {
         filter: PersonalSessionFilter<'_>,
         pagination: Pagination,
     ) -> Result<Page<(PersonalSession, Option<PersonalAccessToken>)>, Self::Error> {
-        let (sql, arguments) = Query::select()
-            .expr_as(
-                Expr::col((PersonalSessions::Table, PersonalSessions::PersonalSessionId)),
-                PersonalSessionAndAccessTokenLookupIden::PersonalSessionId,
-            )
-            .expr_as(
-                Expr::col((PersonalSessions::Table, PersonalSessions::OwnerUserId)),
-                PersonalSessionAndAccessTokenLookupIden::OwnerUserId,
-            )
-            .expr_as(
-                Expr::col((
-                    PersonalSessions::Table,
-                    PersonalSessions::OwnerOAuth2ClientId,
-                )),
-                PersonalSessionAndAccessTokenLookupIden::OwnerOauth2ClientId,
-            )
-            .expr_as(
-                Expr::col((PersonalSessions::Table, PersonalSessions::ActorUserId)),
-                PersonalSessionAndAccessTokenLookupIden::ActorUserId,
-            )
-            .expr_as(
-                Expr::col((PersonalSessions::Table, PersonalSessions::HumanName)),
-                PersonalSessionAndAccessTokenLookupIden::HumanName,
-            )
-            .expr_as(
-                Expr::col((PersonalSessions::Table, PersonalSessions::ScopeList)),
-                PersonalSessionAndAccessTokenLookupIden::ScopeList,
-            )
-            .expr_as(
-                Expr::col((PersonalSessions::Table, PersonalSessions::CreatedAt)),
-                PersonalSessionAndAccessTokenLookupIden::CreatedAt,
-            )
-            .expr_as(
-                Expr::col((PersonalSessions::Table, PersonalSessions::RevokedAt)),
-                PersonalSessionAndAccessTokenLookupIden::RevokedAt,
-            )
-            .expr_as(
-                Expr::col((PersonalSessions::Table, PersonalSessions::LastActiveAt)),
-                PersonalSessionAndAccessTokenLookupIden::LastActiveAt,
-            )
-            .expr_as(
-                Expr::col((PersonalSessions::Table, PersonalSessions::LastActiveIp)),
-                PersonalSessionAndAccessTokenLookupIden::LastActiveIp,
-            )
-            .expr_as(
-                Expr::col((
-                    PersonalAccessTokens::Table,
-                    PersonalAccessTokens::PersonalAccessTokenId,
-                )),
-                PersonalSessionAndAccessTokenLookupIden::PersonalAccessTokenId,
-            )
-            .expr_as(
-                Expr::col((PersonalAccessTokens::Table, PersonalAccessTokens::CreatedAt)),
-                PersonalSessionAndAccessTokenLookupIden::TokenCreatedAt,
-            )
-            .expr_as(
-                Expr::col((PersonalAccessTokens::Table, PersonalAccessTokens::ExpiresAt)),
-                PersonalSessionAndAccessTokenLookupIden::TokenExpiresAt,
-            )
-            .from(PersonalSessions::Table)
+        let mut query = personal_sessions::table
             .left_join(
-                PersonalAccessTokens::Table,
-                Cond::all()
-                    // Match session ID
-                    .add(
-                        Expr::col((PersonalSessions::Table, PersonalSessions::PersonalSessionId))
-                            .eq(Expr::col((
-                                PersonalAccessTokens::Table,
-                                PersonalAccessTokens::PersonalSessionId,
-                            ))),
-                    )
-                    // Only choose the active access token for each session
-                    .add(
-                        Expr::col((PersonalAccessTokens::Table, PersonalAccessTokens::RevokedAt))
-                            .is_null(),
-                    ),
+                personal_access_tokens::table.on(
+                    personal_sessions::personal_session_id
+                        .eq(personal_access_tokens::personal_session_id)
+                        .and(personal_access_tokens::revoked_at.is_null()),
+                ),
             )
-            .apply_filter(filter)
-            .generate_pagination(
-                (PersonalSessions::Table, PersonalSessions::PersonalSessionId),
-                pagination,
-            )
-            .build_sqlx(PostgresQueryBuilder);
+            .select(session_with_token_select())
+            .into_boxed();
 
-        let edges: Vec<PersonalSessionAndAccessTokenLookup> = sqlx::query_as_with(&sql, arguments)
-            .traced()
-            .fetch_all(&mut *self.conn)
-            .await?;
+        // Apply session-level filters
+        if let Some(user) = filter.owner_user() {
+            query = query.filter(personal_sessions::owner_user_id.eq(Uuid::from(user.id)));
+        }
+
+        if let Some(client) = filter.owner_oauth2_client() {
+            query = query
+                .filter(personal_sessions::owner_oauth2_client_id.eq(Uuid::from(client.id)));
+        }
+
+        if let Some(user) = filter.actor_user() {
+            query = query.filter(personal_sessions::actor_user_id.eq(Uuid::from(user.id)));
+        }
+
+        if let Some(device) = filter.device() {
+            let stable = format!("urn:matrix:client:device:{device}");
+            let unstable = format!("urn:matrix:org.matrix.msc2967.client:device:{device}");
+            query = query.filter(
+                diesel::dsl::sql::<diesel::sql_types::Bool>("")
+                    .bind::<diesel::sql_types::Text, _>(stable)
+                    .sql(" = ANY(")
+                    .sql("personal_sessions.scope_list")
+                    .sql(") OR ")
+                    .bind::<diesel::sql_types::Text, _>(unstable)
+                    .sql(" = ANY(")
+                    .sql("personal_sessions.scope_list")
+                    .sql(")"),
+            );
+        }
+
+        match filter.state() {
+            Some(PersonalSessionState::Active) => {
+                query = query.filter(personal_sessions::revoked_at.is_null());
+            }
+            Some(PersonalSessionState::Revoked) => {
+                query = query.filter(personal_sessions::revoked_at.is_not_null());
+            }
+            None => {}
+        }
+
+        if let Some(scope) = filter.scope() {
+            let scope_list: Vec<String> = scope.iter().map(|s| s.as_str().to_owned()).collect();
+            query = query.filter(personal_sessions::scope_list.contains(scope_list));
+        }
+
+        if let Some(last_active_before) = filter.last_active_before() {
+            query = query.filter(personal_sessions::last_active_at.lt(last_active_before));
+        }
+
+        if let Some(last_active_after) = filter.last_active_after() {
+            query = query.filter(personal_sessions::last_active_at.gt(last_active_after));
+        }
+
+        // Token-level filters
+        if let Some(expires_before) = filter.expires_before() {
+            query = query.filter(personal_access_tokens::expires_at.lt(expires_before));
+        }
+
+        if let Some(expires_after) = filter.expires_after() {
+            query = query.filter(personal_access_tokens::expires_at.gt(expires_after));
+        }
+
+        if let Some(expires) = filter.expires() {
+            if expires {
+                query = query.filter(personal_access_tokens::expires_at.is_not_null());
+            } else {
+                query = query.filter(personal_access_tokens::expires_at.is_null());
+            }
+        }
+
+        // Apply pagination
+        if let Some(after) = pagination.after {
+            query = query
+                .filter(personal_sessions::personal_session_id.gt(Uuid::from(after)));
+        }
+        if let Some(before) = pagination.before {
+            query = query
+                .filter(personal_sessions::personal_session_id.lt(Uuid::from(before)));
+        }
+
+        match pagination.direction {
+            PaginationDirection::Forward => {
+                query = query
+                    .order(personal_sessions::personal_session_id.asc())
+                    .limit((pagination.count + 1) as i64);
+            }
+            PaginationDirection::Backward => {
+                query = query
+                    .order(personal_sessions::personal_session_id.desc())
+                    .limit((pagination.count + 1) as i64);
+            }
+        }
+
+        let edges: Vec<PersonalSessionAndAccessTokenRow> = query.load(self.conn).await?;
 
         let page = pagination.process(edges).try_map(TryFrom::try_from)?;
 
@@ -529,39 +573,91 @@ impl PersonalSessionRepository for PgPersonalSessionRepository<'_> {
     #[tracing::instrument(
         name = "db.personal_session.count",
         skip_all,
-        fields(
-            db.query.text,
-        ),
         err,
     )]
     async fn count(&mut self, filter: PersonalSessionFilter<'_>) -> Result<usize, Self::Error> {
-        let (sql, arguments) = Query::select()
-            .expr(Expr::col((PersonalSessions::Table, PersonalSessions::PersonalSessionId)).count())
-            .from(PersonalSessions::Table)
+        let mut query = personal_sessions::table
             .left_join(
-                PersonalAccessTokens::Table,
-                Cond::all()
-                    // Match session ID
-                    .add(
-                        Expr::col((PersonalSessions::Table, PersonalSessions::PersonalSessionId))
-                            .eq(Expr::col((
-                                PersonalAccessTokens::Table,
-                                PersonalAccessTokens::PersonalSessionId,
-                            ))),
-                    )
-                    // Only choose the active access token for each session
-                    .add(
-                        Expr::col((PersonalAccessTokens::Table, PersonalAccessTokens::RevokedAt))
-                            .is_null(),
-                    ),
+                personal_access_tokens::table.on(
+                    personal_sessions::personal_session_id
+                        .eq(personal_access_tokens::personal_session_id)
+                        .and(personal_access_tokens::revoked_at.is_null()),
+                ),
             )
-            .apply_filter(filter)
-            .build_sqlx(PostgresQueryBuilder);
+            .select(diesel::dsl::count(personal_sessions::personal_session_id))
+            .into_boxed();
 
-        let count: i64 = sqlx::query_scalar_with(&sql, arguments)
-            .traced()
-            .fetch_one(&mut *self.conn)
-            .await?;
+        // Apply session-level filters
+        if let Some(user) = filter.owner_user() {
+            query = query.filter(personal_sessions::owner_user_id.eq(Uuid::from(user.id)));
+        }
+
+        if let Some(client) = filter.owner_oauth2_client() {
+            query = query
+                .filter(personal_sessions::owner_oauth2_client_id.eq(Uuid::from(client.id)));
+        }
+
+        if let Some(user) = filter.actor_user() {
+            query = query.filter(personal_sessions::actor_user_id.eq(Uuid::from(user.id)));
+        }
+
+        if let Some(device) = filter.device() {
+            let stable = format!("urn:matrix:client:device:{device}");
+            let unstable = format!("urn:matrix:org.matrix.msc2967.client:device:{device}");
+            query = query.filter(
+                diesel::dsl::sql::<diesel::sql_types::Bool>("")
+                    .bind::<diesel::sql_types::Text, _>(stable)
+                    .sql(" = ANY(")
+                    .sql("personal_sessions.scope_list")
+                    .sql(") OR ")
+                    .bind::<diesel::sql_types::Text, _>(unstable)
+                    .sql(" = ANY(")
+                    .sql("personal_sessions.scope_list")
+                    .sql(")"),
+            );
+        }
+
+        match filter.state() {
+            Some(PersonalSessionState::Active) => {
+                query = query.filter(personal_sessions::revoked_at.is_null());
+            }
+            Some(PersonalSessionState::Revoked) => {
+                query = query.filter(personal_sessions::revoked_at.is_not_null());
+            }
+            None => {}
+        }
+
+        if let Some(scope) = filter.scope() {
+            let scope_list: Vec<String> = scope.iter().map(|s| s.as_str().to_owned()).collect();
+            query = query.filter(personal_sessions::scope_list.contains(scope_list));
+        }
+
+        if let Some(last_active_before) = filter.last_active_before() {
+            query = query.filter(personal_sessions::last_active_at.lt(last_active_before));
+        }
+
+        if let Some(last_active_after) = filter.last_active_after() {
+            query = query.filter(personal_sessions::last_active_at.gt(last_active_after));
+        }
+
+        // Token-level filters
+        if let Some(expires_before) = filter.expires_before() {
+            query = query.filter(personal_access_tokens::expires_at.lt(expires_before));
+        }
+
+        if let Some(expires_after) = filter.expires_after() {
+            query = query.filter(personal_access_tokens::expires_at.gt(expires_after));
+        }
+
+        if let Some(expires) = filter.expires() {
+            if expires {
+                query = query.filter(personal_access_tokens::expires_at.is_not_null());
+            } else {
+                query = query.filter(personal_access_tokens::expires_at.is_null());
+            }
+        }
+
+        let count: i64 = query.get_result(self.conn).await?;
 
         count
             .try_into()
@@ -571,9 +667,6 @@ impl PersonalSessionRepository for PgPersonalSessionRepository<'_> {
     #[tracing::instrument(
         name = "db.personal_session.record_batch_activity",
         skip_all,
-        fields(
-            db.query.text,
-        ),
         err,
     )]
     async fn record_batch_activity(
@@ -590,10 +683,12 @@ impl PersonalSessionRepository for PgPersonalSessionRepository<'_> {
         for (id, last_activity, ip) in activities {
             ids.push(Uuid::from(id));
             last_activities.push(last_activity);
-            ips.push(ip);
+            ips.push(ip.map(ipnetwork::IpNetwork::from));
         }
 
-        let res = sqlx::query!(
+        let expected = ids.len();
+
+        let rows_affected = diesel::sql_query(
             r#"
                 UPDATE personal_sessions
                 SET last_active_at = GREATEST(t.last_active_at, personal_sessions.last_active_at)
@@ -605,89 +700,17 @@ impl PersonalSessionRepository for PgPersonalSessionRepository<'_> {
                 ) AS t
                 WHERE personal_sessions.personal_session_id = t.personal_session_id
             "#,
-            &ids,
-            &last_activities,
-            &ips as &[Option<IpAddr>],
         )
-        .traced()
-        .execute(&mut *self.conn)
+        .bind::<diesel::sql_types::Array<diesel::sql_types::Uuid>, _>(&ids)
+        .bind::<diesel::sql_types::Array<diesel::sql_types::Timestamptz>, _>(&last_activities)
+        .bind::<diesel::sql_types::Array<diesel::sql_types::Nullable<diesel::sql_types::Inet>>, _>(
+            &ips,
+        )
+        .execute(self.conn)
         .await?;
 
-        DatabaseError::ensure_affected_rows(&res, ids.len().try_into().unwrap_or(u64::MAX))?;
+        DatabaseError::ensure_affected_rows_usize(rows_affected, expected)?;
 
         Ok(())
-    }
-}
-
-impl Filter for PersonalSessionFilter<'_> {
-    fn generate_condition(&self, _has_joins: bool) -> impl sea_query::IntoCondition {
-        sea_query::Condition::all()
-            .add_option(self.owner_user().map(|user| {
-                Expr::col((PersonalSessions::Table, PersonalSessions::OwnerUserId))
-                    .eq(Uuid::from(user.id))
-            }))
-            .add_option(self.owner_oauth2_client().map(|client| {
-                Expr::col((
-                    PersonalSessions::Table,
-                    PersonalSessions::OwnerOAuth2ClientId,
-                ))
-                .eq(Uuid::from(client.id))
-            }))
-            .add_option(self.actor_user().map(|user| {
-                Expr::col((PersonalSessions::Table, PersonalSessions::ActorUserId))
-                    .eq(Uuid::from(user.id))
-            }))
-            .add_option(self.device().map(|device| -> SimpleExpr {
-                let stable = format!("urn:matrix:client:device:{device}");
-                let unstable = format!("urn:matrix:org.matrix.msc2967.client:device:{device}");
-                Condition::any()
-                    .add(Expr::val(stable).eq(PgFunc::any(Expr::col((
-                        PersonalSessions::Table,
-                        PersonalSessions::ScopeList,
-                    )))))
-                    .add(Expr::val(unstable).eq(PgFunc::any(Expr::col((
-                        PersonalSessions::Table,
-                        PersonalSessions::ScopeList,
-                    )))))
-                    .into()
-            }))
-            .add_option(self.state().map(|state| match state {
-                PersonalSessionState::Active => {
-                    Expr::col((PersonalSessions::Table, PersonalSessions::RevokedAt)).is_null()
-                }
-                PersonalSessionState::Revoked => {
-                    Expr::col((PersonalSessions::Table, PersonalSessions::RevokedAt)).is_not_null()
-                }
-            }))
-            .add_option(self.scope().map(|scope| {
-                let scope: Vec<String> = scope.iter().map(|s| s.as_str().to_owned()).collect();
-                Expr::col((PersonalSessions::Table, PersonalSessions::ScopeList)).contains(scope)
-            }))
-            .add_option(self.last_active_before().map(|last_active_before| {
-                Expr::col((PersonalSessions::Table, PersonalSessions::LastActiveAt))
-                    .lt(last_active_before)
-            }))
-            .add_option(self.last_active_after().map(|last_active_after| {
-                Expr::col((PersonalSessions::Table, PersonalSessions::LastActiveAt))
-                    .gt(last_active_after)
-            }))
-            .add_option(self.expires_before().map(|expires_before| {
-                Expr::col((PersonalAccessTokens::Table, PersonalAccessTokens::ExpiresAt))
-                    .lt(expires_before)
-            }))
-            .add_option(self.expires_after().map(|expires_after| {
-                Expr::col((PersonalAccessTokens::Table, PersonalAccessTokens::ExpiresAt))
-                    .gt(expires_after)
-            }))
-            .add_option(self.expires().map(|expires| {
-                let column =
-                    Expr::col((PersonalAccessTokens::Table, PersonalAccessTokens::ExpiresAt));
-
-                if expires {
-                    column.is_not_null()
-                } else {
-                    column.is_null()
-                }
-            }))
     }
 }

@@ -20,6 +20,8 @@
 
 use std::sync::{Arc, LazyLock};
 
+use diesel_async::AsyncPgConnection;
+use diesel_async::pooled_connection::deadpool::Pool as DieselPool;
 use new_queue::QueueRunnerError;
 use opentelemetry::metrics::Meter;
 use pasion_data_model::{Clock, SiteConfig};
@@ -29,7 +31,6 @@ use pasion_router::UrlBuilder;
 use pasion_storage::{BoxRepository, RepositoryError, RepositoryFactory};
 use pasion_storage_pg::PgRepositoryFactory;
 use rand::SeedableRng;
-use sqlx::{Pool, Postgres};
 use tokio_util::{sync::CancellationToken, task::TaskTracker};
 
 pub use crate::new_queue::QueueWorker;
@@ -54,6 +55,8 @@ static METER: LazyLock<Meter> = LazyLock::new(|| {
 #[derive(Clone)]
 struct State {
     repository_factory: PgRepositoryFactory,
+    /// Database URL used for sqlx PgListener (LISTEN/NOTIFY)
+    database_url: String,
     mailer: Mailer,
     clock: Arc<dyn Clock>,
     homeserver: Arc<dyn HomeserverConnection>,
@@ -64,6 +67,7 @@ struct State {
 impl State {
     pub fn new(
         repository_factory: PgRepositoryFactory,
+        database_url: String,
         clock: impl Clock + 'static,
         mailer: Mailer,
         homeserver: impl HomeserverConnection + 'static,
@@ -72,6 +76,7 @@ impl State {
     ) -> Self {
         Self {
             repository_factory,
+            database_url,
             mailer,
             clock: Arc::new(clock),
             homeserver: Arc::new(homeserver),
@@ -80,8 +85,12 @@ impl State {
         }
     }
 
-    pub fn pool(&self) -> Pool<Postgres> {
+    pub fn pool(&self) -> &DieselPool<AsyncPgConnection> {
         self.repository_factory.pool()
+    }
+
+    pub fn database_url(&self) -> &str {
+        &self.database_url
     }
 
     pub fn clock(&self) -> &dyn Clock {
@@ -124,6 +133,7 @@ impl State {
 /// This function can fail if the database connection fails.
 pub async fn init(
     repository_factory: PgRepositoryFactory,
+    database_url: String,
     clock: impl Clock + 'static,
     mailer: &Mailer,
     homeserver: impl HomeserverConnection + 'static,
@@ -133,6 +143,7 @@ pub async fn init(
 ) -> Result<QueueWorker, QueueRunnerError> {
     let state = State::new(
         repository_factory,
+        database_url,
         clock,
         mailer.clone(),
         homeserver,
@@ -310,6 +321,7 @@ pub async fn init(
 #[expect(clippy::too_many_arguments, reason = "this is fine")]
 pub async fn init_and_run(
     repository_factory: PgRepositoryFactory,
+    database_url: String,
     clock: impl Clock + 'static,
     mailer: &Mailer,
     homeserver: impl HomeserverConnection + 'static,
@@ -320,6 +332,7 @@ pub async fn init_and_run(
 ) -> Result<(), QueueRunnerError> {
     let worker = init(
         repository_factory,
+        database_url,
         clock,
         mailer,
         homeserver,

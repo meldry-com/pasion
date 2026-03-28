@@ -20,10 +20,10 @@ use crate::{
     app_state::AppState,
     lifecycle::LifecycleManager,
     util::{
-        database_pool_from_config, homeserver_connection_from_config,
-        load_policy_factory_dynamic_data_continuously, mailer_from_config,
-        password_manager_from_config, policy_factory_from_config, site_config_from_config,
-        templates_from_config, test_mailer_in_background,
+        database_pool_from_config, database_url_from_config, diesel_pool_from_config,
+        homeserver_connection_from_config, load_policy_factory_dynamic_data_continuously,
+        mailer_from_config, password_manager_from_config, policy_factory_from_config,
+        site_config_from_config, templates_from_config, test_mailer_in_background,
     },
 };
 
@@ -64,10 +64,13 @@ impl Options {
 
         // Connect to the database
         info!("Connecting to the database");
-        let pool = database_pool_from_config(&config.database).await?;
+        // sqlx pool is kept for migrations, config sync, and LISTEN/NOTIFY
+        let sqlx_pool = database_pool_from_config(&config.database).await?;
+        // diesel pool is used for all repository access
+        let pool = diesel_pool_from_config(&config.database).await?;
 
         if self.no_migrate {
-            let mut conn = pool.acquire().await?;
+            let mut conn = sqlx_pool.acquire().await?;
             let pending_migrations = pasion_storage_pg::pending_migrations(&mut conn).await?;
             if !pending_migrations.is_empty() {
                 // Refuse to start if there are pending migrations
@@ -77,7 +80,7 @@ impl Options {
             }
         } else {
             info!("Running pending database migrations");
-            let mut conn = pool.acquire().await?;
+            let mut conn = sqlx_pool.acquire().await?;
             pasion_storage_pg::migrate(&mut conn)
                 .await
                 .context("could not run migrations")?;
@@ -89,7 +92,7 @@ impl Options {
             info!("Skipping configuration sync");
         } else {
             // Sync the configuration with the database
-            let mut conn = pool.acquire().await?;
+            let conn = pool.get().await.context("could not get connection from pool")?;
             let clients_config =
                 ClientsConfig::extract_or_default(figment).map_err(anyhow::Error::from_boxed)?;
             let upstream_oauth2_config = UpstreamOAuth2Config::extract_or_default(figment)
@@ -98,7 +101,7 @@ impl Options {
             crate::sync::config_sync(
                 upstream_oauth2_config,
                 clients_config,
-                &mut conn,
+                conn,
                 &encrypter,
                 &SystemClock::default(),
                 false,
@@ -172,8 +175,10 @@ impl Options {
             test_mailer_in_background(&mailer, Duration::from_secs(30));
 
             info!("Starting task worker");
+            let database_url = database_url_from_config(&config.database)?;
             pasion_tasks::init_and_run(
                 PgRepositoryFactory::new(pool.clone()),
+                database_url,
                 SystemClock::default(),
                 &mailer,
                 homeserver_connection.clone(),

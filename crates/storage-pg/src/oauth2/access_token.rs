@@ -1,29 +1,32 @@
 use async_trait::async_trait;
 use chrono::{DateTime, Duration, Utc};
+use diesel::prelude::*;
+use diesel_async::RunQueryDsl;
 use pasion_data_model::{AccessToken, AccessTokenState, Clock, Session};
-use pasion_storage::oauth2::OAuth2AccessTokenRepository;
 use rand::RngCore;
-use sqlx::PgConnection;
 use ulid::Ulid;
 use uuid::Uuid;
 
-use crate::{DatabaseError, tracing::ExecuteExt};
+use crate::{DatabaseError, schema::oauth2_access_tokens};
 
 /// An implementation of [`OAuth2AccessTokenRepository`] for a PostgreSQL
 /// connection
 pub struct PgOAuth2AccessTokenRepository<'c> {
-    conn: &'c mut PgConnection,
+    conn: &'c mut diesel_async::AsyncPgConnection,
 }
 
 impl<'c> PgOAuth2AccessTokenRepository<'c> {
     /// Create a new [`PgOAuth2AccessTokenRepository`] from an active PostgreSQL
     /// connection
-    pub fn new(conn: &'c mut PgConnection) -> Self {
+    pub fn new(conn: &'c mut diesel_async::AsyncPgConnection) -> Self {
         Self { conn }
     }
 }
 
-struct OAuth2AccessTokenLookup {
+/// Row type for loading access tokens from the database
+#[derive(Debug, Clone, Queryable, Selectable)]
+#[diesel(table_name = oauth2_access_tokens)]
+struct OAuth2AccessTokenRow {
     oauth2_access_token_id: Uuid,
     oauth2_session_id: Uuid,
     access_token: String,
@@ -33,8 +36,8 @@ struct OAuth2AccessTokenLookup {
     first_used_at: Option<DateTime<Utc>>,
 }
 
-impl From<OAuth2AccessTokenLookup> for AccessToken {
-    fn from(value: OAuth2AccessTokenLookup) -> Self {
+impl From<OAuth2AccessTokenRow> for AccessToken {
+    fn from(value: OAuth2AccessTokenRow) -> Self {
         let state = match value.revoked_at {
             None => AccessTokenState::Valid,
             Some(revoked_at) => AccessTokenState::Revoked { revoked_at },
@@ -52,78 +55,72 @@ impl From<OAuth2AccessTokenLookup> for AccessToken {
     }
 }
 
+/// Insertable row for creating a new access token
+#[derive(Insertable)]
+#[diesel(table_name = oauth2_access_tokens)]
+struct NewOAuth2AccessToken {
+    oauth2_access_token_id: Uuid,
+    oauth2_session_id: Uuid,
+    access_token: String,
+    created_at: DateTime<Utc>,
+    expires_at: Option<DateTime<Utc>>,
+}
+
+/// Row type for cleanup query results via raw SQL
+#[derive(Debug, QueryableByName)]
+struct CleanupResult {
+    #[diesel(sql_type = diesel::sql_types::BigInt)]
+    count: i64,
+    #[diesel(sql_type = diesel::sql_types::Nullable<diesel::sql_types::Timestamptz>)]
+    last_ts: Option<DateTime<Utc>>,
+}
+
 #[async_trait]
-impl OAuth2AccessTokenRepository for PgOAuth2AccessTokenRepository<'_> {
+impl pasion_storage::oauth2::OAuth2AccessTokenRepository
+    for PgOAuth2AccessTokenRepository<'_>
+{
     type Error = DatabaseError;
 
+    #[tracing::instrument(
+        name = "db.oauth2_access_token.lookup",
+        skip_all,
+        fields(access_token.id = %id),
+        err,
+    )]
     async fn lookup(&mut self, id: Ulid) -> Result<Option<AccessToken>, Self::Error> {
-        let res = sqlx::query_as!(
-            OAuth2AccessTokenLookup,
-            r#"
-                SELECT oauth2_access_token_id
-                     , access_token
-                     , created_at
-                     , expires_at
-                     , revoked_at
-                     , oauth2_session_id
-                     , first_used_at
+        let res = oauth2_access_tokens::table
+            .find(Uuid::from(id))
+            .select(OAuth2AccessTokenRow::as_select())
+            .first::<OAuth2AccessTokenRow>(self.conn)
+            .await
+            .optional()?;
 
-                FROM oauth2_access_tokens
-
-                WHERE oauth2_access_token_id = $1
-            "#,
-            Uuid::from(id),
-        )
-        .fetch_optional(&mut *self.conn)
-        .await?;
-
-        let Some(res) = res else { return Ok(None) };
-
-        Ok(Some(res.into()))
+        Ok(res.map(AccessToken::from))
     }
 
     #[tracing::instrument(
         name = "db.oauth2_access_token.find_by_token",
         skip_all,
-        fields(
-            db.query.text,
-        ),
         err,
     )]
     async fn find_by_token(
         &mut self,
         access_token: &str,
     ) -> Result<Option<AccessToken>, Self::Error> {
-        let res = sqlx::query_as!(
-            OAuth2AccessTokenLookup,
-            r#"
-                SELECT oauth2_access_token_id
-                     , access_token
-                     , created_at
-                     , expires_at
-                     , revoked_at
-                     , oauth2_session_id
-                     , first_used_at
+        let res = oauth2_access_tokens::table
+            .filter(oauth2_access_tokens::access_token.eq(access_token))
+            .select(OAuth2AccessTokenRow::as_select())
+            .first::<OAuth2AccessTokenRow>(self.conn)
+            .await
+            .optional()?;
 
-                FROM oauth2_access_tokens
-
-                WHERE access_token = $1
-            "#,
-            access_token,
-        )
-        .fetch_optional(&mut *self.conn)
-        .await?;
-
-        let Some(res) = res else { return Ok(None) };
-
-        Ok(Some(res.into()))
+        Ok(res.map(AccessToken::from))
     }
 
     #[tracing::instrument(
         name = "db.oauth2_access_token.add",
         skip_all,
         fields(
-            db.query.text,
             %session.id,
             client.id = %session.client_id,
             access_token.id,
@@ -144,22 +141,18 @@ impl OAuth2AccessTokenRepository for PgOAuth2AccessTokenRepository<'_> {
 
         tracing::Span::current().record("access_token.id", tracing::field::display(id));
 
-        sqlx::query!(
-            r#"
-                INSERT INTO oauth2_access_tokens
-                    (oauth2_access_token_id, oauth2_session_id, access_token, created_at, expires_at)
-                VALUES
-                    ($1, $2, $3, $4, $5)
-            "#,
-            Uuid::from(id),
-            Uuid::from(session.id),
-            &access_token,
+        let new_row = NewOAuth2AccessToken {
+            oauth2_access_token_id: Uuid::from(id),
+            oauth2_session_id: Uuid::from(session.id),
+            access_token: access_token.clone(),
             created_at,
             expires_at,
-        )
-            .traced()
-        .execute(&mut *self.conn)
-        .await?;
+        };
+
+        diesel::insert_into(oauth2_access_tokens::table)
+            .values(&new_row)
+            .execute(self.conn)
+            .await?;
 
         Ok(AccessToken {
             id,
@@ -176,7 +169,6 @@ impl OAuth2AccessTokenRepository for PgOAuth2AccessTokenRepository<'_> {
         name = "db.oauth2_access_token.revoke",
         skip_all,
         fields(
-            db.query.text,
             session.id = %access_token.session_id,
             %access_token.id,
         ),
@@ -188,20 +180,14 @@ impl OAuth2AccessTokenRepository for PgOAuth2AccessTokenRepository<'_> {
         access_token: AccessToken,
     ) -> Result<AccessToken, Self::Error> {
         let revoked_at = clock.now();
-        let res = sqlx::query!(
-            r#"
-                UPDATE oauth2_access_tokens
-                SET revoked_at = $2
-                WHERE oauth2_access_token_id = $1
-            "#,
-            Uuid::from(access_token.id),
-            revoked_at,
+        let rows_affected = diesel::update(
+            oauth2_access_tokens::table.find(Uuid::from(access_token.id)),
         )
-        .traced()
-        .execute(&mut *self.conn)
+        .set(oauth2_access_tokens::revoked_at.eq(Some(revoked_at)))
+        .execute(self.conn)
         .await?;
 
-        DatabaseError::ensure_affected_rows(&res, 1)?;
+        DatabaseError::ensure_affected_rows_usize(rows_affected, 1)?;
 
         access_token
             .revoke(revoked_at)
@@ -212,7 +198,6 @@ impl OAuth2AccessTokenRepository for PgOAuth2AccessTokenRepository<'_> {
         name = "db.oauth2_access_token.mark_used",
         skip_all,
         fields(
-            db.query.text,
             session.id = %access_token.session_id,
             %access_token.id,
         ),
@@ -224,19 +209,14 @@ impl OAuth2AccessTokenRepository for PgOAuth2AccessTokenRepository<'_> {
         mut access_token: AccessToken,
     ) -> Result<AccessToken, Self::Error> {
         let now = clock.now();
-        let res = sqlx::query!(
-            r#"
-                UPDATE oauth2_access_tokens
-                SET first_used_at = $2
-                WHERE oauth2_access_token_id = $1
-            "#,
-            Uuid::from(access_token.id),
-            now,
+        let rows_affected = diesel::update(
+            oauth2_access_tokens::table.find(Uuid::from(access_token.id)),
         )
-        .execute(&mut *self.conn)
+        .set(oauth2_access_tokens::first_used_at.eq(Some(now)))
+        .execute(self.conn)
         .await?;
 
-        DatabaseError::ensure_affected_rows(&res, 1)?;
+        DatabaseError::ensure_affected_rows_usize(rows_affected, 1)?;
 
         access_token.first_used_at = Some(now);
 
@@ -247,7 +227,6 @@ impl OAuth2AccessTokenRepository for PgOAuth2AccessTokenRepository<'_> {
         name = "db.oauth2_access_token.cleanup_revoked",
         skip_all,
         fields(
-            db.query.text,
             since = since.map(tracing::field::display),
             until = %until,
             limit = limit,
@@ -260,7 +239,9 @@ impl OAuth2AccessTokenRepository for PgOAuth2AccessTokenRepository<'_> {
         until: DateTime<Utc>,
         limit: usize,
     ) -> Result<(usize, Option<DateTime<Utc>>), Self::Error> {
-        let res = sqlx::query!(
+        let limit_i64 = i64::try_from(limit).unwrap_or(i64::MAX);
+
+        let res: CleanupResult = diesel::sql_query(
             r#"
                 WITH
                     to_delete AS (
@@ -282,21 +263,20 @@ impl OAuth2AccessTokenRepository for PgOAuth2AccessTokenRepository<'_> {
                     )
 
                 SELECT
-                    COUNT(*) as "count!",
-                    MAX(revoked_at) as last_revoked_at
+                    COUNT(*) as count,
+                    MAX(revoked_at) as last_ts
                 FROM deleted
             "#,
-            since,
-            until,
-            i64::try_from(limit).unwrap_or(i64::MAX),
         )
-        .traced()
-        .fetch_one(&mut *self.conn)
+        .bind::<diesel::sql_types::Nullable<diesel::sql_types::Timestamptz>, _>(since)
+        .bind::<diesel::sql_types::Timestamptz, _>(until)
+        .bind::<diesel::sql_types::BigInt, _>(limit_i64)
+        .get_result(self.conn)
         .await?;
 
         Ok((
             res.count.try_into().unwrap_or(usize::MAX),
-            res.last_revoked_at,
+            res.last_ts,
         ))
     }
 
@@ -304,7 +284,6 @@ impl OAuth2AccessTokenRepository for PgOAuth2AccessTokenRepository<'_> {
         name = "db.oauth2_access_token.cleanup_expired",
         skip_all,
         fields(
-            db.query.text,
             since = since.map(tracing::field::display),
             until = %until,
             limit = limit,
@@ -317,7 +296,9 @@ impl OAuth2AccessTokenRepository for PgOAuth2AccessTokenRepository<'_> {
         until: DateTime<Utc>,
         limit: usize,
     ) -> Result<(usize, Option<DateTime<Utc>>), Self::Error> {
-        let res = sqlx::query!(
+        let limit_i64 = i64::try_from(limit).unwrap_or(i64::MAX);
+
+        let res: CleanupResult = diesel::sql_query(
             r#"
                 WITH
                     to_delete AS (
@@ -339,21 +320,20 @@ impl OAuth2AccessTokenRepository for PgOAuth2AccessTokenRepository<'_> {
                     )
 
                 SELECT
-                    COUNT(*) as "count!",
-                    MAX(expires_at) as last_expires_at
+                    COUNT(*) as count,
+                    MAX(expires_at) as last_ts
                 FROM deleted
             "#,
-            since,
-            until,
-            i64::try_from(limit).unwrap_or(i64::MAX),
         )
-        .traced()
-        .fetch_one(&mut *self.conn)
+        .bind::<diesel::sql_types::Nullable<diesel::sql_types::Timestamptz>, _>(since)
+        .bind::<diesel::sql_types::Timestamptz, _>(until)
+        .bind::<diesel::sql_types::BigInt, _>(limit_i64)
+        .get_result(self.conn)
         .await?;
 
         Ok((
             res.count.try_into().unwrap_or(usize::MAX),
-            res.last_expires_at,
+            res.last_ts,
         ))
     }
 }
