@@ -522,16 +522,15 @@ mod tests {
     use pasion_storage::{Pagination, user::UserRegistrationTokenFilter};
     use rand::SeedableRng;
     use rand_chacha::ChaChaRng;
-    use sqlx::PgPool;
+    use crate::PgRepositoryFactory;
 
-    use crate::PgRepository;
-
-    #[sqlx::test(migrator = "crate::MIGRATOR")]
-    async fn test_unrevoke(pool: PgPool) {
+    #[tokio::test]
+    async fn test_unrevoke() {
+        let pool = crate::test_utils::setup_test_pool().await;
         let mut rng = ChaChaRng::seed_from_u64(42);
         let clock = MockClock::default();
 
-        let mut repo = PgRepository::from_pool(&pool).await.unwrap().boxed();
+        let mut repo = PgRepositoryFactory::new(pool.clone()).create().await.unwrap();
 
         // Create a token
         let token = repo
@@ -571,12 +570,13 @@ mod tests {
         assert!(page.edges.iter().any(|t| t.node.id == unrevoked_token.id));
     }
 
-    #[sqlx::test(migrator = "crate::MIGRATOR")]
-    async fn test_set_expiry(pool: PgPool) {
+    #[tokio::test]
+    async fn test_set_expiry() {
+        let pool = crate::test_utils::setup_test_pool().await;
         let mut rng = ChaChaRng::seed_from_u64(42);
         let clock = MockClock::default();
 
-        let mut repo = PgRepository::from_pool(&pool).await.unwrap().boxed();
+        let mut repo = PgRepositoryFactory::new(pool.clone()).create().await.unwrap();
 
         // Create a token without expiry
         let token = repo
@@ -610,12 +610,13 @@ mod tests {
         assert!(final_token.expires_at.is_none());
     }
 
-    #[sqlx::test(migrator = "crate::MIGRATOR")]
-    async fn test_set_usage_limit(pool: PgPool) {
+    #[tokio::test]
+    async fn test_set_usage_limit() {
+        let pool = crate::test_utils::setup_test_pool().await;
         let mut rng = ChaChaRng::seed_from_u64(42);
         let clock = MockClock::default();
 
-        let mut repo = PgRepository::from_pool(&pool).await.unwrap().boxed();
+        let mut repo = PgRepositoryFactory::new(pool.clone()).create().await.unwrap();
 
         // Create a token without usage limit
         let token = repo
@@ -658,12 +659,13 @@ mod tests {
         assert!(final_token.usage_limit.is_none());
     }
 
-    #[sqlx::test(migrator = "crate::MIGRATOR")]
-    async fn test_list_and_count(pool: PgPool) {
+    #[tokio::test]
+    async fn test_list_and_count() {
+        let pool = crate::test_utils::setup_test_pool().await;
         let mut rng = ChaChaRng::seed_from_u64(42);
         let clock = MockClock::default();
 
-        let mut repo = PgRepository::from_pool(&pool).await.unwrap().boxed();
+        let mut repo = PgRepositoryFactory::new(pool.clone()).create().await.unwrap();
 
         // Create different types of tokens
         // 1. A regular token

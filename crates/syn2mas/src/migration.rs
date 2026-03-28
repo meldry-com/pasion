@@ -137,7 +137,7 @@ struct MigrationState {
 /// - Invalid data in the Palpo database.
 #[expect(clippy::implicit_hasher)]
 pub async fn migrate(
-    mut palpo: PalpoReader<'_>,
+    mut palpo: PalpoReader,
     mas: MasWriter,
     server_name: String,
     clock: &dyn Clock,
@@ -199,7 +199,7 @@ pub async fn migrate(
 
 #[tracing::instrument(skip_all, level = Level::INFO)]
 async fn migrate_users(
-    palpo: &mut PalpoReader<'_>,
+    palpo: &mut PalpoReader,
     mut mas: MasWriter,
     mut state: MigrationState,
     rng: &mut impl RngCore,
@@ -324,7 +324,7 @@ async fn migrate_users(
 
 #[tracing::instrument(skip_all, level = Level::INFO)]
 async fn migrate_threepids(
-    palpo: &mut PalpoReader<'_>,
+    palpo: &mut PalpoReader,
     mut mas: MasWriter,
     rng: &mut impl RngCore,
     state: MigrationState,
@@ -441,7 +441,7 @@ async fn migrate_threepids(
 
 #[tracing::instrument(skip_all, level = Level::INFO)]
 async fn migrate_external_ids(
-    palpo: &mut PalpoReader<'_>,
+    palpo: &mut PalpoReader,
     mut mas: MasWriter,
     rng: &mut impl RngCore,
     state: MigrationState,
@@ -556,7 +556,7 @@ async fn migrate_external_ids(
 /// resembles a creation timestamp.
 #[tracing::instrument(skip_all, level = Level::INFO)]
 async fn migrate_devices(
-    palpo: &mut PalpoReader<'_>,
+    palpo: &mut PalpoReader,
     mut mas: MasWriter,
     rng: &mut impl RngCore,
     mut state: MigrationState,
@@ -692,7 +692,7 @@ async fn migrate_devices(
 /// token). Some of these may be deviceless.
 #[tracing::instrument(skip_all, level = Level::INFO)]
 async fn migrate_unrefreshable_access_tokens(
-    palpo: &mut PalpoReader<'_>,
+    palpo: &mut PalpoReader,
     mut mas: MasWriter,
     clock: &dyn Clock,
     rng: &mut impl RngCore,
@@ -845,7 +845,7 @@ async fn migrate_unrefreshable_access_tokens(
 /// Does not migrate non-refreshable access tokens.
 #[tracing::instrument(skip_all, level = Level::INFO)]
 async fn migrate_refreshable_token_pairs(
-    palpo: &mut PalpoReader<'_>,
+    palpo: &mut PalpoReader,
     mut mas: MasWriter,
     clock: &dyn Clock,
     rng: &mut impl RngCore,

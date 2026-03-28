@@ -123,7 +123,6 @@ pub async fn handler(req: &mut Request, depot: &Depot) -> Result<StatusCode, Rou
 mod tests {
     use hyper::{Request, StatusCode};
     use pasion_storage::{RepositoryAccess, user::UserPasswordRepository};
-    use sqlx::PgPool;
     use zeroize::Zeroizing;
 
     use crate::{
@@ -131,10 +130,11 @@ mod tests {
         test_utils::{RequestBuilderExt, ResponseExt, TestState, setup},
     };
 
-    #[sqlx::test(migrator = "pasion_storage_pg::MIGRATOR")]
-    async fn test_set_password(pool: PgPool) {
+    #[tokio::test]
+    async fn test_set_password() {
         setup();
-        let mut state = TestState::from_pool(pool).await.unwrap();
+        let pool = pasion_storage_pg::test_utils::setup_test_pool().await;
+        let mut state = TestState::from_pool(pool.clone()).await.unwrap();
         let token = state.token_with_scope("urn:mas:admin").await;
 
         // Create a user
@@ -179,10 +179,11 @@ mod tests {
         assert_eq!(res, PasswordVerificationResult::Success(()));
     }
 
-    #[sqlx::test(migrator = "pasion_storage_pg::MIGRATOR")]
-    async fn test_weak_password(pool: PgPool) {
+    #[tokio::test]
+    async fn test_weak_password() {
         setup();
-        let mut state = TestState::from_pool(pool).await.unwrap();
+        let pool = pasion_storage_pg::test_utils::setup_test_pool().await;
+        let mut state = TestState::from_pool(pool.clone()).await.unwrap();
         let token = state.token_with_scope("urn:mas:admin").await;
 
         // Create a user
@@ -239,10 +240,11 @@ mod tests {
         assert_eq!(res, PasswordVerificationResult::Success(()));
     }
 
-    #[sqlx::test(migrator = "pasion_storage_pg::MIGRATOR")]
-    async fn test_unknown_user(pool: PgPool) {
+    #[tokio::test]
+    async fn test_unknown_user() {
         setup();
-        let mut state = TestState::from_pool(pool).await.unwrap();
+        let pool = pasion_storage_pg::test_utils::setup_test_pool().await;
+        let mut state = TestState::from_pool(pool.clone()).await.unwrap();
         let token = state.token_with_scope("urn:mas:admin").await;
 
         // Set the password through the API
@@ -262,10 +264,11 @@ mod tests {
         );
     }
 
-    #[sqlx::test(migrator = "pasion_storage_pg::MIGRATOR")]
-    async fn test_disabled(pool: PgPool) {
+    #[tokio::test]
+    async fn test_disabled() {
         setup();
-        let mut state = TestState::from_pool(pool).await.unwrap();
+        let pool = pasion_storage_pg::test_utils::setup_test_pool().await;
+        let mut state = TestState::from_pool(pool.clone()).await.unwrap();
         state.password_manager = PasswordManager::disabled();
         let token = state.token_with_scope("urn:mas:admin").await;
 

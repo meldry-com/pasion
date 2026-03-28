@@ -65,15 +65,15 @@ pub async fn handler(
 #[cfg(test)]
 mod tests {
     use hyper::{Request, StatusCode};
-    use sqlx::PgPool;
     use ulid::Ulid;
 
     use crate::test_utils::{RequestBuilderExt, ResponseExt, TestState, setup};
 
-    #[sqlx::test(migrator = "pasion_storage_pg::MIGRATOR")]
-    async fn test_get(pool: PgPool) {
+    #[tokio::test]
+    async fn test_get() {
         setup();
-        let mut state = TestState::from_pool(pool).await.unwrap();
+        let pool = pasion_storage_pg::test_utils::setup_test_pool().await;
+        let mut state = TestState::from_pool(pool.clone()).await.unwrap();
         let token = state.token_with_scope("urn:mas:admin").await;
         let mut rng = state.rng();
 
@@ -125,10 +125,11 @@ mod tests {
         "###);
     }
 
-    #[sqlx::test(migrator = "pasion_storage_pg::MIGRATOR")]
-    async fn test_not_found(pool: PgPool) {
+    #[tokio::test]
+    async fn test_not_found() {
         setup();
-        let mut state = TestState::from_pool(pool).await.unwrap();
+        let pool = pasion_storage_pg::test_utils::setup_test_pool().await;
+        let mut state = TestState::from_pool(pool.clone()).await.unwrap();
         let token = state.token_with_scope("urn:mas:admin").await;
 
         let email_id = Ulid::nil();

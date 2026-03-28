@@ -1,4 +1,3 @@
-use sqlx::postgres::PgQueryResult;
 use thiserror::Error;
 use ulid::Ulid;
 
@@ -6,13 +5,6 @@ use ulid::Ulid;
 #[derive(Debug, Error)]
 #[error(transparent)]
 pub enum DatabaseError {
-    /// An error which came from the database itself (sqlx)
-    Driver {
-        /// The underlying error from the database driver
-        #[from]
-        source: sqlx::Error,
-    },
-
     /// An error from the diesel driver
     #[error("Diesel error: {source}")]
     Diesel {
@@ -53,18 +45,6 @@ pub enum DatabaseError {
 }
 
 impl DatabaseError {
-    pub(crate) fn ensure_affected_rows(
-        result: &PgQueryResult,
-        expected: u64,
-    ) -> Result<(), DatabaseError> {
-        let actual = result.rows_affected();
-        if actual == expected {
-            Ok(())
-        } else {
-            Err(DatabaseError::RowsAffected { expected, actual })
-        }
-    }
-
     /// Diesel variant: `.execute()` returns `usize` directly.
     pub(crate) fn ensure_affected_rows_usize(
         actual: usize,

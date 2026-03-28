@@ -197,14 +197,14 @@ mod tests {
         registration::ClientRegistrationResponse, requests::DeviceAuthorizationResponse,
     };
     use pasion_router::SimpleRoute;
-    use sqlx::PgPool;
 
     use crate::test_utils::{RequestBuilderExt, ResponseExt, TestState, setup};
 
-    #[sqlx::test(migrator = "pasion_storage_pg::MIGRATOR")]
-    async fn test_device_code_request(pool: PgPool) {
+    #[tokio::test]
+    async fn test_device_code_request() {
         setup();
-        let state = TestState::from_pool(pool).await.unwrap();
+        let pool = pasion_storage_pg::test_utils::setup_test_pool().await;
+        let state = TestState::from_pool(pool.clone()).await.unwrap();
 
         // Provision a client
         let request = Request::post(pasion_router::OAuth2RegistrationEndpoint::PATH).json(

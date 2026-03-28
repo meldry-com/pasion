@@ -153,16 +153,16 @@ pub async fn handler(
 mod tests {
     use hyper::{Request, StatusCode};
     use insta::assert_json_snapshot;
-    use sqlx::PgPool;
     use ulid::Ulid;
 
     use super::super::test_utils;
     use crate::test_utils::{RequestBuilderExt, ResponseExt, TestState, setup};
 
-    #[sqlx::test(migrator = "pasion_storage_pg::MIGRATOR")]
-    async fn test_create(pool: PgPool) {
+    #[tokio::test]
+    async fn test_create() {
         setup();
-        let mut state = TestState::from_pool(pool).await.unwrap();
+        let pool = pasion_storage_pg::test_utils::setup_test_pool().await;
+        let mut state = TestState::from_pool(pool.clone()).await.unwrap();
         let token = state.token_with_scope("urn:mas:admin").await;
         let mut rng = state.rng();
         let mut repo = state.repository().await.unwrap();
@@ -218,10 +218,11 @@ mod tests {
         "###);
     }
 
-    #[sqlx::test(migrator = "pasion_storage_pg::MIGRATOR")]
-    async fn test_association(pool: PgPool) {
+    #[tokio::test]
+    async fn test_association() {
         setup();
-        let mut state = TestState::from_pool(pool).await.unwrap();
+        let pool = pasion_storage_pg::test_utils::setup_test_pool().await;
+        let mut state = TestState::from_pool(pool.clone()).await.unwrap();
         let token = state.token_with_scope("urn:mas:admin").await;
         let mut rng = state.rng();
         let mut repo = state.repository().await.unwrap();
@@ -289,10 +290,11 @@ mod tests {
         "###);
     }
 
-    #[sqlx::test(migrator = "pasion_storage_pg::MIGRATOR")]
-    async fn test_link_already_exists(pool: PgPool) {
+    #[tokio::test]
+    async fn test_link_already_exists() {
         setup();
-        let mut state = TestState::from_pool(pool).await.unwrap();
+        let pool = pasion_storage_pg::test_utils::setup_test_pool().await;
+        let mut state = TestState::from_pool(pool.clone()).await.unwrap();
         let token = state.token_with_scope("urn:mas:admin").await;
         let mut rng = state.rng();
         let mut repo = state.repository().await.unwrap();
@@ -359,10 +361,11 @@ mod tests {
         "###);
     }
 
-    #[sqlx::test(migrator = "pasion_storage_pg::MIGRATOR")]
-    async fn test_user_not_found(pool: PgPool) {
+    #[tokio::test]
+    async fn test_user_not_found() {
         setup();
-        let mut state = TestState::from_pool(pool).await.unwrap();
+        let pool = pasion_storage_pg::test_utils::setup_test_pool().await;
+        let mut state = TestState::from_pool(pool.clone()).await.unwrap();
         let token = state.token_with_scope("urn:mas:admin").await;
         let mut rng = state.rng();
         let mut repo = state.repository().await.unwrap();
@@ -400,10 +403,11 @@ mod tests {
         "###);
     }
 
-    #[sqlx::test(migrator = "pasion_storage_pg::MIGRATOR")]
-    async fn test_provider_not_found(pool: PgPool) {
+    #[tokio::test]
+    async fn test_provider_not_found() {
         setup();
-        let mut state = TestState::from_pool(pool).await.unwrap();
+        let pool = pasion_storage_pg::test_utils::setup_test_pool().await;
+        let mut state = TestState::from_pool(pool.clone()).await.unwrap();
         let token = state.token_with_scope("urn:mas:admin").await;
         let mut rng = state.rng();
         let mut repo = state.repository().await.unwrap();

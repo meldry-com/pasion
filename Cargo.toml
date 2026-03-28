@@ -552,21 +552,10 @@ version = "2.2"
 version = "0.12"
 features = ["rt_tokio_1"]
 
-# Query builder (kept temporarily for migration)
-[workspace.dependencies.sea-query]
-version = "0.32.7"
-features = ["derive", "attr", "with-uuid", "with-chrono", "postgres-array"]
-
-# Query builder
-[workspace.dependencies.sea-query-binder]
-version = "0.7.0"
-features = [
-    "sqlx",
-    "sqlx-postgres",
-    "with-uuid",
-    "with-chrono",
-    "postgres-array",
-]
+# PostgreSQL driver (used for LISTEN/NOTIFY and syn2mas)
+[workspace.dependencies.tokio-postgres]
+version = "0.7"
+features = ["with-chrono-0_4", "with-uuid-1", "with-serde_json-1"]
 
 # Sentry error tracking
 [workspace.dependencies.sentry]
@@ -619,20 +608,6 @@ version = "0.6.3"
 [workspace.dependencies.spki]
 version = "0.7.3"
 features = ["std"]
-
-# SQL database support
-[workspace.dependencies.sqlx]
-version = "0.8.6"
-features = [
-    "runtime-tokio",
-    "tls-rustls-aws-lc-rs",
-    "postgres",
-    "migrate",
-    "chrono",
-    "json",
-    "uuid",
-    "ipnetwork",
-]
 
 # Custom error types
 [workspace.dependencies.thiserror]
@@ -765,4 +740,3 @@ pbkdf2.opt-level = 3
 rayon.opt-level = 3
 regalloc2.opt-level = 3
 sha2.opt-level = 3
-sqlx-macros.opt-level = 3

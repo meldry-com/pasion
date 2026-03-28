@@ -29,15 +29,15 @@ mod tests {
         user::UserRepository,
     };
     use rand::SeedableRng;
-    use sqlx::PgPool;
 
-    use crate::PgRepository;
+    use crate::PgRepositoryFactory;
 
-    #[sqlx::test(migrator = "crate::MIGRATOR")]
-    async fn test_repository(pool: PgPool) {
+    #[tokio::test]
+    async fn test_repository() {
+        let pool = crate::test_utils::setup_test_pool().await;
         let mut rng = rand_chacha::ChaChaRng::seed_from_u64(42);
         let clock = MockClock::default();
-        let mut repo = PgRepository::from_pool(&pool).await.unwrap();
+        let mut repo = PgRepositoryFactory::new(pool.clone()).create().await.unwrap();
 
         // The provider list should be empty at the start
         let all_providers = repo.upstream_oauth_provider().all_enabled().await.unwrap();
@@ -303,13 +303,14 @@ mod tests {
 
     /// Test that the pagination works as expected in the upstream OAuth
     /// provider repository
-    #[sqlx::test(migrator = "crate::MIGRATOR")]
-    async fn test_provider_repository_pagination(pool: PgPool) {
+    #[tokio::test]
+    async fn test_provider_repository_pagination() {
+        let pool = crate::test_utils::setup_test_pool().await;
         let scope = Scope::from_iter([OPENID]);
 
         let mut rng = rand_chacha::ChaChaRng::seed_from_u64(42);
         let clock = MockClock::default();
-        let mut repo = PgRepository::from_pool(&pool).await.unwrap();
+        let mut repo = PgRepositoryFactory::new(pool.clone()).create().await.unwrap();
 
         let filter = UpstreamOAuthProviderFilter::new();
 
@@ -452,13 +453,14 @@ mod tests {
 
     /// Test that the pagination works as expected in the upstream OAuth
     /// session repository
-    #[sqlx::test(migrator = "crate::MIGRATOR")]
-    async fn test_session_repository_pagination(pool: PgPool) {
+    #[tokio::test]
+    async fn test_session_repository_pagination() {
+        let pool = crate::test_utils::setup_test_pool().await;
         let scope = Scope::from_iter([OPENID]);
 
         let mut rng = rand_chacha::ChaChaRng::seed_from_u64(42);
         let clock = MockClock::default();
-        let mut repo = PgRepository::from_pool(&pool).await.unwrap();
+        let mut repo = PgRepositoryFactory::new(pool.clone()).create().await.unwrap();
 
         // Create a provider
         let provider = repo

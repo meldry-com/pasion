@@ -79,7 +79,6 @@ mod tests {
         RepositoryAccess,
         upstream_oauth2::{UpstreamOAuthProviderParams, UpstreamOAuthProviderRepository},
     };
-    use sqlx::PgPool;
     use ulid::Ulid;
 
     use crate::test_utils::{RequestBuilderExt, ResponseExt, TestState, setup};
@@ -124,10 +123,11 @@ mod tests {
         provider
     }
 
-    #[sqlx::test(migrator = "pasion_storage_pg::MIGRATOR")]
-    async fn test_get_provider(pool: PgPool) {
+    #[tokio::test]
+    async fn test_get_provider() {
         setup();
-        let mut state = TestState::from_pool(pool).await.unwrap();
+        let pool = pasion_storage_pg::test_utils::setup_test_pool().await;
+        let mut state = TestState::from_pool(pool.clone()).await.unwrap();
         let admin_token = state.token_with_scope("urn:mas:admin").await;
         let provider = create_test_provider(&mut state).await;
 
@@ -169,10 +169,11 @@ mod tests {
         "###);
     }
 
-    #[sqlx::test(migrator = "pasion_storage_pg::MIGRATOR")]
-    async fn test_not_found(pool: PgPool) {
+    #[tokio::test]
+    async fn test_not_found() {
         setup();
-        let mut state = TestState::from_pool(pool).await.unwrap();
+        let pool = pasion_storage_pg::test_utils::setup_test_pool().await;
+        let mut state = TestState::from_pool(pool.clone()).await.unwrap();
         let admin_token = state.token_with_scope("urn:mas:admin").await;
 
         let provider_id = Ulid::nil();

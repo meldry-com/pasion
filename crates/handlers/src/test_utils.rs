@@ -17,6 +17,8 @@ use pasion_matrix::{HomeserverConnection, MockHomeserverConnection};
 use pasion_policy::{InstantiateError, Policy, PolicyFactory};
 use pasion_router::{SimpleRoute, UrlBuilder};
 use pasion_salvo_utils::cookies::{CookieJar, CookieManager};
+use diesel_async::AsyncPgConnection;
+use diesel_async::pooled_connection::deadpool::Pool as DieselPool;
 use pasion_storage::{BoxRepository, BoxRepositoryFactory, RepositoryError, RepositoryFactory};
 use pasion_storage_pg::PgRepositoryFactory;
 use pasion_tasks::QueueWorker;
@@ -25,7 +27,6 @@ use rand::SeedableRng;
 use rand_chacha::ChaChaRng;
 use salvo::{prelude::*, test::TestClient};
 use serde::{Serialize, de::DeserializeOwned};
-use sqlx::PgPool;
 use tokio_util::{
     sync::{CancellationToken, DropGuard},
     task::TaskTracker,
@@ -176,13 +177,13 @@ impl Handler for InjectTestState {
 
 impl TestState {
     /// Create a new test state from the given database pool
-    pub async fn from_pool(pool: PgPool) -> Result<Self, anyhow::Error> {
+    pub async fn from_pool(pool: DieselPool<AsyncPgConnection>) -> Result<Self, anyhow::Error> {
         Self::from_pool_with_site_config(pool, test_site_config()).await
     }
 
     /// Create a new test state from the given database pool and site config
     pub async fn from_pool_with_site_config(
-        pool: PgPool,
+        pool: DieselPool<AsyncPgConnection>,
         site_config: SiteConfig,
     ) -> Result<Self, anyhow::Error> {
         let workspace_root = workspace_root();

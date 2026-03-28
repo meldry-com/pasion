@@ -1,7 +1,0 @@
--- Backfill the upstream_oauth_authorization_sessions.user_session_id column
-UPDATE upstream_oauth_authorization_sessions
-SET user_session_id = user_session_authentications.user_session_id
-FROM user_session_authentications
-WHERE upstream_oauth_authorization_sessions.user_session_id IS NULL
-  AND upstream_oauth_authorization_sessions.upstream_oauth_authorization_session_id
-             = user_session_authentications.upstream_oauth_authorization_session_id;

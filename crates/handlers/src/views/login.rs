@@ -483,7 +483,6 @@ mod test {
         upstream_oauth2::{UpstreamOAuthProviderParams, UpstreamOAuthProviderRepository},
     };
     use pasion_templates::escape_html;
-    use sqlx::PgPool;
     use zeroize::Zeroizing;
 
     use crate::{
@@ -493,11 +492,12 @@ mod test {
         },
     };
 
-    #[sqlx::test(migrator = "pasion_storage_pg::MIGRATOR")]
-    async fn test_password_disabled(pool: PgPool) {
+    #[tokio::test]
+    async fn test_password_disabled() {
         setup();
+        let pool = pasion_storage_pg::test_utils::setup_test_pool().await;
         let state = TestState::from_pool_with_site_config(
-            pool,
+            pool.clone(),
             SiteConfig {
                 password_login_enabled: false,
                 ..test_site_config()
@@ -643,10 +643,11 @@ mod test {
         user
     }
 
-    #[sqlx::test(migrator = "pasion_storage_pg::MIGRATOR")]
-    async fn test_password_login(pool: PgPool) {
+    #[tokio::test]
+    async fn test_password_login() {
         setup();
-        let state = TestState::from_pool(pool).await.unwrap();
+        let pool = pasion_storage_pg::test_utils::setup_test_pool().await;
+        let state = TestState::from_pool(pool.clone()).await.unwrap();
         let cookies = CookieHelper::new();
 
         // Provision a user with a password
@@ -690,10 +691,11 @@ mod test {
         assert!(response.body().contains("john"));
     }
 
-    #[sqlx::test(migrator = "pasion_storage_pg::MIGRATOR")]
-    async fn test_password_login_with_mxid(pool: PgPool) {
+    #[tokio::test]
+    async fn test_password_login_with_mxid() {
         setup();
-        let state = TestState::from_pool(pool).await.unwrap();
+        let pool = pasion_storage_pg::test_utils::setup_test_pool().await;
+        let state = TestState::from_pool(pool.clone()).await.unwrap();
         let cookies = CookieHelper::new();
 
         // Provision a user with a password
@@ -737,10 +739,11 @@ mod test {
         assert!(response.body().contains("john"));
     }
 
-    #[sqlx::test(migrator = "pasion_storage_pg::MIGRATOR")]
-    async fn test_password_login_with_mxid_wrong_server(pool: PgPool) {
+    #[tokio::test]
+    async fn test_password_login_with_mxid_wrong_server() {
         setup();
-        let state = TestState::from_pool(pool).await.unwrap();
+        let pool = pasion_storage_pg::test_utils::setup_test_pool().await;
+        let state = TestState::from_pool(pool.clone()).await.unwrap();
         let cookies = CookieHelper::new();
 
         // Provision a user with a password
@@ -777,10 +780,11 @@ mod test {
         assert!(response.body().contains("Invalid credentials"));
     }
 
-    #[sqlx::test(migrator = "pasion_storage_pg::MIGRATOR")]
-    async fn test_password_login_rate_limit(pool: PgPool) {
+    #[tokio::test]
+    async fn test_password_login_rate_limit() {
         setup();
-        let state = TestState::from_pool(pool).await.unwrap();
+        let pool = pasion_storage_pg::test_utils::setup_test_pool().await;
+        let state = TestState::from_pool(pool.clone()).await.unwrap();
         let mut rng = state.rng();
         let cookies = CookieHelper::new();
 
@@ -846,10 +850,11 @@ mod test {
         assert!(body.contains("too many requests"));
     }
 
-    #[sqlx::test(migrator = "pasion_storage_pg::MIGRATOR")]
-    async fn test_password_login_locked_account(pool: PgPool) {
+    #[tokio::test]
+    async fn test_password_login_locked_account() {
         setup();
-        let state = TestState::from_pool(pool).await.unwrap();
+        let pool = pasion_storage_pg::test_utils::setup_test_pool().await;
+        let state = TestState::from_pool(pool.clone()).await.unwrap();
         let cookies = CookieHelper::new();
 
         // Provision a user with a password
@@ -905,10 +910,11 @@ mod test {
         assert!(response.body().contains("Invalid credentials"));
     }
 
-    #[sqlx::test(migrator = "pasion_storage_pg::MIGRATOR")]
-    async fn test_password_login_deactivated_account(pool: PgPool) {
+    #[tokio::test]
+    async fn test_password_login_deactivated_account() {
         setup();
-        let state = TestState::from_pool(pool).await.unwrap();
+        let pool = pasion_storage_pg::test_utils::setup_test_pool().await;
+        let state = TestState::from_pool(pool.clone()).await.unwrap();
         let cookies = CookieHelper::new();
 
         // Provision a user with a password

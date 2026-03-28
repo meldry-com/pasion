@@ -157,7 +157,6 @@ mod tests {
     use chrono::Duration;
     use hyper::{Request, StatusCode};
     use pasion_data_model::Clock as _;
-    use sqlx::PgPool;
 
     use crate::test_utils::{RequestBuilderExt, ResponseExt, TestState, setup};
 
@@ -248,10 +247,11 @@ mod tests {
         repo.save().await.unwrap();
     }
 
-    #[sqlx::test(migrator = "pasion_storage_pg::MIGRATOR")]
-    async fn test_list_all_tokens(pool: PgPool) {
+    #[tokio::test]
+    async fn test_list_all_tokens() {
         setup();
-        let mut state = TestState::from_pool(pool).await.unwrap();
+        let pool = pasion_storage_pg::test_utils::setup_test_pool().await;
+        let mut state = TestState::from_pool(pool.clone()).await.unwrap();
         let admin_token = state.token_with_scope("urn:mas:admin").await;
         create_test_tokens(&mut state).await;
 
@@ -388,10 +388,11 @@ mod tests {
         "#);
     }
 
-    #[sqlx::test(migrator = "pasion_storage_pg::MIGRATOR")]
-    async fn test_filter_by_used(pool: PgPool) {
+    #[tokio::test]
+    async fn test_filter_by_used() {
         setup();
-        let mut state = TestState::from_pool(pool).await.unwrap();
+        let pool = pasion_storage_pg::test_utils::setup_test_pool().await;
+        let mut state = TestState::from_pool(pool.clone()).await.unwrap();
         let admin_token = state.token_with_scope("urn:mas:admin").await;
         create_test_tokens(&mut state).await;
 
@@ -552,10 +553,11 @@ mod tests {
         "#);
     }
 
-    #[sqlx::test(migrator = "pasion_storage_pg::MIGRATOR")]
-    async fn test_filter_by_revoked(pool: PgPool) {
+    #[tokio::test]
+    async fn test_filter_by_revoked() {
         setup();
-        let mut state = TestState::from_pool(pool).await.unwrap();
+        let pool = pasion_storage_pg::test_utils::setup_test_pool().await;
+        let mut state = TestState::from_pool(pool.clone()).await.unwrap();
         let admin_token = state.token_with_scope("urn:mas:admin").await;
         create_test_tokens(&mut state).await;
 
@@ -716,10 +718,11 @@ mod tests {
         "#);
     }
 
-    #[sqlx::test(migrator = "pasion_storage_pg::MIGRATOR")]
-    async fn test_filter_by_expired(pool: PgPool) {
+    #[tokio::test]
+    async fn test_filter_by_expired() {
         setup();
-        let mut state = TestState::from_pool(pool).await.unwrap();
+        let pool = pasion_storage_pg::test_utils::setup_test_pool().await;
+        let mut state = TestState::from_pool(pool.clone()).await.unwrap();
         let admin_token = state.token_with_scope("urn:mas:admin").await;
         create_test_tokens(&mut state).await;
 
@@ -880,10 +883,11 @@ mod tests {
         "#);
     }
 
-    #[sqlx::test(migrator = "pasion_storage_pg::MIGRATOR")]
-    async fn test_filter_by_valid(pool: PgPool) {
+    #[tokio::test]
+    async fn test_filter_by_valid() {
         setup();
-        let mut state = TestState::from_pool(pool).await.unwrap();
+        let pool = pasion_storage_pg::test_utils::setup_test_pool().await;
+        let mut state = TestState::from_pool(pool.clone()).await.unwrap();
         let admin_token = state.token_with_scope("urn:mas:admin").await;
         create_test_tokens(&mut state).await;
 
@@ -1044,10 +1048,11 @@ mod tests {
         "#);
     }
 
-    #[sqlx::test(migrator = "pasion_storage_pg::MIGRATOR")]
-    async fn test_combined_filters(pool: PgPool) {
+    #[tokio::test]
+    async fn test_combined_filters() {
         setup();
-        let mut state = TestState::from_pool(pool).await.unwrap();
+        let pool = pasion_storage_pg::test_utils::setup_test_pool().await;
+        let mut state = TestState::from_pool(pool.clone()).await.unwrap();
         let admin_token = state.token_with_scope("urn:mas:admin").await;
         create_test_tokens(&mut state).await;
 
@@ -1099,10 +1104,11 @@ mod tests {
         "#);
     }
 
-    #[sqlx::test(migrator = "pasion_storage_pg::MIGRATOR")]
-    async fn test_pagination(pool: PgPool) {
+    #[tokio::test]
+    async fn test_pagination() {
         setup();
-        let mut state = TestState::from_pool(pool).await.unwrap();
+        let pool = pasion_storage_pg::test_utils::setup_test_pool().await;
+        let mut state = TestState::from_pool(pool.clone()).await.unwrap();
         let admin_token = state.token_with_scope("urn:mas:admin").await;
         create_test_tokens(&mut state).await;
 
@@ -1289,10 +1295,11 @@ mod tests {
         "#);
     }
 
-    #[sqlx::test(migrator = "pasion_storage_pg::MIGRATOR")]
-    async fn test_invalid_filter(pool: PgPool) {
+    #[tokio::test]
+    async fn test_invalid_filter() {
         setup();
-        let mut state = TestState::from_pool(pool).await.unwrap();
+        let pool = pasion_storage_pg::test_utils::setup_test_pool().await;
+        let mut state = TestState::from_pool(pool.clone()).await.unwrap();
         let admin_token = state.token_with_scope("urn:mas:admin").await;
 
         // Try with invalid filter value
@@ -1311,10 +1318,11 @@ mod tests {
         );
     }
 
-    #[sqlx::test(migrator = "pasion_storage_pg::MIGRATOR")]
-    async fn test_count_parameter(pool: PgPool) {
+    #[tokio::test]
+    async fn test_count_parameter() {
         setup();
-        let mut state = TestState::from_pool(pool).await.unwrap();
+        let pool = pasion_storage_pg::test_utils::setup_test_pool().await;
+        let mut state = TestState::from_pool(pool.clone()).await.unwrap();
         let admin_token = state.token_with_scope("urn:mas:admin").await;
         create_test_tokens(&mut state).await;
 

@@ -1279,17 +1279,17 @@ mod tests {
     };
     use rand_chacha::ChaChaRng;
     use serde_json::Value;
-    use sqlx::PgPool;
     use ulid::Ulid;
 
     use super::UpstreamSessionsCookie;
     #[cfg(test)]
     use crate::test_utils::{CookieHelper, RequestBuilderExt, ResponseExt, TestState, setup};
 
-    #[sqlx::test(migrator = "pasion_storage_pg::MIGRATOR")]
-    async fn test_register(pool: PgPool) {
+    #[tokio::test]
+    async fn test_register() {
         setup();
-        let state = TestState::from_pool(pool).await.unwrap();
+        let pool = pasion_storage_pg::test_utils::setup_test_pool().await;
+        let state = TestState::from_pool(pool.clone()).await.unwrap();
         let mut rng = state.rng();
         let cookies = CookieHelper::new();
 
@@ -1481,12 +1481,13 @@ mod tests {
         assert!(email_auth.completed_at.is_some());
     }
 
-    #[sqlx::test(migrator = "pasion_storage_pg::MIGRATOR")]
-    async fn test_register_skip_confirmation(pool: PgPool) {
+    #[tokio::test]
+    async fn test_register_skip_confirmation() {
         // Same test as test_register, but checks that we get straight to the
         // registration flow skipping the confirmation
         setup();
-        let state = TestState::from_pool(pool).await.unwrap();
+        let pool = pasion_storage_pg::test_utils::setup_test_pool().await;
+        let state = TestState::from_pool(pool.clone()).await.unwrap();
         let mut rng = state.rng();
         let cookies = CookieHelper::new();
 
@@ -1654,13 +1655,14 @@ mod tests {
         assert!(email_auth.completed_at.is_some());
     }
 
-    #[sqlx::test(migrator = "pasion_storage_pg::MIGRATOR")]
-    async fn test_link_existing_account(pool: PgPool) {
+    #[tokio::test]
+    async fn test_link_existing_account() {
         let existing_username = "john";
         let subject = "subject";
 
         setup();
-        let state = TestState::from_pool(pool).await.unwrap();
+        let pool = pasion_storage_pg::test_utils::setup_test_pool().await;
+        let state = TestState::from_pool(pool.clone()).await.unwrap();
         let mut rng = state.rng();
         let cookies = CookieHelper::new();
 
@@ -1774,12 +1776,13 @@ mod tests {
         assert_eq!(link.user_id, Some(user.id));
     }
 
-    #[sqlx::test(migrator = "pasion_storage_pg::MIGRATOR")]
-    async fn test_link_existing_account_when_not_allowed_by_default(pool: PgPool) {
+    #[tokio::test]
+    async fn test_link_existing_account_when_not_allowed_by_default() {
         let existing_username = "john";
 
         setup();
-        let state = TestState::from_pool(pool).await.unwrap();
+        let pool = pasion_storage_pg::test_utils::setup_test_pool().await;
+        let state = TestState::from_pool(pool.clone()).await.unwrap();
         let mut rng = state.rng();
         let cookies = CookieHelper::new();
 
@@ -1942,14 +1945,15 @@ mod tests {
         Ok((link, session))
     }
 
-    #[sqlx::test(migrator = "pasion_storage_pg::MIGRATOR")]
-    async fn test_link_existing_account_replace_conflict(pool: PgPool) {
+    #[tokio::test]
+    async fn test_link_existing_account_replace_conflict() {
         let existing_username = "john";
         let subject = "subject";
         let old_subject = "old_subject";
 
         setup();
-        let state = TestState::from_pool(pool).await.unwrap();
+        let pool = pasion_storage_pg::test_utils::setup_test_pool().await;
+        let state = TestState::from_pool(pool.clone()).await.unwrap();
         let mut rng = state.rng();
         let cookies = CookieHelper::new();
 
@@ -2092,13 +2096,14 @@ mod tests {
         );
     }
 
-    #[sqlx::test(migrator = "pasion_storage_pg::MIGRATOR")]
-    async fn test_link_existing_account_set_conflict_success(pool: PgPool) {
+    #[tokio::test]
+    async fn test_link_existing_account_set_conflict_success() {
         let existing_username = "john";
         let subject = "subject";
 
         setup();
-        let state = TestState::from_pool(pool).await.unwrap();
+        let pool = pasion_storage_pg::test_utils::setup_test_pool().await;
+        let state = TestState::from_pool(pool.clone()).await.unwrap();
         let mut rng = state.rng();
         let cookies = CookieHelper::new();
 
@@ -2211,14 +2216,15 @@ mod tests {
         assert_eq!(new_link.user_id, Some(user.id));
     }
 
-    #[sqlx::test(migrator = "pasion_storage_pg::MIGRATOR")]
-    async fn test_link_existing_account_set_conflict_failure(pool: PgPool) {
+    #[tokio::test]
+    async fn test_link_existing_account_set_conflict_failure() {
         let existing_username = "john";
         let subject = "subject";
         let old_subject = "old_subject";
 
         setup();
-        let state = TestState::from_pool(pool).await.unwrap();
+        let pool = pasion_storage_pg::test_utils::setup_test_pool().await;
+        let state = TestState::from_pool(pool.clone()).await.unwrap();
         let mut rng = state.rng();
         let cookies = CookieHelper::new();
 

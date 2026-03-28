@@ -1,5 +1,0 @@
--- no-transaction
--- Adds a partial index on oauth2_sessions.finished_at
-CREATE INDEX CONCURRENTLY IF NOT EXISTS "oauth2_sessions_finished_at_idx"
-    ON "oauth2_sessions" ("finished_at")
-    WHERE "finished_at" IS NOT NULL;

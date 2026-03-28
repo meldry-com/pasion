@@ -573,16 +573,15 @@ mod tests {
     use pasion_storage::upstream_oauth2::UpstreamOAuthProviderParams;
     use rand::SeedableRng;
     use rand_chacha::ChaChaRng;
-    use sqlx::PgPool;
+    use crate::PgRepositoryFactory;
 
-    use crate::PgRepository;
-
-    #[sqlx::test(migrator = "crate::MIGRATOR")]
-    async fn test_create_lookup_complete(pool: PgPool) {
+    #[tokio::test]
+    async fn test_create_lookup_complete() {
+        let pool = crate::test_utils::setup_test_pool().await;
         let mut rng = ChaChaRng::seed_from_u64(42);
         let clock = MockClock::default();
 
-        let mut repo = PgRepository::from_pool(&pool).await.unwrap().boxed();
+        let mut repo = PgRepositoryFactory::new(pool.clone()).create().await.unwrap();
 
         let registration = repo
             .user_registration()
@@ -648,12 +647,13 @@ mod tests {
         assert!(res.is_err());
     }
 
-    #[sqlx::test(migrator = "crate::MIGRATOR")]
-    async fn test_create_useragent_ipaddress(pool: PgPool) {
+    #[tokio::test]
+    async fn test_create_useragent_ipaddress() {
+        let pool = crate::test_utils::setup_test_pool().await;
         let mut rng = ChaChaRng::seed_from_u64(42);
         let clock = MockClock::default();
 
-        let mut repo = PgRepository::from_pool(&pool).await.unwrap().boxed();
+        let mut repo = PgRepositoryFactory::new(pool.clone()).create().await.unwrap();
 
         let registration = repo
             .user_registration()
@@ -692,12 +692,13 @@ mod tests {
         assert_eq!(lookup.post_auth_action, registration.post_auth_action);
     }
 
-    #[sqlx::test(migrator = "crate::MIGRATOR")]
-    async fn test_set_display_name(pool: PgPool) {
+    #[tokio::test]
+    async fn test_set_display_name() {
+        let pool = crate::test_utils::setup_test_pool().await;
         let mut rng = ChaChaRng::seed_from_u64(42);
         let clock = MockClock::default();
 
-        let mut repo = PgRepository::from_pool(&pool).await.unwrap().boxed();
+        let mut repo = PgRepositoryFactory::new(pool.clone()).create().await.unwrap();
 
         let registration = repo
             .user_registration()
@@ -756,12 +757,13 @@ mod tests {
         assert!(res.is_err());
     }
 
-    #[sqlx::test(migrator = "crate::MIGRATOR")]
-    async fn test_set_terms_url(pool: PgPool) {
+    #[tokio::test]
+    async fn test_set_terms_url() {
+        let pool = crate::test_utils::setup_test_pool().await;
         let mut rng = ChaChaRng::seed_from_u64(42);
         let clock = MockClock::default();
 
-        let mut repo = PgRepository::from_pool(&pool).await.unwrap().boxed();
+        let mut repo = PgRepositoryFactory::new(pool.clone()).create().await.unwrap();
 
         let registration = repo
             .user_registration()
@@ -826,12 +828,13 @@ mod tests {
         assert!(res.is_err());
     }
 
-    #[sqlx::test(migrator = "crate::MIGRATOR")]
-    async fn test_set_email_authentication(pool: PgPool) {
+    #[tokio::test]
+    async fn test_set_email_authentication() {
+        let pool = crate::test_utils::setup_test_pool().await;
         let mut rng = ChaChaRng::seed_from_u64(42);
         let clock = MockClock::default();
 
-        let mut repo = PgRepository::from_pool(&pool).await.unwrap().boxed();
+        let mut repo = PgRepositoryFactory::new(pool.clone()).create().await.unwrap();
 
         let registration = repo
             .user_registration()
@@ -913,12 +916,13 @@ mod tests {
         assert!(res.is_err());
     }
 
-    #[sqlx::test(migrator = "crate::MIGRATOR")]
-    async fn test_set_password(pool: PgPool) {
+    #[tokio::test]
+    async fn test_set_password() {
+        let pool = crate::test_utils::setup_test_pool().await;
         let mut rng = ChaChaRng::seed_from_u64(42);
         let clock = MockClock::default();
 
-        let mut repo = PgRepository::from_pool(&pool).await.unwrap().boxed();
+        let mut repo = PgRepositoryFactory::new(pool.clone()).create().await.unwrap();
 
         let registration = repo
             .user_registration()
@@ -989,12 +993,13 @@ mod tests {
         assert!(res.is_err());
     }
 
-    #[sqlx::test(migrator = "crate::MIGRATOR")]
-    async fn test_set_upstream_oauth_session(pool: PgPool) {
+    #[tokio::test]
+    async fn test_set_upstream_oauth_session() {
+        let pool = crate::test_utils::setup_test_pool().await;
         let mut rng = ChaChaRng::seed_from_u64(42);
         let clock = MockClock::default();
 
-        let mut repo = PgRepository::from_pool(&pool).await.unwrap().boxed();
+        let mut repo = PgRepositoryFactory::new(pool.clone()).create().await.unwrap();
 
         let registration = repo
             .user_registration()

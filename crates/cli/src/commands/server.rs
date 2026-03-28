@@ -20,7 +20,7 @@ use crate::{
     app_state::AppState,
     lifecycle::LifecycleManager,
     util::{
-        database_pool_from_config, database_url_from_config, diesel_pool_from_config,
+        database_url_from_config, diesel_pool_from_config,
         homeserver_connection_from_config, load_policy_factory_dynamic_data_continuously,
         mailer_from_config, password_manager_from_config, policy_factory_from_config,
         site_config_from_config, templates_from_config, test_mailer_in_background,
@@ -64,15 +64,11 @@ impl Options {
 
         // Connect to the database
         info!("Connecting to the database");
-        // sqlx pool is kept for migrations, config sync, and LISTEN/NOTIFY
-        let sqlx_pool = database_pool_from_config(&config.database).await?;
-        // diesel pool is used for all repository access
+        let db_url = database_url_from_config(&config.database)?;
         let pool = diesel_pool_from_config(&config.database).await?;
 
         if self.no_migrate {
-            let mut conn = sqlx_pool.acquire().await?;
-            let pending_migrations = pasion_storage_pg::pending_migrations(&mut conn).await?;
-            if !pending_migrations.is_empty() {
+            if pasion_storage_pg::has_pending_migrations(&db_url).await? {
                 // Refuse to start if there are pending migrations
                 return Err(anyhow::anyhow!(
                     "The server is running with `--no-migrate` but there are pending migrations. Please run them first with `pasion database migrate`, or omit the `--no-migrate` flag to apply them automatically on startup."
@@ -80,8 +76,7 @@ impl Options {
             }
         } else {
             info!("Running pending database migrations");
-            let mut conn = sqlx_pool.acquire().await?;
-            pasion_storage_pg::migrate(&mut conn)
+            pasion_storage_pg::migrate(&pool, &db_url)
                 .await
                 .context("could not run migrations")?;
         }

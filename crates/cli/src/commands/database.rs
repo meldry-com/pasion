@@ -6,7 +6,7 @@ use figment::Figment;
 use pasion_config::{ConfigurationSectionExt, DatabaseConfig};
 use tracing::info_span;
 
-use crate::util::database_connection_from_config;
+use crate::util::{database_url_from_config, diesel_pool_from_config};
 
 #[derive(Parser, Debug)]
 pub(super) struct Options {
@@ -25,10 +25,11 @@ impl Options {
         let _span = info_span!("cli.database.migrate").entered();
         let config =
             DatabaseConfig::extract_or_default(figment).map_err(anyhow::Error::from_boxed)?;
-        let mut conn = database_connection_from_config(&config).await?;
+        let db_url = database_url_from_config(&config)?;
+        let pool = diesel_pool_from_config(&config).await?;
 
         // Run pending migrations
-        pasion_storage_pg::migrate(&mut conn)
+        pasion_storage_pg::migrate(&pool, &db_url)
             .await
             .context("could not run migrations")?;
 

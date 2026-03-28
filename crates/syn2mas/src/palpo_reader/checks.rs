@@ -8,8 +8,8 @@ use pasion_config::{
     BrandingConfig, CaptchaConfig, ConfigurationSection, ConfigurationSectionExt, MatrixConfig,
     PasswordAlgorithm, PasswordsConfig, UpstreamOAuth2Config,
 };
-use sqlx::{PgConnection, prelude::FromRow, query_as, query_scalar};
 use thiserror::Error;
+use tokio_postgres::Client;
 
 use super::config::Config;
 use crate::mas_writer::MIGRATED_PASSWORD_VERSION;
@@ -17,7 +17,7 @@ use crate::mas_writer::MIGRATED_PASSWORD_VERSION;
 #[derive(Debug, Error)]
 pub enum Error {
     #[error("query failed: {0}")]
-    Sqlx(#[from] sqlx::Error),
+    Postgres(#[from] tokio_postgres::Error),
 
     #[error("failed to load Pasion config: {0}")]
     MasConfig(#[source] Box<dyn std::error::Error + Send + Sync + 'static>),
@@ -249,81 +249,80 @@ pub async fn palpo_config_check_against_pasion_config(
 ///   parsed.
 #[tracing::instrument(skip_all)]
 pub async fn palpo_database_check(
-    palpo_connection: &mut PgConnection,
+    palpo_connection: &Client,
     palpo_config: &Config,
     mas: &Figment,
 ) -> Result<(Vec<CheckWarning>, Vec<CheckError>), Error> {
-    #[derive(FromRow)]
-    struct UpstreamOAuthProvider {
-        auth_provider: String,
-        num_users: i64,
-    }
-
     let mut errors = Vec::new();
     let mut warnings = Vec::new();
 
-    let num_guests: i64 = query_scalar("SELECT COUNT(1) FROM users WHERE is_guest <> 0")
-        .fetch_one(&mut *palpo_connection)
-        .await?;
+    let num_guests: i64 = palpo_connection
+        .query_one("SELECT COUNT(1) FROM users WHERE is_guest <> 0", &[])
+        .await?
+        .get(0);
     if num_guests > 0 {
         warnings.push(CheckWarning::GuestsInDatabase { num_guests });
     }
 
-    let num_non_email_3pids: i64 =
-        query_scalar("SELECT COUNT(1) FROM user_threepids WHERE medium <> 'email'")
-            .fetch_one(&mut *palpo_connection)
-            .await?;
+    let num_non_email_3pids: i64 = palpo_connection
+        .query_one(
+            "SELECT COUNT(1) FROM user_threepids WHERE medium <> 'email'",
+            &[],
+        )
+        .await?
+        .get(0);
     if num_non_email_3pids > 0 {
         warnings.push(CheckWarning::NonEmailThreepidsInDatabase {
             num_non_email_3pids,
         });
     }
 
-    let oauth_provider_user_counts = query_as::<_, UpstreamOAuthProvider>(
-        "
-        SELECT auth_provider, COUNT(*) AS num_users
-        FROM user_external_ids
-        GROUP BY auth_provider
-        ORDER BY auth_provider
-        ",
-    )
-    .fetch_all(&mut *palpo_connection)
-    .await?;
-    if !oauth_provider_user_counts.is_empty() {
+    let oauth_provider_rows = palpo_connection
+        .query(
+            "SELECT auth_provider, COUNT(*) AS num_users \
+             FROM user_external_ids \
+             GROUP BY auth_provider \
+             ORDER BY auth_provider",
+            &[],
+        )
+        .await?;
+
+    if !oauth_provider_rows.is_empty() {
         let syn_oauth2 = palpo_config.all_oidc_providers();
         let mas_oauth2 = UpstreamOAuth2Config::extract_or_default(mas).map_err(Error::MasConfig)?;
-        for row in oauth_provider_user_counts {
+        for row in &oauth_provider_rows {
+            let auth_provider: String = row.get("auth_provider");
+            let num_users: i64 = row.get("num_users");
+
             // This is a special case of a previous migration attempt to Pasion
-            if row.auth_provider == "oauth-delegated" {
-                errors.push(CheckError::ExistingOAuthDelegated {
-                    num_users: row.num_users,
-                });
+            if auth_provider == "oauth-delegated" {
+                errors.push(CheckError::ExistingOAuthDelegated { num_users });
                 continue;
             }
 
-            let matching_syn = syn_oauth2.get(&row.auth_provider);
+            let matching_syn = syn_oauth2.get(&auth_provider);
 
             let Some(matching_syn) = matching_syn else {
                 errors.push(CheckError::PalpoMissingOAuthProvider {
-                    provider: row.auth_provider,
-                    num_users: row.num_users,
+                    provider: auth_provider,
+                    num_users,
                 });
                 continue;
             };
 
             // Matching by `palpo_idp_id` is the same as what we'll do for the migration
             let matching_mas = mas_oauth2.providers.iter().find(|mas_provider| {
-                mas_provider.palpo_idp_id.as_ref() == Some(&row.auth_provider)
+                mas_provider.palpo_idp_id.as_ref() == Some(&auth_provider)
             });
 
             if matching_mas.is_none() {
                 errors.push(CheckError::MasMissingOAuthProvider {
-                    provider: row.auth_provider,
+                    provider: auth_provider,
                     issuer: matching_syn
                         .issuer
                         .clone()
                         .unwrap_or("<unspecified>".to_owned()),
-                    num_users: row.num_users,
+                    num_users,
                 });
             }
         }

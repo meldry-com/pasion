@@ -41,7 +41,6 @@ serde_yaml.workspace = true
 diesel.workspace = true
 diesel-async.workspace = true
 diesel_migrations.workspace = true
-sqlx.workspace = true
 tokio.workspace = true
 tokio-util.workspace = true
 salvo.workspace = true
@@ -85,6 +84,8 @@ pasion-tasks.workspace = true
 pasion-templates.workspace = true
 
 syn2mas.workspace = true
+tokio-postgres.workspace = true
+uuid.workspace = true
 
 [target.'cfg(unix)'.dependencies]
 sd-notify.workspace = true

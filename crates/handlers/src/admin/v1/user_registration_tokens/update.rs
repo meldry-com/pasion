@@ -133,14 +133,14 @@ mod tests {
     use hyper::{Request, StatusCode};
     use pasion_data_model::Clock as _;
     use serde_json::json;
-    use sqlx::PgPool;
 
     use crate::test_utils::{RequestBuilderExt, ResponseExt, TestState, setup};
 
-    #[sqlx::test(migrator = "pasion_storage_pg::MIGRATOR")]
-    async fn test_update_expiry(pool: PgPool) {
+    #[tokio::test]
+    async fn test_update_expiry() {
         setup();
-        let mut state = TestState::from_pool(pool).await.unwrap();
+        let pool = pasion_storage_pg::test_utils::setup_test_pool().await;
+        let mut state = TestState::from_pool(pool.clone()).await.unwrap();
         let token = state.token_with_scope("urn:mas:admin").await;
 
         let mut repo = state.repository().await.unwrap();
@@ -242,10 +242,11 @@ mod tests {
         "#);
     }
 
-    #[sqlx::test(migrator = "pasion_storage_pg::MIGRATOR")]
-    async fn test_update_usage_limit(pool: PgPool) {
+    #[tokio::test]
+    async fn test_update_usage_limit() {
         setup();
-        let mut state = TestState::from_pool(pool).await.unwrap();
+        let pool = pasion_storage_pg::test_utils::setup_test_pool().await;
+        let mut state = TestState::from_pool(pool.clone()).await.unwrap();
         let token = state.token_with_scope("urn:mas:admin").await;
 
         let mut repo = state.repository().await.unwrap();
@@ -346,10 +347,11 @@ mod tests {
         "#);
     }
 
-    #[sqlx::test(migrator = "pasion_storage_pg::MIGRATOR")]
-    async fn test_update_multiple_fields(pool: PgPool) {
+    #[tokio::test]
+    async fn test_update_multiple_fields() {
         setup();
-        let mut state = TestState::from_pool(pool).await.unwrap();
+        let pool = pasion_storage_pg::test_utils::setup_test_pool().await;
+        let mut state = TestState::from_pool(pool.clone()).await.unwrap();
         let token = state.token_with_scope("urn:mas:admin").await;
 
         let mut repo = state.repository().await.unwrap();
@@ -412,10 +414,11 @@ mod tests {
         "#);
     }
 
-    #[sqlx::test(migrator = "pasion_storage_pg::MIGRATOR")]
-    async fn test_update_no_fields(pool: PgPool) {
+    #[tokio::test]
+    async fn test_update_no_fields() {
         setup();
-        let mut state = TestState::from_pool(pool).await.unwrap();
+        let pool = pasion_storage_pg::test_utils::setup_test_pool().await;
+        let mut state = TestState::from_pool(pool.clone()).await.unwrap();
         let token = state.token_with_scope("urn:mas:admin").await;
 
         let mut repo = state.repository().await.unwrap();
@@ -474,10 +477,11 @@ mod tests {
         "#);
     }
 
-    #[sqlx::test(migrator = "pasion_storage_pg::MIGRATOR")]
-    async fn test_update_unknown_token(pool: PgPool) {
+    #[tokio::test]
+    async fn test_update_unknown_token() {
         setup();
-        let mut state = TestState::from_pool(pool).await.unwrap();
+        let pool = pasion_storage_pg::test_utils::setup_test_pool().await;
+        let mut state = TestState::from_pool(pool.clone()).await.unwrap();
         let token = state.token_with_scope("urn:mas:admin").await;
 
         // Try to update a non-existent token

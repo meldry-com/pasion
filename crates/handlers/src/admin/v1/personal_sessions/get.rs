@@ -80,15 +80,15 @@ mod tests {
     use insta::assert_json_snapshot;
     use oauth2_types::scope::{OPENID, Scope};
     use pasion_data_model::personal::session::PersonalSessionOwner;
-    use sqlx::PgPool;
     use ulid::Ulid;
 
     use crate::test_utils::{RequestBuilderExt, ResponseExt, TestState, setup};
 
-    #[sqlx::test(migrator = "pasion_storage_pg::MIGRATOR")]
-    async fn test_get(pool: PgPool) {
+    #[tokio::test]
+    async fn test_get() {
         setup();
-        let mut state = TestState::from_pool(pool).await.unwrap();
+        let pool = pasion_storage_pg::test_utils::setup_test_pool().await;
+        let mut state = TestState::from_pool(pool.clone()).await.unwrap();
         let token = state.token_with_scope("urn:mas:admin").await;
 
         // Create a user and personal session for testing
@@ -157,10 +157,11 @@ mod tests {
         "#);
     }
 
-    #[sqlx::test(migrator = "pasion_storage_pg::MIGRATOR")]
-    async fn test_not_found(pool: PgPool) {
+    #[tokio::test]
+    async fn test_not_found() {
         setup();
-        let mut state = TestState::from_pool(pool).await.unwrap();
+        let pool = pasion_storage_pg::test_utils::setup_test_pool().await;
+        let mut state = TestState::from_pool(pool.clone()).await.unwrap();
         let token = state.token_with_scope("urn:mas:admin").await;
 
         let session_id = Ulid::nil();

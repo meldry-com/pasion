@@ -448,7 +448,6 @@ mod tests {
         header::{CONTENT_TYPE, LOCATION},
     };
     use pasion_router::Route;
-    use sqlx::PgPool;
 
     use crate::{
         SiteConfig,
@@ -457,11 +456,12 @@ mod tests {
         },
     };
 
-    #[sqlx::test(migrator = "pasion_storage_pg::MIGRATOR")]
-    async fn test_password_disabled(pool: PgPool) {
+    #[tokio::test]
+    async fn test_password_disabled() {
         setup();
+        let pool = pasion_storage_pg::test_utils::setup_test_pool().await;
         let state = TestState::from_pool_with_site_config(
-            pool,
+            pool.clone(),
             SiteConfig {
                 password_login_enabled: false,
                 password_registration_enabled: false,
@@ -490,10 +490,11 @@ mod tests {
     }
 
     /// Test the registration happy path
-    #[sqlx::test(migrator = "pasion_storage_pg::MIGRATOR")]
-    async fn test_register(pool: PgPool) {
+    #[tokio::test]
+    async fn test_register() {
         setup();
-        let state = TestState::from_pool(pool).await.unwrap();
+        let pool = pasion_storage_pg::test_utils::setup_test_pool().await;
+        let state = TestState::from_pool(pool.clone()).await.unwrap();
         let cookies = CookieHelper::new();
 
         // Render the registration page and get the CSRF token
@@ -556,10 +557,11 @@ mod tests {
     }
 
     /// When the two password fields mismatch, it should give an error
-    #[sqlx::test(migrator = "pasion_storage_pg::MIGRATOR")]
-    async fn test_register_password_mismatch(pool: PgPool) {
+    #[tokio::test]
+    async fn test_register_password_mismatch() {
         setup();
-        let state = TestState::from_pool(pool).await.unwrap();
+        let pool = pasion_storage_pg::test_utils::setup_test_pool().await;
+        let state = TestState::from_pool(pool.clone()).await.unwrap();
         let cookies = CookieHelper::new();
 
         // Render the registration page and get the CSRF token
@@ -597,10 +599,11 @@ mod tests {
         assert!(response.body().contains("Password fields don't match"));
     }
 
-    #[sqlx::test(migrator = "pasion_storage_pg::MIGRATOR")]
-    async fn test_register_username_too_long(pool: PgPool) {
+    #[tokio::test]
+    async fn test_register_username_too_long() {
         setup();
-        let state = TestState::from_pool(pool).await.unwrap();
+        let pool = pasion_storage_pg::test_utils::setup_test_pool().await;
+        let state = TestState::from_pool(pool.clone()).await.unwrap();
         let cookies = CookieHelper::new();
 
         // Render the registration page and get the CSRF token
@@ -643,10 +646,11 @@ mod tests {
     }
 
     /// When the user already exists in the database, it should give an error
-    #[sqlx::test(migrator = "pasion_storage_pg::MIGRATOR")]
-    async fn test_register_user_exists(pool: PgPool) {
+    #[tokio::test]
+    async fn test_register_user_exists() {
         setup();
-        let state = TestState::from_pool(pool).await.unwrap();
+        let pool = pasion_storage_pg::test_utils::setup_test_pool().await;
+        let state = TestState::from_pool(pool.clone()).await.unwrap();
         let mut rng = state.rng();
         let cookies = CookieHelper::new();
 
@@ -695,10 +699,11 @@ mod tests {
 
     /// When the username is already reserved on the homeserver, it should give
     /// an error
-    #[sqlx::test(migrator = "pasion_storage_pg::MIGRATOR")]
-    async fn test_register_user_reserved(pool: PgPool) {
+    #[tokio::test]
+    async fn test_register_user_reserved() {
         setup();
-        let state = TestState::from_pool(pool).await.unwrap();
+        let pool = pasion_storage_pg::test_utils::setup_test_pool().await;
+        let state = TestState::from_pool(pool.clone()).await.unwrap();
         let cookies = CookieHelper::new();
 
         // Render the registration page and get the CSRF token
@@ -740,11 +745,12 @@ mod tests {
     }
 
     /// Test registration without email when email is not required
-    #[sqlx::test(migrator = "pasion_storage_pg::MIGRATOR")]
-    async fn test_register_without_email_when_not_required(pool: PgPool) {
+    #[tokio::test]
+    async fn test_register_without_email_when_not_required() {
         setup();
+        let pool = pasion_storage_pg::test_utils::setup_test_pool().await;
         let state = TestState::from_pool_with_site_config(
-            pool,
+            pool.clone(),
             SiteConfig {
                 password_registration_email_required: false,
                 ..test_site_config()
@@ -809,11 +815,12 @@ mod tests {
 
     /// Test registration with valid email when email is not required
     /// (email input is ignored completely when not required)
-    #[sqlx::test(migrator = "pasion_storage_pg::MIGRATOR")]
-    async fn test_register_with_email_when_not_required(pool: PgPool) {
+    #[tokio::test]
+    async fn test_register_with_email_when_not_required() {
         setup();
+        let pool = pasion_storage_pg::test_utils::setup_test_pool().await;
         let state = TestState::from_pool_with_site_config(
-            pool,
+            pool.clone(),
             SiteConfig {
                 password_registration_email_required: false,
                 ..test_site_config()
@@ -879,11 +886,12 @@ mod tests {
     }
 
     /// Test registration fails when email is required but not provided
-    #[sqlx::test(migrator = "pasion_storage_pg::MIGRATOR")]
-    async fn test_register_fails_without_email_when_required(pool: PgPool) {
+    #[tokio::test]
+    async fn test_register_fails_without_email_when_required() {
         setup();
+        let pool = pasion_storage_pg::test_utils::setup_test_pool().await;
         let state = TestState::from_pool_with_site_config(
-            pool,
+            pool.clone(),
             SiteConfig {
                 password_registration_email_required: true,
                 ..test_site_config()
@@ -937,11 +945,12 @@ mod tests {
     }
 
     /// Test registration fails when email is required but empty
-    #[sqlx::test(migrator = "pasion_storage_pg::MIGRATOR")]
-    async fn test_register_fails_with_empty_email_when_required(pool: PgPool) {
+    #[tokio::test]
+    async fn test_register_fails_with_empty_email_when_required() {
         setup();
+        let pool = pasion_storage_pg::test_utils::setup_test_pool().await;
         let state = TestState::from_pool_with_site_config(
-            pool,
+            pool.clone(),
             SiteConfig {
                 password_registration_email_required: true,
                 ..test_site_config()
@@ -996,11 +1005,12 @@ mod tests {
     }
 
     /// Test registration fails with invalid email when email is required
-    #[sqlx::test(migrator = "pasion_storage_pg::MIGRATOR")]
-    async fn test_register_fails_with_invalid_email_when_required(pool: PgPool) {
+    #[tokio::test]
+    async fn test_register_fails_with_invalid_email_when_required() {
         setup();
+        let pool = pasion_storage_pg::test_utils::setup_test_pool().await;
         let state = TestState::from_pool_with_site_config(
-            pool,
+            pool.clone(),
             SiteConfig {
                 password_registration_email_required: true,
                 ..test_site_config()

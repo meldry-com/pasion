@@ -165,14 +165,14 @@ mod tests {
     use hyper::{Request, StatusCode};
     use pasion_matrix::HomeserverConnection;
     use pasion_storage::{RepositoryAccess, user::UserRepository};
-    use sqlx::PgPool;
 
     use crate::test_utils::{RequestBuilderExt, ResponseExt, TestState, setup};
 
-    #[sqlx::test(migrator = "pasion_storage_pg::MIGRATOR")]
-    async fn test_add_user(pool: PgPool) {
+    #[tokio::test]
+    async fn test_add_user() {
         setup();
-        let mut state = TestState::from_pool(pool).await.unwrap();
+        let pool = pasion_storage_pg::test_utils::setup_test_pool().await;
+        let mut state = TestState::from_pool(pool.clone()).await.unwrap();
         let token = state.token_with_scope("urn:mas:admin").await;
 
         let request = Request::post("/api/admin/v1/users")
@@ -205,10 +205,11 @@ mod tests {
         assert!(result.is_ok());
     }
 
-    #[sqlx::test(migrator = "pasion_storage_pg::MIGRATOR")]
-    async fn test_add_user_invalid_username(pool: PgPool) {
+    #[tokio::test]
+    async fn test_add_user_invalid_username() {
         setup();
-        let mut state = TestState::from_pool(pool).await.unwrap();
+        let pool = pasion_storage_pg::test_utils::setup_test_pool().await;
+        let mut state = TestState::from_pool(pool.clone()).await.unwrap();
         let token = state.token_with_scope("urn:mas:admin").await;
 
         let request = Request::post("/api/admin/v1/users")
@@ -224,10 +225,11 @@ mod tests {
         assert_eq!(body["errors"][0]["title"], "Username is not valid");
     }
 
-    #[sqlx::test(migrator = "pasion_storage_pg::MIGRATOR")]
-    async fn test_add_user_exists(pool: PgPool) {
+    #[tokio::test]
+    async fn test_add_user_exists() {
         setup();
-        let mut state = TestState::from_pool(pool).await.unwrap();
+        let pool = pasion_storage_pg::test_utils::setup_test_pool().await;
+        let mut state = TestState::from_pool(pool.clone()).await.unwrap();
         let token = state.token_with_scope("urn:mas:admin").await;
 
         let request = Request::post("/api/admin/v1/users")
@@ -256,10 +258,11 @@ mod tests {
         assert_eq!(body["errors"][0]["title"], "User already exists");
     }
 
-    #[sqlx::test(migrator = "pasion_storage_pg::MIGRATOR")]
-    async fn test_add_user_reserved(pool: PgPool) {
+    #[tokio::test]
+    async fn test_add_user_reserved() {
         setup();
-        let mut state = TestState::from_pool(pool).await.unwrap();
+        let pool = pasion_storage_pg::test_utils::setup_test_pool().await;
+        let mut state = TestState::from_pool(pool.clone()).await.unwrap();
         let token = state.token_with_scope("urn:mas:admin").await;
 
         // Reserve a username on the homeserver and try to add it

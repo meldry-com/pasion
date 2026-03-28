@@ -91,13 +91,13 @@ mod tests {
     use pasion_data_model::Clock;
     use pasion_matrix::{HomeserverConnection, ProvisionRequest};
     use pasion_storage::{RepositoryAccess, user::UserRepository};
-    use sqlx::PgPool;
 
     use crate::test_utils::{RequestBuilderExt, ResponseExt, TestState, setup};
 
-    #[sqlx::test(migrator = "pasion_storage_pg::MIGRATOR")]
-    async fn test_reactivate_deactivated_user(pool: PgPool) {
+    #[tokio::test]
+    async fn test_reactivate_deactivated_user() {
         setup();
+        let pool = pasion_storage_pg::test_utils::setup_test_pool().await;
         let mut state = TestState::from_pool(pool.clone()).await.unwrap();
         let token = state.token_with_scope("urn:mas:admin").await;
 
@@ -150,9 +150,10 @@ mod tests {
         );
     }
 
-    #[sqlx::test(migrator = "pasion_storage_pg::MIGRATOR")]
-    async fn test_reactivate_active_user(pool: PgPool) {
+    #[tokio::test]
+    async fn test_reactivate_active_user() {
         setup();
+        let pool = pasion_storage_pg::test_utils::setup_test_pool().await;
         let mut state = TestState::from_pool(pool.clone()).await.unwrap();
         let token = state.token_with_scope("urn:mas:admin").await;
 
@@ -188,10 +189,11 @@ mod tests {
         );
     }
 
-    #[sqlx::test(migrator = "pasion_storage_pg::MIGRATOR")]
-    async fn test_reactivate_unknown_user(pool: PgPool) {
+    #[tokio::test]
+    async fn test_reactivate_unknown_user() {
         setup();
-        let mut state = TestState::from_pool(pool).await.unwrap();
+        let pool = pasion_storage_pg::test_utils::setup_test_pool().await;
+        let mut state = TestState::from_pool(pool.clone()).await.unwrap();
         let token = state.token_with_scope("urn:mas:admin").await;
 
         let request = Request::post("/api/admin/v1/users/01040G2081040G2081040G2081/reactivate")

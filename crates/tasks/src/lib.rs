@@ -55,7 +55,7 @@ static METER: LazyLock<Meter> = LazyLock::new(|| {
 #[derive(Clone)]
 struct State {
     repository_factory: PgRepositoryFactory,
-    /// Database URL used for sqlx PgListener (LISTEN/NOTIFY)
+    /// Database URL used for tokio-postgres LISTEN/NOTIFY
     database_url: String,
     mailer: Mailer,
     clock: Arc<dyn Clock>,

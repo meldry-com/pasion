@@ -10,13 +10,14 @@ use pasion_config::{
 };
 use pasion_data_model::SystemClock;
 use rand::thread_rng;
-use sqlx::{Connection, Either, PgConnection, postgres::PgConnectOptions, types::Uuid};
-use syn2mas::{LockedMasDatabase, MasWriter, PalpoReader, Progress, ProgressStage, palpo_config};
-use tracing::{Instrument, error, info};
-
-use crate::util::{
-    DatabaseConnectOptions, database_connection_from_config_with_options, diesel_pool_from_config,
+use syn2mas::{
+    LockResult, LockedMasDatabase, MasWriter, PalpoReader, Progress, ProgressStage, palpo_config,
 };
+use tokio_postgres::NoTls;
+use tracing::{Instrument, error, info};
+use uuid::Uuid;
+
+use crate::util::{database_url_from_config, diesel_pool_from_config};
 
 /// The exit code used by `syn2mas check` and `syn2mas migrate` when there are
 /// errors preventing migration.
@@ -55,7 +56,7 @@ pub(super) struct Options {
     /// `PGPASSWORD`, etc. It is valid to specify the URL `postgresql:` and
     /// configure all values through those environment variables.
     #[clap(long = "palpo-database-uri", global = true)]
-    palpo_database_uri: Option<PgConnectOptions>,
+    palpo_database_uri: Option<String>,
 }
 
 #[derive(Parser, Debug)]
@@ -81,6 +82,22 @@ enum Subcommand {
 /// database.
 const NUM_WRITER_CONNECTIONS: usize = 8;
 
+/// Connect to a PostgreSQL database using tokio-postgres and spawn the
+/// connection task.
+async fn connect_tokio_postgres(
+    url: &str,
+) -> anyhow::Result<tokio_postgres::Client> {
+    let (client, connection) = tokio_postgres::connect(url, NoTls)
+        .await
+        .context("could not connect to Postgres database")?;
+    tokio::spawn(async move {
+        if let Err(e) = connection.await {
+            tracing::error!("tokio-postgres connection error: {}", e);
+        }
+    });
+    Ok(client)
+}
+
 impl Options {
     #[tracing::instrument("cli.syn2mas.run", skip_all)]
     pub async fn run(self, figment: &Figment) -> anyhow::Result<ExitCode> {
@@ -94,30 +111,26 @@ impl Options {
             .context("Failed to load Palpo configuration")?;
 
         // Establish a connection to Palpo's Postgres database
-        let syn_connection_options = if let Some(db_override) = self.palpo_database_uri {
+        let syn_connection_url = if let Some(db_override) = self.palpo_database_uri {
             db_override
         } else {
             palpo_config
                 .database
-                .to_sqlx_postgres()
+                .to_tokio_postgres_config()
                 .context("Palpo database configuration is invalid, cannot migrate.")?
         };
-        let mut syn_conn = PgConnection::connect_with(&syn_connection_options)
+        let syn_conn = connect_tokio_postgres(&syn_connection_url)
             .await
             .context("could not connect to Palpo Postgres database")?;
 
         let config =
             DatabaseConfig::extract_or_default(figment).map_err(anyhow::Error::from_boxed)?;
 
-        let mut mas_connection = database_connection_from_config_with_options(
-            &config,
-            &DatabaseConnectOptions {
-                log_slow_statements: false,
-            },
-        )
-        .await?;
+        // Create a diesel pool for running migrations and for the MAS connection
+        let mas_url = database_url_from_config(&config)?;
+        let diesel_pool = diesel_pool_from_config(&config).await?;
 
-        pasion_storage_pg::migrate(&mut mas_connection)
+        pasion_storage_pg::migrate(&diesel_pool, &mas_url)
             .await
             .context("could not run migrations")?;
 
@@ -130,8 +143,11 @@ impl Options {
             let encrypter = sync_config.secrets.encrypter().await?;
 
             // Use a diesel pool connection for config sync
-            let diesel_pool = diesel_pool_from_config(&sync_config.database).await?;
-            let diesel_conn = diesel_pool.get().await.context("could not get connection from pool")?;
+            let sync_diesel_pool = diesel_pool_from_config(&sync_config.database).await?;
+            let diesel_conn = sync_diesel_pool
+                .get()
+                .await
+                .context("could not get connection from pool")?;
 
             crate::sync::config_sync(
                 sync_config.upstream_oauth2,
@@ -148,13 +164,22 @@ impl Options {
             .context("could not sync the configuration with the database")?;
         }
 
-        let Either::Left(mut mas_connection) = LockedMasDatabase::try_new(mas_connection)
+        // Create a tokio-postgres connection for the MAS writer's main connection
+        let mas_url = database_url_from_config(&config)?;
+        let mas_connection = connect_tokio_postgres(&mas_url)
+            .await
+            .context("could not connect to Pasion Postgres database")?;
+
+        let mut mas_connection = match LockedMasDatabase::try_new(mas_connection)
             .await
             .context("failed to issue query to lock database")?
-        else {
-            error!("Failed to acquire syn2mas lock on the database.");
-            error!("This likely means that another syn2mas instance is already running!");
-            return Ok(ExitCode::FAILURE);
+        {
+            LockResult::Locked(locked) => locked,
+            LockResult::AlreadyLocked(_) => {
+                error!("Failed to acquire syn2mas lock on the database.");
+                error!("This likely means that another syn2mas instance is already running!");
+                return Ok(ExitCode::FAILURE);
+            }
         };
 
         // Check configuration
@@ -170,7 +195,7 @@ impl Options {
         syn2mas::mas_pre_migration_checks(&mut mas_connection).await?;
         {
             let (extra_warnings, extra_errors) =
-                syn2mas::palpo_database_check(&mut syn_conn, &palpo_config, figment).await?;
+                syn2mas::palpo_database_check(&syn_conn, &palpo_config, figment).await?;
             check_warnings.extend(extra_warnings);
             check_errors.extend(extra_errors);
         }
@@ -226,18 +251,17 @@ impl Options {
 
                 // TODO how should we handle warnings at this stage?
 
-                let reader = PalpoReader::new(&mut syn_conn, dry_run).await?;
-                let writer_mas_connections =
-                    futures_util::future::try_join_all((0..NUM_WRITER_CONNECTIONS).map(|_| {
-                        database_connection_from_config_with_options(
-                            &config,
-                            &DatabaseConnectOptions {
-                                log_slow_statements: false,
-                            },
-                        )
-                    }))
-                    .instrument(tracing::info_span!("syn2mas.mas_writer_connections"))
-                    .await?;
+                let reader = PalpoReader::new(syn_conn, dry_run).await?;
+                let writer_mas_connections = {
+                    let mut connections = Vec::with_capacity(NUM_WRITER_CONNECTIONS);
+                    for _ in 0..NUM_WRITER_CONNECTIONS {
+                        let client = connect_tokio_postgres(&mas_url)
+                            .await
+                            .context("could not create MAS writer connection")?;
+                        connections.push(client);
+                    }
+                    connections
+                };
                 let writer =
                     MasWriter::new(mas_connection, writer_mas_connections, dry_run).await?;
 

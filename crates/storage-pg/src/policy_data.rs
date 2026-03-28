@@ -145,15 +145,16 @@ mod tests {
     use rand::SeedableRng;
     use rand_chacha::ChaChaRng;
     use serde_json::json;
-    use sqlx::PgPool;
+    use diesel_async::RunQueryDsl;
 
-    use crate::PgRepository;
+    use crate::PgRepositoryFactory;
 
-    #[sqlx::test(migrator = "crate::MIGRATOR")]
-    async fn test_policy_data(pool: PgPool) {
+    #[tokio::test]
+    async fn test_policy_data() {
+        let pool = crate::test_utils::setup_test_pool().await;
         let mut rng = ChaChaRng::seed_from_u64(42);
         let clock = MockClock::default();
-        let mut repo = PgRepository::from_pool(&pool).await.unwrap();
+        let mut repo = PgRepositoryFactory::new(pool.clone()).create().await.unwrap();
 
         // Get an empty state at first
         let data = repo.policy_data().get().await.unwrap();
@@ -192,10 +193,18 @@ mod tests {
         assert_eq!(affected, 1);
 
         // Do a raw query to check the other rows were pruned
-        let count: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM policy_data")
-            .fetch_one(&pool)
+        #[derive(diesel::QueryableByName)]
+        struct CountResult {
+            #[diesel(sql_type = diesel::sql_types::BigInt)]
+            count: i64,
+        }
+
+        let mut conn = pool.get().await.unwrap();
+        let count = diesel::sql_query("SELECT COUNT(*) FROM policy_data")
+            .get_result::<CountResult>(&mut *conn)
             .await
-            .unwrap();
+            .unwrap()
+            .count;
         assert_eq!(count, 1);
     }
 }

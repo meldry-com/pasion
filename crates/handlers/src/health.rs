@@ -1,18 +1,19 @@
+use diesel_async::AsyncPgConnection;
+use diesel_async::RunQueryDsl;
+use diesel_async::pooled_connection::deadpool::Pool as DieselPool;
 use pasion_salvo_utils::InternalError;
 use salvo::prelude::*;
-use sqlx::PgPool;
 use tracing::{Instrument, info_span};
 
 #[handler]
 pub async fn get(depot: &Depot) -> Result<String, InternalError> {
     let pool = depot
-        .get::<PgPool>("pg_pool")
-        .map_err(|_| InternalError::from_anyhow(anyhow::anyhow!("PgPool not found in depot")))?;
+        .get::<DieselPool<AsyncPgConnection>>("pg_pool")
+        .map_err(|_| InternalError::from_anyhow(anyhow::anyhow!("pg_pool not found in depot")))?;
 
-    let mut conn = pool.acquire().await?;
+    let mut conn = pool.get().await?;
 
-    sqlx::query("SELECT $1")
-        .bind(1_i64)
+    diesel::sql_query("SELECT 1")
         .execute(&mut *conn)
         .instrument(info_span!("DB health"))
         .await?;

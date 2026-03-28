@@ -183,14 +183,14 @@ mod tests {
     use hyper::{Request, StatusCode};
     use insta::assert_json_snapshot;
     use serde_json::Value;
-    use sqlx::PgPool;
 
     use crate::test_utils::{RequestBuilderExt, ResponseExt, TestState, setup};
 
-    #[sqlx::test(migrator = "pasion_storage_pg::MIGRATOR")]
-    async fn test_create_personal_session_with_token(pool: PgPool) {
+    #[tokio::test]
+    async fn test_create_personal_session_with_token() {
         setup();
-        let mut state = TestState::from_pool(pool).await.unwrap();
+        let pool = pasion_storage_pg::test_utils::setup_test_pool().await;
+        let mut state = TestState::from_pool(pool.clone()).await.unwrap();
         let token = state.token_with_scope("urn:mas:admin").await;
 
         // Create a user for testing
@@ -249,10 +249,11 @@ mod tests {
         "#);
     }
 
-    #[sqlx::test(migrator = "pasion_storage_pg::MIGRATOR")]
-    async fn test_create_personal_session_invalid_user(pool: PgPool) {
+    #[tokio::test]
+    async fn test_create_personal_session_invalid_user() {
         setup();
-        let mut state = TestState::from_pool(pool).await.unwrap();
+        let pool = pasion_storage_pg::test_utils::setup_test_pool().await;
+        let mut state = TestState::from_pool(pool.clone()).await.unwrap();
         let token = state.token_with_scope("urn:mas:admin").await;
 
         let request_body = serde_json::json!({
@@ -270,10 +271,11 @@ mod tests {
         response.assert_status(StatusCode::NOT_FOUND);
     }
 
-    #[sqlx::test(migrator = "pasion_storage_pg::MIGRATOR")]
-    async fn test_create_personal_session_invalid_scope(pool: PgPool) {
+    #[tokio::test]
+    async fn test_create_personal_session_invalid_scope() {
         setup();
-        let mut state = TestState::from_pool(pool).await.unwrap();
+        let pool = pasion_storage_pg::test_utils::setup_test_pool().await;
+        let mut state = TestState::from_pool(pool.clone()).await.unwrap();
         let token = state.token_with_scope("urn:mas:admin").await;
 
         // Create a user for testing

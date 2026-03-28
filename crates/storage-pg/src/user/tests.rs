@@ -12,16 +12,17 @@ use pasion_storage::{
 };
 use rand::SeedableRng;
 use rand_chacha::ChaChaRng;
-use sqlx::PgPool;
+use diesel_async::RunQueryDsl;
 
-use crate::PgRepository;
+use crate::PgRepositoryFactory;
 
 /// Test the user repository, by adding and looking up a user
-#[sqlx::test(migrator = "crate::MIGRATOR")]
-async fn test_user_repo(pool: PgPool) {
+#[tokio::test]
+async fn test_user_repo() {
+    let pool = crate::test_utils::setup_test_pool().await;
     const USERNAME: &str = "john";
 
-    let mut repo = PgRepository::from_pool(&pool).await.unwrap().boxed();
+    let mut repo = PgRepositoryFactory::new(pool.clone()).create().await.unwrap();
     let mut rng = ChaChaRng::seed_from_u64(42);
     let clock = MockClock::default();
 
@@ -227,9 +228,10 @@ async fn test_user_repo(pool: PgPool) {
 }
 
 /// Test [`UserRepository::find_by_username`] with different casings.
-#[sqlx::test(migrator = "crate::MIGRATOR")]
-async fn test_user_repo_find_by_username(pool: PgPool) {
-    let mut repo = PgRepository::from_pool(&pool).await.unwrap().boxed();
+#[tokio::test]
+async fn test_user_repo_find_by_username() {
+    let pool = crate::test_utils::setup_test_pool().await;
+    let mut repo = PgRepositoryFactory::new(pool.clone()).create().await.unwrap();
     let mut rng = ChaChaRng::seed_from_u64(42);
     let clock = MockClock::default();
 
@@ -271,8 +273,9 @@ async fn test_user_repo_find_by_username(pool: PgPool) {
 }
 
 /// Test the user email repository, by trying out most of its methods
-#[sqlx::test(migrator = "crate::MIGRATOR")]
-async fn test_user_email_repo(pool: PgPool) {
+#[tokio::test]
+async fn test_user_email_repo() {
+    let pool = crate::test_utils::setup_test_pool().await;
     const USERNAME: &str = "john";
     const EMAIL: &str = "john@example.com";
     // This is what is stored in the database, making sure that:
@@ -280,7 +283,7 @@ async fn test_user_email_repo(pool: PgPool) {
     //  2. looking it up is case-incensitive
     const UPPERCASE_EMAIL: &str = "JOHN@EXAMPLE.COM";
 
-    let mut repo = PgRepository::from_pool(&pool).await.unwrap().boxed();
+    let mut repo = PgRepositoryFactory::new(pool.clone()).create().await.unwrap();
     let mut rng = ChaChaRng::seed_from_u64(42);
     let clock = MockClock::default();
 
@@ -399,9 +402,10 @@ async fn test_user_email_repo(pool: PgPool) {
 }
 
 /// Test the authentication codes methods in the user email repository
-#[sqlx::test(migrator = "crate::MIGRATOR")]
-async fn test_user_email_repo_authentications(pool: PgPool) {
-    let mut repo = PgRepository::from_pool(&pool).await.unwrap().boxed();
+#[tokio::test]
+async fn test_user_email_repo_authentications() {
+    let pool = crate::test_utils::setup_test_pool().await;
+    let mut repo = PgRepositoryFactory::new(pool.clone()).create().await.unwrap();
     let mut rng = ChaChaRng::seed_from_u64(42);
     let clock = MockClock::default();
 
@@ -514,13 +518,14 @@ async fn test_user_email_repo_authentications(pool: PgPool) {
 }
 
 /// Test the user password repository implementation.
-#[sqlx::test(migrator = "crate::MIGRATOR")]
-async fn test_user_password_repo(pool: PgPool) {
+#[tokio::test]
+async fn test_user_password_repo() {
+    let pool = crate::test_utils::setup_test_pool().await;
     const USERNAME: &str = "john";
     const FIRST_PASSWORD_HASH: &str = "doesntmatter";
     const SECOND_PASSWORD_HASH: &str = "alsodoesntmatter";
 
-    let mut repo = PgRepository::from_pool(&pool).await.unwrap().boxed();
+    let mut repo = PgRepositoryFactory::new(pool.clone()).create().await.unwrap();
     let mut rng = ChaChaRng::seed_from_u64(42);
     let clock = MockClock::default();
 
@@ -596,9 +601,10 @@ async fn test_user_password_repo(pool: PgPool) {
     repo.save().await.unwrap();
 }
 
-#[sqlx::test(migrator = "crate::MIGRATOR")]
-async fn test_user_session(pool: PgPool) {
-    let mut repo = PgRepository::from_pool(&pool).await.unwrap();
+#[tokio::test]
+async fn test_user_session() {
+    let pool = crate::test_utils::setup_test_pool().await;
+    let mut repo = PgRepositoryFactory::new(pool.clone()).create().await.unwrap();
     let mut rng = ChaChaRng::seed_from_u64(42);
     let clock = MockClock::default();
 
@@ -827,9 +833,10 @@ async fn test_user_session(pool: PgPool) {
     assert!(lookup.finished_at.is_some());
 }
 
-#[sqlx::test(migrator = "crate::MIGRATOR")]
-async fn test_user_terms(pool: PgPool) {
-    let mut repo = PgRepository::from_pool(&pool).await.unwrap();
+#[tokio::test]
+async fn test_user_terms() {
+    let pool = crate::test_utils::setup_test_pool().await;
+    let mut repo = PgRepositoryFactory::new(pool.clone()).create().await.unwrap();
     let mut rng = ChaChaRng::seed_from_u64(42);
     let clock = MockClock::default();
 
@@ -872,12 +879,20 @@ async fn test_user_terms(pool: PgPool) {
         .await
         .unwrap();
 
-    let mut conn = repo.into_inner();
+    repo.save().await.unwrap();
+
+    #[derive(diesel::QueryableByName)]
+    struct CountResult {
+        #[diesel(sql_type = diesel::sql_types::BigInt)]
+        count: i64,
+    }
 
     // We should have two rows, as the first terms was deduped
-    let res: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM user_terms")
-        .fetch_one(&mut *conn)
+    let mut conn = pool.get().await.unwrap();
+    let res = diesel::sql_query("SELECT COUNT(*) FROM user_terms")
+        .get_result::<CountResult>(&mut *conn)
         .await
-        .unwrap();
+        .unwrap()
+        .count;
     assert_eq!(res, 2);
 }

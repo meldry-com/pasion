@@ -106,12 +106,12 @@ mod tests {
     use insta::{allow_duplicates, assert_json_snapshot};
     use pasion_data_model::Clock;
     use pasion_storage::{RepositoryAccess, user::UserRepository};
-    use sqlx::{PgPool, types::Json};
 
     use crate::test_utils::{RequestBuilderExt, ResponseExt, TestState, setup};
 
-    async fn test_deactivate_user_helper(pool: PgPool, skip_erase: Option<bool>) {
+    async fn test_deactivate_user_helper(skip_erase: Option<bool>) {
         setup();
+        let pool = pasion_storage_pg::test_utils::setup_test_pool().await;
         let mut state = TestState::from_pool(pool.clone()).await.unwrap();
         let token = state.token_with_scope("urn:mas:admin").await;
 
@@ -149,10 +149,13 @@ mod tests {
 
         // It should have scheduled a deactivation job for the user
         // XXX: we don't have a good way to look for the deactivation job
-        let job: Json<serde_json::Value> = sqlx::query_scalar(
-            "SELECT payload FROM queue_jobs WHERE queue_name = 'deactivate-user'",
+        use diesel::prelude::*;
+        use diesel_async::RunQueryDsl;
+        let mut conn = pool.get().await.unwrap();
+        let job: serde_json::Value = diesel::dsl::sql::<diesel::sql_types::Jsonb>(
+            "SELECT payload FROM queue_jobs WHERE queue_name = 'deactivate-user' LIMIT 1",
         )
-        .fetch_one(&pool)
+        .get_result(&mut conn)
         .await
         .expect("Deactivation job to be scheduled");
         assert_eq!(job["user_id"], serde_json::json!(user.id));
@@ -195,19 +198,20 @@ mod tests {
         "#));
     }
 
-    #[sqlx::test(migrator = "pasion_storage_pg::MIGRATOR")]
-    async fn test_deactivate_user(pool: PgPool) {
-        test_deactivate_user_helper(pool, Option::None).await;
+    #[tokio::test]
+    async fn test_deactivate_user() {
+        test_deactivate_user_helper(Option::None).await;
     }
 
-    #[sqlx::test(migrator = "pasion_storage_pg::MIGRATOR")]
-    async fn test_deactivate_user_skip_erase(pool: PgPool) {
-        test_deactivate_user_helper(pool, Option::Some(true)).await;
+    #[tokio::test]
+    async fn test_deactivate_user_skip_erase() {
+        test_deactivate_user_helper(Option::Some(true)).await;
     }
 
-    #[sqlx::test(migrator = "pasion_storage_pg::MIGRATOR")]
-    async fn test_deactivate_locked_user(pool: PgPool) {
+    #[tokio::test]
+    async fn test_deactivate_locked_user() {
         setup();
+        let pool = pasion_storage_pg::test_utils::setup_test_pool().await;
         let mut state = TestState::from_pool(pool.clone()).await.unwrap();
         let token = state.token_with_scope("urn:mas:admin").await;
 
@@ -276,10 +280,11 @@ mod tests {
         "#);
     }
 
-    #[sqlx::test(migrator = "pasion_storage_pg::MIGRATOR")]
-    async fn test_deactivate_unknown_user(pool: PgPool) {
+    #[tokio::test]
+    async fn test_deactivate_unknown_user() {
         setup();
-        let mut state = TestState::from_pool(pool).await.unwrap();
+        let pool = pasion_storage_pg::test_utils::setup_test_pool().await;
+        let mut state = TestState::from_pool(pool.clone()).await.unwrap();
         let token = state.token_with_scope("urn:mas:admin").await;
 
         let request = Request::post("/api/admin/v1/users/01040G2081040G2081040G2081/deactivate")

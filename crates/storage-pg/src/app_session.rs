@@ -263,15 +263,14 @@ mod tests {
     };
     use rand::SeedableRng;
     use rand_chacha::ChaChaRng;
-    use sqlx::PgPool;
+    use crate::PgRepositoryFactory;
 
-    use crate::PgRepository;
-
-    #[sqlx::test(migrator = "crate::MIGRATOR")]
-    async fn test_app_repo(pool: PgPool) {
+    #[tokio::test]
+    async fn test_app_repo() {
+        let pool = crate::test_utils::setup_test_pool().await;
         let mut rng = ChaChaRng::seed_from_u64(42);
         let clock = MockClock::default();
-        let mut repo = PgRepository::from_pool(&pool).await.unwrap();
+        let mut repo = PgRepositoryFactory::new(pool.clone()).create().await.unwrap();
 
         // Create a user
         let user = repo

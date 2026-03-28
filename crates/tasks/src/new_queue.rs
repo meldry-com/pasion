@@ -19,8 +19,8 @@ use pasion_storage::{
 use pasion_storage_pg::{DatabaseError, PgRepository};
 use rand::{Rng, RngCore, distributions::Uniform};
 use serde::de::DeserializeOwned;
-use sqlx::postgres::PgListener;
 use thiserror::Error;
+use tokio_postgres::NoTls;
 use tokio::{task::JoinSet, time::Instant};
 use tokio_util::sync::CancellationToken;
 use tracing::{Instrument as _, Span};
@@ -137,7 +137,7 @@ fn box_runnable_job<T: RunnableJob + 'static>(job: T) -> Box<dyn RunnableJob> {
 #[derive(Debug, Error)]
 pub enum QueueRunnerError {
     #[error("Failed to setup listener")]
-    SetupListener(#[source] sqlx::Error),
+    SetupListener(#[source] tokio_postgres::Error),
 
     #[error("Failed to get connection from pool")]
     Pool(#[source] Box<dyn std::error::Error + Send + Sync>),
@@ -220,7 +220,10 @@ struct ScheduleDefinition {
 }
 
 pub struct QueueWorker {
-    listener: PgListener,
+    notification_rx: tokio::sync::mpsc::UnboundedReceiver<tokio_postgres::Notification>,
+    /// Kept alive to maintain the underlying connection for LISTEN/NOTIFY.
+    #[expect(dead_code, reason = "Dropping this would close the notification connection")]
+    _pg_client: tokio_postgres::Client,
     registration: Worker,
     am_i_leader: bool,
     last_heartbeat: DateTime<Utc>,
@@ -247,19 +250,42 @@ impl QueueWorker {
         let mut rng = state.rng();
         let clock = state.clock();
 
-        let mut listener = PgListener::connect(state.database_url())
+        // Connect via tokio-postgres for LISTEN/NOTIFY
+        let (pg_client, mut pg_connection) =
+            tokio_postgres::connect(state.database_url(), NoTls)
+                .await
+                .map_err(QueueRunnerError::SetupListener)?;
+
+        // Set up a channel to forward notifications from the connection task
+        let (notification_tx, notification_rx) = tokio::sync::mpsc::unbounded_channel();
+
+        // Spawn connection handler that forwards notifications
+        tokio::spawn(async move {
+            loop {
+                // Poll the connection and forward any notifications
+                match std::future::poll_fn(|cx| pg_connection.poll_message(cx)).await {
+                    Some(Ok(tokio_postgres::AsyncMessage::Notification(n))) => {
+                        let _ = notification_tx.send(n);
+                    }
+                    Some(Ok(_)) => {} // ignore notices, etc.
+                    Some(Err(e)) => {
+                        tracing::error!(error = %e, "PostgreSQL notification connection error");
+                        break;
+                    }
+                    None => {
+                        tracing::warn!("PostgreSQL notification connection closed");
+                        break;
+                    }
+                }
+            }
+        });
+
+        // Subscribe to notification channels
+        tokio_postgres::Client::execute(&pg_client, "LISTEN queue_leader_stepdown", &[])
             .await
             .map_err(QueueRunnerError::SetupListener)?;
 
-        // We get notifications of leader stepping down on this channel
-        listener
-            .listen("queue_leader_stepdown")
-            .await
-            .map_err(QueueRunnerError::SetupListener)?;
-
-        // We get notifications when a job is available on this channel
-        listener
-            .listen("queue_available")
+        tokio_postgres::Client::execute(&pg_client, "LISTEN queue_available", &[])
             .await
             .map_err(QueueRunnerError::SetupListener)?;
 
@@ -298,7 +324,8 @@ impl QueueWorker {
         let cancellation_guard = cancellation_token.clone().drop_guard();
 
         Ok(Self {
-            listener,
+            notification_rx,
+            _pg_client: pg_client,
             registration,
             am_i_leader: false,
             last_heartbeat: now,
@@ -483,18 +510,18 @@ impl QueueWorker {
                 self.wakeup_reason.add(1, &[KeyValue::new("reason", "task")]);
             },
 
-            notification = self.listener.recv() => {
+            notification = self.notification_rx.recv() => {
                 self.wakeup_reason.add(1, &[KeyValue::new("reason", "notification")]);
                 match notification {
-                    Ok(notification) => {
+                    Some(notification) => {
                         tracing::debug!(
                             notification.channel = notification.channel(),
                             notification.payload = notification.payload(),
                             "Woke up from notification"
                         );
                     },
-                    Err(e) => {
-                        tracing::error!(error = &e as &dyn std::error::Error, "Failed to receive notification");
+                    None => {
+                        tracing::error!("Notification channel closed unexpectedly");
                     },
                 }
             },

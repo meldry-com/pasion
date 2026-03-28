@@ -19,12 +19,8 @@ use pasion_policy::PolicyFactory;
 use pasion_router::UrlBuilder;
 use pasion_storage::{BoxRepositoryFactory, RepositoryAccess, RepositoryFactory};
 use pasion_templates::{SiteConfigExt, Templates};
-use sqlx::{
-    ConnectOptions, Executor, PgConnection, PgPool,
-    postgres::{PgConnectOptions, PgPoolOptions},
-};
 use tokio_util::{sync::CancellationToken, task::TaskTracker};
-use tracing::{Instrument, log::LevelFilter};
+use tracing::Instrument;
 
 pub async fn password_manager_from_config(
     config: &PasswordsConfig,
@@ -262,126 +258,6 @@ pub async fn templates_from_config(
     .with_context(|| format!("Failed to load the templates at {}", config.path))
 }
 
-fn database_connect_options_from_config(
-    config: &DatabaseConfig,
-    opts: &DatabaseConnectOptions,
-) -> Result<PgConnectOptions, anyhow::Error> {
-    let options = if let Some(uri) = config.uri.as_deref() {
-        uri.parse()
-            .context("could not parse database connection string")?
-    } else {
-        let mut opts = PgConnectOptions::new().application_name("pasion");
-
-        if let Some(host) = config.host.as_deref() {
-            opts = opts.host(host);
-        }
-
-        if let Some(port) = config.port {
-            opts = opts.port(port);
-        }
-
-        if let Some(socket) = config.socket.as_deref() {
-            opts = opts.socket(socket);
-        }
-
-        if let Some(username) = config.username.as_deref() {
-            opts = opts.username(username);
-        }
-
-        if let Some(password) = config.password.as_deref() {
-            opts = opts.password(password);
-        }
-
-        if let Some(database) = config.database.as_deref() {
-            opts = opts.database(database);
-        }
-
-        opts
-    };
-
-    let options = match (config.ssl_ca.as_deref(), config.ssl_ca_file.as_deref()) {
-        (None, None) => options,
-        (Some(pem), None) => options.ssl_root_cert_from_pem(pem.as_bytes().to_owned()),
-        (None, Some(path)) => options.ssl_root_cert(path),
-        (Some(_), Some(_)) => {
-            anyhow::bail!("invalid database configuration: both `ssl_ca` and `ssl_ca_file` are set")
-        }
-    };
-
-    let options = match (
-        config.ssl_certificate.as_deref(),
-        config.ssl_certificate_file.as_deref(),
-    ) {
-        (None, None) => options,
-        (Some(pem), None) => options.ssl_client_cert_from_pem(pem.as_bytes()),
-        (None, Some(path)) => options.ssl_client_cert(path),
-        (Some(_), Some(_)) => {
-            anyhow::bail!(
-                "invalid database configuration: both `ssl_certificate` and `ssl_certificate_file` are set"
-            )
-        }
-    };
-
-    let options = match (config.ssl_key.as_deref(), config.ssl_key_file.as_deref()) {
-        (None, None) => options,
-        (Some(pem), None) => options.ssl_client_key_from_pem(pem.as_bytes()),
-        (None, Some(path)) => options.ssl_client_key(path),
-        (Some(_), Some(_)) => {
-            anyhow::bail!(
-                "invalid database configuration: both `ssl_key` and `ssl_key_file` are set"
-            )
-        }
-    };
-
-    let options = match &config.ssl_mode {
-        Some(ssl_mode) => {
-            let ssl_mode = match ssl_mode {
-                pasion_config::PgSslMode::Disable => sqlx::postgres::PgSslMode::Disable,
-                pasion_config::PgSslMode::Allow => sqlx::postgres::PgSslMode::Allow,
-                pasion_config::PgSslMode::Prefer => sqlx::postgres::PgSslMode::Prefer,
-                pasion_config::PgSslMode::Require => sqlx::postgres::PgSslMode::Require,
-                pasion_config::PgSslMode::VerifyCa => sqlx::postgres::PgSslMode::VerifyCa,
-                pasion_config::PgSslMode::VerifyFull => sqlx::postgres::PgSslMode::VerifyFull,
-            };
-
-            options.ssl_mode(ssl_mode)
-        }
-        None => options,
-    };
-
-    let mut options = options.log_statements(LevelFilter::Debug);
-
-    if opts.log_slow_statements {
-        options = options.log_slow_statements(LevelFilter::Warn, Duration::from_millis(100));
-    }
-
-    Ok(options)
-}
-
-/// Create a database connection pool from the configuration
-#[tracing::instrument(name = "db.connect", skip_all)]
-pub async fn database_pool_from_config(config: &DatabaseConfig) -> Result<PgPool, anyhow::Error> {
-    let options = database_connect_options_from_config(config, &DatabaseConnectOptions::default())?;
-    PgPoolOptions::new()
-        .max_connections(config.max_connections.into())
-        .min_connections(config.min_connections)
-        .acquire_timeout(config.connect_timeout)
-        .idle_timeout(config.idle_timeout)
-        .max_lifetime(config.max_lifetime)
-        .after_connect(|conn, _meta| {
-            Box::pin(async move {
-                // Unlisten from all channels, as we might be connected via a connection pooler
-                // that doesn't clean up LISTEN/NOTIFY state when reusing connections.
-                conn.execute("UNLISTEN *;").await?;
-
-                Ok(())
-            })
-        })
-        .connect_with(options)
-        .await
-        .context("could not connect to the database")
-}
-
 /// Build a connection string from the [`DatabaseConfig`] for use with diesel-async.
 ///
 /// This mirrors the logic from [`database_connect_options_from_config`] but
@@ -438,42 +314,6 @@ pub async fn diesel_pool_from_config(
         .build()
         .context("could not build diesel connection pool")?;
     Ok(pool)
-}
-
-pub struct DatabaseConnectOptions {
-    pub log_slow_statements: bool,
-}
-
-impl Default for DatabaseConnectOptions {
-    fn default() -> Self {
-        Self {
-            log_slow_statements: true,
-        }
-    }
-}
-
-/// Create a single database connection from the configuration
-#[tracing::instrument(name = "db.connect", skip_all)]
-pub async fn database_connection_from_config(
-    config: &DatabaseConfig,
-) -> Result<PgConnection, anyhow::Error> {
-    database_connect_options_from_config(config, &DatabaseConnectOptions::default())?
-        .connect()
-        .await
-        .context("could not connect to the database")
-}
-
-/// Create a single database connection from the configuration,
-/// with specific options.
-#[tracing::instrument(name = "db.connect", skip_all)]
-pub async fn database_connection_from_config_with_options(
-    config: &DatabaseConfig,
-    options: &DatabaseConnectOptions,
-) -> Result<PgConnection, anyhow::Error> {
-    database_connect_options_from_config(config, options)?
-        .connect()
-        .await
-        .context("could not connect to the database")
 }
 
 /// Update the policy factory dynamic data from the database and spawn a task to

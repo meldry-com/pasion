@@ -66,16 +66,16 @@ pub async fn handler(req: &mut Request, depot: &Depot) -> Result<StatusCode, Rou
 mod tests {
     use hyper::{Request, StatusCode};
     use pasion_data_model::UpstreamOAuthAuthorizationSessionState;
-    use sqlx::PgPool;
     use ulid::Ulid;
 
     use super::super::test_utils;
     use crate::test_utils::{RequestBuilderExt, ResponseExt, TestState, setup};
 
-    #[sqlx::test(migrator = "pasion_storage_pg::MIGRATOR")]
-    async fn test_delete(pool: PgPool) {
+    #[tokio::test]
+    async fn test_delete() {
         setup();
-        let mut state = TestState::from_pool(pool).await.unwrap();
+        let pool = pasion_storage_pg::test_utils::setup_test_pool().await;
+        let mut state = TestState::from_pool(pool.clone()).await.unwrap();
         let token = state.token_with_scope("urn:mas:admin").await;
         let mut rng = state.rng();
         let mut repo = state.repository().await.unwrap();
@@ -155,10 +155,11 @@ mod tests {
         ));
     }
 
-    #[sqlx::test(migrator = "pasion_storage_pg::MIGRATOR")]
-    async fn test_not_found(pool: PgPool) {
+    #[tokio::test]
+    async fn test_not_found() {
         setup();
-        let mut state = TestState::from_pool(pool).await.unwrap();
+        let pool = pasion_storage_pg::test_utils::setup_test_pool().await;
+        let mut state = TestState::from_pool(pool.clone()).await.unwrap();
         let token = state.token_with_scope("urn:mas:admin").await;
 
         let link_id = Ulid::nil();

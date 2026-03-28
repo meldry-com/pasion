@@ -19,12 +19,12 @@ pub enum Error {
     #[error("Query against {table} failed — is this actually a Pasion database?")]
     MaybeNotMas {
         #[source]
-        source: sqlx::Error,
+        source: tokio_postgres::Error,
         table: &'static str,
     },
 
     #[error(transparent)]
-    Sqlx(#[from] sqlx::Error),
+    Postgres(#[from] tokio_postgres::Error),
 
     #[error("Unable to check if syn2mas is already in progress")]
     UnableToCheckInProgress(#[source] super::Error),
@@ -46,7 +46,7 @@ pub enum Error {
 ///   or not.
 #[tracing::instrument(name = "syn2mas.mas_pre_migration_checks", skip_all)]
 pub async fn mas_pre_migration_checks(mas_connection: &mut LockedMasDatabase) -> Result<(), Error> {
-    if is_syn2mas_in_progress(mas_connection.as_mut())
+    if is_syn2mas_in_progress(mas_connection.client())
         .await
         .map_err(Error::UnableToCheckInProgress)?
     {
@@ -60,11 +60,12 @@ pub async fn mas_pre_migration_checks(mas_connection: &mut LockedMasDatabase) ->
     for &table in MAS_TABLES_AFFECTED_BY_MIGRATION {
         let query = format!("SELECT 1 AS dummy FROM {table} LIMIT 1");
         let span = tracing::info_span!("db.query", db.query.text = query);
-        let row_present = sqlx::query(&query)
-            .fetch_optional(mas_connection.as_mut())
+        let row_present = mas_connection
+            .client()
+            .query_opt(&query, &[])
             .instrument(span)
             .await
-            .into_maybe_not_mas(table)?
+            .map_err(|source| Error::MaybeNotMas { source, table })?
             .is_some();
 
         if row_present {

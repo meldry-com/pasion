@@ -23,15 +23,14 @@ mod tests {
     };
     use rand::SeedableRng;
     use rand_chacha::ChaChaRng;
-    use sqlx::PgPool;
+    use crate::PgRepositoryFactory;
 
-    use crate::PgRepository;
-
-    #[sqlx::test(migrator = "crate::MIGRATOR")]
-    async fn test_session_repository(pool: PgPool) {
+    #[tokio::test]
+    async fn test_session_repository() {
+        let pool = crate::test_utils::setup_test_pool().await;
         let mut rng = ChaChaRng::seed_from_u64(42);
         let clock = MockClock::default();
-        let mut repo = PgRepository::from_pool(&pool).await.unwrap();
+        let mut repo = PgRepositoryFactory::new(pool.clone()).create().await.unwrap();
 
         // Create a user
         let admin_user = repo
@@ -176,11 +175,12 @@ mod tests {
         assert!(session_lookup.is_revoked());
     }
 
-    #[sqlx::test(migrator = "crate::MIGRATOR")]
-    async fn test_session_revoke_bulk(pool: PgPool) {
+    #[tokio::test]
+    async fn test_session_revoke_bulk() {
+        let pool = crate::test_utils::setup_test_pool().await;
         let mut rng = ChaChaRng::seed_from_u64(42);
         let clock = MockClock::default();
-        let mut repo = PgRepository::from_pool(&pool).await.unwrap();
+        let mut repo = PgRepositoryFactory::new(pool.clone()).create().await.unwrap();
 
         let alice_user = repo
             .user()
@@ -274,13 +274,14 @@ mod tests {
         );
     }
 
-    #[sqlx::test(migrator = "crate::MIGRATOR")]
-    async fn test_access_token_repository(pool: PgPool) {
+    #[tokio::test]
+    async fn test_access_token_repository() {
+        let pool = crate::test_utils::setup_test_pool().await;
         const FIRST_TOKEN: &str = "first_access_token";
         const SECOND_TOKEN: &str = "second_access_token";
         let mut rng = ChaChaRng::seed_from_u64(42);
         let clock = MockClock::default();
-        let mut repo = PgRepository::from_pool(&pool).await.unwrap().boxed();
+        let mut repo = PgRepositoryFactory::new(pool.clone()).create().await.unwrap();
 
         // Create a user
         let admin_user = repo
@@ -331,7 +332,7 @@ mod tests {
         repo.save().await.unwrap();
 
         {
-            let mut repo = PgRepository::from_pool(&pool).await.unwrap().boxed();
+            let mut repo = PgRepositoryFactory::new(pool.clone()).create().await.unwrap();
             // Adding the same token a second time should conflict
             assert!(
                 repo.personal_access_token()
@@ -349,7 +350,7 @@ mod tests {
         }
 
         // Grab a new repo
-        let mut repo = PgRepository::from_pool(&pool).await.unwrap().boxed();
+        let mut repo = PgRepositoryFactory::new(pool.clone()).create().await.unwrap();
 
         // Looking up via ID works
         let token_lookup = repo

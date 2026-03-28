@@ -9,7 +9,11 @@ type RandomState = rustc_hash::FxBuildHasher;
 type HashMap<K, V> = rustc_hash::FxHashMap<K, V>;
 
 pub use self::{
-    mas_writer::{MasWriter, checks::mas_pre_migration_checks, locking::LockedMasDatabase},
+    mas_writer::{
+        MasWriter,
+        checks::mas_pre_migration_checks,
+        locking::{LockResult, LockedMasDatabase},
+    },
     migration::migrate,
     palpo_reader::{
         PalpoReader,
