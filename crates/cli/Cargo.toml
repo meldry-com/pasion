@@ -20,6 +20,7 @@ chrono.workspace = true
 clap.workspace = true
 console.workspace = true
 crc.workspace = true
+deadpool.workspace = true
 dialoguer.workspace = true
 dotenvy.workspace = true
 figment.workspace = true

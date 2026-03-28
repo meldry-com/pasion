@@ -31,7 +31,7 @@ This will be made easier to read in the future, but in the meantime, it is recom
 When using the `pasion`, multiple configuration files can be loaded, with the following rule:
 
 1. If the `--config` option is specified, possibly multiple times, load the file at the specified path, relative to the current working directory
-2. If not, load the files specified in the `MAS_CONFIG` environment variable if set, separated by `:`, relative to the current working directory
+2. If not, load the files specified in the `PASION_CONFIG` environment variable if set, separated by `:`, relative to the current working directory
 3. If not, load the file at `config.yaml` in the current working directory
 
 The validity of the configuration file can be checked using the [`config check`](../reference/cli/config.md#config-check) command:
@@ -41,7 +41,7 @@ The validity of the configuration file can be checked using the [`config check`]
 pasion config check --config=first.yaml --config=second.yaml
 
 # This will also read both the `first.yaml` and `second.yaml` files
-MAS_CONFIG=first.yaml:second.yaml pasion config check
+PASION_CONFIG=first.yaml:second.yaml pasion config check
 
 # This will only read the `config.yaml` file
 pasion config check

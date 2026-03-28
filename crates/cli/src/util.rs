@@ -431,6 +431,10 @@ pub async fn diesel_pool_from_config(
     let manager = AsyncDieselConnectionManager::<AsyncPgConnection>::new(url);
     let pool = DieselPool::builder(manager)
         .max_size(config.max_connections.get() as usize)
+        .wait_timeout(Some(config.connect_timeout))
+        .create_timeout(Some(config.connect_timeout))
+        .recycle_timeout(Some(std::time::Duration::from_secs(5)))
+        .runtime(deadpool::Runtime::Tokio1)
         .build()
         .context("could not build diesel connection pool")?;
     Ok(pool)

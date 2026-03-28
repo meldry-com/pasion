@@ -83,8 +83,8 @@ impl Options {
     /// Get a [`Figment`] instance with the configuration loaded
     pub fn figment(&self) -> Figment {
         let configs = if self.config.is_empty() {
-            // Read the MAS_CONFIG environment variable
-            std::env::var("MAS_CONFIG")
+            // Read the PASION_CONFIG environment variable
+            std::env::var("PASION_CONFIG")
                 // Default to "config.yaml"
                 .unwrap_or_else(|_| "config.yaml".to_owned())
                 // Split the file list on `:`
@@ -94,7 +94,7 @@ impl Options {
         } else {
             self.config.clone()
         };
-        let base = Figment::new().merge(Env::prefixed("MAS_").split("_"));
+        let base = Figment::new().merge(Env::prefixed("PASION_").split("_"));
 
         configs
             .into_iter()

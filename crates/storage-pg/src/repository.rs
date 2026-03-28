@@ -1,4 +1,5 @@
 use async_trait::async_trait;
+use diesel_async::RunQueryDsl as _;
 use futures_util::{FutureExt, future::BoxFuture};
 use pasion_storage::{
     BoxRepository, BoxRepositoryFactory, MapErr, Repository, RepositoryAccess, RepositoryError,
@@ -82,13 +83,21 @@ impl PgRepositoryFactory {
 impl RepositoryFactory for PgRepositoryFactory {
     async fn create(&self) -> Result<BoxRepository, RepositoryError> {
         let start = std::time::Instant::now();
-        let conn = self
+        let mut conn = self
             .pool
             .get()
             .await
             .map_err(|e| RepositoryError::from_error(DatabaseError::Pool {
                 source: Box::new(e),
             }))?;
+
+        // Start a transaction so that all operations within one request are
+        // atomic. The transaction is committed by `save()` or rolled back by
+        // `cancel()` / on drop.
+        diesel::sql_query("BEGIN")
+            .execute(&mut *conn)
+            .await
+            .map_err(|e| RepositoryError::from_error(DatabaseError::from(e)))?;
 
         let repo = PgRepository::new(conn).boxed();
 
@@ -102,13 +111,24 @@ impl RepositoryFactory for PgRepositoryFactory {
 }
 
 /// An implementation of the [`Repository`] trait backed by a diesel-async
-/// PostgreSQL connection from a deadpool pool.
+/// PostgreSQL connection from a deadpool pool, wrapped in a transaction.
+///
+/// A `BEGIN` is issued when the repository is created (via
+/// [`PgRepositoryFactory::create`]). Calling [`RepositoryTransaction::save`]
+/// issues `COMMIT`; calling [`RepositoryTransaction::cancel`] issues
+/// `ROLLBACK`. If the repository is dropped without either, the connection is
+/// returned to the pool and PostgreSQL will automatically roll back the
+/// incomplete transaction.
 pub struct PgRepository {
     conn: PooledConnection<AsyncPgConnection>,
 }
 
 impl PgRepository {
     /// Create a new [`PgRepository`] from a pooled connection.
+    ///
+    /// **Important:** The caller is responsible for issuing `BEGIN` before
+    /// constructing this, or using [`PgRepositoryFactory::create`] which does
+    /// it automatically.
     pub fn new(conn: PooledConnection<AsyncPgConnection>) -> Self {
         Self { conn }
     }
@@ -129,16 +149,28 @@ impl Repository<DatabaseError> for PgRepository {}
 impl RepositoryTransaction for PgRepository {
     type Error = DatabaseError;
 
-    fn save(self: Box<Self>) -> BoxFuture<'static, Result<(), Self::Error>> {
-        // With deadpool, connections are returned to the pool on drop.
-        // For now, save is a no-op (auto-commit per statement).
+    fn save(mut self: Box<Self>) -> BoxFuture<'static, Result<(), Self::Error>> {
         let span = tracing::info_span!("db.save");
-        async { Ok(()) }.instrument(span).boxed()
+        async move {
+            diesel::sql_query("COMMIT")
+                .execute(&mut *self.conn)
+                .await?;
+            Ok(())
+        }
+        .instrument(span)
+        .boxed()
     }
 
-    fn cancel(self: Box<Self>) -> BoxFuture<'static, Result<(), Self::Error>> {
+    fn cancel(mut self: Box<Self>) -> BoxFuture<'static, Result<(), Self::Error>> {
         let span = tracing::info_span!("db.cancel");
-        async { Ok(()) }.instrument(span).boxed()
+        async move {
+            diesel::sql_query("ROLLBACK")
+                .execute(&mut *self.conn)
+                .await?;
+            Ok(())
+        }
+        .instrument(span)
+        .boxed()
     }
 }
 

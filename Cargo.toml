@@ -547,6 +547,11 @@ features = ["postgres", "deadpool", "async-connection-wrapper"]
 [workspace.dependencies.diesel_migrations]
 version = "2.2"
 
+# Connection pool (used by diesel-async)
+[workspace.dependencies.deadpool]
+version = "0.12"
+features = ["rt_tokio_1"]
+
 # Query builder (kept temporarily for migration)
 [workspace.dependencies.sea-query]
 version = "0.32.7"
