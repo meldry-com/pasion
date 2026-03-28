@@ -49,38 +49,12 @@ RUN --network=default \
   cargo install --locked \
   cargo-auditable@=${CARGO_AUDITABLE_VERSION}
 
-# Install all cross-compilation targets
-# Network access: to download the targets
-RUN --network=default \
-  rustup target add  \
-  --toolchain "${RUSTC_VERSION}" \
-  x86_64-unknown-linux-gnu \
-  aarch64-unknown-linux-gnu
-
-RUN --network=none \
-  dpkg --add-architecture arm64 && \
-  dpkg --add-architecture amd64
-
-ARG BUILDPLATFORM
-
-# Install cross-compilation toolchains for all supported targets
+# Install build dependencies
 # Network access: to install apt packages
 RUN --network=default \
   apt-get update && apt-get install -y \
-  $(if [ "${BUILDPLATFORM}" != "linux/arm64" ]; then echo "g++-aarch64-linux-gnu"; fi) \
-  $(if [ "${BUILDPLATFORM}" != "linux/amd64" ]; then echo "g++-x86-64-linux-gnu"; fi) \
-  libc6-dev-amd64-cross \
-  libc6-dev-arm64-cross \
+  libpq-dev \
   g++
-
-# Setup the cross-compilation environment
-ENV \
-  CARGO_TARGET_AARCH64_UNKNOWN_LINUX_GNU_LINKER=aarch64-linux-gnu-gcc \
-  CC_aarch64_unknown_linux_gnu=aarch64-linux-gnu-gcc \
-  CXX_aarch64_unknown_linux_gnu=aarch64-linux-gnu-g++ \
-  CARGO_TARGET_X86_64_UNKNOWN_LINUX_GNU_LINKER=x86_64-linux-gnu-gcc \
-  CC_x86_64_unknown_linux_gnu=x86_64-linux-gnu-gcc \
-  CXX_x86_64_unknown_linux_gnu=x86_64-linux-gnu-g++
 
 # Set the working directory
 WORKDIR /app
@@ -102,10 +76,7 @@ RUN --network=default \
     --bin pasion \
     --no-default-features \
     --features docker \
-    --target x86_64-unknown-linux-gnu \
-    --target aarch64-unknown-linux-gnu \
-  && mv "target/x86_64-unknown-linux-gnu/release/pasion" /usr/local/bin/pasion-amd64 \
-  && mv "target/aarch64-unknown-linux-gnu/release/pasion" /usr/local/bin/pasion-arm64
+  && mv "target/release/pasion" /usr/local/bin/pasion-amd64
 
 #######################################
 ## Prepare /usr/local/share/pasion/ ##
