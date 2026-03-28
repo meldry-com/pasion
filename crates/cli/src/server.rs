@@ -7,7 +7,10 @@ use std::{
 
 use anyhow::Context;
 use headers::{CacheControl, HeaderMapExt as _, UserAgent};
-use http::{Method, StatusCode, Version, header::USER_AGENT};
+use http::{
+    Method, StatusCode, Version,
+    header::{ACCEPT, AUTHORIZATION, CONTENT_TYPE, USER_AGENT},
+};
 use listenfd::ListenFd;
 use opentelemetry_http::HeaderExtractor;
 use opentelemetry_semantic_conventions::trace::{
@@ -20,7 +23,11 @@ use pasion_listener::{ConnectionInfo, unix_or_tcp::UnixOrTcpListener};
 use pasion_router::Route;
 use pasion_templates::Templates;
 use rustls::ServerConfig;
-use salvo::{prelude::*, serve_static::StaticDir};
+use salvo::{
+    cors::{Any, Cors},
+    prelude::*,
+    serve_static::StaticDir,
+};
 use tracing_opentelemetry::OpenTelemetrySpanExt;
 
 use crate::app_state::{AppState, inject_app_state};
@@ -270,6 +277,19 @@ impl Handler for InjectAppState {
     }
 }
 
+fn public_oidc_browser_cors() -> impl Handler {
+    Cors::new()
+        .allow_origin(Any)
+        .allow_methods([Method::GET, Method::POST, Method::OPTIONS])
+        .allow_headers([ACCEPT, AUTHORIZATION, CONTENT_TYPE])
+        .into_handler()
+}
+
+#[handler]
+async fn oidc_preflight_handler() -> StatusCode {
+    StatusCode::NO_CONTENT
+}
+
 pub fn build_router(
     state: AppState,
     resources: &[HttpResource],
@@ -297,10 +317,12 @@ pub fn build_router(
             pasion_config::HttpResource::Discovery => router
                 .push(
                     Router::with_path(pasion_router::OidcConfiguration::route())
+                        .hoop(public_oidc_browser_cors())
                         .get(pasion_handlers::oauth2::discovery::get),
                 )
                 .push(
                     Router::with_path(pasion_router::Webfinger::route())
+                        .hoop(public_oidc_browser_cors())
                         .get(pasion_handlers::oauth2::webfinger::get),
                 ),
             pasion_config::HttpResource::Human => build_human_router(router, templates.clone()),
@@ -404,31 +426,44 @@ fn build_oauth_router(router: Router) -> Router {
     router
         .push(
             Router::with_path(pasion_router::OAuth2Keys::route())
+                .hoop(public_oidc_browser_cors())
                 .get(pasion_handlers::oauth2::keys::get),
         )
         .push(
             Router::with_path(pasion_router::OidcUserinfo::route())
+                .hoop(public_oidc_browser_cors())
+                .options(oidc_preflight_handler)
                 .get(pasion_handlers::oauth2::userinfo::get)
                 .post(pasion_handlers::oauth2::userinfo::get),
         )
         .push(
             Router::with_path(pasion_router::OAuth2Introspection::route())
+                .hoop(public_oidc_browser_cors())
+                .options(oidc_preflight_handler)
                 .post(pasion_handlers::oauth2::introspection::post),
         )
         .push(
             Router::with_path(pasion_router::OAuth2Revocation::route())
+                .hoop(public_oidc_browser_cors())
+                .options(oidc_preflight_handler)
                 .post(pasion_handlers::oauth2::revoke::post),
         )
         .push(
             Router::with_path(pasion_router::OAuth2TokenEndpoint::route())
+                .hoop(public_oidc_browser_cors())
+                .options(oidc_preflight_handler)
                 .post(pasion_handlers::oauth2::token::post),
         )
         .push(
             Router::with_path(pasion_router::OAuth2RegistrationEndpoint::route())
+                .hoop(public_oidc_browser_cors())
+                .options(oidc_preflight_handler)
                 .post(pasion_handlers::oauth2::registration::post),
         )
         .push(
             Router::with_path(pasion_router::OAuth2DeviceAuthorizationEndpoint::route())
+                .hoop(public_oidc_browser_cors())
+                .options(oidc_preflight_handler)
                 .post(pasion_handlers::oauth2::device::authorize::post),
         )
 }

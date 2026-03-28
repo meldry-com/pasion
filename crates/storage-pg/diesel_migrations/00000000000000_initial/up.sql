@@ -314,6 +314,7 @@ CREATE TABLE IF NOT EXISTS oauth2_authorization_grants (
     fulfilled_at TIMESTAMPTZ,
     cancelled_at TIMESTAMPTZ,
     exchanged_at TIMESTAMPTZ,
+    login_hint TEXT,
     locale TEXT
 );
 
