@@ -2,13 +2,6 @@
 -- This migration creates all tables from scratch for a fresh installation.
 -- Existing databases migrated from sqlx should use the `diesel_initial_setup` migration instead.
 
--- Custom enum type for job queue status
-DO $$ BEGIN
-    CREATE TYPE queue_job_status AS ENUM ('available', 'running', 'completed', 'lost');
-EXCEPTION
-    WHEN duplicate_object THEN null;
-END $$;
-
 -- ── Users ───────────────────────────────────────────────────────
 
 CREATE TABLE IF NOT EXISTS users (
