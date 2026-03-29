@@ -157,6 +157,7 @@ pub struct CompleteRegistrationRequest {
     pub upstream_oauth: Option<(UpstreamOAuthAuthorizationSession, UpstreamOAuthLink)>,
 }
 
+#[derive(Debug)]
 pub struct CompletedRegistration {
     pub registration: UserRegistration,
     pub user: User,
@@ -368,6 +369,78 @@ pub enum SetRegistrationDisplayNameError {
 
     #[error(transparent)]
     Repository(#[from] RepositoryError),
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum RegistrationVerificationOutcome {
+    Advanced { next_step: &'static str },
+    RegistrationCompleted,
+    AlreadyVerified,
+    InvalidCode,
+    RateLimited,
+}
+
+#[derive(Debug, Error)]
+pub enum RegistrationVerificationError {
+    #[error("registration not found")]
+    NotFound,
+
+    #[error("registration verification is not available")]
+    NotAvailable,
+
+    #[error(transparent)]
+    Repository(#[from] RepositoryError),
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum RegistrationResendOutcome {
+    Resent,
+    AlreadyVerified,
+    RegistrationCompleted,
+    RateLimited,
+}
+
+#[derive(Debug, Error)]
+pub enum RegistrationResendError {
+    #[error("registration not found")]
+    NotFound,
+
+    #[error(transparent)]
+    Repository(#[from] RepositoryError),
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum RegistrationDisplayNameOutcome {
+    Advanced { next_step: &'static str },
+    RegistrationCompleted,
+    InvalidDisplayName,
+}
+
+#[derive(Debug, Error)]
+pub enum RegistrationDisplayNameWorkflowError {
+    #[error("registration not found")]
+    NotFound,
+
+    #[error(transparent)]
+    Repository(#[from] RepositoryError),
+}
+
+#[derive(Debug)]
+pub enum RegistrationFinishOutcome {
+    Completed(CompletedRegistration),
+    Rejected { error: &'static str },
+}
+
+#[derive(Debug, Error)]
+pub enum RegistrationFinishError {
+    #[error("registration not found")]
+    NotFound,
+
+    #[error(transparent)]
+    Repository(#[from] RepositoryError),
+
+    #[error(transparent)]
+    Internal(#[from] AnyhowError),
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -1132,6 +1205,142 @@ pub async fn set_registration_display_name(
     Ok(registration)
 }
 
+pub async fn resend_registration_verification(
+    repo: BoxRepository,
+    limiter: &Limiter,
+    rng: &mut (dyn CryptoRngCore + Send),
+    clock: &dyn Clock,
+    requester: RequesterFingerprint,
+    registration_id: Ulid,
+    notification_language: String,
+) -> Result<RegistrationResendOutcome, RegistrationResendError> {
+    match resend_pending_registration_verification(
+        repo,
+        limiter,
+        rng,
+        clock,
+        requester,
+        registration_id,
+        notification_language,
+    )
+    .await
+    {
+        Ok(ResendRegistrationVerificationStatus::Resent) => Ok(RegistrationResendOutcome::Resent),
+        Ok(ResendRegistrationVerificationStatus::AlreadyVerified) => {
+            Ok(RegistrationResendOutcome::AlreadyVerified)
+        }
+        Ok(ResendRegistrationVerificationStatus::RegistrationCompleted) => {
+            Ok(RegistrationResendOutcome::RegistrationCompleted)
+        }
+        Err(ResendRegistrationVerificationError::NotFound) => {
+            Err(RegistrationResendError::NotFound)
+        }
+        Err(ResendRegistrationVerificationError::RateLimited) => {
+            Ok(RegistrationResendOutcome::RateLimited)
+        }
+        Err(ResendRegistrationVerificationError::Repository(error)) => {
+            Err(RegistrationResendError::Repository(error))
+        }
+    }
+}
+
+pub async fn submit_registration_email_code(
+    repo: BoxRepository,
+    limiter: &Limiter,
+    clock: &dyn Clock,
+    registration_id: Ulid,
+    code: &str,
+) -> Result<RegistrationVerificationOutcome, RegistrationVerificationError> {
+    match verify_registration_email_code(repo, limiter, clock, registration_id, code).await {
+        Ok(progress) => Ok(RegistrationVerificationOutcome::Advanced {
+            next_step: progress.next_step(),
+        }),
+        Err(VerifyRegistrationEmailCodeError::NotFound)
+        | Err(VerifyRegistrationEmailCodeError::EmailAuthenticationMissing) => {
+            Err(RegistrationVerificationError::NotFound)
+        }
+        Err(VerifyRegistrationEmailCodeError::NoEmailAuthentication) => {
+            Err(RegistrationVerificationError::NotAvailable)
+        }
+        Err(VerifyRegistrationEmailCodeError::RegistrationCompleted) => {
+            Ok(RegistrationVerificationOutcome::RegistrationCompleted)
+        }
+        Err(VerifyRegistrationEmailCodeError::EmailAlreadyVerified) => {
+            Ok(RegistrationVerificationOutcome::AlreadyVerified)
+        }
+        Err(VerifyRegistrationEmailCodeError::RateLimited) => {
+            Ok(RegistrationVerificationOutcome::RateLimited)
+        }
+        Err(VerifyRegistrationEmailCodeError::InvalidCode) => {
+            Ok(RegistrationVerificationOutcome::InvalidCode)
+        }
+        Err(VerifyRegistrationEmailCodeError::Repository(error)) => {
+            Err(RegistrationVerificationError::Repository(error))
+        }
+    }
+}
+
+pub async fn submit_registration_phone_code(
+    repo: BoxRepository,
+    limiter: &Limiter,
+    clock: &dyn Clock,
+    registration_id: Ulid,
+    code: &str,
+) -> Result<RegistrationVerificationOutcome, RegistrationVerificationError> {
+    match verify_registration_phone_code(repo, limiter, clock, registration_id, code).await {
+        Ok(progress) => Ok(RegistrationVerificationOutcome::Advanced {
+            next_step: progress.next_step(),
+        }),
+        Err(VerifyRegistrationPhoneCodeError::NotFound)
+        | Err(VerifyRegistrationPhoneCodeError::PhoneAuthenticationMissing) => {
+            Err(RegistrationVerificationError::NotFound)
+        }
+        Err(VerifyRegistrationPhoneCodeError::NoPhoneAuthentication) => {
+            Err(RegistrationVerificationError::NotAvailable)
+        }
+        Err(VerifyRegistrationPhoneCodeError::RegistrationCompleted) => {
+            Ok(RegistrationVerificationOutcome::RegistrationCompleted)
+        }
+        Err(VerifyRegistrationPhoneCodeError::PhoneAlreadyVerified) => {
+            Ok(RegistrationVerificationOutcome::AlreadyVerified)
+        }
+        Err(VerifyRegistrationPhoneCodeError::RateLimited) => {
+            Ok(RegistrationVerificationOutcome::RateLimited)
+        }
+        Err(VerifyRegistrationPhoneCodeError::InvalidCode) => {
+            Ok(RegistrationVerificationOutcome::InvalidCode)
+        }
+        Err(VerifyRegistrationPhoneCodeError::Repository(error)) => {
+            Err(RegistrationVerificationError::Repository(error))
+        }
+    }
+}
+
+pub async fn submit_registration_display_name(
+    repo: BoxRepository,
+    registration_id: Ulid,
+    display_name: Option<String>,
+    skip: bool,
+) -> Result<RegistrationDisplayNameOutcome, RegistrationDisplayNameWorkflowError> {
+    match set_registration_display_name(repo, registration_id, display_name, skip).await {
+        Ok(_) => Ok(RegistrationDisplayNameOutcome::Advanced {
+            next_step: "finish",
+        }),
+        Err(SetRegistrationDisplayNameError::NotFound) => {
+            Err(RegistrationDisplayNameWorkflowError::NotFound)
+        }
+        Err(SetRegistrationDisplayNameError::RegistrationCompleted) => {
+            Ok(RegistrationDisplayNameOutcome::RegistrationCompleted)
+        }
+        Err(SetRegistrationDisplayNameError::InvalidDisplayName) => {
+            Ok(RegistrationDisplayNameOutcome::InvalidDisplayName)
+        }
+        Err(SetRegistrationDisplayNameError::Repository(error)) => {
+            Err(RegistrationDisplayNameWorkflowError::Repository(error))
+        }
+    }
+}
+
 pub async fn check_registration_finish_eligibility(
     repo: &mut BoxRepository,
     clock: &dyn Clock,
@@ -1442,4 +1651,143 @@ pub async fn complete_registration(
         user_session,
         password_authenticated,
     })
+}
+
+pub async fn finish_registration(
+    mut repo: BoxRepository,
+    rng: &mut (dyn CryptoRngCore + Send),
+    clock: &dyn Clock,
+    homeserver: &dyn HomeserverConnection,
+    registration_id: Ulid,
+    browser_session_present: Option<bool>,
+    homeserver_check_mode: HomeserverCheckMode,
+    registration_token_required: bool,
+    user_agent: Option<String>,
+) -> Result<RegistrationFinishOutcome, RegistrationFinishError> {
+    let prepared = match load_registration_finish_preparation(
+        &mut repo,
+        clock,
+        homeserver,
+        registration_id,
+        browser_session_present,
+        homeserver_check_mode,
+        registration_token_required,
+    )
+    .await
+    {
+        Ok(prepared) => prepared,
+        Err(LoadRegistrationFinishPreparationError::NotFound) => {
+            return Err(RegistrationFinishError::NotFound);
+        }
+        Err(LoadRegistrationFinishPreparationError::AlreadyCompleted(_)) => {
+            return Ok(RegistrationFinishOutcome::Rejected {
+                error: "registration_already_completed",
+            });
+        }
+        Err(LoadRegistrationFinishPreparationError::Eligibility { source, .. }) => match source {
+            CheckRegistrationFinishEligibilityError::RegistrationExpired => {
+                return Ok(RegistrationFinishOutcome::Rejected {
+                    error: "registration_expired",
+                });
+            }
+            CheckRegistrationFinishEligibilityError::UsernameTaken => {
+                return Ok(RegistrationFinishOutcome::Rejected {
+                    error: "username_taken",
+                });
+            }
+            CheckRegistrationFinishEligibilityError::UsernameNotAvailable => {
+                return Ok(RegistrationFinishOutcome::Rejected {
+                    error: "username_not_available",
+                });
+            }
+            CheckRegistrationFinishEligibilityError::BrowserSessionMissing => {
+                return Err(RegistrationFinishError::Internal(AnyhowError::msg(
+                    "Registration browser session is required",
+                )));
+            }
+            CheckRegistrationFinishEligibilityError::HomeserverUnavailable(_) => unreachable!(),
+            CheckRegistrationFinishEligibilityError::Repository(error) => {
+                return Err(RegistrationFinishError::Repository(error));
+            }
+        },
+        Err(LoadRegistrationFinishPreparationError::Prepare { source, .. }) => match source {
+            PrepareRegistrationCompletionError::RegistrationTokenRequired => {
+                return Ok(RegistrationFinishOutcome::Rejected {
+                    error: "registration_token_required",
+                });
+            }
+            PrepareRegistrationCompletionError::RegistrationTokenInvalid => {
+                return Ok(RegistrationFinishOutcome::Rejected {
+                    error: "registration_token_invalid",
+                });
+            }
+            PrepareRegistrationCompletionError::EmailNotVerified => {
+                return Ok(RegistrationFinishOutcome::Rejected {
+                    error: "email_not_verified",
+                });
+            }
+            PrepareRegistrationCompletionError::EmailInUse(_) => {
+                return Ok(RegistrationFinishOutcome::Rejected {
+                    error: "email_in_use",
+                });
+            }
+            PrepareRegistrationCompletionError::PhoneNotVerified => {
+                return Ok(RegistrationFinishOutcome::Rejected {
+                    error: "phone_not_verified",
+                });
+            }
+            PrepareRegistrationCompletionError::PhoneInUse => {
+                return Ok(RegistrationFinishOutcome::Rejected {
+                    error: "phone_in_use",
+                });
+            }
+            PrepareRegistrationCompletionError::DisplayNameRequired => {
+                return Ok(RegistrationFinishOutcome::Rejected {
+                    error: "display_name_required",
+                });
+            }
+            PrepareRegistrationCompletionError::RegistrationTokenMissing => {
+                return Err(RegistrationFinishError::Internal(AnyhowError::msg(
+                    "Could not load the registration token",
+                )));
+            }
+            PrepareRegistrationCompletionError::EmailAuthenticationMissing => {
+                return Err(RegistrationFinishError::Internal(AnyhowError::msg(
+                    "Could not load the email authentication",
+                )));
+            }
+            PrepareRegistrationCompletionError::PhoneAuthenticationMissing => {
+                return Err(RegistrationFinishError::Internal(AnyhowError::msg(
+                    "Could not load the phone authentication",
+                )));
+            }
+            PrepareRegistrationCompletionError::UpstreamOAuthSessionMissing => {
+                return Err(RegistrationFinishError::Internal(AnyhowError::msg(
+                    "Could not load the upstream OAuth authorization session",
+                )));
+            }
+            PrepareRegistrationCompletionError::UpstreamOAuthLinkMissing => {
+                return Err(RegistrationFinishError::Internal(AnyhowError::msg(
+                    "Could not load the upstream OAuth link",
+                )));
+            }
+            PrepareRegistrationCompletionError::UpstreamOAuthLinkAlreadyUsed => {
+                return Err(RegistrationFinishError::Internal(AnyhowError::msg(
+                    "The upstream identity was already linked to a user",
+                )));
+            }
+            PrepareRegistrationCompletionError::Repository(error) => {
+                return Err(RegistrationFinishError::Repository(error));
+            }
+        },
+        Err(LoadRegistrationFinishPreparationError::Repository(error)) => {
+            return Err(RegistrationFinishError::Repository(error));
+        }
+    };
+
+    let completed = complete_registration(repo, rng, clock, prepared.into_request(user_agent))
+        .await
+        .map_err(RegistrationFinishError::Repository)?;
+
+    Ok(RegistrationFinishOutcome::Completed(completed))
 }

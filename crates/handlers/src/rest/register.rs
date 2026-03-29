@@ -16,14 +16,14 @@ use crate::{
     RequesterFingerprint,
     account_registration::{
         BeginPasswordRegistrationError, BeginPasswordRegistrationRequest,
-        BeginPasswordRegistrationResult, EmailAvailabilityCheck,
-        LoadRegistrationFinishPreparationError, LoadRegistrationProgressError,
-        ResendRegistrationVerificationError, ResendRegistrationVerificationStatus,
-        SetRegistrationDisplayNameError, VerifyRegistrationEmailCodeError,
-        VerifyRegistrationPhoneCodeError, begin_password_registration, complete_registration,
-        load_registration_finish_preparation, load_registration_status, next_registration_step,
-        resend_pending_registration_verification, set_registration_display_name,
-        verify_registration_email_code, verify_registration_phone_code,
+        BeginPasswordRegistrationResult, EmailAvailabilityCheck, HomeserverCheckMode,
+        LoadRegistrationProgressError, RegistrationDisplayNameOutcome,
+        RegistrationDisplayNameWorkflowError, RegistrationFinishError, RegistrationFinishOutcome,
+        RegistrationResendError, RegistrationResendOutcome, RegistrationVerificationError,
+        RegistrationVerificationOutcome, begin_password_registration, finish_registration,
+        load_registration_status, next_registration_step, resend_registration_verification,
+        submit_registration_display_name, submit_registration_email_code,
+        submit_registration_phone_code,
     },
 };
 
@@ -230,55 +230,40 @@ pub async fn post_verify_email(
     let clock = make_clock();
     let repo = repo_factory.create().await?;
 
-    let progress =
-        match verify_registration_email_code(repo, &limiter, &clock, id, &input.code).await {
-            Ok(progress) => progress,
-            Err(VerifyRegistrationEmailCodeError::NotFound)
-            | Err(VerifyRegistrationEmailCodeError::EmailAuthenticationMissing) => {
-                return Err(RouteError::NotFound);
-            }
-            Err(VerifyRegistrationEmailCodeError::NoEmailAuthentication) => {
+    let outcome =
+        match submit_registration_email_code(repo, &limiter, &clock, id, &input.code).await {
+            Ok(outcome) => outcome,
+            Err(RegistrationVerificationError::NotFound) => return Err(RouteError::NotFound),
+            Err(RegistrationVerificationError::NotAvailable) => {
                 return Err(RouteError::BadRequest(
                     "no email authentication for this registration".into(),
                 ));
             }
-            Err(VerifyRegistrationEmailCodeError::RegistrationCompleted) => {
-                return Ok(Json(VerifyEmailResponse {
-                    status: "error",
-                    next_step: None,
-                    error: Some("registration_already_completed".into()),
-                }));
-            }
-            Err(VerifyRegistrationEmailCodeError::EmailAlreadyVerified) => {
-                return Ok(Json(VerifyEmailResponse {
-                    status: "error",
-                    next_step: None,
-                    error: Some("email_already_verified".into()),
-                }));
-            }
-            Err(VerifyRegistrationEmailCodeError::RateLimited) => {
-                return Ok(Json(VerifyEmailResponse {
-                    status: "error",
-                    next_step: None,
-                    error: Some("rate_limited".into()),
-                }));
-            }
-            Err(VerifyRegistrationEmailCodeError::InvalidCode) => {
-                return Ok(Json(VerifyEmailResponse {
-                    status: "error",
-                    next_step: None,
-                    error: Some("invalid_code".into()),
-                }));
-            }
-            Err(VerifyRegistrationEmailCodeError::Repository(error)) => {
-                return Err(error.into());
-            }
+            Err(RegistrationVerificationError::Repository(error)) => return Err(error.into()),
         };
 
+    let (status, next_step, error) = match outcome {
+        RegistrationVerificationOutcome::Advanced { next_step } => {
+            ("success", Some(next_step), None)
+        }
+        RegistrationVerificationOutcome::RegistrationCompleted => {
+            ("error", None, Some("registration_already_completed".into()))
+        }
+        RegistrationVerificationOutcome::AlreadyVerified => {
+            ("error", None, Some("email_already_verified".into()))
+        }
+        RegistrationVerificationOutcome::InvalidCode => {
+            ("error", None, Some("invalid_code".into()))
+        }
+        RegistrationVerificationOutcome::RateLimited => {
+            ("error", None, Some("rate_limited".into()))
+        }
+    };
+
     Ok(Json(VerifyEmailResponse {
-        status: "success",
-        next_step: Some(progress.next_step()),
-        error: None,
+        status,
+        next_step,
+        error,
     }))
 }
 
@@ -320,7 +305,7 @@ pub async fn post_resend_verification(
 
     let repo = repo_factory.create().await?;
 
-    let status = match resend_pending_registration_verification(
+    let outcome = match resend_registration_verification(
         repo,
         &limiter,
         &mut rng,
@@ -331,25 +316,18 @@ pub async fn post_resend_verification(
     )
     .await
     {
-        Ok(status) => status,
-        Err(ResendRegistrationVerificationError::NotFound) => return Err(RouteError::NotFound),
-        Err(ResendRegistrationVerificationError::RateLimited) => {
-            return Ok(Json(ResendVerificationResponse {
-                status: "rate_limited",
-                error: None,
-            }));
-        }
-        Err(ResendRegistrationVerificationError::Repository(error)) => {
-            return Err(error.into());
-        }
+        Ok(outcome) => outcome,
+        Err(RegistrationResendError::NotFound) => return Err(RouteError::NotFound),
+        Err(RegistrationResendError::Repository(error)) => return Err(error.into()),
     };
 
-    let (status, error) = match status {
-        ResendRegistrationVerificationStatus::RegistrationCompleted => {
+    let (status, error) = match outcome {
+        RegistrationResendOutcome::RegistrationCompleted => {
             ("error", Some("registration_already_completed".into()))
         }
-        ResendRegistrationVerificationStatus::Resent => ("resent", None),
-        ResendRegistrationVerificationStatus::AlreadyVerified => ("already_verified", None),
+        RegistrationResendOutcome::Resent => ("resent", None),
+        RegistrationResendOutcome::AlreadyVerified => ("already_verified", None),
+        RegistrationResendOutcome::RateLimited => ("rate_limited", None),
     };
 
     Ok(Json(ResendVerificationResponse { status, error }))
@@ -392,55 +370,40 @@ pub async fn post_verify_phone(
     let clock = make_clock();
     let repo = repo_factory.create().await?;
 
-    let progress =
-        match verify_registration_phone_code(repo, &limiter, &clock, id, &input.code).await {
-            Ok(progress) => progress,
-            Err(VerifyRegistrationPhoneCodeError::NotFound)
-            | Err(VerifyRegistrationPhoneCodeError::PhoneAuthenticationMissing) => {
-                return Err(RouteError::NotFound);
-            }
-            Err(VerifyRegistrationPhoneCodeError::NoPhoneAuthentication) => {
+    let outcome =
+        match submit_registration_phone_code(repo, &limiter, &clock, id, &input.code).await {
+            Ok(outcome) => outcome,
+            Err(RegistrationVerificationError::NotFound) => return Err(RouteError::NotFound),
+            Err(RegistrationVerificationError::NotAvailable) => {
                 return Err(RouteError::BadRequest(
                     "no phone authentication for this registration".into(),
                 ));
             }
-            Err(VerifyRegistrationPhoneCodeError::RegistrationCompleted) => {
-                return Ok(Json(VerifyPhoneResponse {
-                    status: "error",
-                    next_step: None,
-                    error: Some("registration_already_completed".into()),
-                }));
-            }
-            Err(VerifyRegistrationPhoneCodeError::PhoneAlreadyVerified) => {
-                return Ok(Json(VerifyPhoneResponse {
-                    status: "error",
-                    next_step: None,
-                    error: Some("phone_already_verified".into()),
-                }));
-            }
-            Err(VerifyRegistrationPhoneCodeError::RateLimited) => {
-                return Ok(Json(VerifyPhoneResponse {
-                    status: "error",
-                    next_step: None,
-                    error: Some("rate_limited".into()),
-                }));
-            }
-            Err(VerifyRegistrationPhoneCodeError::InvalidCode) => {
-                return Ok(Json(VerifyPhoneResponse {
-                    status: "error",
-                    next_step: None,
-                    error: Some("invalid_code".into()),
-                }));
-            }
-            Err(VerifyRegistrationPhoneCodeError::Repository(error)) => {
-                return Err(error.into());
-            }
+            Err(RegistrationVerificationError::Repository(error)) => return Err(error.into()),
         };
 
+    let (status, next_step, error) = match outcome {
+        RegistrationVerificationOutcome::Advanced { next_step } => {
+            ("success", Some(next_step), None)
+        }
+        RegistrationVerificationOutcome::RegistrationCompleted => {
+            ("error", None, Some("registration_already_completed".into()))
+        }
+        RegistrationVerificationOutcome::AlreadyVerified => {
+            ("error", None, Some("phone_already_verified".into()))
+        }
+        RegistrationVerificationOutcome::InvalidCode => {
+            ("error", None, Some("invalid_code".into()))
+        }
+        RegistrationVerificationOutcome::RateLimited => {
+            ("error", None, Some("rate_limited".into()))
+        }
+    };
+
     Ok(Json(VerifyPhoneResponse {
-        status: "success",
-        next_step: Some(progress.next_step()),
-        error: None,
+        status,
+        next_step,
+        error,
     }))
 }
 
@@ -482,34 +445,35 @@ pub async fn post_display_name(
     let repo_factory = depot.repo_factory()?;
     let repo = repo_factory.create().await?;
 
-    match set_registration_display_name(repo, id, input.display_name, input.skip.unwrap_or(false))
-        .await
+    let outcome = match submit_registration_display_name(
+        repo,
+        id,
+        input.display_name,
+        input.skip.unwrap_or(false),
+    )
+    .await
     {
-        Ok(_) => {}
-        Err(SetRegistrationDisplayNameError::NotFound) => return Err(RouteError::NotFound),
-        Err(SetRegistrationDisplayNameError::RegistrationCompleted) => {
-            return Ok(Json(DisplayNameResponse {
-                status: "error",
-                next_step: None,
-                error: Some("registration_already_completed".into()),
-            }));
+        Ok(outcome) => outcome,
+        Err(RegistrationDisplayNameWorkflowError::NotFound) => return Err(RouteError::NotFound),
+        Err(RegistrationDisplayNameWorkflowError::Repository(error)) => return Err(error.into()),
+    };
+
+    let (status, next_step, error) = match outcome {
+        RegistrationDisplayNameOutcome::Advanced { next_step } => {
+            ("success", Some(next_step), None)
         }
-        Err(SetRegistrationDisplayNameError::InvalidDisplayName) => {
-            return Ok(Json(DisplayNameResponse {
-                status: "error",
-                next_step: None,
-                error: Some("invalid_display_name".into()),
-            }));
+        RegistrationDisplayNameOutcome::RegistrationCompleted => {
+            ("error", None, Some("registration_already_completed".into()))
         }
-        Err(SetRegistrationDisplayNameError::Repository(error)) => {
-            return Err(error.into());
+        RegistrationDisplayNameOutcome::InvalidDisplayName => {
+            ("error", None, Some("invalid_display_name".into()))
         }
-    }
+    };
 
     Ok(Json(DisplayNameResponse {
-        status: "success",
-        next_step: Some("finish"),
-        error: None,
+        status,
+        next_step,
+        error,
     }))
 }
 
@@ -549,149 +513,38 @@ pub async fn post_finish(
         .map(|s| s.to_owned());
     let cookie_jar = depot.cookie_jar(req)?;
 
-    let mut repo = repo_factory.create().await?;
+    let repo = repo_factory.create().await?;
 
-    let prepared = match load_registration_finish_preparation(
-        &mut repo,
+    let outcome = match finish_registration(
+        repo,
+        &mut rng,
         &clock,
         homeserver.as_ref(),
         id,
         None,
-        crate::account_registration::HomeserverCheckMode::BestEffort,
+        HomeserverCheckMode::BestEffort,
         site_config.registration_token_required,
+        user_agent,
     )
     .await
     {
-        Ok(prepared) => prepared,
-        Err(LoadRegistrationFinishPreparationError::NotFound) => return Err(RouteError::NotFound),
-        Err(LoadRegistrationFinishPreparationError::AlreadyCompleted(_)) => {
-            return Ok(Json(FinishRegistrationResponse {
-                status: "error",
-                error: Some("registration_already_completed".into()),
-            }));
-        }
-        Err(LoadRegistrationFinishPreparationError::Eligibility { source, .. }) => match source {
-            crate::account_registration::CheckRegistrationFinishEligibilityError::RegistrationExpired => {
-                return Ok(Json(FinishRegistrationResponse {
-                    status: "error",
-                    error: Some("registration_expired".into()),
-                }));
-            }
-            crate::account_registration::CheckRegistrationFinishEligibilityError::UsernameTaken => {
-                return Ok(Json(FinishRegistrationResponse {
-                    status: "error",
-                    error: Some("username_taken".into()),
-                }));
-            }
-            crate::account_registration::CheckRegistrationFinishEligibilityError::UsernameNotAvailable => {
-                return Ok(Json(FinishRegistrationResponse {
-                    status: "error",
-                    error: Some("username_not_available".into()),
-                }));
-            }
-            crate::account_registration::CheckRegistrationFinishEligibilityError::BrowserSessionMissing => {
-                return Err(RouteError::Internal(Box::new(std::io::Error::new(
-                    std::io::ErrorKind::Other,
-                    "Registration browser session is required",
-                ))));
-            }
-            crate::account_registration::CheckRegistrationFinishEligibilityError::HomeserverUnavailable(_) => {
-                unreachable!()
-            }
-            crate::account_registration::CheckRegistrationFinishEligibilityError::Repository(error) => {
-                return Err(error.into());
-            }
-        },
-        Err(LoadRegistrationFinishPreparationError::Prepare { source, .. }) => match source {
-            crate::account_registration::PrepareRegistrationCompletionError::RegistrationTokenRequired => {
-                return Ok(Json(FinishRegistrationResponse {
-                    status: "error",
-                    error: Some("registration_token_required".into()),
-                }));
-            }
-            crate::account_registration::PrepareRegistrationCompletionError::RegistrationTokenInvalid => {
-                return Ok(Json(FinishRegistrationResponse {
-                    status: "error",
-                    error: Some("registration_token_invalid".into()),
-                }));
-            }
-            crate::account_registration::PrepareRegistrationCompletionError::EmailNotVerified => {
-                return Ok(Json(FinishRegistrationResponse {
-                    status: "error",
-                    error: Some("email_not_verified".into()),
-                }));
-            }
-            crate::account_registration::PrepareRegistrationCompletionError::EmailInUse(_) => {
-                return Ok(Json(FinishRegistrationResponse {
-                    status: "error",
-                    error: Some("email_in_use".into()),
-                }));
-            }
-            crate::account_registration::PrepareRegistrationCompletionError::PhoneNotVerified => {
-                return Ok(Json(FinishRegistrationResponse {
-                    status: "error",
-                    error: Some("phone_not_verified".into()),
-                }));
-            }
-            crate::account_registration::PrepareRegistrationCompletionError::PhoneInUse => {
-                return Ok(Json(FinishRegistrationResponse {
-                    status: "error",
-                    error: Some("phone_in_use".into()),
-                }));
-            }
-            crate::account_registration::PrepareRegistrationCompletionError::DisplayNameRequired => {
-                return Ok(Json(FinishRegistrationResponse {
-                    status: "error",
-                    error: Some("display_name_required".into()),
-                }));
-            }
-            crate::account_registration::PrepareRegistrationCompletionError::RegistrationTokenMissing => {
-                return Err(RouteError::Internal(Box::new(std::io::Error::new(
-                    std::io::ErrorKind::Other,
-                    "Could not load the registration token",
-                ))));
-            }
-            crate::account_registration::PrepareRegistrationCompletionError::EmailAuthenticationMissing => {
-                return Err(RouteError::Internal(Box::new(std::io::Error::new(
-                    std::io::ErrorKind::Other,
-                    "Could not load the email authentication",
-                ))));
-            }
-            crate::account_registration::PrepareRegistrationCompletionError::PhoneAuthenticationMissing => {
-                return Err(RouteError::Internal(Box::new(std::io::Error::new(
-                    std::io::ErrorKind::Other,
-                    "Could not load the phone authentication",
-                ))));
-            }
-            crate::account_registration::PrepareRegistrationCompletionError::UpstreamOAuthSessionMissing => {
-                return Err(RouteError::Internal(Box::new(std::io::Error::new(
-                    std::io::ErrorKind::Other,
-                    "Could not load the upstream OAuth authorization session",
-                ))));
-            }
-            crate::account_registration::PrepareRegistrationCompletionError::UpstreamOAuthLinkMissing => {
-                return Err(RouteError::Internal(Box::new(std::io::Error::new(
-                    std::io::ErrorKind::Other,
-                    "Could not load the upstream OAuth link",
-                ))));
-            }
-            crate::account_registration::PrepareRegistrationCompletionError::UpstreamOAuthLinkAlreadyUsed => {
-                return Err(RouteError::Internal(Box::new(std::io::Error::new(
-                    std::io::ErrorKind::Other,
-                    "The upstream identity was already linked to a user",
-                ))));
-            }
-            crate::account_registration::PrepareRegistrationCompletionError::Repository(error) => {
-                return Err(error.into());
-            }
-        },
-        Err(LoadRegistrationFinishPreparationError::Repository(error)) => {
-            return Err(error.into());
+        Ok(outcome) => outcome,
+        Err(RegistrationFinishError::NotFound) => return Err(RouteError::NotFound),
+        Err(RegistrationFinishError::Repository(error)) => return Err(error.into()),
+        Err(RegistrationFinishError::Internal(error)) => {
+            return Err(RouteError::Internal(error.into()));
         }
     };
 
-    let completed =
-        complete_registration(repo, &mut rng, &clock, prepared.into_request(user_agent)).await?;
+    let completed = match outcome {
+        RegistrationFinishOutcome::Completed(completed) => completed,
+        RegistrationFinishOutcome::Rejected { error } => {
+            return Ok(Json(FinishRegistrationResponse {
+                status: "error",
+                error: Some(error.into()),
+            }));
+        }
+    };
 
     // Record the browser session activity
     activity_tracker
