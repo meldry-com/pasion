@@ -2,11 +2,18 @@ use std::net::IpAddr;
 
 use anyhow::Error as AnyhowError;
 use pasion_data_model::{
-    Clock, UserEmailAuthentication, UserPhoneAuthentication, UserRegistration,
+    BrowserSession, Clock, UpstreamOAuthAuthorizationSession, UpstreamOAuthLink, User,
+    UserEmailAuthentication, UserPhoneAuthentication, UserRegistration, UserRegistrationToken,
 };
 use pasion_storage::{
     BoxRepository, RepositoryAccess, RepositoryError,
-    user::{UserEmailRepository, UserPhoneRepository},
+    queue::{ProvisionUserJob, QueueJobRepositoryExt as _},
+    upstream_oauth2::{UpstreamOAuthLinkRepository, UpstreamOAuthSessionRepository},
+    user::{
+        BrowserSessionRepository, UserEmailRepository, UserFilter, UserPasswordRepository,
+        UserPhoneRepository, UserRegistrationTokenRepository, UserRepository,
+        UserTermsRepository,
+    },
 };
 use rand_chacha::rand_core::CryptoRngCore;
 use serde_json::Value;
@@ -43,6 +50,22 @@ pub struct RegistrationProgress {
     pub registration: UserRegistration,
     pub email_authentication: Option<UserEmailAuthentication>,
     pub phone_authentication: Option<UserPhoneAuthentication>,
+}
+
+pub struct CompleteRegistrationRequest {
+    pub registration: UserRegistration,
+    pub registration_token: Option<UserRegistrationToken>,
+    pub email_authentication: Option<UserEmailAuthentication>,
+    pub phone_authentication: Option<UserPhoneAuthentication>,
+    pub user_agent: Option<String>,
+    pub upstream_oauth: Option<(UpstreamOAuthAuthorizationSession, UpstreamOAuthLink)>,
+}
+
+pub struct CompletedRegistration {
+    pub registration: UserRegistration,
+    pub user: User,
+    pub user_session: BrowserSession,
+    pub password_authenticated: bool,
 }
 
 impl RegistrationProgress {
@@ -577,4 +600,106 @@ pub async fn set_registration_display_name(
     repo.save().await?;
 
     Ok(registration)
+}
+
+pub async fn complete_registration(
+    mut repo: BoxRepository,
+    rng: &mut (dyn CryptoRngCore + Send),
+    clock: &dyn Clock,
+    request: CompleteRegistrationRequest,
+) -> Result<CompletedRegistration, RepositoryError> {
+    let registration = repo
+        .user_registration()
+        .complete(clock, request.registration)
+        .await?;
+
+    if let Some(registration_token) = request.registration_token {
+        repo.user_registration_token()
+            .use_token(clock, registration_token)
+            .await?;
+    }
+
+    let mut user = repo
+        .user()
+        .add(rng, clock, registration.username.clone())
+        .await?;
+
+    let user_count = repo.user().count(UserFilter::new()).await?;
+    if user_count == 1 {
+        user = repo.user().set_can_request_admin(user, true).await?;
+    }
+
+    let user_session = repo
+        .browser_session()
+        .add(rng, clock, &user, request.user_agent)
+        .await?;
+
+    if let Some(email_authentication) = request.email_authentication {
+        repo.user_email()
+            .add(rng, clock, &user, email_authentication.email)
+            .await?;
+    }
+
+    if let Some(phone_authentication) = request.phone_authentication {
+        repo.user_phone()
+            .add(rng, clock, &user, phone_authentication.phone)
+            .await?;
+    }
+
+    let mut password_authenticated = false;
+    if let Some(password) = registration.password.clone() {
+        let user_password = repo
+            .user_password()
+            .add(
+                rng,
+                clock,
+                &user,
+                password.version,
+                password.hashed_password,
+                None,
+            )
+            .await?;
+
+        repo.browser_session()
+            .authenticate_with_password(rng, clock, &user_session, &user_password)
+            .await?;
+
+        password_authenticated = true;
+    }
+
+    if let Some((upstream_session, upstream_link)) = request.upstream_oauth {
+        let upstream_session = repo
+            .upstream_oauth_session()
+            .consume(clock, upstream_session, &user_session)
+            .await?;
+
+        repo.upstream_oauth_link()
+            .associate_to_user(&upstream_link, &user)
+            .await?;
+
+        repo.browser_session()
+            .authenticate_with_upstream(rng, clock, &user_session, &upstream_session)
+            .await?;
+    }
+
+    if let Some(terms_url) = registration.terms_url.clone() {
+        repo.user_terms()
+            .accept_terms(rng, clock, &user, terms_url)
+            .await?;
+    }
+
+    let mut job = ProvisionUserJob::new(&user);
+    if let Some(display_name) = registration.display_name.clone() {
+        job = job.set_display_name(display_name);
+    }
+    repo.queue_job().schedule_job(rng, clock, job).await?;
+
+    repo.save().await?;
+
+    Ok(CompletedRegistration {
+        registration,
+        user,
+        user_session,
+        password_authenticated,
+    })
 }
