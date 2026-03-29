@@ -59,6 +59,7 @@ pub mod user_registration_cookie;
 pub(crate) mod views;
 
 mod account_recovery;
+mod account_registration;
 mod activity_tracker;
 mod captcha;
 mod notification_dispatch;

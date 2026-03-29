@@ -23,8 +23,11 @@ use zeroize::Zeroizing;
 
 use super::cookie::UserRegistrationSessions;
 use crate::{
-    RequesterFingerprint, SiteConfig, captcha::Form as CaptchaForm,
-    notification_dispatch::schedule_email_authentication_code, passwords::PasswordManager, rest,
+    RequesterFingerprint, SiteConfig,
+    account_registration::{StartPasswordRegistrationRequest, start_password_registration},
+    captcha::Form as CaptchaForm,
+    passwords::PasswordManager,
+    rest,
     views::shared::OptionalPostAuthAction,
 };
 
@@ -348,64 +351,26 @@ pub async fn post(
         .post_auth_action
         .map(serde_json::to_value)
         .transpose()?;
-    let registration = repo
-        .user_registration()
-        .add(
-            &mut rng,
-            &clock,
-            form.username,
-            ip_address,
+    let started = start_password_registration(
+        repo,
+        &mut rng,
+        &clock,
+        &password_manager,
+        StartPasswordRegistrationRequest {
+            username: form.username,
+            email,
+            phone: None,
+            password: Zeroizing::new(form.password),
             user_agent,
+            ip_address,
             post_auth_action,
-        )
-        .await?;
-
-    let registration = if let Some(tos_uri) = &site_config.tos_uri {
-        repo.user_registration()
-            .set_terms_url(registration, tos_uri.clone())
-            .await?
-    } else {
-        registration
-    };
-
-    let registration = if let Some(email) = email {
-        // Create a new user email authentication session
-        let user_email_authentication = repo
-            .user_email()
-            .add_authentication_for_registration(&mut rng, &clock, email, &registration)
-            .await?;
-
-        // Schedule a job to verify the email
-        schedule_email_authentication_code(
-            &mut repo,
-            &mut rng,
-            &clock,
-            &user_email_authentication,
-            locale.to_string(),
-        )
-        .await?;
-
-        repo.user_registration()
-            .set_email_authentication(registration, &user_email_authentication)
-            .await?
-    } else {
-        registration
-    };
-
-    // Hash the password
-    let password = Zeroizing::new(form.password);
-    let (version, hashed_password) = password_manager
-        .hash(&mut rng, password)
-        .await
-        .map_err(InternalError::from_anyhow)?;
-
-    // Add the password to the registration
-    let registration = repo
-        .user_registration()
-        .set_password(registration, hashed_password, version)
-        .await?;
-
-    repo.save().await?;
+            terms_url: site_config.tos_uri.clone(),
+            notification_language: locale.to_string(),
+        },
+    )
+    .await
+    .map_err(InternalError::from_anyhow)?;
+    let registration = started.registration;
 
     let cookie_jar = UserRegistrationSessions::load(&cookie_jar)
         .add(&registration)

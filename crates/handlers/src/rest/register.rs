@@ -25,7 +25,11 @@ use zeroize::Zeroizing;
 use super::{DepotExt, RouteError, extract_bound_activity_tracker, make_clock, make_rng};
 use crate::{
     RequesterFingerprint,
-    notification_dispatch::{schedule_email_authentication_code, schedule_sms_authentication_code},
+    account_registration::{
+        ResendRegistrationVerificationError, ResendRegistrationVerificationStatus,
+        StartPasswordRegistrationRequest, resend_pending_registration_verification,
+        start_password_registration,
+    },
 };
 
 // ── Shared helpers ─────────────────────────────────────────────
@@ -298,95 +302,36 @@ pub async fn post_register(
         }));
     }
 
-    // ── Create the registration ────────────────────────────────
-
-    let registration = repo
-        .user_registration()
-        .add(
-            &mut rng,
-            &clock,
-            input.username,
-            ip_address,
+    let started = start_password_registration(
+        repo,
+        &mut rng,
+        &clock,
+        &password_manager,
+        StartPasswordRegistrationRequest {
+            username: input.username,
+            email,
+            phone,
+            password: Zeroizing::new(input.password),
             user_agent,
-            None, // no post_auth_action for REST API
-        )
-        .await?;
+            ip_address,
+            post_auth_action: None,
+            terms_url: site_config.tos_uri.clone(),
+            notification_language,
+        },
+    )
+    .await
+    .map_err(|error| match error {
+        crate::account_registration::StartPasswordRegistrationError::Repository(error) => {
+            RouteError::from(error)
+        }
+        crate::account_registration::StartPasswordRegistrationError::Password(error) => {
+            RouteError::Internal(error.into())
+        }
+    })?;
 
-    // Set terms URL if configured
-    let registration = if let Some(tos_uri) = &site_config.tos_uri {
-        repo.user_registration()
-            .set_terms_url(registration, tos_uri.clone())
-            .await?
-    } else {
-        registration
-    };
-
-    // Set up email authentication if needed
-    let (registration, email_verified) = if let Some(email) = email {
-        let user_email_authentication = repo
-            .user_email()
-            .add_authentication_for_registration(&mut rng, &clock, email, &registration)
-            .await?;
-
-        // Schedule email sending
-        schedule_email_authentication_code(
-            &mut repo,
-            &mut rng,
-            &clock,
-            &user_email_authentication,
-            notification_language.clone(),
-        )
-        .await?;
-
-        let reg = repo
-            .user_registration()
-            .set_email_authentication(registration, &user_email_authentication)
-            .await?;
-
-        (reg, false)
-    } else {
-        (registration, true)
-    };
-
-    // Set up phone authentication if phone was provided
-    let (registration, phone_verified) = if let Some(phone) = phone {
-        let user_phone_authentication = repo
-            .user_phone()
-            .add_authentication_for_registration(&mut rng, &clock, phone, &registration)
-            .await?;
-
-        schedule_sms_authentication_code(
-            &mut repo,
-            &mut rng,
-            &clock,
-            &user_phone_authentication,
-            notification_language.clone(),
-        )
-        .await?;
-
-        let reg = repo
-            .user_registration()
-            .set_phone_authentication(registration, &user_phone_authentication)
-            .await?;
-
-        (reg, false)
-    } else {
-        (registration, true)
-    };
-
-    // Hash and store the password
-    let password = Zeroizing::new(input.password);
-    let (version, hashed_password) = password_manager
-        .hash(&mut rng, password)
-        .await
-        .map_err(|e| RouteError::Internal(e.into()))?;
-
-    let registration = repo
-        .user_registration()
-        .set_password(registration, hashed_password, version)
-        .await?;
-
-    repo.save().await?;
+    let registration = started.registration;
+    let email_verified = started.email_verified;
+    let phone_verified = started.phone_verified;
 
     let step = next_step(&registration, email_verified, phone_verified);
 
@@ -628,93 +573,41 @@ pub async fn post_resend_verification(
         .map(RequesterFingerprint::new)
         .unwrap_or(RequesterFingerprint::EMPTY);
 
-    let mut repo = repo_factory.create().await?;
+    let repo = repo_factory.create().await?;
 
-    let registration = repo
-        .user_registration()
-        .lookup(id)
-        .await?
-        .ok_or(RouteError::NotFound)?;
-
-    if registration.completed_at.is_some() {
-        return Ok(Json(ResendVerificationResponse {
-            status: "error",
-            error: Some("registration_already_completed".into()),
-        }));
-    }
-
-    if let Some(email_authentication_id) = registration.email_authentication_id {
-        let auth = repo
-            .user_email()
-            .lookup_authentication(email_authentication_id)
-            .await?
-            .ok_or(RouteError::NotFound)?;
-
-        if auth.completed_at.is_none() {
-            if let Err(e) = limiter.check_email_authentication_send_code(requester, &auth) {
-                tracing::warn!(error = &e as &dyn std::error::Error);
-                return Ok(Json(ResendVerificationResponse {
-                    status: "rate_limited",
-                    error: None,
-                }));
-            }
-
-            schedule_email_authentication_code(
-                &mut repo,
-                &mut rng,
-                &clock,
-                &auth,
-                notification_language.clone(),
-            )
-            .await?;
-
-            repo.save().await?;
-
+    let status = match resend_pending_registration_verification(
+        repo,
+        &limiter,
+        &mut rng,
+        &clock,
+        requester,
+        id,
+        notification_language,
+    )
+    .await
+    {
+        Ok(status) => status,
+        Err(ResendRegistrationVerificationError::NotFound) => return Err(RouteError::NotFound),
+        Err(ResendRegistrationVerificationError::RateLimited) => {
             return Ok(Json(ResendVerificationResponse {
-                status: "resent",
+                status: "rate_limited",
                 error: None,
             }));
         }
-    }
-
-    if let Some(phone_authentication_id) = registration.phone_authentication_id {
-        let auth = repo
-            .user_phone()
-            .lookup_authentication(phone_authentication_id)
-            .await?
-            .ok_or(RouteError::NotFound)?;
-
-        if auth.completed_at.is_none() {
-            if let Err(e) = limiter.check_phone_authentication_send_code(requester, &auth) {
-                tracing::warn!(error = &e as &dyn std::error::Error);
-                return Ok(Json(ResendVerificationResponse {
-                    status: "rate_limited",
-                    error: None,
-                }));
-            }
-
-            schedule_sms_authentication_code(
-                &mut repo,
-                &mut rng,
-                &clock,
-                &auth,
-                notification_language.clone(),
-            )
-            .await?;
-
-            repo.save().await?;
-
-            return Ok(Json(ResendVerificationResponse {
-                status: "resent",
-                error: None,
-            }));
+        Err(ResendRegistrationVerificationError::Repository(error)) => {
+            return Err(error.into());
         }
-    }
+    };
 
-    Ok(Json(ResendVerificationResponse {
-        status: "already_verified",
-        error: None,
-    }))
+    let (status, error) = match status {
+        ResendRegistrationVerificationStatus::RegistrationCompleted => {
+            ("error", Some("registration_already_completed".into()))
+        }
+        ResendRegistrationVerificationStatus::Resent => ("resent", None),
+        ResendRegistrationVerificationStatus::AlreadyVerified => ("already_verified", None),
+    };
+
+    Ok(Json(ResendVerificationResponse { status, error }))
 }
 
 // ── POST /api/v1/auth/register/:id/verify-phone ────────────────
