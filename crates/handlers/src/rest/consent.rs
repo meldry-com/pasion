@@ -238,7 +238,7 @@ pub async fn oauth2_consent_get(
 /// Accept the OAuth2 authorization consent: create an OAuth2 session, fulfill
 /// the grant, and return the callback redirect URL.
 #[handler]
-#[tracing::instrument(name = "handlers.rest.consent.oauth2_post", skip_all)]
+#[tracing::instrument(name = "handlers.rest.consent.oauth2_post", skip_all, err)]
 pub async fn oauth2_consent_post(
     req: &mut Request,
     depot: &Depot,

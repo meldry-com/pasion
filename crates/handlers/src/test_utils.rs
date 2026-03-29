@@ -154,7 +154,7 @@ impl Handler for InjectTestState {
         );
         depot.insert("templates", state.templates.clone());
         depot.insert("translator", state.templates.translator());
-        depot.insert("key_store", state.key_store.clone());
+        depot.insert("keystore", state.key_store.clone());
         depot.insert("encrypter", state.encrypter.clone());
         depot.insert("url_builder", state.url_builder.clone());
         depot.insert("http_client", state.http_client.clone());

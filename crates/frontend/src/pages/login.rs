@@ -1,4 +1,6 @@
 use dioxus::prelude::*;
+use js_sys::Reflect;
+use web_sys::wasm_bindgen::JsValue;
 
 use crate::{
     api::types::{LoginResponse, ProvidersResponse},
@@ -6,12 +8,60 @@ use crate::{
     pages::Route,
 };
 
+const PRESERVED_LOGIN_QUERY_PROPERTY: &str = "__pasion_login_query";
+
+fn preserved_login_query() -> Option<String> {
+    let window = web_sys::window()?;
+    Reflect::get(window.as_ref(), &JsValue::from_str(PRESERVED_LOGIN_QUERY_PROPERTY))
+        .ok()?
+        .as_string()
+}
+
+pub(crate) fn preserve_login_query() {
+    let Some(window) = web_sys::window() else {
+        return;
+    };
+
+    let Ok(pathname) = window.location().pathname() else {
+        return;
+    };
+    let Ok(search) = window.location().search() else {
+        return;
+    };
+
+    if pathname == "/login" && !search.is_empty() {
+        let _ = Reflect::set(
+            window.as_ref(),
+            &JsValue::from_str(PRESERVED_LOGIN_QUERY_PROPERTY),
+            &JsValue::from_str(&search),
+        );
+    }
+}
+
 /// Read a query parameter from the current URL.
 fn get_query_param(name: &str) -> Option<String> {
     let window = web_sys::window()?;
-    let search = window.location().search().ok()?;
+
+    if let Ok(search) = window.location().search()
+        && !search.is_empty()
+        && let Ok(params) = web_sys::UrlSearchParams::new_with_str(&search)
+        && let Some(value) = params.get(name)
+    {
+        return Some(value);
+    }
+
+    let search = preserved_login_query()?;
     let params = web_sys::UrlSearchParams::new_with_str(&search).ok()?;
     params.get(name)
+}
+
+fn clear_preserved_login_query() {
+    if let Some(window) = web_sys::window() {
+        let _ = Reflect::delete_property(
+            window.as_ref(),
+            &JsValue::from_str(PRESERVED_LOGIN_QUERY_PROPERTY),
+        );
+    }
 }
 
 #[component]
@@ -106,8 +156,12 @@ fn LoginForm(providers: ProvidersResponse) -> Element {
                                 submitting.set(false);
                                 match result {
                                     Ok(resp) if resp.status == "success" => {
+                                        let continuation =
+                                            get_query_param("kind").zip(get_query_param("id"));
+                                        clear_preserved_login_query();
+
                                         // Check if this login is part of an OAuth authorization flow
-                                        if let (Some(kind), Some(id)) = (get_query_param("kind"), get_query_param("id")) {
+                                        if let Some((kind, id)) = continuation {
                                             if kind == "continue_authorization_grant" {
                                                 nav.push(Route::Consent { grant_id: id });
                                             } else {

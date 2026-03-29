@@ -11,6 +11,7 @@ use crate::pages::Route;
 const MAIN_CSS: Asset = asset!("/assets/main.css");
 
 fn main() {
+    crate::pages::login::preserve_login_query();
     dioxus::launch(app);
 }
 

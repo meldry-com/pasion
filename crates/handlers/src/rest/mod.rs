@@ -288,7 +288,7 @@ pub fn get_encrypter(depot: &Depot) -> Result<pasion_keystore::Encrypter, RouteE
 }
 
 pub fn get_key_store(depot: &Depot) -> Result<pasion_keystore::Keystore, RouteError> {
-    depot_get(depot, "key_store")
+    depot_get(depot, "keystore")
 }
 
 pub fn get_app_version(depot: &Depot) -> Result<pasion_data_model::AppVersion, RouteError> {

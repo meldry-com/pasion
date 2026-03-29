@@ -56,7 +56,9 @@ impl CookieManager {
             if let Ok(value) = header_value.to_str() {
                 for cookie_str in value.split(';') {
                     if let Ok(cookie) = Cookie::parse_encoded(cookie_str.trim().to_owned()) {
-                        inner.private_mut(&self.key).add_original(cookie);
+                        // Store the encrypted cookie as-is; `private().get(...)`
+                        // will decrypt it on read.
+                        inner.add_original(cookie);
                     }
                 }
             }
