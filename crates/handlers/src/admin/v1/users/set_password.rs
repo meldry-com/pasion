@@ -12,6 +12,7 @@ use crate::{
     },
     impl_from_error_for_route,
     passwords::PasswordManager,
+    rest::DepotExt,
 };
 
 #[derive(Debug, thiserror::Error)]
@@ -78,7 +79,7 @@ pub async fn handler(req: &mut Request, depot: &Depot) -> Result<StatusCode, Rou
     } = call_context;
     let id = extract_ulid_param(req)?;
     let mut rng = crate::rest::make_rng();
-    let password_manager = crate::rest::get_password_manager(depot)?;
+    let password_manager = depot.password_manager()?;
     let params: RequestBody = req
         .parse_json()
         .await

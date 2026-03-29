@@ -15,20 +15,17 @@ use pasion_storage::{
     RepositoryAccess,
     queue::{
         ProvisionUserJob, QueueJobRepositoryExt as _, SendEmailAuthenticationCodeJob,
-        SendSmsAuthenticationCodeJob,
-    },
-    user::{UserEmailFilter, UserEmailRepository, UserFilter, UserPhoneRepository, UserRepository},
-};
+        SendSmsAuthenticationCodeJob },
+    user::{UserEmailFilter, UserEmailRepository, UserFilter, UserPhoneRepository, UserRepository} };
 use salvo::prelude::*;
 use serde::{Deserialize, Serialize};
 use ulid::Ulid;
 use zeroize::Zeroizing;
 
-use super::{
-    RouteError, extract_bound_activity_tracker, extract_cookie_jar, get_homeserver, get_limiter,
-    get_password_manager, get_policy_factory, get_repo_factory, get_site_config, make_clock,
-    make_rng,
-};
+use super::{DepotExt, 
+    RouteError, extract_bound_activity_tracker,
+    make_clock,
+    make_rng };
 use crate::RequesterFingerprint;
 
 // ── Shared helpers ─────────────────────────────────────────────
@@ -94,8 +91,7 @@ pub struct RegisterInput {
     #[serde(default)]
     pub phone: Option<String>,
     pub password: String,
-    pub password_confirm: String,
-}
+    pub password_confirm: String }
 
 #[derive(Serialize)]
 pub struct RegisterResponse {
@@ -105,8 +101,7 @@ pub struct RegisterResponse {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub next_step: Option<&'static str>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub error: Option<String>,
-}
+    pub error: Option<String> }
 
 #[handler]
 pub async fn post_register(
@@ -118,12 +113,12 @@ pub async fn post_register(
         .await
         .map_err(|_| RouteError::BadRequest("invalid json body".into()))?;
 
-    let site_config = get_site_config(depot)?;
-    let password_manager = get_password_manager(depot)?;
-    let homeserver = get_homeserver(depot)?;
-    let policy_factory = get_policy_factory(depot)?;
-    let limiter = get_limiter(depot)?;
-    let repo_factory = get_repo_factory(depot)?;
+    let site_config = depot.site_config()?;
+    let password_manager = depot.password_manager()?;
+    let homeserver = depot.homeserver()?;
+    let policy_factory = depot.policy_factory()?;
+    let limiter = depot.limiter()?;
+    let repo_factory = depot.repo_factory()?;
 
     let clock = make_clock();
     let mut rng = make_rng();
@@ -145,8 +140,7 @@ pub async fn post_register(
             status: "error",
             id: None,
             next_step: None,
-            error: Some("registration_disabled".into()),
-        }));
+            error: Some("registration_disabled".into()) }));
     }
 
     let mut repo = repo_factory.create().await?;
@@ -250,9 +244,7 @@ pub async fn post_register(
                 email: email.as_deref(),
                 requester: pasion_policy::Requester {
                     ip_address: activity_tracker.ip(),
-                    user_agent: user_agent.clone(),
-                },
-            })
+                    user_agent: user_agent.clone() } })
             .await
             .map_err(|e| RouteError::Internal(e.into()))?;
 
@@ -282,8 +274,7 @@ pub async fn post_register(
             status: "error",
             id: None,
             next_step: None,
-            error: Some(errors.join(", ")),
-        }));
+            error: Some(errors.join(", ")) }));
     }
 
     // ── Create the registration ────────────────────────────────
@@ -380,8 +371,7 @@ pub async fn post_register(
         status: "success",
         id: Some(registration.id.to_string()),
         next_step: Some(step),
-        error: None,
-    }))
+        error: None }))
 }
 
 // ── GET /api/v1/auth/register/:id ──────────────────────────────
@@ -393,8 +383,7 @@ pub struct RegistrationStatusResponse {
     pub email_pending: bool,
     pub phone_pending: bool,
     pub steps_completed: Vec<&'static str>,
-    pub next_step: &'static str,
-}
+    pub next_step: &'static str }
 
 #[handler]
 pub async fn get_registration(
@@ -407,7 +396,7 @@ pub async fn get_registration(
         .parse()
         .map_err(|_| RouteError::BadRequest("invalid id".into()))?;
 
-    let repo_factory = get_repo_factory(depot)?;
+    let repo_factory = depot.repo_factory()?;
     let mut repo = repo_factory.create().await?;
 
     let registration = repo
@@ -454,16 +443,14 @@ pub async fn get_registration(
         email_pending,
         phone_pending,
         steps_completed: completed,
-        next_step: step,
-    }))
+        next_step: step }))
 }
 
 // ── POST /api/v1/auth/register/:id/verify-email ────────────────
 
 #[derive(Deserialize)]
 pub struct VerifyEmailInput {
-    pub code: String,
-}
+    pub code: String }
 
 #[derive(Serialize)]
 pub struct VerifyEmailResponse {
@@ -471,8 +458,7 @@ pub struct VerifyEmailResponse {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub next_step: Option<&'static str>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub error: Option<String>,
-}
+    pub error: Option<String> }
 
 #[handler]
 pub async fn post_verify_email(
@@ -490,8 +476,8 @@ pub async fn post_verify_email(
         .await
         .map_err(|_| RouteError::BadRequest("invalid json body".into()))?;
 
-    let repo_factory = get_repo_factory(depot)?;
-    let limiter = get_limiter(depot)?;
+    let repo_factory = depot.repo_factory()?;
+    let limiter = depot.limiter()?;
     let clock = make_clock();
 
     let mut repo = repo_factory.create().await?;
@@ -506,8 +492,7 @@ pub async fn post_verify_email(
         return Ok(Json(VerifyEmailResponse {
             status: "error",
             next_step: None,
-            error: Some("registration_already_completed".into()),
-        }));
+            error: Some("registration_already_completed".into()) }));
     }
 
     let email_authentication_id = registration.email_authentication_id.ok_or_else(|| {
@@ -524,8 +509,7 @@ pub async fn post_verify_email(
         return Ok(Json(VerifyEmailResponse {
             status: "error",
             next_step: None,
-            error: Some("email_already_verified".into()),
-        }));
+            error: Some("email_already_verified".into()) }));
     }
 
     // Rate limit check
@@ -534,8 +518,7 @@ pub async fn post_verify_email(
         return Ok(Json(VerifyEmailResponse {
             status: "error",
             next_step: None,
-            error: Some("rate_limited".into()),
-        }));
+            error: Some("rate_limited".into()) }));
     }
 
     // Look up the code
@@ -547,8 +530,7 @@ pub async fn post_verify_email(
         return Ok(Json(VerifyEmailResponse {
             status: "error",
             next_step: None,
-            error: Some("invalid_code".into()),
-        }));
+            error: Some("invalid_code".into()) }));
     };
 
     // Complete the email authentication
@@ -574,8 +556,7 @@ pub async fn post_verify_email(
     Ok(Json(VerifyEmailResponse {
         status: "success",
         next_step: Some(next_step(&registration, true, phone_verified)),
-        error: None,
-    }))
+        error: None }))
 }
 
 // ── POST /api/v1/auth/register/:id/resend-verification ────────
@@ -584,8 +565,7 @@ pub async fn post_verify_email(
 pub struct ResendVerificationResponse {
     pub status: &'static str,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub error: Option<String>,
-}
+    pub error: Option<String> }
 
 /// Resend the email verification code for a pending registration.
 ///
@@ -602,8 +582,8 @@ pub async fn post_resend_verification(
         .parse()
         .map_err(|_| RouteError::BadRequest("invalid id".into()))?;
 
-    let repo_factory = get_repo_factory(depot)?;
-    let limiter = get_limiter(depot)?;
+    let repo_factory = depot.repo_factory()?;
+    let limiter = depot.limiter()?;
     let clock = make_clock();
     let mut rng = make_rng();
 
@@ -624,8 +604,7 @@ pub async fn post_resend_verification(
     if registration.completed_at.is_some() {
         return Ok(Json(ResendVerificationResponse {
             status: "error",
-            error: Some("registration_already_completed".into()),
-        }));
+            error: Some("registration_already_completed".into()) }));
     }
 
     let email_authentication_id = registration.email_authentication_id.ok_or_else(|| {
@@ -641,8 +620,7 @@ pub async fn post_resend_verification(
     if auth.completed_at.is_some() {
         return Ok(Json(ResendVerificationResponse {
             status: "already_verified",
-            error: None,
-        }));
+            error: None }));
     }
 
     // Rate limit
@@ -650,8 +628,7 @@ pub async fn post_resend_verification(
         tracing::warn!(error = &e as &dyn std::error::Error);
         return Ok(Json(ResendVerificationResponse {
             status: "rate_limited",
-            error: None,
-        }));
+            error: None }));
     }
 
     repo.queue_job()
@@ -666,16 +643,14 @@ pub async fn post_resend_verification(
 
     Ok(Json(ResendVerificationResponse {
         status: "resent",
-        error: None,
-    }))
+        error: None }))
 }
 
 // ── POST /api/v1/auth/register/:id/verify-phone ────────────────
 
 #[derive(Deserialize)]
 pub struct VerifyPhoneInput {
-    pub code: String,
-}
+    pub code: String }
 
 #[derive(Serialize)]
 pub struct VerifyPhoneResponse {
@@ -683,8 +658,7 @@ pub struct VerifyPhoneResponse {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub next_step: Option<&'static str>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub error: Option<String>,
-}
+    pub error: Option<String> }
 
 #[handler]
 pub async fn post_verify_phone(
@@ -702,8 +676,8 @@ pub async fn post_verify_phone(
         .await
         .map_err(|_| RouteError::BadRequest("invalid json body".into()))?;
 
-    let repo_factory = get_repo_factory(depot)?;
-    let limiter = get_limiter(depot)?;
+    let repo_factory = depot.repo_factory()?;
+    let limiter = depot.limiter()?;
     let clock = make_clock();
 
     let mut repo = repo_factory.create().await?;
@@ -718,8 +692,7 @@ pub async fn post_verify_phone(
         return Ok(Json(VerifyPhoneResponse {
             status: "error",
             next_step: None,
-            error: Some("registration_already_completed".into()),
-        }));
+            error: Some("registration_already_completed".into()) }));
     }
 
     let phone_authentication_id = registration.phone_authentication_id.ok_or_else(|| {
@@ -736,8 +709,7 @@ pub async fn post_verify_phone(
         return Ok(Json(VerifyPhoneResponse {
             status: "error",
             next_step: None,
-            error: Some("phone_already_verified".into()),
-        }));
+            error: Some("phone_already_verified".into()) }));
     }
 
     // Look up the code
@@ -749,8 +721,7 @@ pub async fn post_verify_phone(
         return Ok(Json(VerifyPhoneResponse {
             status: "error",
             next_step: None,
-            error: Some("invalid_code".into()),
-        }));
+            error: Some("invalid_code".into()) }));
     };
 
     // Complete the phone authentication
@@ -776,8 +747,7 @@ pub async fn post_verify_phone(
     Ok(Json(VerifyPhoneResponse {
         status: "success",
         next_step: Some(next_step(&registration, email_verified, true)),
-        error: None,
-    }))
+        error: None }))
 }
 
 // ── POST /api/v1/auth/register/:id/display-name ────────────────
@@ -787,8 +757,7 @@ pub struct DisplayNameInput {
     #[serde(default)]
     pub display_name: Option<String>,
     #[serde(default)]
-    pub skip: Option<bool>,
-}
+    pub skip: Option<bool> }
 
 #[derive(Serialize)]
 pub struct DisplayNameResponse {
@@ -796,8 +765,7 @@ pub struct DisplayNameResponse {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub next_step: Option<&'static str>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub error: Option<String>,
-}
+    pub error: Option<String> }
 
 #[handler]
 pub async fn post_display_name(
@@ -815,7 +783,7 @@ pub async fn post_display_name(
         .await
         .map_err(|_| RouteError::BadRequest("invalid json body".into()))?;
 
-    let repo_factory = get_repo_factory(depot)?;
+    let repo_factory = depot.repo_factory()?;
     let mut repo = repo_factory.create().await?;
 
     let registration = repo
@@ -828,8 +796,7 @@ pub async fn post_display_name(
         return Ok(Json(DisplayNameResponse {
             status: "error",
             next_step: None,
-            error: Some("registration_already_completed".into()),
-        }));
+            error: Some("registration_already_completed".into()) }));
     }
 
     let display_name = if input.skip.unwrap_or(false) {
@@ -847,8 +814,7 @@ pub async fn post_display_name(
             return Ok(Json(DisplayNameResponse {
                 status: "error",
                 next_step: None,
-                error: Some("invalid_display_name".into()),
-            }));
+                error: Some("invalid_display_name".into()) }));
         }
 
         display_name
@@ -864,8 +830,7 @@ pub async fn post_display_name(
     Ok(Json(DisplayNameResponse {
         status: "success",
         next_step: Some("finish"),
-        error: None,
-    }))
+        error: None }))
 }
 
 // ── POST /api/v1/auth/register/:id/finish ──────────────────────
@@ -874,8 +839,7 @@ pub async fn post_display_name(
 pub struct FinishRegistrationResponse {
     pub status: &'static str,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub error: Option<String>,
-}
+    pub error: Option<String> }
 
 #[handler]
 pub async fn post_finish(
@@ -889,9 +853,9 @@ pub async fn post_finish(
         .parse()
         .map_err(|_| RouteError::BadRequest("invalid id".into()))?;
 
-    let site_config = get_site_config(depot)?;
-    let homeserver = get_homeserver(depot)?;
-    let repo_factory = get_repo_factory(depot)?;
+    let site_config = depot.site_config()?;
+    let homeserver = depot.homeserver()?;
+    let repo_factory = depot.repo_factory()?;
 
     let clock = make_clock();
     let mut rng = make_rng();
@@ -902,7 +866,7 @@ pub async fn post_finish(
         .get("user-agent")
         .and_then(|h| h.to_str().ok())
         .map(|s| s.to_owned());
-    let cookie_jar = extract_cookie_jar(req, depot)?;
+    let cookie_jar = depot.cookie_jar(req)?;
 
     let mut repo = repo_factory.create().await?;
 
@@ -915,24 +879,21 @@ pub async fn post_finish(
     if registration.completed_at.is_some() {
         return Ok(Json(FinishRegistrationResponse {
             status: "error",
-            error: Some("registration_already_completed".into()),
-        }));
+            error: Some("registration_already_completed".into()) }));
     }
 
     // Check session expiry (1 hour)
     if clock.now() - registration.created_at > Duration::hours(1) {
         return Ok(Json(FinishRegistrationResponse {
             status: "error",
-            error: Some("registration_expired".into()),
-        }));
+            error: Some("registration_expired".into()) }));
     }
 
     // Verify username is still available
     if repo.user().exists(&registration.username).await? {
         return Ok(Json(FinishRegistrationResponse {
             status: "error",
-            error: Some("username_taken".into()),
-        }));
+            error: Some("username_taken".into()) }));
     }
 
     match homeserver
@@ -942,8 +903,7 @@ pub async fn post_finish(
         Ok(false) => {
             return Ok(Json(FinishRegistrationResponse {
                 status: "error",
-                error: Some("username_not_available".into()),
-            }));
+                error: Some("username_not_available".into()) }));
         }
         Ok(true) => {}
         Err(e) => {
@@ -971,16 +931,14 @@ pub async fn post_finish(
             if !registration_token.is_valid(clock.now()) {
                 return Ok(Json(FinishRegistrationResponse {
                     status: "error",
-                    error: Some("registration_token_invalid".into()),
-                }));
+                    error: Some("registration_token_invalid".into()) }));
             }
 
             Some(registration_token)
         } else {
             return Ok(Json(FinishRegistrationResponse {
                 status: "error",
-                error: Some("registration_token_required".into()),
-            }));
+                error: Some("registration_token_required".into()) }));
         }
     } else {
         None
@@ -1003,8 +961,7 @@ pub async fn post_finish(
             if email_authentication.completed_at.is_none() {
                 return Ok(Json(FinishRegistrationResponse {
                     status: "error",
-                    error: Some("email_not_verified".into()),
-                }));
+                    error: Some("email_not_verified".into()) }));
             }
 
             // Check that the email address is not already in use
@@ -1016,8 +973,7 @@ pub async fn post_finish(
             {
                 return Ok(Json(FinishRegistrationResponse {
                     status: "error",
-                    error: Some("email_in_use".into()),
-                }));
+                    error: Some("email_in_use".into()) }));
             }
 
             Some(email_authentication)
@@ -1042,8 +998,7 @@ pub async fn post_finish(
             if phone_authentication.completed_at.is_none() {
                 return Ok(Json(FinishRegistrationResponse {
                     status: "error",
-                    error: Some("phone_not_verified".into()),
-                }));
+                    error: Some("phone_not_verified".into()) }));
             }
 
             // Check that the phone number is not already in use
@@ -1055,8 +1010,7 @@ pub async fn post_finish(
             {
                 return Ok(Json(FinishRegistrationResponse {
                     status: "error",
-                    error: Some("phone_in_use".into()),
-                }));
+                    error: Some("phone_in_use".into()) }));
             }
 
             Some(phone_authentication)
@@ -1068,8 +1022,7 @@ pub async fn post_finish(
     if registration.display_name.is_none() {
         return Ok(Json(FinishRegistrationResponse {
             status: "error",
-            error: Some("display_name_required".into()),
-        }));
+            error: Some("display_name_required".into()) }));
     }
 
     // ── Complete the registration ──────────────────────────────
@@ -1164,6 +1117,5 @@ pub async fn post_finish(
 
     Ok(Json(FinishRegistrationResponse {
         status: "success",
-        error: None,
-    }))
+        error: None }))
 }

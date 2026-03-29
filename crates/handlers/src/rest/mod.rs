@@ -215,6 +215,28 @@ impl Scribe for RouteError {
 
 // ── Depot helpers ──────────────────────────────────────────────
 
+/// Extension trait for [`Depot`] that provides typed access to shared state
+/// injected by the server setup.
+pub trait DepotExt {
+    fn repo_factory(&self) -> Result<&BoxRepositoryFactory, RouteError>;
+    fn site_config(&self) -> Result<SiteConfig, RouteError>;
+    fn homeserver(&self) -> Result<Arc<dyn HomeserverConnection>, RouteError>;
+    fn policy_factory(&self) -> Result<Arc<PolicyFactory>, RouteError>;
+    fn password_manager(&self) -> Result<PasswordManager, RouteError>;
+    fn url_builder(&self) -> Result<UrlBuilder, RouteError>;
+    fn limiter(&self) -> Result<Limiter, RouteError>;
+    fn templates(&self) -> Result<pasion_templates::Templates, RouteError>;
+    fn frontend_script_src(&self) -> Result<String, RouteError>;
+    fn translator(&self) -> Result<Arc<pasion_i18n::Translator>, RouteError>;
+    fn cookie_manager(&self) -> Result<crate::CookieManager, RouteError>;
+    fn metadata_cache(&self) -> Result<crate::MetadataCache, RouteError>;
+    fn http_client(&self) -> Result<reqwest::Client, RouteError>;
+    fn encrypter(&self) -> Result<pasion_keystore::Encrypter, RouteError>;
+    fn key_store(&self) -> Result<pasion_keystore::Keystore, RouteError>;
+    fn app_version(&self) -> Result<pasion_data_model::AppVersion, RouteError>;
+    fn cookie_jar(&self, req: &Request) -> Result<CookieJar, RouteError>;
+}
+
 fn depot_get<T: Send + Sync + Clone + 'static>(depot: &Depot, key: &str) -> Result<T, RouteError> {
     depot.get::<T>(key).cloned().map_err(|_| {
         RouteError::Internal(Box::new(std::io::Error::new(
@@ -224,80 +246,81 @@ fn depot_get<T: Send + Sync + Clone + 'static>(depot: &Depot, key: &str) -> Resu
     })
 }
 
-pub fn get_repo_factory(depot: &Depot) -> Result<&BoxRepositoryFactory, RouteError> {
-    depot
-        .get::<BoxRepositoryFactory>("box_repository_factory")
-        .map_err(|_| {
-            RouteError::Internal(Box::new(std::io::Error::new(
-                std::io::ErrorKind::Other,
-                "box_repository_factory not found in depot",
-            )))
-        })
-}
+impl DepotExt for Depot {
+    fn repo_factory(&self) -> Result<&BoxRepositoryFactory, RouteError> {
+        self.get::<BoxRepositoryFactory>("box_repository_factory")
+            .map_err(|_| {
+                RouteError::Internal(Box::new(std::io::Error::new(
+                    std::io::ErrorKind::Other,
+                    "box_repository_factory not found in depot",
+                )))
+            })
+    }
 
-pub fn get_site_config(depot: &Depot) -> Result<SiteConfig, RouteError> {
-    depot_get(depot, "site_config")
-}
+    fn site_config(&self) -> Result<SiteConfig, RouteError> {
+        depot_get(self, "site_config")
+    }
 
-pub fn get_homeserver(depot: &Depot) -> Result<Arc<dyn HomeserverConnection>, RouteError> {
-    depot_get(depot, "homeserver_connection")
-}
+    fn homeserver(&self) -> Result<Arc<dyn HomeserverConnection>, RouteError> {
+        depot_get(self, "homeserver_connection")
+    }
 
-pub fn get_policy_factory(depot: &Depot) -> Result<Arc<PolicyFactory>, RouteError> {
-    depot_get(depot, "policy_factory")
-}
+    fn policy_factory(&self) -> Result<Arc<PolicyFactory>, RouteError> {
+        depot_get(self, "policy_factory")
+    }
 
-pub fn get_password_manager(depot: &Depot) -> Result<PasswordManager, RouteError> {
-    depot_get(depot, "password_manager")
-}
+    fn password_manager(&self) -> Result<PasswordManager, RouteError> {
+        depot_get(self, "password_manager")
+    }
 
-pub fn get_url_builder(depot: &Depot) -> Result<UrlBuilder, RouteError> {
-    depot_get(depot, "url_builder")
-}
+    fn url_builder(&self) -> Result<UrlBuilder, RouteError> {
+        depot_get(self, "url_builder")
+    }
 
-pub fn get_limiter(depot: &Depot) -> Result<Limiter, RouteError> {
-    depot_get(depot, "limiter")
-}
+    fn limiter(&self) -> Result<Limiter, RouteError> {
+        depot_get(self, "limiter")
+    }
 
-pub fn get_templates(depot: &Depot) -> Result<pasion_templates::Templates, RouteError> {
-    depot_get(depot, "templates")
-}
+    fn templates(&self) -> Result<pasion_templates::Templates, RouteError> {
+        depot_get(self, "templates")
+    }
 
-pub fn get_frontend_script_src(depot: &Depot) -> Result<String, RouteError> {
-    depot_get(depot, "frontend_script_src")
-}
+    fn frontend_script_src(&self) -> Result<String, RouteError> {
+        depot_get(self, "frontend_script_src")
+    }
 
-pub fn get_translator(depot: &Depot) -> Result<Arc<pasion_i18n::Translator>, RouteError> {
-    depot_get(depot, "translator")
-}
+    fn translator(&self) -> Result<Arc<pasion_i18n::Translator>, RouteError> {
+        depot_get(self, "translator")
+    }
 
-pub fn get_cookie_manager(depot: &Depot) -> Result<crate::CookieManager, RouteError> {
-    depot_get(depot, "cookie_manager")
-}
+    fn cookie_manager(&self) -> Result<crate::CookieManager, RouteError> {
+        depot_get(self, "cookie_manager")
+    }
 
-pub fn get_metadata_cache(depot: &Depot) -> Result<crate::MetadataCache, RouteError> {
-    depot_get(depot, "metadata_cache")
-}
+    fn metadata_cache(&self) -> Result<crate::MetadataCache, RouteError> {
+        depot_get(self, "metadata_cache")
+    }
 
-pub fn get_http_client(depot: &Depot) -> Result<reqwest::Client, RouteError> {
-    depot_get(depot, "http_client")
-}
+    fn http_client(&self) -> Result<reqwest::Client, RouteError> {
+        depot_get(self, "http_client")
+    }
 
-pub fn get_encrypter(depot: &Depot) -> Result<pasion_keystore::Encrypter, RouteError> {
-    depot_get(depot, "encrypter")
-}
+    fn encrypter(&self) -> Result<pasion_keystore::Encrypter, RouteError> {
+        depot_get(self, "encrypter")
+    }
 
-pub fn get_key_store(depot: &Depot) -> Result<pasion_keystore::Keystore, RouteError> {
-    depot_get(depot, "keystore")
-}
+    fn key_store(&self) -> Result<pasion_keystore::Keystore, RouteError> {
+        depot_get(self, "keystore")
+    }
 
-pub fn get_app_version(depot: &Depot) -> Result<pasion_data_model::AppVersion, RouteError> {
-    depot_get(depot, "app_version")
-}
+    fn app_version(&self) -> Result<pasion_data_model::AppVersion, RouteError> {
+        depot_get(self, "app_version")
+    }
 
-pub fn extract_cookie_jar(req: &Request, depot: &Depot) -> Result<CookieJar, RouteError> {
-    let cookie_manager = get_cookie_manager(depot)?;
-    Ok(cookie_manager.cookie_jar_from_headers(req.headers()))
+    fn cookie_jar(&self, req: &Request) -> Result<CookieJar, RouteError> {
+        let cm = self.cookie_manager()?;
+        Ok(cm.cookie_jar_from_headers(req.headers()))
+    }
 }
 
 pub fn make_clock() -> BoxClock {

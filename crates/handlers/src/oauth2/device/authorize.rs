@@ -15,7 +15,7 @@ use salvo::prelude::*;
 use thiserror::Error;
 use ulid::Ulid;
 
-use crate::impl_from_error_for_route;
+use crate::{impl_from_error_for_route, rest::DepotExt};
 
 #[derive(Debug, Error)]
 pub enum RouteError {
@@ -98,10 +98,10 @@ async fn handle_post(
     req: &mut Request,
     depot: &Depot,
 ) -> Result<DeviceAuthorizationResponse, RouteError> {
-    let url_builder = crate::rest::get_url_builder(depot)?;
-    let http_client = crate::rest::get_http_client(depot)?;
-    let encrypter = crate::rest::get_encrypter(depot)?;
-    let mut repo = crate::rest::get_repo_factory(depot)?.create().await?;
+    let url_builder = depot.url_builder()?;
+    let http_client = depot.http_client()?;
+    let encrypter = depot.encrypter()?;
+    let mut repo = depot.repo_factory()?.create().await?;
     let activity_tracker = crate::rest::extract_bound_activity_tracker(req, depot);
 
     let mut rng = crate::rest::make_rng();

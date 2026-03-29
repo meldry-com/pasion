@@ -62,11 +62,11 @@ pub async fn get(
     let mut rng = rest::make_rng();
     let clock = rest::make_clock();
     let locale = crate::preferred_language(req, depot);
-    let templates = rest::get_templates(depot)?;
-    let url_builder = rest::get_url_builder(depot)?;
-    let site_config = rest::get_site_config(depot)?;
-    let mut repo = rest::get_repo_factory(depot)?.create().await?;
-    let cookie_jar = rest::extract_cookie_jar(req, depot)?;
+    let templates = depot.templates()?;
+    let url_builder = depot.url_builder()?;
+    let site_config = depot.site_config()?;
+    let mut repo = depot.repo_factory()?.create().await?;
+    let cookie_jar = depot.cookie_jar(req)?;
     let query: QueryParams = req.parse_queries().unwrap_or_default();
 
     let (csrf_token, cookie_jar) = cookie_jar.csrf_token(&clock, &mut rng);
@@ -123,19 +123,19 @@ pub async fn post(
     let mut rng = rest::make_rng();
     let clock = rest::make_clock();
     let locale = crate::preferred_language(req, depot);
-    let password_manager = rest::get_password_manager(depot)?;
-    let templates = rest::get_templates(depot)?;
-    let url_builder = rest::get_url_builder(depot)?;
-    let site_config = rest::get_site_config(depot)?;
-    let homeserver = rest::get_homeserver(depot)?;
-    let http_client = rest::get_http_client(depot)?;
-    let limiter = rest::get_limiter(depot)?;
-    let policy_factory = rest::get_policy_factory(depot)?;
+    let password_manager = depot.password_manager()?;
+    let templates = depot.templates()?;
+    let url_builder = depot.url_builder()?;
+    let site_config = depot.site_config()?;
+    let homeserver = depot.homeserver()?;
+    let http_client = depot.http_client()?;
+    let limiter = depot.limiter()?;
+    let policy_factory = depot.policy_factory()?;
     let mut policy = policy_factory
         .instantiate()
         .await
         .map_err(|e| InternalError::from_anyhow(e.into()))?;
-    let mut repo = rest::get_repo_factory(depot)?.create().await?;
+    let mut repo = depot.repo_factory()?.create().await?;
     let activity_tracker = rest::extract_bound_activity_tracker(req, depot);
     let requester = activity_tracker
         .ip()
@@ -147,7 +147,7 @@ pub async fn post(
         .and_then(|h| h.to_str().ok())
         .map(|s| s.to_owned());
     let query: OptionalPostAuthAction = req.parse_queries().unwrap_or_default();
-    let cookie_jar = rest::extract_cookie_jar(req, depot)?;
+    let cookie_jar = depot.cookie_jar(req)?;
     let form: ProtectedForm<RegisterForm> = req
         .parse_form()
         .await
@@ -455,6 +455,7 @@ mod tests {
             CookieHelper, RequestBuilderExt, ResponseExt, TestState, setup, test_site_config,
         },
     };
+use crate::rest::DepotExt;
 
     #[tokio::test]
     async fn test_password_disabled() {

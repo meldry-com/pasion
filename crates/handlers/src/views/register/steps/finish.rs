@@ -16,6 +16,7 @@ use ulid::Ulid;
 
 use super::super::cookie::UserRegistrationSessions;
 use crate::{METER, rest, views::shared::OptionalPostAuthAction};
+use crate::rest::DepotExt;
 
 static PASSWORD_REGISTER_COUNTER: LazyLock<Counter<u64>> = LazyLock::new(|| {
     METER
@@ -34,18 +35,18 @@ pub async fn get(
     let mut rng = rest::make_rng();
     let clock = rest::make_clock();
     let lang = crate::preferred_language(req, depot);
-    let url_builder = rest::get_url_builder(depot)?;
-    let homeserver = rest::get_homeserver(depot)?;
-    let templates = rest::get_templates(depot)?;
-    let site_config = rest::get_site_config(depot)?;
-    let mut repo = rest::get_repo_factory(depot)?.create().await?;
+    let url_builder = depot.url_builder()?;
+    let homeserver = depot.homeserver()?;
+    let templates = depot.templates()?;
+    let site_config = depot.site_config()?;
+    let mut repo = depot.repo_factory()?.create().await?;
     let activity_tracker = rest::extract_bound_activity_tracker(req, depot);
     let user_agent = req
         .headers()
         .get("user-agent")
         .and_then(|h| h.to_str().ok())
         .map(|s| s.to_owned());
-    let cookie_jar = rest::extract_cookie_jar(req, depot)?;
+    let cookie_jar = depot.cookie_jar(req)?;
     let id: Ulid = req.param("id").unwrap_or_default();
     let registration = repo
         .user_registration()

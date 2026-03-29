@@ -8,6 +8,7 @@ use pasion_storage::user::BrowserSessionRepository;
 use salvo::prelude::*;
 
 use crate::rest;
+use crate::rest::DepotExt;
 
 #[handler]
 pub async fn post(
@@ -16,9 +17,9 @@ pub async fn post(
     res: &mut Response,
 ) -> Result<(), InternalError> {
     let clock = rest::make_clock();
-    let mut repo = rest::get_repo_factory(depot)?.create().await?;
-    let cookie_jar = rest::extract_cookie_jar(req, depot)?;
-    let url_builder = rest::get_url_builder(depot)?;
+    let mut repo = depot.repo_factory()?.create().await?;
+    let cookie_jar = depot.cookie_jar(req)?;
+    let url_builder = depot.url_builder()?;
     let activity_tracker = rest::extract_bound_activity_tracker(req, depot);
     let form: ProtectedForm<Option<PostAuthAction>> = req
         .parse_form()

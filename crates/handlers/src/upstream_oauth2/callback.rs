@@ -25,6 +25,7 @@ use super::{
     template::{AttributeMappingContext, environment},
 };
 use crate::{METER, impl_from_error_for_route};
+use crate::rest::DepotExt;
 
 static CALLBACK_COUNTER: LazyLock<Counter<u64>> = LazyLock::new(|| {
     METER
@@ -157,15 +158,15 @@ pub async fn handler(
     let provider_id: Ulid = req.param("id").ok_or(RouteError::ProviderNotFound)?;
     let mut rng = crate::rest::make_rng();
     let clock = crate::rest::make_clock();
-    let metadata_cache = crate::rest::get_metadata_cache(depot)?;
-    let mut repo = crate::rest::get_repo_factory(depot)?.create().await?;
-    let url_builder = crate::rest::get_url_builder(depot)?;
-    let encrypter = crate::rest::get_encrypter(depot)?;
-    let keystore = crate::rest::get_key_store(depot)?;
-    let client = crate::rest::get_http_client(depot)?;
-    let templates = crate::rest::get_templates(depot)?;
+    let metadata_cache = depot.metadata_cache()?;
+    let mut repo = depot.repo_factory()?.create().await?;
+    let url_builder = depot.url_builder()?;
+    let encrypter = depot.encrypter()?;
+    let keystore = depot.key_store()?;
+    let client = depot.http_client()?;
+    let templates = depot.templates()?;
     let locale = crate::preferred_language(req, depot);
-    let cookie_jar = crate::rest::extract_cookie_jar(req, depot)?;
+    let cookie_jar = depot.cookie_jar(req)?;
     let method = req.method().clone();
 
     // For POST requests, parse from form body; for GET requests, parse from query

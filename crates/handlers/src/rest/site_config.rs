@@ -1,7 +1,7 @@
 use salvo::prelude::*;
 use serde::Serialize;
 
-use super::{RouteError, get_site_config};
+use super::{DepotExt, RouteError};
 
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -16,13 +16,12 @@ pub struct SiteConfigResponse {
     pub imprint: Option<String>,
     pub tos_uri: Option<String>,
     pub policy_uri: Option<String>,
-    pub plan_management_iframe_uri: Option<String>,
-}
+    pub plan_management_iframe_uri: Option<String> }
 
 /// GET /api/v1/site-config
 #[handler]
 pub async fn get(depot: &Depot) -> Result<Json<SiteConfigResponse>, RouteError> {
-    let config = get_site_config(depot)?;
+    let config = depot.site_config()?;
 
     Ok(Json(SiteConfigResponse {
         id: Some("site_config".to_owned()),
@@ -35,6 +34,5 @@ pub async fn get(depot: &Depot) -> Result<Json<SiteConfigResponse>, RouteError> 
         imprint: config.imprint,
         tos_uri: config.tos_uri.as_ref().map(|u| u.to_string()),
         policy_uri: config.policy_uri.as_ref().map(|u| u.to_string()),
-        plan_management_iframe_uri: config.plan_management_iframe_uri,
-    }))
+        plan_management_iframe_uri: config.plan_management_iframe_uri }))
 }

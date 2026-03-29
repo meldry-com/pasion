@@ -1,14 +1,12 @@
 use pasion_storage::queue::{
-    ProvisionUserJob, QueueJobRepositoryExt as _, SendEmailAuthenticationCodeJob,
-};
+    ProvisionUserJob, QueueJobRepositoryExt as _, SendEmailAuthenticationCodeJob };
 use salvo::prelude::*;
 use serde::{Deserialize, Serialize};
 
-use super::{
-    NodeType, RouteError, extract_bound_activity_tracker, extract_session_info, get_limiter,
-    get_password_manager, get_repo_factory, get_requester, get_site_config, make_clock, make_rng,
-    verify_password_if_needed,
-};
+use super::{DepotExt, 
+    NodeType, RouteError, extract_bound_activity_tracker, extract_session_info,
+    get_requester, make_clock, make_rng,
+    verify_password_if_needed };
 
 // ── Response types ─────────────────────────────────────────────
 
@@ -19,31 +17,26 @@ pub struct StartEmailAuthResponse {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub authentication: Option<EmailAuthData>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub violations: Option<Vec<String>>,
-}
+    pub violations: Option<Vec<String>> }
 
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct EmailAuthData {
     pub id: String,
-    pub email: String,
-}
+    pub email: String }
 
 #[derive(Serialize)]
 pub struct CompleteEmailAuthResponse {
-    pub status: &'static str,
-}
+    pub status: &'static str }
 
 #[derive(Serialize)]
 pub struct ResendEmailAuthCodeResponse {
-    pub status: &'static str,
-}
+    pub status: &'static str }
 
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct RemoveEmailResponse {
-    pub status: &'static str,
-}
+    pub status: &'static str }
 
 // ── GET /api/v1/email-auth/:id ─────────────────────────────────
 
@@ -52,8 +45,7 @@ pub struct RemoveEmailResponse {
 pub struct EmailAuthStatusResponse {
     pub id: String,
     pub email: String,
-    pub completed_at: Option<String>,
-}
+    pub completed_at: Option<String> }
 
 #[handler]
 pub async fn get_email_auth(
@@ -65,7 +57,7 @@ pub async fn get_email_auth(
         .ok_or(RouteError::BadRequest("missing id".into()))?;
     let ulid = NodeType::UserEmailAuthentication.extract_ulid(&id)?;
 
-    let repo_factory = get_repo_factory(depot)?;
+    let repo_factory = depot.repo_factory()?;
     let mut repo = repo_factory.create().await?;
 
     let auth = repo
@@ -79,8 +71,7 @@ pub async fn get_email_auth(
     Ok(Json(EmailAuthStatusResponse {
         id: NodeType::UserEmailAuthentication.serialize(auth.id),
         email: auth.email,
-        completed_at: auth.completed_at.map(|t| t.to_rfc3339()),
-    }))
+        completed_at: auth.completed_at.map(|t| t.to_rfc3339()) }))
 }
 
 // ── POST /api/v1/email-auth/start ──────────────────────────────
@@ -91,8 +82,7 @@ pub struct StartEmailAuthInput {
     pub email: String,
     pub password: Option<String>,
     #[serde(default = "default_language")]
-    pub language: String,
-}
+    pub language: String }
 
 fn default_language() -> String {
     "en".to_owned()
@@ -108,10 +98,10 @@ pub async fn start_email_auth(
         .await
         .map_err(|_| RouteError::BadRequest("invalid json body".into()))?;
 
-    let repo_factory = get_repo_factory(depot)?;
-    let config = get_site_config(depot)?;
-    let password_manager = get_password_manager(depot)?;
-    let limiter = get_limiter(depot)?;
+    let repo_factory = depot.repo_factory()?;
+    let config = depot.site_config()?;
+    let password_manager = depot.password_manager()?;
+    let limiter = depot.limiter()?;
     let clock = make_clock();
     let mut rng = make_rng();
 
@@ -130,8 +120,7 @@ pub async fn start_email_auth(
         return Ok(Json(StartEmailAuthResponse {
             status: "DENIED",
             authentication: None,
-            violations: Some(vec!["Email changes are not allowed".into()]),
-        }));
+            violations: Some(vec!["Email changes are not allowed".into()]) }));
     }
 
     // Validate email format
@@ -139,8 +128,7 @@ pub async fn start_email_auth(
         return Ok(Json(StartEmailAuthResponse {
             status: "INVALID_EMAIL_ADDRESS",
             authentication: None,
-            violations: None,
-        }));
+            violations: None }));
     }
 
     // Rate limit check
@@ -149,8 +137,7 @@ pub async fn start_email_auth(
         return Ok(Json(StartEmailAuthResponse {
             status: "RATE_LIMITED",
             authentication: None,
-            violations: None,
-        }));
+            violations: None }));
     }
 
     // Verify password if needed
@@ -167,8 +154,7 @@ pub async fn start_email_auth(
         return Ok(Json(StartEmailAuthResponse {
             status: "INCORRECT_PASSWORD",
             authentication: None,
-            violations: None,
-        }));
+            violations: None }));
     }
 
     // Create authentication session
@@ -192,18 +178,15 @@ pub async fn start_email_auth(
         status: "STARTED",
         authentication: Some(EmailAuthData {
             id: NodeType::UserEmailAuthentication.serialize(auth.id),
-            email: auth.email,
-        }),
-        violations: None,
-    }))
+            email: auth.email }),
+        violations: None }))
 }
 
 // ── POST /api/v1/email-auth/:id/complete ───────────────────────
 
 #[derive(Deserialize)]
 pub struct CompleteEmailAuthInput {
-    pub code: String,
-}
+    pub code: String }
 
 #[handler]
 pub async fn complete_email_auth(
@@ -220,8 +203,8 @@ pub async fn complete_email_auth(
         .await
         .map_err(|_| RouteError::BadRequest("invalid json body".into()))?;
 
-    let repo_factory = get_repo_factory(depot)?;
-    let limiter = get_limiter(depot)?;
+    let repo_factory = depot.repo_factory()?;
+    let limiter = depot.limiter()?;
     let clock = make_clock();
     let mut rng = make_rng();
 
@@ -249,15 +232,13 @@ pub async fn complete_email_auth(
 
     if auth.completed_at.is_some() {
         return Ok(Json(CompleteEmailAuthResponse {
-            status: "COMPLETED",
-        }));
+            status: "COMPLETED" }));
     }
 
     // Rate limit check
     if let Err(_e) = limiter.check_email_authentication_attempt(&auth) {
         return Ok(Json(CompleteEmailAuthResponse {
-            status: "RATE_LIMITED",
-        }));
+            status: "RATE_LIMITED" }));
     }
 
     // Find and validate code
@@ -268,14 +249,12 @@ pub async fn complete_email_auth(
 
     let Some(code) = code else {
         return Ok(Json(CompleteEmailAuthResponse {
-            status: "INVALID_CODE",
-        }));
+            status: "INVALID_CODE" }));
     };
 
     if code.expires_at < clock.now() {
         return Ok(Json(CompleteEmailAuthResponse {
-            status: "CODE_EXPIRED",
-        }));
+            status: "CODE_EXPIRED" }));
     }
 
     // Complete authentication
@@ -298,8 +277,7 @@ pub async fn complete_email_auth(
     repo.save().await?;
 
     Ok(Json(CompleteEmailAuthResponse {
-        status: "COMPLETED",
-    }))
+        status: "COMPLETED" }))
 }
 
 // ── POST /api/v1/email-auth/:id/resend ─────────────────────────
@@ -308,8 +286,7 @@ pub async fn complete_email_auth(
 #[serde(rename_all = "camelCase")]
 pub struct ResendEmailAuthInput {
     #[serde(default = "default_language")]
-    pub language: String,
-}
+    pub language: String }
 
 #[handler]
 pub async fn resend_email_auth_code(
@@ -322,11 +299,10 @@ pub async fn resend_email_auth_code(
     let ulid = NodeType::UserEmailAuthentication.extract_ulid(&id)?;
 
     let input: ResendEmailAuthInput = req.parse_json().await.unwrap_or(ResendEmailAuthInput {
-        language: "en".to_owned(),
-    });
+        language: "en".to_owned() });
 
-    let repo_factory = get_repo_factory(depot)?;
-    let limiter = get_limiter(depot)?;
+    let repo_factory = depot.repo_factory()?;
+    let limiter = depot.limiter()?;
     let clock = make_clock();
     let mut rng = make_rng();
 
@@ -353,14 +329,12 @@ pub async fn resend_email_auth_code(
 
     if auth.completed_at.is_some() {
         return Ok(Json(ResendEmailAuthCodeResponse {
-            status: "COMPLETED",
-        }));
+            status: "COMPLETED" }));
     }
 
     if let Err(_e) = limiter.check_email_authentication_send_code(requester.fingerprint(), &auth) {
         return Ok(Json(ResendEmailAuthCodeResponse {
-            status: "RATE_LIMITED",
-        }));
+            status: "RATE_LIMITED" }));
     }
 
     repo.queue_job()
@@ -380,8 +354,7 @@ pub async fn resend_email_auth_code(
 
 #[derive(Deserialize)]
 pub struct RemoveEmailInput {
-    pub password: Option<String>,
-}
+    pub password: Option<String> }
 
 #[handler]
 pub async fn remove_email(
@@ -399,9 +372,9 @@ pub async fn remove_email(
         .await
         .unwrap_or(RemoveEmailInput { password: None });
 
-    let repo_factory = get_repo_factory(depot)?;
-    let config = get_site_config(depot)?;
-    let password_manager = get_password_manager(depot)?;
+    let repo_factory = depot.repo_factory()?;
+    let config = depot.site_config()?;
+    let password_manager = depot.password_manager()?;
     let clock = make_clock();
     let mut rng = make_rng();
 
@@ -439,8 +412,7 @@ pub async fn remove_email(
     .await?
     {
         return Ok(Json(RemoveEmailResponse {
-            status: "INCORRECT_PASSWORD",
-        }));
+            status: "INCORRECT_PASSWORD" }));
     }
 
     repo.user_email().remove(email).await?;

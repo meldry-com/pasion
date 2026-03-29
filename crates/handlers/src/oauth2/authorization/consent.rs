@@ -20,6 +20,7 @@ use crate::{
     oauth2::generate_id_token,
     session::{SessionOrFallback, count_user_sessions_for_limiting, load_session_or_fallback},
 };
+use crate::rest::DepotExt;
 
 #[derive(Debug, Error)]
 pub enum RouteError {
@@ -78,18 +79,18 @@ async fn handle_get(
     let mut rng = crate::rest::make_rng();
     let clock = crate::rest::make_clock();
     let locale = crate::preferred_language(req, depot);
-    let templates = crate::rest::get_templates(depot)?;
-    let url_builder = crate::rest::get_url_builder(depot)?;
-    let homeserver = crate::rest::get_homeserver(depot)?;
-    let policy_factory = crate::rest::get_policy_factory(depot)?;
+    let templates = depot.templates()?;
+    let url_builder = depot.url_builder()?;
+    let homeserver = depot.homeserver()?;
+    let policy_factory = depot.policy_factory()?;
     let mut policy: Policy = policy_factory
         .instantiate()
         .await
         .map_err(|e| RouteError::Internal(Box::new(e)))?;
-    let mut repo = crate::rest::get_repo_factory(depot)?.create().await?;
+    let mut repo = depot.repo_factory()?.create().await?;
     let activity_tracker = crate::rest::extract_bound_activity_tracker(req, depot);
     let user_agent: Option<String> = req.header("user-agent");
-    let cookie_jar = crate::rest::extract_cookie_jar(req, depot)?;
+    let cookie_jar = depot.cookie_jar(req)?;
     let grant_id: Ulid = req.param("grant_id").ok_or(RouteError::GrantNotFound)?;
 
     let (cookie_jar, maybe_session) = match load_session_or_fallback(
@@ -228,18 +229,18 @@ async fn handle_post(
     let mut rng = crate::rest::make_rng();
     let clock = crate::rest::make_clock();
     let locale = crate::preferred_language(req, depot);
-    let templates = crate::rest::get_templates(depot)?;
-    let key_store = crate::rest::get_key_store(depot)?;
-    let policy_factory = crate::rest::get_policy_factory(depot)?;
+    let templates = depot.templates()?;
+    let key_store = depot.key_store()?;
+    let policy_factory = depot.policy_factory()?;
     let mut policy: Policy = policy_factory
         .instantiate()
         .await
         .map_err(|e| RouteError::Internal(Box::new(e)))?;
-    let mut repo = crate::rest::get_repo_factory(depot)?.create().await?;
+    let mut repo = depot.repo_factory()?.create().await?;
     let activity_tracker = crate::rest::extract_bound_activity_tracker(req, depot);
     let user_agent: Option<String> = req.header("user-agent");
-    let cookie_jar = crate::rest::extract_cookie_jar(req, depot)?;
-    let url_builder = crate::rest::get_url_builder(depot)?;
+    let cookie_jar = depot.cookie_jar(req)?;
+    let url_builder = depot.url_builder()?;
     let grant_id: Ulid = req.param("grant_id").ok_or(RouteError::GrantNotFound)?;
 
     let form: ProtectedForm<()> = req

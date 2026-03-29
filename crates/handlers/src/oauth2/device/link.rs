@@ -5,6 +5,7 @@ use pasion_templates::{
 };
 use salvo::{prelude::*, writing::Text};
 use serde::{Deserialize, Serialize};
+use crate::rest::DepotExt;
 
 #[derive(Default, Serialize, Deserialize)]
 pub struct Params {
@@ -27,10 +28,10 @@ async fn handle_get(
     res: &mut Response,
 ) -> Result<(), InternalError> {
     let clock = crate::rest::make_clock();
-    let templates = crate::rest::get_templates(depot)?;
-    let url_builder = crate::rest::get_url_builder(depot)?;
-    let mut repo = crate::rest::get_repo_factory(depot)?.create().await?;
-    let cookie_jar = crate::rest::extract_cookie_jar(req, depot)?;
+    let templates = depot.templates()?;
+    let url_builder = depot.url_builder()?;
+    let mut repo = depot.repo_factory()?.create().await?;
+    let cookie_jar = depot.cookie_jar(req)?;
     let locale = crate::preferred_language(req, depot);
 
     let query: Params = req.parse_queries().unwrap_or_default();

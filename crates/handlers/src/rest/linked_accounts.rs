@@ -6,25 +6,21 @@
 use pasion_storage::{
     RepositoryAccess, Pagination,
     upstream_oauth2::{
-        UpstreamOAuthLinkFilter, UpstreamOAuthLinkRepository, UpstreamOAuthProviderRepository,
-    },
-};
+        UpstreamOAuthLinkFilter, UpstreamOAuthLinkRepository, UpstreamOAuthProviderRepository } };
 use salvo::prelude::*;
 use serde::Serialize;
 use ulid::Ulid;
 
-use super::{
-    RouteError, extract_bound_activity_tracker, extract_session_info, get_repo_factory,
-    get_requester, make_clock,
-};
+use super::{DepotExt, 
+    RouteError, extract_bound_activity_tracker, extract_session_info,
+    get_requester, make_clock };
 
 // ── Response types ──────────────────────────────────────────────
 
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct LinkedAccountsResponse {
-    pub accounts: Vec<LinkedAccount>,
-}
+    pub accounts: Vec<LinkedAccount> }
 
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -35,14 +31,12 @@ pub struct LinkedAccount {
     pub provider_brand: Option<String>,
     pub subject: String,
     pub human_account_name: Option<String>,
-    pub created_at: String,
-}
+    pub created_at: String }
 
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct UnlinkResponse {
-    pub status: &'static str,
-}
+    pub status: &'static str }
 
 // ── GET /api/v1/linked-accounts ─────────────────────────────────
 
@@ -52,7 +46,7 @@ pub async fn list_linked_accounts(
     req: &mut Request,
     depot: &Depot,
 ) -> Result<Json<LinkedAccountsResponse>, RouteError> {
-    let repo_factory = get_repo_factory(depot)?;
+    let repo_factory = depot.repo_factory()?;
     let clock = make_clock();
     let activity_tracker = extract_bound_activity_tracker(req, depot);
     let session_info = extract_session_info(req, depot);
@@ -97,8 +91,7 @@ pub async fn list_linked_accounts(
                 provider_brand,
                 subject: link.subject,
                 human_account_name: link.human_account_name,
-                created_at: link.created_at.to_rfc3339(),
-            }
+                created_at: link.created_at.to_rfc3339() }
         })
         .collect();
 
@@ -115,7 +108,7 @@ pub async fn unlink_account(
     req: &mut Request,
     depot: &Depot,
 ) -> Result<Json<UnlinkResponse>, RouteError> {
-    let repo_factory = get_repo_factory(depot)?;
+    let repo_factory = depot.repo_factory()?;
     let clock = make_clock();
     let activity_tracker = extract_bound_activity_tracker(req, depot);
     let session_info = extract_session_info(req, depot);

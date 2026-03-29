@@ -15,6 +15,7 @@ use crate::{
         response::{ErrorResponse, SingleResponse},
     },
     impl_from_error_for_route,
+    rest::DepotExt,
 };
 
 fn valid_username_character(c: char) -> bool {
@@ -115,7 +116,7 @@ pub async fn handler(
         mut repo, clock, ..
     } = call_context;
     let mut rng = crate::rest::make_rng();
-    let homeserver = crate::rest::get_homeserver(depot)?;
+    let homeserver = depot.homeserver()?;
     let params: RequestBody = req
         .parse_json()
         .await

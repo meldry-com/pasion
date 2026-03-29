@@ -12,17 +12,14 @@ use pasion_salvo_utils::SessionInfoExt;
 use pasion_storage::{
     RepositoryAccess,
     upstream_oauth2::UpstreamOAuthProviderRepository,
-    user::{BrowserSessionRepository, UserPasswordRepository, UserRepository},
-};
+    user::{BrowserSessionRepository, UserPasswordRepository, UserRepository} };
 use salvo::prelude::*;
 use serde::{Deserialize, Serialize};
 use zeroize::Zeroizing;
 
-use super::{
-    NodeType, RouteError, extract_bound_activity_tracker, extract_cookie_jar, extract_session_info,
-    get_homeserver, get_limiter, get_password_manager, get_repo_factory, get_site_config,
-    make_clock, make_rng,
-};
+use super::{DepotExt, 
+    NodeType, RouteError, extract_bound_activity_tracker, extract_session_info,
+    make_clock, make_rng };
 use crate::{METER, RequesterFingerprint, passwords::PasswordVerificationResult};
 
 // ── Metrics ────────────────────────────────────────────────────
@@ -41,8 +38,7 @@ const RESULT: Key = Key::from_static_str("result");
 #[derive(Deserialize)]
 pub struct LoginRequest {
     pub username: String,
-    pub password: String,
-}
+    pub password: String }
 
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -51,8 +47,7 @@ pub struct LoginResponse {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub error: Option<&'static str>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub viewer: Option<ViewerInfo>,
-}
+    pub viewer: Option<ViewerInfo> }
 
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -60,21 +55,18 @@ pub struct ViewerInfo {
     pub id: String,
     pub username: String,
     pub mxid: String,
-    pub display_name: Option<String>,
-}
+    pub display_name: Option<String> }
 
 #[derive(Serialize)]
 pub struct LogoutResponse {
-    pub status: &'static str,
-}
+    pub status: &'static str }
 
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ProvidersResponse {
     pub providers: Vec<ProviderInfo>,
     pub password_login_enabled: bool,
-    pub password_registration_enabled: bool,
-}
+    pub password_registration_enabled: bool }
 
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -82,8 +74,7 @@ pub struct ProviderInfo {
     pub id: String,
     pub human_name: Option<String>,
     pub brand_name: Option<String>,
-    pub authorize_url: String,
-}
+    pub authorize_url: String }
 
 // ── Helper: look up user by email or username ──────────────────
 
@@ -117,17 +108,17 @@ async fn get_user_by_email_or_by_username<R: RepositoryAccess>(
 pub async fn login(req: &mut Request, depot: &Depot, res: &mut Response) -> Result<(), RouteError> {
     let mut rng = make_rng();
     let clock = make_clock();
-    let password_manager = get_password_manager(depot)?;
-    let site_config = get_site_config(depot)?;
-    let limiter = get_limiter(depot)?;
-    let homeserver = get_homeserver(depot)?;
-    let mut repo = get_repo_factory(depot)?.create().await?;
+    let password_manager = depot.password_manager()?;
+    let site_config = depot.site_config()?;
+    let limiter = depot.limiter()?;
+    let homeserver = depot.homeserver()?;
+    let mut repo = depot.repo_factory()?.create().await?;
     let activity_tracker = extract_bound_activity_tracker(req, depot);
     let requester = activity_tracker
         .ip()
         .map(RequesterFingerprint::new)
         .unwrap_or(RequesterFingerprint::EMPTY);
-    let cookie_jar = extract_cookie_jar(req, depot)?;
+    let cookie_jar = depot.cookie_jar(req)?;
     let user_agent = req
         .headers()
         .get("user-agent")
@@ -145,8 +136,7 @@ pub async fn login(req: &mut Request, depot: &Depot, res: &mut Response) -> Resu
         res.render(Json(LoginResponse {
             status: "error",
             error: Some("password_login_disabled"),
-            viewer: None,
-        }));
+            viewer: None }));
         return Ok(());
     }
 
@@ -156,8 +146,7 @@ pub async fn login(req: &mut Request, depot: &Depot, res: &mut Response) -> Resu
         res.render(Json(LoginResponse {
             status: "error",
             error: Some("invalid_credentials"),
-            viewer: None,
-        }));
+            viewer: None }));
         return Ok(());
     }
 
@@ -174,8 +163,7 @@ pub async fn login(req: &mut Request, depot: &Depot, res: &mut Response) -> Resu
         res.render(Json(LoginResponse {
             status: "error",
             error: Some("invalid_credentials"),
-            viewer: None,
-        }));
+            viewer: None }));
         return Ok(());
     };
 
@@ -190,8 +178,7 @@ pub async fn login(req: &mut Request, depot: &Depot, res: &mut Response) -> Resu
         res.render(Json(LoginResponse {
             status: "error",
             error: Some("rate_limited"),
-            viewer: None,
-        }));
+            viewer: None }));
         return Ok(());
     }
 
@@ -203,8 +190,7 @@ pub async fn login(req: &mut Request, depot: &Depot, res: &mut Response) -> Resu
         res.render(Json(LoginResponse {
             status: "error",
             error: Some("invalid_credentials"),
-            viewer: None,
-        }));
+            viewer: None }));
         return Ok(());
     };
 
@@ -240,12 +226,10 @@ pub async fn login(req: &mut Request, depot: &Depot, res: &mut Response) -> Resu
             res.render(Json(LoginResponse {
                 status: "error",
                 error: Some("invalid_credentials"),
-                viewer: None,
-            }));
+                viewer: None }));
             return Ok(());
         }
-        Err(err) => return Err(RouteError::Internal(err.into())),
-    };
+        Err(err) => return Err(RouteError::Internal(err.into())) };
 
     // Check deactivated
     if user.deactivated_at.is_some() {
@@ -254,8 +238,7 @@ pub async fn login(req: &mut Request, depot: &Depot, res: &mut Response) -> Resu
         res.render(Json(LoginResponse {
             status: "error",
             error: Some("account_deactivated"),
-            viewer: None,
-        }));
+            viewer: None }));
         return Ok(());
     }
 
@@ -266,8 +249,7 @@ pub async fn login(req: &mut Request, depot: &Depot, res: &mut Response) -> Resu
         res.render(Json(LoginResponse {
             status: "error",
             error: Some("account_locked"),
-            viewer: None,
-        }));
+            viewer: None }));
         return Ok(());
     }
 
@@ -298,8 +280,7 @@ pub async fn login(req: &mut Request, depot: &Depot, res: &mut Response) -> Resu
     // Fetch Matrix display name for the response
     let display_name = match homeserver.query_user(&user.username).await {
         Ok(info) => info.displayname,
-        Err(_) => None,
-    };
+        Err(_) => None };
 
     cookie_jar.write_to_response(res);
     res.render(Json(LoginResponse {
@@ -309,9 +290,7 @@ pub async fn login(req: &mut Request, depot: &Depot, res: &mut Response) -> Resu
             id: NodeType::User.serialize(user.id),
             username: user.username.clone(),
             mxid: homeserver.mxid(&user.username),
-            display_name,
-        }),
-    }));
+            display_name }) }));
     Ok(())
 }
 
@@ -325,8 +304,8 @@ pub async fn logout(
     res: &mut Response,
 ) -> Result<(), RouteError> {
     let clock = make_clock();
-    let mut repo = get_repo_factory(depot)?.create().await?;
-    let cookie_jar = extract_cookie_jar(req, depot)?;
+    let mut repo = depot.repo_factory()?.create().await?;
+    let cookie_jar = depot.cookie_jar(req)?;
     let activity_tracker = extract_bound_activity_tracker(req, depot);
 
     let (session_info, cookie_jar) = cookie_jar.session_info();
@@ -360,8 +339,8 @@ pub async fn logout(
 /// relevant to the login/registration UI.
 #[handler]
 pub async fn providers(depot: &Depot) -> Result<Json<ProvidersResponse>, RouteError> {
-    let site_config = get_site_config(depot)?;
-    let mut repo = get_repo_factory(depot)?.create().await?;
+    let site_config = depot.site_config()?;
+    let mut repo = depot.repo_factory()?.create().await?;
 
     let upstream_providers = repo.upstream_oauth_provider().all_enabled().await?;
 
@@ -373,8 +352,7 @@ pub async fn providers(depot: &Depot) -> Result<Json<ProvidersResponse>, RouteEr
                 id: p.id.to_string(),
                 human_name: p.human_name,
                 brand_name: p.brand_name,
-                authorize_url,
-            }
+                authorize_url }
         })
         .collect();
 
@@ -383,6 +361,5 @@ pub async fn providers(depot: &Depot) -> Result<Json<ProvidersResponse>, RouteEr
     Ok(Json(ProvidersResponse {
         providers: provider_list,
         password_login_enabled: site_config.password_login_enabled,
-        password_registration_enabled: site_config.password_registration_enabled,
-    }))
+        password_registration_enabled: site_config.password_registration_enabled }))
 }

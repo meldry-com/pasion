@@ -16,6 +16,7 @@ use ulid::Ulid;
 use crate::session::{
     SessionOrFallback, count_user_sessions_for_limiting, load_session_or_fallback,
 };
+use crate::rest::DepotExt;
 
 #[derive(Deserialize, Debug)]
 #[serde(rename_all = "lowercase")]
@@ -46,18 +47,18 @@ async fn handle_get(
     let mut rng = crate::rest::make_rng();
     let clock = crate::rest::make_clock();
     let locale = crate::preferred_language(req, depot);
-    let templates = crate::rest::get_templates(depot)?;
-    let url_builder = crate::rest::get_url_builder(depot)?;
-    let homeserver = crate::rest::get_homeserver(depot)?;
-    let mut repo = crate::rest::get_repo_factory(depot)?.create().await?;
-    let policy_factory = crate::rest::get_policy_factory(depot)?;
+    let templates = depot.templates()?;
+    let url_builder = depot.url_builder()?;
+    let homeserver = depot.homeserver()?;
+    let mut repo = depot.repo_factory()?.create().await?;
+    let policy_factory = depot.policy_factory()?;
     let mut policy: Policy = policy_factory
         .instantiate()
         .await
         .map_err(|e| InternalError::new(Box::new(e)))?;
     let activity_tracker = crate::rest::extract_bound_activity_tracker(req, depot);
     let user_agent: Option<String> = req.header("user-agent");
-    let cookie_jar = crate::rest::extract_cookie_jar(req, depot)?;
+    let cookie_jar = depot.cookie_jar(req)?;
     let grant_id: Ulid = req.param("device_code_id").ok_or_else(|| {
         InternalError::from_anyhow(anyhow::anyhow!("Missing device_code_id path parameter"))
     })?;
@@ -210,18 +211,18 @@ async fn handle_post(
     let mut rng = crate::rest::make_rng();
     let clock = crate::rest::make_clock();
     let locale = crate::preferred_language(req, depot);
-    let templates = crate::rest::get_templates(depot)?;
-    let url_builder = crate::rest::get_url_builder(depot)?;
-    let homeserver = crate::rest::get_homeserver(depot)?;
-    let mut repo = crate::rest::get_repo_factory(depot)?.create().await?;
-    let policy_factory = crate::rest::get_policy_factory(depot)?;
+    let templates = depot.templates()?;
+    let url_builder = depot.url_builder()?;
+    let homeserver = depot.homeserver()?;
+    let mut repo = depot.repo_factory()?.create().await?;
+    let policy_factory = depot.policy_factory()?;
     let mut policy: Policy = policy_factory
         .instantiate()
         .await
         .map_err(|e| InternalError::new(Box::new(e)))?;
     let activity_tracker = crate::rest::extract_bound_activity_tracker(req, depot);
     let user_agent: Option<String> = req.header("user-agent");
-    let cookie_jar = crate::rest::extract_cookie_jar(req, depot)?;
+    let cookie_jar = depot.cookie_jar(req)?;
     let grant_id: Ulid = req.param("device_code_id").ok_or_else(|| {
         InternalError::from_anyhow(anyhow::anyhow!("Missing device_code_id path parameter"))
     })?;

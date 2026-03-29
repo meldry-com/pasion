@@ -15,6 +15,7 @@ use serde::{Deserialize, Serialize};
 use ulid::Ulid;
 
 use crate::{rest, views::shared::OptionalPostAuthAction};
+use crate::rest::DepotExt;
 
 #[derive(Serialize, Deserialize, Debug)]
 pub struct CodeForm {
@@ -34,11 +35,11 @@ pub async fn get(
     let mut rng = rest::make_rng();
     let clock = rest::make_clock();
     let locale = crate::preferred_language(req, depot);
-    let templates = rest::get_templates(depot)?;
-    let url_builder = rest::get_url_builder(depot)?;
-    let mut repo = rest::get_repo_factory(depot)?.create().await?;
+    let templates = depot.templates()?;
+    let url_builder = depot.url_builder()?;
+    let mut repo = depot.repo_factory()?.create().await?;
     let id: Ulid = req.param("id").unwrap_or_default();
-    let cookie_jar = rest::extract_cookie_jar(req, depot)?;
+    let cookie_jar = depot.cookie_jar(req)?;
 
     let (csrf_token, cookie_jar) = cookie_jar.csrf_token(&clock, &mut rng);
 
@@ -101,11 +102,11 @@ pub async fn post(
     let clock = rest::make_clock();
     let mut rng = rest::make_rng();
     let locale = crate::preferred_language(req, depot);
-    let templates = rest::get_templates(depot)?;
-    let limiter = rest::get_limiter(depot)?;
-    let mut repo = rest::get_repo_factory(depot)?.create().await?;
-    let cookie_jar = rest::extract_cookie_jar(req, depot)?;
-    let url_builder = rest::get_url_builder(depot)?;
+    let templates = depot.templates()?;
+    let limiter = depot.limiter()?;
+    let mut repo = depot.repo_factory()?.create().await?;
+    let cookie_jar = depot.cookie_jar(req)?;
+    let url_builder = depot.url_builder()?;
     let id: Ulid = req.param("id").unwrap_or_default();
     let form: ProtectedForm<CodeForm> = req
         .parse_form()

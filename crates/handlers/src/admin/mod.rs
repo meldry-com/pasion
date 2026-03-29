@@ -11,6 +11,7 @@ use pasion_router::UrlBuilder;
 use pasion_salvo_utils::InternalError;
 use pasion_templates::{ApiDocContext, Templates};
 use salvo::prelude::*;
+use crate::rest::DepotExt;
 
 mod call_context;
 mod model;
@@ -26,8 +27,8 @@ pub use self::call_context::CallContext;
 
 #[handler]
 pub async fn swagger(depot: &Depot, res: &mut Response) -> Result<(), InternalError> {
-    let url_builder = crate::rest::get_url_builder(depot)?;
-    let templates = crate::rest::get_templates(depot)?;
+    let url_builder = depot.url_builder()?;
+    let templates = depot.templates()?;
     let ctx = ApiDocContext::from_url_builder(&url_builder);
     let content = templates.render_swagger(&ctx)?;
     res.render(salvo::writing::Text::Html(content));
@@ -36,8 +37,8 @@ pub async fn swagger(depot: &Depot, res: &mut Response) -> Result<(), InternalEr
 
 #[handler]
 pub async fn swagger_callback(depot: &Depot, res: &mut Response) -> Result<(), InternalError> {
-    let url_builder = crate::rest::get_url_builder(depot)?;
-    let templates = crate::rest::get_templates(depot)?;
+    let url_builder = depot.url_builder()?;
+    let templates = depot.templates()?;
     let ctx = ApiDocContext::from_url_builder(&url_builder);
     let content = templates.render_swagger_callback(&ctx)?;
     res.render(salvo::writing::Text::Html(content));

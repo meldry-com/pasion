@@ -4,7 +4,7 @@ use salvo::prelude::*;
 use schemars::JsonSchema;
 use serde::Serialize;
 
-use crate::admin::call_context::extract_call_context;
+use crate::{admin::call_context::extract_call_context, rest::DepotExt};
 
 #[derive(Serialize, JsonSchema)]
 pub struct Version {
@@ -16,7 +16,7 @@ pub struct Version {
 #[tracing::instrument(name = "handler.admin.v1.version", skip_all)]
 pub async fn handler(req: &mut Request, depot: &Depot) -> Result<Json<Version>, InternalError> {
     let _call_context = extract_call_context(req, depot).await?;
-    let pasion_data_model::AppVersion(version) = crate::rest::get_app_version(depot)?;
+    let pasion_data_model::AppVersion(version) = depot.app_version()?;
 
     Ok(Json(Version { version }))
 }

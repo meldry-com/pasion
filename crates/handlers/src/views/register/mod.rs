@@ -5,6 +5,7 @@ use salvo::{prelude::*, writing::Text};
 
 use super::shared::OptionalPostAuthAction;
 use crate::rest;
+use crate::rest::DepotExt;
 
 mod cookie;
 pub mod password;
@@ -21,13 +22,13 @@ pub async fn get(
     let mut rng = rest::make_rng();
     let clock = rest::make_clock();
     let locale = crate::preferred_language(req, depot);
-    let templates = rest::get_templates(depot)?;
-    let url_builder = rest::get_url_builder(depot)?;
-    let site_config = rest::get_site_config(depot)?;
-    let mut repo = rest::get_repo_factory(depot)?.create().await?;
+    let templates = depot.templates()?;
+    let url_builder = depot.url_builder()?;
+    let site_config = depot.site_config()?;
+    let mut repo = depot.repo_factory()?.create().await?;
     let activity_tracker = rest::extract_bound_activity_tracker(req, depot);
     let query: OptionalPostAuthAction = req.parse_queries().unwrap_or_default();
-    let cookie_jar = rest::extract_cookie_jar(req, depot)?;
+    let cookie_jar = depot.cookie_jar(req)?;
 
     let (csrf_token, cookie_jar) = cookie_jar.csrf_token(&clock, &mut rng);
     let (session_info, cookie_jar) = cookie_jar.session_info();

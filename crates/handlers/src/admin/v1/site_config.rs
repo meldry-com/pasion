@@ -4,6 +4,7 @@ use schemars::JsonSchema;
 use serde::Serialize;
 
 use crate::admin::call_context::extract_call_context;
+use crate::rest::DepotExt;
 
 #[allow(clippy::struct_excessive_bools)]
 #[derive(Serialize, JsonSchema)]
@@ -52,7 +53,7 @@ pub struct SiteConfig {
 #[tracing::instrument(name = "handler.admin.v1.site_config", skip_all)]
 pub async fn handler(req: &mut Request, depot: &Depot) -> Result<Json<SiteConfig>, InternalError> {
     let _call_context = extract_call_context(req, depot).await?;
-    let site_config = crate::rest::get_site_config(depot)?;
+    let site_config = depot.site_config()?;
 
     Ok(Json(SiteConfig {
         server_name: site_config.server_name,

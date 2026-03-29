@@ -4,10 +4,9 @@ use salvo::prelude::*;
 use serde::{Deserialize, Serialize};
 use zeroize::Zeroizing;
 
-use super::{
-    NodeType, RouteError, extract_bound_activity_tracker, extract_session_info, get_limiter,
-    get_password_manager, get_repo_factory, get_requester, get_site_config, make_clock, make_rng,
-};
+use super::{DepotExt, 
+    NodeType, RouteError, extract_bound_activity_tracker, extract_session_info,
+    get_requester, make_clock, make_rng };
 
 // ── POST /api/v1/viewer/password ───────────────────────────────
 
@@ -16,13 +15,11 @@ use super::{
 pub struct SetPasswordInput {
     pub user_id: String,
     pub current_password: Option<String>,
-    pub new_password: String,
-}
+    pub new_password: String }
 
 #[derive(Serialize)]
 pub struct SetPasswordResponse {
-    pub status: &'static str,
-}
+    pub status: &'static str }
 
 #[handler]
 pub async fn set_password(
@@ -34,9 +31,9 @@ pub async fn set_password(
         .await
         .map_err(|_| RouteError::BadRequest("invalid json body".into()))?;
 
-    let repo_factory = get_repo_factory(depot)?;
-    let config = get_site_config(depot)?;
-    let password_manager = get_password_manager(depot)?;
+    let repo_factory = depot.repo_factory()?;
+    let config = depot.site_config()?;
+    let password_manager = depot.password_manager()?;
     let clock = make_clock();
     let mut rng = make_rng();
 
@@ -55,14 +52,12 @@ pub async fn set_password(
 
     if input.new_password.is_empty() {
         return Ok(Json(SetPasswordResponse {
-            status: "INVALID_NEW_PASSWORD",
-        }));
+            status: "INVALID_NEW_PASSWORD" }));
     }
 
     if !password_manager.is_enabled() {
         return Ok(Json(SetPasswordResponse {
-            status: "PASSWORD_CHANGES_DISABLED",
-        }));
+            status: "PASSWORD_CHANGES_DISABLED" }));
     }
 
     if !password_manager
@@ -70,27 +65,23 @@ pub async fn set_password(
         .map_err(|e| RouteError::Internal(e.into()))?
     {
         return Ok(Json(SetPasswordResponse {
-            status: "INVALID_NEW_PASSWORD",
-        }));
+            status: "INVALID_NEW_PASSWORD" }));
     }
 
     let Some(user) = repo.user().lookup(user_id).await? else {
         return Ok(Json(SetPasswordResponse {
-            status: "NOT_FOUND",
-        }));
+            status: "NOT_FOUND" }));
     };
 
     if !requester.is_admin() {
         if !config.password_change_allowed {
             return Ok(Json(SetPasswordResponse {
-                status: "PASSWORD_CHANGES_DISABLED",
-            }));
+                status: "PASSWORD_CHANGES_DISABLED" }));
         }
 
         let Some(active_password) = repo.user_password().active(&user).await? else {
             return Ok(Json(SetPasswordResponse {
-                status: "NO_CURRENT_PASSWORD",
-            }));
+                status: "NO_CURRENT_PASSWORD" }));
         };
 
         let Some(current_password) = input.current_password else {
@@ -110,8 +101,7 @@ pub async fn set_password(
             .is_success()
         {
             return Ok(Json(SetPasswordResponse {
-                status: "WRONG_PASSWORD",
-            }));
+                status: "WRONG_PASSWORD" }));
         }
     }
 
@@ -135,8 +125,7 @@ pub async fn set_password(
 #[serde(rename_all = "camelCase")]
 pub struct SetPasswordByRecoveryInput {
     pub ticket: String,
-    pub new_password: String,
-}
+    pub new_password: String }
 
 #[handler]
 pub async fn set_password_by_recovery(
@@ -148,16 +137,15 @@ pub async fn set_password_by_recovery(
         .await
         .map_err(|_| RouteError::BadRequest("invalid json body".into()))?;
 
-    let repo_factory = get_repo_factory(depot)?;
-    let config = get_site_config(depot)?;
-    let password_manager = get_password_manager(depot)?;
+    let repo_factory = depot.repo_factory()?;
+    let config = depot.site_config()?;
+    let password_manager = depot.password_manager()?;
     let clock = make_clock();
     let mut rng = make_rng();
 
     if !password_manager.is_enabled() || !config.account_recovery_allowed {
         return Ok(Json(SetPasswordResponse {
-            status: "PASSWORD_CHANGES_DISABLED",
-        }));
+            status: "PASSWORD_CHANGES_DISABLED" }));
     }
 
     if !password_manager
@@ -165,16 +153,14 @@ pub async fn set_password_by_recovery(
         .map_err(|e| RouteError::Internal(e.into()))?
     {
         return Ok(Json(SetPasswordResponse {
-            status: "INVALID_NEW_PASSWORD",
-        }));
+            status: "INVALID_NEW_PASSWORD" }));
     }
 
     let mut repo = repo_factory.create().await?;
 
     let Some(ticket) = repo.user_recovery().find_ticket(&input.ticket).await? else {
         return Ok(Json(SetPasswordResponse {
-            status: "NO_SUCH_RECOVERY_TICKET",
-        }));
+            status: "NO_SUCH_RECOVERY_TICKET" }));
     };
 
     let session = repo
@@ -186,14 +172,12 @@ pub async fn set_password_by_recovery(
 
     if session.consumed_at.is_some() {
         return Ok(Json(SetPasswordResponse {
-            status: "RECOVERY_TICKET_ALREADY_USED",
-        }));
+            status: "RECOVERY_TICKET_ALREADY_USED" }));
     }
 
     if !ticket.active(clock.now()) {
         return Ok(Json(SetPasswordResponse {
-            status: "EXPIRED_RECOVERY_TICKET",
-        }));
+            status: "EXPIRED_RECOVERY_TICKET" }));
     }
 
     let user_email = repo
@@ -212,8 +196,7 @@ pub async fn set_password_by_recovery(
 
     if !user.is_valid() {
         return Ok(Json(SetPasswordResponse {
-            status: "ACCOUNT_LOCKED",
-        }));
+            status: "ACCOUNT_LOCKED" }));
     }
 
     let (version, hash) = password_manager
@@ -238,13 +221,11 @@ pub async fn set_password_by_recovery(
 
 #[derive(Deserialize)]
 pub struct ResendRecoveryInput {
-    pub ticket: String,
-}
+    pub ticket: String }
 
 #[derive(Serialize)]
 pub struct ResendRecoveryResponse {
-    pub status: &'static str,
-}
+    pub status: &'static str }
 
 #[handler]
 pub async fn resend_recovery_email(
@@ -256,8 +237,8 @@ pub async fn resend_recovery_email(
         .await
         .map_err(|_| RouteError::BadRequest("invalid json body".into()))?;
 
-    let repo_factory = get_repo_factory(depot)?;
-    let limiter = get_limiter(depot)?;
+    let repo_factory = depot.repo_factory()?;
+    let limiter = depot.limiter()?;
     let clock = make_clock();
     let mut rng = make_rng();
 
@@ -270,8 +251,7 @@ pub async fn resend_recovery_email(
 
     let Some(ticket) = repo.user_recovery().find_ticket(&input.ticket).await? else {
         return Ok(Json(ResendRecoveryResponse {
-            status: "NO_SUCH_RECOVERY_TICKET",
-        }));
+            status: "NO_SUCH_RECOVERY_TICKET" }));
     };
 
     let session = repo
@@ -283,8 +263,7 @@ pub async fn resend_recovery_email(
 
     if let Err(_e) = limiter.check_account_recovery(requester.fingerprint(), &session.email) {
         return Ok(Json(ResendRecoveryResponse {
-            status: "RATE_LIMITED",
-        }));
+            status: "RATE_LIMITED" }));
     }
 
     repo.queue_job()

@@ -8,6 +8,7 @@ use crate::{
     rest,
     session::{SessionOrFallback, load_session_or_fallback},
 };
+use crate::rest::DepotExt;
 
 #[derive(Deserialize, Default)]
 pub struct Params {
@@ -24,12 +25,12 @@ pub async fn get(
     let mut rng = rest::make_rng();
     let clock = rest::make_clock();
     let locale = crate::preferred_language(req, depot);
-    let templates = rest::get_templates(depot)?;
-    let url_builder = rest::get_url_builder(depot)?;
-    let script_src = rest::get_frontend_script_src(depot)?;
-    let mut repo = rest::get_repo_factory(depot)?.create().await?;
+    let templates = depot.templates()?;
+    let url_builder = depot.url_builder()?;
+    let script_src = depot.frontend_script_src()?;
+    let mut repo = depot.repo_factory()?.create().await?;
     let activity_tracker = rest::extract_bound_activity_tracker(req, depot);
-    let cookie_jar = rest::extract_cookie_jar(req, depot)?;
+    let cookie_jar = depot.cookie_jar(req)?;
     let Params { action } = req.parse_queries().unwrap_or_default();
 
     let (cookie_jar, maybe_session) = match load_session_or_fallback(
@@ -79,9 +80,9 @@ pub async fn get_anonymous(
     res: &mut Response,
 ) -> Result<(), InternalError> {
     let locale = crate::preferred_language(req, depot);
-    let templates = rest::get_templates(depot)?;
-    let url_builder = rest::get_url_builder(depot)?;
-    let script_src = rest::get_frontend_script_src(depot)?;
+    let templates = depot.templates()?;
+    let url_builder = depot.url_builder()?;
+    let script_src = depot.frontend_script_src()?;
 
     let ctx = AppContext::new(&url_builder, &script_src).with_language(locale);
     let content = templates.render_app(&ctx)?;

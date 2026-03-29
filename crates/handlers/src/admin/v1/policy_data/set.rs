@@ -14,6 +14,7 @@ use crate::{
         response::{ErrorResponse, SingleResponse},
     },
     impl_from_error_for_route,
+    rest::DepotExt,
 };
 
 #[derive(Debug, thiserror::Error)]
@@ -74,7 +75,7 @@ pub async fn handler(
         mut repo, clock, ..
     } = call_context;
     let mut rng = crate::rest::make_rng();
-    let policy_factory = crate::rest::get_policy_factory(depot)?;
+    let policy_factory = depot.policy_factory()?;
     let request: SetPolicyDataRequest = req
         .parse_json()
         .await

@@ -13,6 +13,7 @@ use crate::{
         response::{ErrorResponse, SingleResponse},
     },
     impl_from_error_for_route,
+    rest::DepotExt,
 };
 
 #[derive(Debug, thiserror::Error)]
@@ -59,7 +60,7 @@ pub async fn handler(
     let call_context = extract_call_context(req, depot).await?;
     let crate::admin::call_context::CallContext { mut repo, .. } = call_context;
     let id = extract_ulid_param(req)?;
-    let homeserver = crate::rest::get_homeserver(depot)?;
+    let homeserver = depot.homeserver()?;
 
     // id already extracted above
     let user = repo

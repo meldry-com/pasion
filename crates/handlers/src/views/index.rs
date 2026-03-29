@@ -6,6 +6,7 @@ use crate::{
     rest,
     session::{SessionOrFallback, load_session_or_fallback},
 };
+use crate::rest::DepotExt;
 
 #[handler]
 pub async fn get(
@@ -16,11 +17,11 @@ pub async fn get(
     let mut rng = rest::make_rng();
     let clock = rest::make_clock();
     let locale = crate::preferred_language(req, depot);
-    let templates = rest::get_templates(depot)?;
-    let url_builder = rest::get_url_builder(depot)?;
-    let mut repo = rest::get_repo_factory(depot)?.create().await?;
+    let templates = depot.templates()?;
+    let url_builder = depot.url_builder()?;
+    let mut repo = depot.repo_factory()?.create().await?;
     let activity_tracker = rest::extract_bound_activity_tracker(req, depot);
-    let cookie_jar = rest::extract_cookie_jar(req, depot)?;
+    let cookie_jar = depot.cookie_jar(req)?;
 
     let (cookie_jar, maybe_session) = match load_session_or_fallback(
         cookie_jar, &clock, &mut rng, &templates, &locale, &mut repo,

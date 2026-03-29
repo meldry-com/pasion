@@ -224,12 +224,12 @@ pub async fn get(
     let link_id: Ulid = req.param("id").ok_or(RouteError::LinkNotFound)?;
     let mut rng = crate::rest::make_rng();
     let clock = crate::rest::make_clock();
-    let mut repo = crate::rest::get_repo_factory(depot)?.create().await?;
+    let mut repo = depot.repo_factory()?.create().await?;
     let locale = crate::preferred_language(req, depot);
-    let templates = crate::rest::get_templates(depot)?;
-    let url_builder = crate::rest::get_url_builder(depot)?;
-    let homeserver = crate::rest::get_homeserver(depot)?;
-    let cookie_jar = crate::rest::extract_cookie_jar(req, depot)?;
+    let templates = depot.templates()?;
+    let url_builder = depot.url_builder()?;
+    let homeserver = depot.homeserver()?;
+    let cookie_jar = depot.cookie_jar(req)?;
     let activity_tracker = crate::rest::extract_bound_activity_tracker(req, depot);
     let user_agent = req
         .headers()
@@ -237,7 +237,7 @@ pub async fn get(
         .and_then(|v| v.to_str().ok())
         .map(|s| s.to_owned());
 
-    let policy_factory = crate::rest::get_policy_factory(depot)?;
+    let policy_factory = depot.policy_factory()?;
     let mut policy = policy_factory.instantiate().await?;
 
     let sessions_cookie = UpstreamSessionsCookie::load(&cookie_jar);
@@ -856,21 +856,21 @@ pub async fn post(
     let link_id: Ulid = req.param("id").ok_or(RouteError::LinkNotFound)?;
     let mut rng = crate::rest::make_rng();
     let clock = crate::rest::make_clock();
-    let mut repo = crate::rest::get_repo_factory(depot)?.create().await?;
-    let cookie_jar = crate::rest::extract_cookie_jar(req, depot)?;
+    let mut repo = depot.repo_factory()?.create().await?;
+    let cookie_jar = depot.cookie_jar(req)?;
     let user_agent = req
         .headers()
         .get(http::header::USER_AGENT)
         .and_then(|v| v.to_str().ok())
         .map(|s| s.to_owned());
-    let policy_factory = crate::rest::get_policy_factory(depot)?;
+    let policy_factory = depot.policy_factory()?;
     let mut policy = policy_factory.instantiate().await?;
     let locale = crate::preferred_language(req, depot);
     let activity_tracker = crate::rest::extract_bound_activity_tracker(req, depot);
-    let templates = crate::rest::get_templates(depot)?;
-    let homeserver = crate::rest::get_homeserver(depot)?;
-    let url_builder = crate::rest::get_url_builder(depot)?;
-    let site_config = crate::rest::get_site_config(depot)?;
+    let templates = depot.templates()?;
+    let homeserver = depot.homeserver()?;
+    let url_builder = depot.url_builder()?;
+    let site_config = depot.site_config()?;
 
     let form: ProtectedForm<FormData> = req.parse_form().await?;
     let form = cookie_jar.verify_form(&clock, form)?;
@@ -1284,6 +1284,7 @@ mod tests {
     use super::UpstreamSessionsCookie;
     #[cfg(test)]
     use crate::test_utils::{CookieHelper, RequestBuilderExt, ResponseExt, TestState, setup};
+use crate::rest::DepotExt;
 
     #[tokio::test]
     async fn test_register() {

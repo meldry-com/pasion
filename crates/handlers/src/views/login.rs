@@ -60,14 +60,14 @@ pub async fn get(
     let mut rng = rest::make_rng();
     let clock = rest::make_clock();
     let locale = crate::preferred_language(req, depot);
-    let templates = rest::get_templates(depot)?;
-    let url_builder = rest::get_url_builder(depot)?;
-    let site_config = rest::get_site_config(depot)?;
-    let homeserver = rest::get_homeserver(depot)?;
-    let mut repo = rest::get_repo_factory(depot)?.create().await?;
+    let templates = depot.templates()?;
+    let url_builder = depot.url_builder()?;
+    let site_config = depot.site_config()?;
+    let homeserver = depot.homeserver()?;
+    let mut repo = depot.repo_factory()?.create().await?;
     let activity_tracker = rest::extract_bound_activity_tracker(req, depot);
     let query: OptionalPostAuthAction = req.parse_queries().unwrap_or_default();
-    let cookie_jar = rest::extract_cookie_jar(req, depot)?;
+    let cookie_jar = depot.cookie_jar(req)?;
 
     let (cookie_jar, maybe_session) = match load_session_or_fallback(
         cookie_jar, &clock, &mut rng, &templates, &locale, &mut repo,
@@ -139,20 +139,20 @@ pub async fn post(
     let mut rng = rest::make_rng();
     let clock = rest::make_clock();
     let locale = crate::preferred_language(req, depot);
-    let password_manager = rest::get_password_manager(depot)?;
-    let site_config = rest::get_site_config(depot)?;
-    let templates = rest::get_templates(depot)?;
-    let url_builder = rest::get_url_builder(depot)?;
-    let limiter = rest::get_limiter(depot)?;
-    let homeserver = rest::get_homeserver(depot)?;
-    let mut repo = rest::get_repo_factory(depot)?.create().await?;
+    let password_manager = depot.password_manager()?;
+    let site_config = depot.site_config()?;
+    let templates = depot.templates()?;
+    let url_builder = depot.url_builder()?;
+    let limiter = depot.limiter()?;
+    let homeserver = depot.homeserver()?;
+    let mut repo = depot.repo_factory()?.create().await?;
     let activity_tracker = rest::extract_bound_activity_tracker(req, depot);
     let requester = activity_tracker
         .ip()
         .map(RequesterFingerprint::new)
         .unwrap_or(RequesterFingerprint::EMPTY);
     let query: OptionalPostAuthAction = req.parse_queries().unwrap_or_default();
-    let cookie_jar = rest::extract_cookie_jar(req, depot)?;
+    let cookie_jar = depot.cookie_jar(req)?;
     let user_agent = req
         .headers()
         .get("user-agent")
@@ -491,6 +491,7 @@ mod test {
             CookieHelper, RequestBuilderExt, ResponseExt, TestState, setup, test_site_config,
         },
     };
+use crate::rest::DepotExt;
 
     #[tokio::test]
     async fn test_password_disabled() {

@@ -25,6 +25,7 @@ use thiserror::Error;
 use ulid::Ulid;
 
 use crate::{impl_from_error_for_route, upstream_oauth2::cache::LazyProviderInfos};
+use crate::rest::DepotExt;
 
 #[derive(Debug, Error)]
 pub enum RouteError {
@@ -123,9 +124,9 @@ pub async fn post(req: &mut Request, depot: &mut Depot) -> Result<(), RouteError
     let provider_id: Ulid = req.param("id").ok_or(RouteError::ProviderNotFound)?;
     let clock = crate::rest::make_clock();
     let mut rng = crate::rest::make_rng();
-    let mut repo = crate::rest::get_repo_factory(depot)?.create().await?;
-    let metadata_cache = crate::rest::get_metadata_cache(depot)?;
-    let client = crate::rest::get_http_client(depot)?;
+    let mut repo = depot.repo_factory()?.create().await?;
+    let metadata_cache = depot.metadata_cache()?;
+    let client = depot.http_client()?;
 
     let request: BackchannelLogoutRequest = req
         .parse_form()

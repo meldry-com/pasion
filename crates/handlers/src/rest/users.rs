@@ -3,11 +3,10 @@ use pasion_storage::queue::{DeactivateUserJob, QueueJobRepositoryExt as _};
 use salvo::prelude::*;
 use serde::{Deserialize, Serialize};
 
-use super::{
-    NodeType, RouteError, extract_bound_activity_tracker, extract_session_info, get_homeserver,
-    get_password_manager, get_repo_factory, get_requester, get_site_config, make_clock, make_rng,
-    verify_password_if_needed,
-};
+use super::{DepotExt, 
+    NodeType, RouteError, extract_bound_activity_tracker, extract_session_info,
+    get_requester, make_clock, make_rng,
+    verify_password_if_needed };
 
 // ── POST /api/v1/viewer/display-name ───────────────────────────
 
@@ -15,13 +14,11 @@ use super::{
 #[serde(rename_all = "camelCase")]
 pub struct SetDisplayNameInput {
     pub user_id: String,
-    pub display_name: Option<String>,
-}
+    pub display_name: Option<String> }
 
 #[derive(Serialize)]
 pub struct SetDisplayNameResponse {
-    pub status: &'static str,
-}
+    pub status: &'static str }
 
 #[handler]
 pub async fn set_display_name(
@@ -33,8 +30,8 @@ pub async fn set_display_name(
         .await
         .map_err(|_| RouteError::BadRequest("invalid json body".into()))?;
 
-    let repo_factory = get_repo_factory(depot)?;
-    let homeserver = get_homeserver(depot)?;
+    let repo_factory = depot.repo_factory()?;
+    let homeserver = depot.homeserver()?;
     let clock = make_clock();
 
     let activity_tracker = extract_bound_activity_tracker(req, depot);
@@ -83,18 +80,15 @@ pub async fn set_display_name(
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct AllowCrossSigningResetInput {
-    pub user_id: String,
-}
+    pub user_id: String }
 
 #[derive(Serialize)]
 pub struct AllowCrossSigningResetResponse {
-    pub user: Option<UserBrief>,
-}
+    pub user: Option<UserBrief> }
 
 #[derive(Serialize)]
 pub struct UserBrief {
-    pub id: String,
-}
+    pub id: String }
 
 #[handler]
 pub async fn allow_cross_signing_reset(
@@ -106,8 +100,8 @@ pub async fn allow_cross_signing_reset(
         .await
         .map_err(|_| RouteError::BadRequest("invalid json body".into()))?;
 
-    let repo_factory = get_repo_factory(depot)?;
-    let homeserver = get_homeserver(depot)?;
+    let repo_factory = depot.repo_factory()?;
+    let homeserver = depot.homeserver()?;
     let clock = make_clock();
 
     let activity_tracker = extract_bound_activity_tracker(req, depot);
@@ -138,9 +132,7 @@ pub async fn allow_cross_signing_reset(
 
     Ok(Json(AllowCrossSigningResetResponse {
         user: Some(UserBrief {
-            id: NodeType::User.serialize(user.id),
-        }),
-    }))
+            id: NodeType::User.serialize(user.id) }) }))
 }
 
 // ── POST /api/v1/viewer/deactivate ─────────────────────────────
@@ -149,13 +141,11 @@ pub async fn allow_cross_signing_reset(
 #[serde(rename_all = "camelCase")]
 pub struct DeactivateUserInput {
     pub hs_erase: bool,
-    pub password: Option<String>,
-}
+    pub password: Option<String> }
 
 #[derive(Serialize)]
 pub struct DeactivateUserResponse {
-    pub status: &'static str,
-}
+    pub status: &'static str }
 
 #[handler]
 pub async fn deactivate_user(
@@ -167,9 +157,9 @@ pub async fn deactivate_user(
         .await
         .map_err(|_| RouteError::BadRequest("invalid json body".into()))?;
 
-    let repo_factory = get_repo_factory(depot)?;
-    let config = get_site_config(depot)?;
-    let password_manager = get_password_manager(depot)?;
+    let repo_factory = depot.repo_factory()?;
+    let config = depot.site_config()?;
+    let password_manager = depot.password_manager()?;
     let clock = make_clock();
     let mut rng = make_rng();
 
@@ -201,8 +191,7 @@ pub async fn deactivate_user(
     .await?
     {
         return Ok(Json(DeactivateUserResponse {
-            status: "INCORRECT_PASSWORD",
-        }));
+            status: "INCORRECT_PASSWORD" }));
     }
 
     let user = repo
@@ -221,6 +210,5 @@ pub async fn deactivate_user(
     repo.save().await?;
 
     Ok(Json(DeactivateUserResponse {
-        status: "DEACTIVATED",
-    }))
+        status: "DEACTIVATED" }))
 }

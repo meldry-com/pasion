@@ -11,6 +11,7 @@ use ulid::Ulid;
 
 use super::{UpstreamSessionsCookie, cache::LazyProviderInfos};
 use crate::{impl_from_error_for_route, post_auth::OptionalPostAuthAction};
+use crate::rest::DepotExt;
 
 #[derive(Debug, Error)]
 pub enum RouteError {
@@ -49,11 +50,11 @@ pub async fn get(
     let provider_id: Ulid = req.param("id").ok_or(RouteError::ProviderNotFound)?;
     let mut rng = crate::rest::make_rng();
     let clock = crate::rest::make_clock();
-    let metadata_cache = crate::rest::get_metadata_cache(depot)?;
-    let mut repo = crate::rest::get_repo_factory(depot)?.create().await?;
-    let url_builder = crate::rest::get_url_builder(depot)?;
-    let http_client = crate::rest::get_http_client(depot)?;
-    let cookie_jar = crate::rest::extract_cookie_jar(req, depot)?;
+    let metadata_cache = depot.metadata_cache()?;
+    let mut repo = depot.repo_factory()?.create().await?;
+    let url_builder = depot.url_builder()?;
+    let http_client = depot.http_client()?;
+    let cookie_jar = depot.cookie_jar(req)?;
     let query: OptionalPostAuthAction = req.parse_queries().unwrap_or_default();
 
     let provider = repo

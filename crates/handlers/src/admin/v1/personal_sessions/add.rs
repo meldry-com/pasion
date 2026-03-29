@@ -19,6 +19,7 @@ use crate::{
         v1::personal_sessions::personal_session_owner_from_caller,
     },
     impl_from_error_for_route,
+    rest::DepotExt,
 };
 
 #[derive(Debug, thiserror::Error)]
@@ -94,7 +95,7 @@ pub async fn handler(
         ..
     } = call_context;
     let mut rng = crate::rest::make_rng();
-    let homeserver = crate::rest::get_homeserver(depot)?;
+    let homeserver = depot.homeserver()?;
     let params: RequestBody = req
         .parse_json()
         .await

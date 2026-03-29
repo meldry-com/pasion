@@ -15,6 +15,7 @@ use salvo::{prelude::*, writing::Text};
 use serde::{Deserialize, Serialize};
 
 use crate::{RequesterFingerprint, rest};
+use crate::rest::DepotExt;
 
 #[derive(Deserialize, Serialize)]
 pub(crate) struct StartRecoveryForm {
@@ -30,11 +31,11 @@ pub async fn get(
     let mut rng = rest::make_rng();
     let clock = rest::make_clock();
     let locale = crate::preferred_language(req, depot);
-    let site_config = rest::get_site_config(depot)?;
-    let templates = rest::get_templates(depot)?;
-    let url_builder = rest::get_url_builder(depot)?;
-    let mut repo = rest::get_repo_factory(depot)?.create().await?;
-    let cookie_jar = rest::extract_cookie_jar(req, depot)?;
+    let site_config = depot.site_config()?;
+    let templates = depot.templates()?;
+    let url_builder = depot.url_builder()?;
+    let mut repo = depot.repo_factory()?.create().await?;
+    let cookie_jar = depot.cookie_jar(req)?;
 
     if !site_config.account_recovery_allowed {
         let context = EmptyContext.with_language(locale);
@@ -77,11 +78,11 @@ pub async fn post(
     let mut rng = rest::make_rng();
     let clock = rest::make_clock();
     let locale = crate::preferred_language(req, depot);
-    let site_config = rest::get_site_config(depot)?;
-    let templates = rest::get_templates(depot)?;
-    let url_builder = rest::get_url_builder(depot)?;
-    let limiter = rest::get_limiter(depot)?;
-    let mut repo = rest::get_repo_factory(depot)?.create().await?;
+    let site_config = depot.site_config()?;
+    let templates = depot.templates()?;
+    let url_builder = depot.url_builder()?;
+    let limiter = depot.limiter()?;
+    let mut repo = depot.repo_factory()?.create().await?;
     let activity_tracker = rest::extract_bound_activity_tracker(req, depot);
     let requester = activity_tracker
         .ip()
@@ -93,7 +94,7 @@ pub async fn post(
         .and_then(|h| h.to_str().ok())
         .unwrap_or("")
         .to_owned();
-    let cookie_jar = rest::extract_cookie_jar(req, depot)?;
+    let cookie_jar = depot.cookie_jar(req)?;
     let form: ProtectedForm<StartRecoveryForm> = req
         .parse_form()
         .await
