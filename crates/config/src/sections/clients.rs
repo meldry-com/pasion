@@ -241,7 +241,7 @@ impl IntoIterator for ClientsConfig {
 }
 
 impl ConfigurationSection for ClientsConfig {
-    const PATH: Option<&'static str> = Some("clients");
+    const PATH: &'static str = "clients";
 
     fn validate(
         &self,
@@ -250,9 +250,9 @@ impl ConfigurationSection for ClientsConfig {
         for (index, client) in self.0.iter().enumerate() {
             client.validate().map_err(|mut err| {
                 // Save the error location information in the error
-                err.metadata = figment.find_metadata(Self::PATH.unwrap()).cloned();
+                err.metadata = figment.find_metadata(Self::PATH).cloned();
                 err.profile = Some(figment::Profile::Default);
-                err.path.insert(0, Self::PATH.unwrap().to_owned());
+                err.path.insert(0, Self::PATH.to_owned());
                 err.path.insert(1, format!("{index}"));
                 err
             })?;

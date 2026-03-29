@@ -211,5 +211,5 @@ impl PolicyConfig {
 }
 
 impl ConfigurationSection for PolicyConfig {
-    const PATH: Option<&'static str> = Some("policy");
+    const PATH: &'static str = "policy";
 }

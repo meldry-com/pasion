@@ -60,18 +60,18 @@ impl SmsConfig {
 }
 
 impl ConfigurationSection for SmsConfig {
-    const PATH: Option<&'static str> = Some("sms");
+    const PATH: &'static str = "sms";
 
     fn validate(
         &self,
         figment: &figment::Figment,
     ) -> Result<(), Box<dyn std::error::Error + Send + Sync + 'static>> {
-        let metadata = figment.find_metadata(Self::PATH.unwrap());
+        let metadata = figment.find_metadata(Self::PATH);
 
         let error_on_field = |mut error: figment::error::Error, field: &'static str| {
             error.metadata = metadata.cloned();
             error.profile = Some(figment::Profile::Default);
-            error.path = vec![Self::PATH.unwrap().to_owned(), field.to_owned()];
+            error.path = vec![Self::PATH.to_owned(), field.to_owned()];
             error
         };
 

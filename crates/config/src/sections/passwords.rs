@@ -64,16 +64,16 @@ impl Default for PasswordsConfig {
 }
 
 impl ConfigurationSection for PasswordsConfig {
-    const PATH: Option<&'static str> = Some("passwords");
+    const PATH: &'static str = "passwords";
 
     fn validate(
         &self,
         figment: &figment::Figment,
     ) -> Result<(), Box<dyn std::error::Error + Send + Sync + 'static>> {
         let annotate = |mut error: figment::Error| {
-            error.metadata = figment.find_metadata(Self::PATH.unwrap()).cloned();
+            error.metadata = figment.find_metadata(Self::PATH).cloned();
             error.profile = Some(figment::Profile::Default);
-            error.path = vec![Self::PATH.unwrap().to_owned()];
+            error.path = vec![Self::PATH.to_owned()];
             error
         };
 

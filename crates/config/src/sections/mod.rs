@@ -132,6 +132,8 @@ pub struct RootConfig {
 }
 
 impl ConfigurationSection for RootConfig {
+    const PATH: &'static str = "";
+
     fn validate(
         &self,
         figment: &figment::Figment,
@@ -260,6 +262,8 @@ pub struct AppConfig {
 }
 
 impl ConfigurationSection for AppConfig {
+    const PATH: &'static str = "";
+
     fn validate(
         &self,
         figment: &figment::Figment,
@@ -300,6 +304,8 @@ pub struct SyncConfig {
 }
 
 impl ConfigurationSection for SyncConfig {
+    const PATH: &'static str = "";
+
     fn validate(
         &self,
         figment: &figment::Figment,

@@ -5,7 +5,8 @@ use serde::de::DeserializeOwned;
 /// of the config and generate the sample config.
 pub trait ConfigurationSection: Sized + DeserializeOwned {
     /// Specify where this section should live relative to the root.
-    const PATH: Option<&'static str> = None;
+    /// Use `""` for root-level configuration sections.
+    const PATH: &'static str;
 
     /// Validate the configuration section
     ///
@@ -27,12 +28,11 @@ pub trait ConfigurationSection: Sized + DeserializeOwned {
     fn extract(
         figment: &Figment,
     ) -> Result<Self, Box<dyn std::error::Error + Send + Sync + 'static>> {
-        let this: Self = if let Some(path) = Self::PATH {
-            figment.extract_inner(path)?
-        } else {
+        let this: Self = if Self::PATH.is_empty() {
             figment.extract()?
+        } else {
+            figment.extract_inner(Self::PATH)?
         };
-
         this.validate(figment)?;
         Ok(this)
     }
@@ -51,17 +51,15 @@ pub trait ConfigurationSectionExt: ConfigurationSection + Default {
     fn extract_or_default(
         figment: &Figment,
     ) -> Result<Self, Box<dyn std::error::Error + Send + Sync + 'static>> {
-        let this: Self = if let Some(path) = Self::PATH {
-            // If the configuration section is not present, we return the default value
-            if !figment.contains(path) {
-                return Ok(Self::default());
-            }
+        if !Self::PATH.is_empty() && !figment.contains(Self::PATH) {
+            return Ok(Self::default());
+        }
 
-            figment.extract_inner(path)?
-        } else {
+        let this: Self = if Self::PATH.is_empty() {
             figment.extract()?
+        } else {
+            figment.extract_inner(Self::PATH)?
         };
-
         this.validate(figment)?;
         Ok(this)
     }

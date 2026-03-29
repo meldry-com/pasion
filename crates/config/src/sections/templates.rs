@@ -76,5 +76,5 @@ impl TemplatesConfig {
 }
 
 impl ConfigurationSection for TemplatesConfig {
-    const PATH: Option<&'static str> = Some("templates");
+    const PATH: &'static str = "templates";
 }

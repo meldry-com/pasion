@@ -174,7 +174,7 @@ impl TelemetryConfig {
 }
 
 impl ConfigurationSection for TelemetryConfig {
-    const PATH: Option<&'static str> = Some("telemetry");
+    const PATH: &'static str = "telemetry";
 
     fn validate(
         &self,

@@ -109,7 +109,7 @@ pub struct MatrixConfig {
 }
 
 impl ConfigurationSection for MatrixConfig {
-    const PATH: Option<&'static str> = Some("matrix");
+    const PATH: &'static str = "matrix";
 }
 
 impl MatrixConfig {

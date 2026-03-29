@@ -45,5 +45,5 @@ impl BrandingConfig {
 }
 
 impl ConfigurationSection for BrandingConfig {
-    const PATH: Option<&'static str> = Some("branding");
+    const PATH: &'static str = "branding";
 }

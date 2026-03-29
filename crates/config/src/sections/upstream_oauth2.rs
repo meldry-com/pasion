@@ -25,7 +25,7 @@ impl UpstreamOAuth2Config {
 }
 
 impl ConfigurationSection for UpstreamOAuth2Config {
-    const PATH: Option<&'static str> = Some("upstream_oauth2");
+    const PATH: &'static str = "upstream_oauth2";
 
     fn validate(
         &self,
@@ -34,11 +34,11 @@ impl ConfigurationSection for UpstreamOAuth2Config {
         for (index, provider) in self.providers.iter().enumerate() {
             let annotate = |mut error: figment::Error| {
                 error.metadata = figment
-                    .find_metadata(&format!("{root}.providers", root = Self::PATH.unwrap()))
+                    .find_metadata(&format!("{root}.providers", root = Self::PATH))
                     .cloned();
                 error.profile = Some(figment::Profile::Default);
                 error.path = vec![
-                    Self::PATH.unwrap().to_owned(),
+                    Self::PATH.to_owned(),
                     "providers".to_owned(),
                     index.to_string(),
                 ];

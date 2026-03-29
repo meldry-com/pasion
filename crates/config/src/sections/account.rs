@@ -119,5 +119,5 @@ impl AccountConfig {
 }
 
 impl ConfigurationSection for AccountConfig {
-    const PATH: Option<&'static str> = Some("account");
+    const PATH: &'static str = "account";
 }

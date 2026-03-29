@@ -332,7 +332,7 @@ impl SecretsConfig {
 }
 
 impl ConfigurationSection for SecretsConfig {
-    const PATH: Option<&'static str> = Some("secrets");
+    const PATH: &'static str = "secrets";
 }
 
 impl SecretsConfig {

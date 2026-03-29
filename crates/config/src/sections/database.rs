@@ -214,17 +214,17 @@ pub struct DatabaseConfig {
 }
 
 impl ConfigurationSection for DatabaseConfig {
-    const PATH: Option<&'static str> = Some("database");
+    const PATH: &'static str = "database";
 
     fn validate(
         &self,
         figment: &figment::Figment,
     ) -> Result<(), Box<dyn std::error::Error + Send + Sync + 'static>> {
-        let metadata = figment.find_metadata(Self::PATH.unwrap());
+        let metadata = figment.find_metadata(Self::PATH);
         let annotate = |mut error: figment::Error| {
             error.metadata = metadata.cloned();
             error.profile = Some(figment::Profile::Default);
-            error.path = vec![Self::PATH.unwrap().to_owned()];
+            error.path = vec![Self::PATH.to_owned()];
             error
         };
 

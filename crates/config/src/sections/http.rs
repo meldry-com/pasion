@@ -391,7 +391,7 @@ impl Default for HttpConfig {
 }
 
 impl ConfigurationSection for HttpConfig {
-    const PATH: Option<&'static str> = Some("http");
+    const PATH: &'static str = "http";
 
     fn validate(
         &self,
@@ -400,11 +400,11 @@ impl ConfigurationSection for HttpConfig {
         for (index, listener) in self.listeners.iter().enumerate() {
             let annotate = |mut error: figment::Error| {
                 error.metadata = figment
-                    .find_metadata(&format!("{root}.listeners", root = Self::PATH.unwrap()))
+                    .find_metadata(&format!("{root}.listeners", root = Self::PATH))
                     .cloned();
                 error.profile = Some(figment::Profile::Default);
                 error.path = vec![
-                    Self::PATH.unwrap().to_owned(),
+                    Self::PATH.to_owned(),
                     "listeners".to_owned(),
                     index.to_string(),
                 ];

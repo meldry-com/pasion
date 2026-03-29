@@ -109,7 +109,7 @@ impl ExperimentalConfig {
 }
 
 impl ConfigurationSection for ExperimentalConfig {
-    const PATH: Option<&'static str> = Some("experimental");
+    const PATH: &'static str = "experimental";
 }
 
 /// Configuration options for the session limit feature
