@@ -149,6 +149,10 @@ pub struct RegistrationDisplayNameStepContext {
     pub registration: UserRegistration,
 }
 
+pub struct RegistrationTokenStepContext {
+    pub registration: UserRegistration,
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum RegistrationWorkflowState {
     PendingEmailVerification,
@@ -420,6 +424,39 @@ pub enum LoadRegistrationDisplayNameStepError {
 
     #[error("registration already completed")]
     RegistrationCompleted(UserRegistration),
+
+    #[error(transparent)]
+    Repository(#[from] RepositoryError),
+}
+
+#[derive(Debug, Error)]
+pub enum LoadRegistrationTokenStepError {
+    #[error("registration not found")]
+    NotFound,
+
+    #[error("registration already completed")]
+    RegistrationCompleted(UserRegistration),
+
+    #[error("registration token already attached")]
+    TokenAlreadyAttached(UserRegistration),
+
+    #[error(transparent)]
+    Repository(#[from] RepositoryError),
+}
+
+#[derive(Debug, Error)]
+pub enum AttachRegistrationTokenError {
+    #[error("registration not found")]
+    NotFound,
+
+    #[error("registration already completed")]
+    RegistrationCompleted(UserRegistration),
+
+    #[error("registration token already attached")]
+    TokenAlreadyAttached(UserRegistration),
+
+    #[error("registration token invalid")]
+    InvalidToken,
 
     #[error(transparent)]
     Repository(#[from] RepositoryError),
@@ -854,6 +891,74 @@ pub async fn load_registration_display_name_step(
     }
 
     Ok(RegistrationDisplayNameStepContext { registration })
+}
+
+pub async fn load_registration_token_step(
+    repo: &mut BoxRepository,
+    registration_id: Ulid,
+) -> Result<RegistrationTokenStepContext, LoadRegistrationTokenStepError> {
+    let registration = repo
+        .user_registration()
+        .lookup(registration_id)
+        .await?
+        .ok_or(LoadRegistrationTokenStepError::NotFound)?;
+
+    if registration.completed_at.is_some() {
+        return Err(LoadRegistrationTokenStepError::RegistrationCompleted(
+            registration,
+        ));
+    }
+
+    if registration.user_registration_token_id.is_some() {
+        return Err(LoadRegistrationTokenStepError::TokenAlreadyAttached(
+            registration,
+        ));
+    }
+
+    Ok(RegistrationTokenStepContext { registration })
+}
+
+pub async fn attach_registration_token(
+    mut repo: BoxRepository,
+    clock: &dyn Clock,
+    registration_id: Ulid,
+    token: &str,
+) -> Result<UserRegistration, AttachRegistrationTokenError> {
+    let registration = repo
+        .user_registration()
+        .lookup(registration_id)
+        .await?
+        .ok_or(AttachRegistrationTokenError::NotFound)?;
+
+    if registration.completed_at.is_some() {
+        return Err(AttachRegistrationTokenError::RegistrationCompleted(
+            registration,
+        ));
+    }
+
+    if registration.user_registration_token_id.is_some() {
+        return Err(AttachRegistrationTokenError::TokenAlreadyAttached(
+            registration,
+        ));
+    }
+
+    let Some(registration_token) = repo.user_registration_token().find_by_token(token).await?
+    else {
+        return Err(AttachRegistrationTokenError::InvalidToken);
+    };
+
+    if !registration_token.is_valid(clock.now()) {
+        return Err(AttachRegistrationTokenError::InvalidToken);
+    }
+
+    let registration = repo
+        .user_registration()
+        .set_registration_token(registration, &registration_token)
+        .await?;
+
+    repo.save().await?;
+
+    Ok(registration)
 }
 
 pub async fn start_password_registration(

@@ -14,7 +14,14 @@ use serde::{Deserialize, Serialize};
 use ulid::Ulid;
 
 use crate::rest::DepotExt;
-use crate::{rest, views::shared::OptionalPostAuthAction};
+use crate::{
+    account_registration::{
+        AttachRegistrationTokenError, LoadRegistrationTokenStepError, attach_registration_token,
+        load_registration_token_step,
+    },
+    rest,
+    views::shared::OptionalPostAuthAction,
+};
 
 #[derive(Deserialize, Serialize)]
 pub(crate) struct RegistrationTokenForm {
@@ -43,31 +50,32 @@ pub async fn get(
 
     let (csrf_token, cookie_jar) = cookie_jar.csrf_token(&clock, &mut rng);
 
-    let registration = repo
-        .user_registration()
-        .lookup(id)
-        .await?
-        .context("Could not find user registration")
-        .map_err(InternalError::from_anyhow)?;
+    match load_registration_token_step(&mut repo, id).await {
+        Ok(_) => {}
+        Err(LoadRegistrationTokenStepError::NotFound) => {
+            return Err(InternalError::from_anyhow(anyhow::anyhow!(
+                "Could not find user registration"
+            )));
+        }
+        Err(LoadRegistrationTokenStepError::RegistrationCompleted(registration)) => {
+            let post_auth_action: Option<PostAuthAction> = registration
+                .post_auth_action
+                .map(serde_json::from_value)
+                .transpose()?;
 
-    // If the registration is completed, we can go to the registration destination
-    if registration.completed_at.is_some() {
-        let post_auth_action: Option<PostAuthAction> = registration
-            .post_auth_action
-            .map(serde_json::from_value)
-            .transpose()?;
-
-        cookie_jar.write_to_response(res);
-        res.render(OptionalPostAuthAction::from(post_auth_action).go_next(&url_builder));
-        return Ok(());
-    }
-
-    // If the registration already has a token, skip this step
-    if registration.user_registration_token_id.is_some() {
-        let destination = pasion_router::RegisterDisplayName::new(registration.id);
-        cookie_jar.write_to_response(res);
-        res.render(url_builder.redirect(&destination));
-        return Ok(());
+            cookie_jar.write_to_response(res);
+            res.render(OptionalPostAuthAction::from(post_auth_action).go_next(&url_builder));
+            return Ok(());
+        }
+        Err(LoadRegistrationTokenStepError::TokenAlreadyAttached(registration)) => {
+            let destination = pasion_router::RegisterDisplayName::new(registration.id);
+            cookie_jar.write_to_response(res);
+            res.render(url_builder.redirect(&destination));
+            return Ok(());
+        }
+        Err(LoadRegistrationTokenStepError::Repository(error)) => {
+            return Err(InternalError::from_anyhow(error.into()));
+        }
     }
 
     let ctx = RegisterStepsRegistrationTokenContext::new()
@@ -100,23 +108,32 @@ pub async fn post(
         .await
         .map_err(|e| InternalError::from_anyhow(e.into()))?;
 
-    let registration = repo
-        .user_registration()
-        .lookup(id)
-        .await?
-        .context("Could not find user registration")
-        .map_err(InternalError::from_anyhow)?;
+    match load_registration_token_step(&mut repo, id).await {
+        Ok(_) => {}
+        Err(LoadRegistrationTokenStepError::NotFound) => {
+            return Err(InternalError::from_anyhow(anyhow::anyhow!(
+                "Could not find user registration"
+            )));
+        }
+        Err(LoadRegistrationTokenStepError::RegistrationCompleted(registration)) => {
+            let post_auth_action: Option<PostAuthAction> = registration
+                .post_auth_action
+                .map(serde_json::from_value)
+                .transpose()?;
 
-    // If the registration is completed, we can go to the registration destination
-    if registration.completed_at.is_some() {
-        let post_auth_action: Option<PostAuthAction> = registration
-            .post_auth_action
-            .map(serde_json::from_value)
-            .transpose()?;
-
-        cookie_jar.write_to_response(res);
-        res.render(OptionalPostAuthAction::from(post_auth_action).go_next(&url_builder));
-        return Ok(());
+            cookie_jar.write_to_response(res);
+            res.render(OptionalPostAuthAction::from(post_auth_action).go_next(&url_builder));
+            return Ok(());
+        }
+        Err(LoadRegistrationTokenStepError::TokenAlreadyAttached(registration)) => {
+            let destination = pasion_router::RegisterDisplayName::new(registration.id);
+            cookie_jar.write_to_response(res);
+            res.render(url_builder.redirect(&destination));
+            return Ok(());
+        }
+        Err(LoadRegistrationTokenStepError::Repository(error)) => {
+            return Err(InternalError::from_anyhow(error.into()));
+        }
     }
 
     let form = cookie_jar.verify_form(&clock, form)?;
@@ -141,49 +158,48 @@ pub async fn post(
         return Ok(());
     }
 
-    // Look up the token
-    let Some(registration_token) = repo.user_registration_token().find_by_token(token).await?
-    else {
-        let ctx = RegisterStepsRegistrationTokenContext::new()
-            .with_form_state(form.to_form_state().with_error_on_field(
-                RegisterStepsRegistrationTokenFormField::Token,
-                FieldError::Invalid,
-            ))
-            .with_csrf(csrf_token.form_value())
-            .with_language(locale);
+    let registration = match attach_registration_token(repo, &clock, id, token).await {
+        Ok(registration) => registration,
+        Err(AttachRegistrationTokenError::InvalidToken) => {
+            let ctx = RegisterStepsRegistrationTokenContext::new()
+                .with_form_state(form.to_form_state().with_error_on_field(
+                    RegisterStepsRegistrationTokenFormField::Token,
+                    FieldError::Invalid,
+                ))
+                .with_csrf(csrf_token.form_value())
+                .with_language(locale);
 
-        cookie_jar.write_to_response(res);
-        res.render(Text::Html(
-            templates.render_register_steps_registration_token(&ctx)?,
-        ));
-        return Ok(());
+            cookie_jar.write_to_response(res);
+            res.render(Text::Html(
+                templates.render_register_steps_registration_token(&ctx)?,
+            ));
+            return Ok(());
+        }
+        Err(AttachRegistrationTokenError::RegistrationCompleted(registration)) => {
+            let post_auth_action: Option<PostAuthAction> = registration
+                .post_auth_action
+                .map(serde_json::from_value)
+                .transpose()?;
+
+            cookie_jar.write_to_response(res);
+            res.render(OptionalPostAuthAction::from(post_auth_action).go_next(&url_builder));
+            return Ok(());
+        }
+        Err(AttachRegistrationTokenError::TokenAlreadyAttached(registration)) => {
+            let destination = pasion_router::RegisterDisplayName::new(registration.id);
+            cookie_jar.write_to_response(res);
+            res.render(url_builder.redirect(&destination));
+            return Ok(());
+        }
+        Err(AttachRegistrationTokenError::NotFound) => {
+            return Err(InternalError::from_anyhow(anyhow::anyhow!(
+                "Could not find user registration"
+            )));
+        }
+        Err(AttachRegistrationTokenError::Repository(error)) => {
+            return Err(InternalError::from_anyhow(error.into()));
+        }
     };
-
-    // Check if the token is still valid
-    if !registration_token.is_valid(clock.now()) {
-        tracing::warn!("Registration token isn't valid (expired or already used)");
-        let ctx = RegisterStepsRegistrationTokenContext::new()
-            .with_form_state(form.to_form_state().with_error_on_field(
-                RegisterStepsRegistrationTokenFormField::Token,
-                FieldError::Invalid,
-            ))
-            .with_csrf(csrf_token.form_value())
-            .with_language(locale);
-
-        cookie_jar.write_to_response(res);
-        res.render(Text::Html(
-            templates.render_register_steps_registration_token(&ctx)?,
-        ));
-        return Ok(());
-    }
-
-    // Associate the token with the registration
-    let registration = repo
-        .user_registration()
-        .set_registration_token(registration, &registration_token)
-        .await?;
-
-    repo.save().await?;
 
     // Continue to the next step
     let destination = pasion_router::RegisterFinish::new(registration.id);
