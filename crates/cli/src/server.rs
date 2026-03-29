@@ -585,14 +585,153 @@ fn build_rest_api_router(router: Router) -> Router {
 }
 
 fn build_admin_router(router: Router) -> Router {
-    // Admin API routes - these would need OpenAPI integration
-    // For now, we'll set up the basic structure
+    use pasion_handlers::admin;
+    use pasion_handlers::admin::v1::*;
+
     router.push(
-        Router::with_path("/api/admin/v1/{**path}")
-            .get(admin_api_placeholder)
-            .post(admin_api_placeholder)
-            .put(admin_api_placeholder)
-            .delete(admin_api_placeholder),
+        Router::with_path("/api/admin/v1")
+            // Documentation
+            .push(Router::with_path("doc").get(admin::swagger))
+            .push(Router::with_path("doc/callback").get(admin::swagger_callback))
+            // Version
+            .push(Router::with_path("version").get(version::handler))
+            // Site config
+            .push(Router::with_path("site-config").get(site_config::handler))
+            // Users
+            .push(
+                Router::with_path("users")
+                    .get(users::list::handler)
+                    .post(users::add::handler)
+                    .push(
+                        Router::with_path("by-username/<username>")
+                            .get(users::by_username::handler),
+                    )
+                    .push(
+                        Router::with_path("<id>")
+                            .get(users::get::handler)
+                            .push(
+                                Router::with_path("set-password")
+                                    .post(users::set_password::handler),
+                            )
+                            .push(
+                                Router::with_path("set-admin").post(users::set_admin::handler),
+                            )
+                            .push(
+                                Router::with_path("deactivate")
+                                    .post(users::deactivate::handler),
+                            )
+                            .push(
+                                Router::with_path("reactivate")
+                                    .post(users::reactivate::handler),
+                            )
+                            .push(Router::with_path("lock").post(users::lock::handler))
+                            .push(Router::with_path("unlock").post(users::unlock::handler)),
+                    ),
+            )
+            // User emails
+            .push(
+                Router::with_path("user-emails")
+                    .get(user_emails::list::handler)
+                    .post(user_emails::add::handler)
+                    .push(
+                        Router::with_path("<id>")
+                            .get(user_emails::get::handler)
+                            .delete(user_emails::delete::handler),
+                    ),
+            )
+            // User sessions
+            .push(
+                Router::with_path("user-sessions")
+                    .get(user_sessions::list::handler)
+                    .push(
+                        Router::with_path("<id>")
+                            .get(user_sessions::get::handler)
+                            .push(
+                                Router::with_path("finish")
+                                    .post(user_sessions::finish::handler),
+                            ),
+                    ),
+            )
+            // OAuth2 sessions
+            .push(
+                Router::with_path("oauth2-sessions")
+                    .get(oauth2_sessions::list::handler)
+                    .push(
+                        Router::with_path("<id>")
+                            .get(oauth2_sessions::get::handler)
+                            .push(
+                                Router::with_path("finish")
+                                    .post(oauth2_sessions::finish::handler),
+                            ),
+                    ),
+            )
+            // Personal sessions
+            .push(
+                Router::with_path("personal-sessions")
+                    .get(personal_sessions::list::handler)
+                    .post(personal_sessions::add::handler)
+                    .push(
+                        Router::with_path("<id>")
+                            .get(personal_sessions::get::handler)
+                            .push(
+                                Router::with_path("regenerate")
+                                    .post(personal_sessions::regenerate::handler),
+                            )
+                            .push(
+                                Router::with_path("revoke")
+                                    .post(personal_sessions::revoke::handler),
+                            ),
+                    ),
+            )
+            // User registration tokens
+            .push(
+                Router::with_path("user-registration-tokens")
+                    .get(user_registration_tokens::list::handler)
+                    .post(user_registration_tokens::add::handler)
+                    .push(
+                        Router::with_path("<id>")
+                            .get(user_registration_tokens::get::handler)
+                            .put(user_registration_tokens::update::handler)
+                            .push(
+                                Router::with_path("revoke")
+                                    .post(user_registration_tokens::revoke::handler),
+                            )
+                            .push(
+                                Router::with_path("unrevoke")
+                                    .post(user_registration_tokens::unrevoke::handler),
+                            ),
+                    ),
+            )
+            // Upstream OAuth providers
+            .push(
+                Router::with_path("upstream-oauth-providers")
+                    .get(upstream_oauth_providers::list::handler)
+                    .push(
+                        Router::with_path("<id>")
+                            .get(upstream_oauth_providers::get::handler),
+                    ),
+            )
+            // Upstream OAuth links
+            .push(
+                Router::with_path("upstream-oauth-links")
+                    .get(upstream_oauth_links::list::handler)
+                    .post(upstream_oauth_links::add::handler)
+                    .push(
+                        Router::with_path("<id>")
+                            .get(upstream_oauth_links::get::handler)
+                            .delete(upstream_oauth_links::delete::handler),
+                    ),
+            )
+            // Policy data
+            .push(
+                Router::with_path("policy-data")
+                    .push(Router::with_path("latest").get(policy_data::get_latest::handler))
+                    .push(
+                        Router::with_path("<id>")
+                            .get(policy_data::get::handler),
+                    )
+                    .put(policy_data::set::handler),
+            ),
     )
 }
 
@@ -633,11 +772,6 @@ async fn connection_info_handler(req: &Request) -> String {
     } else {
         "No connection info available".to_string()
     }
-}
-
-#[handler]
-async fn admin_api_placeholder() -> impl Writer {
-    StatusError::not_implemented().brief("Admin API not yet migrated")
 }
 
 pub fn build_tls_server_config(config: &HttpTlsConfig) -> Result<ServerConfig, anyhow::Error> {

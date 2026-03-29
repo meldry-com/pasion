@@ -1,4 +1,3 @@
-use anyhow::Context as _;
 use salvo::oapi::ToSchema;
 use salvo::prelude::*;
 use serde::{Deserialize, Serialize};
@@ -8,7 +7,10 @@ use super::{
     DepotExt, NodeType, RouteError, extract_bound_activity_tracker, extract_session_info,
     get_requester, make_clock, make_rng,
 };
-use crate::account_recovery::{ResendAccountRecoveryError, resend_account_recovery};
+use crate::account_password::{
+    ChangePasswordError, ResetPasswordByRecoveryError, ResendRecoveryByTicketError,
+    change_password, resend_recovery_by_ticket, reset_password_by_recovery,
+};
 
 // ── POST /api/v1/viewer/password ───────────────────────────────
 
@@ -45,7 +47,7 @@ pub async fn set_password(
     let session_info = extract_session_info(req, depot);
 
     let repo = repo_factory.create().await?;
-    let (requester, mut repo) =
+    let (requester, repo) =
         get_requester(&clock, &activity_tracker, repo, &session_info).await?;
 
     let user_id = NodeType::User.extract_ulid(&input.user_id)?;
@@ -54,80 +56,44 @@ pub async fn set_password(
         return Err(RouteError::Unauthorized);
     }
 
-    if input.new_password.is_empty() {
-        return Ok(Json(SetPasswordResponse {
-            status: "INVALID_NEW_PASSWORD",
-        }));
-    }
-
-    if !password_manager.is_enabled() {
-        return Ok(Json(SetPasswordResponse {
-            status: "PASSWORD_CHANGES_DISABLED",
-        }));
-    }
-
-    if !password_manager
-        .is_password_complex_enough(&input.new_password)
-        .map_err(|e| RouteError::Internal(e.into()))?
+    match change_password(
+        repo,
+        &mut rng,
+        &clock,
+        &password_manager,
+        user_id,
+        input.current_password.map(Zeroizing::new),
+        Zeroizing::new(input.new_password),
+        requester.is_admin(),
+        config.password_change_allowed,
+    )
+    .await
     {
-        return Ok(Json(SetPasswordResponse {
+        Ok(()) => Ok(Json(SetPasswordResponse { status: "ALLOWED" })),
+        Err(ChangePasswordError::PasswordDisabled) => Ok(Json(SetPasswordResponse {
+            status: "PASSWORD_CHANGES_DISABLED",
+        })),
+        Err(ChangePasswordError::PasswordTooWeak) => Ok(Json(SetPasswordResponse {
             status: "INVALID_NEW_PASSWORD",
-        }));
-    }
-
-    let Some(user) = repo.user().lookup(user_id).await? else {
-        return Ok(Json(SetPasswordResponse {
+        })),
+        Err(ChangePasswordError::UserNotFound) => Ok(Json(SetPasswordResponse {
             status: "NOT_FOUND",
-        }));
-    };
-
-    if !requester.is_admin() {
-        if !config.password_change_allowed {
-            return Ok(Json(SetPasswordResponse {
-                status: "PASSWORD_CHANGES_DISABLED",
-            }));
-        }
-
-        let Some(active_password) = repo.user_password().active(&user).await? else {
-            return Ok(Json(SetPasswordResponse {
-                status: "NO_CURRENT_PASSWORD",
-            }));
-        };
-
-        let Some(current_password) = input.current_password else {
-            return Err(RouteError::BadRequest(
-                "currentPassword required for non-admins".into(),
-            ));
-        };
-
-        if !password_manager
-            .verify(
-                active_password.version,
-                Zeroizing::new(current_password),
-                active_password.hashed_password,
-            )
-            .await
-            .map_err(|e| RouteError::Internal(e.into()))?
-            .is_success()
-        {
-            return Ok(Json(SetPasswordResponse {
-                status: "WRONG_PASSWORD",
-            }));
-        }
+        })),
+        Err(ChangePasswordError::PasswordChangesDisabled) => Ok(Json(SetPasswordResponse {
+            status: "PASSWORD_CHANGES_DISABLED",
+        })),
+        Err(ChangePasswordError::NoCurrentPassword) => Ok(Json(SetPasswordResponse {
+            status: "NO_CURRENT_PASSWORD",
+        })),
+        Err(ChangePasswordError::CurrentPasswordRequired) => Err(RouteError::BadRequest(
+            "currentPassword required for non-admins".into(),
+        )),
+        Err(ChangePasswordError::WrongPassword) => Ok(Json(SetPasswordResponse {
+            status: "WRONG_PASSWORD",
+        })),
+        Err(ChangePasswordError::Password(error)) => Err(RouteError::Internal(error.into())),
+        Err(ChangePasswordError::Repository(error)) => Err(error.into()),
     }
-
-    let (version, hash) = password_manager
-        .hash(make_rng(), Zeroizing::new(input.new_password))
-        .await
-        .map_err(|e| RouteError::Internal(e.into()))?;
-
-    repo.user_password()
-        .add(&mut rng, &clock, &user, version, hash, None)
-        .await?;
-
-    repo.save().await?;
-
-    Ok(Json(SetPasswordResponse { status: "ALLOWED" }))
 }
 
 // ── POST /api/v1/password-recovery/set ─────────────────────────
@@ -155,84 +121,58 @@ pub async fn set_password_by_recovery(
     let clock = make_clock();
     let mut rng = make_rng();
 
-    if !password_manager.is_enabled() || !config.account_recovery_allowed {
-        return Ok(Json(SetPasswordResponse {
-            status: "PASSWORD_CHANGES_DISABLED",
-        }));
-    }
+    let repo = repo_factory.create().await?;
 
-    if !password_manager
-        .is_password_complex_enough(&input.new_password)
-        .map_err(|e| RouteError::Internal(e.into()))?
+    match reset_password_by_recovery(
+        repo,
+        &mut rng,
+        &clock,
+        &password_manager,
+        &input.ticket,
+        Zeroizing::new(input.new_password),
+        config.account_recovery_allowed,
+    )
+    .await
     {
-        return Ok(Json(SetPasswordResponse {
+        Ok(()) => Ok(Json(SetPasswordResponse { status: "ALLOWED" })),
+        Err(ResetPasswordByRecoveryError::PasswordDisabled) => Ok(Json(SetPasswordResponse {
+            status: "PASSWORD_CHANGES_DISABLED",
+        })),
+        Err(ResetPasswordByRecoveryError::PasswordTooWeak) => Ok(Json(SetPasswordResponse {
             status: "INVALID_NEW_PASSWORD",
-        }));
-    }
-
-    let mut repo = repo_factory.create().await?;
-
-    let Some(ticket) = repo.user_recovery().find_ticket(&input.ticket).await? else {
-        return Ok(Json(SetPasswordResponse {
+        })),
+        Err(ResetPasswordByRecoveryError::TicketNotFound) => Ok(Json(SetPasswordResponse {
             status: "NO_SUCH_RECOVERY_TICKET",
-        }));
-    };
-
-    let session = repo
-        .user_recovery()
-        .lookup_session(ticket.user_recovery_session_id)
-        .await?
-        .context("Unknown session")
-        .map_err(|e| RouteError::Internal(e.into()))?;
-
-    if session.consumed_at.is_some() {
-        return Ok(Json(SetPasswordResponse {
+        })),
+        Err(ResetPasswordByRecoveryError::SessionNotFound) => {
+            Err(RouteError::Internal(Box::new(std::io::Error::other(
+                "Could not load recovery session",
+            ))))
+        }
+        Err(ResetPasswordByRecoveryError::AlreadyConsumed) => Ok(Json(SetPasswordResponse {
             status: "RECOVERY_TICKET_ALREADY_USED",
-        }));
-    }
-
-    if !ticket.active(clock.now()) {
-        return Ok(Json(SetPasswordResponse {
+        })),
+        Err(ResetPasswordByRecoveryError::TicketExpired) => Ok(Json(SetPasswordResponse {
             status: "EXPIRED_RECOVERY_TICKET",
-        }));
-    }
-
-    let user_email = repo
-        .user_email()
-        .lookup(ticket.user_email_id)
-        .await?
-        .context("Unknown email")
-        .map_err(|e| RouteError::Internal(e.into()))?;
-
-    let user = repo
-        .user()
-        .lookup(user_email.user_id)
-        .await?
-        .context("Invalid user")
-        .map_err(|e| RouteError::Internal(e.into()))?;
-
-    if !user.is_valid() {
-        return Ok(Json(SetPasswordResponse {
+        })),
+        Err(ResetPasswordByRecoveryError::EmailNotFound) => {
+            Err(RouteError::Internal(Box::new(std::io::Error::other(
+                "Unknown email for recovery ticket",
+            ))))
+        }
+        Err(ResetPasswordByRecoveryError::UserNotFound) => {
+            Err(RouteError::Internal(Box::new(std::io::Error::other(
+                "Invalid user for recovery ticket",
+            ))))
+        }
+        Err(ResetPasswordByRecoveryError::AccountLocked) => Ok(Json(SetPasswordResponse {
             status: "ACCOUNT_LOCKED",
-        }));
+        })),
+        Err(ResetPasswordByRecoveryError::Password(error)) => {
+            Err(RouteError::Internal(error.into()))
+        }
+        Err(ResetPasswordByRecoveryError::Repository(error)) => Err(error.into()),
     }
-
-    let (version, hash) = password_manager
-        .hash(make_rng(), Zeroizing::new(input.new_password))
-        .await
-        .map_err(|e| RouteError::Internal(e.into()))?;
-
-    repo.user_password()
-        .add(&mut rng, &clock, &user, version, hash, None)
-        .await?;
-
-    repo.user_recovery()
-        .consume_ticket(&clock, ticket, session)
-        .await?;
-
-    repo.save().await?;
-
-    Ok(Json(SetPasswordResponse { status: "ALLOWED" }))
 }
 
 // ── POST /api/v1/password-recovery/resend ──────────────────────
@@ -266,51 +206,34 @@ pub async fn resend_recovery_email(
     let session_info = extract_session_info(req, depot);
 
     let repo = repo_factory.create().await?;
-    let (requester, mut repo) =
+    let (requester, repo) =
         get_requester(&clock, &activity_tracker, repo, &session_info).await?;
 
-    let Some(ticket) = repo.user_recovery().find_ticket(&input.ticket).await? else {
-        return Ok(Json(ResendRecoveryResponse {
-            status: "NO_SUCH_RECOVERY_TICKET",
-        }));
-    };
-
-    let session = repo
-        .user_recovery()
-        .lookup_session(ticket.user_recovery_session_id)
-        .await?
-        .context("Could not load recovery session")
-        .map_err(|e| RouteError::Internal(e.into()))?;
-    let session_id = session.id;
-
-    match resend_account_recovery(
+    match resend_recovery_by_ticket(
         repo,
         &limiter,
         &mut rng,
         &clock,
         requester.fingerprint(),
-        session_id,
+        &input.ticket,
     )
     .await
     {
-        Ok(_) => {}
-        Err(ResendAccountRecoveryError::NotFound) => {
-            return Err(RouteError::Internal(Box::new(std::io::Error::other(
+        Ok(()) => Ok(Json(ResendRecoveryResponse { status: "SENT" })),
+        Err(ResendRecoveryByTicketError::TicketNotFound) => Ok(Json(ResendRecoveryResponse {
+            status: "NO_SUCH_RECOVERY_TICKET",
+        })),
+        Err(ResendRecoveryByTicketError::SessionNotFound) => {
+            Err(RouteError::Internal(Box::new(std::io::Error::other(
                 "Could not load recovery session",
-            ))));
+            ))))
         }
-        Err(ResendAccountRecoveryError::AlreadyConsumed) => {
-            return Ok(Json(ResendRecoveryResponse {
-                status: "RECOVERY_TICKET_ALREADY_USED",
-            }));
-        }
-        Err(ResendAccountRecoveryError::RateLimited) => {
-            return Ok(Json(ResendRecoveryResponse {
-                status: "RATE_LIMITED",
-            }));
-        }
-        Err(ResendAccountRecoveryError::Repository(error)) => return Err(error.into()),
+        Err(ResendRecoveryByTicketError::AlreadyConsumed) => Ok(Json(ResendRecoveryResponse {
+            status: "RECOVERY_TICKET_ALREADY_USED",
+        })),
+        Err(ResendRecoveryByTicketError::RateLimited) => Ok(Json(ResendRecoveryResponse {
+            status: "RATE_LIMITED",
+        })),
+        Err(ResendRecoveryByTicketError::Repository(error)) => Err(error.into()),
     }
-
-    Ok(Json(ResendRecoveryResponse { status: "SENT" }))
 }

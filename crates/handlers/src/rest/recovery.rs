@@ -1,8 +1,8 @@
 //! REST API endpoints for account recovery.
 //!
-//! These endpoints mirror the logic in `crate::views::recovery` but return
-//! JSON instead of rendered HTML, making them suitable for SPA / mobile
-//! clients.
+//! These endpoints serve as thin HTTP adapters over the business logic in
+//! [`crate::account_recovery`]. They parse requests, delegate to service
+//! functions, and map results to JSON responses.
 use salvo::oapi::ToSchema;
 use salvo::prelude::*;
 use serde::{Deserialize, Serialize};

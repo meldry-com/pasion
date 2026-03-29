@@ -1,4 +1,7 @@
-use pasion_storage::queue::{ProvisionUserJob, QueueJobRepositoryExt as _};
+use pasion_storage::{
+    RepositoryAccess,
+    user::{UserEmailRepository, UserRepository},
+};
 use salvo::oapi::ToSchema;
 use salvo::prelude::*;
 use serde::{Deserialize, Serialize};
@@ -7,7 +10,11 @@ use super::{
     DepotExt, NodeType, RouteError, extract_bound_activity_tracker, extract_session_info,
     get_requester, make_clock, make_rng, verify_password_if_needed,
 };
-use crate::notification_dispatch::schedule_email_authentication_code;
+use crate::account_contacts::{
+    CompleteEmailVerificationError, RemoveUserEmailError, ResendEmailVerificationError,
+    StartEmailVerificationError, complete_email_verification, remove_user_email,
+    resend_email_verification_code, start_email_verification,
+};
 
 // ── Response types ─────────────────────────────────────────────
 
@@ -115,7 +122,7 @@ pub async fn start_email_auth(
     let session_info = extract_session_info(req, depot);
 
     let repo = repo_factory.create().await?;
-    let (requester, mut repo) =
+    let (requester, repo) =
         get_requester(&clock, &activity_tracker, repo, &session_info).await?;
 
     let Some(browser_session) = requester.browser_session() else {
@@ -139,17 +146,8 @@ pub async fn start_email_auth(
         }));
     }
 
-    // Rate limit check
-    if let Err(_e) = limiter.check_email_authentication_email(requester.fingerprint(), &input.email)
-    {
-        return Ok(Json(StartEmailAuthResponse {
-            status: "RATE_LIMITED",
-            authentication: None,
-            violations: None,
-        }));
-    }
-
     // Verify password if needed
+    let mut repo = repo;
     if !verify_password_if_needed(
         &requester,
         &config,
@@ -167,26 +165,35 @@ pub async fn start_email_auth(
         }));
     }
 
-    // Create authentication session
-    let auth = repo
-        .user_email()
-        .add_authentication_for_session(&mut rng, &clock, input.email.clone(), browser_session)
-        .await?;
+    let fingerprint = requester.fingerprint();
 
-    // Schedule email sending
-    schedule_email_authentication_code(&mut repo, &mut rng, &clock, &auth, notification_language)
-        .await?;
-
-    repo.save().await?;
-
-    Ok(Json(StartEmailAuthResponse {
-        status: "STARTED",
-        authentication: Some(EmailAuthData {
-            id: NodeType::UserEmailAuthentication.serialize(auth.id),
-            email: auth.email,
-        }),
-        violations: None,
-    }))
+    match start_email_verification(
+        repo,
+        &mut rng,
+        &clock,
+        &limiter,
+        fingerprint,
+        browser_session,
+        input.email,
+        notification_language,
+    )
+    .await
+    {
+        Ok(started) => Ok(Json(StartEmailAuthResponse {
+            status: "STARTED",
+            authentication: Some(EmailAuthData {
+                id: NodeType::UserEmailAuthentication.serialize(started.authentication.id),
+                email: started.authentication.email,
+            }),
+            violations: None,
+        })),
+        Err(StartEmailVerificationError::RateLimited) => Ok(Json(StartEmailAuthResponse {
+            status: "RATE_LIMITED",
+            authentication: None,
+            violations: None,
+        })),
+        Err(StartEmailVerificationError::Repository(error)) => Err(error.into()),
+    }
 }
 
 // ── POST /api/v1/email-auth/:id/complete ───────────────────────
@@ -220,77 +227,46 @@ pub async fn complete_email_auth(
     let session_info = extract_session_info(req, depot);
 
     let repo = repo_factory.create().await?;
-    let (requester, mut repo) =
+    let (requester, repo) =
         get_requester(&clock, &activity_tracker, repo, &session_info).await?;
 
     let Some(browser_session) = requester.browser_session() else {
         return Err(RouteError::Unauthorized);
     };
 
-    let auth = repo
-        .user_email()
-        .lookup_authentication(ulid)
-        .await?
-        .ok_or(RouteError::NotFound)?;
-
-    // Verify ownership
-    if auth.user_session_id != Some(browser_session.id) {
-        return Err(RouteError::Unauthorized);
-    }
-
-    if auth.completed_at.is_some() {
-        return Ok(Json(CompleteEmailAuthResponse {
+    match complete_email_verification(
+        repo,
+        &limiter,
+        &mut rng,
+        &clock,
+        ulid,
+        browser_session.id,
+        &browser_session.user,
+        &input.code,
+    )
+    .await
+    {
+        Ok(()) => Ok(Json(CompleteEmailAuthResponse {
             status: "COMPLETED",
-        }));
-    }
-
-    // Rate limit check
-    if let Err(_e) = limiter.check_email_authentication_attempt(&auth) {
-        return Ok(Json(CompleteEmailAuthResponse {
+        })),
+        Err(CompleteEmailVerificationError::NotFound) => Err(RouteError::NotFound),
+        Err(CompleteEmailVerificationError::NotOwned) => Err(RouteError::Unauthorized),
+        Err(CompleteEmailVerificationError::AlreadyCompleted) => {
+            Ok(Json(CompleteEmailAuthResponse {
+                status: "COMPLETED",
+            }))
+        }
+        Err(CompleteEmailVerificationError::RateLimited) => Ok(Json(CompleteEmailAuthResponse {
             status: "RATE_LIMITED",
-        }));
-    }
-
-    // Find and validate code
-    let code = repo
-        .user_email()
-        .find_authentication_code(&auth, &input.code)
-        .await?;
-
-    let Some(code) = code else {
-        return Ok(Json(CompleteEmailAuthResponse {
+        })),
+        Err(CompleteEmailVerificationError::InvalidCode) => Ok(Json(CompleteEmailAuthResponse {
             status: "INVALID_CODE",
-        }));
-    };
-
-    if code.expires_at < clock.now() {
-        return Ok(Json(CompleteEmailAuthResponse {
+        })),
+        Err(CompleteEmailVerificationError::CodeExpired) => Ok(Json(CompleteEmailAuthResponse {
             status: "CODE_EXPIRED",
-        }));
+        })),
+        Err(CompleteEmailVerificationError::Repository(error)) => Err(error.into()),
     }
-
-    // Complete authentication
-    repo.user_email()
-        .complete_authentication_with_code(&clock, auth.clone(), &code)
-        .await?;
-
-    // Check if email is already in use
-    let existing = repo
-        .user_email()
-        .find(&browser_session.user, &auth.email)
-        .await?;
-    if existing.is_none() {
-        // Add email to user
-        repo.user_email()
-            .add(&mut rng, &clock, &browser_session.user, auth.email.clone())
-            .await?;
-    }
-
-    repo.save().await?;
-
-    Ok(Json(CompleteEmailAuthResponse {
-        status: "COMPLETED",
-    }))
 }
 
 // ── POST /api/v1/email-auth/:id/resend ─────────────────────────
@@ -327,41 +303,38 @@ pub async fn resend_email_auth_code(
     let session_info = extract_session_info(req, depot);
 
     let repo = repo_factory.create().await?;
-    let (requester, mut repo) =
+    let (requester, repo) =
         get_requester(&clock, &activity_tracker, repo, &session_info).await?;
 
     let Some(browser_session) = requester.browser_session() else {
         return Err(RouteError::Unauthorized);
     };
 
-    let auth = repo
-        .user_email()
-        .lookup_authentication(ulid)
-        .await?
-        .ok_or(RouteError::NotFound)?;
-
-    if auth.user_session_id != Some(browser_session.id) {
-        return Err(RouteError::Unauthorized);
-    }
-
-    if auth.completed_at.is_some() {
-        return Ok(Json(ResendEmailAuthCodeResponse {
-            status: "COMPLETED",
-        }));
-    }
-
-    if let Err(_e) = limiter.check_email_authentication_send_code(requester.fingerprint(), &auth) {
-        return Ok(Json(ResendEmailAuthCodeResponse {
+    match resend_email_verification_code(
+        repo,
+        &limiter,
+        &mut rng,
+        &clock,
+        requester.fingerprint(),
+        ulid,
+        browser_session.id,
+        notification_language,
+    )
+    .await
+    {
+        Ok(()) => Ok(Json(ResendEmailAuthCodeResponse { status: "RESENT" })),
+        Err(ResendEmailVerificationError::NotFound) => Err(RouteError::NotFound),
+        Err(ResendEmailVerificationError::NotOwned) => Err(RouteError::Unauthorized),
+        Err(ResendEmailVerificationError::AlreadyCompleted) => {
+            Ok(Json(ResendEmailAuthCodeResponse {
+                status: "COMPLETED",
+            }))
+        }
+        Err(ResendEmailVerificationError::RateLimited) => Ok(Json(ResendEmailAuthCodeResponse {
             status: "RATE_LIMITED",
-        }));
+        })),
+        Err(ResendEmailVerificationError::Repository(error)) => Err(error.into()),
     }
-
-    schedule_email_authentication_code(&mut repo, &mut rng, &clock, &auth, notification_language)
-        .await?;
-
-    repo.save().await?;
-
-    Ok(Json(ResendEmailAuthCodeResponse { status: "RESENT" }))
 }
 
 // ── DELETE /api/v1/user-emails/:id ─────────────────────────────
@@ -431,13 +404,9 @@ pub async fn remove_email(
         }));
     }
 
-    repo.user_email().remove(email).await?;
-
-    repo.queue_job()
-        .schedule_job(&mut rng, &clock, ProvisionUserJob::new(&user))
-        .await?;
-
-    repo.save().await?;
-
-    Ok(Json(RemoveEmailResponse { status: "REMOVED" }))
+    match remove_user_email(repo, &mut rng, &clock, ulid, &user).await {
+        Ok(()) => Ok(Json(RemoveEmailResponse { status: "REMOVED" })),
+        Err(RemoveUserEmailError::NotFound) => Err(RouteError::NotFound),
+        Err(RemoveUserEmailError::Repository(error)) => Err(error.into()),
+    }
 }

@@ -1,8 +1,9 @@
 //! REST API endpoints for user registration.
 //!
-//! These endpoints mirror the logic in `crate::views::register` but return
-//! JSON instead of rendered HTML, making them suitable for SPA / mobile
-//! clients.
+//! These endpoints serve as thin HTTP adapters over the business logic in
+//! [`crate::account_registration`]. They parse requests, check config/policy
+//! constraints, delegate to service functions, and map results to JSON
+//! responses.
 
 use std::str::FromStr;
 
