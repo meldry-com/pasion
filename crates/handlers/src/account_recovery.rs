@@ -14,7 +14,8 @@ use ulid::Ulid;
 use zeroize::Zeroizing;
 
 use crate::{
-    Limiter, RequesterFingerprint, notification_dispatch::schedule_account_recovery,
+    Limiter, RequesterFingerprint,
+    notification_dispatch::{NotificationIntent, schedule_notification},
     passwords::PasswordManager,
 };
 
@@ -145,7 +146,13 @@ pub async fn start_account_recovery(
         .add_session(rng, clock, email, user_agent, ip_address, locale)
         .await?;
 
-    schedule_account_recovery(&mut repo, rng, clock, &session).await?;
+    schedule_notification(
+        &mut repo,
+        rng,
+        clock,
+        NotificationIntent::account_recovery(&session),
+    )
+    .await?;
     repo.save().await?;
 
     Ok(session)
@@ -187,7 +194,13 @@ pub async fn resend_account_recovery(
         return Err(ResendAccountRecoveryError::RateLimited);
     }
 
-    schedule_account_recovery(&mut repo, rng, clock, &session).await?;
+    schedule_notification(
+        &mut repo,
+        rng,
+        clock,
+        NotificationIntent::account_recovery(&session),
+    )
+    .await?;
     repo.save().await?;
 
     Ok(session)

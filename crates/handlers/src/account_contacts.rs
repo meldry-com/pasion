@@ -19,7 +19,8 @@ use crate::account_password::{
     VerifyPasswordIfNeededError, verify_password_if_needed as verify_contact_password_if_needed,
 };
 use crate::{
-    Limiter, RequesterFingerprint, notification_dispatch::schedule_email_authentication_code,
+    Limiter, RequesterFingerprint,
+    notification_dispatch::{NotificationIntent, schedule_notification},
     passwords::PasswordManager,
 };
 
@@ -114,7 +115,13 @@ pub async fn start_email_verification(
         .add_authentication_for_session(rng, clock, email, browser_session)
         .await?;
 
-    schedule_email_authentication_code(&mut repo, rng, clock, &auth, notification_language).await?;
+    schedule_notification(
+        &mut repo,
+        rng,
+        clock,
+        NotificationIntent::verify_email(&auth, notification_language),
+    )
+    .await?;
 
     repo.save().await?;
 
@@ -273,7 +280,13 @@ pub async fn resend_email_verification_code(
         return Err(ResendEmailVerificationError::RateLimited);
     }
 
-    schedule_email_authentication_code(&mut repo, rng, clock, &auth, notification_language).await?;
+    schedule_notification(
+        &mut repo,
+        rng,
+        clock,
+        NotificationIntent::verify_email(&auth, notification_language),
+    )
+    .await?;
 
     repo.save().await?;
 

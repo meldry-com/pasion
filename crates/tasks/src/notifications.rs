@@ -13,7 +13,8 @@ use pasion_storage::{
     BoxRepository, Pagination, RepositoryAccess,
     notification::{NewNotificationDelivery, NewNotificationEventLog, NewNotificationRequest},
     queue::{
-        DispatchNotificationJob, ProcessNotificationDeliveriesJob, QueueJobRepositoryExt as _,
+        ContactVerificationTarget, DispatchNotificationJob, ProcessNotificationDeliveriesJob,
+        QueueJobRepositoryExt as _,
     },
     user::UserEmailFilter,
 };
@@ -965,6 +966,20 @@ impl RunnableJob for DispatchNotificationJob {
     #[tracing::instrument(name = "job.dispatch_notification", skip_all)]
     async fn run(&self, state: &State, _context: JobContext) -> Result<(), JobError> {
         match self {
+            Self::ContactVerification { target, language } => match target {
+                ContactVerificationTarget::Email {
+                    user_email_authentication_id,
+                } => {
+                    send_email_authentication_code(state, *user_email_authentication_id, language)
+                        .await
+                }
+                ContactVerificationTarget::Phone {
+                    user_phone_authentication_id,
+                } => {
+                    send_sms_authentication_code(state, *user_phone_authentication_id, language)
+                        .await
+                }
+            },
             Self::EmailAuthenticationCode {
                 user_email_authentication_id,
                 language,

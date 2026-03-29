@@ -101,6 +101,14 @@ impl InsertableJob for SendSmsAuthenticationCodeJob {
 /// A generic job to dispatch user-facing notifications.
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub enum DispatchNotificationJob {
+    /// Send a verification notification for a contact point.
+    ContactVerification {
+        /// The verification target.
+        target: ContactVerificationTarget,
+        /// The language to use for the notification.
+        language: String,
+    },
+
     /// Send an email verification code.
     EmailAuthenticationCode {
         /// The email authentication session to send the code for.
@@ -124,7 +132,28 @@ pub enum DispatchNotificationJob {
     },
 }
 
+/// Target for a contact verification notification.
+#[derive(Serialize, Deserialize, Debug, Clone)]
+pub enum ContactVerificationTarget {
+    /// Email-based verification.
+    Email {
+        /// The email authentication session to send the code for.
+        user_email_authentication_id: Ulid,
+    },
+    /// Phone-based verification.
+    Phone {
+        /// The phone authentication session to send the code for.
+        user_phone_authentication_id: Ulid,
+    },
+}
+
 impl DispatchNotificationJob {
+    /// Create a new notification dispatch job for contact verification.
+    #[must_use]
+    pub fn contact_verification(target: ContactVerificationTarget, language: String) -> Self {
+        Self::ContactVerification { target, language }
+    }
+
     /// Create a new notification dispatch job for email verification.
     #[must_use]
     pub fn email_authentication_code(
