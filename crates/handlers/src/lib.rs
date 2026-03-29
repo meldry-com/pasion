@@ -63,6 +63,7 @@ mod account_connections;
 mod account_contacts;
 mod account_password;
 mod account_profile;
+mod oauth2_access;
 mod account_recovery;
 mod account_registration;
 mod account_sessions;
