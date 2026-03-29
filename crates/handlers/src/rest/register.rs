@@ -12,8 +12,7 @@ use pasion_matrix::HomeserverConnection;
 use pasion_salvo_utils::SessionInfoExt;
 use pasion_storage::{
     RepositoryAccess,
-    queue::{ProvisionUserJob, QueueJobRepositoryExt as _},
-    user::{UserEmailFilter, UserEmailRepository, UserFilter, UserPhoneRepository, UserRepository},
+    user::{UserEmailFilter, UserEmailRepository, UserPhoneRepository, UserRepository},
 };
 use salvo::oapi::ToSchema;
 use salvo::prelude::*;
@@ -25,10 +24,11 @@ use super::{DepotExt, RouteError, extract_bound_activity_tracker, make_clock, ma
 use crate::{
     RequesterFingerprint,
     account_registration::{
-        LoadRegistrationProgressError, ResendRegistrationVerificationError,
-        ResendRegistrationVerificationStatus, SetRegistrationDisplayNameError,
-        StartPasswordRegistrationRequest, VerifyRegistrationEmailCodeError,
-        VerifyRegistrationPhoneCodeError, load_registration_progress, next_registration_step,
+        LoadRegistrationProgressError, PrepareRegistrationCompletionError,
+        ResendRegistrationVerificationError, ResendRegistrationVerificationStatus,
+        SetRegistrationDisplayNameError, StartPasswordRegistrationRequest,
+        VerifyRegistrationEmailCodeError, VerifyRegistrationPhoneCodeError, complete_registration,
+        load_registration_progress, next_registration_step, prepare_registration_completion,
         resend_pending_registration_verification, set_registration_display_name,
         start_password_registration, verify_registration_email_code,
         verify_registration_phone_code,
@@ -697,13 +697,15 @@ pub async fn post_finish(
 
     let mut repo = repo_factory.create().await?;
 
-    let registration = repo
-        .user_registration()
-        .lookup(id)
-        .await?
-        .ok_or(RouteError::NotFound)?;
+    let progress =
+        load_registration_progress(&mut repo, id)
+            .await
+            .map_err(|error| match error {
+                LoadRegistrationProgressError::NotFound => RouteError::NotFound,
+                LoadRegistrationProgressError::Repository(error) => error.into(),
+            })?;
 
-    if registration.completed_at.is_some() {
+    if progress.registration.completed_at.is_some() {
         return Ok(Json(FinishRegistrationResponse {
             status: "error",
             error: Some("registration_already_completed".into()),
@@ -711,7 +713,7 @@ pub async fn post_finish(
     }
 
     // Check session expiry (1 hour)
-    if clock.now() - registration.created_at > Duration::hours(1) {
+    if clock.now() - progress.registration.created_at > Duration::hours(1) {
         return Ok(Json(FinishRegistrationResponse {
             status: "error",
             error: Some("registration_expired".into()),
@@ -719,7 +721,7 @@ pub async fn post_finish(
     }
 
     // Verify username is still available
-    if repo.user().exists(&registration.username).await? {
+    if repo.user().exists(&progress.registration.username).await? {
         return Ok(Json(FinishRegistrationResponse {
             status: "error",
             error: Some("username_taken".into()),
@@ -727,7 +729,7 @@ pub async fn post_finish(
     }
 
     match homeserver
-        .is_localpart_available(&registration.username)
+        .is_localpart_available(&progress.registration.username)
         .await
     {
         Ok(false) => {
@@ -745,212 +747,106 @@ pub async fn post_finish(
         }
     }
 
-    // Check registration token if required
-    let registration_token = if site_config.registration_token_required {
-        if let Some(registration_token_id) = registration.user_registration_token_id {
-            let registration_token = repo
-                .user_registration_token()
-                .lookup(registration_token_id)
-                .await?
-                .ok_or_else(|| {
-                    RouteError::Internal(Box::new(std::io::Error::new(
-                        std::io::ErrorKind::Other,
-                        "Could not load the registration token",
-                    )))
-                })?;
-
-            if !registration_token.is_valid(clock.now()) {
-                return Ok(Json(FinishRegistrationResponse {
-                    status: "error",
-                    error: Some("registration_token_invalid".into()),
-                }));
-            }
-
-            Some(registration_token)
-        } else {
+    let prepared = match prepare_registration_completion(
+        &mut repo,
+        &clock,
+        progress,
+        site_config.registration_token_required,
+    )
+    .await
+    {
+        Ok(prepared) => prepared,
+        Err(PrepareRegistrationCompletionError::RegistrationTokenRequired) => {
             return Ok(Json(FinishRegistrationResponse {
                 status: "error",
                 error: Some("registration_token_required".into()),
             }));
         }
-    } else {
-        None
+        Err(PrepareRegistrationCompletionError::RegistrationTokenInvalid) => {
+            return Ok(Json(FinishRegistrationResponse {
+                status: "error",
+                error: Some("registration_token_invalid".into()),
+            }));
+        }
+        Err(PrepareRegistrationCompletionError::EmailNotVerified) => {
+            return Ok(Json(FinishRegistrationResponse {
+                status: "error",
+                error: Some("email_not_verified".into()),
+            }));
+        }
+        Err(PrepareRegistrationCompletionError::EmailInUse(_)) => {
+            return Ok(Json(FinishRegistrationResponse {
+                status: "error",
+                error: Some("email_in_use".into()),
+            }));
+        }
+        Err(PrepareRegistrationCompletionError::PhoneNotVerified) => {
+            return Ok(Json(FinishRegistrationResponse {
+                status: "error",
+                error: Some("phone_not_verified".into()),
+            }));
+        }
+        Err(PrepareRegistrationCompletionError::PhoneInUse) => {
+            return Ok(Json(FinishRegistrationResponse {
+                status: "error",
+                error: Some("phone_in_use".into()),
+            }));
+        }
+        Err(PrepareRegistrationCompletionError::DisplayNameRequired) => {
+            return Ok(Json(FinishRegistrationResponse {
+                status: "error",
+                error: Some("display_name_required".into()),
+            }));
+        }
+        Err(PrepareRegistrationCompletionError::RegistrationTokenMissing) => {
+            return Err(RouteError::Internal(Box::new(std::io::Error::new(
+                std::io::ErrorKind::Other,
+                "Could not load the registration token",
+            ))));
+        }
+        Err(PrepareRegistrationCompletionError::EmailAuthenticationMissing) => {
+            return Err(RouteError::Internal(Box::new(std::io::Error::new(
+                std::io::ErrorKind::Other,
+                "Could not load the email authentication",
+            ))));
+        }
+        Err(PrepareRegistrationCompletionError::PhoneAuthenticationMissing) => {
+            return Err(RouteError::Internal(Box::new(std::io::Error::new(
+                std::io::ErrorKind::Other,
+                "Could not load the phone authentication",
+            ))));
+        }
+        Err(PrepareRegistrationCompletionError::UpstreamOAuthSessionMissing) => {
+            return Err(RouteError::Internal(Box::new(std::io::Error::new(
+                std::io::ErrorKind::Other,
+                "Could not load the upstream OAuth authorization session",
+            ))));
+        }
+        Err(PrepareRegistrationCompletionError::UpstreamOAuthLinkMissing) => {
+            return Err(RouteError::Internal(Box::new(std::io::Error::new(
+                std::io::ErrorKind::Other,
+                "Could not load the upstream OAuth link",
+            ))));
+        }
+        Err(PrepareRegistrationCompletionError::UpstreamOAuthLinkAlreadyUsed) => {
+            return Err(RouteError::Internal(Box::new(std::io::Error::new(
+                std::io::ErrorKind::Other,
+                "The upstream identity was already linked to a user",
+            ))));
+        }
+        Err(PrepareRegistrationCompletionError::Repository(error)) => return Err(error.into()),
     };
 
-    // Check email authentication
-    let email_authentication =
-        if let Some(email_authentication_id) = registration.email_authentication_id {
-            let email_authentication = repo
-                .user_email()
-                .lookup_authentication(email_authentication_id)
-                .await?
-                .ok_or_else(|| {
-                    RouteError::Internal(Box::new(std::io::Error::new(
-                        std::io::ErrorKind::Other,
-                        "Could not load the email authentication",
-                    )))
-                })?;
-
-            if email_authentication.completed_at.is_none() {
-                return Ok(Json(FinishRegistrationResponse {
-                    status: "error",
-                    error: Some("email_not_verified".into()),
-                }));
-            }
-
-            // Check that the email address is not already in use
-            if repo
-                .user_email()
-                .count(UserEmailFilter::new().for_email(&email_authentication.email))
-                .await?
-                > 0
-            {
-                return Ok(Json(FinishRegistrationResponse {
-                    status: "error",
-                    error: Some("email_in_use".into()),
-                }));
-            }
-
-            Some(email_authentication)
-        } else {
-            None
-        };
-
-    // Check phone authentication
-    let phone_authentication =
-        if let Some(phone_authentication_id) = registration.phone_authentication_id {
-            let phone_authentication = repo
-                .user_phone()
-                .lookup_authentication(phone_authentication_id)
-                .await?
-                .ok_or_else(|| {
-                    RouteError::Internal(Box::new(std::io::Error::new(
-                        std::io::ErrorKind::Other,
-                        "Could not load the phone authentication",
-                    )))
-                })?;
-
-            if phone_authentication.completed_at.is_none() {
-                return Ok(Json(FinishRegistrationResponse {
-                    status: "error",
-                    error: Some("phone_not_verified".into()),
-                }));
-            }
-
-            // Check that the phone number is not already in use
-            if repo
-                .user_phone()
-                .find_by_phone(&phone_authentication.phone)
-                .await?
-                .is_some()
-            {
-                return Ok(Json(FinishRegistrationResponse {
-                    status: "error",
-                    error: Some("phone_in_use".into()),
-                }));
-            }
-
-            Some(phone_authentication)
-        } else {
-            None
-        };
-
-    // Check display name is set
-    if registration.display_name.is_none() {
-        return Ok(Json(FinishRegistrationResponse {
-            status: "error",
-            error: Some("display_name_required".into()),
-        }));
-    }
-
-    // ── Complete the registration ──────────────────────────────
-
-    let registration = repo
-        .user_registration()
-        .complete(&clock, registration)
-        .await?;
-
-    // Mark registration token as used
-    if let Some(registration_token) = registration_token {
-        repo.user_registration_token()
-            .use_token(&clock, registration_token)
-            .await?;
-    }
-
-    // Create the user
-    let mut user = repo
-        .user()
-        .add(&mut rng, &clock, registration.username.clone())
-        .await?;
-
-    // If this is the first user, automatically grant admin privileges
-    let user_count = repo.user().count(UserFilter::new()).await?;
-    if user_count == 1 {
-        user = repo.user().set_can_request_admin(user, true).await?;
-    }
-
-    // Create a browser session to log the user in
-    let user_session = repo
-        .browser_session()
-        .add(&mut rng, &clock, &user, user_agent)
-        .await?;
-
-    // Add the email if verified
-    if let Some(email_authentication) = email_authentication {
-        repo.user_email()
-            .add(&mut rng, &clock, &user, email_authentication.email)
-            .await?;
-    }
-
-    // Add the phone if verified
-    if let Some(phone_authentication) = phone_authentication {
-        repo.user_phone()
-            .add(&mut rng, &clock, &user, phone_authentication.phone)
-            .await?;
-    }
-
-    // Set the password
-    if let Some(password) = registration.password {
-        let user_password = repo
-            .user_password()
-            .add(
-                &mut rng,
-                &clock,
-                &user,
-                password.version,
-                password.hashed_password,
-                None,
-            )
-            .await?;
-
-        repo.browser_session()
-            .authenticate_with_password(&mut rng, &clock, &user_session, &user_password)
-            .await?;
-    }
-
-    // Accept terms if set
-    if let Some(terms_url) = registration.terms_url {
-        repo.user_terms()
-            .accept_terms(&mut rng, &clock, &user, terms_url)
-            .await?;
-    }
-
-    // Schedule user provisioning
-    let mut job = ProvisionUserJob::new(&user);
-    if let Some(display_name) = registration.display_name {
-        job = job.set_display_name(display_name);
-    }
-    repo.queue_job().schedule_job(&mut rng, &clock, job).await?;
-
-    repo.save().await?;
+    let completed =
+        complete_registration(repo, &mut rng, &clock, prepared.into_request(user_agent)).await?;
 
     // Record the browser session activity
     activity_tracker
-        .record_browser_session(&clock, &user_session)
+        .record_browser_session(&clock, &completed.user_session)
         .await;
 
     // Set the session cookie to log the user in
-    let cookie_jar = cookie_jar.set_session(&user_session);
+    let cookie_jar = cookie_jar.set_session(&completed.user_session);
     cookie_jar.write_to_response(res);
 
     Ok(Json(FinishRegistrationResponse {

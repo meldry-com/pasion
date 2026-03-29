@@ -1,15 +1,10 @@
 use std::sync::{Arc, LazyLock};
 
-use anyhow::Context as _;
 use chrono::Duration;
 use opentelemetry::metrics::Counter;
 use pasion_matrix::HomeserverConnection;
 use pasion_router::PostAuthAction;
 use pasion_salvo_utils::{InternalError, SessionInfoExt as _, cookies::CookieJar};
-use pasion_storage::{
-    queue::{ProvisionUserJob, QueueJobRepositoryExt as _},
-    user::{UserEmailFilter, UserFilter},
-};
 use pasion_templates::{RegisterStepsEmailInUseContext, TemplateContext as _, Templates};
 use salvo::{prelude::*, writing::Text};
 use ulid::Ulid;
@@ -18,7 +13,10 @@ use super::super::cookie::UserRegistrationSessions;
 use crate::rest::DepotExt;
 use crate::{
     METER,
-    account_registration::{LoadRegistrationProgressError, load_registration_progress},
+    account_registration::{
+        LoadRegistrationProgressError, PrepareRegistrationCompletionError, complete_registration,
+        load_registration_progress, prepare_registration_completion,
+    },
     rest,
     views::shared::OptionalPostAuthAction,
 };
@@ -119,68 +117,37 @@ pub async fn get(
         )));
     }
 
-    // Check if the registration token is required and was provided
-    let registration_token = if site_config.registration_token_required {
-        if let Some(registration_token_id) = registration.user_registration_token_id {
-            let registration_token = repo
-                .user_registration_token()
-                .lookup(registration_token_id)
-                .await?
-                .context("Could not load the registration token")
-                .map_err(InternalError::from_anyhow)?;
+    let registration_id = registration.id;
+    let post_auth_action_value = registration.post_auth_action.clone();
 
-            if !registration_token.is_valid(clock.now()) {
-                // XXX: the registration token isn't valid anymore, we should
-                // have a better error in this case?
-                return Err(InternalError::from_anyhow(anyhow::anyhow!(
-                    "Registration token used is no longer valid"
-                )));
-            }
-
-            Some(registration_token)
-        } else {
-            // Else redirect to the registration token page
+    let prepared = match prepare_registration_completion(
+        &mut repo,
+        &clock,
+        progress,
+        site_config.registration_token_required,
+    )
+    .await
+    {
+        Ok(prepared) => prepared,
+        Err(PrepareRegistrationCompletionError::RegistrationTokenRequired) => {
             cookie_jar.write_to_response(res);
-            res.render(url_builder.redirect(&pasion_router::RegisterToken::new(registration.id)));
+            res.render(url_builder.redirect(&pasion_router::RegisterToken::new(registration_id)));
             return Ok(());
         }
-    } else {
-        None
-    };
-
-    // If there is an email authentication, we need to check that the email
-    // address was verified. If there is no email authentication attached, we
-    // need to make sure the server doesn't require it
-    let email_authentication = if registration.email_authentication_id.is_some() {
-        let email_authentication = progress
-            .email_authentication
-            .context("Could not load the email authentication")
-            .map_err(InternalError::from_anyhow)?;
-
-        // Check that the email authentication has been completed
-        if email_authentication.completed_at.is_none() {
+        Err(PrepareRegistrationCompletionError::EmailNotVerified) => {
             cookie_jar.write_to_response(res);
-            res.render(url_builder.redirect(&pasion_router::RegisterVerifyEmail::new(id)));
+            res.render(
+                url_builder.redirect(&pasion_router::RegisterVerifyEmail::new(registration_id)),
+            );
             return Ok(());
         }
-
-        // Check that the email address isn't already used
-        // It is important to do that here, as we we're not checking during the
-        // registration, because we don't want to disclose whether an email is
-        // already being used or not before we verified it
-        if repo
-            .user_email()
-            .count(UserEmailFilter::new().for_email(&email_authentication.email))
-            .await?
-            > 0
-        {
-            let action = registration
-                .post_auth_action
+        Err(PrepareRegistrationCompletionError::EmailInUse(email)) => {
+            let action = post_auth_action_value
+                .clone()
                 .map(serde_json::from_value)
                 .transpose()?;
 
-            let ctx = RegisterStepsEmailInUseContext::new(email_authentication.email, action)
-                .with_language(lang);
+            let ctx = RegisterStepsEmailInUseContext::new(email, action).with_language(lang);
 
             cookie_jar.write_to_response(res);
             res.render(Text::Html(
@@ -188,161 +155,87 @@ pub async fn get(
             ));
             return Ok(());
         }
-
-        Some(email_authentication)
-    } else {
-        None
-    };
-
-    // If this registration was created from an upstream OAuth session, check
-    // it is still valid and wasn't linked to a user in the meantime
-    let upstream_oauth = if let Some(upstream_oauth_authorization_session_id) =
-        registration.upstream_oauth_authorization_session_id
-    {
-        let upstream_oauth_authorization_session = repo
-            .upstream_oauth_session()
-            .lookup(upstream_oauth_authorization_session_id)
-            .await?
-            .context("Could not load the upstream OAuth authorization session")
-            .map_err(InternalError::from_anyhow)?;
-
-        let link_id = upstream_oauth_authorization_session
-            .link_id()
-            // This should not happen, the session is associated with the user
-            // registration once the link was already created
-            .context("Authorization session has no upstream link associated with it")
-            .map_err(InternalError::from_anyhow)?;
-
-        let upstream_oauth_link = repo
-            .upstream_oauth_link()
-            .lookup(link_id)
-            .await?
-            .context("Could not load the upstream OAuth link")
-            .map_err(InternalError::from_anyhow)?;
-
-        if upstream_oauth_link.user_id.is_some() {
-            // This means the link was already associated to a user. This could
-            // in theory happen if the same user registers concurrently, but
-            // this is not going to happen often enough to have a dedicated page
+        Err(PrepareRegistrationCompletionError::DisplayNameRequired) => {
+            cookie_jar.write_to_response(res);
+            res.render(
+                url_builder.redirect(&pasion_router::RegisterDisplayName::new(registration_id)),
+            );
+            return Ok(());
+        }
+        Err(PrepareRegistrationCompletionError::RegistrationTokenMissing) => {
+            return Err(InternalError::from_anyhow(anyhow::anyhow!(
+                "Could not load the registration token"
+            )));
+        }
+        Err(PrepareRegistrationCompletionError::RegistrationTokenInvalid) => {
+            return Err(InternalError::from_anyhow(anyhow::anyhow!(
+                "Registration token used is no longer valid"
+            )));
+        }
+        Err(PrepareRegistrationCompletionError::EmailAuthenticationMissing) => {
+            return Err(InternalError::from_anyhow(anyhow::anyhow!(
+                "Could not load the email authentication"
+            )));
+        }
+        Err(PrepareRegistrationCompletionError::PhoneAuthenticationMissing) => {
+            return Err(InternalError::from_anyhow(anyhow::anyhow!(
+                "Could not load the phone authentication"
+            )));
+        }
+        Err(PrepareRegistrationCompletionError::PhoneNotVerified) => {
+            return Err(InternalError::from_anyhow(anyhow::anyhow!(
+                "Phone verification is not complete"
+            )));
+        }
+        Err(PrepareRegistrationCompletionError::PhoneInUse) => {
+            return Err(InternalError::from_anyhow(anyhow::anyhow!(
+                "Phone number is already in use"
+            )));
+        }
+        Err(PrepareRegistrationCompletionError::UpstreamOAuthSessionMissing) => {
+            return Err(InternalError::from_anyhow(anyhow::anyhow!(
+                "Could not load the upstream OAuth authorization session"
+            )));
+        }
+        Err(PrepareRegistrationCompletionError::UpstreamOAuthLinkMissing) => {
+            return Err(InternalError::from_anyhow(anyhow::anyhow!(
+                "Could not load the upstream OAuth link"
+            )));
+        }
+        Err(PrepareRegistrationCompletionError::UpstreamOAuthLinkAlreadyUsed) => {
             return Err(InternalError::from_anyhow(anyhow::anyhow!(
                 "The upstream identity was already linked to a user. Try logging in again"
             )));
         }
-
-        Some((upstream_oauth_authorization_session, upstream_oauth_link))
-    } else {
-        None
+        Err(PrepareRegistrationCompletionError::Repository(error)) => {
+            return Err(InternalError::from_anyhow(error.into()));
+        }
     };
-
-    // Check that the display name is set
-    if registration.display_name.is_none() {
-        cookie_jar.write_to_response(res);
-        res.render(url_builder.redirect(&pasion_router::RegisterDisplayName::new(registration.id)));
-        return Ok(());
-    }
-
-    // Everything is good, let's complete the registration
-    let registration = repo
-        .user_registration()
-        .complete(&clock, registration)
-        .await?;
-
-    // If we used a registration token, we need to mark it as used
-    if let Some(registration_token) = registration_token {
-        repo.user_registration_token()
-            .use_token(&clock, registration_token)
-            .await?;
-    }
 
     // Consume the registration session
     let cookie_jar = registrations
-        .consume_session(&registration)?
+        .consume_session(&prepared.registration)?
         .save(cookie_jar, &clock);
 
-    // Now we can start the user creation
-    let mut user = repo
-        .user()
-        .add(&mut rng, &clock, registration.username)
-        .await?;
+    let completed =
+        complete_registration(repo, &mut rng, &clock, prepared.into_request(user_agent)).await?;
 
-    // If this is the first user, automatically grant admin privileges
-    let user_count = repo.user().count(UserFilter::new()).await?;
-    if user_count == 1 {
-        user = repo.user().set_can_request_admin(user, true).await?;
-    }
-
-    // Also create a browser session which will log the user in
-    let user_session = repo
-        .browser_session()
-        .add(&mut rng, &clock, &user, user_agent)
-        .await?;
-
-    if let Some(email_authentication) = email_authentication {
-        repo.user_email()
-            .add(&mut rng, &clock, &user, email_authentication.email)
-            .await?;
-    }
-
-    if let Some(password) = registration.password {
-        let user_password = repo
-            .user_password()
-            .add(
-                &mut rng,
-                &clock,
-                &user,
-                password.version,
-                password.hashed_password,
-                None,
-            )
-            .await?;
-
-        repo.browser_session()
-            .authenticate_with_password(&mut rng, &clock, &user_session, &user_password)
-            .await?;
-
+    if completed.password_authenticated {
         PASSWORD_REGISTER_COUNTER.add(1, &[]);
     }
 
-    if let Some((upstream_session, upstream_link)) = upstream_oauth {
-        let upstream_session = repo
-            .upstream_oauth_session()
-            .consume(&clock, upstream_session, &user_session)
-            .await?;
-
-        repo.upstream_oauth_link()
-            .associate_to_user(&upstream_link, &user)
-            .await?;
-
-        repo.browser_session()
-            .authenticate_with_upstream(&mut rng, &clock, &user_session, &upstream_session)
-            .await?;
-    }
-
-    if let Some(terms_url) = registration.terms_url {
-        repo.user_terms()
-            .accept_terms(&mut rng, &clock, &user, terms_url)
-            .await?;
-    }
-
-    let mut job = ProvisionUserJob::new(&user);
-    if let Some(display_name) = registration.display_name {
-        job = job.set_display_name(display_name);
-    }
-    repo.queue_job().schedule_job(&mut rng, &clock, job).await?;
-
-    repo.save().await?;
-
     activity_tracker
-        .record_browser_session(&clock, &user_session)
+        .record_browser_session(&clock, &completed.user_session)
         .await;
 
-    let post_auth_action: Option<PostAuthAction> = registration
+    let post_auth_action: Option<PostAuthAction> = completed
+        .registration
         .post_auth_action
         .map(serde_json::from_value)
         .transpose()?;
 
     // Login the user with the session we just created
-    let cookie_jar = cookie_jar.set_session(&user_session);
+    let cookie_jar = cookie_jar.set_session(&completed.user_session);
 
     cookie_jar.write_to_response(res);
     res.render(OptionalPostAuthAction::from(post_auth_action).go_next(&url_builder));

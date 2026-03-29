@@ -10,9 +10,9 @@ use pasion_storage::{
     queue::{ProvisionUserJob, QueueJobRepositoryExt as _},
     upstream_oauth2::{UpstreamOAuthLinkRepository, UpstreamOAuthSessionRepository},
     user::{
-        BrowserSessionRepository, UserEmailRepository, UserFilter, UserPasswordRepository,
-        UserPhoneRepository, UserRegistrationTokenRepository, UserRepository,
-        UserTermsRepository,
+        BrowserSessionRepository, UserEmailFilter, UserEmailRepository, UserFilter,
+        UserPasswordRepository, UserPhoneRepository, UserRegistrationTokenRepository,
+        UserRepository, UserTermsRepository,
     },
 };
 use rand_chacha::rand_core::CryptoRngCore;
@@ -66,6 +66,28 @@ pub struct CompletedRegistration {
     pub user: User,
     pub user_session: BrowserSession,
     pub password_authenticated: bool,
+}
+
+pub struct PreparedRegistrationCompletion {
+    pub registration: UserRegistration,
+    pub registration_token: Option<UserRegistrationToken>,
+    pub email_authentication: Option<UserEmailAuthentication>,
+    pub phone_authentication: Option<UserPhoneAuthentication>,
+    pub upstream_oauth: Option<(UpstreamOAuthAuthorizationSession, UpstreamOAuthLink)>,
+}
+
+impl PreparedRegistrationCompletion {
+    #[must_use]
+    pub fn into_request(self, user_agent: Option<String>) -> CompleteRegistrationRequest {
+        CompleteRegistrationRequest {
+            registration: self.registration,
+            registration_token: self.registration_token,
+            email_authentication: self.email_authentication,
+            phone_authentication: self.phone_authentication,
+            user_agent,
+            upstream_oauth: self.upstream_oauth,
+        }
+    }
 }
 
 impl RegistrationProgress {
@@ -205,6 +227,51 @@ pub enum SetRegistrationDisplayNameError {
 
     #[error("invalid display name")]
     InvalidDisplayName,
+
+    #[error(transparent)]
+    Repository(#[from] RepositoryError),
+}
+
+#[derive(Debug, Error)]
+pub enum PrepareRegistrationCompletionError {
+    #[error("registration token is required")]
+    RegistrationTokenRequired,
+
+    #[error("registration token not found")]
+    RegistrationTokenMissing,
+
+    #[error("registration token is invalid")]
+    RegistrationTokenInvalid,
+
+    #[error("registration email authentication not found")]
+    EmailAuthenticationMissing,
+
+    #[error("registration email is not verified")]
+    EmailNotVerified,
+
+    #[error("registration email is already in use")]
+    EmailInUse(String),
+
+    #[error("registration phone authentication not found")]
+    PhoneAuthenticationMissing,
+
+    #[error("registration phone is not verified")]
+    PhoneNotVerified,
+
+    #[error("registration phone is already in use")]
+    PhoneInUse,
+
+    #[error("upstream OAuth authorization session not found")]
+    UpstreamOAuthSessionMissing,
+
+    #[error("upstream OAuth link not found")]
+    UpstreamOAuthLinkMissing,
+
+    #[error("upstream OAuth link already belongs to a user")]
+    UpstreamOAuthLinkAlreadyUsed,
+
+    #[error("registration display name is required")]
+    DisplayNameRequired,
 
     #[error(transparent)]
     Repository(#[from] RepositoryError),
@@ -600,6 +667,123 @@ pub async fn set_registration_display_name(
     repo.save().await?;
 
     Ok(registration)
+}
+
+pub async fn prepare_registration_completion(
+    repo: &mut BoxRepository,
+    clock: &dyn Clock,
+    progress: RegistrationProgress,
+    registration_token_required: bool,
+) -> Result<PreparedRegistrationCompletion, PrepareRegistrationCompletionError> {
+    let registration = progress.registration;
+
+    let registration_token = if registration_token_required {
+        if let Some(registration_token_id) = registration.user_registration_token_id {
+            let registration_token = repo
+                .user_registration_token()
+                .lookup(registration_token_id)
+                .await?
+                .ok_or(PrepareRegistrationCompletionError::RegistrationTokenMissing)?;
+
+            if !registration_token.is_valid(clock.now()) {
+                return Err(PrepareRegistrationCompletionError::RegistrationTokenInvalid);
+            }
+
+            Some(registration_token)
+        } else {
+            return Err(PrepareRegistrationCompletionError::RegistrationTokenRequired);
+        }
+    } else {
+        None
+    };
+
+    let email_authentication = if registration.email_authentication_id.is_some() {
+        let email_authentication = progress
+            .email_authentication
+            .ok_or(PrepareRegistrationCompletionError::EmailAuthenticationMissing)?;
+
+        if email_authentication.completed_at.is_none() {
+            return Err(PrepareRegistrationCompletionError::EmailNotVerified);
+        }
+
+        if repo
+            .user_email()
+            .count(UserEmailFilter::new().for_email(&email_authentication.email))
+            .await?
+            > 0
+        {
+            return Err(PrepareRegistrationCompletionError::EmailInUse(
+                email_authentication.email.clone(),
+            ));
+        }
+
+        Some(email_authentication)
+    } else {
+        None
+    };
+
+    let phone_authentication = if registration.phone_authentication_id.is_some() {
+        let phone_authentication = progress
+            .phone_authentication
+            .ok_or(PrepareRegistrationCompletionError::PhoneAuthenticationMissing)?;
+
+        if phone_authentication.completed_at.is_none() {
+            return Err(PrepareRegistrationCompletionError::PhoneNotVerified);
+        }
+
+        if repo
+            .user_phone()
+            .find_by_phone(&phone_authentication.phone)
+            .await?
+            .is_some()
+        {
+            return Err(PrepareRegistrationCompletionError::PhoneInUse);
+        }
+
+        Some(phone_authentication)
+    } else {
+        None
+    };
+
+    let upstream_oauth = if let Some(upstream_oauth_authorization_session_id) =
+        registration.upstream_oauth_authorization_session_id
+    {
+        let upstream_oauth_authorization_session = repo
+            .upstream_oauth_session()
+            .lookup(upstream_oauth_authorization_session_id)
+            .await?
+            .ok_or(PrepareRegistrationCompletionError::UpstreamOAuthSessionMissing)?;
+
+        let link_id = upstream_oauth_authorization_session
+            .link_id()
+            .ok_or(PrepareRegistrationCompletionError::UpstreamOAuthLinkMissing)?;
+
+        let upstream_oauth_link = repo
+            .upstream_oauth_link()
+            .lookup(link_id)
+            .await?
+            .ok_or(PrepareRegistrationCompletionError::UpstreamOAuthLinkMissing)?;
+
+        if upstream_oauth_link.user_id.is_some() {
+            return Err(PrepareRegistrationCompletionError::UpstreamOAuthLinkAlreadyUsed);
+        }
+
+        Some((upstream_oauth_authorization_session, upstream_oauth_link))
+    } else {
+        None
+    };
+
+    if registration.display_name.is_none() {
+        return Err(PrepareRegistrationCompletionError::DisplayNameRequired);
+    }
+
+    Ok(PreparedRegistrationCompletion {
+        registration,
+        registration_token,
+        email_authentication,
+        phone_authentication,
+        upstream_oauth,
+    })
 }
 
 pub async fn complete_registration(
