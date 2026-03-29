@@ -12,7 +12,6 @@ use pasion_context::LogContext;
 use pasion_data_model::SystemClock;
 use pasion_handlers::{ActivityTracker, CookieManager, Limiter, MetadataCache};
 use pasion_listener::server::Server;
-use pasion_messaging::NotificationCenter;
 use pasion_router::UrlBuilder;
 use pasion_storage_pg::PgRepositoryFactory;
 use tracing::{info, info_span, warn};
@@ -22,7 +21,7 @@ use crate::{
     lifecycle::LifecycleManager,
     util::{
         database_url_from_config, diesel_pool_from_config, homeserver_connection_from_config,
-        load_policy_factory_dynamic_data_continuously, mailer_from_config,
+        load_policy_factory_dynamic_data_continuously, notification_center_from_config,
         password_manager_from_config, policy_factory_from_config, site_config_from_config,
         templates_from_config, test_mailer_in_background,
     },
@@ -170,9 +169,11 @@ impl Options {
             homeserver_connection_from_config(&config.matrix, http_client.clone()).await?;
 
         if !self.no_worker {
-            let mailer = mailer_from_config(&config.email, &templates)?;
-            let notifications = NotificationCenter::email_only(mailer.clone());
-            test_mailer_in_background(&mailer, Duration::from_secs(30));
+            let notifications =
+                notification_center_from_config(&config.email, &config.sms, &templates)?;
+            if let Some(mailer) = notifications.email() {
+                test_mailer_in_background(mailer, Duration::from_secs(30));
+            }
 
             info!("Starting task worker");
             let database_url = database_url_from_config(&config.database)?;

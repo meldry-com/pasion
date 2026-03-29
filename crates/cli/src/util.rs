@@ -2,19 +2,19 @@ use std::{sync::Arc, time::Duration};
 
 use anyhow::Context;
 use diesel_async::AsyncPgConnection;
-use diesel_async::pooled_connection::deadpool::Pool as DieselPool;
 use diesel_async::pooled_connection::AsyncDieselConnectionManager;
+use diesel_async::pooled_connection::deadpool::Pool as DieselPool;
 use pasion_config::{
     AccountConfig, BrandingConfig, CaptchaConfig, DatabaseConfig, EmailConfig, EmailSmtpMode,
     EmailTransportKind, ExperimentalConfig, HomeserverKind, MatrixConfig, PasswordsConfig,
-    PolicyConfig, PolicyEngine, TemplatesConfig,
+    PolicyConfig, PolicyEngine, SmsConfig, SmsTransportKind, TemplatesConfig,
 };
 use pasion_context::LogContext;
 use pasion_data_model::{SessionExpirationConfig, SessionLimitConfig, SiteConfig};
-use pasion_messaging::{MailTransport, Mailer};
 use pasion_handlers::passwords::PasswordManager;
 use pasion_matrix::{HomeserverConnection, ReadOnlyHomeserverConnection};
 use pasion_matrix_palpo::PalpoConnection;
+use pasion_messaging::{MailTransport, Mailer, NotificationCenter, SmsSender, SmsTransport};
 use pasion_policy::PolicyFactory;
 use pasion_router::UrlBuilder;
 use pasion_storage::{BoxRepositoryFactory, RepositoryAccess, RepositoryFactory};
@@ -99,6 +99,91 @@ pub fn mailer_from_config(
     };
 
     Ok(Mailer::new(templates.clone(), transport, from, reply_to))
+}
+
+pub fn sms_sender_from_config(config: &SmsConfig) -> Result<SmsSender, anyhow::Error> {
+    let transport = match config.transport {
+        SmsTransportKind::Blackhole => SmsTransport::blackhole(),
+        SmsTransportKind::Twilio => SmsTransport::twilio(
+            config
+                .account_sid
+                .clone()
+                .context("invalid sms configuration: missing account_sid")?,
+            config
+                .auth_token
+                .clone()
+                .context("invalid sms configuration: missing auth_token")?,
+            config
+                .from_number
+                .clone()
+                .context("invalid sms configuration: missing from_number")?,
+        ),
+        SmsTransportKind::HttpWebhook => SmsTransport::http_webhook(
+            config
+                .api_url
+                .as_deref()
+                .context("invalid sms configuration: missing api_url")?
+                .parse()
+                .context("invalid sms configuration: invalid api_url")?,
+            config.api_key.clone(),
+            config
+                .from_number
+                .clone()
+                .context("invalid sms configuration: missing from_number")?,
+        ),
+        SmsTransportKind::AliyunSms => SmsTransport::aliyun(
+            config
+                .aliyun_access_key_id
+                .clone()
+                .context("invalid sms configuration: missing aliyun_access_key_id")?,
+            config
+                .aliyun_access_key_secret
+                .clone()
+                .context("invalid sms configuration: missing aliyun_access_key_secret")?,
+            config
+                .aliyun_sign_name
+                .clone()
+                .context("invalid sms configuration: missing aliyun_sign_name")?,
+            config
+                .aliyun_template_code
+                .clone()
+                .context("invalid sms configuration: missing aliyun_template_code")?,
+        ),
+        SmsTransportKind::TencentCloudSms => SmsTransport::tencent_cloud(
+            config
+                .tencent_secret_id
+                .clone()
+                .context("invalid sms configuration: missing tencent_secret_id")?,
+            config
+                .tencent_secret_key
+                .clone()
+                .context("invalid sms configuration: missing tencent_secret_key")?,
+            config
+                .tencent_sdk_app_id
+                .clone()
+                .context("invalid sms configuration: missing tencent_sdk_app_id")?,
+            config
+                .tencent_sign_name
+                .clone()
+                .context("invalid sms configuration: missing tencent_sign_name")?,
+            config
+                .tencent_template_id
+                .clone()
+                .context("invalid sms configuration: missing tencent_template_id")?,
+        ),
+    };
+
+    Ok(SmsSender::new(transport))
+}
+
+pub fn notification_center_from_config(
+    email_config: &EmailConfig,
+    sms_config: &SmsConfig,
+    templates: &Templates,
+) -> Result<NotificationCenter, anyhow::Error> {
+    let mailer = mailer_from_config(email_config, templates)?;
+    let sms = sms_sender_from_config(sms_config)?;
+    Ok(NotificationCenter::email_only(mailer).with_sms(sms))
 }
 
 /// Test the connection to the mailer in a background task
@@ -257,7 +342,8 @@ pub fn site_config_from_config(
         password_login_enabled: password_config.enabled(),
         password_registration_enabled: password_config.enabled()
             && account_config.password_registration_enabled,
-        password_registration_contact_required: account_config.password_registration_contact_required,
+        password_registration_contact_required: account_config
+            .password_registration_contact_required,
         registration_token_required: account_config.registration_token_required,
         email_change_allowed: account_config.email_change_allowed,
         displayname_change_allowed: account_config.displayname_change_allowed,

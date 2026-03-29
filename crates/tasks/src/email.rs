@@ -1,6 +1,6 @@
 use async_trait::async_trait;
 use chrono::Duration;
-use pasion_messaging::{Address, EmailVerificationContext, Mailbox};
+use pasion_messaging::{Address, EmailVerificationContext, Mailbox, NotificationRequest};
 use pasion_storage::queue::{SendEmailAuthenticationCodeJob, VerifyEmailJob};
 use pasion_templates::TemplateContext as _;
 use rand::{Rng, distributions::Uniform};
@@ -117,14 +117,16 @@ impl RunnableJob for SendEmailAuthenticationCodeJob {
 
         let context = EmailVerificationContext::new(code, browser_session, registration)
             .with_language(language);
-        if let Err(e) = notifications
-            .send_email_verification(mailbox, &context)
-            .await
-        {
+        let verification_code = context.code().to_owned();
+        let request = NotificationRequest::EmailVerification {
+            to: mailbox,
+            context,
+        };
+        if let Err(e) = notifications.dispatch(request).await {
             tracing::warn!(
                 error = &e as &dyn std::error::Error,
                 "Failed to send email verification code. code = {}",
-                context.code(),
+                verification_code,
             );
         }
 

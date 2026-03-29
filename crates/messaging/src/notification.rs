@@ -17,6 +17,35 @@ pub struct NotificationCenter {
     sms: Option<SmsSender>,
 }
 
+/// A standardized outbound notification request.
+pub enum NotificationRequest {
+    /// Send a verification email to a mailbox.
+    EmailVerification {
+        /// Mailbox receiving the notification.
+        to: Mailbox,
+        /// Template context for the verification email.
+        context: WithLanguage<EmailVerificationContext>,
+    },
+
+    /// Send an account recovery email to a mailbox.
+    EmailRecovery {
+        /// Mailbox receiving the notification.
+        to: Mailbox,
+        /// Template context for the recovery email.
+        context: WithLanguage<EmailRecoveryContext>,
+    },
+
+    /// Send a verification code over SMS.
+    SmsVerificationCode {
+        /// Phone number receiving the notification.
+        to: String,
+        /// One-time verification code.
+        code: String,
+        /// IETF language tag used to localize the message body.
+        language: String,
+    },
+}
+
 impl NotificationCenter {
     /// Create a new notification center with the provided channels.
     #[must_use]
@@ -60,6 +89,26 @@ impl NotificationCenter {
     #[must_use]
     pub fn sms(&self) -> Option<&SmsSender> {
         self.sms.as_ref()
+    }
+
+    /// Dispatch a standardized notification request.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the requested delivery channel is unavailable or if
+    /// delivery fails.
+    pub async fn dispatch(&self, request: NotificationRequest) -> Result<(), NotificationError> {
+        match request {
+            NotificationRequest::EmailVerification { to, context } => {
+                self.send_email_verification(to, &context).await
+            }
+            NotificationRequest::EmailRecovery { to, context } => {
+                self.send_email_recovery(to, &context).await
+            }
+            NotificationRequest::SmsVerificationCode { to, code, language } => {
+                self.send_sms_verification_code(&to, &code, &language).await
+            }
+        }
     }
 
     /// Send an email verification message through the configured email channel.

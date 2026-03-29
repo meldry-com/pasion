@@ -1,7 +1,7 @@
 use anyhow::Context;
 use async_trait::async_trait;
 use pasion_i18n::DataLocale;
-use pasion_messaging::{Address, Mailbox};
+use pasion_messaging::{Address, Mailbox, NotificationRequest};
 use pasion_storage::{
     Pagination, RepositoryAccess,
     queue::SendAccountRecoveryEmailsJob,
@@ -89,9 +89,13 @@ impl RunnableJob for SendAccountRecoveryEmailsJob {
                 info!("Sending recovery email to {}", mailbox);
                 let context = EmailRecoveryContext::new(user, session.clone(), url)
                     .with_language(lang.clone());
+                let request = NotificationRequest::EmailRecovery {
+                    to: mailbox,
+                    context,
+                };
 
                 // XXX: we only log if the email fails to send, to avoid stopping the loop
-                if let Err(e) = notifications.send_email_recovery(mailbox, &context).await {
+                if let Err(e) = notifications.dispatch(request).await {
                     error!(
                         error = &e as &dyn std::error::Error,
                         "Failed to send recovery email"

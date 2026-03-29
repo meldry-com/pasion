@@ -9,7 +9,7 @@ mod notification;
 pub mod sms;
 
 pub use self::email::{Mailer, SmtpMode, Transport as MailTransport};
-pub use self::notification::{NotificationCenter, NotificationError};
+pub use self::notification::{NotificationCenter, NotificationError, NotificationRequest};
 pub use self::sms::{SmsSender, SmsTransport, SmsTransportError};
 
 // Re-export commonly used types from email for backward compatibility

@@ -41,6 +41,7 @@ mod matrix;
 mod new_queue;
 mod recovery;
 mod sessions;
+mod sms;
 mod user;
 
 static METER: LazyLock<Meter> = LazyLock::new(|| {
@@ -174,6 +175,7 @@ pub async fn init(
         .register_handler::<pasion_storage::queue::ReactivateUserJob>()
         .register_handler::<pasion_storage::queue::SendAccountRecoveryEmailsJob>()
         .register_handler::<pasion_storage::queue::SendEmailAuthenticationCodeJob>()
+        .register_handler::<pasion_storage::queue::SendSmsAuthenticationCodeJob>()
         .register_handler::<pasion_storage::queue::SyncDevicesJob>()
         .register_handler::<pasion_storage::queue::VerifyEmailJob>()
         .register_handler::<pasion_storage::queue::ExpireInactiveSessionsJob>()

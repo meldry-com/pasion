@@ -569,7 +569,7 @@ pub struct ResendVerificationResponse {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub error: Option<String> }
 
-/// Resend the email verification code for a pending registration.
+/// Resend the next pending verification code for a registration.
 ///
 /// Unlike the authenticated `/email-auth/:id/resend` endpoint, this one works
 /// during registration when the user does not yet have a browser session.
@@ -606,46 +606,80 @@ pub async fn post_resend_verification(
     if registration.completed_at.is_some() {
         return Ok(Json(ResendVerificationResponse {
             status: "error",
-            error: Some("registration_already_completed".into()) }));
+            error: Some("registration_already_completed".into()),
+        }));
     }
 
-    let email_authentication_id = registration.email_authentication_id.ok_or_else(|| {
-        RouteError::BadRequest("no email authentication for this registration".into())
-    })?;
+    if let Some(email_authentication_id) = registration.email_authentication_id {
+        let auth = repo
+            .user_email()
+            .lookup_authentication(email_authentication_id)
+            .await?
+            .ok_or(RouteError::NotFound)?;
 
-    let auth = repo
-        .user_email()
-        .lookup_authentication(email_authentication_id)
-        .await?
-        .ok_or(RouteError::NotFound)?;
+        if auth.completed_at.is_none() {
+            if let Err(e) = limiter.check_email_authentication_send_code(requester, &auth) {
+                tracing::warn!(error = &e as &dyn std::error::Error);
+                return Ok(Json(ResendVerificationResponse {
+                    status: "rate_limited",
+                    error: None,
+                }));
+            }
 
-    if auth.completed_at.is_some() {
-        return Ok(Json(ResendVerificationResponse {
-            status: "already_verified",
-            error: None }));
+            repo.queue_job()
+                .schedule_job(
+                    &mut rng,
+                    &clock,
+                    SendEmailAuthenticationCodeJob::new(&auth, "en".to_owned()),
+                )
+                .await?;
+
+            repo.save().await?;
+
+            return Ok(Json(ResendVerificationResponse {
+                status: "resent",
+                error: None,
+            }));
+        }
     }
 
-    // Rate limit
-    if let Err(e) = limiter.check_email_authentication_send_code(requester, &auth) {
-        tracing::warn!(error = &e as &dyn std::error::Error);
-        return Ok(Json(ResendVerificationResponse {
-            status: "rate_limited",
-            error: None }));
+    if let Some(phone_authentication_id) = registration.phone_authentication_id {
+        let auth = repo
+            .user_phone()
+            .lookup_authentication(phone_authentication_id)
+            .await?
+            .ok_or(RouteError::NotFound)?;
+
+        if auth.completed_at.is_none() {
+            if let Err(e) = limiter.check_registration(requester) {
+                tracing::warn!(error = &e as &dyn std::error::Error);
+                return Ok(Json(ResendVerificationResponse {
+                    status: "rate_limited",
+                    error: None,
+                }));
+            }
+
+            repo.queue_job()
+                .schedule_job(
+                    &mut rng,
+                    &clock,
+                    SendSmsAuthenticationCodeJob::new(&auth, "en".to_owned()),
+                )
+                .await?;
+
+            repo.save().await?;
+
+            return Ok(Json(ResendVerificationResponse {
+                status: "resent",
+                error: None,
+            }));
+        }
     }
-
-    repo.queue_job()
-        .schedule_job(
-            &mut rng,
-            &clock,
-            SendEmailAuthenticationCodeJob::new(&auth, "en".to_owned()),
-        )
-        .await?;
-
-    repo.save().await?;
 
     Ok(Json(ResendVerificationResponse {
-        status: "resent",
-        error: None }))
+        status: "already_verified",
+        error: None,
+    }))
 }
 
 // ── POST /api/v1/auth/register/:id/verify-phone ────────────────
