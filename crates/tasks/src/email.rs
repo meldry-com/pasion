@@ -117,10 +117,13 @@ impl RunnableJob for SendEmailAuthenticationCodeJob {
 
         let context = EmailVerificationContext::new(code, browser_session, registration)
             .with_language(language);
-        mailer
-            .send_verification_email(mailbox, &context)
-            .await
-            .map_err(JobError::fail)?;
+        if let Err(e) = mailer.send_verification_email(mailbox, &context).await {
+            tracing::warn!(
+                error = &e as &dyn std::error::Error,
+                "Failed to send email verification code. code = {}",
+                context.code(),
+            );
+        }
 
         repo.save().await.map_err(JobError::fail)?;
 

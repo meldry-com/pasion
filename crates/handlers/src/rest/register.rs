@@ -15,7 +15,6 @@ use pasion_storage::{
     RepositoryAccess,
     queue::{
         ProvisionUserJob, QueueJobRepositoryExt as _, SendEmailAuthenticationCodeJob,
-        SendSmsAuthenticationCodeJob,
     },
     user::{UserEmailFilter, UserEmailRepository, UserFilter, UserPhoneRepository, UserRepository},
 };
@@ -33,23 +32,26 @@ use crate::RequesterFingerprint;
 
 // ── Shared helpers ─────────────────────────────────────────────
 
-/// Determine the next step for a registration based on its current state.
-fn next_step(
-    registration: &UserRegistration,
-    email_verified: bool,
-    phone_verified: bool,
-) -> &'static str {
-    // If there is a phone authentication that is not yet completed, verify it first
-    if registration.phone_authentication_id.is_some() && !phone_verified {
-        return "verify_phone";
-    }
-
-    // If there is an email authentication that is not yet completed, verify it next
+/// Determine the next verification step for a registration.
+///
+/// The registration flow supports pluggable verification steps. Each
+/// verification target (email, phone, …) has its own endpoint
+/// (`verify-email`, `verify-phone`, …) and its own authentication record on
+/// the registration.  This function inspects which verifications have been
+/// configured and returns the first one that is still pending.
+///
+/// **Current default flow:** `register → verify_email → display_name → finish`
+fn next_step(registration: &UserRegistration, email_verified: bool) -> &'static str {
+    // Email verification
     if registration.email_authentication_id.is_some() && !email_verified {
         return "verify_email";
     }
 
-    // If the display name is not set, that's the next step
+    // Future: phone / other verification steps can be added here, e.g.:
+    // if registration.phone_authentication_id.is_some() && !phone_verified {
+    //     return "verify_phone";
+    // }
+
     if registration.display_name.is_none() {
         return "display_name";
     }
@@ -58,21 +60,15 @@ fn next_step(
 }
 
 /// Build the list of steps that have been completed so far.
-fn steps_completed(
-    registration: &UserRegistration,
-    email_verified: bool,
-    phone_verified: bool,
-) -> Vec<&'static str> {
+fn steps_completed(registration: &UserRegistration, email_verified: bool) -> Vec<&'static str> {
     let mut steps = Vec::new();
     steps.push("register"); // the initial registration step is always done
-
-    if registration.phone_authentication_id.is_some() && phone_verified {
-        steps.push("verify_phone");
-    }
 
     if registration.email_authentication_id.is_some() && email_verified {
         steps.push("verify_email");
     }
+
+    // Future: phone / other verification steps can be added here.
 
     if registration.display_name.is_some() {
         steps.push("display_name");
@@ -314,32 +310,10 @@ pub async fn post_register(
         (registration, true)
     };
 
-    // Set up phone authentication if needed
-    let phone_str = input.phone.unwrap_or_default();
-    let (registration, phone_verified) = if !phone_str.is_empty() {
-        let user_phone_authentication = repo
-            .user_phone()
-            .add_authentication_for_registration(&mut rng, &clock, phone_str, &registration)
-            .await?;
-
-        // Schedule SMS sending
-        repo.queue_job()
-            .schedule_job(
-                &mut rng,
-                &clock,
-                SendSmsAuthenticationCodeJob::new(&user_phone_authentication, "en".to_owned()),
-            )
-            .await?;
-
-        let reg = repo
-            .user_registration()
-            .set_phone_authentication(registration, &user_phone_authentication)
-            .await?;
-
-        (reg, false)
-    } else {
-        (registration, true)
-    };
+    // NOTE: Phone number from input.phone is accepted but not verified during
+    // registration.  When phone verification is needed, a similar block to the
+    // email setup above should be added here using UserPhoneAuthentication +
+    // the verify-phone endpoint.
 
     // Hash and store the password
     let password = Zeroizing::new(input.password);
@@ -355,7 +329,7 @@ pub async fn post_register(
 
     repo.save().await?;
 
-    let step = next_step(&registration, email_verified, phone_verified);
+    let step = next_step(&registration, email_verified);
 
     Ok(Json(RegisterResponse {
         status: "success",
@@ -408,24 +382,12 @@ pub async fn get_registration(
         true // no email auth means no email step needed
     };
 
-    // Check if phone has been verified
-    let phone_verified = if let Some(phone_auth_id) = registration.phone_authentication_id {
-        let phone_auth = repo
-            .user_phone()
-            .lookup_authentication(phone_auth_id)
-            .await?
-            .ok_or(RouteError::NotFound)?;
-        phone_auth.completed_at.is_some()
-    } else {
-        true // no phone auth means no phone step needed
-    };
-
     let email_pending = registration.email_authentication_id.is_some() && !email_verified;
 
     repo.cancel().await?;
 
-    let completed = steps_completed(&registration, email_verified, phone_verified);
-    let step = next_step(&registration, email_verified, phone_verified);
+    let completed = steps_completed(&registration, email_verified);
+    let step = next_step(&registration, email_verified);
 
     Ok(Json(RegistrationStatusResponse {
         id: registration.id.to_string(),
@@ -538,7 +500,7 @@ pub async fn post_verify_email(
 
     Ok(Json(VerifyEmailResponse {
         status: "success",
-        next_step: Some(next_step(&registration, true, true)),
+        next_step: Some(next_step(&registration, true)),
         error: None,
     }))
 }
@@ -635,7 +597,7 @@ pub async fn post_verify_phone(
 
     Ok(Json(VerifyPhoneResponse {
         status: "success",
-        next_step: Some(next_step(&registration, true, true)),
+        next_step: Some(next_step(&registration, true)),
         error: None,
     }))
 }
