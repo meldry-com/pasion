@@ -1,10 +1,12 @@
 use std::net::IpAddr;
 
 use anyhow::Error as AnyhowError;
+use chrono::Duration;
 use pasion_data_model::{
     BrowserSession, Clock, UpstreamOAuthAuthorizationSession, UpstreamOAuthLink, User,
     UserEmailAuthentication, UserPhoneAuthentication, UserRegistration, UserRegistrationToken,
 };
+use pasion_matrix::HomeserverConnection;
 use pasion_storage::{
     BoxRepository, RepositoryAccess, RepositoryError,
     queue::{ProvisionUserJob, QueueJobRepositoryExt as _},
@@ -227,6 +229,33 @@ pub enum SetRegistrationDisplayNameError {
 
     #[error("invalid display name")]
     InvalidDisplayName,
+
+    #[error(transparent)]
+    Repository(#[from] RepositoryError),
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum HomeserverCheckMode {
+    Strict,
+    BestEffort,
+}
+
+#[derive(Debug, Error)]
+pub enum CheckRegistrationFinishEligibilityError {
+    #[error("registration session has expired")]
+    RegistrationExpired,
+
+    #[error("registration does not belong to this browser")]
+    BrowserSessionMissing,
+
+    #[error("username is already taken")]
+    UsernameTaken,
+
+    #[error("username is not available")]
+    UsernameNotAvailable,
+
+    #[error("failed to verify username availability")]
+    HomeserverUnavailable(#[source] AnyhowError),
 
     #[error(transparent)]
     Repository(#[from] RepositoryError),
@@ -667,6 +696,47 @@ pub async fn set_registration_display_name(
     repo.save().await?;
 
     Ok(registration)
+}
+
+pub async fn check_registration_finish_eligibility(
+    repo: &mut BoxRepository,
+    clock: &dyn Clock,
+    homeserver: &dyn HomeserverConnection,
+    registration: &UserRegistration,
+    browser_session_present: Option<bool>,
+    homeserver_check_mode: HomeserverCheckMode,
+) -> Result<(), CheckRegistrationFinishEligibilityError> {
+    if clock.now() - registration.created_at > Duration::hours(1) {
+        return Err(CheckRegistrationFinishEligibilityError::RegistrationExpired);
+    }
+
+    if let Some(false) = browser_session_present {
+        return Err(CheckRegistrationFinishEligibilityError::BrowserSessionMissing);
+    }
+
+    if repo.user().exists(&registration.username).await? {
+        return Err(CheckRegistrationFinishEligibilityError::UsernameTaken);
+    }
+
+    match homeserver
+        .is_localpart_available(&registration.username)
+        .await
+    {
+        Ok(true) => Ok(()),
+        Ok(false) => Err(CheckRegistrationFinishEligibilityError::UsernameNotAvailable),
+        Err(error) => match homeserver_check_mode {
+            HomeserverCheckMode::Strict => {
+                Err(CheckRegistrationFinishEligibilityError::HomeserverUnavailable(error))
+            }
+            HomeserverCheckMode::BestEffort => {
+                tracing::warn!(
+                    error = %error,
+                    "Failed to check localpart availability during finish, skipping homeserver check"
+                );
+                Ok(())
+            }
+        },
+    }
 }
 
 pub async fn prepare_registration_completion(

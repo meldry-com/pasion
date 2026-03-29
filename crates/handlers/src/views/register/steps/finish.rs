@@ -1,6 +1,5 @@
 use std::sync::{Arc, LazyLock};
 
-use chrono::Duration;
 use opentelemetry::metrics::Counter;
 use pasion_matrix::HomeserverConnection;
 use pasion_router::PostAuthAction;
@@ -14,8 +13,10 @@ use crate::rest::DepotExt;
 use crate::{
     METER,
     account_registration::{
-        LoadRegistrationProgressError, PrepareRegistrationCompletionError, complete_registration,
-        load_registration_progress, prepare_registration_completion,
+        CheckRegistrationFinishEligibilityError, HomeserverCheckMode,
+        LoadRegistrationProgressError, PrepareRegistrationCompletionError,
+        check_registration_finish_eligibility, complete_registration, load_registration_progress,
+        prepare_registration_completion,
     },
     rest,
     views::shared::OptionalPostAuthAction,
@@ -78,43 +79,45 @@ pub async fn get(
         return Ok(());
     }
 
-    // Make sure the registration session hasn't expired
-    // XXX: this duration is hard-coded, could be configurable
-    if clock.now() - registration.created_at > Duration::hours(1) {
-        return Err(InternalError::from_anyhow(anyhow::anyhow!(
-            "Registration session has expired"
-        )));
-    }
-
     // Check that this registration belongs to this browser
     let registrations = UserRegistrationSessions::load(&cookie_jar);
-    if !registrations.contains(&registration) {
-        // XXX: we should have a better error screen here
-        return Err(InternalError::from_anyhow(anyhow::anyhow!(
-            "Could not find the registration in the browser cookies"
-        )));
-    }
-
-    // Let's perform last minute checks on the registration, especially to avoid
-    // race conditions where multiple users register with the same username or email
-    // address
-
-    if repo.user().exists(&registration.username).await? {
-        // XXX: this could have a better error message, but as this is unlikely to
-        // happen, we're fine with a vague message for now
-        return Err(InternalError::from_anyhow(anyhow::anyhow!(
-            "Username is already taken"
-        )));
-    }
-
-    if !homeserver
-        .is_localpart_available(&registration.username)
-        .await
-        .map_err(InternalError::from_anyhow)?
+    match check_registration_finish_eligibility(
+        &mut repo,
+        &clock,
+        homeserver.as_ref(),
+        &registration,
+        Some(registrations.contains(&registration)),
+        HomeserverCheckMode::Strict,
+    )
+    .await
     {
-        return Err(InternalError::from_anyhow(anyhow::anyhow!(
-            "Username is not available"
-        )));
+        Ok(()) => {}
+        Err(CheckRegistrationFinishEligibilityError::RegistrationExpired) => {
+            return Err(InternalError::from_anyhow(anyhow::anyhow!(
+                "Registration session has expired"
+            )));
+        }
+        Err(CheckRegistrationFinishEligibilityError::BrowserSessionMissing) => {
+            return Err(InternalError::from_anyhow(anyhow::anyhow!(
+                "Could not find the registration in the browser cookies"
+            )));
+        }
+        Err(CheckRegistrationFinishEligibilityError::UsernameTaken) => {
+            return Err(InternalError::from_anyhow(anyhow::anyhow!(
+                "Username is already taken"
+            )));
+        }
+        Err(CheckRegistrationFinishEligibilityError::UsernameNotAvailable) => {
+            return Err(InternalError::from_anyhow(anyhow::anyhow!(
+                "Username is not available"
+            )));
+        }
+        Err(CheckRegistrationFinishEligibilityError::HomeserverUnavailable(error)) => {
+            return Err(InternalError::from_anyhow(error));
+        }
+        Err(CheckRegistrationFinishEligibilityError::Repository(error)) => {
+            return Err(InternalError::from_anyhow(error.into()));
+        }
     }
 
     let registration_id = registration.id;

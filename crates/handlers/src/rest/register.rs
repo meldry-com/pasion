@@ -6,7 +6,6 @@
 
 use std::str::FromStr;
 
-use chrono::Duration;
 use lettre::Address;
 use pasion_matrix::HomeserverConnection;
 use pasion_salvo_utils::SessionInfoExt;
@@ -24,11 +23,13 @@ use super::{DepotExt, RouteError, extract_bound_activity_tracker, make_clock, ma
 use crate::{
     RequesterFingerprint,
     account_registration::{
+        CheckRegistrationFinishEligibilityError, HomeserverCheckMode,
         LoadRegistrationProgressError, PrepareRegistrationCompletionError,
         ResendRegistrationVerificationError, ResendRegistrationVerificationStatus,
         SetRegistrationDisplayNameError, StartPasswordRegistrationRequest,
-        VerifyRegistrationEmailCodeError, VerifyRegistrationPhoneCodeError, complete_registration,
-        load_registration_progress, next_registration_step, prepare_registration_completion,
+        VerifyRegistrationEmailCodeError, VerifyRegistrationPhoneCodeError,
+        check_registration_finish_eligibility, complete_registration, load_registration_progress,
+        next_registration_step, prepare_registration_completion,
         resend_pending_registration_verification, set_registration_display_name,
         start_password_registration, verify_registration_email_code,
         verify_registration_phone_code,
@@ -712,38 +713,44 @@ pub async fn post_finish(
         }));
     }
 
-    // Check session expiry (1 hour)
-    if clock.now() - progress.registration.created_at > Duration::hours(1) {
-        return Ok(Json(FinishRegistrationResponse {
-            status: "error",
-            error: Some("registration_expired".into()),
-        }));
-    }
-
-    // Verify username is still available
-    if repo.user().exists(&progress.registration.username).await? {
-        return Ok(Json(FinishRegistrationResponse {
-            status: "error",
-            error: Some("username_taken".into()),
-        }));
-    }
-
-    match homeserver
-        .is_localpart_available(&progress.registration.username)
-        .await
+    match check_registration_finish_eligibility(
+        &mut repo,
+        &clock,
+        homeserver.as_ref(),
+        &progress.registration,
+        None,
+        HomeserverCheckMode::BestEffort,
+    )
+    .await
     {
-        Ok(false) => {
+        Ok(()) => {}
+        Err(CheckRegistrationFinishEligibilityError::RegistrationExpired) => {
+            return Ok(Json(FinishRegistrationResponse {
+                status: "error",
+                error: Some("registration_expired".into()),
+            }));
+        }
+        Err(CheckRegistrationFinishEligibilityError::UsernameTaken) => {
+            return Ok(Json(FinishRegistrationResponse {
+                status: "error",
+                error: Some("username_taken".into()),
+            }));
+        }
+        Err(CheckRegistrationFinishEligibilityError::UsernameNotAvailable) => {
             return Ok(Json(FinishRegistrationResponse {
                 status: "error",
                 error: Some("username_not_available".into()),
             }));
         }
-        Ok(true) => {}
-        Err(e) => {
-            tracing::warn!(
-                error = &*e as &dyn std::error::Error,
-                "Failed to check localpart availability during finish, skipping homeserver check"
-            );
+        Err(CheckRegistrationFinishEligibilityError::BrowserSessionMissing) => {
+            return Err(RouteError::Internal(Box::new(std::io::Error::new(
+                std::io::ErrorKind::Other,
+                "Registration browser session is required",
+            ))));
+        }
+        Err(CheckRegistrationFinishEligibilityError::HomeserverUnavailable(_)) => unreachable!(),
+        Err(CheckRegistrationFinishEligibilityError::Repository(error)) => {
+            return Err(error.into());
         }
     }
 
