@@ -63,6 +63,7 @@ mod account_contacts;
 mod account_password;
 mod account_recovery;
 mod account_registration;
+mod account_sessions;
 mod activity_tracker;
 mod captcha;
 mod notification_dispatch;

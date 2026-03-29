@@ -1,4 +1,3 @@
-use pasion_storage::queue::{QueueJobRepositoryExt as _, SyncDevicesJob};
 use salvo::oapi::ToSchema;
 use salvo::prelude::*;
 use serde::{Deserialize, Serialize};
@@ -6,6 +5,11 @@ use serde::{Deserialize, Serialize};
 use super::{
     DepotExt, NodeType, RouteError, UserAgentInfo, extract_bound_activity_tracker,
     extract_session_info, get_requester, make_clock, make_rng, parse_user_agent,
+};
+use crate::account_sessions::{
+    AccountSessionError, end_browser_session as end_browser_session_service,
+    end_oauth2_session as end_oauth2_session_service, load_browser_session_detail,
+    load_oauth2_session_detail, set_oauth2_session_human_name,
 };
 
 // ── Response types ─────────────────────────────────────────────
@@ -77,27 +81,16 @@ pub async fn get_session(
     let session_info = extract_session_info(req, depot);
 
     let repo = repo_factory.create().await?;
-    let (requester, mut repo) =
-        get_requester(&clock, &activity_tracker, repo, &session_info).await?;
+    let (requester, repo) = get_requester(&clock, &activity_tracker, repo, &session_info).await?;
 
     let (node_type, ulid) = NodeType::deserialize(&id)?;
 
     let response = match node_type {
         NodeType::BrowserSession => {
-            let session = repo
-                .browser_session()
-                .lookup(ulid)
-                .await?
-                .ok_or(RouteError::NotFound)?;
-
-            if !requester.is_owner_or_admin(Some(session.user.id)) {
-                return Err(RouteError::Unauthorized);
-            }
-
-            let last_auth = repo
-                .browser_session()
-                .get_last_authentication(&session)
-                .await?;
+            let detail = load_browser_session_detail(repo, &requester, ulid)
+                .await
+                .map_err(map_account_session_error)?;
+            let session = detail.session;
 
             SessionDetailResponse::BrowserSession(BrowserSessionDetail {
                 id: NodeType::BrowserSession.serialize(session.id),
@@ -106,30 +99,23 @@ pub async fn get_session(
                 last_active_ip: session.last_active_ip.map(|ip| ip.to_string()),
                 last_active_at: session.last_active_at.map(|t| t.to_rfc3339()),
                 created_at: Some(session.created_at.to_rfc3339()),
-                last_authentication: last_auth.map(|a| AuthenticationData {
+                last_authentication: detail.last_authentication.map(|a| AuthenticationData {
                     id: NodeType::Authentication.serialize(a.id),
                     created_at: a.created_at.to_rfc3339(),
                 }),
             })
         }
         NodeType::OAuth2Session => {
-            let session = repo
-                .oauth2_session()
-                .lookup(ulid)
-                .await?
-                .ok_or(RouteError::NotFound)?;
-
-            if !requester.is_owner_or_admin(session.user_id) {
-                return Err(RouteError::Unauthorized);
-            }
-
-            let client = repo.oauth2_client().lookup(session.client_id).await?;
+            let detail = load_oauth2_session_detail(repo, &requester, ulid)
+                .await
+                .map_err(map_account_session_error)?;
+            let session = detail.session;
 
             SessionDetailResponse::Oauth2Session(Oauth2SessionDetail {
                 id: NodeType::OAuth2Session.serialize(session.id),
                 scope: Some(session.scope.to_string()),
                 display_name: None,
-                client: client.map(|c| Oauth2ClientBrief {
+                client: detail.client.map(|c| Oauth2ClientBrief {
                     id: NodeType::OAuth2Client.serialize(c.id),
                     client_id: c.client_id.to_string(),
                     client_name: c.client_name.clone(),
@@ -144,8 +130,6 @@ pub async fn get_session(
         }
         _ => return Err(RouteError::BadRequest("not a session id".into())),
     };
-
-    repo.cancel().await?;
 
     Ok(Json(response))
 }
@@ -174,21 +158,11 @@ pub async fn end_browser_session(
     let session_info = extract_session_info(req, depot);
 
     let repo = repo_factory.create().await?;
-    let (requester, mut repo) =
-        get_requester(&clock, &activity_tracker, repo, &session_info).await?;
+    let (requester, repo) = get_requester(&clock, &activity_tracker, repo, &session_info).await?;
 
-    let session = repo
-        .browser_session()
-        .lookup(ulid)
-        .await?
-        .ok_or(RouteError::NotFound)?;
-
-    if !requester.is_owner_or_admin(Some(session.user.id)) {
-        return Err(RouteError::Unauthorized);
-    }
-
-    repo.browser_session().finish(&clock, session).await?;
-    repo.save().await?;
+    end_browser_session_service(repo, &requester, &clock, ulid)
+        .await
+        .map_err(map_account_session_error)?;
 
     Ok(Json(EndSessionResponse { status: "ENDED" }))
 }
@@ -213,30 +187,11 @@ pub async fn end_oauth2_session(
     let session_info = extract_session_info(req, depot);
 
     let repo = repo_factory.create().await?;
-    let (requester, mut repo) =
-        get_requester(&clock, &activity_tracker, repo, &session_info).await?;
+    let (requester, repo) = get_requester(&clock, &activity_tracker, repo, &session_info).await?;
 
-    let session = repo
-        .oauth2_session()
-        .lookup(ulid)
-        .await?
-        .ok_or(RouteError::NotFound)?;
-
-    if !requester.is_owner_or_admin(session.user_id) {
-        return Err(RouteError::Unauthorized);
-    }
-
-    if let Some(user_id) = session.user_id {
-        let user = repo.user().lookup(user_id).await?;
-        if let Some(user) = user {
-            repo.queue_job()
-                .schedule_job(&mut rng, &clock, SyncDevicesJob::new(&user))
-                .await?;
-        }
-    }
-
-    repo.oauth2_session().finish(&clock, session).await?;
-    repo.save().await?;
+    end_oauth2_session_service(repo, &requester, &mut rng, &clock, ulid)
+        .await
+        .map_err(map_account_session_error)?;
 
     Ok(Json(EndSessionResponse { status: "ENDED" }))
 }
@@ -277,42 +232,26 @@ pub async fn set_oauth2_session_name(
     let session_info = extract_session_info(req, depot);
 
     let repo = repo_factory.create().await?;
-    let (requester, mut repo) =
-        get_requester(&clock, &activity_tracker, repo, &session_info).await?;
+    let (requester, repo) = get_requester(&clock, &activity_tracker, repo, &session_info).await?;
 
-    let session = repo
-        .oauth2_session()
-        .lookup(ulid)
-        .await?
-        .ok_or(RouteError::NotFound)?;
-
-    if !requester.is_owner_or_admin(session.user_id) {
-        return Err(RouteError::Unauthorized);
-    }
-
-    let session = repo
-        .oauth2_session()
-        .set_human_name(session, input.human_name.clone())
-        .await?;
-
-    // Update device display name on homeserver for each device in scope
-    if let Some(name) = &input.human_name {
-        for token in session.scope.iter() {
-            if let Some(device_id) =
-                token.strip_prefix("urn:matrix:org.matrix.msc2967.client:device:")
-            {
-                let _ = homeserver
-                    .update_device_display_name(
-                        &session.user_id.map(|_| "").unwrap_or(""),
-                        device_id,
-                        name,
-                    )
-                    .await;
-            }
-        }
-    }
-
-    repo.save().await?;
+    set_oauth2_session_human_name(
+        repo,
+        &requester,
+        &clock,
+        homeserver.as_ref(),
+        ulid,
+        input.human_name,
+    )
+    .await
+    .map_err(map_account_session_error)?;
 
     Ok(Json(SetSessionNameResponse { status: "UPDATED" }))
+}
+
+fn map_account_session_error(error: AccountSessionError) -> RouteError {
+    match error {
+        AccountSessionError::NotFound => RouteError::NotFound,
+        AccountSessionError::Unauthorized => RouteError::Unauthorized,
+        AccountSessionError::Repository(error) => RouteError::from(error),
+    }
 }
