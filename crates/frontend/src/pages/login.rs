@@ -6,6 +6,14 @@ use crate::{
     pages::Route,
 };
 
+/// Read a query parameter from the current URL.
+fn get_query_param(name: &str) -> Option<String> {
+    let window = web_sys::window()?;
+    let search = window.location().search().ok()?;
+    let params = web_sys::UrlSearchParams::new_with_str(&search).ok()?;
+    params.get(name)
+}
+
 #[component]
 pub fn Login() -> Element {
     let providers_data = use_resource(|| async {
@@ -98,7 +106,16 @@ fn LoginForm(providers: ProvidersResponse) -> Element {
                                 submitting.set(false);
                                 match result {
                                     Ok(resp) if resp.status == "success" => {
-                                        nav.push(Route::AccountSettings {});
+                                        // Check if this login is part of an OAuth authorization flow
+                                        if let (Some(kind), Some(id)) = (get_query_param("kind"), get_query_param("id")) {
+                                            if kind == "continue_authorization_grant" {
+                                                nav.push(Route::Consent { grant_id: id });
+                                            } else {
+                                                nav.push(Route::AccountSettings {});
+                                            }
+                                        } else {
+                                            nav.push(Route::AccountSettings {});
+                                        }
                                     }
                                     Ok(resp) => {
                                         let msg = match resp.error.as_deref() {
