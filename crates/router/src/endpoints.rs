@@ -498,6 +498,13 @@ pub struct Account {
     action: Option<AccountAction>,
 }
 
+impl Account {
+    #[must_use]
+    pub const fn new(action: Option<AccountAction>) -> Self {
+        Self { action }
+    }
+}
+
 impl Route for Account {
     type Query = AccountAction;
 

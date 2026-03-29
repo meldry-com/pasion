@@ -39,8 +39,8 @@
 ### C. Legacy 入口去编排化
 
 - [x] 清理 `views/*` 对 repo / policy / limiter / task 的直接编排依赖。
-- [ ] 清理 `rest/*` 中剩余的“查库 + 校验 + 状态推进 + 发任务”组合逻辑。
-- [ ] 让 handler 保持为纯 HTTP adapter，只做请求解析与响应映射。
+- [x] 清理 `rest/*` 中剩余的“查库 + 校验 + 状态推进 + 发任务”组合逻辑。
+- [x] 让 handler 保持为纯 HTTP adapter，只做请求解析与响应映射。
 
 ## P1：高优先级
 
@@ -95,4 +95,4 @@
 
 ## 当前下一项
 
-- [ ] 清理 `rest/*` 中剩余的“查库 + 校验 + 状态推进 + 发任务”组合逻辑。
+- [ ] 设计 workflow 相关新表：`workflow_instance` / `workflow_step` / `workflow_event` / `workflow_deadline` / `workflow_audit_log`。

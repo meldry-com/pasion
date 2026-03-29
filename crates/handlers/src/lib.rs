@@ -76,6 +76,7 @@ mod rate_limit;
 mod session;
 #[cfg(test)]
 mod test_utils;
+mod upstream_link_workflow;
 
 static METER: LazyLock<Meter> = LazyLock::new(|| {
     let scope = opentelemetry::InstrumentationScope::builder(env!("CARGO_PKG_NAME"))

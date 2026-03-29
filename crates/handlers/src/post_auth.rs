@@ -21,6 +21,29 @@ impl From<Option<PostAuthAction>> for OptionalPostAuthAction {
 }
 
 impl OptionalPostAuthAction {
+    pub fn next_relative_url(&self, url_builder: &UrlBuilder) -> String {
+        self.post_auth_action.as_ref().map_or_else(
+            || url_builder.relative_url_for(&pasion_router::Index),
+            |action| match action {
+                PostAuthAction::ContinueAuthorizationGrant { id } => {
+                    url_builder.relative_url_for(&pasion_router::Consent(*id))
+                }
+                PostAuthAction::ContinueDeviceCodeGrant { id } => {
+                    url_builder.relative_url_for(&pasion_router::DeviceCodeConsent::new(*id))
+                }
+                PostAuthAction::ChangePassword => {
+                    url_builder.relative_url_for(&pasion_router::AccountPasswordChange)
+                }
+                PostAuthAction::LinkUpstream { id } => {
+                    url_builder.relative_url_for(&pasion_router::UpstreamOAuth2Link::new(*id))
+                }
+                PostAuthAction::ManageAccount { action } => {
+                    url_builder.relative_url_for(&pasion_router::Account::new(action.clone()))
+                }
+            },
+        )
+    }
+
     pub fn go_next_or_default<T: Route>(
         &self,
         url_builder: &UrlBuilder,

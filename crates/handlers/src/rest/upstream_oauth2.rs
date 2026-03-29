@@ -3,24 +3,10 @@
 //! These endpoints replace the server-rendered HTML handlers in
 //! `upstream_oauth2::link`, providing JSON responses for the Dioxus SPA.
 
-use std::net::IpAddr;
 use std::sync::LazyLock;
 
-use minijinja::Environment;
 use opentelemetry::{Key, KeyValue, metrics::Counter};
-use pasion_data_model::{UpstreamOAuthAuthorizationSession, UserRegistration};
-use pasion_jose::jwt::Jwt;
-use pasion_matrix::HomeserverConnection;
-use pasion_salvo_utils::SessionInfoExt;
-use pasion_salvo_utils::cookies::CookieJar;
-use pasion_storage::{
-    RepositoryAccess,
-    upstream_oauth2::{
-        UpstreamOAuthLinkRepository, UpstreamOAuthProviderRepository,
-        UpstreamOAuthSessionRepository,
-    },
-    user::{BrowserSessionRepository, UserEmailRepository, UserRepository},
-};
+use pasion_salvo_utils::{SessionInfoExt, cookies::CookieJar};
 use salvo::oapi::ToSchema;
 use salvo::prelude::*;
 use serde::{Deserialize, Serialize};
@@ -29,11 +15,12 @@ use ulid::Ulid;
 use super::{DepotExt, RouteError, extract_bound_activity_tracker, make_clock, make_rng};
 use crate::{
     METER,
-    post_auth::OptionalPostAuthAction,
-    upstream_oauth2::{
-        UpstreamSessionsCookie,
-        template::{AttributeMappingContext, environment},
+    upstream_link_workflow::{
+        LoadUpstreamLinkOutcome, SubmitUpstreamLinkError, SubmitUpstreamLinkOutcome,
+        UpstreamLinkAction, UpstreamLinkRegistrationAction, UpstreamLinkWorkflowError,
+        load_upstream_link_context, load_upstream_link_state, submit_upstream_link_action,
     },
+    upstream_oauth2::UpstreamSessionsCookie,
     user_registration_cookie::UserRegistrationSessions,
 };
 
@@ -52,12 +39,6 @@ static REGISTRATION_COUNTER: LazyLock<Counter<u64>> = LazyLock::new(|| {
         .build()
 });
 const PROVIDER: Key = Key::from_static_str("provider");
-
-const DEFAULT_LOCALPART_TEMPLATE: &str = "{{ user.preferred_username }}";
-const DEFAULT_DISPLAYNAME_TEMPLATE: &str = "{{ user.name }}";
-const DEFAULT_EMAIL_TEMPLATE: &str = "{{ user.email }}";
-
-// ── Response types ──────────────────────────────────────────────
 
 /// The possible states of an upstream OAuth2 link.
 #[derive(Serialize, ToSchema)]
@@ -126,36 +107,6 @@ pub struct LinkActionResponse {
     pub field_errors: Option<serde_json::Value>,
 }
 
-// ── Helper: render attribute template ───────────────────────────
-
-fn render_attribute_template(
-    environment: &Environment,
-    template: &str,
-    context: &minijinja::Value,
-    required: bool,
-) -> Result<Option<String>, RouteError> {
-    match environment.render_str(template, context) {
-        Ok(value) if value.is_empty() => {
-            if required {
-                return Err(RouteError::Internal(
-                    format!("Template {template:?} rendered to an empty string").into(),
-                ));
-            }
-            Ok(None)
-        }
-        Ok(value) => Ok(Some(value)),
-        Err(source) => {
-            if required {
-                return Err(RouteError::Internal(Box::new(source)));
-            }
-            tracing::warn!(error = &source as &dyn std::error::Error, %template, "Error while rendering template");
-            Ok(None)
-        }
-    }
-}
-
-// ── GET /api/v1/upstream-oauth2/link/{id} ───────────────────────
-
 /// Return the current state of an upstream OAuth2 link as JSON.
 #[endpoint]
 pub async fn get_link(
@@ -169,310 +120,45 @@ pub async fn get_link(
     let mut rng = make_rng();
     let clock = make_clock();
     let mut repo = depot.repo_factory()?.create().await?;
-    let homeserver = depot.homeserver()?;
     let cookie_jar = depot.cookie_jar(req)?;
-    let activity_tracker = extract_bound_activity_tracker(req, depot);
     let user_agent = req
         .headers()
         .get(http::header::USER_AGENT)
         .and_then(|v| v.to_str().ok())
         .map(|s| s.to_owned());
     let url_builder = depot.url_builder()?;
-    let policy_factory = depot.policy_factory()?;
-    let mut policy = policy_factory
-        .instantiate()
-        .await
-        .map_err(|e| RouteError::Internal(e.into()))?;
     let site_config = depot.site_config()?;
+    let ip_address = extract_bound_activity_tracker(req, depot).ip();
 
     let sessions_cookie = UpstreamSessionsCookie::load(&cookie_jar);
-    let (session_id, post_auth_action) = sessions_cookie
-        .lookup_link(link_id)
-        .map_err(|_| RouteError::BadRequest("missing upstream session cookie".into()))?;
-    // Clone to release borrow on sessions_cookie
-    let post_auth_action = post_auth_action.cloned();
+    let (session_info, cookie_jar) = cookie_jar.session_info();
+    let context = load_upstream_link_context(&mut repo, &session_info, &sessions_cookie, link_id)
+        .await
+        .map_err(map_upstream_link_workflow_error)?;
+    let outcome = load_upstream_link_state(
+        &mut repo,
+        &mut *rng,
+        &*clock,
+        &url_builder,
+        &site_config,
+        user_agent,
+        ip_address,
+        context,
+    )
+    .await
+    .map_err(map_upstream_link_workflow_error)?;
 
-    let link = repo
-        .upstream_oauth_link()
-        .lookup(link_id)
-        .await?
-        .ok_or(RouteError::NotFound)?;
-
-    let upstream_session = repo
-        .upstream_oauth_session()
-        .lookup(session_id)
-        .await?
-        .ok_or(RouteError::NotFound)?;
-
-    if upstream_session.link_id() != Some(link.id) {
-        return Err(RouteError::NotFound);
+    if matches!(
+        &outcome,
+        LoadUpstreamLinkOutcome::Authenticated { .. }
+            | LoadUpstreamLinkOutcome::LoggedIn { .. }
+            | LoadUpstreamLinkOutcome::Registered { .. }
+    ) {
+        repo.save().await?;
     }
 
-    if upstream_session.is_consumed() {
-        return Err(RouteError::BadRequest("session already consumed".into()));
-    }
-
-    let (user_session_info, cookie_jar) = cookie_jar.session_info();
-    let maybe_user_session = user_session_info.load_active_session(&mut repo).await?;
-
-    let state = match (maybe_user_session, link.user_id) {
-        (Some(session), Some(user_id)) if session.user.id == user_id => {
-            // Already linked & matches current user — auto-consume
-            let upstream_session = repo
-                .upstream_oauth_session()
-                .consume(&clock, upstream_session, &session)
-                .await?;
-
-            repo.browser_session()
-                .authenticate_with_upstream(&mut rng, &clock, &session, &upstream_session)
-                .await?;
-
-            let cookie_jar = cookie_jar.set_session(&session);
-            repo.save().await?;
-
-            let action = OptionalPostAuthAction {
-                post_auth_action: post_auth_action.clone(),
-            };
-            let redirect = action.go_next(&url_builder);
-            // Get the redirect URL from the Redirect response
-            let redirect_url = "/".to_owned(); // fallback
-
-            cookie_jar.write_to_response(res);
-            res.render(Json(LinkResponse {
-                state: LinkState::Redirect { redirect_url },
-            }));
-            return Ok(());
-        }
-
-        (Some(_session), Some(user_id)) => {
-            // Link exists but belongs to different user
-            let user = repo
-                .user()
-                .lookup(user_id)
-                .await?
-                .ok_or(RouteError::LoadFailed)?;
-
-            LinkState::LinkMismatch {
-                existing_username: user.username.clone(),
-            }
-        }
-
-        (Some(_session), None) => {
-            // User logged in, link not connected
-            let provider = repo
-                .upstream_oauth_provider()
-                .lookup(link.provider_id)
-                .await?
-                .ok_or(RouteError::LoadFailed)?;
-
-            LinkState::SuggestLink {
-                provider_name: provider.human_name.clone(),
-                upstream_subject: Some(link.subject.clone()),
-            }
-        }
-
-        (None, Some(user_id)) => {
-            // Link exists, user not logged in — auto-login
-            let user = repo
-                .user()
-                .lookup(user_id)
-                .await?
-                .ok_or(RouteError::LoadFailed)?;
-
-            if user.deactivated_at.is_some() {
-                LinkState::AccountDeactivated {
-                    username: user.username.clone(),
-                }
-            } else if user.locked_at.is_some() {
-                LinkState::AccountLocked {
-                    username: user.username.clone(),
-                }
-            } else {
-                // Auto-login
-                let session = repo
-                    .browser_session()
-                    .add(&mut rng, &clock, &user, user_agent.clone())
-                    .await?;
-
-                let upstream_session = repo
-                    .upstream_oauth_session()
-                    .consume(&clock, upstream_session, &session)
-                    .await?;
-
-                repo.browser_session()
-                    .authenticate_with_upstream(&mut rng, &clock, &session, &upstream_session)
-                    .await?;
-
-                let cookie_jar = sessions_cookie
-                    .consume_link(link_id)
-                    .map_err(|e| RouteError::Internal(e.into()))?
-                    .save(cookie_jar, &clock)
-                    .set_session(&session);
-
-                repo.save().await?;
-
-                LOGIN_COUNTER.add(
-                    1,
-                    &[KeyValue::new(
-                        PROVIDER,
-                        upstream_session.provider_id.to_string(),
-                    )],
-                );
-
-                let action = OptionalPostAuthAction {
-                    post_auth_action: post_auth_action.clone(),
-                };
-
-                cookie_jar.write_to_response(res);
-                res.render(Json(LinkResponse {
-                    state: LinkState::Redirect {
-                        redirect_url: "/".to_owned(),
-                    },
-                }));
-                return Ok(());
-            }
-        }
-
-        (None, None) => {
-            // Not linked, not logged in — show registration
-            let id_token = upstream_session
-                .id_token()
-                .map(Jwt::try_from)
-                .transpose()
-                .map_err(|e| RouteError::Internal(e.into()))?;
-
-            let provider = repo
-                .upstream_oauth_provider()
-                .lookup(link.provider_id)
-                .await?
-                .ok_or(RouteError::LoadFailed)?;
-
-            let env = environment();
-
-            let mut context = AttributeMappingContext::new();
-            if let Some(id_token) = id_token {
-                let (_, payload) = id_token.into_parts();
-                context = context.with_id_token_claims(payload);
-            }
-            if let Some(extra_callback_parameters) = upstream_session.extra_callback_parameters() {
-                context = context.with_extra_callback_parameters(extra_callback_parameters.clone());
-            }
-            if let Some(userinfo) = upstream_session.userinfo() {
-                context = context.with_userinfo_claims(userinfo.clone());
-            }
-            let context = context.build();
-
-            let suggested_display_name = if provider.claims_imports.displayname.ignore() {
-                None
-            } else {
-                let template = provider
-                    .claims_imports
-                    .displayname
-                    .template
-                    .as_deref()
-                    .unwrap_or(DEFAULT_DISPLAYNAME_TEMPLATE);
-                render_attribute_template(
-                    &env,
-                    template,
-                    &context,
-                    provider.claims_imports.displayname.is_required(),
-                )?
-            };
-
-            let suggested_email = if provider.claims_imports.email.ignore() {
-                None
-            } else {
-                let template = provider
-                    .claims_imports
-                    .email
-                    .template
-                    .as_deref()
-                    .unwrap_or(DEFAULT_EMAIL_TEMPLATE);
-                render_attribute_template(
-                    &env,
-                    template,
-                    &context,
-                    provider.claims_imports.email.is_required(),
-                )?
-            };
-
-            let suggested_username = if provider.claims_imports.localpart.ignore() {
-                None
-            } else {
-                let template = provider
-                    .claims_imports
-                    .localpart
-                    .template
-                    .as_deref()
-                    .unwrap_or(DEFAULT_LOCALPART_TEMPLATE);
-                render_attribute_template(
-                    &env,
-                    template,
-                    &context,
-                    provider.claims_imports.localpart.is_required(),
-                )?
-            };
-
-            // If skip_confirmation is configured, auto-register
-            if provider.claims_imports.skip_confirmation {
-                let Some(ref localpart) = suggested_username else {
-                    return Err(RouteError::Internal(
-                        "No localpart available even though the provider is configured to skip confirmation".into()
-                    ));
-                };
-
-                REGISTRATION_COUNTER.add(1, &[KeyValue::new(PROVIDER, provider.id.to_string())]);
-
-                let registration = prepare_user_registration(
-                    &mut rng,
-                    &clock,
-                    &mut repo,
-                    upstream_session,
-                    localpart.clone(),
-                    suggested_display_name.clone(),
-                    suggested_email.clone(),
-                    activity_tracker.ip(),
-                    user_agent,
-                    post_auth_action.map(|action| serde_json::json!(action)),
-                )
-                .await?;
-
-                let registrations = UserRegistrationSessions::load(&cookie_jar);
-                let cookie_jar = sessions_cookie
-                    .consume_link(link_id)
-                    .map_err(|e| RouteError::Internal(e.into()))?
-                    .save(cookie_jar, &clock);
-                let cookie_jar = registrations.add(&registration).save(cookie_jar, &clock);
-
-                repo.save().await?;
-
-                let redirect_url = format!("/register/{}/finish", registration.id);
-                cookie_jar.write_to_response(res);
-                res.render(Json(LinkResponse {
-                    state: LinkState::Redirect { redirect_url },
-                }));
-                return Ok(());
-            }
-
-            LinkState::Register {
-                suggested_username,
-                username_forced: provider.claims_imports.localpart.is_forced_or_required(),
-                suggested_display_name,
-                display_name_forced: provider.claims_imports.displayname.is_forced_or_required(),
-                suggested_email,
-                email_forced: provider.claims_imports.email.is_forced_or_required(),
-                provider_name: provider.human_name.clone(),
-                has_tos: site_config.tos_uri.is_some(),
-            }
-        }
-    };
-
-    cookie_jar.write_to_response(res);
-    res.render(Json(LinkResponse { state }));
-    Ok(())
+    render_get_link_outcome(res, cookie_jar, sessions_cookie, &clock, link_id, outcome)
 }
-
-// ── POST /api/v1/upstream-oauth2/link/{id} ──────────────────────
 
 /// Process a user's choice for an upstream OAuth2 link.
 #[endpoint]
@@ -493,15 +179,15 @@ pub async fn post_link(
         .get(http::header::USER_AGENT)
         .and_then(|v| v.to_str().ok())
         .map(|s| s.to_owned());
-    let policy_factory = depot.policy_factory()?;
-    let mut policy = policy_factory
+    let mut policy = depot
+        .policy_factory()?
         .instantiate()
         .await
         .map_err(|e| RouteError::Internal(e.into()))?;
-    let activity_tracker = extract_bound_activity_tracker(req, depot);
     let homeserver = depot.homeserver()?;
     let url_builder = depot.url_builder()?;
     let site_config = depot.site_config()?;
+    let ip_address = extract_bound_activity_tracker(req, depot).ip();
 
     let input: LinkAction = req
         .parse_json()
@@ -509,272 +195,54 @@ pub async fn post_link(
         .map_err(|_| RouteError::BadRequest("invalid json body".into()))?;
 
     let sessions_cookie = UpstreamSessionsCookie::load(&cookie_jar);
-    let (session_id, post_auth_action) = sessions_cookie
-        .lookup_link(link_id)
-        .map_err(|_| RouteError::BadRequest("missing upstream session cookie".into()))?;
+    let (session_info, cookie_jar) = cookie_jar.session_info();
+    let context = load_upstream_link_context(&mut repo, &session_info, &sessions_cookie, link_id)
+        .await
+        .map_err(map_upstream_link_workflow_error)?;
 
-    let link = repo
-        .upstream_oauth_link()
-        .lookup(link_id)
-        .await?
-        .ok_or(RouteError::NotFound)?;
+    let action = match input {
+        LinkAction::Link => UpstreamLinkAction::LinkCurrentSession,
+        LinkAction::Register {
+            username,
+            import_email,
+            import_display_name,
+            accept_terms,
+        } => UpstreamLinkAction::Register(UpstreamLinkRegistrationAction {
+            username,
+            import_email: import_email.unwrap_or(false),
+            import_display_name: import_display_name.unwrap_or(false),
+            accept_terms: accept_terms.unwrap_or(false),
+        }),
+    };
 
-    let upstream_session = repo
-        .upstream_oauth_session()
-        .lookup(session_id)
-        .await?
-        .ok_or(RouteError::NotFound)?;
+    let outcome = submit_upstream_link_action(
+        &mut repo,
+        &mut *rng,
+        &*clock,
+        &url_builder,
+        &*homeserver,
+        &mut policy,
+        &site_config,
+        user_agent,
+        ip_address,
+        context,
+        action,
+    )
+    .await;
 
-    if upstream_session.link_id() != Some(link.id) {
-        return Err(RouteError::NotFound);
-    }
-
-    if upstream_session.is_consumed() {
-        return Err(RouteError::BadRequest("session already consumed".into()));
-    }
-
-    let (user_session_info, cookie_jar) = cookie_jar.session_info();
-    let maybe_user_session = user_session_info.load_active_session(&mut repo).await?;
-
-    match (maybe_user_session, link.user_id, input) {
-        (Some(session), None, LinkAction::Link) => {
-            // Link the upstream identity to the current user
-            repo.upstream_oauth_link()
-                .associate_to_user(&link, &session.user)
-                .await?;
-
-            let upstream_session = repo
-                .upstream_oauth_session()
-                .consume(&clock, upstream_session, &session)
-                .await?;
-
-            repo.browser_session()
-                .authenticate_with_upstream(&mut rng, &clock, &session, &upstream_session)
-                .await?;
-
-            let cookie_jar = sessions_cookie
-                .consume_link(link_id)
-                .map_err(|e| RouteError::Internal(e.into()))?
-                .save(cookie_jar, &clock)
-                .set_session(&session);
-
-            repo.save().await?;
-
-            cookie_jar.write_to_response(res);
-            res.render(Json(LinkActionResponse {
-                status: "success",
-                redirect_url: Some("/".to_owned()),
-                error: None,
-                field_errors: None,
-            }));
-            Ok(())
+    match outcome {
+        Ok(outcome) => {
+            if matches!(
+                &outcome,
+                SubmitUpstreamLinkOutcome::Linked { .. }
+                    | SubmitUpstreamLinkOutcome::Registered { .. }
+            ) {
+                repo.save().await?;
+            }
+            render_post_link_outcome(res, cookie_jar, sessions_cookie, &clock, link_id, outcome)
         }
-
-        (
-            None,
-            None,
-            LinkAction::Register {
-                username,
-                import_email,
-                import_display_name,
-                accept_terms,
-            },
-        ) => {
-            let import_email = import_email.unwrap_or(false);
-            let import_display_name = import_display_name.unwrap_or(false);
-            let accept_terms = accept_terms.unwrap_or(false);
-
-            let id_token = upstream_session
-                .id_token()
-                .map(Jwt::try_from)
-                .transpose()
-                .map_err(|e| RouteError::Internal(e.into()))?;
-
-            let provider = repo
-                .upstream_oauth_provider()
-                .lookup(link.provider_id)
-                .await?
-                .ok_or(RouteError::LoadFailed)?;
-
-            let env = environment();
-            let mut context = AttributeMappingContext::new();
-            if let Some(id_token) = id_token {
-                let (_, payload) = id_token.into_parts();
-                context = context.with_id_token_claims(payload);
-            }
-            if let Some(extra_callback_parameters) = upstream_session.extra_callback_parameters() {
-                context = context.with_extra_callback_parameters(extra_callback_parameters.clone());
-            }
-            if let Some(userinfo) = upstream_session.userinfo() {
-                context = context.with_userinfo_claims(userinfo.clone());
-            }
-            let context = context.build();
-
-            let display_name = if provider
-                .claims_imports
-                .displayname
-                .should_import(import_display_name)
-            {
-                let template = provider
-                    .claims_imports
-                    .displayname
-                    .template
-                    .as_deref()
-                    .unwrap_or(DEFAULT_DISPLAYNAME_TEMPLATE);
-                render_attribute_template(
-                    &env,
-                    template,
-                    &context,
-                    provider.claims_imports.displayname.is_required(),
-                )?
-            } else {
-                None
-            };
-
-            let email = if provider.claims_imports.email.should_import(import_email) {
-                let template = provider
-                    .claims_imports
-                    .email
-                    .template
-                    .as_deref()
-                    .unwrap_or(DEFAULT_EMAIL_TEMPLATE);
-                render_attribute_template(
-                    &env,
-                    template,
-                    &context,
-                    provider.claims_imports.email.is_required(),
-                )?
-            } else {
-                None
-            };
-
-            let username = if provider.claims_imports.localpart.is_forced_or_required() {
-                let template = provider
-                    .claims_imports
-                    .localpart
-                    .template
-                    .as_deref()
-                    .unwrap_or(DEFAULT_LOCALPART_TEMPLATE);
-                render_attribute_template(&env, template, &context, true)?
-            } else {
-                username
-            }
-            .unwrap_or_default();
-
-            // Validate
-            let mut field_errors = serde_json::Map::new();
-
-            if username.is_empty() {
-                field_errors.insert("username".into(), serde_json::json!("required"));
-            } else if repo.user().exists(&username).await? {
-                field_errors.insert("username".into(), serde_json::json!("exists"));
-            } else if !homeserver
-                .is_localpart_available(&username)
-                .await
-                .map_err(|e| RouteError::Internal(e.into()))?
-            {
-                field_errors.insert("username".into(), serde_json::json!("exists"));
-            }
-
-            if site_config.tos_uri.is_some() && !accept_terms {
-                field_errors.insert("accept_terms".into(), serde_json::json!("required"));
-            }
-
-            // Policy check
-            let eval_result = policy
-                .evaluate_register(pasion_policy::RegisterInput {
-                    registration_method: pasion_policy::RegistrationMethod::UpstreamOAuth2,
-                    username: &username,
-                    email: email.as_deref(),
-                    requester: pasion_policy::Requester {
-                        ip_address: activity_tracker.ip(),
-                        user_agent: user_agent.clone(),
-                        ..Default::default()
-                    },
-                })
-                .await
-                .map_err(|e| RouteError::Internal(e.into()))?;
-
-            for violation in &eval_result.violations {
-                match violation.field.as_deref() {
-                    Some("username") => {
-                        field_errors.insert(
-                            "username".into(),
-                            serde_json::json!(if violation.msg.is_empty() {
-                                "policy_violation"
-                            } else {
-                                &violation.msg
-                            }),
-                        );
-                    }
-                    _ => {
-                        field_errors.insert(
-                            "_form".into(),
-                            serde_json::json!(if violation.msg.is_empty() {
-                                "policy_violation"
-                            } else {
-                                &violation.msg
-                            }),
-                        );
-                    }
-                }
-            }
-
-            if !field_errors.is_empty() {
-                cookie_jar.write_to_response(res);
-                res.render(Json(LinkActionResponse {
-                    status: "error",
-                    redirect_url: None,
-                    error: Some("validation_failed".to_owned()),
-                    field_errors: Some(serde_json::Value::Object(field_errors)),
-                }));
-                return Ok(());
-            }
-
-            REGISTRATION_COUNTER.add(1, &[KeyValue::new(PROVIDER, provider.id.to_string())]);
-
-            let mut registration = prepare_user_registration(
-                &mut rng,
-                &clock,
-                &mut repo,
-                upstream_session,
-                username,
-                display_name,
-                email,
-                activity_tracker.ip(),
-                user_agent,
-                post_auth_action.map(|action| serde_json::json!(action)),
-            )
-            .await?;
-
-            if let Some(terms_url) = &site_config.tos_uri {
-                registration = repo
-                    .user_registration()
-                    .set_terms_url(registration, terms_url.clone())
-                    .await?;
-            }
-
-            let registrations = UserRegistrationSessions::load(&cookie_jar);
-            let cookie_jar = sessions_cookie
-                .consume_link(link_id)
-                .map_err(|e| RouteError::Internal(e.into()))?
-                .save(cookie_jar, &clock);
-            let cookie_jar = registrations.add(&registration).save(cookie_jar, &clock);
-
-            repo.save().await?;
-
-            let redirect_url = format!("/register/{}/finish", registration.id);
+        Err(SubmitUpstreamLinkError::InvalidAction) => {
             cookie_jar.write_to_response(res);
-            res.render(Json(LinkActionResponse {
-                status: "success",
-                redirect_url: Some(redirect_url),
-                error: None,
-                field_errors: None,
-            }));
-            Ok(())
-        }
-
-        _ => {
             res.render(Json(LinkActionResponse {
                 status: "error",
                 redirect_url: None,
@@ -783,61 +251,200 @@ pub async fn post_link(
             }));
             Ok(())
         }
+        Err(SubmitUpstreamLinkError::Validation { field_errors }) => {
+            cookie_jar.write_to_response(res);
+            res.render(Json(LinkActionResponse {
+                status: "error",
+                redirect_url: None,
+                error: Some("validation_failed".to_owned()),
+                field_errors: Some(field_errors),
+            }));
+            Ok(())
+        }
+        Err(SubmitUpstreamLinkError::Workflow(error)) => {
+            Err(map_upstream_link_workflow_error(error))
+        }
     }
 }
 
-/// Create a user registration using attributes from the upstream authorization session.
-async fn prepare_user_registration(
-    rng: &mut pasion_data_model::BoxRng,
+fn render_get_link_outcome(
+    res: &mut Response,
+    cookie_jar: CookieJar,
+    sessions_cookie: UpstreamSessionsCookie,
     clock: &pasion_data_model::BoxClock,
-    repo: &mut pasion_storage::BoxRepository,
-    upstream_session: UpstreamOAuthAuthorizationSession,
-    localpart: String,
-    displayname: Option<String>,
-    email: Option<String>,
-    ip_address: Option<IpAddr>,
-    user_agent: Option<String>,
-    post_auth_action: Option<serde_json::Value>,
-) -> Result<UserRegistration, RouteError> {
-    let mut registration = repo
-        .user_registration()
-        .add(
-            rng,
-            clock,
-            localpart,
-            ip_address,
-            user_agent,
-            post_auth_action,
-        )
-        .await?;
+    link_id: Ulid,
+    outcome: LoadUpstreamLinkOutcome,
+) -> Result<(), RouteError> {
+    match outcome {
+        LoadUpstreamLinkOutcome::Authenticated {
+            session,
+            redirect_url,
+        } => {
+            let cookie_jar = cookie_jar.set_session(&session);
+            cookie_jar.write_to_response(res);
+            res.render(Json(LinkResponse {
+                state: LinkState::Redirect { redirect_url },
+            }));
+        }
+        LoadUpstreamLinkOutcome::LoggedIn {
+            session,
+            redirect_url,
+            provider_id,
+        } => {
+            let cookie_jar = sessions_cookie
+                .consume_link(link_id)
+                .map_err(|e| RouteError::Internal(e.into()))?
+                .save(cookie_jar, clock)
+                .set_session(&session);
 
-    if let Some(email) = email {
-        let authentication = repo
-            .user_email()
-            .add_authentication_for_registration(rng, clock, email, &registration)
-            .await?;
-        let authentication = repo
-            .user_email()
-            .complete_authentication_with_upstream(clock, authentication, &upstream_session)
-            .await?;
+            LOGIN_COUNTER.add(1, &[KeyValue::new(PROVIDER, provider_id.to_string())]);
 
-        registration = repo
-            .user_registration()
-            .set_email_authentication(registration, &authentication)
-            .await?;
+            cookie_jar.write_to_response(res);
+            res.render(Json(LinkResponse {
+                state: LinkState::Redirect { redirect_url },
+            }));
+        }
+        LoadUpstreamLinkOutcome::LinkMismatch { existing_username } => {
+            cookie_jar.write_to_response(res);
+            res.render(Json(LinkResponse {
+                state: LinkState::LinkMismatch { existing_username },
+            }));
+        }
+        LoadUpstreamLinkOutcome::SuggestLink {
+            provider_name,
+            upstream_subject,
+        } => {
+            cookie_jar.write_to_response(res);
+            res.render(Json(LinkResponse {
+                state: LinkState::SuggestLink {
+                    provider_name,
+                    upstream_subject,
+                },
+            }));
+        }
+        LoadUpstreamLinkOutcome::Register { screen } => {
+            cookie_jar.write_to_response(res);
+            res.render(Json(LinkResponse {
+                state: LinkState::Register {
+                    suggested_username: screen.suggested_username,
+                    username_forced: screen.username_forced,
+                    suggested_display_name: screen.suggested_display_name,
+                    display_name_forced: screen.display_name_forced,
+                    suggested_email: screen.suggested_email,
+                    email_forced: screen.email_forced,
+                    provider_name: screen.provider_name,
+                    has_tos: screen.has_tos,
+                },
+            }));
+        }
+        LoadUpstreamLinkOutcome::Registered {
+            registration,
+            redirect_url,
+            provider_id,
+        } => {
+            let registrations = UserRegistrationSessions::load(&cookie_jar);
+            let cookie_jar = sessions_cookie
+                .consume_link(link_id)
+                .map_err(|e| RouteError::Internal(e.into()))?
+                .save(cookie_jar, clock);
+            let cookie_jar = registrations.add(&registration).save(cookie_jar, clock);
+
+            REGISTRATION_COUNTER.add(1, &[KeyValue::new(PROVIDER, provider_id.to_string())]);
+
+            cookie_jar.write_to_response(res);
+            res.render(Json(LinkResponse {
+                state: LinkState::Redirect { redirect_url },
+            }));
+        }
+        LoadUpstreamLinkOutcome::AccountDeactivated { username } => {
+            cookie_jar.write_to_response(res);
+            res.render(Json(LinkResponse {
+                state: LinkState::AccountDeactivated { username },
+            }));
+        }
+        LoadUpstreamLinkOutcome::AccountLocked { username } => {
+            cookie_jar.write_to_response(res);
+            res.render(Json(LinkResponse {
+                state: LinkState::AccountLocked { username },
+            }));
+        }
     }
 
-    if let Some(name) = displayname {
-        registration = repo
-            .user_registration()
-            .set_display_name(registration, name)
-            .await?;
+    Ok(())
+}
+
+fn render_post_link_outcome(
+    res: &mut Response,
+    cookie_jar: CookieJar,
+    sessions_cookie: UpstreamSessionsCookie,
+    clock: &pasion_data_model::BoxClock,
+    link_id: Ulid,
+    outcome: SubmitUpstreamLinkOutcome,
+) -> Result<(), RouteError> {
+    match outcome {
+        SubmitUpstreamLinkOutcome::Linked {
+            session,
+            redirect_url,
+        } => {
+            let cookie_jar = sessions_cookie
+                .consume_link(link_id)
+                .map_err(|e| RouteError::Internal(e.into()))?
+                .save(cookie_jar, clock)
+                .set_session(&session);
+
+            cookie_jar.write_to_response(res);
+            res.render(Json(LinkActionResponse {
+                status: "success",
+                redirect_url: Some(redirect_url),
+                error: None,
+                field_errors: None,
+            }));
+        }
+        SubmitUpstreamLinkOutcome::Registered {
+            registration,
+            redirect_url,
+            provider_id,
+        } => {
+            let registrations = UserRegistrationSessions::load(&cookie_jar);
+            let cookie_jar = sessions_cookie
+                .consume_link(link_id)
+                .map_err(|e| RouteError::Internal(e.into()))?
+                .save(cookie_jar, clock);
+            let cookie_jar = registrations.add(&registration).save(cookie_jar, clock);
+
+            REGISTRATION_COUNTER.add(1, &[KeyValue::new(PROVIDER, provider_id.to_string())]);
+
+            cookie_jar.write_to_response(res);
+            res.render(Json(LinkActionResponse {
+                status: "success",
+                redirect_url: Some(redirect_url),
+                error: None,
+                field_errors: None,
+            }));
+        }
     }
 
-    let registration = repo
-        .user_registration()
-        .set_upstream_oauth_authorization_session(registration, &upstream_session)
-        .await?;
+    Ok(())
+}
 
-    Ok(registration)
+fn map_upstream_link_workflow_error(error: UpstreamLinkWorkflowError) -> RouteError {
+    match error {
+        UpstreamLinkWorkflowError::MissingCookie => {
+            RouteError::BadRequest("missing upstream session cookie".into())
+        }
+        UpstreamLinkWorkflowError::LinkNotFound | UpstreamLinkWorkflowError::SessionNotFound => {
+            RouteError::NotFound
+        }
+        UpstreamLinkWorkflowError::SessionConsumed => {
+            RouteError::BadRequest("session already consumed".into())
+        }
+        UpstreamLinkWorkflowError::UserNotFound | UpstreamLinkWorkflowError::ProviderNotFound => {
+            RouteError::LoadFailed
+        }
+        UpstreamLinkWorkflowError::RequiredAttributeEmpty { .. }
+        | UpstreamLinkWorkflowError::RequiredAttributeRender { .. }
+        | UpstreamLinkWorkflowError::HomeserverConnection(_)
+        | UpstreamLinkWorkflowError::Repository(_)
+        | UpstreamLinkWorkflowError::Internal(_) => RouteError::Internal(Box::new(error)),
+    }
 }
