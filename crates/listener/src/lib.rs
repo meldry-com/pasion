@@ -9,16 +9,16 @@
 
 use self::{maybe_tls::TlsStreamInfo, proxy_protocol::ProxyProtocolV1Info};
 
-/// Buffered-prefix stream used during protocol negotiation.
-pub mod stream;
 /// TLS acceptor and stream metadata.
 pub mod maybe_tls;
 /// PROXY protocol v1 parsing and optional acceptor.
 pub mod proxy_protocol;
-/// TCP / Unix socket binding and accept.
-pub mod unix_or_tcp;
 /// Connection accept loop with graceful shutdown.
 pub mod server;
+/// Buffered-prefix stream used during protocol negotiation.
+pub mod stream;
+/// TCP / Unix socket binding and accept.
+pub mod unix_or_tcp;
 
 // Keep `rewind` as a hidden alias for internal use within this crate.
 pub(crate) use stream as rewind;
@@ -44,7 +44,11 @@ impl ConnectionInfo {
         proxy: Option<ProxyProtocolV1Info>,
         net_peer_addr: Option<std::net::SocketAddr>,
     ) -> Self {
-        Self { tls, proxy, net_peer_addr }
+        Self {
+            tls,
+            proxy,
+            net_peer_addr,
+        }
     }
 
     /// TLS session metadata, if the connection was established over TLS.
@@ -88,11 +92,17 @@ impl ConnectionInfo {
     // Keep old method names as hidden aliases for backward compat.
     #[doc(hidden)]
     #[must_use]
-    pub fn get_tls_ref(&self) -> Option<&TlsStreamInfo> { self.tls() }
+    pub fn get_tls_ref(&self) -> Option<&TlsStreamInfo> {
+        self.tls()
+    }
     #[doc(hidden)]
     #[must_use]
-    pub fn get_proxy_ref(&self) -> Option<&ProxyProtocolV1Info> { self.proxy() }
+    pub fn get_proxy_ref(&self) -> Option<&ProxyProtocolV1Info> {
+        self.proxy()
+    }
     #[doc(hidden)]
     #[must_use]
-    pub fn get_peer_addr(&self) -> Option<std::net::SocketAddr> { self.peer_addr() }
+    pub fn get_peer_addr(&self) -> Option<std::net::SocketAddr> {
+        self.peer_addr()
+    }
 }

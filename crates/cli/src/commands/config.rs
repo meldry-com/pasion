@@ -111,7 +111,10 @@ impl Options {
                     .await
                     .context("could not run migrations")?;
 
-                let conn = pool.get().await.context("could not get connection from pool")?;
+                let conn = pool
+                    .get()
+                    .await
+                    .context("could not get connection from pool")?;
 
                 crate::sync::config_sync(
                     config.upstream_oauth2,

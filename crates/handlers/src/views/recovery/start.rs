@@ -14,8 +14,8 @@ use pasion_templates::{
 use salvo::{prelude::*, writing::Text};
 use serde::{Deserialize, Serialize};
 
-use crate::{RequesterFingerprint, rest};
 use crate::rest::DepotExt;
+use crate::{RequesterFingerprint, rest};
 
 #[derive(Deserialize, Serialize)]
 pub(crate) struct StartRecoveryForm {

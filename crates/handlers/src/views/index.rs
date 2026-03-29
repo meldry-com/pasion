@@ -2,11 +2,11 @@ use pasion_salvo_utils::{InternalError, cookies::CookieJar, csrf::CsrfExt};
 use pasion_templates::{IndexContext, TemplateContext, Templates};
 use salvo::{prelude::*, writing::Text};
 
+use crate::rest::DepotExt;
 use crate::{
     rest,
     session::{SessionOrFallback, load_session_or_fallback},
 };
-use crate::rest::DepotExt;
 
 #[handler]
 pub async fn get(

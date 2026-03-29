@@ -15,8 +15,8 @@ use salvo::{prelude::*, writing::Text};
 use ulid::Ulid;
 
 use super::super::cookie::UserRegistrationSessions;
-use crate::{METER, rest, views::shared::OptionalPostAuthAction};
 use crate::rest::DepotExt;
+use crate::{METER, rest, views::shared::OptionalPostAuthAction};
 
 static PASSWORD_REGISTER_COUNTER: LazyLock<Counter<u64>> = LazyLock::new(|| {
     METER

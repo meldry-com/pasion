@@ -102,49 +102,33 @@ impl TryFrom<OAuth2ClientRow> for Client {
             grant_types.push(GrantType::DeviceCode);
         }
 
-        let logo_uri = row
-            .logo_uri
-            .map(|s| s.parse())
-            .transpose()
-            .map_err(|e| {
-                DatabaseInconsistencyError::on("oauth2_clients")
-                    .column("logo_uri")
-                    .row(id)
-                    .source(e)
-            })?;
+        let logo_uri = row.logo_uri.map(|s| s.parse()).transpose().map_err(|e| {
+            DatabaseInconsistencyError::on("oauth2_clients")
+                .column("logo_uri")
+                .row(id)
+                .source(e)
+        })?;
 
-        let client_uri = row
-            .client_uri
-            .map(|s| s.parse())
-            .transpose()
-            .map_err(|e| {
-                DatabaseInconsistencyError::on("oauth2_clients")
-                    .column("client_uri")
-                    .row(id)
-                    .source(e)
-            })?;
+        let client_uri = row.client_uri.map(|s| s.parse()).transpose().map_err(|e| {
+            DatabaseInconsistencyError::on("oauth2_clients")
+                .column("client_uri")
+                .row(id)
+                .source(e)
+        })?;
 
-        let policy_uri = row
-            .policy_uri
-            .map(|s| s.parse())
-            .transpose()
-            .map_err(|e| {
-                DatabaseInconsistencyError::on("oauth2_clients")
-                    .column("policy_uri")
-                    .row(id)
-                    .source(e)
-            })?;
+        let policy_uri = row.policy_uri.map(|s| s.parse()).transpose().map_err(|e| {
+            DatabaseInconsistencyError::on("oauth2_clients")
+                .column("policy_uri")
+                .row(id)
+                .source(e)
+        })?;
 
-        let tos_uri = row
-            .tos_uri
-            .map(|s| s.parse())
-            .transpose()
-            .map_err(|e| {
-                DatabaseInconsistencyError::on("oauth2_clients")
-                    .column("tos_uri")
-                    .row(id)
-                    .source(e)
-            })?;
+        let tos_uri = row.tos_uri.map(|s| s.parse()).transpose().map_err(|e| {
+            DatabaseInconsistencyError::on("oauth2_clients")
+                .column("tos_uri")
+                .row(id)
+                .source(e)
+        })?;
 
         let id_token_signed_response_alg = row
             .id_token_signed_response_alg
@@ -305,11 +289,7 @@ impl OAuth2ClientRepository for PgOAuth2ClientRepository<'_> {
         Ok(Some(Client::try_from(res)?))
     }
 
-    #[tracing::instrument(
-        name = "db.oauth2_client.find_by_metadata_digest",
-        skip_all,
-        err,
-    )]
+    #[tracing::instrument(name = "db.oauth2_client.find_by_metadata_digest", skip_all, err)]
     async fn find_by_metadata_digest(
         &mut self,
         digest: &str,
@@ -326,11 +306,7 @@ impl OAuth2ClientRepository for PgOAuth2ClientRepository<'_> {
         Ok(Some(Client::try_from(res)?))
     }
 
-    #[tracing::instrument(
-        name = "db.oauth2_client.load_batch",
-        skip_all,
-        err,
-    )]
+    #[tracing::instrument(name = "db.oauth2_client.load_batch", skip_all, err)]
     async fn load_batch(
         &mut self,
         ids: BTreeSet<Ulid>,
@@ -567,11 +543,7 @@ impl OAuth2ClientRepository for PgOAuth2ClientRepository<'_> {
         })
     }
 
-    #[tracing::instrument(
-        name = "db.oauth2_client.all_static",
-        skip_all,
-        err,
-    )]
+    #[tracing::instrument(name = "db.oauth2_client.all_static", skip_all, err)]
     async fn all_static(&mut self) -> Result<Vec<Client>, Self::Error> {
         let res: Vec<OAuth2ClientRow> = oauth2_clients::table
             .filter(oauth2_clients::is_static.eq(Some(true)))
@@ -604,43 +576,48 @@ impl OAuth2ClientRepository for PgOAuth2ClientRepository<'_> {
         .await?;
 
         // Delete the OAuth 2 sessions related data: access tokens
-        diesel::delete(oauth2_access_tokens::table.filter(
-            oauth2_access_tokens::oauth2_session_id.eq_any(
-                oauth2_sessions::table
-                    .filter(oauth2_sessions::oauth2_client_id.eq(client_uuid))
-                    .select(oauth2_sessions::oauth2_session_id),
+        diesel::delete(
+            oauth2_access_tokens::table.filter(
+                oauth2_access_tokens::oauth2_session_id.eq_any(
+                    oauth2_sessions::table
+                        .filter(oauth2_sessions::oauth2_client_id.eq(client_uuid))
+                        .select(oauth2_sessions::oauth2_session_id),
+                ),
             ),
-        ))
+        )
         .execute(self.conn)
         .await?;
 
         // Delete refresh tokens
-        diesel::delete(oauth2_refresh_tokens::table.filter(
-            oauth2_refresh_tokens::oauth2_session_id.eq_any(
-                oauth2_sessions::table
-                    .filter(oauth2_sessions::oauth2_client_id.eq(client_uuid))
-                    .select(oauth2_sessions::oauth2_session_id),
+        diesel::delete(
+            oauth2_refresh_tokens::table.filter(
+                oauth2_refresh_tokens::oauth2_session_id.eq_any(
+                    oauth2_sessions::table
+                        .filter(oauth2_sessions::oauth2_client_id.eq(client_uuid))
+                        .select(oauth2_sessions::oauth2_session_id),
+                ),
             ),
-        ))
+        )
         .execute(self.conn)
         .await?;
 
         // Delete sessions
         diesel::delete(
-            oauth2_sessions::table
-                .filter(oauth2_sessions::oauth2_client_id.eq(client_uuid)),
+            oauth2_sessions::table.filter(oauth2_sessions::oauth2_client_id.eq(client_uuid)),
         )
         .execute(self.conn)
         .await?;
 
         // Delete personal access tokens owned by the client
-        diesel::delete(personal_access_tokens::table.filter(
-            personal_access_tokens::personal_session_id.eq_any(
-                personal_sessions::table
-                    .filter(personal_sessions::owner_oauth2_client_id.eq(client_uuid))
-                    .select(personal_sessions::personal_session_id),
+        diesel::delete(
+            personal_access_tokens::table.filter(
+                personal_access_tokens::personal_session_id.eq_any(
+                    personal_sessions::table
+                        .filter(personal_sessions::owner_oauth2_client_id.eq(client_uuid))
+                        .select(personal_sessions::personal_session_id),
+                ),
             ),
-        ))
+        )
         .execute(self.conn)
         .await?;
 
@@ -653,11 +630,9 @@ impl OAuth2ClientRepository for PgOAuth2ClientRepository<'_> {
         .await?;
 
         // Now delete the client itself
-        let rows_affected = diesel::delete(
-            oauth2_clients::table.find(client_uuid),
-        )
-        .execute(self.conn)
-        .await?;
+        let rows_affected = diesel::delete(oauth2_clients::table.find(client_uuid))
+            .execute(self.conn)
+            .await?;
 
         DatabaseError::ensure_affected_rows_usize(rows_affected, 1)
     }

@@ -133,9 +133,7 @@ impl Node<Ulid> for PersonalSessionAndAccessTokenRow {
     }
 }
 
-impl TryFrom<PersonalSessionAndAccessTokenRow>
-    for (PersonalSession, Option<PersonalAccessToken>)
-{
+impl TryFrom<PersonalSessionAndAccessTokenRow> for (PersonalSession, Option<PersonalAccessToken>) {
     type Error = DatabaseInconsistencyError;
 
     fn try_from(value: PersonalSessionAndAccessTokenRow) -> Result<Self, Self::Error> {
@@ -328,12 +326,10 @@ impl PersonalSessionRepository for PgPersonalSessionRepository<'_> {
         .execute(self.conn)
         .await?;
 
-        let rows_affected = diesel::update(
-            personal_sessions::table.find(Uuid::from(session.id)),
-        )
-        .set(personal_sessions::revoked_at.eq(Some(revoked_at)))
-        .execute(self.conn)
-        .await?;
+        let rows_affected = diesel::update(personal_sessions::table.find(Uuid::from(session.id)))
+            .set(personal_sessions::revoked_at.eq(Some(revoked_at)))
+            .execute(self.conn)
+            .await?;
 
         DatabaseError::ensure_affected_rows_usize(rows_affected, 1)?;
 
@@ -342,11 +338,7 @@ impl PersonalSessionRepository for PgPersonalSessionRepository<'_> {
             .map_err(DatabaseError::to_invalid_operation)
     }
 
-    #[tracing::instrument(
-        name = "db.personal_session.revoke_bulk",
-        skip_all,
-        err,
-    )]
+    #[tracing::instrument(name = "db.personal_session.revoke_bulk", skip_all, err)]
     async fn revoke_bulk(
         &mut self,
         clock: &dyn Clock,
@@ -359,11 +351,9 @@ impl PersonalSessionRepository for PgPersonalSessionRepository<'_> {
         // reference token fields (expires_before, expires_after, expires).
         let mut sub = personal_sessions::table
             .left_join(
-                personal_access_tokens::table.on(
-                    personal_sessions::personal_session_id
-                        .eq(personal_access_tokens::personal_session_id)
-                        .and(personal_access_tokens::revoked_at.is_null()),
-                ),
+                personal_access_tokens::table.on(personal_sessions::personal_session_id
+                    .eq(personal_access_tokens::personal_session_id)
+                    .and(personal_access_tokens::revoked_at.is_null())),
             )
             .select(personal_sessions::personal_session_id)
             .into_boxed();
@@ -374,8 +364,7 @@ impl PersonalSessionRepository for PgPersonalSessionRepository<'_> {
         }
 
         if let Some(client) = filter.owner_oauth2_client() {
-            sub = sub
-                .filter(personal_sessions::owner_oauth2_client_id.eq(Uuid::from(client.id)));
+            sub = sub.filter(personal_sessions::owner_oauth2_client_id.eq(Uuid::from(client.id)));
         }
 
         if let Some(user) = filter.actor_user() {
@@ -439,8 +428,7 @@ impl PersonalSessionRepository for PgPersonalSessionRepository<'_> {
         }
 
         let rows_affected = diesel::update(
-            personal_sessions::table
-                .filter(personal_sessions::personal_session_id.eq_any(sub)),
+            personal_sessions::table.filter(personal_sessions::personal_session_id.eq_any(sub)),
         )
         .set(personal_sessions::revoked_at.eq(Some(revoked_at)))
         .execute(self.conn)
@@ -449,11 +437,7 @@ impl PersonalSessionRepository for PgPersonalSessionRepository<'_> {
         Ok(rows_affected)
     }
 
-    #[tracing::instrument(
-        name = "db.personal_session.list",
-        skip_all,
-        err,
-    )]
+    #[tracing::instrument(name = "db.personal_session.list", skip_all, err)]
     async fn list(
         &mut self,
         filter: PersonalSessionFilter<'_>,
@@ -461,11 +445,9 @@ impl PersonalSessionRepository for PgPersonalSessionRepository<'_> {
     ) -> Result<Page<(PersonalSession, Option<PersonalAccessToken>)>, Self::Error> {
         let mut query = personal_sessions::table
             .left_join(
-                personal_access_tokens::table.on(
-                    personal_sessions::personal_session_id
-                        .eq(personal_access_tokens::personal_session_id)
-                        .and(personal_access_tokens::revoked_at.is_null()),
-                ),
+                personal_access_tokens::table.on(personal_sessions::personal_session_id
+                    .eq(personal_access_tokens::personal_session_id)
+                    .and(personal_access_tokens::revoked_at.is_null())),
             )
             .select(session_with_token_select())
             .into_boxed();
@@ -476,8 +458,8 @@ impl PersonalSessionRepository for PgPersonalSessionRepository<'_> {
         }
 
         if let Some(client) = filter.owner_oauth2_client() {
-            query = query
-                .filter(personal_sessions::owner_oauth2_client_id.eq(Uuid::from(client.id)));
+            query =
+                query.filter(personal_sessions::owner_oauth2_client_id.eq(Uuid::from(client.id)));
         }
 
         if let Some(user) = filter.actor_user() {
@@ -542,12 +524,10 @@ impl PersonalSessionRepository for PgPersonalSessionRepository<'_> {
 
         // Apply pagination
         if let Some(after) = pagination.after {
-            query = query
-                .filter(personal_sessions::personal_session_id.gt(Uuid::from(after)));
+            query = query.filter(personal_sessions::personal_session_id.gt(Uuid::from(after)));
         }
         if let Some(before) = pagination.before {
-            query = query
-                .filter(personal_sessions::personal_session_id.lt(Uuid::from(before)));
+            query = query.filter(personal_sessions::personal_session_id.lt(Uuid::from(before)));
         }
 
         match pagination.direction {
@@ -570,19 +550,13 @@ impl PersonalSessionRepository for PgPersonalSessionRepository<'_> {
         Ok(page)
     }
 
-    #[tracing::instrument(
-        name = "db.personal_session.count",
-        skip_all,
-        err,
-    )]
+    #[tracing::instrument(name = "db.personal_session.count", skip_all, err)]
     async fn count(&mut self, filter: PersonalSessionFilter<'_>) -> Result<usize, Self::Error> {
         let mut query = personal_sessions::table
             .left_join(
-                personal_access_tokens::table.on(
-                    personal_sessions::personal_session_id
-                        .eq(personal_access_tokens::personal_session_id)
-                        .and(personal_access_tokens::revoked_at.is_null()),
-                ),
+                personal_access_tokens::table.on(personal_sessions::personal_session_id
+                    .eq(personal_access_tokens::personal_session_id)
+                    .and(personal_access_tokens::revoked_at.is_null())),
             )
             .select(diesel::dsl::count(personal_sessions::personal_session_id))
             .into_boxed();
@@ -593,8 +567,8 @@ impl PersonalSessionRepository for PgPersonalSessionRepository<'_> {
         }
 
         if let Some(client) = filter.owner_oauth2_client() {
-            query = query
-                .filter(personal_sessions::owner_oauth2_client_id.eq(Uuid::from(client.id)));
+            query =
+                query.filter(personal_sessions::owner_oauth2_client_id.eq(Uuid::from(client.id)));
         }
 
         if let Some(user) = filter.actor_user() {
@@ -664,11 +638,7 @@ impl PersonalSessionRepository for PgPersonalSessionRepository<'_> {
             .map_err(DatabaseError::to_invalid_operation)
     }
 
-    #[tracing::instrument(
-        name = "db.personal_session.record_batch_activity",
-        skip_all,
-        err,
-    )]
+    #[tracing::instrument(name = "db.personal_session.record_batch_activity", skip_all, err)]
     async fn record_batch_activity(
         &mut self,
         mut activities: Vec<(Ulid, DateTime<Utc>, Option<IpAddr>)>,

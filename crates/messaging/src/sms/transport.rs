@@ -221,8 +221,8 @@ impl SmsTransport {
                 println!("[SMS] transport=aliyun, sending SMS...");
                 // Parse body as template params: try JSON first, fall back to
                 // {"code": body}
-                let params: std::collections::HashMap<String, String> =
-                    serde_json::from_str(body).unwrap_or_else(|_| {
+                let params: std::collections::HashMap<String, String> = serde_json::from_str(body)
+                    .unwrap_or_else(|_| {
                         let mut m = std::collections::HashMap::new();
                         m.insert("code".to_owned(), body.to_owned());
                         m
@@ -235,8 +235,8 @@ impl SmsTransport {
                 println!("[SMS] transport=tencent_cloud, sending SMS...");
                 // Parse body as template params: try JSON array first, fall
                 // back to [body]
-                let params: Vec<String> = serde_json::from_str(body)
-                    .unwrap_or_else(|_| vec![body.to_owned()]);
+                let params: Vec<String> =
+                    serde_json::from_str(body).unwrap_or_else(|_| vec![body.to_owned()]);
                 transport.send(to, &params).await?;
                 println!("[SMS] tencent_cloud send SUCCESS");
             }

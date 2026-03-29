@@ -7,11 +7,11 @@
 //! The API specification is available as an OpenAPI document served by the
 //! [`swagger`] handler.
 
+use crate::rest::DepotExt;
 use pasion_router::UrlBuilder;
 use pasion_salvo_utils::InternalError;
 use pasion_templates::{ApiDocContext, Templates};
 use salvo::prelude::*;
-use crate::rest::DepotExt;
 
 mod call_context;
 mod model;

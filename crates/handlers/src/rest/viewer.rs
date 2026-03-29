@@ -6,9 +6,10 @@ use salvo::prelude::*;
 use serde::Serialize;
 use ulid::Ulid;
 
-use super::{DepotExt, 
-    NodeType, RouteError, UserAgentInfo, extract_bound_activity_tracker, extract_session_info,
-    get_requester, make_clock, parse_user_agent };
+use super::{
+    DepotExt, NodeType, RouteError, UserAgentInfo, extract_bound_activity_tracker,
+    extract_session_info, get_requester, make_clock, parse_user_agent,
+};
 
 // ── Response types ─────────────────────────────────────────────
 
@@ -17,13 +18,15 @@ use super::{DepotExt,
 struct ViewerResponse {
     viewer: ViewerData,
     viewer_session: ViewerSessionData,
-    site_config: SiteConfigData }
+    site_config: SiteConfigData,
+}
 
 #[derive(Serialize, ToSchema)]
 #[serde(tag = "__typename")]
 enum ViewerData {
     User(ViewerUser),
-    Anonymous(AnonymousData) }
+    Anonymous(AnonymousData),
+}
 
 #[derive(Serialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
@@ -32,7 +35,8 @@ struct ViewerUser {
     has_password: bool,
     matrix: Option<MatrixUserData>,
     emails: Option<EmailListData>,
-    linked_accounts: Option<Vec<LinkedAccountData>> }
+    linked_accounts: Option<Vec<LinkedAccountData>>,
+}
 
 #[derive(Serialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
@@ -43,17 +47,20 @@ struct LinkedAccountData {
     provider_brand: Option<String>,
     subject: String,
     human_account_name: Option<String>,
-    created_at: String }
+    created_at: String,
+}
 
 #[derive(Serialize, ToSchema)]
 struct AnonymousData {
-    id: String }
+    id: String,
+}
 
 #[derive(Serialize, ToSchema)]
 #[serde(tag = "__typename")]
 enum ViewerSessionData {
     BrowserSession(BrowserSessionData),
-    Anonymous(AnonymousData) }
+    Anonymous(AnonymousData),
+}
 
 #[derive(Serialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
@@ -63,13 +70,15 @@ struct BrowserSessionData {
     user_agent: Option<UserAgentInfo>,
     last_active_ip: Option<String>,
     last_active_at: Option<String>,
-    created_at: Option<String> }
+    created_at: Option<String>,
+}
 
 #[derive(Serialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
 struct MatrixUserData {
     mxid: String,
-    display_name: Option<String> }
+    display_name: Option<String>,
+}
 
 #[derive(Serialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
@@ -84,26 +93,30 @@ struct SiteConfigData {
     imprint: Option<String>,
     tos_uri: Option<String>,
     policy_uri: Option<String>,
-    plan_management_iframe_uri: Option<String> }
+    plan_management_iframe_uri: Option<String>,
+}
 
 #[derive(Serialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
 struct EmailListData {
     total_count: i64,
-    edges: Vec<EmailEdgeData> }
+    edges: Vec<EmailEdgeData>,
+}
 
 #[derive(Serialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
 struct EmailEdgeData {
     cursor: String,
-    node: EmailData }
+    node: EmailData,
+}
 
 #[derive(Serialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
 struct EmailData {
     id: String,
     email: String,
-    confirmed_at: Option<String> }
+    confirmed_at: Option<String>,
+}
 
 fn site_config_data(config: &SiteConfig) -> SiteConfigData {
     SiteConfigData {
@@ -117,7 +130,8 @@ fn site_config_data(config: &SiteConfig) -> SiteConfigData {
         imprint: config.imprint.clone(),
         tos_uri: config.tos_uri.as_ref().map(|u| u.to_string()),
         policy_uri: config.policy_uri.as_ref().map(|u| u.to_string()),
-        plan_management_iframe_uri: config.plan_management_iframe_uri.clone() }
+        plan_management_iframe_uri: config.plan_management_iframe_uri.clone(),
+    }
 }
 
 // ── GET /api/v1/viewer ─────────────────────────────────────────
@@ -149,10 +163,13 @@ pub async fn get_viewer(
             let matrix = match homeserver.query_user(&user.username).await {
                 Ok(info) => Some(MatrixUserData {
                     mxid: homeserver.mxid(&user.username),
-                    display_name: info.displayname }),
+                    display_name: info.displayname,
+                }),
                 Err(_) => Some(MatrixUserData {
                     mxid: homeserver.mxid(&user.username),
-                    display_name: None }) };
+                    display_name: None,
+                }),
+            };
 
             // Fetch emails
             let emails_list = repo.user_email().all(&user).await?;
@@ -163,7 +180,9 @@ pub async fn get_viewer(
                     node: EmailData {
                         id: NodeType::UserEmail.serialize(e.id),
                         email: e.email,
-                        confirmed_at: Some(e.created_at.to_rfc3339()) } })
+                        confirmed_at: Some(e.created_at.to_rfc3339()),
+                    },
+                })
                 .collect();
             let total = email_edges.len() as i64;
 
@@ -197,7 +216,8 @@ pub async fn get_viewer(
                         provider_brand,
                         subject: link.subject,
                         human_account_name: link.human_account_name,
-                        created_at: link.created_at.to_rfc3339() }
+                        created_at: link.created_at.to_rfc3339(),
+                    }
                 })
                 .collect();
 
@@ -207,8 +227,10 @@ pub async fn get_viewer(
                 matrix,
                 emails: Some(EmailListData {
                     total_count: total,
-                    edges: email_edges }),
-                linked_accounts: Some(linked_accounts) };
+                    edges: email_edges,
+                }),
+                linked_accounts: Some(linked_accounts),
+            };
 
             let browser_session_data = BrowserSessionData {
                 id: NodeType::BrowserSession.serialize(session.id),
@@ -216,7 +238,8 @@ pub async fn get_viewer(
                 user_agent: session.user_agent.as_deref().map(parse_user_agent),
                 last_active_ip: session.last_active_ip.map(|ip| ip.to_string()),
                 last_active_at: session.last_active_at.map(|t| t.to_rfc3339()),
-                created_at: Some(session.created_at.to_rfc3339()) };
+                created_at: Some(session.created_at.to_rfc3339()),
+            };
 
             (
                 ViewerData::User(viewer_user),
@@ -225,15 +248,19 @@ pub async fn get_viewer(
         }
         _ => (
             ViewerData::Anonymous(AnonymousData {
-                id: "anonymous".to_owned() }),
+                id: "anonymous".to_owned(),
+            }),
             ViewerSessionData::Anonymous(AnonymousData {
-                id: "anonymous".to_owned() }),
-        ) };
+                id: "anonymous".to_owned(),
+            }),
+        ),
+    };
 
     repo.cancel().await?;
 
     Ok(Json(ViewerResponse {
         viewer,
         viewer_session,
-        site_config: site_config_data(&config) }))
+        site_config: site_config_data(&config),
+    }))
 }

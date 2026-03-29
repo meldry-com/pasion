@@ -10,8 +10,8 @@ use pasion_config::{
     ConfigurationSection, ConfigurationSectionExt, DatabaseConfig, MatrixConfig, PasswordsConfig,
 };
 use pasion_data_model::{Clock, SystemClock, Ulid, UpstreamOAuthProvider, User};
-use pasion_messaging::Address;
 use pasion_matrix::HomeserverConnection;
+use pasion_messaging::Address;
 use pasion_storage::{
     Pagination, RepositoryAccess,
     oauth2::OAuth2SessionFilter,
@@ -33,8 +33,7 @@ use tracing::{error, info, info_span, warn};
 use zeroize::Zeroizing;
 
 use crate::util::{
-    diesel_pool_from_config, homeserver_connection_from_config,
-    password_manager_from_config,
+    diesel_pool_from_config, homeserver_connection_from_config, password_manager_from_config,
 };
 
 const USER_ATTRIBUTES_HEADING: &str = "User attributes";
@@ -220,7 +219,10 @@ impl Options {
                 let pool = diesel_pool_from_config(&database_config).await?;
                 let password_manager = password_manager_from_config(&passwords_config).await?;
 
-                let conn = pool.get().await.context("could not get connection from pool")?;
+                let conn = pool
+                    .get()
+                    .await
+                    .context("could not get connection from pool")?;
                 let mut repo = PgRepository::new(conn);
                 let user = repo
                     .user()
@@ -257,7 +259,10 @@ impl Options {
                 let database_config = DatabaseConfig::extract_or_default(figment)
                     .map_err(anyhow::Error::from_boxed)?;
                 let pool = diesel_pool_from_config(&database_config).await?;
-                let conn = pool.get().await.context("could not get connection from pool")?;
+                let conn = pool
+                    .get()
+                    .await
+                    .context("could not get connection from pool")?;
                 let mut repo = PgRepository::new(conn);
 
                 let user = repo
@@ -309,7 +314,10 @@ impl Options {
                 let database_config = DatabaseConfig::extract_or_default(figment)
                     .map_err(anyhow::Error::from_boxed)?;
                 let pool = diesel_pool_from_config(&database_config).await?;
-                let conn = pool.get().await.context("could not get connection from pool")?;
+                let conn = pool
+                    .get()
+                    .await
+                    .context("could not get connection from pool")?;
                 let mut repo = PgRepository::new(conn);
 
                 let user = repo
@@ -332,7 +340,10 @@ impl Options {
                 let database_config = DatabaseConfig::extract_or_default(figment)
                     .map_err(anyhow::Error::from_boxed)?;
                 let pool = diesel_pool_from_config(&database_config).await?;
-                let conn = pool.get().await.context("could not get connection from pool")?;
+                let conn = pool
+                    .get()
+                    .await
+                    .context("could not get connection from pool")?;
                 let mut repo = PgRepository::new(conn);
 
                 let user = repo
@@ -353,7 +364,10 @@ impl Options {
                 let database_config = DatabaseConfig::extract_or_default(figment)
                     .map_err(anyhow::Error::from_boxed)?;
                 let pool = diesel_pool_from_config(&database_config).await?;
-                let conn = pool.get().await.context("could not get connection from pool")?;
+                let conn = pool
+                    .get()
+                    .await
+                    .context("could not get connection from pool")?;
                 let mut repo = PgRepository::new(conn);
 
                 let mut cursor = Pagination::first(1000);
@@ -395,7 +409,10 @@ impl Options {
                 let database_config = DatabaseConfig::extract_or_default(figment)
                     .map_err(anyhow::Error::from_boxed)?;
                 let pool = diesel_pool_from_config(&database_config).await?;
-                let conn = pool.get().await.context("could not get connection from pool")?;
+                let conn = pool
+                    .get()
+                    .await
+                    .context("could not get connection from pool")?;
                 let mut repo = PgRepository::new(conn);
 
                 // Calculate expiration time if provided
@@ -421,7 +438,10 @@ impl Options {
                 let database_config = DatabaseConfig::extract_or_default(figment)
                     .map_err(anyhow::Error::from_boxed)?;
                 let pool = diesel_pool_from_config(&database_config).await?;
-                let conn = pool.get().await.context("could not get connection from pool")?;
+                let conn = pool
+                    .get()
+                    .await
+                    .context("could not get connection from pool")?;
                 let mut repo = PgRepository::new(conn);
 
                 // List all users via the repository
@@ -451,7 +471,10 @@ impl Options {
                 let database_config = DatabaseConfig::extract_or_default(figment)
                     .map_err(anyhow::Error::from_boxed)?;
                 let pool = diesel_pool_from_config(&database_config).await?;
-                let conn = pool.get().await.context("could not get connection from pool")?;
+                let conn = pool
+                    .get()
+                    .await
+                    .context("could not get connection from pool")?;
                 let mut repo = PgRepository::new(conn);
 
                 let user = repo
@@ -507,7 +530,10 @@ impl Options {
                 let config = DatabaseConfig::extract_or_default(figment)
                     .map_err(anyhow::Error::from_boxed)?;
                 let pool = diesel_pool_from_config(&config).await?;
-                let conn = pool.get().await.context("could not get connection from pool")?;
+                let conn = pool
+                    .get()
+                    .await
+                    .context("could not get connection from pool")?;
                 let mut repo = PgRepository::new(conn);
 
                 let user = repo
@@ -542,7 +568,10 @@ impl Options {
                 let config = DatabaseConfig::extract_or_default(figment)
                     .map_err(anyhow::Error::from_boxed)?;
                 let pool = diesel_pool_from_config(&config).await?;
-                let conn = pool.get().await.context("could not get connection from pool")?;
+                let conn = pool
+                    .get()
+                    .await
+                    .context("could not get connection from pool")?;
                 let mut repo = PgRepository::new(conn);
 
                 let user = repo
@@ -586,7 +615,10 @@ impl Options {
                 let homeserver =
                     homeserver_connection_from_config(&matrix_config, http_client).await?;
                 let pool = diesel_pool_from_config(&database_config).await?;
-                let conn = pool.get().await.context("could not get connection from pool")?;
+                let conn = pool
+                    .get()
+                    .await
+                    .context("could not get connection from pool")?;
                 let mut repo = PgRepository::new(conn);
 
                 if let Some(password) = &password

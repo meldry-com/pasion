@@ -11,7 +11,10 @@ use rand::RngCore;
 use ulid::Ulid;
 use uuid::Uuid;
 
-use crate::{DatabaseError, schema::{user_recovery_sessions, user_recovery_tickets}};
+use crate::{
+    DatabaseError,
+    schema::{user_recovery_sessions, user_recovery_tickets},
+};
 
 /// An implementation of [`UserRecoveryRepository`] for a PostgreSQL connection
 pub struct PgUserRecoveryRepository<'c> {
@@ -292,8 +295,7 @@ impl UserRecoveryRepository for PgUserRecoveryRepository<'_> {
         let consumed_at = clock.now();
 
         let rows_affected = diesel::update(
-            user_recovery_sessions::table
-                .find(Uuid::from(user_recovery_session.id)),
+            user_recovery_sessions::table.find(Uuid::from(user_recovery_session.id)),
         )
         .set(user_recovery_sessions::consumed_at.eq(Some(consumed_at)))
         .execute(self.conn)

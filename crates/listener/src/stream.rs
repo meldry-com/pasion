@@ -5,7 +5,12 @@
 //! bytes of a connection and then hand the full stream (including those bytes)
 //! back to the caller.
 
-use std::{cmp, io, marker::Unpin, pin::Pin, task::{Context, Poll}};
+use std::{
+    cmp, io,
+    marker::Unpin,
+    pin::Pin,
+    task::{Context, Poll},
+};
 
 use bytes::{Buf, Bytes};
 use tokio::io::{AsyncRead, AsyncWrite, ReadBuf};
@@ -24,12 +29,18 @@ pub type Rewind<T> = BufferedStream<T>;
 impl<T> BufferedStream<T> {
     /// Wrap a stream without any prefix data.
     pub(crate) fn new(io: T) -> Self {
-        Self { prefix: None, inner: io }
+        Self {
+            prefix: None,
+            inner: io,
+        }
     }
 
     /// Wrap a stream with buffered prefix data that will be read first.
     pub(crate) fn new_buffered(io: T, buf: Bytes) -> Self {
-        Self { prefix: Some(buf), inner: io }
+        Self {
+            prefix: Some(buf),
+            inner: io,
+        }
     }
 
     #[cfg(test)]
@@ -61,7 +72,11 @@ impl<T: AsyncRead + Unpin> AsyncRead for BufferedStream<T> {
 }
 
 impl<T: AsyncWrite + Unpin> AsyncWrite for BufferedStream<T> {
-    fn poll_write(mut self: Pin<&mut Self>, cx: &mut Context<'_>, buf: &[u8]) -> Poll<io::Result<usize>> {
+    fn poll_write(
+        mut self: Pin<&mut Self>,
+        cx: &mut Context<'_>,
+        buf: &[u8],
+    ) -> Poll<io::Result<usize>> {
         Pin::new(&mut self.inner).poll_write(cx, buf)
     }
 
@@ -88,9 +103,9 @@ impl<T: AsyncWrite + Unpin> AsyncWrite for BufferedStream<T> {
 
 #[cfg(test)]
 mod tests {
+    use super::BufferedStream;
     use bytes::Bytes;
     use tokio::io::AsyncReadExt;
-    use super::BufferedStream;
 
     #[tokio::test]
     async fn partial_rewind() {

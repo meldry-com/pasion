@@ -60,11 +60,7 @@ struct NewPolicyData {
 impl PolicyDataRepository for PgPolicyDataRepository<'_> {
     type Error = DatabaseError;
 
-    #[tracing::instrument(
-        name = "db.policy_data.get",
-        skip_all,
-        err,
-    )]
+    #[tracing::instrument(name = "db.policy_data.get", skip_all, err)]
     async fn get(&mut self) -> Result<Option<PolicyData>, Self::Error> {
         let row = policy_data::table
             .select(PolicyDataRow::as_select())
@@ -76,11 +72,7 @@ impl PolicyDataRepository for PgPolicyDataRepository<'_> {
         Ok(row.map(PolicyData::from))
     }
 
-    #[tracing::instrument(
-        name = "db.policy_data.set",
-        skip_all,
-        err,
-    )]
+    #[tracing::instrument(name = "db.policy_data.set", skip_all, err)]
     async fn set(
         &mut self,
         rng: &mut (dyn RngCore + Send),
@@ -108,11 +100,7 @@ impl PolicyDataRepository for PgPolicyDataRepository<'_> {
         })
     }
 
-    #[tracing::instrument(
-        name = "db.policy_data.prune",
-        skip_all,
-        err,
-    )]
+    #[tracing::instrument(name = "db.policy_data.prune", skip_all, err)]
     async fn prune(&mut self, keep: usize) -> Result<usize, Self::Error> {
         let offset = i64::try_from(keep).map_err(DatabaseError::to_invalid_operation)?;
 
@@ -140,12 +128,12 @@ impl PolicyDataRepository for PgPolicyDataRepository<'_> {
 
 #[cfg(test)]
 mod tests {
+    use diesel_async::RunQueryDsl;
     use pasion_data_model::clock::MockClock;
     use pasion_storage::policy_data::PolicyDataRepository;
     use rand::SeedableRng;
     use rand_chacha::ChaChaRng;
     use serde_json::json;
-    use diesel_async::RunQueryDsl;
 
     use crate::PgRepositoryFactory;
 
@@ -154,7 +142,10 @@ mod tests {
         let pool = crate::test_utils::setup_test_pool().await;
         let mut rng = ChaChaRng::seed_from_u64(42);
         let clock = MockClock::default();
-        let mut repo = PgRepositoryFactory::new(pool.clone()).create().await.unwrap();
+        let mut repo = PgRepositoryFactory::new(pool.clone())
+            .create()
+            .await
+            .unwrap();
 
         // Get an empty state at first
         let data = repo.policy_data().get().await.unwrap();

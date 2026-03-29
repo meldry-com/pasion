@@ -295,15 +295,15 @@ impl OAuth2DeviceCodeGrantRepository for PgOAuth2DeviceCodeGrantRepository<'_> {
             .fulfill(browser_session, fulfilled_at)
             .map_err(DatabaseError::to_invalid_operation)?;
 
-        let rows_affected = diesel::update(
-            oauth2_device_code_grant::table.find(Uuid::from(device_code_grant.id)),
-        )
-        .set((
-            oauth2_device_code_grant::fulfilled_at.eq(Some(fulfilled_at)),
-            oauth2_device_code_grant::user_session_id.eq(Some(Uuid::from(browser_session.id))),
-        ))
-        .execute(self.conn)
-        .await?;
+        let rows_affected =
+            diesel::update(oauth2_device_code_grant::table.find(Uuid::from(device_code_grant.id)))
+                .set((
+                    oauth2_device_code_grant::fulfilled_at.eq(Some(fulfilled_at)),
+                    oauth2_device_code_grant::user_session_id
+                        .eq(Some(Uuid::from(browser_session.id))),
+                ))
+                .execute(self.conn)
+                .await?;
 
         DatabaseError::ensure_affected_rows_usize(rows_affected, 1)?;
 
@@ -332,15 +332,15 @@ impl OAuth2DeviceCodeGrantRepository for PgOAuth2DeviceCodeGrantRepository<'_> {
             .reject(browser_session, fulfilled_at)
             .map_err(DatabaseError::to_invalid_operation)?;
 
-        let rows_affected = diesel::update(
-            oauth2_device_code_grant::table.find(Uuid::from(device_code_grant.id)),
-        )
-        .set((
-            oauth2_device_code_grant::rejected_at.eq(Some(fulfilled_at)),
-            oauth2_device_code_grant::user_session_id.eq(Some(Uuid::from(browser_session.id))),
-        ))
-        .execute(self.conn)
-        .await?;
+        let rows_affected =
+            diesel::update(oauth2_device_code_grant::table.find(Uuid::from(device_code_grant.id)))
+                .set((
+                    oauth2_device_code_grant::rejected_at.eq(Some(fulfilled_at)),
+                    oauth2_device_code_grant::user_session_id
+                        .eq(Some(Uuid::from(browser_session.id))),
+                ))
+                .execute(self.conn)
+                .await?;
 
         DatabaseError::ensure_affected_rows_usize(rows_affected, 1)?;
 
@@ -368,15 +368,14 @@ impl OAuth2DeviceCodeGrantRepository for PgOAuth2DeviceCodeGrantRepository<'_> {
             .exchange(session, exchanged_at)
             .map_err(DatabaseError::to_invalid_operation)?;
 
-        let rows_affected = diesel::update(
-            oauth2_device_code_grant::table.find(Uuid::from(device_code_grant.id)),
-        )
-        .set((
-            oauth2_device_code_grant::exchanged_at.eq(Some(exchanged_at)),
-            oauth2_device_code_grant::oauth2_session_id.eq(Some(Uuid::from(session.id))),
-        ))
-        .execute(self.conn)
-        .await?;
+        let rows_affected =
+            diesel::update(oauth2_device_code_grant::table.find(Uuid::from(device_code_grant.id)))
+                .set((
+                    oauth2_device_code_grant::exchanged_at.eq(Some(exchanged_at)),
+                    oauth2_device_code_grant::oauth2_session_id.eq(Some(Uuid::from(session.id))),
+                ))
+                .execute(self.conn)
+                .await?;
 
         DatabaseError::ensure_affected_rows_usize(rows_affected, 1)?;
 

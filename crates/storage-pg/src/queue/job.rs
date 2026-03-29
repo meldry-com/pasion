@@ -186,8 +186,7 @@ impl QueueJobRepository for PgQueueJobRepository<'_> {
         // If there was a schedule name supplied, update the queue_schedules table
         if let Some(schedule_name) = schedule_name {
             let rows_affected = diesel::update(
-                queue_schedules::table
-                    .filter(queue_schedules::schedule_name.eq(schedule_name)),
+                queue_schedules::table.filter(queue_schedules::schedule_name.eq(schedule_name)),
             )
             .set((
                 queue_schedules::last_scheduled_at.eq(Some(scheduled_at)),
@@ -202,11 +201,7 @@ impl QueueJobRepository for PgQueueJobRepository<'_> {
         Ok(())
     }
 
-    #[tracing::instrument(
-        name = "db.queue_job.reserve",
-        skip_all,
-        err,
-    )]
+    #[tracing::instrument(name = "db.queue_job.reserve", skip_all, err)]
     async fn reserve(
         &mut self,
         clock: &dyn Clock,
@@ -373,24 +368,18 @@ impl QueueJobRepository for PgQueueJobRepository<'_> {
         .await?;
 
         // Update the old job to point to the new attempt
-        let rows_affected = diesel::update(
-            queue_jobs::table
-                .filter(queue_jobs::queue_job_id.eq(Uuid::from(id))),
-        )
-        .set(queue_jobs::next_attempt_id.eq(Some(Uuid::from(new_id))))
-        .execute(self.conn)
-        .await?;
+        let rows_affected =
+            diesel::update(queue_jobs::table.filter(queue_jobs::queue_job_id.eq(Uuid::from(id))))
+                .set(queue_jobs::next_attempt_id.eq(Some(Uuid::from(new_id))))
+                .execute(self.conn)
+                .await?;
 
         DatabaseError::ensure_affected_rows_usize(rows_affected, 1)?;
 
         Ok(())
     }
 
-    #[tracing::instrument(
-        name = "db.queue_job.schedule_available_jobs",
-        skip_all,
-        err
-    )]
+    #[tracing::instrument(name = "db.queue_job.schedule_available_jobs", skip_all, err)]
     async fn schedule_available_jobs(&mut self, clock: &dyn Clock) -> Result<usize, Self::Error> {
         let now = clock.now();
         let count = diesel::update(

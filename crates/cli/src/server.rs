@@ -330,19 +330,18 @@ pub fn build_router(
                 playground: _,
                 undocumented_oauth2_access: _,
             } => build_rest_api_router(router),
-            pasion_config::HttpResource::Assets { path } => router
-                .push(
-                    Router::with_path(&format!(
-                        "{}/{{**path}}",
-                        pasion_router::StaticAsset::route()
-                    ))
-                    .hoop(cache_control_middleware)
-                    .get(
-                        StaticDir::new([path.join("assets")])
-                            .include_dot_files(false)
-                            .auto_list(false),
-                    ),
+            pasion_config::HttpResource::Assets { path } => router.push(
+                Router::with_path(&format!(
+                    "{}/{{**path}}",
+                    pasion_router::StaticAsset::route()
+                ))
+                .hoop(cache_control_middleware)
+                .get(
+                    StaticDir::new([path.join("assets")])
+                        .include_dot_files(false)
+                        .auto_list(false),
                 ),
+            ),
             pasion_config::HttpResource::OAuth => build_oauth_router(router),
             pasion_config::HttpResource::Compat => {
                 // Compat layer removed — pass through
@@ -479,7 +478,10 @@ fn build_rest_api_router(router: Router) -> Router {
                     .get(viewer::get_viewer)
                     .push(Router::with_path("password").post(password::set_password))
                     .push(Router::with_path("display-name").post(users::set_display_name))
-                    .push(Router::with_path("cross-signing-reset").post(users::allow_cross_signing_reset))
+                    .push(
+                        Router::with_path("cross-signing-reset")
+                            .post(users::allow_cross_signing_reset),
+                    )
                     .push(Router::with_path("deactivate").post(users::deactivate_user)),
             )
             // Site config
@@ -526,10 +528,22 @@ fn build_rest_api_router(router: Router) -> Router {
                             .push(
                                 Router::with_path("{id}")
                                     .get(register::get_registration)
-                                    .push(Router::with_path("verify-email").post(register::post_verify_email))
-                                    .push(Router::with_path("verify-phone").post(register::post_verify_phone))
-                                    .push(Router::with_path("resend-verification").post(register::post_resend_verification))
-                                    .push(Router::with_path("display-name").post(register::post_display_name))
+                                    .push(
+                                        Router::with_path("verify-email")
+                                            .post(register::post_verify_email),
+                                    )
+                                    .push(
+                                        Router::with_path("verify-phone")
+                                            .post(register::post_verify_phone),
+                                    )
+                                    .push(
+                                        Router::with_path("resend-verification")
+                                            .post(register::post_resend_verification),
+                                    )
+                                    .push(
+                                        Router::with_path("display-name")
+                                            .post(register::post_display_name),
+                                    )
                                     .push(Router::with_path("finish").post(register::post_finish)),
                             ),
                     )
@@ -537,11 +551,9 @@ fn build_rest_api_router(router: Router) -> Router {
                     .push(
                         Router::with_path("recovery")
                             .push(Router::with_path("start").post(recovery::post_recovery_start))
-                            .push(
-                                Router::with_path("{id}")
-                                    .get(recovery::get_recovery)
-                                    .push(Router::with_path("resend").post(recovery::post_recovery_resend)),
-                            ),
+                            .push(Router::with_path("{id}").get(recovery::get_recovery).push(
+                                Router::with_path("resend").post(recovery::post_recovery_resend),
+                            )),
                     ),
             )
             // OAuth2 consent

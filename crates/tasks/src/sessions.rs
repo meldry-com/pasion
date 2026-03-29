@@ -5,8 +5,8 @@ use chrono::Duration;
 use pasion_storage::{
     oauth2::OAuth2SessionFilter,
     queue::{
-        ExpireInactiveOAuthSessionsJob, ExpireInactiveSessionsJob,
-        ExpireInactiveUserSessionsJob, QueueJobRepositoryExt, SyncDevicesJob,
+        ExpireInactiveOAuthSessionsJob, ExpireInactiveSessionsJob, ExpireInactiveUserSessionsJob,
+        QueueJobRepositoryExt, SyncDevicesJob,
     },
     user::BrowserSessionFilter,
 };

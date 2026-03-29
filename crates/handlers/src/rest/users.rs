@@ -4,10 +4,10 @@ use salvo::oapi::ToSchema;
 use salvo::prelude::*;
 use serde::{Deserialize, Serialize};
 
-use super::{DepotExt, 
-    NodeType, RouteError, extract_bound_activity_tracker, extract_session_info,
-    get_requester, make_clock, make_rng,
-    verify_password_if_needed };
+use super::{
+    DepotExt, NodeType, RouteError, extract_bound_activity_tracker, extract_session_info,
+    get_requester, make_clock, make_rng, verify_password_if_needed,
+};
 
 // ── POST /api/v1/viewer/display-name ───────────────────────────
 
@@ -15,11 +15,13 @@ use super::{DepotExt,
 #[serde(rename_all = "camelCase")]
 pub struct SetDisplayNameInput {
     pub user_id: String,
-    pub display_name: Option<String> }
+    pub display_name: Option<String>,
+}
 
 #[derive(Serialize, ToSchema)]
 pub struct SetDisplayNameResponse {
-    pub status: &'static str }
+    pub status: &'static str,
+}
 
 #[endpoint]
 pub async fn set_display_name(
@@ -81,15 +83,18 @@ pub async fn set_display_name(
 #[derive(Deserialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct AllowCrossSigningResetInput {
-    pub user_id: String }
+    pub user_id: String,
+}
 
 #[derive(Serialize, ToSchema)]
 pub struct AllowCrossSigningResetResponse {
-    pub user: Option<UserBrief> }
+    pub user: Option<UserBrief>,
+}
 
 #[derive(Serialize, ToSchema)]
 pub struct UserBrief {
-    pub id: String }
+    pub id: String,
+}
 
 #[endpoint]
 pub async fn allow_cross_signing_reset(
@@ -133,7 +138,9 @@ pub async fn allow_cross_signing_reset(
 
     Ok(Json(AllowCrossSigningResetResponse {
         user: Some(UserBrief {
-            id: NodeType::User.serialize(user.id) }) }))
+            id: NodeType::User.serialize(user.id),
+        }),
+    }))
 }
 
 // ── POST /api/v1/viewer/deactivate ─────────────────────────────
@@ -142,11 +149,13 @@ pub async fn allow_cross_signing_reset(
 #[serde(rename_all = "camelCase")]
 pub struct DeactivateUserInput {
     pub hs_erase: bool,
-    pub password: Option<String> }
+    pub password: Option<String>,
+}
 
 #[derive(Serialize, ToSchema)]
 pub struct DeactivateUserResponse {
-    pub status: &'static str }
+    pub status: &'static str,
+}
 
 #[endpoint]
 pub async fn deactivate_user(
@@ -192,7 +201,8 @@ pub async fn deactivate_user(
     .await?
     {
         return Ok(Json(DeactivateUserResponse {
-            status: "INCORRECT_PASSWORD" }));
+            status: "INCORRECT_PASSWORD",
+        }));
     }
 
     let user = repo
@@ -211,5 +221,6 @@ pub async fn deactivate_user(
     repo.save().await?;
 
     Ok(Json(DeactivateUserResponse {
-        status: "DEACTIVATED" }))
+        status: "DEACTIVATED",
+    }))
 }

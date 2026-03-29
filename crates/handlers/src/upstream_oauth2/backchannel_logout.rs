@@ -24,8 +24,8 @@ use serde_json::Value;
 use thiserror::Error;
 use ulid::Ulid;
 
-use crate::{impl_from_error_for_route, upstream_oauth2::cache::LazyProviderInfos};
 use crate::rest::DepotExt;
+use crate::{impl_from_error_for_route, upstream_oauth2::cache::LazyProviderInfos};
 
 #[derive(Debug, Error)]
 pub enum RouteError {

@@ -13,10 +13,10 @@ use serde::Deserialize;
 use tracing::warn;
 use ulid::Ulid;
 
+use crate::rest::DepotExt;
 use crate::session::{
     SessionOrFallback, count_user_sessions_for_limiting, load_session_or_fallback,
 };
-use crate::rest::DepotExt;
 
 #[derive(Deserialize, Debug)]
 #[serde(rename_all = "lowercase")]

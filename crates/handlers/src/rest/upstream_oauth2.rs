@@ -17,23 +17,25 @@ use pasion_storage::{
     RepositoryAccess,
     upstream_oauth2::{
         UpstreamOAuthLinkRepository, UpstreamOAuthProviderRepository,
-        UpstreamOAuthSessionRepository },
-    user::{BrowserSessionRepository, UserEmailRepository, UserRepository} };
+        UpstreamOAuthSessionRepository,
+    },
+    user::{BrowserSessionRepository, UserEmailRepository, UserRepository},
+};
 use salvo::oapi::ToSchema;
 use salvo::prelude::*;
 use serde::{Deserialize, Serialize};
 use ulid::Ulid;
 
-use super::{DepotExt, 
-    RouteError, extract_bound_activity_tracker,
-    make_clock, make_rng };
+use super::{DepotExt, RouteError, extract_bound_activity_tracker, make_clock, make_rng};
 use crate::{
     METER,
     post_auth::OptionalPostAuthAction,
     upstream_oauth2::{
         UpstreamSessionsCookie,
-        template::{AttributeMappingContext, environment} },
-    user_registration_cookie::UserRegistrationSessions };
+        template::{AttributeMappingContext, environment},
+    },
+    user_registration_cookie::UserRegistrationSessions,
+};
 
 static LOGIN_COUNTER: LazyLock<Counter<u64>> = LazyLock::new(|| {
     METER
@@ -66,7 +68,8 @@ pub enum LinkState {
     /// User is logged in, upstream not linked: suggest linking.
     SuggestLink {
         provider_name: Option<String>,
-        upstream_subject: Option<String> },
+        upstream_subject: Option<String>,
+    },
     /// User is logged in, but upstream is linked to a different user.
     LinkMismatch { existing_username: String },
     /// No session, no link: show registration form.
@@ -78,18 +81,21 @@ pub enum LinkState {
         suggested_email: Option<String>,
         email_forced: bool,
         provider_name: Option<String>,
-        has_tos: bool },
+        has_tos: bool,
+    },
     /// Account is deactivated.
     AccountDeactivated { username: String },
     /// Account is locked.
     AccountLocked { username: String },
     /// An error occurred.
-    Error { code: String, description: String } }
+    Error { code: String, description: String },
+}
 
 #[derive(Serialize, ToSchema)]
 pub struct LinkResponse {
     #[serde(flatten)]
-    pub state: LinkState }
+    pub state: LinkState,
+}
 
 #[derive(Deserialize, ToSchema)]
 #[serde(tag = "action", rename_all = "snake_case")]
@@ -103,7 +109,9 @@ pub enum LinkAction {
         #[serde(default)]
         import_display_name: Option<bool>,
         #[serde(default)]
-        accept_terms: Option<bool> } }
+        accept_terms: Option<bool>,
+    },
+}
 
 #[derive(Serialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
@@ -115,7 +123,8 @@ pub struct LinkActionResponse {
     pub error: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     #[salvo(schema(value_type = Object))]
-    pub field_errors: Option<serde_json::Value> }
+    pub field_errors: Option<serde_json::Value>,
+}
 
 // ── Helper: render attribute template ───────────────────────────
 
@@ -222,14 +231,16 @@ pub async fn get_link(
             repo.save().await?;
 
             let action = OptionalPostAuthAction {
-                post_auth_action: post_auth_action.clone() };
+                post_auth_action: post_auth_action.clone(),
+            };
             let redirect = action.go_next(&url_builder);
             // Get the redirect URL from the Redirect response
             let redirect_url = "/".to_owned(); // fallback
 
             cookie_jar.write_to_response(res);
             res.render(Json(LinkResponse {
-                state: LinkState::Redirect { redirect_url } }));
+                state: LinkState::Redirect { redirect_url },
+            }));
             return Ok(());
         }
 
@@ -242,7 +253,8 @@ pub async fn get_link(
                 .ok_or(RouteError::LoadFailed)?;
 
             LinkState::LinkMismatch {
-                existing_username: user.username.clone() }
+                existing_username: user.username.clone(),
+            }
         }
 
         (Some(_session), None) => {
@@ -255,7 +267,8 @@ pub async fn get_link(
 
             LinkState::SuggestLink {
                 provider_name: provider.human_name.clone(),
-                upstream_subject: Some(link.subject.clone()) }
+                upstream_subject: Some(link.subject.clone()),
+            }
         }
 
         (None, Some(user_id)) => {
@@ -268,10 +281,12 @@ pub async fn get_link(
 
             if user.deactivated_at.is_some() {
                 LinkState::AccountDeactivated {
-                    username: user.username.clone() }
+                    username: user.username.clone(),
+                }
             } else if user.locked_at.is_some() {
                 LinkState::AccountLocked {
-                    username: user.username.clone() }
+                    username: user.username.clone(),
+                }
             } else {
                 // Auto-login
                 let session = repo
@@ -305,12 +320,15 @@ pub async fn get_link(
                 );
 
                 let action = OptionalPostAuthAction {
-                    post_auth_action: post_auth_action.clone() };
+                    post_auth_action: post_auth_action.clone(),
+                };
 
                 cookie_jar.write_to_response(res);
                 res.render(Json(LinkResponse {
                     state: LinkState::Redirect {
-                        redirect_url: "/".to_owned() } }));
+                        redirect_url: "/".to_owned(),
+                    },
+                }));
                 return Ok(());
             }
         }
@@ -431,7 +449,8 @@ pub async fn get_link(
                 let redirect_url = format!("/register/{}/finish", registration.id);
                 cookie_jar.write_to_response(res);
                 res.render(Json(LinkResponse {
-                    state: LinkState::Redirect { redirect_url } }));
+                    state: LinkState::Redirect { redirect_url },
+                }));
                 return Ok(());
             }
 
@@ -443,7 +462,8 @@ pub async fn get_link(
                 suggested_email,
                 email_forced: provider.claims_imports.email.is_forced_or_required(),
                 provider_name: provider.human_name.clone(),
-                has_tos: site_config.tos_uri.is_some() }
+                has_tos: site_config.tos_uri.is_some(),
+            }
         }
     };
 
@@ -545,7 +565,8 @@ pub async fn post_link(
                 status: "success",
                 redirect_url: Some("/".to_owned()),
                 error: None,
-                field_errors: None }));
+                field_errors: None,
+            }));
             Ok(())
         }
 
@@ -556,7 +577,8 @@ pub async fn post_link(
                 username,
                 import_email,
                 import_display_name,
-                accept_terms },
+                accept_terms,
+            },
         ) => {
             let import_email = import_email.unwrap_or(false);
             let import_display_name = import_display_name.unwrap_or(false);
@@ -667,7 +689,9 @@ pub async fn post_link(
                     requester: pasion_policy::Requester {
                         ip_address: activity_tracker.ip(),
                         user_agent: user_agent.clone(),
-                        ..Default::default() } })
+                        ..Default::default()
+                    },
+                })
                 .await
                 .map_err(|e| RouteError::Internal(e.into()))?;
 
@@ -702,7 +726,8 @@ pub async fn post_link(
                     status: "error",
                     redirect_url: None,
                     error: Some("validation_failed".to_owned()),
-                    field_errors: Some(serde_json::Value::Object(field_errors)) }));
+                    field_errors: Some(serde_json::Value::Object(field_errors)),
+                }));
                 return Ok(());
             }
 
@@ -744,7 +769,8 @@ pub async fn post_link(
                 status: "success",
                 redirect_url: Some(redirect_url),
                 error: None,
-                field_errors: None }));
+                field_errors: None,
+            }));
             Ok(())
         }
 
@@ -753,7 +779,8 @@ pub async fn post_link(
                 status: "error",
                 redirect_url: None,
                 error: Some("invalid_action".to_owned()),
-                field_errors: None }));
+                field_errors: None,
+            }));
             Ok(())
         }
     }

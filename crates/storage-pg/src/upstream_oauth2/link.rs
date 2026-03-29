@@ -193,21 +193,15 @@ impl UpstreamOAuthLinkRepository for PgUpstreamOAuthLinkRepository<'_> {
         upstream_oauth_link: &UpstreamOAuthLink,
         user: &User,
     ) -> Result<(), Self::Error> {
-        diesel::update(
-            upstream_oauth_links::table.find(Uuid::from(upstream_oauth_link.id)),
-        )
-        .set(upstream_oauth_links::user_id.eq(Some(Uuid::from(user.id))))
-        .execute(self.conn)
-        .await?;
+        diesel::update(upstream_oauth_links::table.find(Uuid::from(upstream_oauth_link.id)))
+            .set(upstream_oauth_links::user_id.eq(Some(Uuid::from(user.id))))
+            .execute(self.conn)
+            .await?;
 
         Ok(())
     }
 
-    #[tracing::instrument(
-        name = "db.upstream_oauth_link.list",
-        skip_all,
-        err,
-    )]
+    #[tracing::instrument(name = "db.upstream_oauth_link.list", skip_all, err)]
     async fn list(
         &mut self,
         filter: UpstreamOAuthLinkFilter<'_>,
@@ -224,8 +218,7 @@ impl UpstreamOAuthLinkRepository for PgUpstreamOAuthLinkRepository<'_> {
 
         if let Some(provider) = filter.provider() {
             query = query.filter(
-                upstream_oauth_links::upstream_oauth_provider_id
-                    .eq(Uuid::from(provider.id)),
+                upstream_oauth_links::upstream_oauth_provider_id.eq(Uuid::from(provider.id)),
             );
         }
 
@@ -244,9 +237,7 @@ impl UpstreamOAuthLinkRepository for PgUpstreamOAuthLinkRepository<'_> {
                     .into_boxed()
             };
 
-            query = query.filter(
-                upstream_oauth_links::upstream_oauth_provider_id.eq_any(subquery),
-            );
+            query = query.filter(upstream_oauth_links::upstream_oauth_provider_id.eq_any(subquery));
         }
 
         if let Some(subject) = filter.subject() {
@@ -255,14 +246,12 @@ impl UpstreamOAuthLinkRepository for PgUpstreamOAuthLinkRepository<'_> {
 
         // Apply pagination
         if let Some(after) = pagination.after {
-            query = query.filter(
-                upstream_oauth_links::upstream_oauth_link_id.gt(Uuid::from(after)),
-            );
+            query =
+                query.filter(upstream_oauth_links::upstream_oauth_link_id.gt(Uuid::from(after)));
         }
         if let Some(before) = pagination.before {
-            query = query.filter(
-                upstream_oauth_links::upstream_oauth_link_id.lt(Uuid::from(before)),
-            );
+            query =
+                query.filter(upstream_oauth_links::upstream_oauth_link_id.lt(Uuid::from(before)));
         }
 
         match pagination.direction {
@@ -285,11 +274,7 @@ impl UpstreamOAuthLinkRepository for PgUpstreamOAuthLinkRepository<'_> {
         Ok(page)
     }
 
-    #[tracing::instrument(
-        name = "db.upstream_oauth_link.count",
-        skip_all,
-        err,
-    )]
+    #[tracing::instrument(name = "db.upstream_oauth_link.count", skip_all, err)]
     async fn count(&mut self, filter: UpstreamOAuthLinkFilter<'_>) -> Result<usize, Self::Error> {
         let mut query = upstream_oauth_links::table.into_boxed();
 
@@ -299,8 +284,7 @@ impl UpstreamOAuthLinkRepository for PgUpstreamOAuthLinkRepository<'_> {
 
         if let Some(provider) = filter.provider() {
             query = query.filter(
-                upstream_oauth_links::upstream_oauth_provider_id
-                    .eq(Uuid::from(provider.id)),
+                upstream_oauth_links::upstream_oauth_provider_id.eq(Uuid::from(provider.id)),
             );
         }
 
@@ -317,19 +301,14 @@ impl UpstreamOAuthLinkRepository for PgUpstreamOAuthLinkRepository<'_> {
                     .into_boxed()
             };
 
-            query = query.filter(
-                upstream_oauth_links::upstream_oauth_provider_id.eq_any(subquery),
-            );
+            query = query.filter(upstream_oauth_links::upstream_oauth_provider_id.eq_any(subquery));
         }
 
         if let Some(subject) = filter.subject() {
             query = query.filter(upstream_oauth_links::subject.eq(subject));
         }
 
-        let count: i64 = query
-            .count()
-            .get_result(self.conn)
-            .await?;
+        let count: i64 = query.count().get_result(self.conn).await?;
 
         count
             .try_into()
@@ -356,11 +335,10 @@ impl UpstreamOAuthLinkRepository for PgUpstreamOAuthLinkRepository<'_> {
         // Unlink the authorization sessions first, as they have a foreign key
         // constraint on the links.
         diesel::update(
-            upstream_oauth_authorization_sessions::table
-                .filter(
-                    upstream_oauth_authorization_sessions::upstream_oauth_link_id
-                        .eq(Uuid::from(upstream_oauth_link.id)),
-                ),
+            upstream_oauth_authorization_sessions::table.filter(
+                upstream_oauth_authorization_sessions::upstream_oauth_link_id
+                    .eq(Uuid::from(upstream_oauth_link.id)),
+            ),
         )
         .set((
             upstream_oauth_authorization_sessions::upstream_oauth_link_id.eq(None::<Uuid>),
@@ -370,11 +348,10 @@ impl UpstreamOAuthLinkRepository for PgUpstreamOAuthLinkRepository<'_> {
         .await?;
 
         // Then delete the link itself
-        let rows_affected = diesel::delete(
-            upstream_oauth_links::table.find(Uuid::from(upstream_oauth_link.id)),
-        )
-        .execute(self.conn)
-        .await?;
+        let rows_affected =
+            diesel::delete(upstream_oauth_links::table.find(Uuid::from(upstream_oauth_link.id)))
+                .execute(self.conn)
+                .await?;
 
         DatabaseError::ensure_affected_rows_usize(rows_affected, 1)?;
 

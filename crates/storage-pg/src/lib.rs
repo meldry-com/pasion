@@ -5,10 +5,10 @@
 #![deny(clippy::future_not_send, missing_docs)]
 #![allow(clippy::module_name_repetitions, clippy::blocks_in_conditions)]
 
+use ::tracing::{info, warn};
 use diesel::sql_types::{BigInt, Bool};
 use diesel_async::{AsyncPgConnection, RunQueryDsl, pooled_connection::deadpool::Pool};
 use diesel_migrations::{EmbeddedMigrations, MigrationHarness, embed_migrations};
-use ::tracing::{info, warn};
 
 pub mod app_session;
 pub mod oauth2;
@@ -107,9 +107,10 @@ pub async fn migrate(
     let url = database_url.to_owned();
     let migration_result = tokio::task::spawn_blocking(move || {
         use diesel::Connection;
-        let mut wrapper =
-            diesel_async::async_connection_wrapper::AsyncConnectionWrapper::<AsyncPgConnection>::establish(&url)
-                .map_err(|e| anyhow::anyhow!("could not establish migration connection: {e}"))?;
+        let mut wrapper = diesel_async::async_connection_wrapper::AsyncConnectionWrapper::<
+            AsyncPgConnection,
+        >::establish(&url)
+        .map_err(|e| anyhow::anyhow!("could not establish migration connection: {e}"))?;
         let applied = wrapper
             .run_pending_migrations(MIGRATIONS)
             .map_err(|e| anyhow::anyhow!("could not run migrations: {e}"))?;
@@ -138,15 +139,14 @@ pub async fn migrate(
 /// # Errors
 ///
 /// Returns an error if there is a problem checking the migration state.
-pub async fn has_pending_migrations(
-    database_url: &str,
-) -> Result<bool, anyhow::Error> {
+pub async fn has_pending_migrations(database_url: &str) -> Result<bool, anyhow::Error> {
     let url = database_url.to_owned();
     tokio::task::spawn_blocking(move || {
         use diesel::Connection;
-        let mut wrapper =
-            diesel_async::async_connection_wrapper::AsyncConnectionWrapper::<AsyncPgConnection>::establish(&url)
-                .map_err(|e| anyhow::anyhow!("could not establish connection: {e}"))?;
+        let mut wrapper = diesel_async::async_connection_wrapper::AsyncConnectionWrapper::<
+            AsyncPgConnection,
+        >::establish(&url)
+        .map_err(|e| anyhow::anyhow!("could not establish connection: {e}"))?;
         let pending = wrapper
             .pending_migrations(MIGRATIONS)
             .map_err(|e| anyhow::anyhow!("could not check pending migrations: {e}"))?;
@@ -185,9 +185,7 @@ async fn bridge_from_sqlx(conn: &mut AsyncPgConnection) -> Result<(), anyhow::Er
     )
     .get_result(conn)
     .await
-    .map_err(|e| {
-        anyhow::anyhow!("could not check for __diesel_schema_migrations table: {e}")
-    })?;
+    .map_err(|e| anyhow::anyhow!("could not check for __diesel_schema_migrations table: {e}"))?;
 
     if has_diesel.exists {
         // Already bridged or fresh diesel install

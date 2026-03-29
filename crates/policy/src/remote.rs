@@ -144,12 +144,11 @@ impl RemoteEvaluator {
             )));
         }
 
-        let remote_response: RemoteResponse =
-            response.json().await.map_err(|e| {
-                EvaluationError::Evaluation(anyhow::anyhow!(
-                    "Failed to parse remote policy response: {e}"
-                ))
-            })?;
+        let remote_response: RemoteResponse = response.json().await.map_err(|e| {
+            EvaluationError::Evaluation(anyhow::anyhow!(
+                "Failed to parse remote policy response: {e}"
+            ))
+        })?;
 
         Ok(EvaluationResult {
             violations: remote_response.violations,

@@ -56,8 +56,8 @@ impl AliyunSmsTransport {
     ) -> Result<(), SmsTransportError> {
         let timestamp = chrono::Utc::now().format("%Y-%m-%dT%H:%M:%SZ").to_string();
         let nonce = uuid_v4_string();
-        let template_param_json = serde_json::to_string(template_params)
-            .unwrap_or_else(|_| String::from("{}"));
+        let template_param_json =
+            serde_json::to_string(template_params).unwrap_or_else(|_| String::from("{}"));
 
         let mut params: Vec<(&str, String)> = vec![
             ("Action", "SendSms".to_owned()),
@@ -99,10 +99,8 @@ impl AliyunSmsTransport {
         let signature = BASE64.encode(mac.finalize().into_bytes());
 
         // Add signature to params
-        let mut form_params: Vec<(&str, &str)> = params
-            .iter()
-            .map(|(k, v)| (*k, v.as_str()))
-            .collect();
+        let mut form_params: Vec<(&str, &str)> =
+            params.iter().map(|(k, v)| (*k, v.as_str())).collect();
         // We need to own the signature string for the borrow to work
         form_params.push(("Signature", &signature));
 

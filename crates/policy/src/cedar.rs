@@ -41,9 +41,7 @@
 use std::sync::Arc;
 
 use async_trait::async_trait;
-use cedar_policy::{
-    Authorizer, Context, Decision, Entities, EntityUid, PolicySet, Request,
-};
+use cedar_policy::{Authorizer, Context, Decision, Entities, EntityUid, PolicySet, Request};
 use chrono::{Datelike, Timelike, Utc};
 use pasion_data_model::PolicyData;
 
@@ -166,10 +164,9 @@ impl CedarEvaluator {
         let principal: EntityUid = r#"Requester::"anonymous""#.parse().map_err(|e| {
             EvaluationError::Evaluation(anyhow::anyhow!("Failed to parse principal: {e}"))
         })?;
-        let action: EntityUid =
-            format!(r#"Action::"{action_name}""#).parse().map_err(|e| {
-                EvaluationError::Evaluation(anyhow::anyhow!("Failed to parse action: {e}"))
-            })?;
+        let action: EntityUid = format!(r#"Action::"{action_name}""#).parse().map_err(|e| {
+            EvaluationError::Evaluation(anyhow::anyhow!("Failed to parse action: {e}"))
+        })?;
         let resource: EntityUid = r#"Resource::"default""#.parse().map_err(|e| {
             EvaluationError::Evaluation(anyhow::anyhow!("Failed to parse resource: {e}"))
         })?;
@@ -178,14 +175,13 @@ impl CedarEvaluator {
             EvaluationError::Evaluation(anyhow::anyhow!("Failed to build Cedar context: {e}"))
         })?;
 
-        let request =
-            Request::new(principal, action, resource, context, None).map_err(|e| {
-                EvaluationError::Evaluation(anyhow::anyhow!("Failed to build Cedar request: {e}"))
-            })?;
+        let request = Request::new(principal, action, resource, context, None).map_err(|e| {
+            EvaluationError::Evaluation(anyhow::anyhow!("Failed to build Cedar request: {e}"))
+        })?;
 
-        let response =
-            self.authorizer
-                .is_authorized(&request, &self.policy_set, &self.entities);
+        let response = self
+            .authorizer
+            .is_authorized(&request, &self.policy_set, &self.entities);
 
         let violations = match response.decision() {
             Decision::Allow => vec![],

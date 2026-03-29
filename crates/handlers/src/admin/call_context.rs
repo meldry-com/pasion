@@ -119,7 +119,8 @@ pub async fn extract_call_context(req: &Request, depot: &Depot) -> Result<CallCo
     let clock = crate::rest::make_clock();
 
     // Load the database repository
-    let repo_factory = depot.repo_factory()
+    let repo_factory = depot
+        .repo_factory()
         .map_err(|e| Rejection::RepositorySetup(Box::new(e)))?;
     let mut repo = repo_factory
         .create()

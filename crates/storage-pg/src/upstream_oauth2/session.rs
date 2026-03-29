@@ -16,8 +16,7 @@ use ulid::Ulid;
 use uuid::Uuid;
 
 use crate::{
-    DatabaseError, DatabaseInconsistencyError,
-    schema::upstream_oauth_authorization_sessions,
+    DatabaseError, DatabaseInconsistencyError, schema::upstream_oauth_authorization_sessions,
 };
 
 /// An implementation of [`UpstreamOAuthSessionRepository`] for a PostgreSQL
@@ -336,11 +335,7 @@ impl UpstreamOAuthSessionRepository for PgUpstreamOAuthSessionRepository<'_> {
         Ok(upstream_oauth_authorization_session)
     }
 
-    #[tracing::instrument(
-        name = "db.upstream_oauth_authorization_session.list",
-        skip_all,
-        err,
-    )]
+    #[tracing::instrument(name = "db.upstream_oauth_authorization_session.list", skip_all, err)]
     async fn list(
         &mut self,
         filter: UpstreamOAuthSessionFilter<'_>,
@@ -361,22 +356,18 @@ impl UpstreamOAuthSessionRepository for PgUpstreamOAuthSessionRepository<'_> {
         if let Some(sub) = filter.sub_claim() {
             // Filter by the "sub" field in id_token_claims JSONB column
             // Using the ->> operator: id_token_claims->>'sub' = sub
-            query = query.filter(
-                diesel::dsl::sql::<diesel::sql_types::Bool>(&format!(
-                    "id_token_claims->>'sub' = '{}'",
-                    sub.replace('\'', "''")
-                )),
-            );
+            query = query.filter(diesel::dsl::sql::<diesel::sql_types::Bool>(&format!(
+                "id_token_claims->>'sub' = '{}'",
+                sub.replace('\'', "''")
+            )));
         }
 
         if let Some(sid) = filter.sid_claim() {
             // Filter by the "sid" field in id_token_claims JSONB column
-            query = query.filter(
-                diesel::dsl::sql::<diesel::sql_types::Bool>(&format!(
-                    "id_token_claims->>'sid' = '{}'",
-                    sid.replace('\'', "''")
-                )),
-            );
+            query = query.filter(diesel::dsl::sql::<diesel::sql_types::Bool>(&format!(
+                "id_token_claims->>'sid' = '{}'",
+                sid.replace('\'', "''")
+            )));
         }
 
         // Apply pagination
@@ -421,11 +412,7 @@ impl UpstreamOAuthSessionRepository for PgUpstreamOAuthSessionRepository<'_> {
         Ok(page)
     }
 
-    #[tracing::instrument(
-        name = "db.upstream_oauth_authorization_session.count",
-        skip_all,
-        err,
-    )]
+    #[tracing::instrument(name = "db.upstream_oauth_authorization_session.count", skip_all, err)]
     async fn count(
         &mut self,
         filter: UpstreamOAuthSessionFilter<'_>,
@@ -440,27 +427,20 @@ impl UpstreamOAuthSessionRepository for PgUpstreamOAuthSessionRepository<'_> {
         }
 
         if let Some(sub) = filter.sub_claim() {
-            query = query.filter(
-                diesel::dsl::sql::<diesel::sql_types::Bool>(&format!(
-                    "id_token_claims->>'sub' = '{}'",
-                    sub.replace('\'', "''")
-                )),
-            );
+            query = query.filter(diesel::dsl::sql::<diesel::sql_types::Bool>(&format!(
+                "id_token_claims->>'sub' = '{}'",
+                sub.replace('\'', "''")
+            )));
         }
 
         if let Some(sid) = filter.sid_claim() {
-            query = query.filter(
-                diesel::dsl::sql::<diesel::sql_types::Bool>(&format!(
-                    "id_token_claims->>'sid' = '{}'",
-                    sid.replace('\'', "''")
-                )),
-            );
+            query = query.filter(diesel::dsl::sql::<diesel::sql_types::Bool>(&format!(
+                "id_token_claims->>'sid' = '{}'",
+                sid.replace('\'', "''")
+            )));
         }
 
-        let count: i64 = query
-            .count()
-            .get_result(self.conn)
-            .await?;
+        let count: i64 = query.count().get_result(self.conn).await?;
 
         count
             .try_into()

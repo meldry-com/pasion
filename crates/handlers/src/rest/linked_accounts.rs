@@ -4,24 +4,28 @@
 //! connected external accounts (GitHub, Google, etc.).
 
 use pasion_storage::{
-    RepositoryAccess, Pagination,
+    Pagination, RepositoryAccess,
     upstream_oauth2::{
-        UpstreamOAuthLinkFilter, UpstreamOAuthLinkRepository, UpstreamOAuthProviderRepository } };
+        UpstreamOAuthLinkFilter, UpstreamOAuthLinkRepository, UpstreamOAuthProviderRepository,
+    },
+};
 use salvo::oapi::ToSchema;
 use salvo::prelude::*;
 use serde::Serialize;
 use ulid::Ulid;
 
-use super::{DepotExt, 
-    RouteError, extract_bound_activity_tracker, extract_session_info,
-    get_requester, make_clock };
+use super::{
+    DepotExt, RouteError, extract_bound_activity_tracker, extract_session_info, get_requester,
+    make_clock,
+};
 
 // ── Response types ──────────────────────────────────────────────
 
 #[derive(Serialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct LinkedAccountsResponse {
-    pub accounts: Vec<LinkedAccount> }
+    pub accounts: Vec<LinkedAccount>,
+}
 
 #[derive(Serialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
@@ -32,12 +36,14 @@ pub struct LinkedAccount {
     pub provider_brand: Option<String>,
     pub subject: String,
     pub human_account_name: Option<String>,
-    pub created_at: String }
+    pub created_at: String,
+}
 
 #[derive(Serialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct UnlinkResponse {
-    pub status: &'static str }
+    pub status: &'static str,
+}
 
 // ── GET /api/v1/linked-accounts ─────────────────────────────────
 
@@ -92,7 +98,8 @@ pub async fn list_linked_accounts(
                 provider_brand,
                 subject: link.subject,
                 human_account_name: link.human_account_name,
-                created_at: link.created_at.to_rfc3339() }
+                created_at: link.created_at.to_rfc3339(),
+            }
         })
         .collect();
 

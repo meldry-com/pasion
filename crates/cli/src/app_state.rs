@@ -1,5 +1,7 @@
 use std::{net::IpAddr, sync::Arc};
 
+use diesel_async::AsyncPgConnection;
+use diesel_async::pooled_connection::deadpool::Pool as DieselPool;
 use ipnetwork::IpNetwork;
 use opentelemetry::KeyValue;
 use pasion_context::LogContext;
@@ -17,8 +19,6 @@ use pasion_storage_pg::PgRepositoryFactory;
 use pasion_templates::Templates;
 use rand::SeedableRng;
 use salvo::prelude::*;
-use diesel_async::AsyncPgConnection;
-use diesel_async::pooled_connection::deadpool::Pool as DieselPool;
 use tracing::Instrument;
 
 use crate::{VERSION, telemetry::METER};

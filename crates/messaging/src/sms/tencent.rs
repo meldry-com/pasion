@@ -67,7 +67,10 @@ impl TencentSmsTransport {
             format!("TC3-HMAC-SHA256\n{timestamp}\n{credential_scope}\n{hashed_canonical}");
 
         // Step 3: Calculate signature via HMAC chain
-        let secret_date = hmac_sha256(format!("TC3{}", self.secret_key).as_bytes(), date.as_bytes());
+        let secret_date = hmac_sha256(
+            format!("TC3{}", self.secret_key).as_bytes(),
+            date.as_bytes(),
+        );
         let secret_service = hmac_sha256(&secret_date, service.as_bytes());
         let secret_signing = hmac_sha256(&secret_service, b"tc3_request");
         let signature_bytes = hmac_sha256(&secret_signing, string_to_sign.as_bytes());
@@ -98,11 +101,7 @@ impl TencentSmsTransport {
 
         // Check for errors in the response
         if let Ok(json) = serde_json::from_str::<serde_json::Value>(&body) {
-            if json
-                .get("Response")
-                .and_then(|r| r.get("Error"))
-                .is_some()
-            {
+            if json.get("Response").and_then(|r| r.get("Error")).is_some() {
                 return Err(SmsTransportError::ProviderError {
                     status: status.as_u16(),
                     body,

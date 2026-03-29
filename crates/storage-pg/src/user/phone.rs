@@ -246,11 +246,9 @@ impl UserPhoneRepository for PgUserPhoneRepository<'_> {
         err,
     )]
     async fn remove(&mut self, user_phone: UserPhone) -> Result<(), Self::Error> {
-        let rows_affected = diesel::delete(
-            user_phones::table.find(Uuid::from(user_phone.id)),
-        )
-        .execute(self.conn)
-        .await?;
+        let rows_affected = diesel::delete(user_phones::table.find(Uuid::from(user_phone.id)))
+            .execute(self.conn)
+            .await?;
 
         DatabaseError::ensure_affected_rows_usize(rows_affected, 1)?;
 

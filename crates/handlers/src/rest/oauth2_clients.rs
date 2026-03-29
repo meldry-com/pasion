@@ -13,7 +13,8 @@ pub struct Oauth2ClientResponse {
     pub client_uri: Option<String>,
     pub tos_uri: Option<String>,
     pub policy_uri: Option<String>,
-    pub logo_uri: Option<String> }
+    pub logo_uri: Option<String>,
+}
 
 /// GET /api/v1/oauth2-clients/:id
 #[endpoint]
@@ -44,5 +45,6 @@ pub async fn get_client(
         client_uri: client.client_uri.as_ref().map(|u| u.to_string()),
         tos_uri: client.tos_uri.as_ref().map(|u| u.to_string()),
         policy_uri: client.policy_uri.as_ref().map(|u| u.to_string()),
-        logo_uri: client.logo_uri.as_ref().map(|u| u.to_string()) }))
+        logo_uri: client.logo_uri.as_ref().map(|u| u.to_string()),
+    }))
 }

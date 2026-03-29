@@ -49,7 +49,9 @@ impl SmsSender {
 
         // Text-based transports (Twilio, HttpWebhook, Blackhole)
         let body = match language {
-            "zh" | "zh-Hans" | "zh-CN" => format!("\u{60A8}\u{7684}\u{9A8C}\u{8BC1}\u{7801}\u{662F}\u{FF1A}{code}"),
+            "zh" | "zh-Hans" | "zh-CN" => {
+                format!("\u{60A8}\u{7684}\u{9A8C}\u{8BC1}\u{7801}\u{662F}\u{FF1A}{code}")
+            }
             _ => format!("Your verification code is: {code}"),
         };
 

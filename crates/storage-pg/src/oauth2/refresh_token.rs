@@ -96,9 +96,7 @@ struct CleanupResult {
 }
 
 #[async_trait]
-impl pasion_storage::oauth2::OAuth2RefreshTokenRepository
-    for PgOAuth2RefreshTokenRepository<'_>
-{
+impl pasion_storage::oauth2::OAuth2RefreshTokenRepository for PgOAuth2RefreshTokenRepository<'_> {
     type Error = DatabaseError;
 
     #[tracing::instrument(
@@ -120,11 +118,7 @@ impl pasion_storage::oauth2::OAuth2RefreshTokenRepository
         Ok(Some(res.try_into()?))
     }
 
-    #[tracing::instrument(
-        name = "db.oauth2_refresh_token.find_by_token",
-        skip_all,
-        err,
-    )]
+    #[tracing::instrument(name = "db.oauth2_refresh_token.find_by_token", skip_all, err)]
     async fn find_by_token(
         &mut self,
         refresh_token: &str,
@@ -202,16 +196,15 @@ impl pasion_storage::oauth2::OAuth2RefreshTokenRepository
         replaced_by: &RefreshToken,
     ) -> Result<RefreshToken, Self::Error> {
         let consumed_at = clock.now();
-        let rows_affected = diesel::update(
-            oauth2_refresh_tokens::table.find(Uuid::from(refresh_token.id)),
-        )
-        .set((
-            oauth2_refresh_tokens::consumed_at.eq(Some(consumed_at)),
-            oauth2_refresh_tokens::next_oauth2_refresh_token_id
-                .eq(Some(Uuid::from(replaced_by.id))),
-        ))
-        .execute(self.conn)
-        .await?;
+        let rows_affected =
+            diesel::update(oauth2_refresh_tokens::table.find(Uuid::from(refresh_token.id)))
+                .set((
+                    oauth2_refresh_tokens::consumed_at.eq(Some(consumed_at)),
+                    oauth2_refresh_tokens::next_oauth2_refresh_token_id
+                        .eq(Some(Uuid::from(replaced_by.id))),
+                ))
+                .execute(self.conn)
+                .await?;
 
         DatabaseError::ensure_affected_rows_usize(rows_affected, 1)?;
 
@@ -235,12 +228,11 @@ impl pasion_storage::oauth2::OAuth2RefreshTokenRepository
         refresh_token: RefreshToken,
     ) -> Result<RefreshToken, Self::Error> {
         let revoked_at = clock.now();
-        let rows_affected = diesel::update(
-            oauth2_refresh_tokens::table.find(Uuid::from(refresh_token.id)),
-        )
-        .set(oauth2_refresh_tokens::revoked_at.eq(Some(revoked_at)))
-        .execute(self.conn)
-        .await?;
+        let rows_affected =
+            diesel::update(oauth2_refresh_tokens::table.find(Uuid::from(refresh_token.id)))
+                .set(oauth2_refresh_tokens::revoked_at.eq(Some(revoked_at)))
+                .execute(self.conn)
+                .await?;
 
         DatabaseError::ensure_affected_rows_usize(rows_affected, 1)?;
 
@@ -249,11 +241,7 @@ impl pasion_storage::oauth2::OAuth2RefreshTokenRepository
             .map_err(DatabaseError::to_invalid_operation)
     }
 
-    #[tracing::instrument(
-        name = "db.oauth2_refresh_token.cleanup_revoked",
-        skip_all,
-        err,
-    )]
+    #[tracing::instrument(name = "db.oauth2_refresh_token.cleanup_revoked", skip_all, err)]
     async fn cleanup_revoked(
         &mut self,
         since: Option<DateTime<Utc>>,
@@ -295,17 +283,10 @@ impl pasion_storage::oauth2::OAuth2RefreshTokenRepository
         .get_result(self.conn)
         .await?;
 
-        Ok((
-            res.count.try_into().unwrap_or(usize::MAX),
-            res.last_ts,
-        ))
+        Ok((res.count.try_into().unwrap_or(usize::MAX), res.last_ts))
     }
 
-    #[tracing::instrument(
-        name = "db.oauth2_refresh_token.cleanup_consumed",
-        skip_all,
-        err,
-    )]
+    #[tracing::instrument(name = "db.oauth2_refresh_token.cleanup_consumed", skip_all, err)]
     async fn cleanup_consumed(
         &mut self,
         since: Option<DateTime<Utc>>,
@@ -349,9 +330,6 @@ impl pasion_storage::oauth2::OAuth2RefreshTokenRepository
         .get_result(self.conn)
         .await?;
 
-        Ok((
-            res.count.try_into().unwrap_or(usize::MAX),
-            res.last_ts,
-        ))
+        Ok((res.count.try_into().unwrap_or(usize::MAX), res.last_ts))
     }
 }

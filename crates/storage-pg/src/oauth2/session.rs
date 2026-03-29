@@ -153,9 +153,7 @@ macro_rules! apply_session_filter {
         }
 
         if let Some(browser_session) = $filter.browser_session() {
-            q = q.filter(
-                oauth2_sessions::user_session_id.eq(Uuid::from(browser_session.id)),
-            );
+            q = q.filter(oauth2_sessions::user_session_id.eq(Uuid::from(browser_session.id)));
         }
 
         if let Some(browser_session_filter) = $filter.browser_session_filter() {
@@ -298,11 +296,7 @@ impl OAuth2SessionRepository for PgOAuth2SessionRepository<'_> {
         })
     }
 
-    #[tracing::instrument(
-        name = "db.oauth2_session.finish_bulk",
-        skip_all,
-        err,
-    )]
+    #[tracing::instrument(name = "db.oauth2_session.finish_bulk", skip_all, err)]
     async fn finish_bulk(
         &mut self,
         clock: &dyn Clock,
@@ -319,8 +313,7 @@ impl OAuth2SessionRepository for PgOAuth2SessionRepository<'_> {
         );
 
         let rows_affected = diesel::update(
-            oauth2_sessions::table
-                .filter(oauth2_sessions::oauth2_session_id.eq_any(filtered_ids)),
+            oauth2_sessions::table.filter(oauth2_sessions::oauth2_session_id.eq_any(filtered_ids)),
         )
         .set(oauth2_sessions::finished_at.eq(Some(finished_at)))
         .execute(self.conn)
@@ -345,12 +338,10 @@ impl OAuth2SessionRepository for PgOAuth2SessionRepository<'_> {
         session: Session,
     ) -> Result<Session, Self::Error> {
         let finished_at = clock.now();
-        let rows_affected = diesel::update(
-            oauth2_sessions::table.find(Uuid::from(session.id)),
-        )
-        .set(oauth2_sessions::finished_at.eq(Some(finished_at)))
-        .execute(self.conn)
-        .await?;
+        let rows_affected = diesel::update(oauth2_sessions::table.find(Uuid::from(session.id)))
+            .set(oauth2_sessions::finished_at.eq(Some(finished_at)))
+            .execute(self.conn)
+            .await?;
 
         DatabaseError::ensure_affected_rows_usize(rows_affected, 1)?;
 
@@ -359,11 +350,7 @@ impl OAuth2SessionRepository for PgOAuth2SessionRepository<'_> {
             .map_err(DatabaseError::to_invalid_operation)
     }
 
-    #[tracing::instrument(
-        name = "db.oauth2_session.list",
-        skip_all,
-        err,
-    )]
+    #[tracing::instrument(name = "db.oauth2_session.list", skip_all, err)]
     async fn list(
         &mut self,
         filter: OAuth2SessionFilter<'_>,
@@ -378,14 +365,10 @@ impl OAuth2SessionRepository for PgOAuth2SessionRepository<'_> {
 
         // Apply pagination
         if let Some(after) = pagination.after {
-            query = query.filter(
-                oauth2_sessions::oauth2_session_id.gt(Uuid::from(after)),
-            );
+            query = query.filter(oauth2_sessions::oauth2_session_id.gt(Uuid::from(after)));
         }
         if let Some(before) = pagination.before {
-            query = query.filter(
-                oauth2_sessions::oauth2_session_id.lt(Uuid::from(before)),
-            );
+            query = query.filter(oauth2_sessions::oauth2_session_id.lt(Uuid::from(before)));
         }
 
         match pagination.direction {
@@ -408,32 +391,18 @@ impl OAuth2SessionRepository for PgOAuth2SessionRepository<'_> {
         Ok(page)
     }
 
-    #[tracing::instrument(
-        name = "db.oauth2_session.count",
-        skip_all,
-        err,
-    )]
+    #[tracing::instrument(name = "db.oauth2_session.count", skip_all, err)]
     async fn count(&mut self, filter: OAuth2SessionFilter<'_>) -> Result<usize, Self::Error> {
-        let query = apply_session_filter!(
-            oauth2_sessions::table.into_boxed(),
-            filter
-        );
+        let query = apply_session_filter!(oauth2_sessions::table.into_boxed(), filter);
 
-        let count: i64 = query
-            .count()
-            .get_result(self.conn)
-            .await?;
+        let count: i64 = query.count().get_result(self.conn).await?;
 
         count
             .try_into()
             .map_err(DatabaseError::to_invalid_operation)
     }
 
-    #[tracing::instrument(
-        name = "db.oauth2_session.record_batch_activity",
-        skip_all,
-        err,
-    )]
+    #[tracing::instrument(name = "db.oauth2_session.record_batch_activity", skip_all, err)]
     async fn record_batch_activity(
         &mut self,
         mut activities: Vec<(Ulid, DateTime<Utc>, Option<IpAddr>)>,
@@ -495,12 +464,10 @@ impl OAuth2SessionRepository for PgOAuth2SessionRepository<'_> {
         mut session: Session,
         user_agent: String,
     ) -> Result<Session, Self::Error> {
-        let rows_affected = diesel::update(
-            oauth2_sessions::table.find(Uuid::from(session.id)),
-        )
-        .set(oauth2_sessions::user_agent.eq(&user_agent))
-        .execute(self.conn)
-        .await?;
+        let rows_affected = diesel::update(oauth2_sessions::table.find(Uuid::from(session.id)))
+            .set(oauth2_sessions::user_agent.eq(&user_agent))
+            .execute(self.conn)
+            .await?;
 
         session.user_agent = Some(user_agent);
 
@@ -523,12 +490,10 @@ impl OAuth2SessionRepository for PgOAuth2SessionRepository<'_> {
         mut session: Session,
         human_name: Option<String>,
     ) -> Result<Session, Self::Error> {
-        let rows_affected = diesel::update(
-            oauth2_sessions::table.find(Uuid::from(session.id)),
-        )
-        .set(oauth2_sessions::human_name.eq(human_name.as_deref()))
-        .execute(self.conn)
-        .await?;
+        let rows_affected = diesel::update(oauth2_sessions::table.find(Uuid::from(session.id)))
+            .set(oauth2_sessions::human_name.eq(human_name.as_deref()))
+            .execute(self.conn)
+            .await?;
 
         session.human_name = human_name;
 
@@ -588,10 +553,7 @@ impl OAuth2SessionRepository for PgOAuth2SessionRepository<'_> {
         .get_result(self.conn)
         .await?;
 
-        Ok((
-            res.count.try_into().unwrap_or(usize::MAX),
-            res.last_ts,
-        ))
+        Ok((res.count.try_into().unwrap_or(usize::MAX), res.last_ts))
     }
 
     #[tracing::instrument(
@@ -639,9 +601,6 @@ impl OAuth2SessionRepository for PgOAuth2SessionRepository<'_> {
         .get_result(self.conn)
         .await?;
 
-        Ok((
-            res.count.try_into().unwrap_or(usize::MAX),
-            res.last_ts,
-        ))
+        Ok((res.count.try_into().unwrap_or(usize::MAX), res.last_ts))
     }
 }

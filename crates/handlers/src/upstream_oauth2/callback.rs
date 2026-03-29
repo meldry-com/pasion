@@ -24,8 +24,8 @@ use super::{
     client_credentials_for_provider,
     template::{AttributeMappingContext, environment},
 };
-use crate::{METER, impl_from_error_for_route};
 use crate::rest::DepotExt;
+use crate::{METER, impl_from_error_for_route};
 
 static CALLBACK_COUNTER: LazyLock<Counter<u64>> = LazyLock::new(|| {
     METER

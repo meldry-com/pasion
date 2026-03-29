@@ -8,8 +8,8 @@ use pasion_templates::{EmptyContext, RecoveryProgressContext, TemplateContext, T
 use salvo::{prelude::*, writing::Text};
 use ulid::Ulid;
 
-use crate::{RequesterFingerprint, rest};
 use crate::rest::DepotExt;
+use crate::{RequesterFingerprint, rest};
 
 #[handler]
 pub async fn get(

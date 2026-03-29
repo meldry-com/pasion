@@ -188,8 +188,8 @@ impl UserRepository for PgUserRepository<'_> {
         err,
     )]
     async fn exists(&mut self, username: &str) -> Result<bool, Self::Error> {
-        use diesel::dsl::{exists, select};
         use crate::lower;
+        use diesel::dsl::{exists, select};
 
         let result = select(exists(
             users::table.filter(lower(users::username).eq(username.to_lowercase())),
@@ -311,19 +311,13 @@ impl UserRepository for PgUserRepository<'_> {
         Ok(user)
     }
 
-    #[tracing::instrument(
-        name = "db.user.list",
-        skip_all,
-        err,
-    )]
+    #[tracing::instrument(name = "db.user.list", skip_all, err)]
     async fn list(
         &mut self,
         filter: UserFilter<'_>,
         pagination: Pagination,
     ) -> Result<pasion_storage::Page<User>, Self::Error> {
-        let mut query = users::table
-            .select(UserRow::as_select())
-            .into_boxed();
+        let mut query = users::table.select(UserRow::as_select()).into_boxed();
 
         // Apply filters
         if let Some(state) = filter.state() {
@@ -381,11 +375,7 @@ impl UserRepository for PgUserRepository<'_> {
         Ok(page)
     }
 
-    #[tracing::instrument(
-        name = "db.user.count",
-        skip_all,
-        err,
-    )]
+    #[tracing::instrument(name = "db.user.count", skip_all, err)]
     async fn count(&mut self, filter: UserFilter<'_>) -> Result<usize, Self::Error> {
         let mut query = users::table.into_boxed();
 
@@ -418,10 +408,7 @@ impl UserRepository for PgUserRepository<'_> {
             query = query.filter(users::username.ilike(pattern));
         }
 
-        let count: i64 = query
-            .count()
-            .get_result(self.conn)
-            .await?;
+        let count: i64 = query.count().get_result(self.conn).await?;
 
         count
             .try_into()

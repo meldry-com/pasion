@@ -38,7 +38,10 @@ mod tests {
         let pool = crate::test_utils::setup_test_pool().await;
         let mut rng = ChaChaRng::seed_from_u64(42);
         let clock = MockClock::default();
-        let mut repo = PgRepositoryFactory::new(pool.clone()).create().await.unwrap();
+        let mut repo = PgRepositoryFactory::new(pool.clone())
+            .create()
+            .await
+            .unwrap();
 
         // Lookup a non-existing client
         let client = repo.oauth2_client().lookup(Ulid::nil()).await.unwrap();
@@ -372,7 +375,10 @@ mod tests {
         let pool = crate::test_utils::setup_test_pool().await;
         let mut rng = ChaChaRng::seed_from_u64(42);
         let clock = MockClock::default();
-        let mut repo = PgRepositoryFactory::new(pool.clone()).create().await.unwrap();
+        let mut repo = PgRepositoryFactory::new(pool.clone())
+            .create()
+            .await
+            .unwrap();
 
         // Create two users and their corresponding browser sessions
         let user1 = repo
@@ -721,7 +727,10 @@ mod tests {
         let pool = crate::test_utils::setup_test_pool().await;
         let mut rng = ChaChaRng::seed_from_u64(42);
         let clock = MockClock::default();
-        let mut repo = PgRepositoryFactory::new(pool.clone()).create().await.unwrap();
+        let mut repo = PgRepositoryFactory::new(pool.clone())
+            .create()
+            .await
+            .unwrap();
 
         // Provision a client
         let client = repo

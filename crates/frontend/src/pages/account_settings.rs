@@ -42,10 +42,8 @@ pub fn AccountSettings() -> Element {
                 .unwrap_or_default();
             let email_count = user.emails.as_ref().map(|ec| ec.total_count).unwrap_or(0);
             let has_password = user.has_password.unwrap_or(false);
-            let linked_accounts: Vec<LinkedAccount> = user
-                .linked_accounts
-                .clone()
-                .unwrap_or_default();
+            let linked_accounts: Vec<LinkedAccount> =
+                user.linked_accounts.clone().unwrap_or_default();
             let email_change_allowed = result.site_config.email_change_allowed;
             let password_login_enabled = result.site_config.password_login_enabled;
             let account_deactivation_allowed = result.site_config.account_deactivation_allowed;

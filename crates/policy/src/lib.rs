@@ -690,8 +690,7 @@ mod tests {
         assert_eq!(res, j!({"hello": "world"}));
 
         // Objects get deeply merged
-        let res =
-            merge_data(j!({"a": {"b": {"c": "d"}}}), j!({"a": {"b": {"e": "f"}}})).unwrap();
+        let res = merge_data(j!({"a": {"b": {"c": "d"}}}), j!({"a": {"b": {"e": "f"}}})).unwrap();
         assert_eq!(res, j!({"a": {"b": {"c": "d", "e": "f"}}}));
     }
 }

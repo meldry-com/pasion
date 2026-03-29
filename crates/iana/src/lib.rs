@@ -3,8 +3,8 @@
 #![deny(missing_docs)]
 #![allow(clippy::module_name_repetitions)]
 
-mod macros;
 pub mod jose;
+mod macros;
 pub mod oauth;
 
 /// An error that occurred while parsing a value from a string.

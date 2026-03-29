@@ -13,16 +13,15 @@ use salvo::prelude::*;
 use serde::{Deserialize, Serialize};
 use ulid::Ulid;
 
-use super::{DepotExt, 
-    RouteError, extract_bound_activity_tracker,
-    make_clock, make_rng };
+use super::{DepotExt, RouteError, extract_bound_activity_tracker, make_clock, make_rng};
 use crate::RequesterFingerprint;
 
 // ── POST /api/v1/auth/recovery/start ───────────────────────────
 
 #[derive(Deserialize, ToSchema)]
 pub struct StartRecoveryInput {
-    pub email: String }
+    pub email: String,
+}
 
 #[derive(Serialize, ToSchema)]
 pub struct StartRecoveryResponse {
@@ -30,7 +29,8 @@ pub struct StartRecoveryResponse {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub id: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub error: Option<String> }
+    pub error: Option<String>,
+}
 
 #[endpoint]
 pub async fn post_recovery_start(
@@ -66,7 +66,8 @@ pub async fn post_recovery_start(
         return Ok(Json(StartRecoveryResponse {
             status: "error",
             id: None,
-            error: Some("recovery_disabled".into()) }));
+            error: Some("recovery_disabled".into()),
+        }));
     }
 
     // Validate email format
@@ -74,7 +75,8 @@ pub async fn post_recovery_start(
         return Ok(Json(StartRecoveryResponse {
             status: "error",
             id: None,
-            error: Some("invalid_email".into()) }));
+            error: Some("invalid_email".into()),
+        }));
     }
 
     // Rate limit check
@@ -83,7 +85,8 @@ pub async fn post_recovery_start(
         return Ok(Json(StartRecoveryResponse {
             status: "error",
             id: None,
-            error: Some("rate_limited".into()) }));
+            error: Some("rate_limited".into()),
+        }));
     }
 
     let mut repo = repo_factory.create().await?;
@@ -115,7 +118,8 @@ pub async fn post_recovery_start(
     Ok(Json(StartRecoveryResponse {
         status: "success",
         id: Some(session.id.to_string()),
-        error: None }))
+        error: None,
+    }))
 }
 
 // ── GET /api/v1/auth/recovery/:id ──────────────────────────────
@@ -124,7 +128,8 @@ pub async fn post_recovery_start(
 pub struct RecoveryStatusResponse {
     pub id: String,
     pub email: String,
-    pub status: &'static str }
+    pub status: &'static str,
+}
 
 #[endpoint]
 pub async fn get_recovery(
@@ -163,7 +168,8 @@ pub async fn get_recovery(
     Ok(Json(RecoveryStatusResponse {
         id: session.id.to_string(),
         email: session.email,
-        status }))
+        status,
+    }))
 }
 
 // ── POST /api/v1/auth/recovery/:id/resend ──────────────────────
@@ -172,7 +178,8 @@ pub async fn get_recovery(
 pub struct ResendRecoveryResponse {
     pub status: &'static str,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub error: Option<String> }
+    pub error: Option<String>,
+}
 
 #[endpoint]
 pub async fn post_recovery_resend(
@@ -201,7 +208,8 @@ pub async fn post_recovery_resend(
     if !site_config.account_recovery_allowed {
         return Ok(Json(ResendRecoveryResponse {
             status: "error",
-            error: Some("recovery_disabled".into()) }));
+            error: Some("recovery_disabled".into()),
+        }));
     }
 
     let mut repo = repo_factory.create().await?;
@@ -215,7 +223,8 @@ pub async fn post_recovery_resend(
     if session.consumed_at.is_some() {
         return Ok(Json(ResendRecoveryResponse {
             status: "error",
-            error: Some("recovery_already_consumed".into()) }));
+            error: Some("recovery_already_consumed".into()),
+        }));
     }
 
     // Rate limit check
@@ -223,7 +232,8 @@ pub async fn post_recovery_resend(
         tracing::warn!(error = &e as &dyn std::error::Error);
         return Ok(Json(ResendRecoveryResponse {
             status: "error",
-            error: Some("rate_limited".into()) }));
+            error: Some("rate_limited".into()),
+        }));
     }
 
     // Schedule a new batch of recovery emails
@@ -239,5 +249,6 @@ pub async fn post_recovery_resend(
 
     Ok(Json(ResendRecoveryResponse {
         status: "success",
-        error: None }))
+        error: None,
+    }))
 }

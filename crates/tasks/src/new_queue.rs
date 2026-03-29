@@ -20,8 +20,8 @@ use pasion_storage_pg::{DatabaseError, PgRepository};
 use rand::{Rng, RngCore, distributions::Uniform};
 use serde::de::DeserializeOwned;
 use thiserror::Error;
-use tokio_postgres::NoTls;
 use tokio::{task::JoinSet, time::Instant};
+use tokio_postgres::NoTls;
 use tokio_util::sync::CancellationToken;
 use tracing::{Instrument as _, Span};
 use tracing_opentelemetry::OpenTelemetrySpanExt as _;
@@ -222,7 +222,10 @@ struct ScheduleDefinition {
 pub struct QueueWorker {
     notification_rx: tokio::sync::mpsc::UnboundedReceiver<tokio_postgres::Notification>,
     /// Kept alive to maintain the underlying connection for LISTEN/NOTIFY.
-    #[expect(dead_code, reason = "Dropping this would close the notification connection")]
+    #[expect(
+        dead_code,
+        reason = "Dropping this would close the notification connection"
+    )]
     _pg_client: tokio_postgres::Client,
     registration: Worker,
     am_i_leader: bool,
@@ -251,10 +254,9 @@ impl QueueWorker {
         let clock = state.clock();
 
         // Connect via tokio-postgres for LISTEN/NOTIFY
-        let (pg_client, mut pg_connection) =
-            tokio_postgres::connect(state.database_url(), NoTls)
-                .await
-                .map_err(QueueRunnerError::SetupListener)?;
+        let (pg_client, mut pg_connection) = tokio_postgres::connect(state.database_url(), NoTls)
+            .await
+            .map_err(QueueRunnerError::SetupListener)?;
 
         // Set up a channel to forward notifications from the connection task
         let (notification_tx, notification_rx) = tokio::sync::mpsc::unbounded_channel();
@@ -659,12 +661,12 @@ impl QueueWorker {
         // lock, so that in the very rare case where two workers think they are the
         // leader, we still don't have two workers doing the duties at the same time.
         let lock_key = advisory_lock_key("leader-duties");
-        let lock_result: AdvisoryLockResult = sql_query(
-            format!("SELECT pg_try_advisory_lock({lock_key}) AS acquired")
-        )
-            .get_result(&mut *conn)
-            .await
-            .map_err(DatabaseError::from)?;
+        let lock_result: AdvisoryLockResult = sql_query(format!(
+            "SELECT pg_try_advisory_lock({lock_key}) AS acquired"
+        ))
+        .get_result(&mut *conn)
+        .await
+        .map_err(DatabaseError::from)?;
 
         if !lock_result.acquired {
             tracing::error!("Another worker has the leader lock, aborting");

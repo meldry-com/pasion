@@ -12,11 +12,7 @@ use rand::RngCore;
 use ulid::Ulid;
 use uuid::Uuid;
 
-use crate::{
-    DatabaseInconsistencyError,
-    errors::DatabaseError,
-    schema::user_registration_tokens,
-};
+use crate::{DatabaseInconsistencyError, errors::DatabaseError, schema::user_registration_tokens};
 
 /// An implementation of
 /// [`pasion_storage::user::UserRegistrationTokenRepository`] for a PostgreSQL
@@ -167,12 +163,10 @@ macro_rules! apply_token_filter {
             } else {
                 // Not valid: at least one validity condition fails
                 query = query.filter(
-                    (user_registration_tokens::usage_limit
-                        .is_not_null()
-                        .and(
-                            user_registration_tokens::times_used
-                                .ge(user_registration_tokens::usage_limit.assume_not_null()),
-                        ))
+                    (user_registration_tokens::usage_limit.is_not_null().and(
+                        user_registration_tokens::times_used
+                            .ge(user_registration_tokens::usage_limit.assume_not_null()),
+                    ))
                     .or(user_registration_tokens::revoked_at.is_not_null())
                     .or(user_registration_tokens::expires_at
                         .is_not_null()
@@ -189,11 +183,7 @@ macro_rules! apply_token_filter {
 impl UserRegistrationTokenRepository for PgUserRegistrationTokenRepository<'_> {
     type Error = DatabaseError;
 
-    #[tracing::instrument(
-        name = "db.user_registration_token.list",
-        skip_all,
-        err,
-    )]
+    #[tracing::instrument(name = "db.user_registration_token.list", skip_all, err)]
     async fn list(
         &mut self,
         filter: UserRegistrationTokenFilter,
@@ -207,9 +197,8 @@ impl UserRegistrationTokenRepository for PgUserRegistrationTokenRepository<'_> {
 
         // Apply pagination cursors
         if let Some(after) = pagination.after {
-            query = query.filter(
-                user_registration_tokens::user_registration_token_id.gt(Uuid::from(after)),
-            );
+            query = query
+                .filter(user_registration_tokens::user_registration_token_id.gt(Uuid::from(after)));
         }
         if let Some(before) = pagination.before {
             query = query.filter(
@@ -517,12 +506,12 @@ struct TimesUsedRow {
 
 #[cfg(test)]
 mod tests {
+    use crate::PgRepositoryFactory;
     use chrono::Duration;
     use pasion_data_model::{Clock as _, clock::MockClock};
     use pasion_storage::{Pagination, user::UserRegistrationTokenFilter};
     use rand::SeedableRng;
     use rand_chacha::ChaChaRng;
-    use crate::PgRepositoryFactory;
 
     #[tokio::test]
     async fn test_unrevoke() {
@@ -530,7 +519,10 @@ mod tests {
         let mut rng = ChaChaRng::seed_from_u64(42);
         let clock = MockClock::default();
 
-        let mut repo = PgRepositoryFactory::new(pool.clone()).create().await.unwrap();
+        let mut repo = PgRepositoryFactory::new(pool.clone())
+            .create()
+            .await
+            .unwrap();
 
         // Create a token
         let token = repo
@@ -576,7 +568,10 @@ mod tests {
         let mut rng = ChaChaRng::seed_from_u64(42);
         let clock = MockClock::default();
 
-        let mut repo = PgRepositoryFactory::new(pool.clone()).create().await.unwrap();
+        let mut repo = PgRepositoryFactory::new(pool.clone())
+            .create()
+            .await
+            .unwrap();
 
         // Create a token without expiry
         let token = repo
@@ -616,7 +611,10 @@ mod tests {
         let mut rng = ChaChaRng::seed_from_u64(42);
         let clock = MockClock::default();
 
-        let mut repo = PgRepositoryFactory::new(pool.clone()).create().await.unwrap();
+        let mut repo = PgRepositoryFactory::new(pool.clone())
+            .create()
+            .await
+            .unwrap();
 
         // Create a token without usage limit
         let token = repo
@@ -665,7 +663,10 @@ mod tests {
         let mut rng = ChaChaRng::seed_from_u64(42);
         let clock = MockClock::default();
 
-        let mut repo = PgRepositoryFactory::new(pool.clone()).create().await.unwrap();
+        let mut repo = PgRepositoryFactory::new(pool.clone())
+            .create()
+            .await
+            .unwrap();
 
         // Create different types of tokens
         // 1. A regular token

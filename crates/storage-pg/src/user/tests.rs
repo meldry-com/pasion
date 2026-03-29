@@ -1,4 +1,5 @@
 use chrono::Duration;
+use diesel_async::RunQueryDsl;
 use oauth2_types::scope::{OPENID, Scope};
 use pasion_data_model::{Clock, clock::MockClock};
 use pasion_iana::jose::JsonWebSignatureAlg;
@@ -12,7 +13,6 @@ use pasion_storage::{
 };
 use rand::SeedableRng;
 use rand_chacha::ChaChaRng;
-use diesel_async::RunQueryDsl;
 
 use crate::PgRepositoryFactory;
 
@@ -22,7 +22,10 @@ async fn test_user_repo() {
     let pool = crate::test_utils::setup_test_pool().await;
     const USERNAME: &str = "john";
 
-    let mut repo = PgRepositoryFactory::new(pool.clone()).create().await.unwrap();
+    let mut repo = PgRepositoryFactory::new(pool.clone())
+        .create()
+        .await
+        .unwrap();
     let mut rng = ChaChaRng::seed_from_u64(42);
     let clock = MockClock::default();
 
@@ -231,7 +234,10 @@ async fn test_user_repo() {
 #[tokio::test]
 async fn test_user_repo_find_by_username() {
     let pool = crate::test_utils::setup_test_pool().await;
-    let mut repo = PgRepositoryFactory::new(pool.clone()).create().await.unwrap();
+    let mut repo = PgRepositoryFactory::new(pool.clone())
+        .create()
+        .await
+        .unwrap();
     let mut rng = ChaChaRng::seed_from_u64(42);
     let clock = MockClock::default();
 
@@ -283,7 +289,10 @@ async fn test_user_email_repo() {
     //  2. looking it up is case-incensitive
     const UPPERCASE_EMAIL: &str = "JOHN@EXAMPLE.COM";
 
-    let mut repo = PgRepositoryFactory::new(pool.clone()).create().await.unwrap();
+    let mut repo = PgRepositoryFactory::new(pool.clone())
+        .create()
+        .await
+        .unwrap();
     let mut rng = ChaChaRng::seed_from_u64(42);
     let clock = MockClock::default();
 
@@ -405,7 +414,10 @@ async fn test_user_email_repo() {
 #[tokio::test]
 async fn test_user_email_repo_authentications() {
     let pool = crate::test_utils::setup_test_pool().await;
-    let mut repo = PgRepositoryFactory::new(pool.clone()).create().await.unwrap();
+    let mut repo = PgRepositoryFactory::new(pool.clone())
+        .create()
+        .await
+        .unwrap();
     let mut rng = ChaChaRng::seed_from_u64(42);
     let clock = MockClock::default();
 
@@ -525,7 +537,10 @@ async fn test_user_password_repo() {
     const FIRST_PASSWORD_HASH: &str = "doesntmatter";
     const SECOND_PASSWORD_HASH: &str = "alsodoesntmatter";
 
-    let mut repo = PgRepositoryFactory::new(pool.clone()).create().await.unwrap();
+    let mut repo = PgRepositoryFactory::new(pool.clone())
+        .create()
+        .await
+        .unwrap();
     let mut rng = ChaChaRng::seed_from_u64(42);
     let clock = MockClock::default();
 
@@ -604,7 +619,10 @@ async fn test_user_password_repo() {
 #[tokio::test]
 async fn test_user_session() {
     let pool = crate::test_utils::setup_test_pool().await;
-    let mut repo = PgRepositoryFactory::new(pool.clone()).create().await.unwrap();
+    let mut repo = PgRepositoryFactory::new(pool.clone())
+        .create()
+        .await
+        .unwrap();
     let mut rng = ChaChaRng::seed_from_u64(42);
     let clock = MockClock::default();
 
@@ -836,7 +854,10 @@ async fn test_user_session() {
 #[tokio::test]
 async fn test_user_terms() {
     let pool = crate::test_utils::setup_test_pool().await;
-    let mut repo = PgRepositoryFactory::new(pool.clone()).create().await.unwrap();
+    let mut repo = PgRepositoryFactory::new(pool.clone())
+        .create()
+        .await
+        .unwrap();
     let mut rng = ChaChaRng::seed_from_u64(42);
     let clock = MockClock::default();
 

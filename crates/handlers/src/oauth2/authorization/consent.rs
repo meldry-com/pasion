@@ -15,12 +15,12 @@ use thiserror::Error;
 use ulid::Ulid;
 
 use super::callback::CallbackDestination;
+use crate::rest::DepotExt;
 use crate::{
     impl_from_error_for_route,
     oauth2::generate_id_token,
     session::{SessionOrFallback, count_user_sessions_for_limiting, load_session_or_fallback},
 };
-use crate::rest::DepotExt;
 
 #[derive(Debug, Error)]
 pub enum RouteError {

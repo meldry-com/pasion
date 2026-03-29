@@ -85,11 +85,7 @@ impl PersonalAccessTokenRepository for PgPersonalAccessTokenRepository<'_> {
         Ok(res.map(PersonalAccessToken::from))
     }
 
-    #[tracing::instrument(
-        name = "db.personal_access_token.find_by_token",
-        skip_all,
-        err,
-    )]
+    #[tracing::instrument(name = "db.personal_access_token.find_by_token", skip_all, err)]
     async fn find_by_token(
         &mut self,
         access_token: &str,
@@ -109,7 +105,7 @@ impl PersonalAccessTokenRepository for PgPersonalAccessTokenRepository<'_> {
     #[tracing::instrument(
         name = "db.personal_access_token.find_active_for_session",
         skip_all,
-        err,
+        err
     )]
     async fn find_active_for_session(
         &mut self,
@@ -187,12 +183,11 @@ impl PersonalAccessTokenRepository for PgPersonalAccessTokenRepository<'_> {
         mut access_token: PersonalAccessToken,
     ) -> Result<PersonalAccessToken, Self::Error> {
         let revoked_at = clock.now();
-        let rows_affected = diesel::update(
-            personal_access_tokens::table.find(Uuid::from(access_token.id)),
-        )
-        .set(personal_access_tokens::revoked_at.eq(Some(revoked_at)))
-        .execute(self.conn)
-        .await?;
+        let rows_affected =
+            diesel::update(personal_access_tokens::table.find(Uuid::from(access_token.id)))
+                .set(personal_access_tokens::revoked_at.eq(Some(revoked_at)))
+                .execute(self.conn)
+                .await?;
 
         DatabaseError::ensure_affected_rows_usize(rows_affected, 1)?;
 

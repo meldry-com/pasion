@@ -139,9 +139,7 @@ impl TryFrom<AuthenticationLookup> for Authentication {
             },
             (None, None) => AuthenticationMethod::Unknown,
             _ => {
-                return Err(
-                    DatabaseInconsistencyError::on("user_session_authentications").row(id),
-                );
+                return Err(DatabaseInconsistencyError::on("user_session_authentications").row(id));
             }
         };
 
@@ -366,11 +364,7 @@ impl BrowserSessionRepository for PgBrowserSessionRepository<'_> {
         Ok(user_session)
     }
 
-    #[tracing::instrument(
-        name = "db.browser_session.finish_bulk",
-        skip_all,
-        err,
-    )]
+    #[tracing::instrument(name = "db.browser_session.finish_bulk", skip_all, err)]
     async fn finish_bulk(
         &mut self,
         clock: &dyn Clock,
@@ -389,11 +383,7 @@ impl BrowserSessionRepository for PgBrowserSessionRepository<'_> {
         Ok(rows_affected)
     }
 
-    #[tracing::instrument(
-        name = "db.browser_session.list",
-        skip_all,
-        err,
-    )]
+    #[tracing::instrument(name = "db.browser_session.list", skip_all, err)]
     async fn list(
         &mut self,
         filter: BrowserSessionFilter<'_>,
@@ -443,10 +433,8 @@ impl BrowserSessionRepository for PgBrowserSessionRepository<'_> {
             .load(self.conn)
             .await?;
 
-        let user_map: std::collections::HashMap<Uuid, UserRow> = user_rows
-            .into_iter()
-            .map(|u| (u.user_id, u))
-            .collect();
+        let user_map: std::collections::HashMap<Uuid, UserRow> =
+            user_rows.into_iter().map(|u| (u.user_id, u)).collect();
 
         // Combine into SessionLookup entries
         let edges: Vec<SessionLookup> = session_rows
@@ -464,11 +452,7 @@ impl BrowserSessionRepository for PgBrowserSessionRepository<'_> {
         Ok(page)
     }
 
-    #[tracing::instrument(
-        name = "db.browser_session.count",
-        skip_all,
-        err,
-    )]
+    #[tracing::instrument(name = "db.browser_session.count", skip_all, err)]
     async fn count(&mut self, filter: BrowserSessionFilter<'_>) -> Result<usize, Self::Error> {
         let query = user_sessions::table.into_boxed();
         let query = apply_session_filter!(query, filter);
@@ -583,9 +567,7 @@ impl BrowserSessionRepository for PgBrowserSessionRepository<'_> {
         user_session: &BrowserSession,
     ) -> Result<Option<Authentication>, Self::Error> {
         let authentication = user_session_authentications::table
-            .filter(
-                user_session_authentications::user_session_id.eq(Uuid::from(user_session.id)),
-            )
+            .filter(user_session_authentications::user_session_id.eq(Uuid::from(user_session.id)))
             .select(AuthenticationLookup::as_select())
             .order(user_session_authentications::created_at.desc())
             .first::<AuthenticationLookup>(self.conn)
@@ -600,11 +582,7 @@ impl BrowserSessionRepository for PgBrowserSessionRepository<'_> {
         Ok(Some(authentication))
     }
 
-    #[tracing::instrument(
-        name = "db.browser_session.record_batch_activity",
-        skip_all,
-        err,
-    )]
+    #[tracing::instrument(name = "db.browser_session.record_batch_activity", skip_all, err)]
     async fn record_batch_activity(
         &mut self,
         mut activities: Vec<(Ulid, DateTime<Utc>, Option<IpAddr>)>,
@@ -702,10 +680,7 @@ impl BrowserSessionRepository for PgBrowserSessionRepository<'_> {
         .get_result(self.conn)
         .await?;
 
-        Ok((
-            res.count.try_into().unwrap_or(usize::MAX),
-            res.last_ts,
-        ))
+        Ok((res.count.try_into().unwrap_or(usize::MAX), res.last_ts))
     }
 
     #[tracing::instrument(
@@ -753,9 +728,6 @@ impl BrowserSessionRepository for PgBrowserSessionRepository<'_> {
         .get_result(self.conn)
         .await?;
 
-        Ok((
-            res.count.try_into().unwrap_or(usize::MAX),
-            res.last_ts,
-        ))
+        Ok((res.count.try_into().unwrap_or(usize::MAX), res.last_ts))
     }
 }

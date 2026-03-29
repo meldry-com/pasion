@@ -485,13 +485,13 @@ mod test {
     use pasion_templates::escape_html;
     use zeroize::Zeroizing;
 
+    use crate::rest::DepotExt;
     use crate::{
         SiteConfig,
         test_utils::{
             CookieHelper, RequestBuilderExt, ResponseExt, TestState, setup, test_site_config,
         },
     };
-use crate::rest::DepotExt;
 
     #[tokio::test]
     async fn test_password_disabled() {

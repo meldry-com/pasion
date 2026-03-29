@@ -12,9 +12,12 @@ const PRESERVED_LOGIN_QUERY_PROPERTY: &str = "__pasion_login_query";
 
 fn preserved_login_query() -> Option<String> {
     let window = web_sys::window()?;
-    Reflect::get(window.as_ref(), &JsValue::from_str(PRESERVED_LOGIN_QUERY_PROPERTY))
-        .ok()?
-        .as_string()
+    Reflect::get(
+        window.as_ref(),
+        &JsValue::from_str(PRESERVED_LOGIN_QUERY_PROPERTY),
+    )
+    .ok()?
+    .as_string()
 }
 
 pub(crate) fn preserve_login_query() {

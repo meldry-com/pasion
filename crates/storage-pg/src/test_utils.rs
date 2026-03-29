@@ -1,8 +1,8 @@
 //! Test utilities for creating temporary test databases.
 
 use diesel_async::AsyncPgConnection;
-use diesel_async::pooled_connection::deadpool::Pool;
 use diesel_async::pooled_connection::AsyncDieselConnectionManager;
+use diesel_async::pooled_connection::deadpool::Pool;
 
 /// Create a diesel connection pool suitable for tests.
 ///
@@ -10,8 +10,7 @@ use diesel_async::pooled_connection::AsyncDieselConnectionManager;
 /// (set by the test harness or CI) and returns a pool.
 /// Migrations should already be applied to the test database.
 pub async fn setup_test_pool() -> Pool<AsyncPgConnection> {
-    let database_url =
-        std::env::var("DATABASE_URL").expect("DATABASE_URL must be set for tests");
+    let database_url = std::env::var("DATABASE_URL").expect("DATABASE_URL must be set for tests");
     let manager = AsyncDieselConnectionManager::<AsyncPgConnection>::new(&database_url);
     Pool::builder(manager)
         .max_size(5)

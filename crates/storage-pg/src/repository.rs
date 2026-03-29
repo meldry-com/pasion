@@ -1,5 +1,7 @@
 use async_trait::async_trait;
+use diesel_async::AsyncPgConnection;
 use diesel_async::RunQueryDsl as _;
+use diesel_async::pooled_connection::deadpool::{Object as PooledConnection, Pool};
 use futures_util::{FutureExt, future::BoxFuture};
 use pasion_storage::{
     BoxRepository, BoxRepositoryFactory, MapErr, Repository, RepositoryAccess, RepositoryError,
@@ -22,8 +24,6 @@ use pasion_storage::{
         UserRepository, UserTermsRepository,
     },
 };
-use diesel_async::AsyncPgConnection;
-use diesel_async::pooled_connection::deadpool::{Object as PooledConnection, Pool};
 use tracing::Instrument;
 
 use crate::{
@@ -83,13 +83,11 @@ impl PgRepositoryFactory {
 impl RepositoryFactory for PgRepositoryFactory {
     async fn create(&self) -> Result<BoxRepository, RepositoryError> {
         let start = std::time::Instant::now();
-        let mut conn = self
-            .pool
-            .get()
-            .await
-            .map_err(|e| RepositoryError::from_error(DatabaseError::Pool {
+        let mut conn = self.pool.get().await.map_err(|e| {
+            RepositoryError::from_error(DatabaseError::Pool {
                 source: Box::new(e),
-            }))?;
+            })
+        })?;
 
         // Start a transaction so that all operations within one request are
         // atomic. The transaction is committed by `save()` or rolled back by
@@ -152,9 +150,7 @@ impl RepositoryTransaction for PgRepository {
     fn save(mut self: Box<Self>) -> BoxFuture<'static, Result<(), Self::Error>> {
         let span = tracing::info_span!("db.save");
         async move {
-            diesel::sql_query("COMMIT")
-                .execute(&mut *self.conn)
-                .await?;
+            diesel::sql_query("COMMIT").execute(&mut *self.conn).await?;
             Ok(())
         }
         .instrument(span)
@@ -254,9 +250,7 @@ impl RepositoryAccess for PgRepository {
     fn oauth2_authorization_grant<'c>(
         &'c mut self,
     ) -> Box<dyn OAuth2AuthorizationGrantRepository<Error = Self::Error> + 'c> {
-        Box::new(PgOAuth2AuthorizationGrantRepository::new(
-            &mut *self.conn,
-        ))
+        Box::new(PgOAuth2AuthorizationGrantRepository::new(&mut *self.conn))
     }
 
     fn oauth2_session<'c>(

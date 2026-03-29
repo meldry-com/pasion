@@ -115,8 +115,7 @@ macro_rules! apply_app_session_filter {
 
         if let Some(device) = filter.device() {
             let stable_scope = format!("urn:matrix:client:device:{device}");
-            let unstable_scope =
-                format!("urn:matrix:org.matrix.msc2967.client:device:{device}");
+            let unstable_scope = format!("urn:matrix:org.matrix.msc2967.client:device:{device}");
             query = query.filter(
                 diesel::dsl::sql::<diesel::sql_types::Bool>("")
                     .bind::<diesel::sql_types::Text, _>(stable_scope)
@@ -131,8 +130,8 @@ macro_rules! apply_app_session_filter {
         }
 
         if let Some(browser_session) = filter.browser_session() {
-            query = query
-                .filter(oauth2_sessions::user_session_id.eq(Uuid::from(browser_session.id)));
+            query =
+                query.filter(oauth2_sessions::user_session_id.eq(Uuid::from(browser_session.id)));
         }
 
         if let Some(last_active_before) = filter.last_active_before() {
@@ -151,11 +150,7 @@ macro_rules! apply_app_session_filter {
 impl AppSessionRepository for PgAppSessionRepository<'_> {
     type Error = DatabaseError;
 
-    #[tracing::instrument(
-        name = "db.app_session.list",
-        skip_all,
-        err,
-    )]
+    #[tracing::instrument(name = "db.app_session.list", skip_all, err)]
     async fn list(
         &mut self,
         filter: AppSessionFilter<'_>,
@@ -195,11 +190,7 @@ impl AppSessionRepository for PgAppSessionRepository<'_> {
         Ok(page)
     }
 
-    #[tracing::instrument(
-        name = "db.app_session.count",
-        skip_all,
-        err,
-    )]
+    #[tracing::instrument(name = "db.app_session.count", skip_all, err)]
     async fn count(&mut self, filter: AppSessionFilter<'_>) -> Result<usize, Self::Error> {
         let query = oauth2_sessions::table.into_boxed();
         let query = apply_app_session_filter!(query, filter);
@@ -250,6 +241,7 @@ impl AppSessionRepository for PgAppSessionRepository<'_> {
 
 #[cfg(test)]
 mod tests {
+    use crate::PgRepositoryFactory;
     use chrono::Duration;
     use oauth2_types::{
         requests::GrantType,
@@ -263,14 +255,16 @@ mod tests {
     };
     use rand::SeedableRng;
     use rand_chacha::ChaChaRng;
-    use crate::PgRepositoryFactory;
 
     #[tokio::test]
     async fn test_app_repo() {
         let pool = crate::test_utils::setup_test_pool().await;
         let mut rng = ChaChaRng::seed_from_u64(42);
         let clock = MockClock::default();
-        let mut repo = PgRepositoryFactory::new(pool.clone()).create().await.unwrap();
+        let mut repo = PgRepositoryFactory::new(pool.clone())
+            .create()
+            .await
+            .unwrap();
 
         // Create a user
         let user = repo

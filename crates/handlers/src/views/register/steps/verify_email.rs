@@ -14,8 +14,8 @@ use salvo::{prelude::*, writing::Text};
 use serde::{Deserialize, Serialize};
 use ulid::Ulid;
 
-use crate::{rest, views::shared::OptionalPostAuthAction};
 use crate::rest::DepotExt;
+use crate::{rest, views::shared::OptionalPostAuthAction};
 
 #[derive(Serialize, Deserialize, Debug)]
 pub struct CodeForm {

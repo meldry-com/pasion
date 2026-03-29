@@ -3,9 +3,10 @@ use salvo::oapi::ToSchema;
 use salvo::prelude::*;
 use serde::{Deserialize, Serialize};
 
-use super::{DepotExt, 
-    NodeType, RouteError, UserAgentInfo, extract_bound_activity_tracker, extract_session_info,
-    get_requester, make_clock, make_rng, parse_user_agent };
+use super::{
+    DepotExt, NodeType, RouteError, UserAgentInfo, extract_bound_activity_tracker,
+    extract_session_info, get_requester, make_clock, make_rng, parse_user_agent,
+};
 
 // ── Response types ─────────────────────────────────────────────
 
@@ -13,7 +14,8 @@ use super::{DepotExt,
 #[serde(tag = "__typename")]
 pub enum SessionDetailResponse {
     BrowserSession(BrowserSessionDetail),
-    Oauth2Session(Oauth2SessionDetail) }
+    Oauth2Session(Oauth2SessionDetail),
+}
 
 #[derive(Serialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
@@ -24,13 +26,15 @@ pub struct BrowserSessionDetail {
     pub last_active_ip: Option<String>,
     pub last_active_at: Option<String>,
     pub created_at: Option<String>,
-    pub last_authentication: Option<AuthenticationData> }
+    pub last_authentication: Option<AuthenticationData>,
+}
 
 #[derive(Serialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct AuthenticationData {
     pub id: String,
-    pub created_at: String }
+    pub created_at: String,
+}
 
 #[derive(Serialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
@@ -42,7 +46,8 @@ pub struct Oauth2SessionDetail {
     pub user_agent: Option<UserAgentInfo>,
     pub last_active_ip: Option<String>,
     pub last_active_at: Option<String>,
-    pub created_at: Option<String> }
+    pub created_at: Option<String>,
+}
 
 #[derive(Serialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
@@ -51,7 +56,8 @@ pub struct Oauth2ClientBrief {
     pub client_id: String,
     pub client_name: Option<String>,
     pub client_uri: Option<String>,
-    pub logo_uri: Option<String> }
+    pub logo_uri: Option<String>,
+}
 
 // ── GET /api/v1/sessions/:id ───────────────────────────────────
 
@@ -102,7 +108,9 @@ pub async fn get_session(
                 created_at: Some(session.created_at.to_rfc3339()),
                 last_authentication: last_auth.map(|a| AuthenticationData {
                     id: NodeType::Authentication.serialize(a.id),
-                    created_at: a.created_at.to_rfc3339() }) })
+                    created_at: a.created_at.to_rfc3339(),
+                }),
+            })
         }
         NodeType::OAuth2Session => {
             let session = repo
@@ -126,13 +134,16 @@ pub async fn get_session(
                     client_id: c.client_id.to_string(),
                     client_name: c.client_name.clone(),
                     client_uri: c.client_uri.as_ref().map(|u| u.to_string()),
-                    logo_uri: c.logo_uri.as_ref().map(|u| u.to_string()) }),
+                    logo_uri: c.logo_uri.as_ref().map(|u| u.to_string()),
+                }),
                 user_agent: session.user_agent.as_deref().map(parse_user_agent),
                 last_active_ip: session.last_active_ip.map(|ip| ip.to_string()),
                 last_active_at: session.last_active_at.map(|t| t.to_rfc3339()),
-                created_at: Some(session.created_at.to_rfc3339()) })
+                created_at: Some(session.created_at.to_rfc3339()),
+            })
         }
-        _ => return Err(RouteError::BadRequest("not a session id".into())) };
+        _ => return Err(RouteError::BadRequest("not a session id".into())),
+    };
 
     repo.cancel().await?;
 
@@ -143,7 +154,8 @@ pub async fn get_session(
 
 #[derive(Serialize, ToSchema)]
 pub struct EndSessionResponse {
-    pub status: &'static str }
+    pub status: &'static str,
+}
 
 #[endpoint]
 pub async fn end_browser_session(
@@ -234,11 +246,13 @@ pub async fn end_oauth2_session(
 #[derive(Deserialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct SetSessionNameInput {
-    pub human_name: Option<String> }
+    pub human_name: Option<String>,
+}
 
 #[derive(Serialize, ToSchema)]
 pub struct SetSessionNameResponse {
-    pub status: &'static str }
+    pub status: &'static str,
+}
 
 #[endpoint]
 pub async fn set_oauth2_session_name(

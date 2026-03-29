@@ -76,9 +76,7 @@ struct CleanupResult {
 }
 
 #[async_trait]
-impl pasion_storage::oauth2::OAuth2AccessTokenRepository
-    for PgOAuth2AccessTokenRepository<'_>
-{
+impl pasion_storage::oauth2::OAuth2AccessTokenRepository for PgOAuth2AccessTokenRepository<'_> {
     type Error = DatabaseError;
 
     #[tracing::instrument(
@@ -98,11 +96,7 @@ impl pasion_storage::oauth2::OAuth2AccessTokenRepository
         Ok(res.map(AccessToken::from))
     }
 
-    #[tracing::instrument(
-        name = "db.oauth2_access_token.find_by_token",
-        skip_all,
-        err,
-    )]
+    #[tracing::instrument(name = "db.oauth2_access_token.find_by_token", skip_all, err)]
     async fn find_by_token(
         &mut self,
         access_token: &str,
@@ -180,12 +174,11 @@ impl pasion_storage::oauth2::OAuth2AccessTokenRepository
         access_token: AccessToken,
     ) -> Result<AccessToken, Self::Error> {
         let revoked_at = clock.now();
-        let rows_affected = diesel::update(
-            oauth2_access_tokens::table.find(Uuid::from(access_token.id)),
-        )
-        .set(oauth2_access_tokens::revoked_at.eq(Some(revoked_at)))
-        .execute(self.conn)
-        .await?;
+        let rows_affected =
+            diesel::update(oauth2_access_tokens::table.find(Uuid::from(access_token.id)))
+                .set(oauth2_access_tokens::revoked_at.eq(Some(revoked_at)))
+                .execute(self.conn)
+                .await?;
 
         DatabaseError::ensure_affected_rows_usize(rows_affected, 1)?;
 
@@ -209,12 +202,11 @@ impl pasion_storage::oauth2::OAuth2AccessTokenRepository
         mut access_token: AccessToken,
     ) -> Result<AccessToken, Self::Error> {
         let now = clock.now();
-        let rows_affected = diesel::update(
-            oauth2_access_tokens::table.find(Uuid::from(access_token.id)),
-        )
-        .set(oauth2_access_tokens::first_used_at.eq(Some(now)))
-        .execute(self.conn)
-        .await?;
+        let rows_affected =
+            diesel::update(oauth2_access_tokens::table.find(Uuid::from(access_token.id)))
+                .set(oauth2_access_tokens::first_used_at.eq(Some(now)))
+                .execute(self.conn)
+                .await?;
 
         DatabaseError::ensure_affected_rows_usize(rows_affected, 1)?;
 
@@ -274,10 +266,7 @@ impl pasion_storage::oauth2::OAuth2AccessTokenRepository
         .get_result(self.conn)
         .await?;
 
-        Ok((
-            res.count.try_into().unwrap_or(usize::MAX),
-            res.last_ts,
-        ))
+        Ok((res.count.try_into().unwrap_or(usize::MAX), res.last_ts))
     }
 
     #[tracing::instrument(
@@ -331,9 +320,6 @@ impl pasion_storage::oauth2::OAuth2AccessTokenRepository
         .get_result(self.conn)
         .await?;
 
-        Ok((
-            res.count.try_into().unwrap_or(usize::MAX),
-            res.last_ts,
-        ))
+        Ok((res.count.try_into().unwrap_or(usize::MAX), res.last_ts))
     }
 }

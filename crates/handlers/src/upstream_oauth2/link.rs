@@ -1284,9 +1284,9 @@ mod tests {
     use ulid::Ulid;
 
     use super::UpstreamSessionsCookie;
+    use crate::rest::DepotExt;
     #[cfg(test)]
     use crate::test_utils::{CookieHelper, RequestBuilderExt, ResponseExt, TestState, setup};
-use crate::rest::DepotExt;
 
     #[tokio::test]
     async fn test_register() {

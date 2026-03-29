@@ -37,7 +37,10 @@ mod tests {
         let pool = crate::test_utils::setup_test_pool().await;
         let mut rng = rand_chacha::ChaChaRng::seed_from_u64(42);
         let clock = MockClock::default();
-        let mut repo = PgRepositoryFactory::new(pool.clone()).create().await.unwrap();
+        let mut repo = PgRepositoryFactory::new(pool.clone())
+            .create()
+            .await
+            .unwrap();
 
         // The provider list should be empty at the start
         let all_providers = repo.upstream_oauth_provider().all_enabled().await.unwrap();
@@ -310,7 +313,10 @@ mod tests {
 
         let mut rng = rand_chacha::ChaChaRng::seed_from_u64(42);
         let clock = MockClock::default();
-        let mut repo = PgRepositoryFactory::new(pool.clone()).create().await.unwrap();
+        let mut repo = PgRepositoryFactory::new(pool.clone())
+            .create()
+            .await
+            .unwrap();
 
         let filter = UpstreamOAuthProviderFilter::new();
 
@@ -460,7 +466,10 @@ mod tests {
 
         let mut rng = rand_chacha::ChaChaRng::seed_from_u64(42);
         let clock = MockClock::default();
-        let mut repo = PgRepositoryFactory::new(pool.clone()).create().await.unwrap();
+        let mut repo = PgRepositoryFactory::new(pool.clone())
+            .create()
+            .await
+            .unwrap();
 
         // Create a provider
         let provider = repo

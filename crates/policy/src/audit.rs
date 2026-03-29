@@ -8,11 +8,11 @@ use std::time::Instant;
 use async_trait::async_trait;
 use tracing::{info, warn};
 
+use crate::EvaluationError;
 use crate::model::{
     AuthorizationGrantInput, ClientRegistrationInput, EmailInput, EvaluationResult, RegisterInput,
 };
 use crate::provider::PolicyEvaluator;
-use crate::EvaluationError;
 
 /// A policy evaluator decorator that logs audit information for every
 /// evaluation.

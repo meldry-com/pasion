@@ -4,11 +4,11 @@ use pasion_templates::{AppContext, TemplateContext, Templates};
 use salvo::{prelude::*, writing::Text};
 use serde::Deserialize;
 
+use crate::rest::DepotExt;
 use crate::{
     rest,
     session::{SessionOrFallback, load_session_or_fallback},
 };
-use crate::rest::DepotExt;
 
 #[derive(Deserialize, Default)]
 pub struct Params {

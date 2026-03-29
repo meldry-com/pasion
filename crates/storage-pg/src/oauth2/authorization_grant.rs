@@ -289,11 +289,7 @@ impl OAuth2AuthorizationGrantRepository for PgOAuth2AuthorizationGrantRepository
         Ok(Some(res.try_into()?))
     }
 
-    #[tracing::instrument(
-        name = "db.oauth2_authorization_grant.find_by_code",
-        skip_all,
-        err,
-    )]
+    #[tracing::instrument(name = "db.oauth2_authorization_grant.find_by_code", skip_all, err)]
     async fn find_by_code(
         &mut self,
         code: &str,
@@ -327,15 +323,14 @@ impl OAuth2AuthorizationGrantRepository for PgOAuth2AuthorizationGrantRepository
         grant: AuthorizationGrant,
     ) -> Result<AuthorizationGrant, Self::Error> {
         let fulfilled_at = clock.now();
-        let rows_affected = diesel::update(
-            oauth2_authorization_grants::table.find(Uuid::from(grant.id)),
-        )
-        .set((
-            oauth2_authorization_grants::fulfilled_at.eq(Some(fulfilled_at)),
-            oauth2_authorization_grants::oauth2_session_id.eq(Some(Uuid::from(session.id))),
-        ))
-        .execute(self.conn)
-        .await?;
+        let rows_affected =
+            diesel::update(oauth2_authorization_grants::table.find(Uuid::from(grant.id)))
+                .set((
+                    oauth2_authorization_grants::fulfilled_at.eq(Some(fulfilled_at)),
+                    oauth2_authorization_grants::oauth2_session_id.eq(Some(Uuid::from(session.id))),
+                ))
+                .execute(self.conn)
+                .await?;
 
         DatabaseError::ensure_affected_rows_usize(rows_affected, 1)?;
 
@@ -362,12 +357,11 @@ impl OAuth2AuthorizationGrantRepository for PgOAuth2AuthorizationGrantRepository
         grant: AuthorizationGrant,
     ) -> Result<AuthorizationGrant, Self::Error> {
         let exchanged_at = clock.now();
-        let rows_affected = diesel::update(
-            oauth2_authorization_grants::table.find(Uuid::from(grant.id)),
-        )
-        .set(oauth2_authorization_grants::exchanged_at.eq(Some(exchanged_at)))
-        .execute(self.conn)
-        .await?;
+        let rows_affected =
+            diesel::update(oauth2_authorization_grants::table.find(Uuid::from(grant.id)))
+                .set(oauth2_authorization_grants::exchanged_at.eq(Some(exchanged_at)))
+                .execute(self.conn)
+                .await?;
 
         DatabaseError::ensure_affected_rows_usize(rows_affected, 1)?;
 

@@ -230,11 +230,7 @@ impl UserEmailRepository for PgUserEmailRepository<'_> {
         Ok(res.into_iter().map(Into::into).collect())
     }
 
-    #[tracing::instrument(
-        name = "db.user_email.list",
-        skip_all,
-        err,
-    )]
+    #[tracing::instrument(name = "db.user_email.list", skip_all, err)]
     async fn list(
         &mut self,
         filter: UserEmailFilter<'_>,
@@ -282,11 +278,7 @@ impl UserEmailRepository for PgUserEmailRepository<'_> {
         Ok(page)
     }
 
-    #[tracing::instrument(
-        name = "db.user_email.count",
-        skip_all,
-        err,
-    )]
+    #[tracing::instrument(name = "db.user_email.count", skip_all, err)]
     async fn count(&mut self, filter: UserEmailFilter<'_>) -> Result<usize, Self::Error> {
         use crate::lower;
 
@@ -300,10 +292,7 @@ impl UserEmailRepository for PgUserEmailRepository<'_> {
             query = query.filter(lower(user_emails::email).eq(email.to_lowercase()));
         }
 
-        let count: i64 = query
-            .count()
-            .get_result(self.conn)
-            .await?;
+        let count: i64 = query.count().get_result(self.conn).await?;
 
         count
             .try_into()
@@ -362,22 +351,16 @@ impl UserEmailRepository for PgUserEmailRepository<'_> {
         err,
     )]
     async fn remove(&mut self, user_email: UserEmail) -> Result<(), Self::Error> {
-        let rows_affected = diesel::delete(
-            user_emails::table.find(Uuid::from(user_email.id)),
-        )
-        .execute(self.conn)
-        .await?;
+        let rows_affected = diesel::delete(user_emails::table.find(Uuid::from(user_email.id)))
+            .execute(self.conn)
+            .await?;
 
         DatabaseError::ensure_affected_rows_usize(rows_affected, 1)?;
 
         Ok(())
     }
 
-    #[tracing::instrument(
-        name = "db.user_email.remove_bulk",
-        skip_all,
-        err,
-    )]
+    #[tracing::instrument(name = "db.user_email.remove_bulk", skip_all, err)]
     async fn remove_bulk(&mut self, filter: UserEmailFilter<'_>) -> Result<usize, Self::Error> {
         use crate::lower;
 

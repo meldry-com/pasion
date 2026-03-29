@@ -2,6 +2,11 @@
 
 use std::collections::{BTreeMap, BTreeSet};
 
+use diesel::sql_query;
+use diesel::sql_types::Bool;
+use diesel_async::AsyncPgConnection;
+use diesel_async::RunQueryDsl;
+use diesel_async::pooled_connection::deadpool::Object as PooledConnection;
 use pasion_config::{ClientsConfig, UpstreamOAuth2Config};
 use pasion_data_model::Clock;
 use pasion_keystore::Encrypter;
@@ -9,11 +14,6 @@ use pasion_storage::{
     Pagination, RepositoryAccess,
     upstream_oauth2::{UpstreamOAuthProviderFilter, UpstreamOAuthProviderParams},
 };
-use diesel::sql_query;
-use diesel::sql_types::Bool;
-use diesel_async::AsyncPgConnection;
-use diesel_async::RunQueryDsl;
-use diesel_async::pooled_connection::deadpool::Object as PooledConnection;
 use pasion_storage_pg::PgRepository;
 use tracing::{error, info, info_span, warn};
 
@@ -111,11 +111,11 @@ pub async fn config_sync(
     let lock_key = advisory_lock_key("Pasion config sync");
 
     // pg_advisory_lock blocks until the lock is acquired (returns void/true)
-    let _: AdvisoryLockResult = sql_query(
-        format!("SELECT pg_advisory_lock({lock_key}) IS NOT NULL AS acquired")
-    )
-        .get_result(&mut *conn)
-        .await?;
+    let _: AdvisoryLockResult = sql_query(format!(
+        "SELECT pg_advisory_lock({lock_key}) IS NOT NULL AS acquired"
+    ))
+    .get_result(&mut *conn)
+    .await?;
 
     // Create a repository from the locked connection
     let mut repo = PgRepository::new(conn);

@@ -506,11 +506,7 @@ impl UserRegistrationRepository for PgUserRegistrationRepository<'_> {
         Ok(user_registration)
     }
 
-    #[tracing::instrument(
-        name = "db.user_registration.cleanup",
-        skip_all,
-        err,
-    )]
+    #[tracing::instrument(name = "db.user_registration.cleanup", skip_all, err)]
     async fn cleanup(
         &mut self,
         since: Option<Ulid>,
@@ -543,10 +539,7 @@ impl UserRegistrationRepository for PgUserRegistrationRepository<'_> {
         .await?;
 
         let count = res.len();
-        let max_id = res
-            .into_iter()
-            .map(|r| r.user_registration_id)
-            .max();
+        let max_id = res.into_iter().map(|r| r.user_registration_id).max();
 
         Ok((count, max_id.map(Ulid::from)))
     }
@@ -563,6 +556,7 @@ struct UuidRow {
 mod tests {
     use std::net::{IpAddr, Ipv4Addr};
 
+    use crate::PgRepositoryFactory;
     use oauth2_types::scope::Scope;
     use pasion_data_model::{
         Clock, UpstreamOAuthProviderClaimsImports, UpstreamOAuthProviderDiscoveryMode,
@@ -573,7 +567,6 @@ mod tests {
     use pasion_storage::upstream_oauth2::UpstreamOAuthProviderParams;
     use rand::SeedableRng;
     use rand_chacha::ChaChaRng;
-    use crate::PgRepositoryFactory;
 
     #[tokio::test]
     async fn test_create_lookup_complete() {
@@ -581,7 +574,10 @@ mod tests {
         let mut rng = ChaChaRng::seed_from_u64(42);
         let clock = MockClock::default();
 
-        let mut repo = PgRepositoryFactory::new(pool.clone()).create().await.unwrap();
+        let mut repo = PgRepositoryFactory::new(pool.clone())
+            .create()
+            .await
+            .unwrap();
 
         let registration = repo
             .user_registration()
@@ -653,7 +649,10 @@ mod tests {
         let mut rng = ChaChaRng::seed_from_u64(42);
         let clock = MockClock::default();
 
-        let mut repo = PgRepositoryFactory::new(pool.clone()).create().await.unwrap();
+        let mut repo = PgRepositoryFactory::new(pool.clone())
+            .create()
+            .await
+            .unwrap();
 
         let registration = repo
             .user_registration()
@@ -675,9 +674,7 @@ mod tests {
         );
         assert_eq!(
             registration.post_auth_action,
-            Some(
-                serde_json::json!({"kind": "change_password"})
-            )
+            Some(serde_json::json!({"kind": "change_password"}))
         );
 
         let lookup = repo
@@ -698,7 +695,10 @@ mod tests {
         let mut rng = ChaChaRng::seed_from_u64(42);
         let clock = MockClock::default();
 
-        let mut repo = PgRepositoryFactory::new(pool.clone()).create().await.unwrap();
+        let mut repo = PgRepositoryFactory::new(pool.clone())
+            .create()
+            .await
+            .unwrap();
 
         let registration = repo
             .user_registration()
@@ -763,7 +763,10 @@ mod tests {
         let mut rng = ChaChaRng::seed_from_u64(42);
         let clock = MockClock::default();
 
-        let mut repo = PgRepositoryFactory::new(pool.clone()).create().await.unwrap();
+        let mut repo = PgRepositoryFactory::new(pool.clone())
+            .create()
+            .await
+            .unwrap();
 
         let registration = repo
             .user_registration()
@@ -834,7 +837,10 @@ mod tests {
         let mut rng = ChaChaRng::seed_from_u64(42);
         let clock = MockClock::default();
 
-        let mut repo = PgRepositoryFactory::new(pool.clone()).create().await.unwrap();
+        let mut repo = PgRepositoryFactory::new(pool.clone())
+            .create()
+            .await
+            .unwrap();
 
         let registration = repo
             .user_registration()
@@ -922,7 +928,10 @@ mod tests {
         let mut rng = ChaChaRng::seed_from_u64(42);
         let clock = MockClock::default();
 
-        let mut repo = PgRepositoryFactory::new(pool.clone()).create().await.unwrap();
+        let mut repo = PgRepositoryFactory::new(pool.clone())
+            .create()
+            .await
+            .unwrap();
 
         let registration = repo
             .user_registration()
@@ -999,7 +1008,10 @@ mod tests {
         let mut rng = ChaChaRng::seed_from_u64(42);
         let clock = MockClock::default();
 
-        let mut repo = PgRepositoryFactory::new(pool.clone()).create().await.unwrap();
+        let mut repo = PgRepositoryFactory::new(pool.clone())
+            .create()
+            .await
+            .unwrap();
 
         let registration = repo
             .user_registration()

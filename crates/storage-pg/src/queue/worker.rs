@@ -12,8 +12,8 @@ use rand::RngCore;
 use ulid::Ulid;
 use uuid::Uuid;
 
-use crate::schema::{queue_leader, queue_workers};
 use crate::DatabaseError;
+use crate::schema::{queue_leader, queue_workers};
 
 /// An implementation of [`QueueWorkerRepository`] for a PostgreSQL connection.
 pub struct PgQueueWorkerRepository<'c> {
@@ -109,8 +109,7 @@ impl QueueWorkerRepository for PgQueueWorkerRepository<'_> {
     async fn shutdown(&mut self, clock: &dyn Clock, worker: &Worker) -> Result<(), Self::Error> {
         let now = clock.now();
         let rows_affected = diesel::update(
-            queue_workers::table
-                .filter(queue_workers::queue_worker_id.eq(Uuid::from(worker.id))),
+            queue_workers::table.filter(queue_workers::queue_worker_id.eq(Uuid::from(worker.id))),
         )
         .set(queue_workers::shutdown_at.eq(Some(now)))
         .execute(self.conn)
@@ -120,8 +119,7 @@ impl QueueWorkerRepository for PgQueueWorkerRepository<'_> {
 
         // Remove the leader lease if we were holding it
         let rows_affected = diesel::delete(
-            queue_leader::table
-                .filter(queue_leader::queue_worker_id.eq(Uuid::from(worker.id))),
+            queue_leader::table.filter(queue_leader::queue_worker_id.eq(Uuid::from(worker.id))),
         )
         .execute(self.conn)
         .await?;
@@ -136,11 +134,7 @@ impl QueueWorkerRepository for PgQueueWorkerRepository<'_> {
         Ok(())
     }
 
-    #[tracing::instrument(
-        name = "db.queue_worker.shutdown_dead_workers",
-        skip_all,
-        err,
-    )]
+    #[tracing::instrument(name = "db.queue_worker.shutdown_dead_workers", skip_all, err)]
     async fn shutdown_dead_workers(
         &mut self,
         clock: &dyn Clock,
@@ -162,11 +156,7 @@ impl QueueWorkerRepository for PgQueueWorkerRepository<'_> {
         Ok(())
     }
 
-    #[tracing::instrument(
-        name = "db.queue_worker.remove_leader_lease_if_expired",
-        skip_all,
-        err,
-    )]
+    #[tracing::instrument(name = "db.queue_worker.remove_leader_lease_if_expired", skip_all, err)]
     async fn remove_leader_lease_if_expired(
         &mut self,
         _clock: &dyn Clock,

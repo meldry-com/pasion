@@ -283,9 +283,7 @@ impl TokenType {
     pub fn check(token: &str) -> Result<TokenType, TokenFormatError> {
         // Reject legacy Palpo tokens — the compat session infrastructure has
         // been removed so these can no longer be serviced.
-        if token.starts_with("pst_")
-            || token.starts_with("syr_")
-            || is_likely_palpo_macaroon(token)
+        if token.starts_with("pst_") || token.starts_with("syr_") || is_likely_palpo_macaroon(token)
         {
             return Err(TokenFormatError::InvalidFormat);
         }
@@ -325,10 +323,7 @@ impl PartialEq<OAuthTokenTypeHint> for TokenType {
             (
                 TokenType::AccessToken | TokenType::PersonalAccessToken,
                 OAuthTokenTypeHint::AccessToken
-            ) | (
-                TokenType::RefreshToken,
-                OAuthTokenTypeHint::RefreshToken
-            )
+            ) | (TokenType::RefreshToken, OAuthTokenTypeHint::RefreshToken)
         )
     }
 }
@@ -398,7 +393,10 @@ mod tests {
         use TokenType::{AccessToken, RefreshToken};
         assert_eq!(TokenType::match_prefix("mat"), Some(AccessToken));
         assert_eq!(TokenType::match_prefix("mar"), Some(RefreshToken));
-        assert_eq!(TokenType::match_prefix("mpt"), Some(TokenType::PersonalAccessToken));
+        assert_eq!(
+            TokenType::match_prefix("mpt"),
+            Some(TokenType::PersonalAccessToken)
+        );
         assert_eq!(TokenType::match_prefix("mct"), None);
         assert_eq!(TokenType::match_prefix("mcr"), None);
         assert_eq!(TokenType::match_prefix("syt"), None);

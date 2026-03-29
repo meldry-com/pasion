@@ -42,10 +42,10 @@ use crate::{
 
 pub mod auth;
 pub mod consent;
-pub mod openapi;
 pub mod emails;
 pub mod linked_accounts;
 pub mod oauth2_clients;
+pub mod openapi;
 pub mod password;
 pub mod recovery;
 pub mod register;
@@ -215,7 +215,10 @@ impl Scribe for RouteError {
 }
 
 impl salvo::oapi::EndpointOutRegister for RouteError {
-    fn register(_components: &mut salvo::oapi::Components, _operation: &mut salvo::oapi::Operation) {
+    fn register(
+        _components: &mut salvo::oapi::Components,
+        _operation: &mut salvo::oapi::Operation,
+    ) {
         // Register common error responses in the OpenAPI spec
         use salvo::oapi::*;
 
@@ -232,7 +235,9 @@ impl salvo::oapi::EndpointOutRegister for RouteError {
         ] {
             let response = Response::new(desc)
                 .add_content("application/json", Content::new(error_schema.clone()));
-            _operation.responses.insert(status, salvo::oapi::RefOr::Type(response));
+            _operation
+                .responses
+                .insert(status, salvo::oapi::RefOr::Type(response));
         }
     }
 }
