@@ -21,9 +21,9 @@
 - [x] 为 shared registration service 引入结构化 validation issue 和 email availability mode。
 - [x] 将 legacy `views/register/password.rs` 接到 shared registration service。
 - [x] 将 registration 的 resend / verify-email / verify-phone / display-name / finish 结果映射进一步收成统一 workflow facade。
-- [ ] 引入显式 registration workflow state / event / deadline 代码模型。
-- [ ] 将 `rest/password.rs` 的 recovery 相关编排完全下沉到 `account_recovery`。
-- [ ] 将 `rest/emails.rs` / `account_contacts.rs` 完整收口到 shared contact workflow。
+- [x] 引入显式 registration workflow state / event / deadline 代码模型。
+- [x] 将 `rest/password.rs` 的 recovery 相关编排完全下沉到 `account_recovery`。
+- [x] 将 `rest/emails.rs` / `account_contacts.rs` 完整收口到 shared contact workflow。
 
 ### B. 通知中心升级
 
@@ -95,4 +95,4 @@
 
 ## 当前下一项
 
-- [ ] 引入显式 registration workflow state / event / deadline 代码模型。
+- [ ] 设计 `notification_request` / `notification_delivery` / `notification_event_log` 数据模型。

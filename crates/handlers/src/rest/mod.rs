@@ -19,6 +19,10 @@
 
 use std::{net::IpAddr, ops::Deref, sync::Arc};
 
+use crate::{
+    BoundActivityTracker, Limiter, RequesterFingerprint, impl_from_error_for_route,
+    passwords::PasswordManager,
+};
 use chrono::{DateTime, Utc};
 use pasion_data_model::{
     BoxClock, BoxRng, BrowserSession, Clock, Session, SiteConfig, SystemClock, User,
@@ -33,12 +37,6 @@ use rand_chacha::ChaChaRng;
 use salvo::prelude::*;
 use serde::{Deserialize, Serialize};
 use ulid::Ulid;
-use zeroize::Zeroizing;
-
-use crate::{
-    BoundActivityTracker, Limiter, RequesterFingerprint, impl_from_error_for_route,
-    passwords::PasswordManager,
-};
 
 pub mod auth;
 pub mod consent;
@@ -400,40 +398,16 @@ pub async fn verify_password_if_needed(
     user: &User,
     repo: &mut BoxRepository,
 ) -> Result<bool, RouteError> {
-    if requester.is_admin() {
-        return Ok(true);
-    }
-
-    if !config.password_login_enabled {
-        return Ok(true);
-    }
-
-    let user_password = repo
-        .user_password()
-        .active(user)
-        .await
-        .map_err(|e| RouteError::Internal(e.into()))?;
-
-    let Some(user_password) = user_password else {
-        return Ok(true);
-    };
-
-    let Some(password) = password else {
-        return Ok(false);
-    };
-
-    let password = Zeroizing::new(password);
-
-    let res = password_manager
-        .verify(
-            user_password.version,
-            password,
-            user_password.hashed_password,
-        )
-        .await
-        .map_err(|e| RouteError::Internal(e.into()))?;
-
-    Ok(res.is_success())
+    crate::account_password::verify_password_if_needed(
+        requester.is_admin(),
+        config.password_login_enabled,
+        password_manager,
+        password,
+        user,
+        repo,
+    )
+    .await
+    .map_err(|error| RouteError::Internal(Box::new(error)))
 }
 
 // ── Node ID helpers ────────────────────────────────────────────

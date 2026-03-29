@@ -4,26 +4,46 @@
 //! removing contact information on an existing user account. They are consumed
 //! by the REST handlers in [`crate::rest::emails`].
 
-use pasion_data_model::{BrowserSession, Clock, User, UserEmailAuthentication};
+use anyhow::Error as AnyhowError;
+use pasion_data_model::{BrowserSession, Clock, UserEmailAuthentication};
 use pasion_storage::{
     BoxRepository, RepositoryAccess, RepositoryError,
     queue::{ProvisionUserJob, QueueJobRepositoryExt as _},
-    user::UserEmailRepository,
+    user::{UserEmailRepository, UserRepository},
 };
 use rand::RngCore;
 use thiserror::Error;
 use ulid::Ulid;
 
+use crate::account_password::{
+    VerifyPasswordIfNeededError, verify_password_if_needed as verify_contact_password_if_needed,
+};
 use crate::{
     Limiter, RequesterFingerprint, notification_dispatch::schedule_email_authentication_code,
+    passwords::PasswordManager,
 };
 
 // ── Start email verification ──────────────────────────────────
 
 #[derive(Debug, Error)]
 pub enum StartEmailVerificationError {
+    #[error("browser session required")]
+    Unauthorized,
+
+    #[error("email changes are not allowed")]
+    Disabled,
+
+    #[error("invalid email address")]
+    InvalidEmail,
+
+    #[error("incorrect password")]
+    IncorrectPassword,
+
     #[error("email verification is rate limited")]
     RateLimited,
+
+    #[error(transparent)]
+    Password(AnyhowError),
 
     #[error(transparent)]
     Repository(#[from] RepositoryError),
@@ -36,19 +56,54 @@ pub struct StartedEmailVerification {
 /// Begin an email verification flow for an existing user session.
 ///
 /// Creates a [`UserEmailAuthentication`] record and schedules a verification
-/// code notification. The caller is responsible for checking config flags
-/// (e.g. `email_change_allowed`) and verifying the user's password before
-/// calling this function.
+/// code notification.
 pub async fn start_email_verification(
     mut repo: BoxRepository,
     rng: &mut (dyn RngCore + Send),
     clock: &dyn Clock,
     limiter: &Limiter,
+    password_manager: &PasswordManager,
+    email_change_allowed: bool,
+    password_login_enabled: bool,
+    requester_is_admin: bool,
     requester: RequesterFingerprint,
-    browser_session: &BrowserSession,
+    browser_session: Option<&BrowserSession>,
     email: String,
+    password: Option<String>,
     notification_language: String,
 ) -> Result<StartedEmailVerification, StartEmailVerificationError> {
+    let Some(browser_session) = browser_session else {
+        return Err(StartEmailVerificationError::Unauthorized);
+    };
+
+    if !email_change_allowed {
+        return Err(StartEmailVerificationError::Disabled);
+    }
+
+    if !email.contains('@') {
+        return Err(StartEmailVerificationError::InvalidEmail);
+    }
+
+    if !verify_contact_password_if_needed(
+        requester_is_admin,
+        password_login_enabled,
+        password_manager,
+        password,
+        &browser_session.user,
+        &mut repo,
+    )
+    .await
+    .map_err(|error| match error {
+        VerifyPasswordIfNeededError::Password(error) => {
+            StartEmailVerificationError::Password(error)
+        }
+        VerifyPasswordIfNeededError::Repository(error) => {
+            StartEmailVerificationError::Repository(error)
+        }
+    })? {
+        return Err(StartEmailVerificationError::IncorrectPassword);
+    }
+
     if let Err(error) = limiter.check_email_authentication_email(requester, &email) {
         tracing::warn!(error = &error as &dyn std::error::Error);
         return Err(StartEmailVerificationError::RateLimited);
@@ -72,6 +127,9 @@ pub async fn start_email_verification(
 
 #[derive(Debug, Error)]
 pub enum CompleteEmailVerificationError {
+    #[error("browser session required")]
+    Unauthorized,
+
     #[error("email authentication not found")]
     NotFound,
 
@@ -102,17 +160,20 @@ pub async fn complete_email_verification(
     rng: &mut (dyn RngCore + Send),
     clock: &dyn Clock,
     authentication_id: Ulid,
-    session_id: Ulid,
-    user: &User,
+    browser_session: Option<&BrowserSession>,
     code: &str,
 ) -> Result<(), CompleteEmailVerificationError> {
+    let Some(browser_session) = browser_session else {
+        return Err(CompleteEmailVerificationError::Unauthorized);
+    };
+
     let auth = repo
         .user_email()
         .lookup_authentication(authentication_id)
         .await?
         .ok_or(CompleteEmailVerificationError::NotFound)?;
 
-    if auth.user_session_id != Some(session_id) {
+    if auth.user_session_id != Some(browser_session.id) {
         return Err(CompleteEmailVerificationError::NotOwned);
     }
 
@@ -140,10 +201,13 @@ pub async fn complete_email_verification(
         .await?;
 
     // Add email to user if not already present
-    let existing = repo.user_email().find(user, &auth.email).await?;
+    let existing = repo
+        .user_email()
+        .find(&browser_session.user, &auth.email)
+        .await?;
     if existing.is_none() {
         repo.user_email()
-            .add(rng, clock, user, auth.email.clone())
+            .add(rng, clock, &browser_session.user, auth.email.clone())
             .await?;
     }
 
@@ -156,6 +220,9 @@ pub async fn complete_email_verification(
 
 #[derive(Debug, Error)]
 pub enum ResendEmailVerificationError {
+    #[error("browser session required")]
+    Unauthorized,
+
     #[error("email authentication not found")]
     NotFound,
 
@@ -180,16 +247,20 @@ pub async fn resend_email_verification_code(
     clock: &dyn Clock,
     requester: RequesterFingerprint,
     authentication_id: Ulid,
-    session_id: Ulid,
+    browser_session: Option<&BrowserSession>,
     notification_language: String,
 ) -> Result<(), ResendEmailVerificationError> {
+    let Some(browser_session) = browser_session else {
+        return Err(ResendEmailVerificationError::Unauthorized);
+    };
+
     let auth = repo
         .user_email()
         .lookup_authentication(authentication_id)
         .await?
         .ok_or(ResendEmailVerificationError::NotFound)?;
 
-    if auth.user_session_id != Some(session_id) {
+    if auth.user_session_id != Some(browser_session.id) {
         return Err(ResendEmailVerificationError::NotOwned);
     }
 
@@ -213,23 +284,36 @@ pub async fn resend_email_verification_code(
 
 #[derive(Debug, Error)]
 pub enum RemoveUserEmailError {
+    #[error("unauthorized")]
+    Unauthorized,
+
     #[error("user email not found")]
     NotFound,
+
+    #[error("user owning email not found")]
+    UserNotFound,
+
+    #[error("incorrect password")]
+    IncorrectPassword,
+
+    #[error(transparent)]
+    Password(AnyhowError),
 
     #[error(transparent)]
     Repository(#[from] RepositoryError),
 }
 
 /// Remove an email address from a user's account.
-///
-/// The caller is responsible for verifying ownership and password before
-/// calling this function.
 pub async fn remove_user_email(
     mut repo: BoxRepository,
     rng: &mut (dyn RngCore + Send),
     clock: &dyn Clock,
+    password_manager: &PasswordManager,
+    requester_user_id: Option<Ulid>,
+    requester_is_admin: bool,
+    password_login_enabled: bool,
+    password: Option<String>,
     email_id: Ulid,
-    user: &User,
 ) -> Result<(), RemoveUserEmailError> {
     let email = repo
         .user_email()
@@ -237,13 +321,60 @@ pub async fn remove_user_email(
         .await?
         .ok_or(RemoveUserEmailError::NotFound)?;
 
+    if !requester_is_admin && requester_user_id != Some(email.user_id) {
+        return Err(RemoveUserEmailError::Unauthorized);
+    }
+
+    let user = repo
+        .user()
+        .lookup(email.user_id)
+        .await?
+        .ok_or(RemoveUserEmailError::UserNotFound)?;
+
+    if !verify_contact_password_if_needed(
+        requester_is_admin,
+        password_login_enabled,
+        password_manager,
+        password,
+        &user,
+        &mut repo,
+    )
+    .await
+    .map_err(|error| match error {
+        VerifyPasswordIfNeededError::Password(error) => RemoveUserEmailError::Password(error),
+        VerifyPasswordIfNeededError::Repository(error) => RemoveUserEmailError::Repository(error),
+    })? {
+        return Err(RemoveUserEmailError::IncorrectPassword);
+    }
+
     repo.user_email().remove(email).await?;
 
     repo.queue_job()
-        .schedule_job(rng, clock, ProvisionUserJob::new(user))
+        .schedule_job(rng, clock, ProvisionUserJob::new(&user))
         .await?;
 
     repo.save().await?;
 
     Ok(())
+}
+
+// ── Load email verification status ────────────────────────────
+
+#[derive(Debug, Error)]
+pub enum LoadEmailVerificationStatusError {
+    #[error("email authentication not found")]
+    NotFound,
+
+    #[error(transparent)]
+    Repository(#[from] RepositoryError),
+}
+
+pub async fn load_email_verification_status(
+    repo: &mut BoxRepository,
+    authentication_id: Ulid,
+) -> Result<UserEmailAuthentication, LoadEmailVerificationStatusError> {
+    repo.user_email()
+        .lookup_authentication(authentication_id)
+        .await?
+        .ok_or(LoadEmailVerificationStatusError::NotFound)
 }

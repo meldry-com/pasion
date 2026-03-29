@@ -1,24 +1,20 @@
 //! Service functions for password management.
 //!
-//! These functions encapsulate the business logic for changing passwords and
-//! resetting passwords via recovery tickets. They are consumed by the REST
-//! handlers in [`crate::rest::password`].
+//! These functions encapsulate the business logic for changing a user's
+//! password while already authenticated. Recovery-session orchestration lives
+//! in [`crate::account_recovery`].
 
-use anyhow::{Context as _, Error as AnyhowError};
-use pasion_data_model::Clock;
+use anyhow::Error as AnyhowError;
+use pasion_data_model::{Clock, User};
 use pasion_storage::{
     BoxRepository, RepositoryAccess, RepositoryError,
-    user::{UserEmailRepository, UserPasswordRepository, UserRecoveryRepository, UserRepository},
+    user::{UserPasswordRepository, UserRepository},
 };
 use rand_chacha::rand_core::CryptoRngCore;
 use thiserror::Error;
 use zeroize::Zeroizing;
 
-use crate::{
-    Limiter, RequesterFingerprint,
-    account_recovery::{ResendAccountRecoveryError, resend_account_recovery},
-    passwords::PasswordManager,
-};
+use crate::passwords::PasswordManager;
 
 // ── Change password ───────────────────────────────────────────
 
@@ -45,6 +41,15 @@ pub enum ChangePasswordError {
     #[error("current password is incorrect")]
     WrongPassword,
 
+    #[error(transparent)]
+    Password(AnyhowError),
+
+    #[error(transparent)]
+    Repository(#[from] RepositoryError),
+}
+
+#[derive(Debug, Error)]
+pub enum VerifyPasswordIfNeededError {
     #[error(transparent)]
     Password(AnyhowError),
 
@@ -133,185 +138,44 @@ pub async fn change_password(
     Ok(())
 }
 
-// ── Reset password by recovery ticket ─────────────────────────
-
-#[derive(Debug, Error)]
-pub enum ResetPasswordByRecoveryError {
-    #[error("password manager is disabled")]
-    PasswordDisabled,
-
-    #[error("new password is too weak")]
-    PasswordTooWeak,
-
-    #[error("recovery ticket not found")]
-    TicketNotFound,
-
-    #[error("recovery session not found")]
-    SessionNotFound,
-
-    #[error("recovery ticket already consumed")]
-    AlreadyConsumed,
-
-    #[error("recovery ticket has expired")]
-    TicketExpired,
-
-    #[error("user email not found")]
-    EmailNotFound,
-
-    #[error("user not found")]
-    UserNotFound,
-
-    #[error("user account is locked")]
-    AccountLocked,
-
-    #[error(transparent)]
-    Password(AnyhowError),
-
-    #[error(transparent)]
-    Repository(#[from] RepositoryError),
-}
-
-/// Reset a user's password using a recovery ticket.
-///
-/// This validates the ticket, verifies the associated user is active, hashes
-/// the new password, saves it, and consumes the ticket so it cannot be reused.
-pub async fn reset_password_by_recovery(
-    mut repo: BoxRepository,
-    rng: &mut (dyn CryptoRngCore + Send),
-    clock: &dyn Clock,
+pub async fn verify_password_if_needed(
+    is_admin: bool,
+    password_login_enabled: bool,
     password_manager: &PasswordManager,
-    ticket_string: &str,
-    new_password: Zeroizing<String>,
-    recovery_allowed: bool,
-) -> Result<(), ResetPasswordByRecoveryError> {
-    if !password_manager.is_enabled() || !recovery_allowed {
-        return Err(ResetPasswordByRecoveryError::PasswordDisabled);
+    password: Option<String>,
+    user: &User,
+    repo: &mut BoxRepository,
+) -> Result<bool, VerifyPasswordIfNeededError> {
+    if is_admin {
+        return Ok(true);
     }
 
-    if !password_manager
-        .is_password_complex_enough(&new_password)
-        .map_err(|e| ResetPasswordByRecoveryError::Password(e.into()))?
-    {
-        return Err(ResetPasswordByRecoveryError::PasswordTooWeak);
+    if !password_login_enabled {
+        return Ok(true);
     }
 
-    let ticket = repo
-        .user_recovery()
-        .find_ticket(ticket_string)
-        .await?
-        .ok_or(ResetPasswordByRecoveryError::TicketNotFound)?;
+    let user_password = repo.user_password().active(user).await?;
 
-    let session = repo
-        .user_recovery()
-        .lookup_session(ticket.user_recovery_session_id)
-        .await?
-        .context("Unknown session")
-        .map_err(|_| ResetPasswordByRecoveryError::SessionNotFound)?;
+    let Some(user_password) = user_password else {
+        return Ok(true);
+    };
 
-    if session.consumed_at.is_some() {
-        return Err(ResetPasswordByRecoveryError::AlreadyConsumed);
-    }
+    let Some(password) = password else {
+        return Ok(false);
+    };
 
-    if !ticket.active(clock.now()) {
-        return Err(ResetPasswordByRecoveryError::TicketExpired);
-    }
+    let password = Zeroizing::new(password);
 
-    let user_email = repo
-        .user_email()
-        .lookup(ticket.user_email_id)
-        .await?
-        .context("Unknown email")
-        .map_err(|_| ResetPasswordByRecoveryError::EmailNotFound)?;
-
-    let user = repo
-        .user()
-        .lookup(user_email.user_id)
-        .await?
-        .context("Invalid user")
-        .map_err(|_| ResetPasswordByRecoveryError::UserNotFound)?;
-
-    if !user.is_valid() {
-        return Err(ResetPasswordByRecoveryError::AccountLocked);
-    }
-
-    let (version, hash) = password_manager
-        .hash(make_rng_from(rng), new_password)
+    let res = password_manager
+        .verify(
+            user_password.version,
+            password,
+            user_password.hashed_password,
+        )
         .await
-        .map_err(ResetPasswordByRecoveryError::Password)?;
+        .map_err(VerifyPasswordIfNeededError::Password)?;
 
-    repo.user_password()
-        .add(rng, clock, &user, version, hash, None)
-        .await?;
-
-    repo.user_recovery()
-        .consume_ticket(clock, ticket, session)
-        .await?;
-
-    repo.save().await?;
-
-    Ok(())
-}
-
-// ── Resend recovery email by ticket ───────────────────────────
-
-#[derive(Debug, Error)]
-pub enum ResendRecoveryByTicketError {
-    #[error("recovery ticket not found")]
-    TicketNotFound,
-
-    #[error("recovery session not found")]
-    SessionNotFound,
-
-    #[error("recovery session already consumed")]
-    AlreadyConsumed,
-
-    #[error("account recovery resend is rate limited")]
-    RateLimited,
-
-    #[error(transparent)]
-    Repository(#[from] RepositoryError),
-}
-
-/// Resend a recovery email, looking up the session from a recovery ticket.
-pub async fn resend_recovery_by_ticket(
-    mut repo: BoxRepository,
-    limiter: &Limiter,
-    rng: &mut (dyn rand::RngCore + Send),
-    clock: &dyn Clock,
-    requester: RequesterFingerprint,
-    ticket_string: &str,
-) -> Result<(), ResendRecoveryByTicketError> {
-    let ticket = repo
-        .user_recovery()
-        .find_ticket(ticket_string)
-        .await?
-        .ok_or(ResendRecoveryByTicketError::TicketNotFound)?;
-
-    let session = repo
-        .user_recovery()
-        .lookup_session(ticket.user_recovery_session_id)
-        .await?
-        .context("Could not load recovery session")
-        .map_err(|_| ResendRecoveryByTicketError::SessionNotFound)?;
-
-    let session_id = session.id;
-
-    // Hand off to the recovery service function, which takes ownership of repo
-    match resend_account_recovery(repo, limiter, rng, clock, requester, session_id).await {
-        Ok(_) => Ok(()),
-        Err(ResendAccountRecoveryError::NotFound) => {
-            Err(ResendRecoveryByTicketError::SessionNotFound)
-        }
-        Err(ResendAccountRecoveryError::AlreadyConsumed) => {
-            Err(ResendRecoveryByTicketError::AlreadyConsumed)
-        }
-        Err(ResendAccountRecoveryError::RateLimited) => {
-            Err(ResendRecoveryByTicketError::RateLimited)
-        }
-        Err(ResendAccountRecoveryError::Repository(error)) => {
-            Err(ResendRecoveryByTicketError::Repository(error))
-        }
-    }
+    Ok(res.is_success())
 }
 
 /// Create a new RNG from the provided one, suitable for `PasswordManager::hash`

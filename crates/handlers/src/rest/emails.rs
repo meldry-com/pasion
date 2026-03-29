@@ -1,19 +1,16 @@
-use pasion_storage::{
-    RepositoryAccess,
-    user::{UserEmailRepository, UserRepository},
-};
 use salvo::oapi::ToSchema;
 use salvo::prelude::*;
 use serde::{Deserialize, Serialize};
 
 use super::{
     DepotExt, NodeType, RouteError, extract_bound_activity_tracker, extract_session_info,
-    get_requester, make_clock, make_rng, verify_password_if_needed,
+    get_requester, make_clock, make_rng,
 };
 use crate::account_contacts::{
-    CompleteEmailVerificationError, RemoveUserEmailError, ResendEmailVerificationError,
-    StartEmailVerificationError, complete_email_verification, remove_user_email,
-    resend_email_verification_code, start_email_verification,
+    CompleteEmailVerificationError, LoadEmailVerificationStatusError, RemoveUserEmailError,
+    ResendEmailVerificationError, StartEmailVerificationError, complete_email_verification,
+    load_email_verification_status, remove_user_email, resend_email_verification_code,
+    start_email_verification,
 };
 
 // ── Response types ─────────────────────────────────────────────
@@ -74,11 +71,12 @@ pub async fn get_email_auth(
     let repo_factory = depot.repo_factory()?;
     let mut repo = repo_factory.create().await?;
 
-    let auth = repo
-        .user_email()
-        .lookup_authentication(ulid)
-        .await?
-        .ok_or(RouteError::NotFound)?;
+    let auth = load_email_verification_status(&mut repo, ulid)
+        .await
+        .map_err(|error| match error {
+            LoadEmailVerificationStatusError::NotFound => RouteError::NotFound,
+            LoadEmailVerificationStatusError::Repository(error) => error.into(),
+        })?;
 
     repo.cancel().await?;
 
@@ -124,60 +122,39 @@ pub async fn start_email_auth(
     let repo = repo_factory.create().await?;
     let (requester, repo) = get_requester(&clock, &activity_tracker, repo, &session_info).await?;
 
-    let Some(browser_session) = requester.browser_session() else {
-        return Err(RouteError::Unauthorized);
-    };
-
-    if !config.email_change_allowed {
-        return Ok(Json(StartEmailAuthResponse {
-            status: "DENIED",
-            authentication: None,
-            violations: Some(vec!["Email changes are not allowed".into()]),
-        }));
-    }
-
-    // Validate email format
-    if !input.email.contains('@') {
-        return Ok(Json(StartEmailAuthResponse {
-            status: "INVALID_EMAIL_ADDRESS",
-            authentication: None,
-            violations: None,
-        }));
-    }
-
-    // Verify password if needed
-    let mut repo = repo;
-    if !verify_password_if_needed(
-        &requester,
-        &config,
-        &password_manager,
-        input.password,
-        &browser_session.user,
-        &mut repo,
-    )
-    .await?
-    {
-        return Ok(Json(StartEmailAuthResponse {
-            status: "INCORRECT_PASSWORD",
-            authentication: None,
-            violations: None,
-        }));
-    }
-
-    let fingerprint = requester.fingerprint();
-
     match start_email_verification(
         repo,
         &mut rng,
         &clock,
         &limiter,
-        fingerprint,
-        browser_session,
+        &password_manager,
+        config.email_change_allowed,
+        config.password_login_enabled,
+        requester.is_admin(),
+        requester.fingerprint(),
+        requester.browser_session(),
         input.email,
+        input.password,
         notification_language,
     )
     .await
     {
+        Err(StartEmailVerificationError::Unauthorized) => Err(RouteError::Unauthorized),
+        Err(StartEmailVerificationError::Disabled) => Ok(Json(StartEmailAuthResponse {
+            status: "DENIED",
+            authentication: None,
+            violations: Some(vec!["Email changes are not allowed".into()]),
+        })),
+        Err(StartEmailVerificationError::InvalidEmail) => Ok(Json(StartEmailAuthResponse {
+            status: "INVALID_EMAIL_ADDRESS",
+            authentication: None,
+            violations: None,
+        })),
+        Err(StartEmailVerificationError::IncorrectPassword) => Ok(Json(StartEmailAuthResponse {
+            status: "INCORRECT_PASSWORD",
+            authentication: None,
+            violations: None,
+        })),
         Ok(started) => Ok(Json(StartEmailAuthResponse {
             status: "STARTED",
             authentication: Some(EmailAuthData {
@@ -191,6 +168,9 @@ pub async fn start_email_auth(
             authentication: None,
             violations: None,
         })),
+        Err(StartEmailVerificationError::Password(error)) => {
+            Err(RouteError::Internal(error.into()))
+        }
         Err(StartEmailVerificationError::Repository(error)) => Err(error.into()),
     }
 }
@@ -228,22 +208,18 @@ pub async fn complete_email_auth(
     let repo = repo_factory.create().await?;
     let (requester, repo) = get_requester(&clock, &activity_tracker, repo, &session_info).await?;
 
-    let Some(browser_session) = requester.browser_session() else {
-        return Err(RouteError::Unauthorized);
-    };
-
     match complete_email_verification(
         repo,
         &limiter,
         &mut rng,
         &clock,
         ulid,
-        browser_session.id,
-        &browser_session.user,
+        requester.browser_session(),
         &input.code,
     )
     .await
     {
+        Err(CompleteEmailVerificationError::Unauthorized) => Err(RouteError::Unauthorized),
         Ok(()) => Ok(Json(CompleteEmailAuthResponse {
             status: "COMPLETED",
         })),
@@ -303,10 +279,6 @@ pub async fn resend_email_auth_code(
     let repo = repo_factory.create().await?;
     let (requester, repo) = get_requester(&clock, &activity_tracker, repo, &session_info).await?;
 
-    let Some(browser_session) = requester.browser_session() else {
-        return Err(RouteError::Unauthorized);
-    };
-
     match resend_email_verification_code(
         repo,
         &limiter,
@@ -314,11 +286,12 @@ pub async fn resend_email_auth_code(
         &clock,
         requester.fingerprint(),
         ulid,
-        browser_session.id,
+        requester.browser_session(),
         notification_language,
     )
     .await
     {
+        Err(ResendEmailVerificationError::Unauthorized) => Err(RouteError::Unauthorized),
         Ok(()) => Ok(Json(ResendEmailAuthCodeResponse { status: "RESENT" })),
         Err(ResendEmailVerificationError::NotFound) => Err(RouteError::NotFound),
         Err(ResendEmailVerificationError::NotOwned) => Err(RouteError::Unauthorized),
@@ -367,43 +340,29 @@ pub async fn remove_email(
     let session_info = extract_session_info(req, depot);
 
     let repo = repo_factory.create().await?;
-    let (requester, mut repo) =
-        get_requester(&clock, &activity_tracker, repo, &session_info).await?;
+    let (requester, repo) = get_requester(&clock, &activity_tracker, repo, &session_info).await?;
 
-    let email = repo
-        .user_email()
-        .lookup(ulid)
-        .await?
-        .ok_or(RouteError::NotFound)?;
-
-    if !requester.is_owner_or_admin(Some(email.user_id)) {
-        return Err(RouteError::Unauthorized);
-    }
-
-    let user = repo
-        .user()
-        .lookup(email.user_id)
-        .await?
-        .ok_or(RouteError::LoadFailed)?;
-
-    if !verify_password_if_needed(
-        &requester,
-        &config,
+    match remove_user_email(
+        repo,
+        &mut rng,
+        &clock,
         &password_manager,
+        requester.user().map(|user| user.id),
+        requester.is_admin(),
+        config.password_login_enabled,
         input.password,
-        &user,
-        &mut repo,
+        ulid,
     )
-    .await?
+    .await
     {
-        return Ok(Json(RemoveEmailResponse {
-            status: "INCORRECT_PASSWORD",
-        }));
-    }
-
-    match remove_user_email(repo, &mut rng, &clock, ulid, &user).await {
         Ok(()) => Ok(Json(RemoveEmailResponse { status: "REMOVED" })),
+        Err(RemoveUserEmailError::Unauthorized) => Err(RouteError::Unauthorized),
         Err(RemoveUserEmailError::NotFound) => Err(RouteError::NotFound),
+        Err(RemoveUserEmailError::UserNotFound) => Err(RouteError::LoadFailed),
+        Err(RemoveUserEmailError::IncorrectPassword) => Ok(Json(RemoveEmailResponse {
+            status: "INCORRECT_PASSWORD",
+        })),
+        Err(RemoveUserEmailError::Password(error)) => Err(RouteError::Internal(error.into())),
         Err(RemoveUserEmailError::Repository(error)) => Err(error.into()),
     }
 }
