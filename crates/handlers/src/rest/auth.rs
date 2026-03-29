@@ -145,8 +145,7 @@ pub async fn login(req: &mut Request, depot: &Depot, res: &mut Response) -> Resu
         crate::account_access::PasswordLoginError::Password(error) => {
             RouteError::Internal(error.into())
         }
-    })?
-    {
+    })? {
         PasswordLoginOutcome::Disabled => {
             PASSWORD_LOGIN_COUNTER.add(1, &[KeyValue::new(RESULT, "error")]);
             res.render(Json(LoginResponse {

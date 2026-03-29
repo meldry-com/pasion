@@ -61,6 +61,7 @@ pub(crate) mod views;
 mod account_access;
 mod account_contacts;
 mod account_password;
+mod account_profile;
 mod account_recovery;
 mod account_registration;
 mod account_sessions;

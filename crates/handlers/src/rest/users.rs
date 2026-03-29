@@ -1,12 +1,15 @@
-use anyhow::Context as _;
-use pasion_storage::queue::{DeactivateUserJob, QueueJobRepositoryExt as _};
 use salvo::oapi::ToSchema;
 use salvo::prelude::*;
 use serde::{Deserialize, Serialize};
 
 use super::{
     DepotExt, NodeType, RouteError, extract_bound_activity_tracker, extract_session_info,
-    get_requester, make_clock, make_rng, verify_password_if_needed,
+    get_requester, make_clock, make_rng,
+};
+use crate::account_profile::{
+    AccountProfileError, DeactivateAccountOutcome, SetDisplayNameOutcome,
+    allow_cross_signing_reset as allow_cross_signing_reset_service,
+    deactivate_current_account, set_display_name as set_display_name_service,
 };
 
 // ── POST /api/v1/viewer/display-name ───────────────────────────
@@ -41,41 +44,25 @@ pub async fn set_display_name(
     let session_info = extract_session_info(req, depot);
 
     let repo = repo_factory.create().await?;
-    let (requester, mut repo) =
-        get_requester(&clock, &activity_tracker, repo, &session_info).await?;
+    let (requester, repo) = get_requester(&clock, &activity_tracker, repo, &session_info).await?;
 
     let user_id = NodeType::User.extract_ulid(&input.user_id)?;
 
-    if !requester.is_owner_or_admin(Some(user_id)) {
-        return Err(RouteError::Unauthorized);
-    }
+    let status = match set_display_name_service(
+        repo,
+        &requester,
+        homeserver.as_ref(),
+        user_id,
+        input.display_name,
+    )
+    .await
+    .map_err(map_account_profile_error)?
+    {
+        SetDisplayNameOutcome::Set => "SET",
+        SetDisplayNameOutcome::Invalid => "INVALID",
+    };
 
-    let user = repo
-        .user()
-        .lookup(user_id)
-        .await?
-        .ok_or(RouteError::NotFound)?;
-    repo.cancel().await?;
-
-    match &input.display_name {
-        Some(name) => {
-            if name.is_empty() || name.len() > 256 {
-                return Ok(Json(SetDisplayNameResponse { status: "INVALID" }));
-            }
-            homeserver
-                .set_displayname(&user.username, name)
-                .await
-                .map_err(|e| RouteError::Internal(e.into()))?;
-        }
-        None => {
-            homeserver
-                .unset_displayname(&user.username)
-                .await
-                .map_err(|e| RouteError::Internal(e.into()))?;
-        }
-    }
-
-    Ok(Json(SetDisplayNameResponse { status: "SET" }))
+    Ok(Json(SetDisplayNameResponse { status }))
 }
 
 // ── POST /api/v1/viewer/cross-signing-reset ────────────────────
@@ -114,27 +101,13 @@ pub async fn allow_cross_signing_reset(
     let session_info = extract_session_info(req, depot);
 
     let repo = repo_factory.create().await?;
-    let (requester, mut repo) =
-        get_requester(&clock, &activity_tracker, repo, &session_info).await?;
+    let (requester, repo) = get_requester(&clock, &activity_tracker, repo, &session_info).await?;
 
     let user_id = NodeType::User.extract_ulid(&input.user_id)?;
 
-    if !requester.is_owner_or_admin(Some(user_id)) {
-        return Err(RouteError::Unauthorized);
-    }
-
-    let user = repo
-        .user()
-        .lookup(user_id)
-        .await?
-        .ok_or(RouteError::NotFound)?;
-    repo.cancel().await?;
-
-    homeserver
-        .allow_cross_signing_reset(&user.username)
+    let user = allow_cross_signing_reset_service(repo, &requester, homeserver.as_ref(), user_id)
         .await
-        .context("Failed to allow cross-signing reset")
-        .map_err(|e| RouteError::Internal(e.into()))?;
+        .map_err(map_account_profile_error)?;
 
     Ok(Json(AllowCrossSigningResetResponse {
         user: Some(UserBrief {
@@ -177,50 +150,40 @@ pub async fn deactivate_user(
     let session_info = extract_session_info(req, depot);
 
     let repo = repo_factory.create().await?;
-    let (requester, mut repo) =
-        get_requester(&clock, &activity_tracker, repo, &session_info).await?;
+    let (requester, repo) = get_requester(&clock, &activity_tracker, repo, &session_info).await?;
 
-    let Some(browser_session) = requester.browser_session() else {
-        return Err(RouteError::Unauthorized);
-    };
-
-    if !config.account_deactivation_allowed {
-        return Err(RouteError::BadRequest(
-            "Account deactivation is not allowed".into(),
-        ));
-    }
-
-    if !verify_password_if_needed(
+    let status = match deactivate_current_account(
+        repo,
         &requester,
+        &mut rng,
+        &clock,
         &config,
         &password_manager,
         input.password,
-        &browser_session.user,
-        &mut repo,
+        input.hs_erase,
     )
-    .await?
+    .await
+    .map_err(map_account_profile_error)?
     {
-        return Ok(Json(DeactivateUserResponse {
-            status: "INCORRECT_PASSWORD",
-        }));
+        DeactivateAccountOutcome::IncorrectPassword => "INCORRECT_PASSWORD",
+        DeactivateAccountOutcome::Deactivated => "DEACTIVATED",
+    };
+
+    Ok(Json(DeactivateUserResponse { status }))
+}
+
+fn map_account_profile_error(error: AccountProfileError) -> RouteError {
+    match error {
+        AccountProfileError::NotFound => RouteError::NotFound,
+        AccountProfileError::Unauthorized | AccountProfileError::BrowserSessionRequired => {
+            RouteError::Unauthorized
+        }
+        AccountProfileError::DeactivationDisabled => {
+            RouteError::BadRequest("Account deactivation is not allowed".into())
+        }
+        AccountProfileError::Password(error) | AccountProfileError::Homeserver(error) => {
+            RouteError::Internal(error.into())
+        }
+        AccountProfileError::Repository(error) => RouteError::from(error),
     }
-
-    let user = repo
-        .user()
-        .deactivate(&clock, browser_session.user.clone())
-        .await?;
-
-    repo.queue_job()
-        .schedule_job(
-            &mut rng,
-            &clock,
-            DeactivateUserJob::new(&user, input.hs_erase),
-        )
-        .await?;
-
-    repo.save().await?;
-
-    Ok(Json(DeactivateUserResponse {
-        status: "DEACTIVATED",
-    }))
 }
