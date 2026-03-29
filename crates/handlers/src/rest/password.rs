@@ -1,5 +1,6 @@
 use anyhow::Context as _;
 use pasion_storage::queue::{QueueJobRepositoryExt as _, SendAccountRecoveryEmailsJob};
+use salvo::oapi::ToSchema;
 use salvo::prelude::*;
 use serde::{Deserialize, Serialize};
 use zeroize::Zeroizing;
@@ -10,18 +11,18 @@ use super::{DepotExt,
 
 // ── POST /api/v1/viewer/password ───────────────────────────────
 
-#[derive(Deserialize)]
+#[derive(Deserialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct SetPasswordInput {
     pub user_id: String,
     pub current_password: Option<String>,
     pub new_password: String }
 
-#[derive(Serialize)]
+#[derive(Serialize, ToSchema)]
 pub struct SetPasswordResponse {
     pub status: &'static str }
 
-#[handler]
+#[endpoint]
 pub async fn set_password(
     req: &mut Request,
     depot: &Depot,
@@ -121,13 +122,13 @@ pub async fn set_password(
 
 // ── POST /api/v1/password-recovery/set ─────────────────────────
 
-#[derive(Deserialize)]
+#[derive(Deserialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct SetPasswordByRecoveryInput {
     pub ticket: String,
     pub new_password: String }
 
-#[handler]
+#[endpoint]
 pub async fn set_password_by_recovery(
     req: &mut Request,
     depot: &Depot,
@@ -219,15 +220,15 @@ pub async fn set_password_by_recovery(
 
 // ── POST /api/v1/password-recovery/resend ──────────────────────
 
-#[derive(Deserialize)]
+#[derive(Deserialize, ToSchema)]
 pub struct ResendRecoveryInput {
     pub ticket: String }
 
-#[derive(Serialize)]
+#[derive(Serialize, ToSchema)]
 pub struct ResendRecoveryResponse {
     pub status: &'static str }
 
-#[handler]
+#[endpoint]
 pub async fn resend_recovery_email(
     req: &mut Request,
     depot: &Depot,

@@ -1,9 +1,10 @@
+use salvo::oapi::ToSchema;
 use salvo::prelude::*;
 use serde::Serialize;
 
 use super::{DepotExt, RouteError};
 
-#[derive(Serialize)]
+#[derive(Serialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct SiteConfigResponse {
     pub id: Option<String>,
@@ -19,7 +20,7 @@ pub struct SiteConfigResponse {
     pub plan_management_iframe_uri: Option<String> }
 
 /// GET /api/v1/site-config
-#[handler]
+#[endpoint]
 pub async fn get(depot: &Depot) -> Result<Json<SiteConfigResponse>, RouteError> {
     let config = depot.site_config()?;
 

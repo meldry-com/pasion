@@ -209,8 +209,7 @@ async fn handle_post(req: &mut Request, depot: &Depot) -> Result<(), RouteError>
         }
 
         // This case can happen if there is a mismatch between the token type hint and the guessed
-        // token type or if the token was a compat access/refresh token. In those cases, we return
-        // an unknown token error.
+        // token type. In those cases, we return an unknown token error.
         (Some(OAuthTokenTypeHint::AccessToken | OAuthTokenTypeHint::RefreshToken) | None, _) => {
             return Err(RouteError::UnknownToken);
         }

@@ -158,7 +158,6 @@ pub async fn init(
         .register_handler::<pasion_storage::queue::CleanupRevokedOAuthRefreshTokensJob>()
         .register_handler::<pasion_storage::queue::CleanupConsumedOAuthRefreshTokensJob>()
         .register_handler::<pasion_storage::queue::CleanupUserRegistrationsJob>()
-        .register_handler::<pasion_storage::queue::CleanupFinishedCompatSessionsJob>()
         .register_handler::<pasion_storage::queue::CleanupFinishedOAuth2SessionsJob>()
         .register_handler::<pasion_storage::queue::CleanupFinishedUserSessionsJob>()
         .register_handler::<pasion_storage::queue::CleanupOAuthAuthorizationGrantsJob>()
@@ -178,14 +177,15 @@ pub async fn init(
         .register_handler::<pasion_storage::queue::SyncDevicesJob>()
         .register_handler::<pasion_storage::queue::VerifyEmailJob>()
         .register_handler::<pasion_storage::queue::ExpireInactiveSessionsJob>()
-        .register_handler::<pasion_storage::queue::ExpireInactiveCompatSessionsJob>()
         .register_handler::<pasion_storage::queue::ExpireInactiveOAuthSessionsJob>()
         .register_handler::<pasion_storage::queue::ExpireInactiveUserSessionsJob>()
         .register_handler::<pasion_storage::queue::PruneStalePolicyDataJob>()
         .register_handler::<pasion_storage::queue::CleanupInactiveOAuth2SessionIpsJob>()
-        .register_handler::<pasion_storage::queue::CleanupInactiveCompatSessionIpsJob>()
         .register_handler::<pasion_storage::queue::CleanupInactiveUserSessionIpsJob>()
         .register_deprecated_queue("cleanup-expired-tokens")
+        .register_deprecated_queue("cleanup-finished-compat-sessions")
+        .register_deprecated_queue("expire-inactive-compat-sessions")
+        .register_deprecated_queue("cleanup-inactive-compat-session-ips")
         // Recurring jobs are spread across the hour at ~5 minute intervals
         // to avoid clustering and distribute database load evenly.
         .add_schedule(
@@ -207,12 +207,6 @@ pub async fn init(
             pasion_storage::queue::CleanupConsumedOAuthRefreshTokensJob,
         )
         .add_schedule(
-            "cleanup-finished-compat-sessions",
-            // Run this job every hour at minute 10
-            "0 10 * * * *".parse()?,
-            pasion_storage::queue::CleanupFinishedCompatSessionsJob,
-        )
-        .add_schedule(
             "cleanup-finished-oauth2-sessions",
             // Run this job every hour at minute 15
             "0 15 * * * *".parse()?,
@@ -229,12 +223,6 @@ pub async fn init(
             // Run this job every hour at minute 25
             "0 25 * * * *".parse()?,
             pasion_storage::queue::CleanupInactiveOAuth2SessionIpsJob,
-        )
-        .add_schedule(
-            "cleanup-inactive-compat-session-ips",
-            // Run this job every hour at minute 25
-            "0 25 * * * *".parse()?,
-            pasion_storage::queue::CleanupInactiveCompatSessionIpsJob,
         )
         .add_schedule(
             "cleanup-inactive-user-session-ips",

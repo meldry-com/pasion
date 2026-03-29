@@ -288,6 +288,7 @@ async fn handle_post(req: &mut Request, depot: &Depot) -> Result<RouteResponse, 
             requester: pasion_policy::Requester {
                 ip_address: activity_tracker.ip(),
                 user_agent,
+                ..Default::default()
             },
         })
         .await?;

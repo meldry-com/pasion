@@ -42,6 +42,7 @@ use crate::{
 
 pub mod auth;
 pub mod consent;
+pub mod openapi;
 pub mod emails;
 pub mod linked_accounts;
 pub mod oauth2_clients;
@@ -209,6 +210,29 @@ impl Scribe for RouteError {
                 res.status_code(StatusCode::BAD_REQUEST);
                 res.render(Json(serde_json::json!({"error": msg})));
             }
+        }
+    }
+}
+
+impl salvo::oapi::EndpointOutRegister for RouteError {
+    fn register(_components: &mut salvo::oapi::Components, _operation: &mut salvo::oapi::Operation) {
+        // Register common error responses in the OpenAPI spec
+        use salvo::oapi::*;
+
+        let error_schema = Object::new()
+            .property("error", Object::new().schema_type(BasicType::String))
+            .required("error");
+
+        for (status, desc) in [
+            ("400", "Bad request"),
+            ("401", "Invalid or missing access token"),
+            ("403", "Unauthorized"),
+            ("404", "Resource not found"),
+            ("500", "Internal server error"),
+        ] {
+            let response = Response::new(desc)
+                .add_content("application/json", Content::new(error_schema.clone()));
+            _operation.responses.insert(status, salvo::oapi::RefOr::Type(response));
         }
     }
 }
@@ -413,8 +437,6 @@ pub async fn verify_password_if_needed(
 pub enum NodeType {
     Authentication,
     BrowserSession,
-    CompatSession,
-    CompatSsoLogin,
     OAuth2Client,
     OAuth2Session,
     UpstreamOAuth2Provider,
@@ -430,8 +452,6 @@ impl NodeType {
         match self {
             Self::Authentication => "authentication",
             Self::BrowserSession => "browser_session",
-            Self::CompatSession => "compat_session",
-            Self::CompatSsoLogin => "compat_sso_login",
             Self::OAuth2Client => "oauth2_client",
             Self::OAuth2Session => "oauth2_session",
             Self::UpstreamOAuth2Provider => "upstream_oauth2_provider",
@@ -447,8 +467,6 @@ impl NodeType {
         match prefix {
             "authentication" => Some(Self::Authentication),
             "browser_session" => Some(Self::BrowserSession),
-            "compat_session" => Some(Self::CompatSession),
-            "compat_sso_login" => Some(Self::CompatSsoLogin),
             "oauth2_client" => Some(Self::OAuth2Client),
             "oauth2_session" => Some(Self::OAuth2Session),
             "upstream_oauth2_provider" => Some(Self::UpstreamOAuth2Provider),
@@ -493,7 +511,7 @@ impl NodeType {
 
 // ── User-agent parsing helper ──────────────────────────────────
 
-#[derive(Serialize, Clone)]
+#[derive(Serialize, Clone, salvo::oapi::ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct UserAgentInfo {
     pub name: Option<String>,

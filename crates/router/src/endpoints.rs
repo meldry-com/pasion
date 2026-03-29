@@ -13,9 +13,6 @@ pub enum PostAuthAction {
     ContinueDeviceCodeGrant {
         id: Ulid,
     },
-    ContinueCompatSsoLogin {
-        id: Ulid,
-    },
     ChangePassword,
     LinkUpstream {
         id: Ulid,
@@ -38,11 +35,6 @@ impl PostAuthAction {
     }
 
     #[must_use]
-    pub const fn continue_compat_sso_login(id: Ulid) -> Self {
-        PostAuthAction::ContinueCompatSsoLogin { id }
-    }
-
-    #[must_use]
     pub const fn link_upstream(id: Ulid) -> Self {
         PostAuthAction::LinkUpstream { id }
     }
@@ -57,9 +49,6 @@ impl PostAuthAction {
             Self::ContinueAuthorizationGrant { id } => url_builder.redirect(&Consent(*id)),
             Self::ContinueDeviceCodeGrant { id } => {
                 url_builder.redirect(&DeviceCodeConsent::new(*id))
-            }
-            Self::ContinueCompatSsoLogin { id } => {
-                url_builder.redirect(&CompatLoginSsoComplete::new(*id, None))
             }
             Self::ChangePassword => url_builder.redirect(&AccountPasswordChange),
             Self::LinkUpstream { id } => url_builder.redirect(&UpstreamOAuth2Link::new(*id)),
@@ -212,14 +201,6 @@ impl Login {
     }
 
     #[must_use]
-    pub const fn and_continue_compat_sso_login(id: Ulid) -> Self {
-        Self {
-            post_auth_action: Some(PostAuthAction::continue_compat_sso_login(id)),
-            login_hint: None,
-        }
-    }
-
-    #[must_use]
     pub const fn and_link_upstream(id: Ulid) -> Self {
         Self {
             post_auth_action: Some(PostAuthAction::link_upstream(id)),
@@ -286,13 +267,6 @@ impl Register {
         }
     }
 
-    #[must_use]
-    pub fn and_continue_compat_sso_login(data: Ulid) -> Self {
-        Self {
-            post_auth_action: Some(PostAuthAction::continue_compat_sso_login(data)),
-        }
-    }
-
     /// Get a reference to the reauth's post auth action.
     #[must_use]
     pub fn post_auth_action(&self) -> Option<&PostAuthAction> {
@@ -344,12 +318,6 @@ impl PasswordRegister {
     #[must_use]
     pub fn and_continue_grant(mut self, data: Ulid) -> Self {
         self.post_auth_action = Some(PostAuthAction::continue_grant(data));
-        self
-    }
-
-    #[must_use]
-    pub fn and_continue_compat_sso_login(mut self, data: Ulid) -> Self {
-        self.post_auth_action = Some(PostAuthAction::continue_compat_sso_login(data));
         self
     }
 
@@ -626,66 +594,6 @@ pub struct CompatLoginSsoRedirectIdp;
 
 impl SimpleRoute for CompatLoginSsoRedirectIdp {
     const PATH: &'static str = "/_matrix/client/{version}/login/sso/redirect/{idp}";
-}
-
-#[derive(Debug, Serialize, Deserialize, Clone, Copy)]
-#[serde(rename_all = "lowercase")]
-pub enum CompatLoginSsoAction {
-    Login,
-    Register,
-    #[serde(other)]
-    Unknown,
-}
-
-impl CompatLoginSsoAction {
-    /// Returns `true` if the action is a known action.
-    #[must_use]
-    pub fn is_known(self) -> bool {
-        !matches!(self, Self::Unknown)
-    }
-}
-
-#[derive(Debug, Serialize, Deserialize, Clone, Copy)]
-pub struct CompatLoginSsoActionParams {
-    action: CompatLoginSsoAction,
-    /// DEPRECATED: Use `action` instead.
-    #[serde(rename = "org.matrix.msc3824.action")]
-    unstable_action: CompatLoginSsoAction,
-}
-
-/// `GET|POST /complete-compat-sso/{id}`
-pub struct CompatLoginSsoComplete {
-    id: Ulid,
-    query: Option<CompatLoginSsoActionParams>,
-}
-
-impl CompatLoginSsoComplete {
-    #[must_use]
-    pub fn new(id: Ulid, action: Option<CompatLoginSsoAction>) -> Self {
-        Self {
-            id,
-            query: action.map(|action| CompatLoginSsoActionParams {
-                action,
-                unstable_action: action,
-            }),
-        }
-    }
-}
-
-impl Route for CompatLoginSsoComplete {
-    type Query = CompatLoginSsoActionParams;
-
-    fn query(&self) -> Option<&Self::Query> {
-        self.query.as_ref()
-    }
-
-    fn route() -> &'static str {
-        "/complete-compat-sso/{grant_id}"
-    }
-
-    fn path(&self) -> std::borrow::Cow<'static, str> {
-        format!("/complete-compat-sso/{}", self.id).into()
-    }
 }
 
 /// `GET /upstream/authorize/{id}`

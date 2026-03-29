@@ -22,6 +22,7 @@
 //! [`PolicyFactory`] and [`Policy`] are the public-facing types that wrap
 //! these traits, preserving backward compatibility with existing handler code.
 
+pub mod audit;
 pub mod model;
 pub mod opa;
 pub mod provider;
@@ -499,6 +500,7 @@ mod tests {
                 requester: Requester {
                     ip_address: None,
                     user_agent: None,
+                    ..Default::default()
                 },
             })
             .await
@@ -513,6 +515,7 @@ mod tests {
                 requester: Requester {
                     ip_address: None,
                     user_agent: None,
+                    ..Default::default()
                 },
             })
             .await
@@ -527,6 +530,7 @@ mod tests {
                 requester: Requester {
                     ip_address: None,
                     user_agent: None,
+                    ..Default::default()
                 },
             })
             .await
@@ -561,6 +565,7 @@ mod tests {
                 requester: Requester {
                     ip_address: None,
                     user_agent: None,
+                    ..Default::default()
                 },
             })
             .await
@@ -591,6 +596,7 @@ mod tests {
                 requester: Requester {
                     ip_address: None,
                     user_agent: None,
+                    ..Default::default()
                 },
             })
             .await
@@ -641,6 +647,7 @@ mod tests {
                 requester: Requester {
                     ip_address: None,
                     user_agent: None,
+                    ..Default::default()
                 },
             })
             .await

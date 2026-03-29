@@ -397,14 +397,6 @@ impl InsertableJob for CleanupUserRegistrationsJob {
     const QUEUE_NAME: &'static str = "cleanup-user-registrations";
 }
 
-/// Cleanup finished compat sessions
-#[derive(Serialize, Deserialize, Debug, Clone, Default)]
-pub struct CleanupFinishedCompatSessionsJob;
-
-impl InsertableJob for CleanupFinishedCompatSessionsJob {
-    const QUEUE_NAME: &'static str = "cleanup-finished-compat-sessions";
-}
-
 /// Cleanup finished OAuth 2.0 sessions
 #[derive(Serialize, Deserialize, Debug, Clone, Default)]
 pub struct CleanupFinishedOAuth2SessionsJob;
@@ -545,52 +537,6 @@ impl InsertableJob for ExpireInactiveOAuthSessionsJob {
     const QUEUE_NAME: &'static str = "expire-inactive-oauth-sessions";
 }
 
-/// Expire inactive compatibility sessions
-///
-/// This job is deprecated since the compatibility layer has been removed.
-/// The struct is kept to consume any remaining jobs in the queue.
-#[derive(Serialize, Deserialize, Debug, Clone)]
-pub struct ExpireInactiveCompatSessionsJob {
-    threshold: DateTime<Utc>,
-    after: Option<Ulid>,
-}
-
-impl ExpireInactiveCompatSessionsJob {
-    /// Create a new job to expire inactive compatibility sessions
-    ///
-    /// # Parameters
-    ///
-    /// * `threshold` - The threshold to expire sessions at
-    #[must_use]
-    pub fn new(threshold: DateTime<Utc>) -> Self {
-        Self {
-            threshold,
-            after: None,
-        }
-    }
-
-    /// Get the threshold to expire sessions at
-    #[must_use]
-    pub fn threshold(&self) -> DateTime<Utc> {
-        self.threshold
-    }
-
-    /// Get the pagination cursor
-    #[must_use]
-    pub fn pagination(&self, batch_size: usize) -> Pagination {
-        let pagination = Pagination::first(batch_size);
-        if let Some(after) = self.after {
-            pagination.after(after)
-        } else {
-            pagination
-        }
-    }
-}
-
-impl InsertableJob for ExpireInactiveCompatSessionsJob {
-    const QUEUE_NAME: &'static str = "expire-inactive-compat-sessions";
-}
-
 /// Expire inactive user sessions
 #[derive(Debug, Serialize, Deserialize)]
 pub struct ExpireInactiveUserSessionsJob {
@@ -662,14 +608,6 @@ pub struct CleanupInactiveOAuth2SessionIpsJob;
 
 impl InsertableJob for CleanupInactiveOAuth2SessionIpsJob {
     const QUEUE_NAME: &'static str = "cleanup-inactive-oauth2-session-ips";
-}
-
-/// Cleanup IP addresses from inactive compat sessions
-#[derive(Serialize, Deserialize, Debug, Clone, Default)]
-pub struct CleanupInactiveCompatSessionIpsJob;
-
-impl InsertableJob for CleanupInactiveCompatSessionIpsJob {
-    const QUEUE_NAME: &'static str = "cleanup-inactive-compat-session-ips";
 }
 
 /// Cleanup IP addresses from inactive user/browser sessions

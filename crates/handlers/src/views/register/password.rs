@@ -264,6 +264,7 @@ pub async fn post(
                 requester: pasion_policy::Requester {
                     ip_address: activity_tracker.ip(),
                     user_agent: user_agent.clone(),
+                    ..Default::default()
                 },
             })
             .await?;

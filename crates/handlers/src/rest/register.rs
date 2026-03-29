@@ -17,6 +17,7 @@ use pasion_storage::{
         ProvisionUserJob, QueueJobRepositoryExt as _, SendEmailAuthenticationCodeJob,
         SendSmsAuthenticationCodeJob },
     user::{UserEmailFilter, UserEmailRepository, UserFilter, UserPhoneRepository, UserRepository} };
+use salvo::oapi::ToSchema;
 use salvo::prelude::*;
 use serde::{Deserialize, Serialize};
 use ulid::Ulid;
@@ -83,7 +84,7 @@ fn steps_completed(registration: &UserRegistration, email_verified: bool, phone_
 
 // ── POST /api/v1/auth/register ─────────────────────────────────
 
-#[derive(Deserialize)]
+#[derive(Deserialize, ToSchema)]
 pub struct RegisterInput {
     pub username: String,
     #[serde(default)]
@@ -93,7 +94,7 @@ pub struct RegisterInput {
     pub password: String,
     pub password_confirm: String }
 
-#[derive(Serialize)]
+#[derive(Serialize, ToSchema)]
 pub struct RegisterResponse {
     pub status: &'static str,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -103,7 +104,7 @@ pub struct RegisterResponse {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub error: Option<String> }
 
-#[handler]
+#[endpoint]
 pub async fn post_register(
     req: &mut Request,
     depot: &Depot,
@@ -244,7 +245,8 @@ pub async fn post_register(
                 email: email.as_deref(),
                 requester: pasion_policy::Requester {
                     ip_address: activity_tracker.ip(),
-                    user_agent: user_agent.clone() } })
+                    user_agent: user_agent.clone(),
+                    ..Default::default() } })
             .await
             .map_err(|e| RouteError::Internal(e.into()))?;
 
@@ -376,7 +378,7 @@ pub async fn post_register(
 
 // ── GET /api/v1/auth/register/:id ──────────────────────────────
 
-#[derive(Serialize)]
+#[derive(Serialize, ToSchema)]
 pub struct RegistrationStatusResponse {
     pub id: String,
     pub username: String,
@@ -385,7 +387,7 @@ pub struct RegistrationStatusResponse {
     pub steps_completed: Vec<&'static str>,
     pub next_step: &'static str }
 
-#[handler]
+#[endpoint]
 pub async fn get_registration(
     req: &mut Request,
     depot: &Depot,
@@ -448,11 +450,11 @@ pub async fn get_registration(
 
 // ── POST /api/v1/auth/register/:id/verify-email ────────────────
 
-#[derive(Deserialize)]
+#[derive(Deserialize, ToSchema)]
 pub struct VerifyEmailInput {
     pub code: String }
 
-#[derive(Serialize)]
+#[derive(Serialize, ToSchema)]
 pub struct VerifyEmailResponse {
     pub status: &'static str,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -460,7 +462,7 @@ pub struct VerifyEmailResponse {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub error: Option<String> }
 
-#[handler]
+#[endpoint]
 pub async fn post_verify_email(
     req: &mut Request,
     depot: &Depot,
@@ -561,7 +563,7 @@ pub async fn post_verify_email(
 
 // ── POST /api/v1/auth/register/:id/resend-verification ────────
 
-#[derive(Serialize)]
+#[derive(Serialize, ToSchema)]
 pub struct ResendVerificationResponse {
     pub status: &'static str,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -571,7 +573,7 @@ pub struct ResendVerificationResponse {
 ///
 /// Unlike the authenticated `/email-auth/:id/resend` endpoint, this one works
 /// during registration when the user does not yet have a browser session.
-#[handler]
+#[endpoint]
 pub async fn post_resend_verification(
     req: &mut Request,
     depot: &Depot,
@@ -648,11 +650,11 @@ pub async fn post_resend_verification(
 
 // ── POST /api/v1/auth/register/:id/verify-phone ────────────────
 
-#[derive(Deserialize)]
+#[derive(Deserialize, ToSchema)]
 pub struct VerifyPhoneInput {
     pub code: String }
 
-#[derive(Serialize)]
+#[derive(Serialize, ToSchema)]
 pub struct VerifyPhoneResponse {
     pub status: &'static str,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -660,7 +662,7 @@ pub struct VerifyPhoneResponse {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub error: Option<String> }
 
-#[handler]
+#[endpoint]
 pub async fn post_verify_phone(
     req: &mut Request,
     depot: &Depot,
@@ -752,14 +754,14 @@ pub async fn post_verify_phone(
 
 // ── POST /api/v1/auth/register/:id/display-name ────────────────
 
-#[derive(Deserialize)]
+#[derive(Deserialize, ToSchema)]
 pub struct DisplayNameInput {
     #[serde(default)]
     pub display_name: Option<String>,
     #[serde(default)]
     pub skip: Option<bool> }
 
-#[derive(Serialize)]
+#[derive(Serialize, ToSchema)]
 pub struct DisplayNameResponse {
     pub status: &'static str,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -767,7 +769,7 @@ pub struct DisplayNameResponse {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub error: Option<String> }
 
-#[handler]
+#[endpoint]
 pub async fn post_display_name(
     req: &mut Request,
     depot: &Depot,
@@ -835,13 +837,13 @@ pub async fn post_display_name(
 
 // ── POST /api/v1/auth/register/:id/finish ──────────────────────
 
-#[derive(Serialize)]
+#[derive(Serialize, ToSchema)]
 pub struct FinishRegistrationResponse {
     pub status: &'static str,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub error: Option<String> }
 
-#[handler]
+#[endpoint]
 pub async fn post_finish(
     req: &mut Request,
     depot: &Depot,

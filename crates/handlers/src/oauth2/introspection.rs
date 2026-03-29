@@ -466,13 +466,6 @@ async fn handle_post(
             }
         }
 
-        // Compat tokens are no longer supported; the compat layer has been removed.
-        // Treat them as inactive.
-        TokenType::CompatAccessToken | TokenType::CompatRefreshToken => {
-            INTROSPECTION_COUNTER.add(1, &[KeyValue::new(ACTIVE, false)]);
-            INACTIVE
-        }
-
         TokenType::PersonalAccessToken => {
             let access_token = repo
                 .personal_access_token()

@@ -64,13 +64,6 @@ impl OptionalPostAuthAction {
                 PostAuthContextInner::ContinueDeviceCodeGrant { grant }
             }
 
-            PostAuthAction::ContinueCompatSsoLogin { .. } => {
-                // Compat SSO login is no longer supported; the compat layer
-                // has been removed. Return None so callers fall through to the
-                // default post-auth redirect.
-                return Ok(None);
-            }
-
             PostAuthAction::ChangePassword => PostAuthContextInner::ChangePassword,
 
             PostAuthAction::LinkUpstream { id } => {

@@ -10,8 +10,6 @@
 //!   [`UserRegistration`], [`UserRecoveryTicket`]
 //! - **OAuth 2.0** — [`Client`], [`Session`], [`AuthorizationGrant`],
 //!   [`AccessToken`], [`RefreshToken`], [`DeviceCodeGrant`]
-//! - **Compatibility** — [`CompatSession`], [`CompatAccessToken`],
-//!   [`CompatSsoLogin`] (legacy Matrix login support)
 //! - **Upstream SSO** — [`UpstreamOAuthProvider`], [`UpstreamOAuthLink`],
 //!   [`UpstreamOAuthAuthorizationSession`]
 //! - **Configuration** — [`SiteConfig`], [`PolicyData`], [`AppVersion`]

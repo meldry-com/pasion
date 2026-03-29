@@ -229,12 +229,6 @@ pub enum TokenType {
     /// A refresh token, used by the refresh token grant
     RefreshToken,
 
-    /// A legacy access token
-    CompatAccessToken,
-
-    /// A legacy refresh token
-    CompatRefreshToken,
-
     /// A personal access token.
     PersonalAccessToken,
 }
@@ -244,8 +238,6 @@ impl std::fmt::Display for TokenType {
         match self {
             TokenType::AccessToken => write!(f, "access token"),
             TokenType::RefreshToken => write!(f, "refresh token"),
-            TokenType::CompatAccessToken => write!(f, "compat access token"),
-            TokenType::CompatRefreshToken => write!(f, "compat refresh token"),
             TokenType::PersonalAccessToken => write!(f, "personal access token"),
         }
     }
@@ -256,8 +248,6 @@ impl TokenType {
         match self {
             TokenType::AccessToken => "mat",
             TokenType::RefreshToken => "mar",
-            TokenType::CompatAccessToken => "mct",
-            TokenType::CompatRefreshToken => "mcr",
             TokenType::PersonalAccessToken => "mpt",
         }
     }
@@ -266,8 +256,6 @@ impl TokenType {
         match prefix {
             "mat" => Some(TokenType::AccessToken),
             "mar" => Some(TokenType::RefreshToken),
-            "mct" | "syt" => Some(TokenType::CompatAccessToken),
-            "mcr" | "syr" => Some(TokenType::CompatRefreshToken),
             "mpt" => Some(TokenType::PersonalAccessToken),
             _ => None,
         }
@@ -293,13 +281,13 @@ impl TokenType {
     ///
     /// Returns an error if the token is not valid
     pub fn check(token: &str) -> Result<TokenType, TokenFormatError> {
-        // these are legacy tokens imported from Palpo
-        // we don't do any validation on them and continue as is
-        if token.starts_with("pst_") || is_likely_palpo_macaroon(token) {
-            return Ok(TokenType::CompatAccessToken);
-        }
-        if token.starts_with("syr_") {
-            return Ok(TokenType::CompatRefreshToken);
+        // Reject legacy Palpo tokens — the compat session infrastructure has
+        // been removed so these can no longer be serviced.
+        if token.starts_with("pst_")
+            || token.starts_with("syr_")
+            || is_likely_palpo_macaroon(token)
+        {
+            return Err(TokenFormatError::InvalidFormat);
         }
 
         let split: Vec<&str> = token.split('_').collect();
@@ -335,12 +323,10 @@ impl PartialEq<OAuthTokenTypeHint> for TokenType {
         matches!(
             (self, other),
             (
-                TokenType::AccessToken
-                    | TokenType::CompatAccessToken
-                    | TokenType::PersonalAccessToken,
+                TokenType::AccessToken | TokenType::PersonalAccessToken,
                 OAuthTokenTypeHint::AccessToken
             ) | (
-                TokenType::RefreshToken | TokenType::CompatRefreshToken,
+                TokenType::RefreshToken,
                 OAuthTokenTypeHint::RefreshToken
             )
         )
@@ -409,24 +395,17 @@ mod tests {
 
     #[test]
     fn test_prefix_match() {
-        use TokenType::{AccessToken, CompatAccessToken, CompatRefreshToken, RefreshToken};
-        assert_eq!(TokenType::match_prefix("syt"), Some(CompatAccessToken));
-        assert_eq!(TokenType::match_prefix("syr"), Some(CompatRefreshToken));
-        assert_eq!(TokenType::match_prefix("mct"), Some(CompatAccessToken));
-        assert_eq!(TokenType::match_prefix("mcr"), Some(CompatRefreshToken));
+        use TokenType::{AccessToken, RefreshToken};
         assert_eq!(TokenType::match_prefix("mat"), Some(AccessToken));
         assert_eq!(TokenType::match_prefix("mar"), Some(RefreshToken));
+        assert_eq!(TokenType::match_prefix("mpt"), Some(TokenType::PersonalAccessToken));
+        assert_eq!(TokenType::match_prefix("mct"), None);
+        assert_eq!(TokenType::match_prefix("mcr"), None);
+        assert_eq!(TokenType::match_prefix("syt"), None);
+        assert_eq!(TokenType::match_prefix("syr"), None);
         assert_eq!(TokenType::match_prefix("matt"), None);
         assert_eq!(TokenType::match_prefix("marr"), None);
         assert_eq!(TokenType::match_prefix("ma"), None);
-        assert_eq!(
-            TokenType::match_prefix(TokenType::CompatAccessToken.prefix()),
-            Some(TokenType::CompatAccessToken)
-        );
-        assert_eq!(
-            TokenType::match_prefix(TokenType::CompatRefreshToken.prefix()),
-            Some(TokenType::CompatRefreshToken)
-        );
         assert_eq!(
             TokenType::match_prefix(TokenType::AccessToken.prefix()),
             Some(TokenType::AccessToken)
@@ -466,10 +445,9 @@ mod tests {
         let mut rng = thread_rng();
 
         for t in [
-            TokenType::CompatAccessToken,
-            TokenType::CompatRefreshToken,
             TokenType::AccessToken,
             TokenType::RefreshToken,
+            TokenType::PersonalAccessToken,
         ] {
             // Generate many tokens
             let tokens: HashSet<String> = (0..COUNT).map(|_| t.generate(&mut rng)).collect();

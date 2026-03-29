@@ -154,6 +154,7 @@ async fn handle_get(
             requester: pasion_policy::Requester {
                 ip_address: activity_tracker.ip(),
                 user_agent,
+                ..Default::default()
             },
         })
         .await?;
@@ -309,6 +310,7 @@ async fn handle_post(
             requester: pasion_policy::Requester {
                 ip_address: activity_tracker.ip(),
                 user_agent,
+                ..Default::default()
             },
         })
         .await?;

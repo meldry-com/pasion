@@ -595,6 +595,10 @@ features = ["hex", "chrono"]
 [workspace.dependencies.serde_yaml]
 version = "0.9.34"
 
+# SHA-1 cryptographic hash algorithm
+[workspace.dependencies.sha1]
+version = "0.10"
+
 # SHA-2 cryptographic hash algorithm
 [workspace.dependencies.sha2]
 version = "0.10.9"

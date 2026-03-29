@@ -28,10 +28,6 @@ pub struct InactiveSessionExpirationConfig {
     #[serde_as(as = "serde_with::DurationSeconds<i64>")]
     pub ttl: Duration,
 
-    /// Should compatibility sessions expire after inactivity
-    #[serde(default = "default_true")]
-    pub expire_compat_sessions: bool,
-
     /// Should OAuth 2.0 sessions expire after inactivity
     #[serde(default = "default_true")]
     pub expire_oauth_sessions: bool,
@@ -56,17 +52,7 @@ pub struct ExperimentalConfig {
     #[serde_as(as = "serde_with::DurationSeconds<i64>")]
     pub access_token_ttl: Duration,
 
-    /// Time-to-live of compatibility access tokens in seconds. Defaults to 5
-    /// minutes.
-    #[schemars(with = "u64", range(min = 60, max = 86400))]
-    #[serde(
-        default = "default_token_ttl",
-        skip_serializing_if = "is_default_token_ttl"
-    )]
-    #[serde_as(as = "serde_with::DurationSeconds<i64>")]
-    pub compat_token_ttl: Duration,
-
-    /// Experimetal feature to automatically expire inactive sessions
+    /// Experimental feature to automatically expire inactive sessions
     ///
     /// Disabled by default
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -90,7 +76,6 @@ impl Default for ExperimentalConfig {
     fn default() -> Self {
         Self {
             access_token_ttl: default_token_ttl(),
-            compat_token_ttl: default_token_ttl(),
             inactive_session_expiration: None,
             plan_management_iframe_uri: None,
             session_limit: None,
@@ -101,7 +86,6 @@ impl Default for ExperimentalConfig {
 impl ExperimentalConfig {
     pub(crate) fn is_default(&self) -> bool {
         is_default_token_ttl(&self.access_token_ttl)
-            && is_default_token_ttl(&self.compat_token_ttl)
             && self.inactive_session_expiration.is_none()
             && self.plan_management_iframe_uri.is_none()
             && self.session_limit.is_none()

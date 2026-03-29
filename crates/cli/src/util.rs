@@ -245,13 +245,11 @@ pub fn site_config_from_config(
         .as_ref()
         .map(|c| SessionExpirationConfig {
             oauth_session_inactivity_ttl: c.expire_oauth_sessions.then_some(c.ttl),
-            compat_session_inactivity_ttl: c.expire_compat_sessions.then_some(c.ttl),
             user_session_inactivity_ttl: c.expire_user_sessions.then_some(c.ttl),
         });
 
     Ok(SiteConfig {
         access_token_ttl: experimental_config.access_token_ttl,
-        compat_token_ttl: experimental_config.compat_token_ttl,
         server_name: matrix_config.homeserver.clone(),
         policy_uri: branding_config.policy_uri.clone(),
         tos_uri: branding_config.tos_uri.clone(),

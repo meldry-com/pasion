@@ -1,4 +1,5 @@
 use pasion_storage::queue::{QueueJobRepositoryExt as _, SyncDevicesJob};
+use salvo::oapi::ToSchema;
 use salvo::prelude::*;
 use serde::{Deserialize, Serialize};
 
@@ -8,13 +9,13 @@ use super::{DepotExt,
 
 // ── Response types ─────────────────────────────────────────────
 
-#[derive(Serialize)]
+#[derive(Serialize, ToSchema)]
 #[serde(tag = "__typename")]
 pub enum SessionDetailResponse {
     BrowserSession(BrowserSessionDetail),
     Oauth2Session(Oauth2SessionDetail) }
 
-#[derive(Serialize)]
+#[derive(Serialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct BrowserSessionDetail {
     pub id: String,
@@ -25,13 +26,13 @@ pub struct BrowserSessionDetail {
     pub created_at: Option<String>,
     pub last_authentication: Option<AuthenticationData> }
 
-#[derive(Serialize)]
+#[derive(Serialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct AuthenticationData {
     pub id: String,
     pub created_at: String }
 
-#[derive(Serialize)]
+#[derive(Serialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct Oauth2SessionDetail {
     pub id: String,
@@ -43,7 +44,7 @@ pub struct Oauth2SessionDetail {
     pub last_active_at: Option<String>,
     pub created_at: Option<String> }
 
-#[derive(Serialize)]
+#[derive(Serialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct Oauth2ClientBrief {
     pub id: String,
@@ -54,7 +55,7 @@ pub struct Oauth2ClientBrief {
 
 // ── GET /api/v1/sessions/:id ───────────────────────────────────
 
-#[handler]
+#[endpoint]
 pub async fn get_session(
     req: &mut Request,
     depot: &Depot,
@@ -140,11 +141,11 @@ pub async fn get_session(
 
 // ── DELETE /api/v1/browser-sessions/:id ────────────────────────
 
-#[derive(Serialize)]
+#[derive(Serialize, ToSchema)]
 pub struct EndSessionResponse {
     pub status: &'static str }
 
-#[handler]
+#[endpoint]
 pub async fn end_browser_session(
     req: &mut Request,
     depot: &Depot,
@@ -182,7 +183,7 @@ pub async fn end_browser_session(
 
 // ── DELETE /api/v1/oauth2-sessions/:id ─────────────────────────
 
-#[handler]
+#[endpoint]
 pub async fn end_oauth2_session(
     req: &mut Request,
     depot: &Depot,
@@ -230,16 +231,16 @@ pub async fn end_oauth2_session(
 
 // ── PUT /api/v1/oauth2-sessions/:id/name ───────────────────────
 
-#[derive(Deserialize)]
+#[derive(Deserialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct SetSessionNameInput {
     pub human_name: Option<String> }
 
-#[derive(Serialize)]
+#[derive(Serialize, ToSchema)]
 pub struct SetSessionNameResponse {
     pub status: &'static str }
 
-#[handler]
+#[endpoint]
 pub async fn set_oauth2_session_name(
     req: &mut Request,
     depot: &Depot,

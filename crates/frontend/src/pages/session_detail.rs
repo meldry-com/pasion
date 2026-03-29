@@ -167,64 +167,6 @@ fn SessionDetailView(node: SessionNode) -> Element {
                 }
             }
         }
-        SessionNode::CompatSession(session) => {
-            let device_type = session
-                .user_agent
-                .as_ref()
-                .map(|ua| ua.device_type.clone())
-                .unwrap_or(DeviceType::Unknown);
-            let name = session
-                .display_name
-                .clone()
-                .or_else(|| session.device_id.clone())
-                .unwrap_or_else(|| "Unknown session".to_string());
-            let session_id = session.id.clone();
-            let device_id = session.device_id.clone();
-            let created_at = session.created_at.clone();
-            let last_active_at = session.last_active_at.clone();
-            let last_active_ip = session.last_active_ip.clone();
-
-            rsx! {
-                div { class: "flex flex-col gap-6",
-                    div { class: "flex items-center gap-2",
-                        SessionCardHeader { device_type: device_type,
-                            SessionCardName { name: name.clone() }
-                        }
-                        EditSessionName {
-                            session_id: session_id.clone(),
-                            current_name: session.display_name.clone().unwrap_or_default(),
-                            session_type: EditableSessionType::Compat,
-                        }
-                    }
-                    SessionCardMetadata {
-                        if let Some(ref did) = device_id {
-                            SessionCardInfo { label: "Device ID".to_string(),
-                                span { "{did}" }
-                            }
-                        }
-                        if let Some(ref created) = created_at {
-                            SessionCardInfo { label: "Created".to_string(),
-                                span { "{format_date(created)}" }
-                            }
-                        }
-                        if let Some(ref last_active) = last_active_at {
-                            SessionCardInfo { label: "Last active".to_string(),
-                                LastActive { datetime: last_active.clone() }
-                            }
-                        }
-                        if let Some(ref ip) = last_active_ip {
-                            SessionCardInfo { label: "IP address".to_string(),
-                                span { "{ip}" }
-                            }
-                        }
-                    }
-                    EndSessionButton {
-                        session_id: session_id,
-                        session_type: SessionType::Compat,
-                    }
-                }
-            }
-        }
     }
 }
 
@@ -232,13 +174,11 @@ fn SessionDetailView(node: SessionNode) -> Element {
 enum SessionType {
     Browser,
     Oauth2,
-    Compat,
 }
 
 #[derive(Debug, Clone, PartialEq)]
 enum EditableSessionType {
     Oauth2,
-    Compat,
 }
 
 #[component]
@@ -297,7 +237,6 @@ fn EditSessionName(
                                 spawn(async move {
                                     let path = match st {
                                         EditableSessionType::Oauth2 => format!("/oauth2-sessions/{}/name", sid),
-                                        EditableSessionType::Compat => format!("/compat-sessions/{}/name", sid),
                                     };
                                     let result = crate::api::api_put::<serde_json::Value>(
                                         &path,
@@ -376,7 +315,6 @@ fn EndSessionButton(session_id: String, session_type: SessionType) -> Element {
                     let path = match st {
                         SessionType::Browser => format!("/browser-sessions/{}", sid),
                         SessionType::Oauth2 => format!("/oauth2-sessions/{}", sid),
-                        SessionType::Compat => format!("/compat-sessions/{}", sid),
                     };
                     let _ = crate::api::api_delete::<serde_json::Value>(
                         &path,

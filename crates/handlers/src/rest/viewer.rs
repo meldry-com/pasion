@@ -1,6 +1,7 @@
 use pasion_data_model::SiteConfig;
 use pasion_matrix::HomeserverConnection;
 use pasion_storage::{Pagination, upstream_oauth2::UpstreamOAuthLinkFilter};
+use salvo::oapi::ToSchema;
 use salvo::prelude::*;
 use serde::Serialize;
 use ulid::Ulid;
@@ -11,20 +12,20 @@ use super::{DepotExt,
 
 // ── Response types ─────────────────────────────────────────────
 
-#[derive(Serialize)]
+#[derive(Serialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
 struct ViewerResponse {
     viewer: ViewerData,
     viewer_session: ViewerSessionData,
     site_config: SiteConfigData }
 
-#[derive(Serialize)]
+#[derive(Serialize, ToSchema)]
 #[serde(tag = "__typename")]
 enum ViewerData {
     User(ViewerUser),
     Anonymous(AnonymousData) }
 
-#[derive(Serialize)]
+#[derive(Serialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
 struct ViewerUser {
     id: String,
@@ -33,7 +34,7 @@ struct ViewerUser {
     emails: Option<EmailListData>,
     linked_accounts: Option<Vec<LinkedAccountData>> }
 
-#[derive(Serialize)]
+#[derive(Serialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
 struct LinkedAccountData {
     id: String,
@@ -44,17 +45,17 @@ struct LinkedAccountData {
     human_account_name: Option<String>,
     created_at: String }
 
-#[derive(Serialize)]
+#[derive(Serialize, ToSchema)]
 struct AnonymousData {
     id: String }
 
-#[derive(Serialize)]
+#[derive(Serialize, ToSchema)]
 #[serde(tag = "__typename")]
 enum ViewerSessionData {
     BrowserSession(BrowserSessionData),
     Anonymous(AnonymousData) }
 
-#[derive(Serialize)]
+#[derive(Serialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
 struct BrowserSessionData {
     id: String,
@@ -64,13 +65,13 @@ struct BrowserSessionData {
     last_active_at: Option<String>,
     created_at: Option<String> }
 
-#[derive(Serialize)]
+#[derive(Serialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
 struct MatrixUserData {
     mxid: String,
     display_name: Option<String> }
 
-#[derive(Serialize)]
+#[derive(Serialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
 struct SiteConfigData {
     id: Option<String>,
@@ -85,19 +86,19 @@ struct SiteConfigData {
     policy_uri: Option<String>,
     plan_management_iframe_uri: Option<String> }
 
-#[derive(Serialize)]
+#[derive(Serialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
 struct EmailListData {
     total_count: i64,
     edges: Vec<EmailEdgeData> }
 
-#[derive(Serialize)]
+#[derive(Serialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
 struct EmailEdgeData {
     cursor: String,
     node: EmailData }
 
-#[derive(Serialize)]
+#[derive(Serialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
 struct EmailData {
     id: String,
@@ -123,7 +124,7 @@ fn site_config_data(config: &SiteConfig) -> SiteConfigData {
 
 /// Returns the current viewer (user or anonymous), viewer session, and site
 /// config in a single response.
-#[handler]
+#[endpoint]
 pub async fn get_viewer(
     req: &mut Request,
     depot: &Depot,

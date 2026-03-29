@@ -858,44 +858,6 @@ impl PolicyViolationContext {
     }
 }
 
-/// Context used by the `compat_login_policy_violation.html` template
-#[derive(Serialize)]
-pub struct CompatLoginPolicyViolationContext {
-    violations: Vec<Violation>,
-}
-
-impl TemplateContext for CompatLoginPolicyViolationContext {
-    fn sample<R: Rng>(
-        _now: chrono::DateTime<Utc>,
-        _rng: &mut R,
-        _locales: &[DataLocale],
-    ) -> BTreeMap<SampleIdentifier, Self>
-    where
-        Self: Sized,
-    {
-        sample_list(vec![
-            CompatLoginPolicyViolationContext { violations: vec![] },
-            CompatLoginPolicyViolationContext {
-                violations: vec![Violation {
-                    msg: "user has too many active sessions".to_owned(),
-                    redirect_uri: None,
-                    field: None,
-                    code: Some(ViolationCode::TooManySessions),
-                }],
-            },
-        ])
-    }
-}
-
-impl CompatLoginPolicyViolationContext {
-    /// Constructs a context for the compatibility login policy violation page
-    /// given the list of violations
-    #[must_use]
-    pub const fn for_violations(violations: Vec<Violation>) -> Self {
-        Self { violations }
-    }
-}
-
 /// Context used by the `emails/recovery.{txt,html,subject}` templates
 #[derive(Serialize)]
 pub struct EmailRecoveryContext {

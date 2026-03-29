@@ -1,5 +1,6 @@
 use pasion_storage::queue::{
     ProvisionUserJob, QueueJobRepositoryExt as _, SendEmailAuthenticationCodeJob };
+use salvo::oapi::ToSchema;
 use salvo::prelude::*;
 use serde::{Deserialize, Serialize};
 
@@ -10,7 +11,7 @@ use super::{DepotExt,
 
 // ── Response types ─────────────────────────────────────────────
 
-#[derive(Serialize)]
+#[derive(Serialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct StartEmailAuthResponse {
     pub status: &'static str,
@@ -19,35 +20,35 @@ pub struct StartEmailAuthResponse {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub violations: Option<Vec<String>> }
 
-#[derive(Serialize)]
+#[derive(Serialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct EmailAuthData {
     pub id: String,
     pub email: String }
 
-#[derive(Serialize)]
+#[derive(Serialize, ToSchema)]
 pub struct CompleteEmailAuthResponse {
     pub status: &'static str }
 
-#[derive(Serialize)]
+#[derive(Serialize, ToSchema)]
 pub struct ResendEmailAuthCodeResponse {
     pub status: &'static str }
 
-#[derive(Serialize)]
+#[derive(Serialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct RemoveEmailResponse {
     pub status: &'static str }
 
 // ── GET /api/v1/email-auth/:id ─────────────────────────────────
 
-#[derive(Serialize)]
+#[derive(Serialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct EmailAuthStatusResponse {
     pub id: String,
     pub email: String,
     pub completed_at: Option<String> }
 
-#[handler]
+#[endpoint]
 pub async fn get_email_auth(
     req: &mut Request,
     depot: &Depot,
@@ -76,7 +77,7 @@ pub async fn get_email_auth(
 
 // ── POST /api/v1/email-auth/start ──────────────────────────────
 
-#[derive(Deserialize)]
+#[derive(Deserialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct StartEmailAuthInput {
     pub email: String,
@@ -88,7 +89,7 @@ fn default_language() -> String {
     "en".to_owned()
 }
 
-#[handler]
+#[endpoint]
 pub async fn start_email_auth(
     req: &mut Request,
     depot: &Depot,
@@ -184,11 +185,11 @@ pub async fn start_email_auth(
 
 // ── POST /api/v1/email-auth/:id/complete ───────────────────────
 
-#[derive(Deserialize)]
+#[derive(Deserialize, ToSchema)]
 pub struct CompleteEmailAuthInput {
     pub code: String }
 
-#[handler]
+#[endpoint]
 pub async fn complete_email_auth(
     req: &mut Request,
     depot: &Depot,
@@ -282,13 +283,13 @@ pub async fn complete_email_auth(
 
 // ── POST /api/v1/email-auth/:id/resend ─────────────────────────
 
-#[derive(Deserialize)]
+#[derive(Deserialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct ResendEmailAuthInput {
     #[serde(default = "default_language")]
     pub language: String }
 
-#[handler]
+#[endpoint]
 pub async fn resend_email_auth_code(
     req: &mut Request,
     depot: &Depot,
@@ -352,11 +353,11 @@ pub async fn resend_email_auth_code(
 
 // ── DELETE /api/v1/user-emails/:id ─────────────────────────────
 
-#[derive(Deserialize)]
+#[derive(Deserialize, ToSchema)]
 pub struct RemoveEmailInput {
     pub password: Option<String> }
 
-#[handler]
+#[endpoint]
 pub async fn remove_email(
     req: &mut Request,
     depot: &Depot,

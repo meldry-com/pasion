@@ -175,6 +175,13 @@ pub struct PolicyConfig {
     /// `POST {base_url}/evaluate/{policy_type}`
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub remote_endpoint: Option<String>,
+
+    /// Whether to enable audit logging for policy evaluations.
+    ///
+    /// When enabled, every policy evaluation will be logged with the action
+    /// type, result (violation count or error), and evaluation duration.
+    #[serde(default)]
+    pub audit_logging: bool,
 }
 
 impl Default for PolicyConfig {
@@ -190,6 +197,7 @@ impl Default for PolicyConfig {
             data: default_data(),
             cedar_policy_file: None,
             remote_endpoint: None,
+            audit_logging: false,
         }
     }
 }
@@ -207,6 +215,7 @@ impl PolicyConfig {
             && is_default_data(&self.data)
             && self.cedar_policy_file.is_none()
             && self.remote_endpoint.is_none()
+            && !self.audit_logging
     }
 }
 

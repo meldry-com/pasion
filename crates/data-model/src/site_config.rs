@@ -30,7 +30,6 @@ pub struct CaptchaConfig {
 pub struct SessionExpirationConfig {
     pub user_session_inactivity_ttl: Option<Duration>,
     pub oauth_session_inactivity_ttl: Option<Duration>,
-    pub compat_session_inactivity_ttl: Option<Duration>,
 }
 
 #[derive(Serialize, Debug, Clone)]
@@ -45,9 +44,6 @@ pub struct SessionLimitConfig {
 pub struct SiteConfig {
     /// Time-to-live of access tokens.
     pub access_token_ttl: Duration,
-
-    /// Time-to-live of compatibility access tokens.
-    pub compat_token_ttl: Duration,
 
     /// The server name, e.g. "matrix.org".
     pub server_name: String,

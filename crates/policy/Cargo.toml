@@ -12,7 +12,7 @@ workspace = true
 
 [features]
 default = []
-cedar = ["dep:cedar-policy"]
+cedar = ["dep:cedar-policy", "dep:chrono"]
 remote = ["dep:reqwest"]
 
 [dependencies]
@@ -35,6 +35,7 @@ opa-wasm.workspace = true
 
 # Cedar backend (optional)
 cedar-policy = { workspace = true, optional = true }
+chrono = { workspace = true, optional = true }
 
 # Remote HTTP backend (optional)
 reqwest = { workspace = true, optional = true }

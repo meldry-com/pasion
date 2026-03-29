@@ -139,7 +139,6 @@ pub struct Authentication {
 #[serde(tag = "__typename")]
 pub enum AppSession {
     Oauth2Session(Oauth2Session),
-    CompatSession(CompatSession),
 }
 
 #[derive(Debug, Clone, PartialEq, Deserialize, Serialize)]
@@ -170,33 +169,6 @@ pub struct Oauth2Client {
     pub client_name: Option<String>,
     pub client_uri: Option<String>,
     pub logo_uri: Option<String>,
-}
-
-#[derive(Debug, Clone, PartialEq, Deserialize, Serialize)]
-#[serde(rename_all = "camelCase")]
-pub struct CompatSession {
-    pub id: String,
-    #[serde(default)]
-    pub device_id: Option<String>,
-    #[serde(default)]
-    pub user_agent: Option<UserAgent>,
-    #[serde(default)]
-    pub last_active_ip: Option<String>,
-    #[serde(default)]
-    pub last_active_at: Option<String>,
-    #[serde(default)]
-    pub created_at: Option<String>,
-    #[serde(default)]
-    pub display_name: Option<String>,
-    #[serde(default)]
-    pub sso_login: Option<SsoLogin>,
-}
-
-#[derive(Debug, Clone, PartialEq, Deserialize, Serialize)]
-#[serde(rename_all = "camelCase")]
-pub struct SsoLogin {
-    pub id: String,
-    pub redirect_uri: String,
 }
 
 // ── Email ──────────────────────────────────────────────────────
@@ -424,7 +396,6 @@ pub type SetDisplayNameResult = SetDisplayNamePayload;
 pub type AddEmailResult = AddEmailPayload;
 pub type EndBrowserSessionResult = EndSessionPayload;
 pub type EndOauth2SessionResult = EndSessionPayload;
-pub type EndCompatSessionResult = EndSessionPayload;
 
 #[derive(Debug, Clone, PartialEq, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -440,7 +411,6 @@ pub type SessionDetailData = SessionNode;
 pub enum SessionNode {
     BrowserSession(BrowserSession),
     Oauth2Session(Oauth2Session),
-    CompatSession(CompatSession),
 }
 
 #[derive(Debug, Clone, PartialEq, Deserialize)]
@@ -518,7 +488,6 @@ pub struct SetSessionNamePayload {
 }
 
 pub type SetOauth2SessionNameResult = SetSessionNamePayload;
-pub type SetCompatSessionNameResult = SetSessionNamePayload;
 
 // ── Email verification query/mutation types ───────────────────
 

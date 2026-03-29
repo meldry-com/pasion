@@ -5,7 +5,7 @@ use chrono::Duration;
 use pasion_storage::{
     oauth2::OAuth2SessionFilter,
     queue::{
-        ExpireInactiveCompatSessionsJob, ExpireInactiveOAuthSessionsJob, ExpireInactiveSessionsJob,
+        ExpireInactiveOAuthSessionsJob, ExpireInactiveSessionsJob,
         ExpireInactiveUserSessionsJob, QueueJobRepositoryExt, SyncDevicesJob,
     },
     user::BrowserSessionFilter,
@@ -118,16 +118,6 @@ impl RunnableJob for ExpireInactiveOAuthSessionsJob {
 
         repo.save().await.map_err(JobError::retry)?;
 
-        Ok(())
-    }
-}
-
-/// The compat session expiry job is deprecated (compat layer removed).
-/// This no-op impl exists to consume any remaining jobs in the queue.
-#[async_trait]
-impl RunnableJob for ExpireInactiveCompatSessionsJob {
-    async fn run(&self, _state: &State, _context: JobContext) -> Result<(), JobError> {
-        tracing::info!("Compat session expiry job is deprecated (compat layer removed), skipping");
         Ok(())
     }
 }

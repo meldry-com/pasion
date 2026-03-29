@@ -1,9 +1,10 @@
+use salvo::oapi::ToSchema;
 use salvo::prelude::*;
 use serde::Serialize;
 
 use super::{DepotExt, NodeType, RouteError};
 
-#[derive(Serialize)]
+#[derive(Serialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct Oauth2ClientResponse {
     pub id: String,
@@ -15,7 +16,7 @@ pub struct Oauth2ClientResponse {
     pub logo_uri: Option<String> }
 
 /// GET /api/v1/oauth2-clients/:id
-#[handler]
+#[endpoint]
 pub async fn get_client(
     req: &mut Request,
     depot: &Depot,

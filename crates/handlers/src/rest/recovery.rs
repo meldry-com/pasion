@@ -8,6 +8,7 @@ use std::str::FromStr;
 
 use lettre::Address;
 use pasion_storage::queue::{QueueJobRepositoryExt as _, SendAccountRecoveryEmailsJob};
+use salvo::oapi::ToSchema;
 use salvo::prelude::*;
 use serde::{Deserialize, Serialize};
 use ulid::Ulid;
@@ -19,11 +20,11 @@ use crate::RequesterFingerprint;
 
 // ── POST /api/v1/auth/recovery/start ───────────────────────────
 
-#[derive(Deserialize)]
+#[derive(Deserialize, ToSchema)]
 pub struct StartRecoveryInput {
     pub email: String }
 
-#[derive(Serialize)]
+#[derive(Serialize, ToSchema)]
 pub struct StartRecoveryResponse {
     pub status: &'static str,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -31,7 +32,7 @@ pub struct StartRecoveryResponse {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub error: Option<String> }
 
-#[handler]
+#[endpoint]
 pub async fn post_recovery_start(
     req: &mut Request,
     depot: &Depot,
@@ -119,13 +120,13 @@ pub async fn post_recovery_start(
 
 // ── GET /api/v1/auth/recovery/:id ──────────────────────────────
 
-#[derive(Serialize)]
+#[derive(Serialize, ToSchema)]
 pub struct RecoveryStatusResponse {
     pub id: String,
     pub email: String,
     pub status: &'static str }
 
-#[handler]
+#[endpoint]
 pub async fn get_recovery(
     req: &mut Request,
     depot: &Depot,
@@ -167,13 +168,13 @@ pub async fn get_recovery(
 
 // ── POST /api/v1/auth/recovery/:id/resend ──────────────────────
 
-#[derive(Serialize)]
+#[derive(Serialize, ToSchema)]
 pub struct ResendRecoveryResponse {
     pub status: &'static str,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub error: Option<String> }
 
-#[handler]
+#[endpoint]
 pub async fn post_recovery_resend(
     req: &mut Request,
     depot: &Depot,

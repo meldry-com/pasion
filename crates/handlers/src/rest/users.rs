@@ -1,5 +1,6 @@
 use anyhow::Context as _;
 use pasion_storage::queue::{DeactivateUserJob, QueueJobRepositoryExt as _};
+use salvo::oapi::ToSchema;
 use salvo::prelude::*;
 use serde::{Deserialize, Serialize};
 
@@ -10,17 +11,17 @@ use super::{DepotExt,
 
 // ── POST /api/v1/viewer/display-name ───────────────────────────
 
-#[derive(Deserialize)]
+#[derive(Deserialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct SetDisplayNameInput {
     pub user_id: String,
     pub display_name: Option<String> }
 
-#[derive(Serialize)]
+#[derive(Serialize, ToSchema)]
 pub struct SetDisplayNameResponse {
     pub status: &'static str }
 
-#[handler]
+#[endpoint]
 pub async fn set_display_name(
     req: &mut Request,
     depot: &Depot,
@@ -77,20 +78,20 @@ pub async fn set_display_name(
 
 // ── POST /api/v1/viewer/cross-signing-reset ────────────────────
 
-#[derive(Deserialize)]
+#[derive(Deserialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct AllowCrossSigningResetInput {
     pub user_id: String }
 
-#[derive(Serialize)]
+#[derive(Serialize, ToSchema)]
 pub struct AllowCrossSigningResetResponse {
     pub user: Option<UserBrief> }
 
-#[derive(Serialize)]
+#[derive(Serialize, ToSchema)]
 pub struct UserBrief {
     pub id: String }
 
-#[handler]
+#[endpoint]
 pub async fn allow_cross_signing_reset(
     req: &mut Request,
     depot: &Depot,
@@ -137,17 +138,17 @@ pub async fn allow_cross_signing_reset(
 
 // ── POST /api/v1/viewer/deactivate ─────────────────────────────
 
-#[derive(Deserialize)]
+#[derive(Deserialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct DeactivateUserInput {
     pub hs_erase: bool,
     pub password: Option<String> }
 
-#[derive(Serialize)]
+#[derive(Serialize, ToSchema)]
 pub struct DeactivateUserResponse {
     pub status: &'static str }
 
-#[handler]
+#[endpoint]
 pub async fn deactivate_user(
     req: &mut Request,
     depot: &Depot,

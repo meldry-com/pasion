@@ -13,6 +13,7 @@ use pasion_storage::{
     RepositoryAccess,
     upstream_oauth2::UpstreamOAuthProviderRepository,
     user::{BrowserSessionRepository, UserPasswordRepository, UserRepository} };
+use salvo::oapi::ToSchema;
 use salvo::prelude::*;
 use serde::{Deserialize, Serialize};
 use zeroize::Zeroizing;
@@ -35,12 +36,12 @@ const RESULT: Key = Key::from_static_str("result");
 
 // ── Request / Response types ───────────────────────────────────
 
-#[derive(Deserialize)]
+#[derive(Deserialize, ToSchema)]
 pub struct LoginRequest {
     pub username: String,
     pub password: String }
 
-#[derive(Serialize)]
+#[derive(Serialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct LoginResponse {
     pub status: &'static str,
@@ -49,7 +50,7 @@ pub struct LoginResponse {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub viewer: Option<ViewerInfo> }
 
-#[derive(Serialize)]
+#[derive(Serialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct ViewerInfo {
     pub id: String,
@@ -57,18 +58,18 @@ pub struct ViewerInfo {
     pub mxid: String,
     pub display_name: Option<String> }
 
-#[derive(Serialize)]
+#[derive(Serialize, ToSchema)]
 pub struct LogoutResponse {
     pub status: &'static str }
 
-#[derive(Serialize)]
+#[derive(Serialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct ProvidersResponse {
     pub providers: Vec<ProviderInfo>,
     pub password_login_enabled: bool,
     pub password_registration_enabled: bool }
 
-#[derive(Serialize)]
+#[derive(Serialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct ProviderInfo {
     pub id: String,
@@ -104,7 +105,7 @@ async fn get_user_by_email_or_by_username<R: RepositoryAccess>(
 
 /// Authenticate a user with username and password, returning viewer info and
 /// setting a session cookie on success.
-#[handler]
+#[endpoint]
 pub async fn login(req: &mut Request, depot: &Depot, res: &mut Response) -> Result<(), RouteError> {
     let mut rng = make_rng();
     let clock = make_clock();
@@ -297,7 +298,7 @@ pub async fn login(req: &mut Request, depot: &Depot, res: &mut Response) -> Resu
 // ── POST /api/v1/auth/logout ───────────────────────────────────
 
 /// End the current browser session and clear the session cookie.
-#[handler]
+#[endpoint]
 pub async fn logout(
     req: &mut Request,
     depot: &Depot,
@@ -337,7 +338,7 @@ pub async fn logout(
 
 /// List all enabled upstream OAuth providers and site configuration flags
 /// relevant to the login/registration UI.
-#[handler]
+#[endpoint]
 pub async fn providers(depot: &Depot) -> Result<Json<ProvidersResponse>, RouteError> {
     let site_config = depot.site_config()?;
     let mut repo = depot.repo_factory()?.create().await?;

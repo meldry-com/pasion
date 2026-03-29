@@ -7,6 +7,9 @@ use reqwest::Client;
 use thiserror::Error;
 use url::Url;
 
+use crate::aliyun::AliyunSmsTransport;
+use crate::tencent::TencentSmsTransport;
+
 /// Errors that can occur when sending an SMS
 #[derive(Debug, Error)]
 pub enum SmsTransportError {
@@ -44,6 +47,8 @@ enum SmsTransportInner {
         api_key: Option<String>,
         from_number: String,
     },
+    AliyunSms(AliyunSmsTransport),
+    TencentCloudSms(TencentSmsTransport),
 }
 
 impl Default for SmsTransport {
@@ -84,6 +89,54 @@ impl SmsTransport {
             api_key,
             from_number,
         })
+    }
+
+    /// Construct an Aliyun SMS transport
+    #[must_use]
+    pub fn aliyun(
+        access_key_id: String,
+        access_key_secret: String,
+        sign_name: String,
+        template_code: String,
+    ) -> Self {
+        Self::new(SmsTransportInner::AliyunSms(AliyunSmsTransport {
+            client: Client::new(),
+            access_key_id,
+            access_key_secret,
+            sign_name,
+            template_code,
+        }))
+    }
+
+    /// Construct a Tencent Cloud SMS transport
+    #[must_use]
+    pub fn tencent_cloud(
+        secret_id: String,
+        secret_key: String,
+        sdk_app_id: String,
+        sign_name: String,
+        template_id: String,
+    ) -> Self {
+        Self::new(SmsTransportInner::TencentCloudSms(TencentSmsTransport {
+            client: Client::new(),
+            secret_id,
+            secret_key,
+            sdk_app_id,
+            sign_name,
+            template_id,
+        }))
+    }
+
+    /// Returns `true` if this transport is the Aliyun SMS backend
+    #[must_use]
+    pub fn is_aliyun(&self) -> bool {
+        matches!(self.inner.as_ref(), SmsTransportInner::AliyunSms(_))
+    }
+
+    /// Returns `true` if this transport is the Tencent Cloud SMS backend
+    #[must_use]
+    pub fn is_tencent_cloud(&self) -> bool {
+        matches!(self.inner.as_ref(), SmsTransportInner::TencentCloudSms(_))
     }
 
     /// Send an SMS message
@@ -162,6 +215,30 @@ impl SmsTransport {
                     });
                 }
                 println!("[SMS] http_webhook send SUCCESS");
+            }
+
+            SmsTransportInner::AliyunSms(transport) => {
+                println!("[SMS] transport=aliyun, sending SMS...");
+                // Parse body as template params: try JSON first, fall back to
+                // {"code": body}
+                let params: std::collections::HashMap<String, String> =
+                    serde_json::from_str(body).unwrap_or_else(|_| {
+                        let mut m = std::collections::HashMap::new();
+                        m.insert("code".to_owned(), body.to_owned());
+                        m
+                    });
+                transport.send(to, &params).await?;
+                println!("[SMS] aliyun send SUCCESS");
+            }
+
+            SmsTransportInner::TencentCloudSms(transport) => {
+                println!("[SMS] transport=tencent_cloud, sending SMS...");
+                // Parse body as template params: try JSON array first, fall
+                // back to [body]
+                let params: Vec<String> = serde_json::from_str(body)
+                    .unwrap_or_else(|_| vec![body.to_owned()]);
+                transport.send(to, &params).await?;
+                println!("[SMS] tencent_cloud send SUCCESS");
             }
         }
 

@@ -16,6 +16,7 @@ use pasion_storage::{
         OAuth2AuthorizationGrantRepository, OAuth2ClientRepository,
         OAuth2DeviceCodeGrantRepository, OAuth2SessionRepository },
     user::BrowserSessionRepository };
+use salvo::oapi::ToSchema;
 use salvo::prelude::*;
 use serde::{Deserialize, Serialize};
 use ulid::Ulid;
@@ -29,7 +30,7 @@ use crate::{
 
 // ── Response types ─────────────────────────────────────────────
 
-#[derive(Serialize)]
+#[derive(Serialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct ClientInfo {
     pub id: String,
@@ -41,14 +42,14 @@ pub struct ClientInfo {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub logo_uri: Option<String> }
 
-#[derive(Serialize)]
+#[derive(Serialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct UserInfo {
     pub mxid: String,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub display_name: Option<String> }
 
-#[derive(Serialize)]
+#[derive(Serialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct ConsentGetResponse {
     pub grant_id: String,
@@ -57,33 +58,33 @@ pub struct ConsentGetResponse {
     pub user: UserInfo,
     pub policy_violation: bool }
 
-#[derive(Deserialize)]
+#[derive(Deserialize, ToSchema)]
 pub struct ConsentPostRequest {
     pub action: String }
 
-#[derive(Serialize)]
+#[derive(Serialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct ConsentPostResponse {
     pub status: &'static str,
     pub redirect_url: String }
 
-#[derive(Serialize)]
+#[derive(Serialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct DeviceLinkResponse {
     pub status: &'static str,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub grant_id: Option<String> }
 
-#[derive(Deserialize)]
+#[derive(Deserialize, ToSchema)]
 pub struct DeviceLinkQuery {
     #[serde(default)]
     pub code: Option<String> }
 
-#[derive(Deserialize)]
+#[derive(Deserialize, ToSchema)]
 pub struct DeviceConsentPostRequest {
     pub action: String }
 
-#[derive(Serialize)]
+#[derive(Serialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct DeviceConsentPostResponse {
     pub status: &'static str }
@@ -125,7 +126,7 @@ fn client_info(client: &pasion_data_model::Client) -> ClientInfo {
 
 /// Return the data needed to render a consent page for an OAuth2 authorization
 /// grant.
-#[handler]
+#[endpoint]
 #[tracing::instrument(name = "handlers.rest.consent.oauth2_get", skip_all)]
 pub async fn oauth2_consent_get(
     req: &mut Request,
@@ -195,7 +196,8 @@ pub async fn oauth2_consent_get(
             grant_type: pasion_policy::GrantType::AuthorizationCode,
             requester: pasion_policy::Requester {
                 ip_address: activity_tracker.ip(),
-                user_agent } })
+                user_agent,
+                ..Default::default() } })
         .await
         .map_err(|e| RouteError::Internal(Box::new(e)))?;
 
@@ -219,7 +221,7 @@ pub async fn oauth2_consent_get(
 
 /// Accept the OAuth2 authorization consent: create an OAuth2 session, fulfill
 /// the grant, and return the callback redirect URL.
-#[handler]
+#[endpoint]
 #[tracing::instrument(name = "handlers.rest.consent.oauth2_post", skip_all, err)]
 pub async fn oauth2_consent_post(
     req: &mut Request,
@@ -302,7 +304,8 @@ pub async fn oauth2_consent_post(
             grant_type: pasion_policy::GrantType::AuthorizationCode,
             requester: pasion_policy::Requester {
                 ip_address: activity_tracker.ip(),
-                user_agent } })
+                user_agent,
+                ..Default::default() } })
         .await
         .map_err(|e| RouteError::Internal(Box::new(e)))?;
 
@@ -379,7 +382,7 @@ pub async fn oauth2_consent_post(
 // ── GET /api/v1/device-link ────────────────────────────────────
 
 /// Validate a device user code and return the grant ID if valid.
-#[handler]
+#[endpoint]
 #[tracing::instrument(name = "handlers.rest.consent.device_link_get", skip_all)]
 pub async fn device_link_get(
     req: &mut Request,
@@ -425,7 +428,7 @@ pub async fn device_link_get(
 // ── GET /api/v1/device-consent/:id ─────────────────────────────
 
 /// Return the data needed to render a consent page for a device code grant.
-#[handler]
+#[endpoint]
 #[tracing::instrument(name = "handlers.rest.consent.device_consent_get", skip_all)]
 pub async fn device_consent_get(
     req: &mut Request,
@@ -495,7 +498,8 @@ pub async fn device_consent_get(
             grant_type: pasion_policy::GrantType::DeviceCode,
             requester: pasion_policy::Requester {
                 ip_address: activity_tracker.ip(),
-                user_agent } })
+                user_agent,
+                ..Default::default() } })
         .await
         .map_err(|e| RouteError::Internal(Box::new(e)))?;
 
@@ -518,7 +522,7 @@ pub async fn device_consent_get(
 // ── POST /api/v1/device-consent/:id ────────────────────────────
 
 /// Accept or reject a device code grant.
-#[handler]
+#[endpoint]
 #[tracing::instrument(name = "handlers.rest.consent.device_consent_post", skip_all)]
 pub async fn device_consent_post(
     req: &mut Request,
@@ -596,7 +600,8 @@ pub async fn device_consent_post(
             grant_type: pasion_policy::GrantType::DeviceCode,
             requester: pasion_policy::Requester {
                 ip_address: activity_tracker.ip(),
-                user_agent } })
+                user_agent,
+                ..Default::default() } })
         .await
         .map_err(|e| RouteError::Internal(Box::new(e)))?;
 

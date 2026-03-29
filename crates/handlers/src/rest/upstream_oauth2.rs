@@ -19,6 +19,7 @@ use pasion_storage::{
         UpstreamOAuthLinkRepository, UpstreamOAuthProviderRepository,
         UpstreamOAuthSessionRepository },
     user::{BrowserSessionRepository, UserEmailRepository, UserRepository} };
+use salvo::oapi::ToSchema;
 use salvo::prelude::*;
 use serde::{Deserialize, Serialize};
 use ulid::Ulid;
@@ -57,7 +58,7 @@ const DEFAULT_EMAIL_TEMPLATE: &str = "{{ user.email }}";
 // ── Response types ──────────────────────────────────────────────
 
 /// The possible states of an upstream OAuth2 link.
-#[derive(Serialize)]
+#[derive(Serialize, ToSchema)]
 #[serde(tag = "state", rename_all = "snake_case")]
 pub enum LinkState {
     /// Redirect: session already linked and matches current user, or auto-login succeeded.
@@ -85,12 +86,12 @@ pub enum LinkState {
     /// An error occurred.
     Error { code: String, description: String } }
 
-#[derive(Serialize)]
+#[derive(Serialize, ToSchema)]
 pub struct LinkResponse {
     #[serde(flatten)]
     pub state: LinkState }
 
-#[derive(Deserialize)]
+#[derive(Deserialize, ToSchema)]
 #[serde(tag = "action", rename_all = "snake_case")]
 pub enum LinkAction {
     Link,
@@ -104,7 +105,7 @@ pub enum LinkAction {
         #[serde(default)]
         accept_terms: Option<bool> } }
 
-#[derive(Serialize)]
+#[derive(Serialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct LinkActionResponse {
     pub status: &'static str,
@@ -113,6 +114,7 @@ pub struct LinkActionResponse {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub error: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
+    #[salvo(schema(value_type = Object))]
     pub field_errors: Option<serde_json::Value> }
 
 // ── Helper: render attribute template ───────────────────────────
@@ -146,7 +148,7 @@ fn render_attribute_template(
 // ── GET /api/v1/upstream-oauth2/link/{id} ───────────────────────
 
 /// Return the current state of an upstream OAuth2 link as JSON.
-#[handler]
+#[endpoint]
 pub async fn get_link(
     req: &mut Request,
     depot: &Depot,
@@ -453,7 +455,7 @@ pub async fn get_link(
 // ── POST /api/v1/upstream-oauth2/link/{id} ──────────────────────
 
 /// Process a user's choice for an upstream OAuth2 link.
-#[handler]
+#[endpoint]
 pub async fn post_link(
     req: &mut Request,
     depot: &Depot,
@@ -664,7 +666,8 @@ pub async fn post_link(
                     email: email.as_deref(),
                     requester: pasion_policy::Requester {
                         ip_address: activity_tracker.ip(),
-                        user_agent: user_agent.clone() } })
+                        user_agent: user_agent.clone(),
+                        ..Default::default() } })
                 .await
                 .map_err(|e| RouteError::Internal(e.into()))?;
 

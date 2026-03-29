@@ -680,11 +680,6 @@ impl BrowserSessionRepository for PgBrowserSessionRepository<'_> {
                               SELECT 1 FROM oauth2_sessions os
                               WHERE os.user_session_id = us.user_session_id
                           )
-                          -- Only delete if no compat_sessions reference this user_session
-                          AND NOT EXISTS (
-                              SELECT 1 FROM compat_sessions cs
-                              WHERE cs.user_session_id = us.user_session_id
-                          )
                         ORDER BY us.finished_at ASC
                         LIMIT $3
                         FOR UPDATE OF us

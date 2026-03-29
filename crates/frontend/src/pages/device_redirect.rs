@@ -48,7 +48,6 @@ pub fn DeviceRedirect(route: Vec<String>) -> Element {
                 if let Some(edge) = app_sessions.edges.first() {
                     let session_id = match &edge.node {
                         AppSession::Oauth2Session(s) => s.id.clone(),
-                        AppSession::CompatSession(s) => s.id.clone(),
                     };
                     nav.push(Route::SessionDetail { id: session_id });
                     return rsx! { LoadingScreen {} };

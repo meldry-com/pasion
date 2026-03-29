@@ -18,6 +18,12 @@ pub enum SmsTransportKind {
 
     /// Send SMS via an HTTP webhook
     HttpWebhook,
+
+    /// Send SMS via Aliyun (阿里云短信)
+    AliyunSms,
+
+    /// Send SMS via Tencent Cloud (腾讯云短信)
+    TencentCloudSms,
 }
 
 /// Configuration related to sending SMS messages
@@ -46,6 +52,42 @@ pub struct SmsConfig {
     /// HTTP webhook transport: API key for authorization
     #[serde(skip_serializing_if = "Option::is_none")]
     pub api_key: Option<String>,
+
+    /// Aliyun SMS transport: Access Key ID
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub aliyun_access_key_id: Option<String>,
+
+    /// Aliyun SMS transport: Access Key Secret
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub aliyun_access_key_secret: Option<String>,
+
+    /// Aliyun SMS transport: Sign name (签名)
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub aliyun_sign_name: Option<String>,
+
+    /// Aliyun SMS transport: Template code (模板编号)
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub aliyun_template_code: Option<String>,
+
+    /// Tencent Cloud SMS transport: Secret ID
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub tencent_secret_id: Option<String>,
+
+    /// Tencent Cloud SMS transport: Secret Key
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub tencent_secret_key: Option<String>,
+
+    /// Tencent Cloud SMS transport: SDK App ID
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub tencent_sdk_app_id: Option<String>,
+
+    /// Tencent Cloud SMS transport: Sign name (签名)
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub tencent_sign_name: Option<String>,
+
+    /// Tencent Cloud SMS transport: Template ID (模板 ID)
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub tencent_template_id: Option<String>,
 }
 
 impl SmsConfig {
@@ -56,6 +98,15 @@ impl SmsConfig {
             && self.auth_token.is_none()
             && self.from_number.is_none()
             && self.api_key.is_none()
+            && self.aliyun_access_key_id.is_none()
+            && self.aliyun_access_key_secret.is_none()
+            && self.aliyun_sign_name.is_none()
+            && self.aliyun_template_code.is_none()
+            && self.tencent_secret_id.is_none()
+            && self.tencent_secret_key.is_none()
+            && self.tencent_sdk_app_id.is_none()
+            && self.tencent_sign_name.is_none()
+            && self.tencent_template_id.is_none()
     }
 }
 
@@ -103,6 +154,46 @@ impl ConfigurationSection for SmsConfig {
 
                 if self.from_number.is_none() {
                     return Err(missing_field("from_number").into());
+                }
+            }
+
+            SmsTransportKind::AliyunSms => {
+                if self.aliyun_access_key_id.is_none() {
+                    return Err(missing_field("aliyun_access_key_id").into());
+                }
+
+                if self.aliyun_access_key_secret.is_none() {
+                    return Err(missing_field("aliyun_access_key_secret").into());
+                }
+
+                if self.aliyun_sign_name.is_none() {
+                    return Err(missing_field("aliyun_sign_name").into());
+                }
+
+                if self.aliyun_template_code.is_none() {
+                    return Err(missing_field("aliyun_template_code").into());
+                }
+            }
+
+            SmsTransportKind::TencentCloudSms => {
+                if self.tencent_secret_id.is_none() {
+                    return Err(missing_field("tencent_secret_id").into());
+                }
+
+                if self.tencent_secret_key.is_none() {
+                    return Err(missing_field("tencent_secret_key").into());
+                }
+
+                if self.tencent_sdk_app_id.is_none() {
+                    return Err(missing_field("tencent_sdk_app_id").into());
+                }
+
+                if self.tencent_sign_name.is_none() {
+                    return Err(missing_field("tencent_sign_name").into());
+                }
+
+                if self.tencent_template_id.is_none() {
+                    return Err(missing_field("tencent_template_id").into());
                 }
             }
         }

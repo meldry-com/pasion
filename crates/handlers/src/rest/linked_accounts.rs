@@ -7,6 +7,7 @@ use pasion_storage::{
     RepositoryAccess, Pagination,
     upstream_oauth2::{
         UpstreamOAuthLinkFilter, UpstreamOAuthLinkRepository, UpstreamOAuthProviderRepository } };
+use salvo::oapi::ToSchema;
 use salvo::prelude::*;
 use serde::Serialize;
 use ulid::Ulid;
@@ -17,12 +18,12 @@ use super::{DepotExt,
 
 // ── Response types ──────────────────────────────────────────────
 
-#[derive(Serialize)]
+#[derive(Serialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct LinkedAccountsResponse {
     pub accounts: Vec<LinkedAccount> }
 
-#[derive(Serialize)]
+#[derive(Serialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct LinkedAccount {
     pub id: String,
@@ -33,7 +34,7 @@ pub struct LinkedAccount {
     pub human_account_name: Option<String>,
     pub created_at: String }
 
-#[derive(Serialize)]
+#[derive(Serialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct UnlinkResponse {
     pub status: &'static str }
@@ -41,7 +42,7 @@ pub struct UnlinkResponse {
 // ── GET /api/v1/linked-accounts ─────────────────────────────────
 
 /// Returns the list of upstream OAuth providers linked to the current user.
-#[handler]
+#[endpoint]
 pub async fn list_linked_accounts(
     req: &mut Request,
     depot: &Depot,
@@ -103,7 +104,7 @@ pub async fn list_linked_accounts(
 // ── DELETE /api/v1/linked-accounts/{id} ─────────────────────────
 
 /// Unlink an upstream OAuth provider from the current user.
-#[handler]
+#[endpoint]
 pub async fn unlink_account(
     req: &mut Request,
     depot: &Depot,

@@ -4,8 +4,7 @@ use std::time::Duration;
 
 use async_trait::async_trait;
 use pasion_storage::queue::{
-    CleanupFinishedCompatSessionsJob, CleanupFinishedOAuth2SessionsJob,
-    CleanupFinishedUserSessionsJob, CleanupInactiveCompatSessionIpsJob,
+    CleanupFinishedOAuth2SessionsJob, CleanupFinishedUserSessionsJob,
     CleanupInactiveOAuth2SessionIpsJob, CleanupInactiveUserSessionIpsJob,
 };
 use tracing::{debug, info};
@@ -15,17 +14,6 @@ use crate::{
     State,
     new_queue::{JobContext, JobError, RunnableJob},
 };
-
-/// The compat session cleanup job is deprecated (compat layer removed).
-/// This no-op impl exists to consume any remaining jobs in the queue.
-#[async_trait]
-impl RunnableJob for CleanupFinishedCompatSessionsJob {
-    #[tracing::instrument(name = "job.cleanup_finished_compat_sessions", skip_all)]
-    async fn run(&self, _state: &State, _context: JobContext) -> Result<(), JobError> {
-        debug!("compat session cleanup job is deprecated, skipping");
-        Ok(())
-    }
-}
 
 #[async_trait]
 impl RunnableJob for CleanupFinishedOAuth2SessionsJob {
@@ -91,7 +79,7 @@ impl RunnableJob for CleanupFinishedUserSessionsJob {
 
             // This returns the number of deleted sessions, and the last finished_at
             // timestamp. Only deletes sessions that have no child sessions
-            // (compat_sessions or oauth2_sessions).
+            // (oauth2_sessions).
             let (count, last_finished_at) = repo
                 .browser_session()
                 .cleanup_finished(since, until, BATCH_SIZE)
@@ -162,17 +150,6 @@ impl RunnableJob for CleanupInactiveOAuth2SessionIpsJob {
 
     fn timeout(&self) -> Option<Duration> {
         Some(Duration::from_secs(10 * 60))
-    }
-}
-
-/// The compat session IP cleanup job is deprecated (compat layer removed).
-/// This no-op impl exists to consume any remaining jobs in the queue.
-#[async_trait]
-impl RunnableJob for CleanupInactiveCompatSessionIpsJob {
-    #[tracing::instrument(name = "job.cleanup_inactive_compat_session_ips", skip_all)]
-    async fn run(&self, _state: &State, _context: JobContext) -> Result<(), JobError> {
-        debug!("compat session IP cleanup job is deprecated, skipping");
-        Ok(())
     }
 }
 
