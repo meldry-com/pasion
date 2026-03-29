@@ -613,17 +613,9 @@ fn build_admin_router(router: Router) -> Router {
                                 Router::with_path("set-password")
                                     .post(users::set_password::handler),
                             )
-                            .push(
-                                Router::with_path("set-admin").post(users::set_admin::handler),
-                            )
-                            .push(
-                                Router::with_path("deactivate")
-                                    .post(users::deactivate::handler),
-                            )
-                            .push(
-                                Router::with_path("reactivate")
-                                    .post(users::reactivate::handler),
-                            )
+                            .push(Router::with_path("set-admin").post(users::set_admin::handler))
+                            .push(Router::with_path("deactivate").post(users::deactivate::handler))
+                            .push(Router::with_path("reactivate").post(users::reactivate::handler))
                             .push(Router::with_path("lock").post(users::lock::handler))
                             .push(Router::with_path("unlock").post(users::unlock::handler)),
                     ),
@@ -646,10 +638,7 @@ fn build_admin_router(router: Router) -> Router {
                     .push(
                         Router::with_path("<id>")
                             .get(user_sessions::get::handler)
-                            .push(
-                                Router::with_path("finish")
-                                    .post(user_sessions::finish::handler),
-                            ),
+                            .push(Router::with_path("finish").post(user_sessions::finish::handler)),
                     ),
             )
             // OAuth2 sessions
@@ -660,8 +649,7 @@ fn build_admin_router(router: Router) -> Router {
                         Router::with_path("<id>")
                             .get(oauth2_sessions::get::handler)
                             .push(
-                                Router::with_path("finish")
-                                    .post(oauth2_sessions::finish::handler),
+                                Router::with_path("finish").post(oauth2_sessions::finish::handler),
                             ),
                     ),
             )
@@ -706,10 +694,7 @@ fn build_admin_router(router: Router) -> Router {
             .push(
                 Router::with_path("upstream-oauth-providers")
                     .get(upstream_oauth_providers::list::handler)
-                    .push(
-                        Router::with_path("<id>")
-                            .get(upstream_oauth_providers::get::handler),
-                    ),
+                    .push(Router::with_path("<id>").get(upstream_oauth_providers::get::handler)),
             )
             // Upstream OAuth links
             .push(
@@ -726,10 +711,7 @@ fn build_admin_router(router: Router) -> Router {
             .push(
                 Router::with_path("policy-data")
                     .push(Router::with_path("latest").get(policy_data::get_latest::handler))
-                    .push(
-                        Router::with_path("<id>")
-                            .get(policy_data::get::handler),
-                    )
+                    .push(Router::with_path("<id>").get(policy_data::get::handler))
                     .put(policy_data::set::handler),
             ),
     )

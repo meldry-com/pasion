@@ -24,13 +24,11 @@ use super::{DepotExt, RouteError, extract_bound_activity_tracker, make_clock, ma
 use crate::{
     RequesterFingerprint,
     account_registration::{
-        CheckRegistrationFinishEligibilityError, HomeserverCheckMode,
-        LoadRegistrationProgressError, PrepareRegistrationCompletionError,
+        LoadRegistrationFinishPreparationError, LoadRegistrationProgressError,
         ResendRegistrationVerificationError, ResendRegistrationVerificationStatus,
         SetRegistrationDisplayNameError, StartPasswordRegistrationRequest,
-        VerifyRegistrationEmailCodeError, VerifyRegistrationPhoneCodeError,
-        check_registration_finish_eligibility, complete_registration, load_registration_progress,
-        next_registration_step, prepare_registration_completion,
+        VerifyRegistrationEmailCodeError, VerifyRegistrationPhoneCodeError, complete_registration,
+        load_registration_finish_preparation, load_registration_progress, next_registration_step,
         resend_pending_registration_verification, set_registration_display_name,
         start_password_registration, verify_registration_email_code,
         verify_registration_phone_code,
@@ -699,150 +697,143 @@ pub async fn post_finish(
 
     let mut repo = repo_factory.create().await?;
 
-    let progress =
-        load_registration_progress(&mut repo, id)
-            .await
-            .map_err(|error| match error {
-                LoadRegistrationProgressError::NotFound => RouteError::NotFound,
-                LoadRegistrationProgressError::Repository(error) => error.into(),
-            })?;
-
-    if progress.registration.completed_at.is_some() {
-        return Ok(Json(FinishRegistrationResponse {
-            status: "error",
-            error: Some("registration_already_completed".into()),
-        }));
-    }
-
-    match check_registration_finish_eligibility(
+    let prepared = match load_registration_finish_preparation(
         &mut repo,
         &clock,
         homeserver.as_ref(),
-        &progress.registration,
+        id,
         None,
-        HomeserverCheckMode::BestEffort,
-    )
-    .await
-    {
-        Ok(()) => {}
-        Err(CheckRegistrationFinishEligibilityError::RegistrationExpired) => {
-            return Ok(Json(FinishRegistrationResponse {
-                status: "error",
-                error: Some("registration_expired".into()),
-            }));
-        }
-        Err(CheckRegistrationFinishEligibilityError::UsernameTaken) => {
-            return Ok(Json(FinishRegistrationResponse {
-                status: "error",
-                error: Some("username_taken".into()),
-            }));
-        }
-        Err(CheckRegistrationFinishEligibilityError::UsernameNotAvailable) => {
-            return Ok(Json(FinishRegistrationResponse {
-                status: "error",
-                error: Some("username_not_available".into()),
-            }));
-        }
-        Err(CheckRegistrationFinishEligibilityError::BrowserSessionMissing) => {
-            return Err(RouteError::Internal(Box::new(std::io::Error::new(
-                std::io::ErrorKind::Other,
-                "Registration browser session is required",
-            ))));
-        }
-        Err(CheckRegistrationFinishEligibilityError::HomeserverUnavailable(_)) => unreachable!(),
-        Err(CheckRegistrationFinishEligibilityError::Repository(error)) => {
-            return Err(error.into());
-        }
-    }
-
-    let prepared = match prepare_registration_completion(
-        &mut repo,
-        &clock,
-        progress,
+        crate::account_registration::HomeserverCheckMode::BestEffort,
         site_config.registration_token_required,
     )
     .await
     {
         Ok(prepared) => prepared,
-        Err(PrepareRegistrationCompletionError::RegistrationTokenRequired) => {
+        Err(LoadRegistrationFinishPreparationError::NotFound) => return Err(RouteError::NotFound),
+        Err(LoadRegistrationFinishPreparationError::AlreadyCompleted(_)) => {
             return Ok(Json(FinishRegistrationResponse {
                 status: "error",
-                error: Some("registration_token_required".into()),
+                error: Some("registration_already_completed".into()),
             }));
         }
-        Err(PrepareRegistrationCompletionError::RegistrationTokenInvalid) => {
-            return Ok(Json(FinishRegistrationResponse {
-                status: "error",
-                error: Some("registration_token_invalid".into()),
-            }));
+        Err(LoadRegistrationFinishPreparationError::Eligibility { source, .. }) => match source {
+            crate::account_registration::CheckRegistrationFinishEligibilityError::RegistrationExpired => {
+                return Ok(Json(FinishRegistrationResponse {
+                    status: "error",
+                    error: Some("registration_expired".into()),
+                }));
+            }
+            crate::account_registration::CheckRegistrationFinishEligibilityError::UsernameTaken => {
+                return Ok(Json(FinishRegistrationResponse {
+                    status: "error",
+                    error: Some("username_taken".into()),
+                }));
+            }
+            crate::account_registration::CheckRegistrationFinishEligibilityError::UsernameNotAvailable => {
+                return Ok(Json(FinishRegistrationResponse {
+                    status: "error",
+                    error: Some("username_not_available".into()),
+                }));
+            }
+            crate::account_registration::CheckRegistrationFinishEligibilityError::BrowserSessionMissing => {
+                return Err(RouteError::Internal(Box::new(std::io::Error::new(
+                    std::io::ErrorKind::Other,
+                    "Registration browser session is required",
+                ))));
+            }
+            crate::account_registration::CheckRegistrationFinishEligibilityError::HomeserverUnavailable(_) => {
+                unreachable!()
+            }
+            crate::account_registration::CheckRegistrationFinishEligibilityError::Repository(error) => {
+                return Err(error.into());
+            }
+        },
+        Err(LoadRegistrationFinishPreparationError::Prepare { source, .. }) => match source {
+            crate::account_registration::PrepareRegistrationCompletionError::RegistrationTokenRequired => {
+                return Ok(Json(FinishRegistrationResponse {
+                    status: "error",
+                    error: Some("registration_token_required".into()),
+                }));
+            }
+            crate::account_registration::PrepareRegistrationCompletionError::RegistrationTokenInvalid => {
+                return Ok(Json(FinishRegistrationResponse {
+                    status: "error",
+                    error: Some("registration_token_invalid".into()),
+                }));
+            }
+            crate::account_registration::PrepareRegistrationCompletionError::EmailNotVerified => {
+                return Ok(Json(FinishRegistrationResponse {
+                    status: "error",
+                    error: Some("email_not_verified".into()),
+                }));
+            }
+            crate::account_registration::PrepareRegistrationCompletionError::EmailInUse(_) => {
+                return Ok(Json(FinishRegistrationResponse {
+                    status: "error",
+                    error: Some("email_in_use".into()),
+                }));
+            }
+            crate::account_registration::PrepareRegistrationCompletionError::PhoneNotVerified => {
+                return Ok(Json(FinishRegistrationResponse {
+                    status: "error",
+                    error: Some("phone_not_verified".into()),
+                }));
+            }
+            crate::account_registration::PrepareRegistrationCompletionError::PhoneInUse => {
+                return Ok(Json(FinishRegistrationResponse {
+                    status: "error",
+                    error: Some("phone_in_use".into()),
+                }));
+            }
+            crate::account_registration::PrepareRegistrationCompletionError::DisplayNameRequired => {
+                return Ok(Json(FinishRegistrationResponse {
+                    status: "error",
+                    error: Some("display_name_required".into()),
+                }));
+            }
+            crate::account_registration::PrepareRegistrationCompletionError::RegistrationTokenMissing => {
+                return Err(RouteError::Internal(Box::new(std::io::Error::new(
+                    std::io::ErrorKind::Other,
+                    "Could not load the registration token",
+                ))));
+            }
+            crate::account_registration::PrepareRegistrationCompletionError::EmailAuthenticationMissing => {
+                return Err(RouteError::Internal(Box::new(std::io::Error::new(
+                    std::io::ErrorKind::Other,
+                    "Could not load the email authentication",
+                ))));
+            }
+            crate::account_registration::PrepareRegistrationCompletionError::PhoneAuthenticationMissing => {
+                return Err(RouteError::Internal(Box::new(std::io::Error::new(
+                    std::io::ErrorKind::Other,
+                    "Could not load the phone authentication",
+                ))));
+            }
+            crate::account_registration::PrepareRegistrationCompletionError::UpstreamOAuthSessionMissing => {
+                return Err(RouteError::Internal(Box::new(std::io::Error::new(
+                    std::io::ErrorKind::Other,
+                    "Could not load the upstream OAuth authorization session",
+                ))));
+            }
+            crate::account_registration::PrepareRegistrationCompletionError::UpstreamOAuthLinkMissing => {
+                return Err(RouteError::Internal(Box::new(std::io::Error::new(
+                    std::io::ErrorKind::Other,
+                    "Could not load the upstream OAuth link",
+                ))));
+            }
+            crate::account_registration::PrepareRegistrationCompletionError::UpstreamOAuthLinkAlreadyUsed => {
+                return Err(RouteError::Internal(Box::new(std::io::Error::new(
+                    std::io::ErrorKind::Other,
+                    "The upstream identity was already linked to a user",
+                ))));
+            }
+            crate::account_registration::PrepareRegistrationCompletionError::Repository(error) => {
+                return Err(error.into());
+            }
+        },
+        Err(LoadRegistrationFinishPreparationError::Repository(error)) => {
+            return Err(error.into());
         }
-        Err(PrepareRegistrationCompletionError::EmailNotVerified) => {
-            return Ok(Json(FinishRegistrationResponse {
-                status: "error",
-                error: Some("email_not_verified".into()),
-            }));
-        }
-        Err(PrepareRegistrationCompletionError::EmailInUse(_)) => {
-            return Ok(Json(FinishRegistrationResponse {
-                status: "error",
-                error: Some("email_in_use".into()),
-            }));
-        }
-        Err(PrepareRegistrationCompletionError::PhoneNotVerified) => {
-            return Ok(Json(FinishRegistrationResponse {
-                status: "error",
-                error: Some("phone_not_verified".into()),
-            }));
-        }
-        Err(PrepareRegistrationCompletionError::PhoneInUse) => {
-            return Ok(Json(FinishRegistrationResponse {
-                status: "error",
-                error: Some("phone_in_use".into()),
-            }));
-        }
-        Err(PrepareRegistrationCompletionError::DisplayNameRequired) => {
-            return Ok(Json(FinishRegistrationResponse {
-                status: "error",
-                error: Some("display_name_required".into()),
-            }));
-        }
-        Err(PrepareRegistrationCompletionError::RegistrationTokenMissing) => {
-            return Err(RouteError::Internal(Box::new(std::io::Error::new(
-                std::io::ErrorKind::Other,
-                "Could not load the registration token",
-            ))));
-        }
-        Err(PrepareRegistrationCompletionError::EmailAuthenticationMissing) => {
-            return Err(RouteError::Internal(Box::new(std::io::Error::new(
-                std::io::ErrorKind::Other,
-                "Could not load the email authentication",
-            ))));
-        }
-        Err(PrepareRegistrationCompletionError::PhoneAuthenticationMissing) => {
-            return Err(RouteError::Internal(Box::new(std::io::Error::new(
-                std::io::ErrorKind::Other,
-                "Could not load the phone authentication",
-            ))));
-        }
-        Err(PrepareRegistrationCompletionError::UpstreamOAuthSessionMissing) => {
-            return Err(RouteError::Internal(Box::new(std::io::Error::new(
-                std::io::ErrorKind::Other,
-                "Could not load the upstream OAuth authorization session",
-            ))));
-        }
-        Err(PrepareRegistrationCompletionError::UpstreamOAuthLinkMissing) => {
-            return Err(RouteError::Internal(Box::new(std::io::Error::new(
-                std::io::ErrorKind::Other,
-                "Could not load the upstream OAuth link",
-            ))));
-        }
-        Err(PrepareRegistrationCompletionError::UpstreamOAuthLinkAlreadyUsed) => {
-            return Err(RouteError::Internal(Box::new(std::io::Error::new(
-                std::io::ErrorKind::Other,
-                "The upstream identity was already linked to a user",
-            ))));
-        }
-        Err(PrepareRegistrationCompletionError::Repository(error)) => return Err(error.into()),
     };
 
     let completed =

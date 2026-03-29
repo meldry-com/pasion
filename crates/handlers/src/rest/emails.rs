@@ -122,8 +122,7 @@ pub async fn start_email_auth(
     let session_info = extract_session_info(req, depot);
 
     let repo = repo_factory.create().await?;
-    let (requester, repo) =
-        get_requester(&clock, &activity_tracker, repo, &session_info).await?;
+    let (requester, repo) = get_requester(&clock, &activity_tracker, repo, &session_info).await?;
 
     let Some(browser_session) = requester.browser_session() else {
         return Err(RouteError::Unauthorized);
@@ -227,8 +226,7 @@ pub async fn complete_email_auth(
     let session_info = extract_session_info(req, depot);
 
     let repo = repo_factory.create().await?;
-    let (requester, repo) =
-        get_requester(&clock, &activity_tracker, repo, &session_info).await?;
+    let (requester, repo) = get_requester(&clock, &activity_tracker, repo, &session_info).await?;
 
     let Some(browser_session) = requester.browser_session() else {
         return Err(RouteError::Unauthorized);
@@ -303,8 +301,7 @@ pub async fn resend_email_auth_code(
     let session_info = extract_session_info(req, depot);
 
     let repo = repo_factory.create().await?;
-    let (requester, repo) =
-        get_requester(&clock, &activity_tracker, repo, &session_info).await?;
+    let (requester, repo) = get_requester(&clock, &activity_tracker, repo, &session_info).await?;
 
     let Some(browser_session) = requester.browser_session() else {
         return Err(RouteError::Unauthorized);

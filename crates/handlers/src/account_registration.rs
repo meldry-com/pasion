@@ -262,6 +262,32 @@ pub enum CheckRegistrationFinishEligibilityError {
 }
 
 #[derive(Debug, Error)]
+pub enum LoadRegistrationFinishPreparationError {
+    #[error("registration not found")]
+    NotFound,
+
+    #[error("registration already completed")]
+    AlreadyCompleted(UserRegistration),
+
+    #[error(transparent)]
+    Repository(#[from] RepositoryError),
+
+    #[error("registration finish eligibility check failed")]
+    Eligibility {
+        registration: UserRegistration,
+        #[source]
+        source: CheckRegistrationFinishEligibilityError,
+    },
+
+    #[error("registration finish preparation failed")]
+    Prepare {
+        registration: UserRegistration,
+        #[source]
+        source: PrepareRegistrationCompletionError,
+    },
+}
+
+#[derive(Debug, Error)]
 pub enum PrepareRegistrationCompletionError {
     #[error("registration token is required")]
     RegistrationTokenRequired,
@@ -737,6 +763,58 @@ pub async fn check_registration_finish_eligibility(
             }
         },
     }
+}
+
+pub async fn load_registration_finish_preparation(
+    repo: &mut BoxRepository,
+    clock: &dyn Clock,
+    homeserver: &dyn HomeserverConnection,
+    registration_id: Ulid,
+    browser_session_present: Option<bool>,
+    homeserver_check_mode: HomeserverCheckMode,
+    registration_token_required: bool,
+) -> Result<PreparedRegistrationCompletion, LoadRegistrationFinishPreparationError> {
+    let progress = load_registration_progress(repo, registration_id)
+        .await
+        .map_err(|error| match error {
+            LoadRegistrationProgressError::NotFound => {
+                LoadRegistrationFinishPreparationError::NotFound
+            }
+            LoadRegistrationProgressError::Repository(error) => {
+                LoadRegistrationFinishPreparationError::Repository(error)
+            }
+        })?;
+
+    let registration = progress.registration.clone();
+
+    if registration.completed_at.is_some() {
+        return Err(LoadRegistrationFinishPreparationError::AlreadyCompleted(
+            registration,
+        ));
+    }
+
+    check_registration_finish_eligibility(
+        repo,
+        clock,
+        homeserver,
+        &registration,
+        browser_session_present,
+        homeserver_check_mode,
+    )
+    .await
+    .map_err(
+        |source| LoadRegistrationFinishPreparationError::Eligibility {
+            registration: registration.clone(),
+            source,
+        },
+    )?;
+
+    prepare_registration_completion(repo, clock, progress, registration_token_required)
+        .await
+        .map_err(|source| LoadRegistrationFinishPreparationError::Prepare {
+            registration,
+            source,
+        })
 }
 
 pub async fn prepare_registration_completion(

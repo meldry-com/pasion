@@ -8,7 +8,7 @@ use super::{
     get_requester, make_clock, make_rng,
 };
 use crate::account_password::{
-    ChangePasswordError, ResetPasswordByRecoveryError, ResendRecoveryByTicketError,
+    ChangePasswordError, ResendRecoveryByTicketError, ResetPasswordByRecoveryError,
     change_password, resend_recovery_by_ticket, reset_password_by_recovery,
 };
 
@@ -47,8 +47,7 @@ pub async fn set_password(
     let session_info = extract_session_info(req, depot);
 
     let repo = repo_factory.create().await?;
-    let (requester, repo) =
-        get_requester(&clock, &activity_tracker, repo, &session_info).await?;
+    let (requester, repo) = get_requester(&clock, &activity_tracker, repo, &session_info).await?;
 
     let user_id = NodeType::User.extract_ulid(&input.user_id)?;
 
@@ -144,27 +143,21 @@ pub async fn set_password_by_recovery(
         Err(ResetPasswordByRecoveryError::TicketNotFound) => Ok(Json(SetPasswordResponse {
             status: "NO_SUCH_RECOVERY_TICKET",
         })),
-        Err(ResetPasswordByRecoveryError::SessionNotFound) => {
-            Err(RouteError::Internal(Box::new(std::io::Error::other(
-                "Could not load recovery session",
-            ))))
-        }
+        Err(ResetPasswordByRecoveryError::SessionNotFound) => Err(RouteError::Internal(Box::new(
+            std::io::Error::other("Could not load recovery session"),
+        ))),
         Err(ResetPasswordByRecoveryError::AlreadyConsumed) => Ok(Json(SetPasswordResponse {
             status: "RECOVERY_TICKET_ALREADY_USED",
         })),
         Err(ResetPasswordByRecoveryError::TicketExpired) => Ok(Json(SetPasswordResponse {
             status: "EXPIRED_RECOVERY_TICKET",
         })),
-        Err(ResetPasswordByRecoveryError::EmailNotFound) => {
-            Err(RouteError::Internal(Box::new(std::io::Error::other(
-                "Unknown email for recovery ticket",
-            ))))
-        }
-        Err(ResetPasswordByRecoveryError::UserNotFound) => {
-            Err(RouteError::Internal(Box::new(std::io::Error::other(
-                "Invalid user for recovery ticket",
-            ))))
-        }
+        Err(ResetPasswordByRecoveryError::EmailNotFound) => Err(RouteError::Internal(Box::new(
+            std::io::Error::other("Unknown email for recovery ticket"),
+        ))),
+        Err(ResetPasswordByRecoveryError::UserNotFound) => Err(RouteError::Internal(Box::new(
+            std::io::Error::other("Invalid user for recovery ticket"),
+        ))),
         Err(ResetPasswordByRecoveryError::AccountLocked) => Ok(Json(SetPasswordResponse {
             status: "ACCOUNT_LOCKED",
         })),
@@ -206,8 +199,7 @@ pub async fn resend_recovery_email(
     let session_info = extract_session_info(req, depot);
 
     let repo = repo_factory.create().await?;
-    let (requester, repo) =
-        get_requester(&clock, &activity_tracker, repo, &session_info).await?;
+    let (requester, repo) = get_requester(&clock, &activity_tracker, repo, &session_info).await?;
 
     match resend_recovery_by_ticket(
         repo,
@@ -223,11 +215,9 @@ pub async fn resend_recovery_email(
         Err(ResendRecoveryByTicketError::TicketNotFound) => Ok(Json(ResendRecoveryResponse {
             status: "NO_SUCH_RECOVERY_TICKET",
         })),
-        Err(ResendRecoveryByTicketError::SessionNotFound) => {
-            Err(RouteError::Internal(Box::new(std::io::Error::other(
-                "Could not load recovery session",
-            ))))
-        }
+        Err(ResendRecoveryByTicketError::SessionNotFound) => Err(RouteError::Internal(Box::new(
+            std::io::Error::other("Could not load recovery session"),
+        ))),
         Err(ResendRecoveryByTicketError::AlreadyConsumed) => Ok(Json(ResendRecoveryResponse {
             status: "RECOVERY_TICKET_ALREADY_USED",
         })),

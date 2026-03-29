@@ -15,8 +15,7 @@ use thiserror::Error;
 use ulid::Ulid;
 
 use crate::{
-    Limiter, RequesterFingerprint,
-    notification_dispatch::schedule_email_authentication_code,
+    Limiter, RequesterFingerprint, notification_dispatch::schedule_email_authentication_code,
 };
 
 // ── Start email verification ──────────────────────────────────
@@ -60,8 +59,7 @@ pub async fn start_email_verification(
         .add_authentication_for_session(rng, clock, email, browser_session)
         .await?;
 
-    schedule_email_authentication_code(&mut repo, rng, clock, &auth, notification_language)
-        .await?;
+    schedule_email_authentication_code(&mut repo, rng, clock, &auth, notification_language).await?;
 
     repo.save().await?;
 
@@ -204,8 +202,7 @@ pub async fn resend_email_verification_code(
         return Err(ResendEmailVerificationError::RateLimited);
     }
 
-    schedule_email_authentication_code(&mut repo, rng, clock, &auth, notification_language)
-        .await?;
+    schedule_email_authentication_code(&mut repo, rng, clock, &auth, notification_language).await?;
 
     repo.save().await?;
 
