@@ -5,13 +5,14 @@ use clap::Parser;
 use figment::Figment;
 use itertools::Itertools;
 use pasion_config::{
-    AppConfig, ClientsConfig, ConfigurationSection, ConfigurationSectionExt,
-    HttpResource, UpstreamOAuth2Config,
+    AppConfig, ClientsConfig, ConfigurationSection, ConfigurationSectionExt, HttpResource,
+    UpstreamOAuth2Config,
 };
 use pasion_context::LogContext;
 use pasion_data_model::SystemClock;
 use pasion_handlers::{ActivityTracker, CookieManager, Limiter, MetadataCache};
 use pasion_listener::server::Server;
+use pasion_messaging::NotificationCenter;
 use pasion_router::UrlBuilder;
 use pasion_storage_pg::PgRepositoryFactory;
 use tracing::{info, info_span, warn};
@@ -20,10 +21,10 @@ use crate::{
     app_state::AppState,
     lifecycle::LifecycleManager,
     util::{
-        database_url_from_config, diesel_pool_from_config,
-        homeserver_connection_from_config, load_policy_factory_dynamic_data_continuously,
-        mailer_from_config, password_manager_from_config, policy_factory_from_config,
-        site_config_from_config, templates_from_config, test_mailer_in_background,
+        database_url_from_config, diesel_pool_from_config, homeserver_connection_from_config,
+        load_policy_factory_dynamic_data_continuously, mailer_from_config,
+        password_manager_from_config, policy_factory_from_config, site_config_from_config,
+        templates_from_config, test_mailer_in_background,
     },
 };
 
@@ -87,7 +88,10 @@ impl Options {
             info!("Skipping configuration sync");
         } else {
             // Sync the configuration with the database
-            let conn = pool.get().await.context("could not get connection from pool")?;
+            let conn = pool
+                .get()
+                .await
+                .context("could not get connection from pool")?;
             let clients_config =
                 ClientsConfig::extract_or_default(figment).map_err(anyhow::Error::from_boxed)?;
             let upstream_oauth2_config = UpstreamOAuth2Config::extract_or_default(figment)
@@ -167,6 +171,7 @@ impl Options {
 
         if !self.no_worker {
             let mailer = mailer_from_config(&config.email, &templates)?;
+            let notifications = NotificationCenter::email_only(mailer.clone());
             test_mailer_in_background(&mailer, Duration::from_secs(30));
 
             info!("Starting task worker");
@@ -175,7 +180,7 @@ impl Options {
                 PgRepositoryFactory::new(pool.clone()),
                 database_url,
                 SystemClock::default(),
-                &mailer,
+                &notifications,
                 homeserver_connection.clone(),
                 url_builder.clone(),
                 &site_config,

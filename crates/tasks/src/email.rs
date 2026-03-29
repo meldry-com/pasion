@@ -35,7 +35,7 @@ impl RunnableJob for SendEmailAuthenticationCodeJob {
     )]
     async fn run(&self, state: &State, _context: JobContext) -> Result<(), JobError> {
         let clock = state.clock();
-        let mailer = state.mailer();
+        let notifications = state.notifications();
         let mut rng = state.rng();
         let mut repo = state.repository().await.map_err(JobError::retry)?;
 
@@ -117,7 +117,10 @@ impl RunnableJob for SendEmailAuthenticationCodeJob {
 
         let context = EmailVerificationContext::new(code, browser_session, registration)
             .with_language(language);
-        if let Err(e) = mailer.send_verification_email(mailbox, &context).await {
+        if let Err(e) = notifications
+            .send_email_verification(mailbox, &context)
+            .await
+        {
             tracing::warn!(
                 error = &e as &dyn std::error::Error,
                 "Failed to send email verification code. code = {}",

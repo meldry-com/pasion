@@ -9,6 +9,6 @@ pub use lettre::{
 pub use pasion_templates::EmailVerificationContext;
 
 pub use self::{
-    mailer::Mailer,
+    mailer::{Error as MailerError, Mailer},
     transport::{SmtpMode, Transport},
 };

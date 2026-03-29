@@ -1,7 +1,7 @@
 use anyhow::Context;
 use async_trait::async_trait;
-use pasion_messaging::{Address, Mailbox};
 use pasion_i18n::DataLocale;
+use pasion_messaging::{Address, Mailbox};
 use pasion_storage::{
     Pagination, RepositoryAccess,
     queue::SendAccountRecoveryEmailsJob,
@@ -29,7 +29,7 @@ impl RunnableJob for SendAccountRecoveryEmailsJob {
     )]
     async fn run(&self, state: &State, _context: JobContext) -> Result<(), JobError> {
         let clock = state.clock();
-        let mailer = state.mailer();
+        let notifications = state.notifications();
         let url_builder = state.url_builder();
         let mut rng = state.rng();
         let mut repo = state.repository().await.map_err(JobError::retry)?;
@@ -91,7 +91,7 @@ impl RunnableJob for SendAccountRecoveryEmailsJob {
                     .with_language(lang.clone());
 
                 // XXX: we only log if the email fails to send, to avoid stopping the loop
-                if let Err(e) = mailer.send_recovery_email(mailbox, &context).await {
+                if let Err(e) = notifications.send_email_recovery(mailbox, &context).await {
                     error!(
                         error = &e as &dyn std::error::Error,
                         "Failed to send recovery email"

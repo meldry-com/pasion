@@ -2,6 +2,8 @@ use std::sync::{Arc, Mutex, RwLock};
 
 use chrono::Duration;
 use cookie_store::{CookieStore, RawCookie};
+use diesel_async::AsyncPgConnection;
+use diesel_async::pooled_connection::deadpool::Pool as DieselPool;
 use headers::{Authorization, ContentType, HeaderMapExt, HeaderName, HeaderValue};
 use hyper::{
     Request, Response, StatusCode,
@@ -10,15 +12,13 @@ use hyper::{
 use oauth2_types::{registration::ClientRegistrationResponse, requests::AccessTokenResponse};
 use pasion_config::RateLimitingConfig;
 use pasion_data_model::{AppVersion, BoxClock, BoxRng, SiteConfig, clock::MockClock};
-use pasion_messaging::{MailTransport, Mailer};
 use pasion_i18n::Translator;
 use pasion_keystore::{Encrypter, JsonWebKey, JsonWebKeySet, Keystore, PrivateKey};
 use pasion_matrix::{HomeserverConnection, MockHomeserverConnection};
+use pasion_messaging::{MailTransport, Mailer, NotificationCenter};
 use pasion_policy::{InstantiateError, Policy, PolicyFactory};
 use pasion_router::{SimpleRoute, UrlBuilder};
 use pasion_salvo_utils::cookies::{CookieJar, CookieManager};
-use diesel_async::AsyncPgConnection;
-use diesel_async::pooled_connection::deadpool::Pool as DieselPool;
 use pasion_storage::{BoxRepository, BoxRepositoryFactory, RepositoryError, RepositoryFactory};
 use pasion_storage_pg::PgRepositoryFactory;
 use pasion_tasks::QueueWorker;
@@ -252,11 +252,15 @@ impl TestState {
             "hello@example.com".parse().unwrap(),
             "hello@example.com".parse().unwrap(),
         );
+        let notifications = NotificationCenter::email_only(mailer);
+        let database_url =
+            std::env::var("DATABASE_URL").expect("DATABASE_URL must be set for handler tests");
 
         let queue_worker = pasion_tasks::init(
             PgRepositoryFactory::new(pool.clone()),
+            database_url,
             Arc::clone(&clock),
-            &mailer,
+            &notifications,
             homeserver_connection.clone(),
             url_builder.clone(),
             &site_config,

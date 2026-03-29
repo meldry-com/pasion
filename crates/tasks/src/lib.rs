@@ -4,8 +4,8 @@
 //! are enqueued during HTTP request handling and processed by a background
 //! worker. Task types include:
 //!
-//! - **Email delivery** — sending verification codes, password-reset links,
-//!   etc.
+//! - **Notification delivery** — sending verification codes, password-reset
+//!   links, and other outbound messages.
 //! - **Homeserver provisioning** — creating / deactivating Matrix users via the
 //!   homeserver admin API
 //! - **Session cleanup** — expiring old sessions and tokens
@@ -25,8 +25,8 @@ use diesel_async::pooled_connection::deadpool::Pool as DieselPool;
 use new_queue::QueueRunnerError;
 use opentelemetry::metrics::Meter;
 use pasion_data_model::{Clock, SiteConfig};
-use pasion_messaging::Mailer;
 use pasion_matrix::HomeserverConnection;
+use pasion_messaging::NotificationCenter;
 use pasion_router::UrlBuilder;
 use pasion_storage::{BoxRepository, RepositoryError, RepositoryFactory};
 use pasion_storage_pg::PgRepositoryFactory;
@@ -57,7 +57,7 @@ struct State {
     repository_factory: PgRepositoryFactory,
     /// Database URL used for tokio-postgres LISTEN/NOTIFY
     database_url: String,
-    mailer: Mailer,
+    notifications: NotificationCenter,
     clock: Arc<dyn Clock>,
     homeserver: Arc<dyn HomeserverConnection>,
     url_builder: UrlBuilder,
@@ -69,7 +69,7 @@ impl State {
         repository_factory: PgRepositoryFactory,
         database_url: String,
         clock: impl Clock + 'static,
-        mailer: Mailer,
+        notifications: NotificationCenter,
         homeserver: impl HomeserverConnection + 'static,
         url_builder: UrlBuilder,
         site_config: SiteConfig,
@@ -77,7 +77,7 @@ impl State {
         Self {
             repository_factory,
             database_url,
-            mailer,
+            notifications,
             clock: Arc::new(clock),
             homeserver: Arc::new(homeserver),
             url_builder,
@@ -97,8 +97,8 @@ impl State {
         &self.clock
     }
 
-    pub fn mailer(&self) -> &Mailer {
-        &self.mailer
+    pub fn notifications(&self) -> &NotificationCenter {
+        &self.notifications
     }
 
     // This is fine for now, we may move that to a trait at some point.
@@ -135,7 +135,7 @@ pub async fn init(
     repository_factory: PgRepositoryFactory,
     database_url: String,
     clock: impl Clock + 'static,
-    mailer: &Mailer,
+    notifications: &NotificationCenter,
     homeserver: impl HomeserverConnection + 'static,
     url_builder: UrlBuilder,
     site_config: &SiteConfig,
@@ -145,7 +145,7 @@ pub async fn init(
         repository_factory,
         database_url,
         clock,
-        mailer.clone(),
+        notifications.clone(),
         homeserver,
         url_builder,
         site_config.clone(),
@@ -311,7 +311,7 @@ pub async fn init_and_run(
     repository_factory: PgRepositoryFactory,
     database_url: String,
     clock: impl Clock + 'static,
-    mailer: &Mailer,
+    notifications: &NotificationCenter,
     homeserver: impl HomeserverConnection + 'static,
     url_builder: UrlBuilder,
     site_config: &SiteConfig,
@@ -322,7 +322,7 @@ pub async fn init_and_run(
         repository_factory,
         database_url,
         clock,
-        mailer,
+        notifications,
         homeserver,
         url_builder,
         site_config,

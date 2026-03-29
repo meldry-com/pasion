@@ -18,11 +18,15 @@ pub struct Mailer {
     reply_to: Mailbox,
 }
 
+/// Errors that can occur while preparing or sending an email.
 #[derive(Debug, Error)]
 #[error(transparent)]
 pub enum Error {
+    /// The configured email transport failed.
     Transport(#[from] super::transport::Error),
+    /// Rendering the email templates failed.
     Templates(#[from] pasion_templates::TemplateError),
+    /// Building the email message content failed.
     Content(#[from] lettre::error::Error),
 }
 
