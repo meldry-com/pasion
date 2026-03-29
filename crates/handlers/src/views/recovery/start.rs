@@ -60,8 +60,6 @@ pub async fn get(
         .with_csrf(csrf_token.form_value())
         .with_language(locale);
 
-    repo.save().await?;
-
     let rendered = templates.render_recovery_start(&context)?;
 
     cookie_jar.write_to_response(res);
