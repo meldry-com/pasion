@@ -1,7 +1,7 @@
 use std::{net::IpAddr, str::FromStr};
 
 use anyhow::Error as AnyhowError;
-use chrono::Duration;
+use chrono::{DateTime, Duration, Utc};
 use lettre::Address;
 use pasion_data_model::{
     BrowserSession, Clock, UpstreamOAuthAuthorizationSession, UpstreamOAuthLink, User,
@@ -137,6 +137,7 @@ pub struct RegistrationStatusSummary {
     pub phone_pending: bool,
     pub steps_completed: Vec<&'static str>,
     pub next_step: &'static str,
+    pub workflow: RegistrationWorkflowSnapshot,
 }
 
 pub struct RegistrationEmailStepContext {
@@ -146,6 +147,51 @@ pub struct RegistrationEmailStepContext {
 
 pub struct RegistrationDisplayNameStepContext {
     pub registration: UserRegistration,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum RegistrationWorkflowState {
+    PendingEmailVerification,
+    PendingPhoneVerification,
+    PendingDisplayName,
+    ReadyToFinish,
+    Completed,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum RegistrationWorkflowEventKind {
+    Started,
+    EmailVerificationRequested,
+    EmailVerified,
+    PhoneVerificationRequested,
+    PhoneVerified,
+    Completed,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct RegistrationWorkflowEvent {
+    pub kind: RegistrationWorkflowEventKind,
+    pub occurred_at: DateTime<Utc>,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum RegistrationWorkflowDeadlineKind {
+    RegistrationExpiresAt,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct RegistrationWorkflowDeadline {
+    pub kind: RegistrationWorkflowDeadlineKind,
+    pub due_at: DateTime<Utc>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct RegistrationWorkflowSnapshot {
+    pub state: RegistrationWorkflowState,
+    pub next_step: Option<&'static str>,
+    pub completed_steps: Vec<&'static str>,
+    pub events: Vec<RegistrationWorkflowEvent>,
+    pub deadlines: Vec<RegistrationWorkflowDeadline>,
 }
 
 pub struct CompleteRegistrationRequest {
@@ -189,6 +235,27 @@ impl PreparedRegistrationCompletion {
 
 impl RegistrationProgress {
     #[must_use]
+    pub fn workflow_state(&self) -> RegistrationWorkflowState {
+        if self.registration.completed_at.is_some() {
+            return RegistrationWorkflowState::Completed;
+        }
+
+        if self.registration.email_authentication_id.is_some() && !self.email_verified() {
+            return RegistrationWorkflowState::PendingEmailVerification;
+        }
+
+        if self.registration.phone_authentication_id.is_some() && !self.phone_verified() {
+            return RegistrationWorkflowState::PendingPhoneVerification;
+        }
+
+        if self.registration.display_name.is_none() {
+            return RegistrationWorkflowState::PendingDisplayName;
+        }
+
+        RegistrationWorkflowState::ReadyToFinish
+    }
+
+    #[must_use]
     pub fn email_verified(&self) -> bool {
         self.email_authentication.as_ref().map_or(
             self.registration.email_authentication_id.is_none(),
@@ -220,6 +287,81 @@ impl RegistrationProgress {
             self.email_verified(),
             self.phone_verified(),
         )
+    }
+
+    #[must_use]
+    pub fn workflow_events(&self) -> Vec<RegistrationWorkflowEvent> {
+        let mut events = vec![RegistrationWorkflowEvent {
+            kind: RegistrationWorkflowEventKind::Started,
+            occurred_at: self.registration.created_at,
+        }];
+
+        if let Some(email_authentication) = &self.email_authentication {
+            events.push(RegistrationWorkflowEvent {
+                kind: RegistrationWorkflowEventKind::EmailVerificationRequested,
+                occurred_at: email_authentication.created_at,
+            });
+
+            if let Some(completed_at) = email_authentication.completed_at {
+                events.push(RegistrationWorkflowEvent {
+                    kind: RegistrationWorkflowEventKind::EmailVerified,
+                    occurred_at: completed_at,
+                });
+            }
+        }
+
+        if let Some(phone_authentication) = &self.phone_authentication {
+            events.push(RegistrationWorkflowEvent {
+                kind: RegistrationWorkflowEventKind::PhoneVerificationRequested,
+                occurred_at: phone_authentication.created_at,
+            });
+
+            if let Some(completed_at) = phone_authentication.completed_at {
+                events.push(RegistrationWorkflowEvent {
+                    kind: RegistrationWorkflowEventKind::PhoneVerified,
+                    occurred_at: completed_at,
+                });
+            }
+        }
+
+        if let Some(completed_at) = self.registration.completed_at {
+            events.push(RegistrationWorkflowEvent {
+                kind: RegistrationWorkflowEventKind::Completed,
+                occurred_at: completed_at,
+            });
+        }
+
+        events.sort_by_key(|event| event.occurred_at);
+        events
+    }
+
+    #[must_use]
+    pub fn workflow_deadlines(&self) -> Vec<RegistrationWorkflowDeadline> {
+        if self.registration.completed_at.is_some() {
+            return Vec::new();
+        }
+
+        vec![RegistrationWorkflowDeadline {
+            kind: RegistrationWorkflowDeadlineKind::RegistrationExpiresAt,
+            due_at: self.registration.created_at + Duration::hours(1),
+        }]
+    }
+
+    #[must_use]
+    pub fn workflow_snapshot(&self) -> RegistrationWorkflowSnapshot {
+        let state = self.workflow_state();
+        let next_step = match state {
+            RegistrationWorkflowState::Completed => None,
+            _ => Some(self.next_step()),
+        };
+
+        RegistrationWorkflowSnapshot {
+            state,
+            next_step,
+            completed_steps: self.completed_steps(),
+            events: self.workflow_events(),
+            deadlines: self.workflow_deadlines(),
+        }
     }
 }
 
@@ -630,13 +772,14 @@ pub async fn load_registration_status(
     registration_id: Ulid,
 ) -> Result<RegistrationStatusSummary, LoadRegistrationProgressError> {
     let progress = load_registration_progress(repo, registration_id).await?;
+    let workflow = progress.workflow_snapshot();
 
     let email_pending =
         progress.registration.email_authentication_id.is_some() && !progress.email_verified();
     let phone_pending =
         progress.registration.phone_authentication_id.is_some() && !progress.phone_verified();
-    let steps_completed = progress.completed_steps();
-    let next_step = progress.next_step();
+    let steps_completed = workflow.completed_steps.clone();
+    let next_step = workflow.next_step.unwrap_or_else(|| progress.next_step());
 
     Ok(RegistrationStatusSummary {
         registration: progress.registration,
@@ -644,6 +787,7 @@ pub async fn load_registration_status(
         phone_pending,
         steps_completed,
         next_step,
+        workflow,
     })
 }
 
@@ -1790,4 +1934,112 @@ pub async fn finish_registration(
         .map_err(RegistrationFinishError::Repository)?;
 
     Ok(RegistrationFinishOutcome::Completed(completed))
+}
+
+#[cfg(test)]
+mod tests {
+    use chrono::TimeZone;
+
+    use super::*;
+
+    fn sample_registration(created_at: DateTime<Utc>) -> UserRegistration {
+        UserRegistration {
+            id: Ulid::new(),
+            username: "alice".into(),
+            display_name: None,
+            terms_url: None,
+            email_authentication_id: None,
+            phone_authentication_id: None,
+            user_registration_token_id: None,
+            password: None,
+            upstream_oauth_authorization_session_id: None,
+            post_auth_action: None,
+            ip_address: None,
+            user_agent: None,
+            created_at,
+            completed_at: None,
+        }
+    }
+
+    #[test]
+    fn workflow_snapshot_tracks_pending_email_verification() {
+        let created_at = Utc.with_ymd_and_hms(2026, 3, 30, 12, 0, 0).unwrap();
+        let email_authentication = UserEmailAuthentication {
+            id: Ulid::new(),
+            user_session_id: None,
+            user_registration_id: Some(Ulid::new()),
+            email: "alice@example.com".into(),
+            created_at: created_at + Duration::minutes(1),
+            completed_at: None,
+        };
+
+        let mut registration = sample_registration(created_at);
+        registration.email_authentication_id = Some(email_authentication.id);
+
+        let progress = RegistrationProgress {
+            registration,
+            email_authentication: Some(email_authentication),
+            phone_authentication: None,
+        };
+
+        let snapshot = progress.workflow_snapshot();
+
+        assert_eq!(
+            snapshot.state,
+            RegistrationWorkflowState::PendingEmailVerification
+        );
+        assert_eq!(snapshot.next_step, Some("verify_email"));
+        assert_eq!(snapshot.deadlines.len(), 1);
+        assert_eq!(
+            snapshot.deadlines[0].due_at,
+            created_at + Duration::hours(1)
+        );
+        assert_eq!(snapshot.events.len(), 2);
+        assert_eq!(
+            snapshot.events[0].kind,
+            RegistrationWorkflowEventKind::Started
+        );
+        assert_eq!(
+            snapshot.events[1].kind,
+            RegistrationWorkflowEventKind::EmailVerificationRequested
+        );
+    }
+
+    #[test]
+    fn workflow_snapshot_tracks_completed_registration() {
+        let created_at = Utc.with_ymd_and_hms(2026, 3, 30, 12, 0, 0).unwrap();
+        let completed_at = created_at + Duration::minutes(10);
+        let email_verified_at = created_at + Duration::minutes(2);
+
+        let email_authentication = UserEmailAuthentication {
+            id: Ulid::new(),
+            user_session_id: None,
+            user_registration_id: Some(Ulid::new()),
+            email: "alice@example.com".into(),
+            created_at: created_at + Duration::minutes(1),
+            completed_at: Some(email_verified_at),
+        };
+
+        let mut registration = sample_registration(created_at);
+        registration.display_name = Some("Alice".into());
+        registration.email_authentication_id = Some(email_authentication.id);
+        registration.completed_at = Some(completed_at);
+
+        let progress = RegistrationProgress {
+            registration,
+            email_authentication: Some(email_authentication),
+            phone_authentication: None,
+        };
+
+        let snapshot = progress.workflow_snapshot();
+
+        assert_eq!(snapshot.state, RegistrationWorkflowState::Completed);
+        assert_eq!(snapshot.next_step, None);
+        assert!(snapshot.deadlines.is_empty());
+        assert!(snapshot.completed_steps.contains(&"finish"));
+        assert_eq!(
+            snapshot.events.last().map(|event| event.kind),
+            Some(RegistrationWorkflowEventKind::Completed)
+        );
+    }
 }
