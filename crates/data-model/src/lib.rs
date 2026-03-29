@@ -12,6 +12,8 @@
 //!   [`AccessToken`], [`RefreshToken`], [`DeviceCodeGrant`]
 //! - **Upstream SSO** — [`UpstreamOAuthProvider`], [`UpstreamOAuthLink`],
 //!   [`UpstreamOAuthAuthorizationSession`]
+//! - **Notifications** — [`NotificationRequest`], [`NotificationDelivery`],
+//!   [`NotificationEventLog`]
 //! - **Configuration** — [`SiteConfig`], [`PolicyData`], [`AppVersion`]
 //! - **Utilities** — [`Clock`], [`BoxClock`], [`BoxRng`]
 
@@ -22,6 +24,8 @@ use thiserror::Error;
 /// Clock abstraction for testability (`SystemClock` in production, mock clock
 /// in tests).
 pub mod clock;
+/// Persisted notification request, delivery, and audit event models.
+pub mod notification;
 /// OAuth 2.0 client and session models.
 pub mod oauth2;
 /// Personal access token types.
@@ -44,6 +48,12 @@ pub use ulid::Ulid;
 
 pub use self::{
     clock::{Clock, SystemClock},
+    notification::{
+        NotificationChannel, NotificationDelivery, NotificationDeliveryFailure,
+        NotificationDeliveryStatus, NotificationDestination, NotificationEventActor,
+        NotificationEventKind, NotificationEventLog, NotificationRequest,
+        NotificationRequestSource, NotificationRequestStatus,
+    },
     oauth2::{
         AuthorizationCode, AuthorizationGrant, AuthorizationGrantStage, Client, DeviceCodeGrant,
         DeviceCodeGrantState, InvalidRedirectUriError, JwksOrJwksUri, Pkce, Session, SessionState,
