@@ -11,7 +11,7 @@ use pasion_config::{
 };
 use pasion_context::LogContext;
 use pasion_data_model::{SessionExpirationConfig, SessionLimitConfig, SiteConfig};
-use pasion_email::{MailTransport, Mailer};
+use pasion_messaging::{MailTransport, Mailer};
 use pasion_handlers::passwords::PasswordManager;
 use pasion_matrix::{HomeserverConnection, ReadOnlyHomeserverConnection};
 use pasion_matrix_palpo::PalpoConnection;
@@ -76,7 +76,7 @@ pub fn mailer_from_config(
                 .context("invalid email configuration: missing mode")?;
 
             let credentials = match (config.username(), config.password()) {
-                (Some(username), Some(password)) => Some(pasion_email::SmtpCredentials::new(
+                (Some(username), Some(password)) => Some(pasion_messaging::SmtpCredentials::new(
                     username.to_owned(),
                     password.to_owned(),
                 )),
@@ -87,9 +87,9 @@ pub fn mailer_from_config(
             };
 
             let mode = match mode {
-                EmailSmtpMode::Plain => pasion_email::SmtpMode::Plain,
-                EmailSmtpMode::StartTls => pasion_email::SmtpMode::StartTls,
-                EmailSmtpMode::Tls => pasion_email::SmtpMode::Tls,
+                EmailSmtpMode::Plain => pasion_messaging::SmtpMode::Plain,
+                EmailSmtpMode::StartTls => pasion_messaging::SmtpMode::StartTls,
+                EmailSmtpMode::Tls => pasion_messaging::SmtpMode::Tls,
             };
 
             MailTransport::smtp(mode, hostname, config.port(), credentials)

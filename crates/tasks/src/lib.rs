@@ -25,7 +25,7 @@ use diesel_async::pooled_connection::deadpool::Pool as DieselPool;
 use new_queue::QueueRunnerError;
 use opentelemetry::metrics::Meter;
 use pasion_data_model::{Clock, SiteConfig};
-use pasion_email::Mailer;
+use pasion_messaging::Mailer;
 use pasion_matrix::HomeserverConnection;
 use pasion_router::UrlBuilder;
 use pasion_storage::{BoxRepository, RepositoryError, RepositoryFactory};

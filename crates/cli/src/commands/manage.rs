@@ -10,7 +10,7 @@ use pasion_config::{
     ConfigurationSection, ConfigurationSectionExt, DatabaseConfig, MatrixConfig, PasswordsConfig,
 };
 use pasion_data_model::{Clock, SystemClock, Ulid, UpstreamOAuthProvider, User};
-use pasion_email::Address;
+use pasion_messaging::Address;
 use pasion_matrix::HomeserverConnection;
 use pasion_storage::{
     Pagination, RepositoryAccess,

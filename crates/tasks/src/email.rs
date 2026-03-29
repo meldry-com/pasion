@@ -1,6 +1,6 @@
 use async_trait::async_trait;
 use chrono::Duration;
-use pasion_email::{Address, EmailVerificationContext, Mailbox};
+use pasion_messaging::{Address, EmailVerificationContext, Mailbox};
 use pasion_storage::queue::{SendEmailAuthenticationCodeJob, VerifyEmailJob};
 use pasion_templates::TemplateContext as _;
 use rand::{Rng, distributions::Uniform};

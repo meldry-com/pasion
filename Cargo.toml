@@ -1,6 +1,7 @@
 [workspace]
 default-members = ["crates/cli"]
 members = ["crates/*"]
+exclude = ["crates/iana-codegen", "crates/email", "crates/sms"]
 resolver = "3"
 
 # Updated in the CI with a `sed` command
@@ -33,8 +34,7 @@ pasion = { path = "./crates/cli/", version = "=1.8.0" }
 pasion-config = { path = "./crates/config/", version = "=1.8.0" }
 pasion-context = { path = "./crates/context/", version = "=1.8.0" }
 pasion-data-model = { path = "./crates/data-model/", version = "=1.8.0" }
-pasion-email = { path = "./crates/email/", version = "=1.8.0" }
-pasion-sms = { path = "./crates/sms/", version = "=1.8.0" }
+pasion-messaging = { path = "./crates/messaging/", version = "=1.8.0" }
 pasion-handlers = { path = "./crates/handlers/", version = "=1.8.0" }
 pasion-http = { path = "./crates/http/", version = "=1.8.0" }
 pasion-i18n = { path = "./crates/i18n/", version = "=1.8.0" }

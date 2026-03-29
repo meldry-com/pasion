@@ -10,7 +10,7 @@ use hyper::{
 use oauth2_types::{registration::ClientRegistrationResponse, requests::AccessTokenResponse};
 use pasion_config::RateLimitingConfig;
 use pasion_data_model::{AppVersion, BoxClock, BoxRng, SiteConfig, clock::MockClock};
-use pasion_email::{MailTransport, Mailer};
+use pasion_messaging::{MailTransport, Mailer};
 use pasion_i18n::Translator;
 use pasion_keystore::{Encrypter, JsonWebKey, JsonWebKeySet, Keystore, PrivateKey};
 use pasion_matrix::{HomeserverConnection, MockHomeserverConnection};

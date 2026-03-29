@@ -1,6 +1,6 @@
 use anyhow::Context;
 use async_trait::async_trait;
-use pasion_email::{Address, Mailbox};
+use pasion_messaging::{Address, Mailbox};
 use pasion_i18n::DataLocale;
 use pasion_storage::{
     Pagination, RepositoryAccess,

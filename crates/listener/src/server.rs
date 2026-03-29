@@ -182,11 +182,7 @@ where
         // Figure out if it's HTTP/2 based on the negociated ALPN info
         let is_h2 = tls.as_ref().is_some_and(TlsStreamInfo::is_alpn_h2);
 
-        let info = ConnectionInfo {
-            tls,
-            proxy,
-            net_peer_addr: peer_addr.into_net(),
-        };
+        let info = ConnectionInfo::new(tls, proxy, peer_addr.into_net());
 
         let mut builder = hyper_util::server::conn::auto::Builder::new(TokioExecutor::new());
         if is_h2 {
