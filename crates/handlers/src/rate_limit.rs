@@ -2,7 +2,7 @@ use std::{net::IpAddr, sync::Arc, time::Duration};
 
 use governor::{RateLimiter, clock::QuantaClock, state::keyed::DashMapStateStore};
 use pasion_config::RateLimitingConfig;
-use pasion_data_model::{User, UserEmailAuthentication};
+use pasion_data_model::{User, UserEmailAuthentication, UserPhoneAuthentication};
 use ulid::Ulid;
 
 #[derive(Debug, Clone, thiserror::Error)]
@@ -39,6 +39,18 @@ pub enum EmailAuthenticationLimitedError {
 
     #[error("Too many email authentication requests for email {0}")]
     Email(String),
+}
+
+#[derive(Debug, Clone, thiserror::Error)]
+pub enum PhoneAuthenticationLimitedError {
+    #[error("Too many phone authentication requests for requester {0}")]
+    Requester(RequesterFingerprint),
+
+    #[error("Too many phone authentication requests for authentication session {0}")]
+    Authentication(Ulid),
+
+    #[error("Too many phone authentication requests for phone {0}")]
+    Phone(String),
 }
 
 /// Key used to rate limit requests per requester
@@ -88,6 +100,10 @@ struct LimiterInner {
     email_authentication_per_email: KeyedRateLimiter<String>,
     email_authentication_emails_per_session: KeyedRateLimiter<Ulid>,
     email_authentication_attempt_per_session: KeyedRateLimiter<Ulid>,
+    phone_authentication_per_requester: KeyedRateLimiter<RequesterFingerprint>,
+    phone_authentication_per_phone: KeyedRateLimiter<String>,
+    phone_authentication_sms_per_session: KeyedRateLimiter<Ulid>,
+    phone_authentication_attempt_per_session: KeyedRateLimiter<Ulid>,
 }
 
 impl LimiterInner {
@@ -113,6 +129,18 @@ impl LimiterInner {
             ),
             email_authentication_attempt_per_session: RateLimiter::keyed(
                 config.email_authentication.attempt_per_session.to_quota()?,
+            ),
+            phone_authentication_per_requester: RateLimiter::keyed(
+                config.phone_authentication.per_ip.to_quota()?,
+            ),
+            phone_authentication_per_phone: RateLimiter::keyed(
+                config.phone_authentication.per_phone.to_quota()?,
+            ),
+            phone_authentication_sms_per_session: RateLimiter::keyed(
+                config.phone_authentication.sms_per_session.to_quota()?,
+            ),
+            phone_authentication_attempt_per_session: RateLimiter::keyed(
+                config.phone_authentication.attempt_per_session.to_quota()?,
             ),
         })
     }
@@ -158,6 +186,16 @@ impl Limiter {
                     .retain_recent();
                 this.inner
                     .email_authentication_attempt_per_session
+                    .retain_recent();
+                this.inner
+                    .phone_authentication_per_requester
+                    .retain_recent();
+                this.inner.phone_authentication_per_phone.retain_recent();
+                this.inner
+                    .phone_authentication_sms_per_session
+                    .retain_recent();
+                this.inner
+                    .phone_authentication_attempt_per_session
                     .retain_recent();
 
                 interval.tick().await;
@@ -291,11 +329,68 @@ impl Limiter {
             .check_key(&authentication.id)
             .map_err(|_| EmailAuthenticationLimitedError::Authentication(authentication.id))
     }
+
+    /// Check if an SMS can be sent to the phone number for a phone
+    /// authentication session.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the operation is rate limited.
+    pub fn check_phone_authentication_phone(
+        &self,
+        requester: RequesterFingerprint,
+        phone: &str,
+    ) -> Result<(), PhoneAuthenticationLimitedError> {
+        let canonical_phone = phone.to_owned();
+        self.inner
+            .phone_authentication_per_requester
+            .check_key(&requester)
+            .map_err(|_| PhoneAuthenticationLimitedError::Requester(requester))?;
+
+        self.inner
+            .phone_authentication_per_phone
+            .check_key(&canonical_phone)
+            .map_err(|_| PhoneAuthenticationLimitedError::Phone(canonical_phone))?;
+        Ok(())
+    }
+
+    /// Check if an attempt can be done on a phone authentication session.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the operation is rate limited.
+    pub fn check_phone_authentication_attempt(
+        &self,
+        authentication: &UserPhoneAuthentication,
+    ) -> Result<(), PhoneAuthenticationLimitedError> {
+        self.inner
+            .phone_authentication_attempt_per_session
+            .check_key(&authentication.id)
+            .map_err(|_| PhoneAuthenticationLimitedError::Authentication(authentication.id))
+    }
+
+    /// Check if a new verification SMS can be sent for a phone
+    /// authentication session.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the operation is rate limited.
+    pub fn check_phone_authentication_send_code(
+        &self,
+        requester: RequesterFingerprint,
+        authentication: &UserPhoneAuthentication,
+    ) -> Result<(), PhoneAuthenticationLimitedError> {
+        self.check_phone_authentication_phone(requester, &authentication.phone)?;
+        self.inner
+            .phone_authentication_sms_per_session
+            .check_key(&authentication.id)
+            .map_err(|_| PhoneAuthenticationLimitedError::Authentication(authentication.id))
+    }
 }
 
 #[cfg(test)]
 mod tests {
-    use pasion_data_model::{Clock, User, clock::MockClock};
+    use pasion_data_model::{Clock, User, UserPhoneAuthentication, clock::MockClock};
     use rand::SeedableRng;
 
     use super::*;
@@ -366,5 +461,64 @@ mod tests {
 
         // The other account isn't rate-limited
         assert!(limiter.check_password(requesters[603], &bob).is_ok());
+    }
+
+    #[test]
+    fn test_phone_authentication_limiter() {
+        let now = MockClock::default().now();
+        let mut rng = rand_chacha::ChaChaRng::seed_from_u64(7);
+
+        let limiter = Limiter::new(&RateLimitingConfig::default()).unwrap();
+        let requester = RequesterFingerprint::new([127, 0, 0, 1].into());
+        let auth = UserPhoneAuthentication {
+            id: Ulid::from_datetime_with_source(now.into(), &mut rng),
+            user_registration_id: None,
+            phone: "+8613800138000".to_owned(),
+            created_at: now,
+            completed_at: None,
+        };
+
+        assert!(
+            limiter
+                .check_phone_authentication_phone(requester, &auth.phone)
+                .is_ok()
+        );
+        assert!(
+            limiter
+                .check_phone_authentication_phone(requester, &auth.phone)
+                .is_ok()
+        );
+        assert!(
+            limiter
+                .check_phone_authentication_phone(requester, &auth.phone)
+                .is_ok()
+        );
+        assert!(
+            limiter
+                .check_phone_authentication_phone(requester, &auth.phone)
+                .is_err()
+        );
+
+        let limiter = Limiter::new(&RateLimitingConfig::default()).unwrap();
+        assert!(
+            limiter
+                .check_phone_authentication_send_code(requester, &auth)
+                .is_ok()
+        );
+        assert!(
+            limiter
+                .check_phone_authentication_send_code(requester, &auth)
+                .is_ok()
+        );
+        assert!(
+            limiter
+                .check_phone_authentication_send_code(requester, &auth)
+                .is_err()
+        );
+
+        for _ in 0..10 {
+            assert!(limiter.check_phone_authentication_attempt(&auth).is_ok());
+        }
+        assert!(limiter.check_phone_authentication_attempt(&auth).is_err());
     }
 }

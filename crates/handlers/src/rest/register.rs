@@ -279,6 +279,13 @@ pub async fn post_register(
                 errors.push("rate_limited".into());
             }
         }
+
+        if let Some(phone) = &phone {
+            if let Err(e) = limiter.check_phone_authentication_phone(requester, phone) {
+                tracing::warn!(error = &e as &dyn std::error::Error);
+                errors.push("rate_limited".into());
+            }
+        }
     }
 
     if !errors.is_empty() {
@@ -673,7 +680,7 @@ pub async fn post_resend_verification(
             .ok_or(RouteError::NotFound)?;
 
         if auth.completed_at.is_none() {
-            if let Err(e) = limiter.check_registration(requester) {
+            if let Err(e) = limiter.check_phone_authentication_send_code(requester, &auth) {
                 tracing::warn!(error = &e as &dyn std::error::Error);
                 return Ok(Json(ResendVerificationResponse {
                     status: "rate_limited",
@@ -771,6 +778,15 @@ pub async fn post_verify_phone(
             status: "error",
             next_step: None,
             error: Some("phone_already_verified".into()),
+        }));
+    }
+
+    if let Err(e) = limiter.check_phone_authentication_attempt(&phone_authentication) {
+        tracing::warn!(error = &e as &dyn std::error::Error);
+        return Ok(Json(VerifyPhoneResponse {
+            status: "error",
+            next_step: None,
+            error: Some("rate_limited".into()),
         }));
     }
 

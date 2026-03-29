@@ -25,6 +25,10 @@ pub struct RateLimitingConfig {
     /// Email authentication-specific rate limits
     #[serde(default)]
     pub email_authentication: EmailauthenticationRateLimitingConfig,
+
+    /// Phone authentication-specific rate limits
+    #[serde(default)]
+    pub phone_authentication: PhoneAuthenticationRateLimitingConfig,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize, JsonSchema, PartialEq)]
@@ -98,6 +102,35 @@ pub struct EmailauthenticationRateLimitingConfig {
     pub attempt_per_session: RateLimiterConfiguration,
 }
 
+#[derive(Clone, Debug, Serialize, Deserialize, JsonSchema, PartialEq)]
+pub struct PhoneAuthenticationRateLimitingConfig {
+    /// Controls how many phone authentication attempts are permitted
+    /// based on the source IP address.
+    /// This can protect against causing SMS spam to many targets.
+    #[serde(default = "default_phone_authentication_per_ip")]
+    pub per_ip: RateLimiterConfiguration,
+
+    /// Controls how many phone authentication attempts are permitted
+    /// based on the phone number entered into the authentication form.
+    /// This can protect against causing SMS spam to one target.
+    ///
+    /// Note: this limit also applies to re-sends.
+    #[serde(default = "default_phone_authentication_per_phone")]
+    pub per_phone: RateLimiterConfiguration,
+
+    /// Controls how many authentication SMS messages are permitted to be sent
+    /// per authentication session. This ensures not too many verification
+    /// codes are created for the same phone authentication session.
+    #[serde(default = "default_phone_authentication_sms_per_session")]
+    pub sms_per_session: RateLimiterConfiguration,
+
+    /// Controls how many code authentication attempts are permitted per
+    /// authentication session. This can protect against brute-forcing the
+    /// code.
+    #[serde(default = "default_phone_authentication_attempt_per_session")]
+    pub attempt_per_session: RateLimiterConfiguration,
+}
+
 #[derive(Copy, Clone, Debug, Serialize, Deserialize, JsonSchema, PartialEq)]
 pub struct RateLimiterConfiguration {
     /// A one-off burst of actions that the user can perform
@@ -166,6 +199,46 @@ impl ConfigurationSection for RateLimitingConfig {
         }
         if let Some(error) = error_on_limiter(&self.login.per_account) {
             return Err(error_on_nested_field(error, "login", "per_account").into());
+        }
+
+        if let Some(error) = error_on_limiter(&self.email_authentication.per_ip) {
+            return Err(error_on_nested_field(error, "email_authentication", "per_ip").into());
+        }
+        if let Some(error) = error_on_limiter(&self.email_authentication.per_address) {
+            return Err(error_on_nested_field(error, "email_authentication", "per_address").into());
+        }
+        if let Some(error) = error_on_limiter(&self.email_authentication.emails_per_session) {
+            return Err(
+                error_on_nested_field(error, "email_authentication", "emails_per_session").into(),
+            );
+        }
+        if let Some(error) = error_on_limiter(&self.email_authentication.attempt_per_session) {
+            return Err(error_on_nested_field(
+                error,
+                "email_authentication",
+                "attempt_per_session",
+            )
+            .into());
+        }
+
+        if let Some(error) = error_on_limiter(&self.phone_authentication.per_ip) {
+            return Err(error_on_nested_field(error, "phone_authentication", "per_ip").into());
+        }
+        if let Some(error) = error_on_limiter(&self.phone_authentication.per_phone) {
+            return Err(error_on_nested_field(error, "phone_authentication", "per_phone").into());
+        }
+        if let Some(error) = error_on_limiter(&self.phone_authentication.sms_per_session) {
+            return Err(
+                error_on_nested_field(error, "phone_authentication", "sms_per_session").into(),
+            );
+        }
+        if let Some(error) = error_on_limiter(&self.phone_authentication.attempt_per_session) {
+            return Err(error_on_nested_field(
+                error,
+                "phone_authentication",
+                "attempt_per_session",
+            )
+            .into());
         }
 
         Ok(())
@@ -251,6 +324,34 @@ fn default_email_authentication_attempt_per_session() -> RateLimiterConfiguratio
     }
 }
 
+fn default_phone_authentication_per_ip() -> RateLimiterConfiguration {
+    RateLimiterConfiguration {
+        burst: NonZeroU32::new(5).unwrap(),
+        per_second: 1.0 / 60.0,
+    }
+}
+
+fn default_phone_authentication_per_phone() -> RateLimiterConfiguration {
+    RateLimiterConfiguration {
+        burst: NonZeroU32::new(3).unwrap(),
+        per_second: 1.0 / 3600.0,
+    }
+}
+
+fn default_phone_authentication_sms_per_session() -> RateLimiterConfiguration {
+    RateLimiterConfiguration {
+        burst: NonZeroU32::new(2).unwrap(),
+        per_second: 1.0 / 300.0,
+    }
+}
+
+fn default_phone_authentication_attempt_per_session() -> RateLimiterConfiguration {
+    RateLimiterConfiguration {
+        burst: NonZeroU32::new(10).unwrap(),
+        per_second: 1.0 / 60.0,
+    }
+}
+
 impl Default for RateLimitingConfig {
     fn default() -> Self {
         RateLimitingConfig {
@@ -258,6 +359,7 @@ impl Default for RateLimitingConfig {
             registration: default_registration(),
             account_recovery: AccountRecoveryRateLimitingConfig::default(),
             email_authentication: EmailauthenticationRateLimitingConfig::default(),
+            phone_authentication: PhoneAuthenticationRateLimitingConfig::default(),
         }
     }
 }
@@ -287,6 +389,17 @@ impl Default for EmailauthenticationRateLimitingConfig {
             per_address: default_email_authentication_per_address(),
             emails_per_session: default_email_authentication_emails_per_session(),
             attempt_per_session: default_email_authentication_attempt_per_session(),
+        }
+    }
+}
+
+impl Default for PhoneAuthenticationRateLimitingConfig {
+    fn default() -> Self {
+        PhoneAuthenticationRateLimitingConfig {
+            per_ip: default_phone_authentication_per_ip(),
+            per_phone: default_phone_authentication_per_phone(),
+            sms_per_session: default_phone_authentication_sms_per_session(),
+            attempt_per_session: default_phone_authentication_attempt_per_session(),
         }
     }
 }
