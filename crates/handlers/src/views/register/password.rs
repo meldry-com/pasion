@@ -180,7 +180,7 @@ pub async fn post(
 
     // The email form is only shown if the server requires it
     let email = site_config
-        .password_registration_email_required
+        .password_registration_contact_required
         .then_some(form.email);
 
     // Validate the form
@@ -752,7 +752,7 @@ mod tests {
         let state = TestState::from_pool_with_site_config(
             pool.clone(),
             SiteConfig {
-                password_registration_email_required: false,
+                password_registration_contact_required: false,
                 ..test_site_config()
             },
         )
@@ -822,7 +822,7 @@ mod tests {
         let state = TestState::from_pool_with_site_config(
             pool.clone(),
             SiteConfig {
-                password_registration_email_required: false,
+                password_registration_contact_required: false,
                 ..test_site_config()
             },
         )
@@ -893,7 +893,7 @@ mod tests {
         let state = TestState::from_pool_with_site_config(
             pool.clone(),
             SiteConfig {
-                password_registration_email_required: true,
+                password_registration_contact_required: true,
                 ..test_site_config()
             },
         )
@@ -952,7 +952,7 @@ mod tests {
         let state = TestState::from_pool_with_site_config(
             pool.clone(),
             SiteConfig {
-                password_registration_email_required: true,
+                password_registration_contact_required: true,
                 ..test_site_config()
             },
         )
@@ -1012,7 +1012,7 @@ mod tests {
         let state = TestState::from_pool_with_site_config(
             pool.clone(),
             SiteConfig {
-                password_registration_email_required: true,
+                password_registration_contact_required: true,
                 ..test_site_config()
             },
         )

@@ -17,8 +17,9 @@ pub struct SiteConfig {
     /// Whether password registration is enabled.
     pub password_registration_enabled: bool,
 
-    /// Whether a valid email address is required for password registrations.
-    pub password_registration_email_required: bool,
+    /// Whether at least one contact method (email or phone) is required for
+    /// password registrations.
+    pub password_registration_contact_required: bool,
 
     /// Whether registration tokens are required for password registrations.
     pub registration_token_required: bool,
@@ -57,7 +58,7 @@ pub async fn handler(req: &mut Request, depot: &Depot) -> Result<Json<SiteConfig
         server_name: site_config.server_name,
         password_login_enabled: site_config.password_login_enabled,
         password_registration_enabled: site_config.password_registration_enabled,
-        password_registration_email_required: site_config.password_registration_email_required,
+        password_registration_contact_required: site_config.password_registration_contact_required,
         registration_token_required: site_config.registration_token_required,
         email_change_allowed: site_config.email_change_allowed,
         displayname_change_allowed: site_config.displayname_change_allowed,

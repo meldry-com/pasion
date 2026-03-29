@@ -558,6 +558,10 @@ fn build_rest_api_router(router: Router) -> Router {
                 .post(pasion_handlers::rest::register::post_verify_email),
         )
         .push(
+            Router::with_path("/api/v1/auth/register/{id}/resend-verification")
+                .post(pasion_handlers::rest::register::post_resend_verification),
+        )
+        .push(
             Router::with_path("/api/v1/auth/register/{id}/verify-phone")
                 .post(pasion_handlers::rest::register::post_verify_phone),
         )

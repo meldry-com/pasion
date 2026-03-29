@@ -1,7 +1,7 @@
 use dioxus::prelude::*;
 
 use crate::{
-    api::types::{ProvidersResponse, RegisterResponse, StepResponse},
+    api::types::{ProvidersResponse, RegisterResponse, ResendEmailAuthCodePayload, StepResponse},
     components::{
         layout::Layout, loading::LoadingSpinner, password_input::PasswordCreationDoubleInput,
     },
@@ -223,9 +223,12 @@ fn RegisterPage(providers: ProvidersResponse) -> Element {
 pub fn RegisterVerifyEmail(id: String) -> Element {
     let mut code = use_signal(String::new);
     let mut submitting = use_signal(|| false);
+    let mut resending = use_signal(|| false);
     let mut error = use_signal(|| None::<String>);
+    let mut resend_message = use_signal(|| None::<String>);
     let nav = navigator();
     let reg_id = id.clone();
+    let resend_id = id.clone();
 
     rsx! {
         Layout {
@@ -237,6 +240,12 @@ pub fn RegisterVerifyEmail(id: String) -> Element {
                     if let Some(ref err) = *error.read() {
                         div { class: "alert alert-critical",
                             p { "{err}" }
+                        }
+                    }
+
+                    if let Some(ref msg) = *resend_message.read() {
+                        div { class: "alert alert-info",
+                            p { "{msg}" }
                         }
                     }
 
@@ -253,6 +262,7 @@ pub fn RegisterVerifyEmail(id: String) -> Element {
 
                             submitting.set(true);
                             error.set(None);
+                            resend_message.set(None);
                             let nav = nav.clone();
                             let rid = reg_id.clone();
 
@@ -299,6 +309,37 @@ pub fn RegisterVerifyEmail(id: String) -> Element {
                             }
                             "Verify"
                         }
+
+                        button {
+                            class: "btn btn-secondary btn-block",
+                            r#type: "button",
+                            disabled: resending(),
+                            onclick: move |_| {
+                                let rid = resend_id.clone();
+                                resending.set(true);
+                                resend_message.set(None);
+                                error.set(None);
+                                spawn(async move {
+                                    let result = crate::api::api_post::<ResendEmailAuthCodePayload>(
+                                        &format!("/auth/register/{rid}/resend-verification"),
+                                        serde_json::json!({}),
+                                    ).await;
+                                    resending.set(false);
+                                    match result {
+                                        Ok(_) => {
+                                            resend_message.set(Some("Verification code resent.".to_string()));
+                                        }
+                                        Err(err) => {
+                                            error.set(Some(err));
+                                        }
+                                    }
+                                });
+                            },
+                            if resending() {
+                                LoadingSpinner { inline: true }
+                            }
+                            "Resend code"
+                        }
                     }
                 }
             }
@@ -311,9 +352,12 @@ pub fn RegisterVerifyEmail(id: String) -> Element {
 pub fn RegisterVerifyPhone(id: String) -> Element {
     let mut code = use_signal(String::new);
     let mut submitting = use_signal(|| false);
+    let mut resending = use_signal(|| false);
     let mut error = use_signal(|| None::<String>);
+    let mut resend_message = use_signal(|| None::<String>);
     let nav = navigator();
     let reg_id = id.clone();
+    let resend_id = id.clone();
 
     rsx! {
         Layout {
@@ -325,6 +369,12 @@ pub fn RegisterVerifyPhone(id: String) -> Element {
                     if let Some(ref err) = *error.read() {
                         div { class: "alert alert-critical",
                             p { "{err}" }
+                        }
+                    }
+
+                    if let Some(ref msg) = *resend_message.read() {
+                        div { class: "alert alert-info",
+                            p { "{msg}" }
                         }
                     }
 
@@ -341,6 +391,7 @@ pub fn RegisterVerifyPhone(id: String) -> Element {
 
                             submitting.set(true);
                             error.set(None);
+                            resend_message.set(None);
                             let nav = nav.clone();
                             let rid = reg_id.clone();
 
@@ -387,6 +438,37 @@ pub fn RegisterVerifyPhone(id: String) -> Element {
                                 LoadingSpinner { inline: true }
                             }
                             "Verify"
+                        }
+
+                        button {
+                            class: "btn btn-secondary btn-block",
+                            r#type: "button",
+                            disabled: resending(),
+                            onclick: move |_| {
+                                let rid = resend_id.clone();
+                                resending.set(true);
+                                resend_message.set(None);
+                                error.set(None);
+                                spawn(async move {
+                                    let result = crate::api::api_post::<ResendEmailAuthCodePayload>(
+                                        &format!("/auth/register/{rid}/resend-verification"),
+                                        serde_json::json!({}),
+                                    ).await;
+                                    resending.set(false);
+                                    match result {
+                                        Ok(_) => {
+                                            resend_message.set(Some("Verification code resent.".to_string()));
+                                        }
+                                        Err(err) => {
+                                            error.set(Some(err));
+                                        }
+                                    }
+                                });
+                            },
+                            if resending() {
+                                LoadingSpinner { inline: true }
+                            }
+                            "Resend code"
                         }
                     }
                 }

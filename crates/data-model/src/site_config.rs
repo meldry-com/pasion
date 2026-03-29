@@ -67,8 +67,9 @@ pub struct SiteConfig {
     /// Whether password registration is enabled.
     pub password_registration_enabled: bool,
 
-    /// Whether a valid email address is required for password registrations.
-    pub password_registration_email_required: bool,
+    /// Whether at least one contact method (email or phone) is required for
+    /// password registrations.
+    pub password_registration_contact_required: bool,
 
     /// Whether registration tokens are required for password registrations.
     pub registration_token_required: bool,

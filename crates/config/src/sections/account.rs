@@ -44,12 +44,16 @@ pub struct AccountConfig {
     #[serde(default = "default_false", skip_serializing_if = "is_default_false")]
     pub password_registration_enabled: bool,
 
-    /// Whether self-service password registrations require a valid email.
-    /// Defaults to `true`.
+    /// Whether self-service password registrations require at least one
+    /// contact method (email or phone). Defaults to `true`.
     ///
     /// This has no effect if password registration is disabled.
-    #[serde(default = "default_true", skip_serializing_if = "is_default_true")]
-    pub password_registration_email_required: bool,
+    #[serde(
+        default = "default_true",
+        skip_serializing_if = "is_default_true",
+        alias = "password_registration_email_required"
+    )]
+    pub password_registration_contact_required: bool,
 
     /// Whether users are allowed to change their passwords. Defaults to `true`.
     ///
@@ -90,7 +94,7 @@ impl Default for AccountConfig {
             email_change_allowed: default_true(),
             displayname_change_allowed: default_true(),
             password_registration_enabled: default_false(),
-            password_registration_email_required: default_true(),
+            password_registration_contact_required: default_true(),
             password_change_allowed: default_true(),
             password_recovery_enabled: default_false(),
             account_deactivation_allowed: default_true(),
