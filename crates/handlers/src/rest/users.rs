@@ -8,8 +8,8 @@ use super::{
 };
 use crate::account_profile::{
     AccountProfileError, DeactivateAccountOutcome, SetDisplayNameOutcome,
-    allow_cross_signing_reset as allow_cross_signing_reset_service,
-    deactivate_current_account, set_display_name as set_display_name_service,
+    allow_cross_signing_reset as allow_cross_signing_reset_service, deactivate_current_account,
+    set_display_name as set_display_name_service,
 };
 
 // ── POST /api/v1/viewer/display-name ───────────────────────────

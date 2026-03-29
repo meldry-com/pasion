@@ -3,12 +3,6 @@
 //! These endpoints allow authenticated users to view and unlink their
 //! connected external accounts (GitHub, Google, etc.).
 
-use pasion_storage::{
-    Pagination, RepositoryAccess,
-    upstream_oauth2::{
-        UpstreamOAuthLinkFilter, UpstreamOAuthLinkRepository, UpstreamOAuthProviderRepository,
-    },
-};
 use salvo::oapi::ToSchema;
 use salvo::prelude::*;
 use serde::Serialize;
@@ -17,6 +11,9 @@ use ulid::Ulid;
 use super::{
     DepotExt, RouteError, extract_bound_activity_tracker, extract_session_info, get_requester,
     make_clock,
+};
+use crate::account_connections::{
+    LinkedAccountError, list_linked_accounts as list_linked_accounts_service, unlink_linked_account,
 };
 
 // ── Response types ──────────────────────────────────────────────
@@ -59,51 +56,22 @@ pub async fn list_linked_accounts(
     let session_info = extract_session_info(req, depot);
 
     let repo = repo_factory.create().await?;
-    let (requester, mut repo) =
-        get_requester(&clock, &activity_tracker, repo, &session_info).await?;
+    let (requester, repo) = get_requester(&clock, &activity_tracker, repo, &session_info).await?;
 
-    let user = match &requester.entity {
-        super::RequestingEntity::BrowserSession(session) => &session.user,
-        _ => {
-            return Err(RouteError::Unauthorized);
-        }
-    };
-
-    let filter = UpstreamOAuthLinkFilter::new().for_user(user);
-    let page = repo
-        .upstream_oauth_link()
-        .list(filter, Pagination::first(100))
-        .await?;
-
-    // Fetch all enabled providers to resolve names
-    let providers = repo.upstream_oauth_provider().all_enabled().await?;
-    let provider_map: std::collections::HashMap<Ulid, _> = providers
+    let accounts: Vec<LinkedAccount> = list_linked_accounts_service(repo, &requester, 100)
+        .await
+        .map_err(map_linked_account_error)?
         .into_iter()
-        .map(|p| (p.id, (p.human_name, p.brand_name)))
-        .collect();
-
-    let accounts: Vec<LinkedAccount> = page
-        .edges
-        .into_iter()
-        .map(|edge| {
-            let link = edge.node;
-            let (provider_name, provider_brand) = provider_map
-                .get(&link.provider_id)
-                .cloned()
-                .unwrap_or((None, None));
-            LinkedAccount {
-                id: link.id.to_string(),
-                provider_id: link.provider_id.to_string(),
-                provider_name,
-                provider_brand,
-                subject: link.subject,
-                human_account_name: link.human_account_name,
-                created_at: link.created_at.to_rfc3339(),
-            }
+        .map(|link| LinkedAccount {
+            id: link.id.to_string(),
+            provider_id: link.provider_id.to_string(),
+            provider_name: link.provider_name,
+            provider_brand: link.provider_brand,
+            subject: link.subject,
+            human_account_name: link.human_account_name,
+            created_at: link.created_at.to_rfc3339(),
         })
         .collect();
-
-    repo.cancel().await?;
 
     Ok(Json(LinkedAccountsResponse { accounts }))
 }
@@ -122,15 +90,7 @@ pub async fn unlink_account(
     let session_info = extract_session_info(req, depot);
 
     let repo = repo_factory.create().await?;
-    let (requester, mut repo) =
-        get_requester(&clock, &activity_tracker, repo, &session_info).await?;
-
-    let user = match &requester.entity {
-        super::RequestingEntity::BrowserSession(session) => session.user.clone(),
-        _ => {
-            return Err(RouteError::Unauthorized);
-        }
-    };
+    let (requester, repo) = get_requester(&clock, &activity_tracker, repo, &session_info).await?;
 
     let id: Ulid = req
         .param::<String>("id")
@@ -138,19 +98,17 @@ pub async fn unlink_account(
         .parse()
         .map_err(|_| RouteError::BadRequest("invalid id".into()))?;
 
-    let link = repo
-        .upstream_oauth_link()
-        .lookup(id)
-        .await?
-        .ok_or(RouteError::NotFound)?;
-
-    // Verify the link belongs to the current user
-    if link.user_id != Some(user.id) {
-        return Err(RouteError::NotFound);
-    }
-
-    repo.upstream_oauth_link().remove(&clock, link).await?;
-    repo.save().await?;
+    unlink_linked_account(repo, &requester, &clock, id)
+        .await
+        .map_err(map_linked_account_error)?;
 
     Ok(Json(UnlinkResponse { status: "unlinked" }))
+}
+
+fn map_linked_account_error(error: LinkedAccountError) -> RouteError {
+    match error {
+        LinkedAccountError::NotFound => RouteError::NotFound,
+        LinkedAccountError::Unauthorized => RouteError::Unauthorized,
+        LinkedAccountError::Repository(error) => RouteError::from(error),
+    }
 }

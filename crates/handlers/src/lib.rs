@@ -59,6 +59,7 @@ pub mod user_registration_cookie;
 pub(crate) mod views;
 
 mod account_access;
+mod account_connections;
 mod account_contacts;
 mod account_password;
 mod account_profile;

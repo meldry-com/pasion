@@ -3,6 +3,7 @@ use salvo::prelude::*;
 use serde::Serialize;
 
 use super::{DepotExt, NodeType, RouteError};
+use crate::account_connections::{OAuth2ClientLookupError, load_oauth2_client};
 
 #[derive(Serialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
@@ -28,15 +29,11 @@ pub async fn get_client(
     let ulid = NodeType::OAuth2Client.extract_ulid(&id)?;
 
     let repo_factory = depot.repo_factory()?;
-    let mut repo = repo_factory.create().await?;
+    let repo = repo_factory.create().await?;
 
-    let client = repo
-        .oauth2_client()
-        .lookup(ulid)
-        .await?
-        .ok_or(RouteError::NotFound)?;
-
-    repo.cancel().await?;
+    let client = load_oauth2_client(repo, ulid)
+        .await
+        .map_err(map_client_lookup_error)?;
 
     Ok(Json(Oauth2ClientResponse {
         id: NodeType::OAuth2Client.serialize(client.id),
@@ -47,4 +44,11 @@ pub async fn get_client(
         policy_uri: client.policy_uri.as_ref().map(|u| u.to_string()),
         logo_uri: client.logo_uri.as_ref().map(|u| u.to_string()),
     }))
+}
+
+fn map_client_lookup_error(error: OAuth2ClientLookupError) -> RouteError {
+    match error {
+        OAuth2ClientLookupError::NotFound => RouteError::NotFound,
+        OAuth2ClientLookupError::Repository(error) => RouteError::from(error),
+    }
 }

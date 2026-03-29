@@ -1,15 +1,14 @@
 use pasion_data_model::SiteConfig;
 use pasion_matrix::HomeserverConnection;
-use pasion_storage::{Pagination, upstream_oauth2::UpstreamOAuthLinkFilter};
 use salvo::oapi::ToSchema;
 use salvo::prelude::*;
 use serde::Serialize;
-use ulid::Ulid;
 
 use super::{
     DepotExt, NodeType, RouteError, UserAgentInfo, extract_bound_activity_tracker,
     extract_session_info, get_requester, make_clock, parse_user_agent,
 };
+use crate::account_connections::load_linked_accounts;
 
 // ── Response types ─────────────────────────────────────────────
 
@@ -190,36 +189,20 @@ pub async fn get_viewer(
             let has_password = repo.user_password().active(user).await?.is_some();
 
             // Fetch linked upstream OAuth accounts
-            let link_filter = UpstreamOAuthLinkFilter::new().for_user(user);
-            let links_page = repo
-                .upstream_oauth_link()
-                .list(link_filter, Pagination::first(100))
-                .await?;
-            let providers = repo.upstream_oauth_provider().all_enabled().await?;
-            let provider_map: std::collections::HashMap<Ulid, _> = providers
-                .into_iter()
-                .map(|p| (p.id, (p.human_name, p.brand_name)))
-                .collect();
-            let linked_accounts: Vec<LinkedAccountData> = links_page
-                .edges
-                .into_iter()
-                .map(|edge| {
-                    let link = edge.node;
-                    let (provider_name, provider_brand) = provider_map
-                        .get(&link.provider_id)
-                        .cloned()
-                        .unwrap_or((None, None));
-                    LinkedAccountData {
+            let linked_accounts: Vec<LinkedAccountData> =
+                load_linked_accounts(&mut repo, user, 100)
+                    .await?
+                    .into_iter()
+                    .map(|link| LinkedAccountData {
                         id: link.id.to_string(),
                         provider_id: link.provider_id.to_string(),
-                        provider_name,
-                        provider_brand,
+                        provider_name: link.provider_name,
+                        provider_brand: link.provider_brand,
                         subject: link.subject,
                         human_account_name: link.human_account_name,
                         created_at: link.created_at.to_rfc3339(),
-                    }
-                })
-                .collect();
+                    })
+                    .collect();
 
             let viewer_user = ViewerUser {
                 id: NodeType::User.serialize(user.id),
