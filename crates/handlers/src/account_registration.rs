@@ -28,7 +28,7 @@ use zeroize::Zeroizing;
 
 use crate::{
     Limiter, RequesterFingerprint,
-    notification_dispatch::{schedule_email_authentication_code, schedule_sms_authentication_code},
+    notification_dispatch::{NotificationIntent, schedule_notification},
     passwords::PasswordManager,
 };
 
@@ -888,12 +888,14 @@ pub async fn start_password_registration(
             .add_authentication_for_registration(rng, clock, email, &registration)
             .await?;
 
-        schedule_email_authentication_code(
+        schedule_notification(
             &mut repo,
             rng,
             clock,
-            &user_email_authentication,
-            request.notification_language.clone(),
+            NotificationIntent::verify_email(
+                &user_email_authentication,
+                request.notification_language.clone(),
+            ),
         )
         .await?;
 
@@ -913,12 +915,14 @@ pub async fn start_password_registration(
             .add_authentication_for_registration(rng, clock, phone, &registration)
             .await?;
 
-        schedule_sms_authentication_code(
+        schedule_notification(
             &mut repo,
             rng,
             clock,
-            &user_phone_authentication,
-            request.notification_language,
+            NotificationIntent::verify_phone(
+                &user_phone_authentication,
+                request.notification_language,
+            ),
         )
         .await?;
 
@@ -1165,8 +1169,13 @@ pub async fn resend_pending_registration_verification(
                 return Err(ResendRegistrationVerificationError::RateLimited);
             }
 
-            schedule_email_authentication_code(&mut repo, rng, clock, &auth, notification_language)
-                .await?;
+            schedule_notification(
+                &mut repo,
+                rng,
+                clock,
+                NotificationIntent::verify_email(&auth, notification_language),
+            )
+            .await?;
             repo.save().await?;
 
             return Ok(ResendRegistrationVerificationStatus::Resent);
@@ -1186,8 +1195,13 @@ pub async fn resend_pending_registration_verification(
                 return Err(ResendRegistrationVerificationError::RateLimited);
             }
 
-            schedule_sms_authentication_code(&mut repo, rng, clock, &auth, notification_language)
-                .await?;
+            schedule_notification(
+                &mut repo,
+                rng,
+                clock,
+                NotificationIntent::verify_phone(&auth, notification_language),
+            )
+            .await?;
             repo.save().await?;
 
             return Ok(ResendRegistrationVerificationStatus::Resent);

@@ -34,7 +34,7 @@
 - [x] 设计 `notification_request` / `notification_delivery` / `notification_event_log` 数据模型。
 - [x] 在 `storage` / `storage-pg` 落地通知投递 repository。
 - [x] 加入 delivery retry / audit / provider binding。
-- [ ] 将业务层通知调用全部收口为“表达发什么”，不再关心渠道细节。
+- [x] 将业务层通知调用全部收口为“表达发什么”，不再关心渠道细节。
 
 ### C. Legacy 入口去编排化
 
@@ -95,4 +95,4 @@
 
 ## 当前下一项
 
-- [ ] 将业务层通知调用全部收口为“表达发什么”，不再关心渠道细节。
+- [ ] 清理 `views/*` 对 repo / policy / limiter / task 的直接编排依赖。
