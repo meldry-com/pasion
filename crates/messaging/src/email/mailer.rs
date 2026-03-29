@@ -163,4 +163,10 @@ impl Mailer {
     pub async fn test_connection(&self) -> Result<(), super::transport::Error> {
         self.transport.test_connection().await
     }
+
+    /// Return the stable provider binding key for the configured transport.
+    #[must_use]
+    pub fn provider_binding_key(&self) -> &'static str {
+        self.transport.binding_key()
+    }
 }

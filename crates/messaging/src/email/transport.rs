@@ -107,6 +107,16 @@ impl Transport {
 
         Ok(())
     }
+
+    /// Return the stable provider binding key for this transport.
+    #[must_use]
+    pub fn binding_key(&self) -> &'static str {
+        match self.inner.as_ref() {
+            TransportInner::Blackhole => "email.blackhole",
+            TransportInner::Smtp(_) => "email.smtp",
+            TransportInner::Sendmail(_) => "email.sendmail",
+        }
+    }
 }
 
 #[derive(Debug, Error)]

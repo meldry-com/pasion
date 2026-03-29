@@ -162,6 +162,36 @@ impl InsertableJob for DispatchNotificationJob {
     const QUEUE_NAME: &'static str = "dispatch-notification";
 }
 
+/// A job to process reserved notification deliveries from the notification outbox.
+#[derive(Serialize, Deserialize, Debug, Clone)]
+pub struct ProcessNotificationDeliveriesJob {
+    limit: usize,
+}
+
+impl ProcessNotificationDeliveriesJob {
+    /// Create a new job to process up to `limit` deliveries.
+    #[must_use]
+    pub const fn new(limit: usize) -> Self {
+        Self { limit }
+    }
+
+    /// The maximum number of deliveries this job should process.
+    #[must_use]
+    pub const fn limit(&self) -> usize {
+        self.limit
+    }
+}
+
+impl Default for ProcessNotificationDeliveriesJob {
+    fn default() -> Self {
+        Self { limit: 10 }
+    }
+}
+
+impl InsertableJob for ProcessNotificationDeliveriesJob {
+    const QUEUE_NAME: &'static str = "process-notification-deliveries";
+}
+
 /// A job to provision the user on the homeserver.
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct ProvisionUserJob {

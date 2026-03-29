@@ -139,6 +139,18 @@ impl SmsTransport {
         matches!(self.inner.as_ref(), SmsTransportInner::TencentCloudSms(_))
     }
 
+    /// Return the stable provider binding key for this transport.
+    #[must_use]
+    pub fn binding_key(&self) -> &'static str {
+        match self.inner.as_ref() {
+            SmsTransportInner::Blackhole => "sms.blackhole",
+            SmsTransportInner::Twilio { .. } => "sms.twilio",
+            SmsTransportInner::HttpWebhook { .. } => "sms.http_webhook",
+            SmsTransportInner::AliyunSms(_) => "sms.aliyun",
+            SmsTransportInner::TencentCloudSms(_) => "sms.tencent_cloud",
+        }
+    }
+
     /// Send an SMS message
     ///
     /// # Errors

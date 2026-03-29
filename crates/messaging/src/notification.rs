@@ -91,6 +91,18 @@ impl NotificationCenter {
         self.sms.as_ref()
     }
 
+    /// Return the stable provider binding key for the configured email channel.
+    #[must_use]
+    pub fn email_provider_binding_key(&self) -> Option<&'static str> {
+        self.email.as_ref().map(Mailer::provider_binding_key)
+    }
+
+    /// Return the stable provider binding key for the configured SMS channel.
+    #[must_use]
+    pub fn sms_provider_binding_key(&self) -> Option<&'static str> {
+        self.sms.as_ref().map(SmsSender::provider_binding_key)
+    }
+
     /// Dispatch a standardized notification request.
     ///
     /// # Errors

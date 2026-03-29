@@ -171,6 +171,7 @@ pub async fn init(
         .register_handler::<pasion_storage::queue::CleanupQueueJobsJob>()
         .register_handler::<pasion_storage::queue::DeactivateUserJob>()
         .register_handler::<pasion_storage::queue::DeleteDeviceJob>()
+        .register_handler::<pasion_storage::queue::ProcessNotificationDeliveriesJob>()
         .register_handler::<pasion_storage::queue::ProvisionDeviceJob>()
         .register_handler::<pasion_storage::queue::ProvisionUserJob>()
         .register_handler::<pasion_storage::queue::ReactivateUserJob>()
@@ -192,6 +193,12 @@ pub async fn init(
         .register_deprecated_queue("cleanup-inactive-compat-session-ips")
         // Recurring jobs are spread across the hour at ~5 minute intervals
         // to avoid clustering and distribute database load evenly.
+        .add_schedule(
+            "process-notification-deliveries",
+            // Run once a minute as a safety net for delayed retries.
+            "15 * * * * *".parse()?,
+            pasion_storage::queue::ProcessNotificationDeliveriesJob::default(),
+        )
         .add_schedule(
             "cleanup-revoked-oauth-access-tokens",
             // Run this job every hour at minute 0

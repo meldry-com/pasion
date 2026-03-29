@@ -57,4 +57,10 @@ impl SmsSender {
 
         self.transport.send(to, &body).await
     }
+
+    /// Return the stable provider binding key for the configured transport.
+    #[must_use]
+    pub fn provider_binding_key(&self) -> &'static str {
+        self.transport.binding_key()
+    }
 }
