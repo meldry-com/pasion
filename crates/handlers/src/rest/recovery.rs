@@ -3,17 +3,20 @@
 //! These endpoints mirror the logic in `crate::views::recovery` but return
 //! JSON instead of rendered HTML, making them suitable for SPA / mobile
 //! clients.
-
-use std::str::FromStr;
-
-use lettre::Address;
 use salvo::oapi::ToSchema;
 use salvo::prelude::*;
 use serde::{Deserialize, Serialize};
 use ulid::Ulid;
 
 use super::{DepotExt, RouteError, extract_bound_activity_tracker, make_clock, make_rng};
-use crate::{RequesterFingerprint, notification_dispatch::schedule_account_recovery};
+use crate::{
+    RequesterFingerprint,
+    account_recovery::{
+        LoadAccountRecoverySessionError, ResendAccountRecoveryError, StartAccountRecoveryError,
+        load_account_recovery_session, recovery_session_status, resend_account_recovery,
+        start_account_recovery,
+    },
+};
 
 // ── POST /api/v1/auth/recovery/start ───────────────────────────
 
@@ -70,44 +73,40 @@ pub async fn post_recovery_start(
         }));
     }
 
-    // Validate email format
-    if Address::from_str(&input.email).is_err() {
-        return Ok(Json(StartRecoveryResponse {
-            status: "error",
-            id: None,
-            error: Some("invalid_email".into()),
-        }));
-    }
+    let repo = repo_factory.create().await?;
 
-    // Rate limit check
-    if let Err(e) = limiter.check_account_recovery(requester, &input.email) {
-        tracing::warn!(error = &e as &dyn std::error::Error);
-        return Ok(Json(StartRecoveryResponse {
-            status: "error",
-            id: None,
-            error: Some("rate_limited".into()),
-        }));
-    }
-
-    let mut repo = repo_factory.create().await?;
-
-    // Create the recovery session
-    let session = repo
-        .user_recovery()
-        .add_session(
-            &mut rng,
-            &clock,
-            input.email,
-            user_agent,
-            ip_address,
-            notification_language,
-        )
-        .await?;
-
-    // Schedule recovery emails
-    schedule_account_recovery(&mut repo, &mut rng, &clock, &session).await?;
-
-    repo.save().await?;
+    let session = match start_account_recovery(
+        repo,
+        &limiter,
+        &mut rng,
+        &clock,
+        requester,
+        input.email,
+        user_agent,
+        ip_address,
+        notification_language,
+    )
+    .await
+    {
+        Ok(session) => session,
+        Err(StartAccountRecoveryError::InvalidEmail) => {
+            return Ok(Json(StartRecoveryResponse {
+                status: "error",
+                id: None,
+                error: Some("invalid_email".into()),
+            }));
+        }
+        Err(StartAccountRecoveryError::RateLimited) => {
+            return Ok(Json(StartRecoveryResponse {
+                status: "error",
+                id: None,
+                error: Some("rate_limited".into()),
+            }));
+        }
+        Err(StartAccountRecoveryError::Repository(error)) => {
+            return Err(error.into());
+        }
+    };
 
     Ok(Json(StartRecoveryResponse {
         status: "success",
@@ -145,19 +144,14 @@ pub async fn get_recovery(
 
     let mut repo = repo_factory.create().await?;
 
-    let session = repo
-        .user_recovery()
-        .lookup_session(id)
-        .await?
-        .ok_or(RouteError::NotFound)?;
+    let session = match load_account_recovery_session(&mut repo, id).await {
+        Ok(session) => session,
+        Err(LoadAccountRecoverySessionError::NotFound) => return Err(RouteError::NotFound),
+        Err(LoadAccountRecoverySessionError::Repository(error)) => return Err(error.into()),
+    };
+    let status = recovery_session_status(&session);
 
     repo.cancel().await?;
-
-    let status = if session.consumed_at.is_some() {
-        "consumed"
-    } else {
-        "pending"
-    };
 
     Ok(Json(RecoveryStatusResponse {
         id: session.id.to_string(),
@@ -206,34 +200,25 @@ pub async fn post_recovery_resend(
         }));
     }
 
-    let mut repo = repo_factory.create().await?;
+    let repo = repo_factory.create().await?;
 
-    let session = repo
-        .user_recovery()
-        .lookup_session(id)
-        .await?
-        .ok_or(RouteError::NotFound)?;
-
-    if session.consumed_at.is_some() {
-        return Ok(Json(ResendRecoveryResponse {
-            status: "error",
-            error: Some("recovery_already_consumed".into()),
-        }));
+    match resend_account_recovery(repo, &limiter, &mut rng, &clock, requester, id).await {
+        Ok(_) => {}
+        Err(ResendAccountRecoveryError::NotFound) => return Err(RouteError::NotFound),
+        Err(ResendAccountRecoveryError::AlreadyConsumed) => {
+            return Ok(Json(ResendRecoveryResponse {
+                status: "error",
+                error: Some("recovery_already_consumed".into()),
+            }));
+        }
+        Err(ResendAccountRecoveryError::RateLimited) => {
+            return Ok(Json(ResendRecoveryResponse {
+                status: "error",
+                error: Some("rate_limited".into()),
+            }));
+        }
+        Err(ResendAccountRecoveryError::Repository(error)) => return Err(error.into()),
     }
-
-    // Rate limit check
-    if let Err(e) = limiter.check_account_recovery(requester, &session.email) {
-        tracing::warn!(error = &e as &dyn std::error::Error);
-        return Ok(Json(ResendRecoveryResponse {
-            status: "error",
-            error: Some("rate_limited".into()),
-        }));
-    }
-
-    // Schedule a new batch of recovery emails
-    schedule_account_recovery(&mut repo, &mut rng, &clock, &session).await?;
-
-    repo.save().await?;
 
     Ok(Json(ResendRecoveryResponse {
         status: "success",

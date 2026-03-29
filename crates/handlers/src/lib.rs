@@ -58,6 +58,7 @@ pub mod user_registration_cookie;
 #[cfg(test)]
 pub(crate) mod views;
 
+mod account_recovery;
 mod activity_tracker;
 mod captcha;
 mod notification_dispatch;

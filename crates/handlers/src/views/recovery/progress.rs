@@ -8,7 +8,14 @@ use salvo::{prelude::*, writing::Text};
 use ulid::Ulid;
 
 use crate::rest::DepotExt;
-use crate::{RequesterFingerprint, notification_dispatch::schedule_account_recovery, rest};
+use crate::{
+    RequesterFingerprint,
+    account_recovery::{
+        LoadAccountRecoverySessionError, ResendAccountRecoveryError, load_account_recovery_session,
+        resend_account_recovery,
+    },
+    rest,
+};
 
 #[handler]
 pub async fn get(
@@ -45,11 +52,16 @@ pub async fn get(
         return Ok(());
     }
 
-    let Some(recovery_session) = repo.user_recovery().lookup_session(id).await? else {
-        // XXX: is that the right thing to do?
-        cookie_jar.write_to_response(res);
-        res.render(url_builder.redirect(&pasion_router::AccountRecoveryStart));
-        return Ok(());
+    let recovery_session = match load_account_recovery_session(&mut repo, id).await {
+        Ok(session) => session,
+        Err(LoadAccountRecoverySessionError::NotFound) => {
+            cookie_jar.write_to_response(res);
+            res.render(url_builder.redirect(&pasion_router::AccountRecoveryStart));
+            return Ok(());
+        }
+        Err(LoadAccountRecoverySessionError::Repository(error)) => {
+            return Err(InternalError::from_anyhow(error.into()));
+        }
     };
 
     if recovery_session.consumed_at.is_some() {
@@ -118,11 +130,16 @@ pub async fn post(
         return Ok(());
     }
 
-    let Some(recovery_session) = repo.user_recovery().lookup_session(id).await? else {
-        // XXX: is that the right thing to do?
-        cookie_jar.write_to_response(res);
-        res.render(url_builder.redirect(&pasion_router::AccountRecoveryStart));
-        return Ok(());
+    let recovery_session = match load_account_recovery_session(&mut repo, id).await {
+        Ok(session) => session,
+        Err(LoadAccountRecoverySessionError::NotFound) => {
+            cookie_jar.write_to_response(res);
+            res.render(url_builder.redirect(&pasion_router::AccountRecoveryStart));
+            return Ok(());
+        }
+        Err(LoadAccountRecoverySessionError::Repository(error)) => {
+            return Err(InternalError::from_anyhow(error.into()));
+        }
     };
 
     if recovery_session.consumed_at.is_some() {
@@ -136,24 +153,44 @@ pub async fn post(
     // Verify the CSRF token
     let () = cookie_jar.verify_form(&clock, form)?;
 
-    // Check the rate limit if we are about to process the form
-    if let Err(e) = limiter.check_account_recovery(requester, &recovery_session.email) {
-        tracing::warn!(error = &e as &dyn std::error::Error);
-        let context = RecoveryProgressContext::new(recovery_session, true)
-            .with_csrf(csrf_token.form_value())
-            .with_language(locale);
-        let rendered = templates.render_recovery_progress(&context)?;
+    let recovery_session = match resend_account_recovery(
+        repo,
+        &limiter,
+        &mut rng,
+        &clock,
+        requester,
+        recovery_session.id,
+    )
+    .await
+    {
+        Ok(session) => session,
+        Err(ResendAccountRecoveryError::AlreadyConsumed) => {
+            let context = EmptyContext.with_language(locale);
+            let rendered = templates.render_recovery_consumed(&context)?;
+            cookie_jar.write_to_response(res);
+            res.render(Text::Html(rendered));
+            return Ok(());
+        }
+        Err(ResendAccountRecoveryError::RateLimited) => {
+            let context = RecoveryProgressContext::new(recovery_session, true)
+                .with_csrf(csrf_token.form_value())
+                .with_language(locale);
+            let rendered = templates.render_recovery_progress(&context)?;
 
-        res.status_code(StatusCode::TOO_MANY_REQUESTS);
-        cookie_jar.write_to_response(res);
-        res.render(Text::Html(rendered));
-        return Ok(());
-    }
-
-    // Schedule a new batch of emails
-    schedule_account_recovery(&mut repo, &mut rng, &clock, &recovery_session).await?;
-
-    repo.save().await?;
+            res.status_code(StatusCode::TOO_MANY_REQUESTS);
+            cookie_jar.write_to_response(res);
+            res.render(Text::Html(rendered));
+            return Ok(());
+        }
+        Err(ResendAccountRecoveryError::NotFound) => {
+            cookie_jar.write_to_response(res);
+            res.render(url_builder.redirect(&pasion_router::AccountRecoveryStart));
+            return Ok(());
+        }
+        Err(ResendAccountRecoveryError::Repository(error)) => {
+            return Err(InternalError::from_anyhow(error.into()));
+        }
+    };
 
     let context = RecoveryProgressContext::new(recovery_session, false)
         .with_csrf(csrf_token.form_value())

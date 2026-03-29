@@ -1,6 +1,3 @@
-use std::str::FromStr;
-
-use lettre::Address;
 use pasion_salvo_utils::{
     InternalError, SessionInfoExt,
     cookies::CookieJar,
@@ -14,7 +11,11 @@ use salvo::{prelude::*, writing::Text};
 use serde::{Deserialize, Serialize};
 
 use crate::rest::DepotExt;
-use crate::{RequesterFingerprint, notification_dispatch::schedule_account_recovery, rest};
+use crate::{
+    RequesterFingerprint,
+    account_recovery::{StartAccountRecoveryError, start_account_recovery},
+    rest,
+};
 
 #[derive(Deserialize, Serialize)]
 pub(crate) struct StartRecoveryForm {
@@ -118,53 +119,54 @@ pub async fn post(
         return Ok(());
     }
 
-    let ip_address = activity_tracker.ip();
-
     let form = cookie_jar.verify_form(&clock, form)?;
     let mut form_state = FormState::from_form(&form);
 
-    if Address::from_str(&form.email).is_err() {
-        form_state =
-            form_state.with_error_on_field(RecoveryStartFormField::Email, FieldError::Invalid);
-    }
+    let session = match start_account_recovery(
+        repo,
+        &limiter,
+        &mut rng,
+        &clock,
+        requester,
+        form.email,
+        user_agent,
+        activity_tracker.ip(),
+        locale.to_string(),
+    )
+    .await
+    {
+        Ok(session) => session,
+        Err(StartAccountRecoveryError::InvalidEmail) => {
+            form_state =
+                form_state.with_error_on_field(RecoveryStartFormField::Email, FieldError::Invalid);
 
-    if form_state.is_valid() {
-        // Check the rate limit if we are about to process the form
-        if let Err(e) = limiter.check_account_recovery(requester, &form.email) {
-            tracing::warn!(error = &e as &dyn std::error::Error);
-            form_state.add_error_on_form(FormError::RateLimitExceeded);
+            let context = RecoveryStartContext::new()
+                .with_form_state(form_state)
+                .with_csrf(csrf_token.form_value())
+                .with_language(locale);
+            let rendered = templates.render_recovery_start(&context)?;
+
+            cookie_jar.write_to_response(res);
+            res.render(Text::Html(rendered));
+            return Ok(());
         }
-    }
+        Err(StartAccountRecoveryError::RateLimited) => {
+            form_state.add_error_on_form(FormError::RateLimitExceeded);
 
-    if !form_state.is_valid() {
-        repo.save().await?;
-        let context = RecoveryStartContext::new()
-            .with_form_state(form_state)
-            .with_csrf(csrf_token.form_value())
-            .with_language(locale);
+            let context = RecoveryStartContext::new()
+                .with_form_state(form_state)
+                .with_csrf(csrf_token.form_value())
+                .with_language(locale);
+            let rendered = templates.render_recovery_start(&context)?;
 
-        let rendered = templates.render_recovery_start(&context)?;
-
-        cookie_jar.write_to_response(res);
-        res.render(Text::Html(rendered));
-        return Ok(());
-    }
-
-    let session = repo
-        .user_recovery()
-        .add_session(
-            &mut rng,
-            &clock,
-            form.email,
-            user_agent,
-            ip_address,
-            locale.to_string(),
-        )
-        .await?;
-
-    schedule_account_recovery(&mut repo, &mut rng, &clock, &session).await?;
-
-    repo.save().await?;
+            cookie_jar.write_to_response(res);
+            res.render(Text::Html(rendered));
+            return Ok(());
+        }
+        Err(StartAccountRecoveryError::Repository(error)) => {
+            return Err(InternalError::from_anyhow(error.into()));
+        }
+    };
 
     cookie_jar.write_to_response(res);
     res.render(url_builder.redirect(&pasion_router::AccountRecoveryProgress::new(session.id)));

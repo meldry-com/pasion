@@ -8,7 +8,7 @@ use super::{
     DepotExt, NodeType, RouteError, extract_bound_activity_tracker, extract_session_info,
     get_requester, make_clock, make_rng,
 };
-use crate::notification_dispatch::schedule_account_recovery;
+use crate::account_recovery::{ResendAccountRecoveryError, resend_account_recovery};
 
 // ── POST /api/v1/viewer/password ───────────────────────────────
 
@@ -281,16 +281,36 @@ pub async fn resend_recovery_email(
         .await?
         .context("Could not load recovery session")
         .map_err(|e| RouteError::Internal(e.into()))?;
+    let session_id = session.id;
 
-    if let Err(_e) = limiter.check_account_recovery(requester.fingerprint(), &session.email) {
-        return Ok(Json(ResendRecoveryResponse {
-            status: "RATE_LIMITED",
-        }));
+    match resend_account_recovery(
+        repo,
+        &limiter,
+        &mut rng,
+        &clock,
+        requester.fingerprint(),
+        session_id,
+    )
+    .await
+    {
+        Ok(_) => {}
+        Err(ResendAccountRecoveryError::NotFound) => {
+            return Err(RouteError::Internal(Box::new(std::io::Error::other(
+                "Could not load recovery session",
+            ))));
+        }
+        Err(ResendAccountRecoveryError::AlreadyConsumed) => {
+            return Ok(Json(ResendRecoveryResponse {
+                status: "RECOVERY_TICKET_ALREADY_USED",
+            }));
+        }
+        Err(ResendAccountRecoveryError::RateLimited) => {
+            return Ok(Json(ResendRecoveryResponse {
+                status: "RATE_LIMITED",
+            }));
+        }
+        Err(ResendAccountRecoveryError::Repository(error)) => return Err(error.into()),
     }
-
-    schedule_account_recovery(&mut repo, &mut rng, &clock, &session).await?;
-
-    repo.save().await?;
 
     Ok(Json(ResendRecoveryResponse { status: "SENT" }))
 }
