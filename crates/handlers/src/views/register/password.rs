@@ -1,32 +1,28 @@
-use std::{str::FromStr, sync::Arc};
+use std::sync::Arc;
 
-use lettre::Address;
 use pasion_data_model::CaptchaConfig;
 use pasion_i18n::DataLocale;
-use pasion_matrix::HomeserverConnection;
 use pasion_salvo_utils::{
     InternalError, SessionInfoExt,
     cookies::CookieJar,
     csrf::{CsrfExt, CsrfToken, ProtectedForm},
 };
-use pasion_storage::{
-    RepositoryAccess,
-    user::{UserEmailRepository, UserRepository},
-};
+use pasion_storage::RepositoryAccess;
 use pasion_templates::{
     FieldError, FormError, FormState, PasswordRegisterContext, RegisterFormField, TemplateContext,
     Templates, ToFormState,
 };
 use salvo::{prelude::*, writing::Text};
 use serde::{Deserialize, Serialize};
-use zeroize::Zeroizing;
 
 use super::cookie::UserRegistrationSessions;
 use crate::{
     RequesterFingerprint, SiteConfig,
-    account_registration::{StartPasswordRegistrationRequest, start_password_registration},
+    account_registration::{
+        BeginPasswordRegistrationIssue, BeginPasswordRegistrationRequest,
+        BeginPasswordRegistrationResult, EmailAvailabilityCheck, begin_password_registration,
+    },
     captcha::Form as CaptchaForm,
-    passwords::PasswordManager,
     rest,
     views::shared::OptionalPostAuthAction,
 };
@@ -134,10 +130,6 @@ pub async fn post(
     let http_client = depot.http_client()?;
     let limiter = depot.limiter()?;
     let policy_factory = depot.policy_factory()?;
-    let mut policy = policy_factory
-        .instantiate()
-        .await
-        .map_err(|e| InternalError::from_anyhow(e.into()))?;
     let mut repo = depot.repo_factory()?.create().await?;
     let activity_tracker = rest::extract_bound_activity_tracker(req, depot);
     let requester = activity_tracker
@@ -186,7 +178,6 @@ pub async fn post(
         .password_registration_contact_required
         .then_some(form.email);
 
-    // Validate the form
     let state = {
         let mut state = state;
 
@@ -194,137 +185,8 @@ pub async fn post(
             state.add_error_on_form(FormError::Captcha);
         }
 
-        let mut homeserver_denied_username = false;
-        if form.username.is_empty() {
-            state.add_error_on_field(RegisterFormField::Username, FieldError::Required);
-        } else if repo.user().exists(&form.username).await? {
-            // The user already exists in the database
-            state.add_error_on_field(RegisterFormField::Username, FieldError::Exists);
-        } else if !homeserver
-            .is_localpart_available(&form.username)
-            .await
-            .map_err(InternalError::from_anyhow)?
-        {
-            // The user already exists on the homeserver
-            tracing::warn!(
-                username = &form.username,
-                "Homeserver denied username provided by user"
-            );
-
-            // We defer adding the error on the field, until we know whether we had another
-            // error from the policy, to avoid showing both
-            homeserver_denied_username = true;
-        }
-
-        if let Some(email) = &email {
-            // Note that we don't check here if the email is already taken here, as
-            // we don't want to leak the information about other users. Instead, we will
-            // show an error message once the user confirmed their email address.
-            if email.is_empty() {
-                state.add_error_on_field(RegisterFormField::Email, FieldError::Required);
-            } else if Address::from_str(email).is_err() {
-                state.add_error_on_field(RegisterFormField::Email, FieldError::Invalid);
-            }
-        }
-
-        if form.password.is_empty() {
-            state.add_error_on_field(RegisterFormField::Password, FieldError::Required);
-        }
-
-        if form.password_confirm.is_empty() {
-            state.add_error_on_field(RegisterFormField::PasswordConfirm, FieldError::Required);
-        }
-
-        if form.password != form.password_confirm {
-            state.add_error_on_field(RegisterFormField::Password, FieldError::Unspecified);
-            state.add_error_on_field(
-                RegisterFormField::PasswordConfirm,
-                FieldError::PasswordMismatch,
-            );
-        }
-
-        if !password_manager.is_password_complex_enough(&form.password)? {
-            // TODO localise this error
-            state.add_error_on_field(
-                RegisterFormField::Password,
-                FieldError::Policy {
-                    code: None,
-                    message: "Password is too weak".to_owned(),
-                },
-            );
-        }
-
-        // If the site has terms of service, the user must accept them
         if site_config.tos_uri.is_some() && form.accept_terms != "on" {
             state.add_error_on_field(RegisterFormField::AcceptTerms, FieldError::Required);
-        }
-
-        let res = policy
-            .evaluate_register(pasion_policy::RegisterInput {
-                registration_method: pasion_policy::RegistrationMethod::Password,
-                username: &form.username,
-                email: email.as_deref(),
-                requester: pasion_policy::Requester {
-                    ip_address: activity_tracker.ip(),
-                    user_agent: user_agent.clone(),
-                    ..Default::default()
-                },
-            })
-            .await?;
-
-        for violation in res.violations {
-            match violation.field.as_deref() {
-                Some("email") => state.add_error_on_field(
-                    RegisterFormField::Email,
-                    FieldError::Policy {
-                        code: violation.code.map(|c| c.as_str()),
-                        message: violation.msg,
-                    },
-                ),
-                Some("username") => {
-                    // If the homeserver denied the username, but we also had an error on the policy
-                    // side, we don't want to show both, so we reset the state here
-                    homeserver_denied_username = false;
-                    state.add_error_on_field(
-                        RegisterFormField::Username,
-                        FieldError::Policy {
-                            code: violation.code.map(|c| c.as_str()),
-                            message: violation.msg,
-                        },
-                    );
-                }
-                Some("password") => state.add_error_on_field(
-                    RegisterFormField::Password,
-                    FieldError::Policy {
-                        code: violation.code.map(|c| c.as_str()),
-                        message: violation.msg,
-                    },
-                ),
-                _ => state.add_error_on_form(FormError::Policy {
-                    code: violation.code.map(|c| c.as_str()),
-                    message: violation.msg,
-                }),
-            }
-        }
-
-        if homeserver_denied_username {
-            // XXX: we may want to return different errors like "this username is reserved"
-            state.add_error_on_field(RegisterFormField::Username, FieldError::Exists);
-        }
-
-        if state.is_valid() {
-            // Check the rate limit if we are about to process the form
-            if let Err(e) = limiter.check_registration(requester) {
-                tracing::warn!(error = &e as &dyn std::error::Error);
-                state.add_error_on_form(FormError::RateLimitExceeded);
-            }
-
-            if let Some(email) = &email
-                && let Err(e) = limiter.check_email_authentication_email(requester, email)
-            {
-                tracing::warn!(error = &e as &dyn std::error::Error);
-                state.add_error_on_form(FormError::RateLimitExceeded);
-            }
         }
 
         state
@@ -351,25 +213,54 @@ pub async fn post(
         .post_auth_action
         .map(serde_json::to_value)
         .transpose()?;
-    let started = start_password_registration(
+    let started = match begin_password_registration(
         repo,
         &mut rng,
         &clock,
         &password_manager,
-        StartPasswordRegistrationRequest {
+        homeserver.as_ref(),
+        policy_factory.as_ref(),
+        &limiter,
+        BeginPasswordRegistrationRequest {
             username: form.username,
             email,
             phone: None,
-            password: Zeroizing::new(form.password),
+            password: form.password,
+            password_confirm: form.password_confirm,
             user_agent,
             ip_address,
-            post_auth_action,
-            terms_url: site_config.tos_uri.clone(),
+            requester,
             notification_language: locale.to_string(),
+            post_auth_action,
+            password_registration_enabled: site_config.password_registration_enabled,
+            password_registration_contact_required: site_config
+                .password_registration_contact_required,
+            terms_url: site_config.tos_uri.clone(),
+            email_availability: EmailAvailabilityCheck::Deferred,
         },
     )
     .await
-    .map_err(InternalError::from_anyhow)?;
+    .map_err(InternalError::from_anyhow)?
+    {
+        BeginPasswordRegistrationResult::Started(started) => started,
+        BeginPasswordRegistrationResult::Rejected { issues } => {
+            let content = render(
+                locale,
+                PasswordRegisterContext::default()
+                    .with_form_state(apply_begin_password_registration_issues(state, issues)),
+                query,
+                csrf_token,
+                &mut repo,
+                &templates,
+                site_config.captcha.clone(),
+            )
+            .await?;
+
+            cookie_jar.write_to_response(res);
+            res.render(Text::Html(content));
+            return Ok(());
+        }
+    };
     let registration = started.registration;
 
     let cookie_jar = UserRegistrationSessions::load(&cookie_jar)
@@ -406,6 +297,95 @@ async fn render(
 
     let content = templates.render_password_register(&ctx)?;
     Ok(content)
+}
+
+fn apply_begin_password_registration_issues(
+    mut state: FormState<RegisterFormField>,
+    issues: Vec<BeginPasswordRegistrationIssue>,
+) -> FormState<RegisterFormField> {
+    let has_username_policy_issue = issues.iter().any(|issue| {
+        matches!(
+            issue,
+            BeginPasswordRegistrationIssue::Policy {
+                field: Some(field),
+                ..
+            } if field == "username"
+        )
+    });
+
+    for issue in issues {
+        match issue {
+            BeginPasswordRegistrationIssue::RegistrationDisabled => {
+                state.add_error_on_form(FormError::Internal);
+            }
+            BeginPasswordRegistrationIssue::UsernameRequired => {
+                state.add_error_on_field(RegisterFormField::Username, FieldError::Required);
+            }
+            BeginPasswordRegistrationIssue::UsernameExists => {
+                if !has_username_policy_issue {
+                    state.add_error_on_field(RegisterFormField::Username, FieldError::Exists);
+                }
+            }
+            BeginPasswordRegistrationIssue::EmailOrPhoneRequired => {
+                state.add_error_on_field(RegisterFormField::Email, FieldError::Required);
+            }
+            BeginPasswordRegistrationIssue::EmailInvalid => {
+                state.add_error_on_field(RegisterFormField::Email, FieldError::Invalid);
+            }
+            BeginPasswordRegistrationIssue::EmailInUse => {
+                state.add_error_on_field(RegisterFormField::Email, FieldError::Unspecified);
+            }
+            BeginPasswordRegistrationIssue::PhoneInUse => {
+                state.add_error_on_form(FormError::Internal);
+            }
+            BeginPasswordRegistrationIssue::PasswordRequired => {
+                state.add_error_on_field(RegisterFormField::Password, FieldError::Required);
+            }
+            BeginPasswordRegistrationIssue::PasswordConfirmRequired => {
+                state.add_error_on_field(RegisterFormField::PasswordConfirm, FieldError::Required);
+            }
+            BeginPasswordRegistrationIssue::PasswordMismatch => {
+                state.add_error_on_field(RegisterFormField::Password, FieldError::Unspecified);
+                state.add_error_on_field(
+                    RegisterFormField::PasswordConfirm,
+                    FieldError::PasswordMismatch,
+                );
+            }
+            BeginPasswordRegistrationIssue::PasswordTooWeak => {
+                state.add_error_on_field(
+                    RegisterFormField::Password,
+                    FieldError::Policy {
+                        code: None,
+                        message: "Password is too weak".to_owned(),
+                    },
+                );
+            }
+            BeginPasswordRegistrationIssue::RateLimited => {
+                state.add_error_on_form(FormError::RateLimitExceeded);
+            }
+            BeginPasswordRegistrationIssue::Policy {
+                field,
+                code,
+                message,
+            } => match field.as_deref() {
+                Some("email") => state.add_error_on_field(
+                    RegisterFormField::Email,
+                    FieldError::Policy { code, message },
+                ),
+                Some("username") => state.add_error_on_field(
+                    RegisterFormField::Username,
+                    FieldError::Policy { code, message },
+                ),
+                Some("password") => state.add_error_on_field(
+                    RegisterFormField::Password,
+                    FieldError::Policy { code, message },
+                ),
+                _ => state.add_error_on_form(FormError::Policy { code, message }),
+            },
+        }
+    }
+
+    state
 }
 
 #[cfg(test)]

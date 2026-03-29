@@ -1,12 +1,14 @@
-use std::net::IpAddr;
+use std::{net::IpAddr, str::FromStr};
 
 use anyhow::Error as AnyhowError;
 use chrono::Duration;
+use lettre::Address;
 use pasion_data_model::{
     BrowserSession, Clock, UpstreamOAuthAuthorizationSession, UpstreamOAuthLink, User,
     UserEmailAuthentication, UserPhoneAuthentication, UserRegistration, UserRegistrationToken,
 };
 use pasion_matrix::HomeserverConnection;
+use pasion_policy::PolicyFactory;
 use pasion_storage::{
     BoxRepository, RepositoryAccess, RepositoryError,
     queue::{ProvisionUserJob, QueueJobRepositoryExt as _},
@@ -42,16 +44,108 @@ pub struct StartPasswordRegistrationRequest {
     pub notification_language: String,
 }
 
+pub struct BeginPasswordRegistrationRequest {
+    pub username: String,
+    pub email: Option<String>,
+    pub phone: Option<String>,
+    pub password: String,
+    pub password_confirm: String,
+    pub user_agent: Option<String>,
+    pub ip_address: Option<IpAddr>,
+    pub requester: RequesterFingerprint,
+    pub notification_language: String,
+    pub post_auth_action: Option<Value>,
+    pub password_registration_enabled: bool,
+    pub password_registration_contact_required: bool,
+    pub terms_url: Option<Url>,
+    pub email_availability: EmailAvailabilityCheck,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum EmailAvailabilityCheck {
+    Precheck,
+    Deferred,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum BeginPasswordRegistrationIssue {
+    RegistrationDisabled,
+    UsernameRequired,
+    UsernameExists,
+    EmailOrPhoneRequired,
+    EmailInvalid,
+    EmailInUse,
+    PhoneInUse,
+    PasswordRequired,
+    PasswordConfirmRequired,
+    PasswordMismatch,
+    PasswordTooWeak,
+    RateLimited,
+    Policy {
+        field: Option<String>,
+        code: Option<&'static str>,
+        message: String,
+    },
+}
+
+impl BeginPasswordRegistrationIssue {
+    #[must_use]
+    pub fn as_api_error(&self) -> String {
+        match self {
+            Self::RegistrationDisabled => "registration_disabled".into(),
+            Self::UsernameRequired => "username_required".into(),
+            Self::UsernameExists => "username_exists".into(),
+            Self::EmailOrPhoneRequired => "email_or_phone_required".into(),
+            Self::EmailInvalid => "email_invalid".into(),
+            Self::EmailInUse => "email_in_use".into(),
+            Self::PhoneInUse => "phone_in_use".into(),
+            Self::PasswordRequired => "password_required".into(),
+            Self::PasswordConfirmRequired => "password_confirm_required".into(),
+            Self::PasswordMismatch => "password_mismatch".into(),
+            Self::PasswordTooWeak => "password_too_weak".into(),
+            Self::RateLimited => "rate_limited".into(),
+            Self::Policy { field, message, .. } => {
+                let field = field.as_deref().unwrap_or("form");
+                format!("policy_{field}:{message}")
+            }
+        }
+    }
+}
+
 pub struct StartedPasswordRegistration {
     pub registration: UserRegistration,
     pub email_verified: bool,
     pub phone_verified: bool,
 }
 
+pub enum BeginPasswordRegistrationResult {
+    Started(StartedPasswordRegistration),
+    Rejected {
+        issues: Vec<BeginPasswordRegistrationIssue>,
+    },
+}
+
 pub struct RegistrationProgress {
     pub registration: UserRegistration,
     pub email_authentication: Option<UserEmailAuthentication>,
     pub phone_authentication: Option<UserPhoneAuthentication>,
+}
+
+pub struct RegistrationStatusSummary {
+    pub registration: UserRegistration,
+    pub email_pending: bool,
+    pub phone_pending: bool,
+    pub steps_completed: Vec<&'static str>,
+    pub next_step: &'static str,
+}
+
+pub struct RegistrationEmailStepContext {
+    pub registration: UserRegistration,
+    pub email_authentication: UserEmailAuthentication,
+}
+
+pub struct RegistrationDisplayNameStepContext {
+    pub registration: UserRegistration,
 }
 
 pub struct CompleteRegistrationRequest {
@@ -138,9 +232,51 @@ pub enum StartPasswordRegistrationError {
 }
 
 #[derive(Debug, Error)]
+pub enum BeginPasswordRegistrationError {
+    #[error(transparent)]
+    Repository(#[from] RepositoryError),
+
+    #[error(transparent)]
+    Internal(#[from] AnyhowError),
+}
+
+#[derive(Debug, Error)]
 pub enum LoadRegistrationProgressError {
     #[error("registration not found")]
     NotFound,
+
+    #[error(transparent)]
+    Repository(#[from] RepositoryError),
+}
+
+#[derive(Debug, Error)]
+pub enum LoadRegistrationEmailStepError {
+    #[error("registration not found")]
+    NotFound,
+
+    #[error("registration already completed")]
+    RegistrationCompleted(UserRegistration),
+
+    #[error("registration has no email authentication")]
+    NoEmailAuthentication,
+
+    #[error("registration email authentication not found")]
+    EmailAuthenticationMissing,
+
+    #[error("email authentication already completed")]
+    EmailAlreadyVerified,
+
+    #[error(transparent)]
+    Repository(#[from] RepositoryError),
+}
+
+#[derive(Debug, Error)]
+pub enum LoadRegistrationDisplayNameStepError {
+    #[error("registration not found")]
+    NotFound,
+
+    #[error("registration already completed")]
+    RegistrationCompleted(UserRegistration),
 
     #[error(transparent)]
     Repository(#[from] RepositoryError),
@@ -416,6 +552,93 @@ pub async fn load_registration_progress(
     })
 }
 
+pub async fn load_registration_status(
+    repo: &mut BoxRepository,
+    registration_id: Ulid,
+) -> Result<RegistrationStatusSummary, LoadRegistrationProgressError> {
+    let progress = load_registration_progress(repo, registration_id).await?;
+
+    let email_pending =
+        progress.registration.email_authentication_id.is_some() && !progress.email_verified();
+    let phone_pending =
+        progress.registration.phone_authentication_id.is_some() && !progress.phone_verified();
+    let steps_completed = progress.completed_steps();
+    let next_step = progress.next_step();
+
+    Ok(RegistrationStatusSummary {
+        registration: progress.registration,
+        email_pending,
+        phone_pending,
+        steps_completed,
+        next_step,
+    })
+}
+
+pub async fn load_registration_email_step(
+    repo: &mut BoxRepository,
+    registration_id: Ulid,
+) -> Result<RegistrationEmailStepContext, LoadRegistrationEmailStepError> {
+    let progress = load_registration_progress(repo, registration_id)
+        .await
+        .map_err(|error| match error {
+            LoadRegistrationProgressError::NotFound => LoadRegistrationEmailStepError::NotFound,
+            LoadRegistrationProgressError::Repository(error) => {
+                LoadRegistrationEmailStepError::Repository(error)
+            }
+        })?;
+
+    let registration = progress.registration;
+
+    if registration.completed_at.is_some() {
+        return Err(LoadRegistrationEmailStepError::RegistrationCompleted(
+            registration,
+        ));
+    }
+
+    if registration.email_authentication_id.is_none() {
+        return Err(LoadRegistrationEmailStepError::NoEmailAuthentication);
+    }
+
+    let email_authentication = progress
+        .email_authentication
+        .ok_or(LoadRegistrationEmailStepError::EmailAuthenticationMissing)?;
+
+    if email_authentication.completed_at.is_some() {
+        return Err(LoadRegistrationEmailStepError::EmailAlreadyVerified);
+    }
+
+    Ok(RegistrationEmailStepContext {
+        registration,
+        email_authentication,
+    })
+}
+
+pub async fn load_registration_display_name_step(
+    repo: &mut BoxRepository,
+    registration_id: Ulid,
+) -> Result<RegistrationDisplayNameStepContext, LoadRegistrationDisplayNameStepError> {
+    let progress = load_registration_progress(repo, registration_id)
+        .await
+        .map_err(|error| match error {
+            LoadRegistrationProgressError::NotFound => {
+                LoadRegistrationDisplayNameStepError::NotFound
+            }
+            LoadRegistrationProgressError::Repository(error) => {
+                LoadRegistrationDisplayNameStepError::Repository(error)
+            }
+        })?;
+
+    let registration = progress.registration;
+
+    if registration.completed_at.is_some() {
+        return Err(LoadRegistrationDisplayNameStepError::RegistrationCompleted(
+            registration,
+        ));
+    }
+
+    Ok(RegistrationDisplayNameStepContext { registration })
+}
+
 pub async fn start_password_registration(
     mut repo: BoxRepository,
     rng: &mut (dyn CryptoRngCore + Send),
@@ -506,6 +729,191 @@ pub async fn start_password_registration(
         email_verified,
         phone_verified,
     })
+}
+
+pub async fn begin_password_registration(
+    mut repo: BoxRepository,
+    rng: &mut (dyn CryptoRngCore + Send),
+    clock: &dyn Clock,
+    password_manager: &PasswordManager,
+    homeserver: &dyn HomeserverConnection,
+    policy_factory: &PolicyFactory,
+    limiter: &Limiter,
+    request: BeginPasswordRegistrationRequest,
+) -> Result<BeginPasswordRegistrationResult, BeginPasswordRegistrationError> {
+    if !request.password_registration_enabled {
+        return Ok(BeginPasswordRegistrationResult::Rejected {
+            issues: vec![BeginPasswordRegistrationIssue::RegistrationDisabled],
+        });
+    }
+
+    let mut issues: Vec<BeginPasswordRegistrationIssue> = Vec::new();
+
+    if request.username.is_empty() {
+        issues.push(BeginPasswordRegistrationIssue::UsernameRequired);
+    } else if repo.user().exists(&request.username).await? {
+        issues.push(BeginPasswordRegistrationIssue::UsernameExists);
+    } else {
+        match homeserver.is_localpart_available(&request.username).await {
+            Ok(false) => issues.push(BeginPasswordRegistrationIssue::UsernameExists),
+            Ok(true) => {}
+            Err(error) => {
+                tracing::warn!(
+                    error = &*error as &dyn std::error::Error,
+                    "Failed to check localpart availability, skipping homeserver check"
+                );
+            }
+        }
+    }
+
+    let email_str = request.email.unwrap_or_default();
+    let phone_str = request.phone.unwrap_or_default();
+
+    if request.password_registration_contact_required
+        && email_str.is_empty()
+        && phone_str.is_empty()
+    {
+        issues.push(BeginPasswordRegistrationIssue::EmailOrPhoneRequired);
+    }
+
+    let email = if !email_str.is_empty() {
+        if Address::from_str(&email_str).is_err() {
+            issues.push(BeginPasswordRegistrationIssue::EmailInvalid);
+            None
+        } else if matches!(request.email_availability, EmailAvailabilityCheck::Precheck)
+            && repo
+                .user_email()
+                .count(UserEmailFilter::new().for_email(&email_str))
+                .await?
+                > 0
+        {
+            issues.push(BeginPasswordRegistrationIssue::EmailInUse);
+            None
+        } else {
+            Some(email_str)
+        }
+    } else {
+        None
+    };
+
+    let phone = if !phone_str.is_empty() {
+        if repo.user_phone().find_by_phone(&phone_str).await?.is_some() {
+            issues.push(BeginPasswordRegistrationIssue::PhoneInUse);
+            None
+        } else {
+            Some(phone_str)
+        }
+    } else {
+        None
+    };
+
+    if request.password.is_empty() {
+        issues.push(BeginPasswordRegistrationIssue::PasswordRequired);
+    }
+
+    if request.password_confirm.is_empty() {
+        issues.push(BeginPasswordRegistrationIssue::PasswordConfirmRequired);
+    }
+
+    if request.password != request.password_confirm {
+        issues.push(BeginPasswordRegistrationIssue::PasswordMismatch);
+    }
+
+    if issues.is_empty()
+        && !password_manager
+            .is_password_complex_enough(&request.password)
+            .map_err(AnyhowError::from)?
+    {
+        issues.push(BeginPasswordRegistrationIssue::PasswordTooWeak);
+    }
+
+    if issues.is_empty() {
+        let mut policy = policy_factory
+            .instantiate()
+            .await
+            .map_err(AnyhowError::from)?;
+        let result = policy
+            .evaluate_register(pasion_policy::RegisterInput {
+                registration_method: pasion_policy::RegistrationMethod::Password,
+                username: &request.username,
+                email: email.as_deref(),
+                requester: pasion_policy::Requester {
+                    ip_address: request.ip_address,
+                    user_agent: request.user_agent.clone(),
+                    ..Default::default()
+                },
+            })
+            .await
+            .map_err(AnyhowError::from)?;
+
+        for violation in result.violations {
+            issues.push(BeginPasswordRegistrationIssue::Policy {
+                field: violation.field,
+                code: violation.code.map(|code| code.as_str()),
+                message: violation.msg,
+            });
+        }
+    }
+
+    if issues.is_empty() {
+        let mut rate_limited = false;
+
+        if let Err(error) = limiter.check_registration(request.requester) {
+            tracing::warn!(error = &error as &dyn std::error::Error);
+            rate_limited = true;
+        }
+
+        if let Some(email) = &email
+            && let Err(error) = limiter.check_email_authentication_email(request.requester, email)
+        {
+            tracing::warn!(error = &error as &dyn std::error::Error);
+            rate_limited = true;
+        }
+
+        if let Some(phone) = &phone
+            && let Err(error) = limiter.check_phone_authentication_phone(request.requester, phone)
+        {
+            tracing::warn!(error = &error as &dyn std::error::Error);
+            rate_limited = true;
+        }
+
+        if rate_limited {
+            issues.push(BeginPasswordRegistrationIssue::RateLimited);
+        }
+    }
+
+    if !issues.is_empty() {
+        return Ok(BeginPasswordRegistrationResult::Rejected { issues });
+    }
+
+    let started = start_password_registration(
+        repo,
+        rng,
+        clock,
+        password_manager,
+        StartPasswordRegistrationRequest {
+            username: request.username,
+            email,
+            phone,
+            password: Zeroizing::new(request.password),
+            user_agent: request.user_agent,
+            ip_address: request.ip_address,
+            post_auth_action: request.post_auth_action,
+            terms_url: request.terms_url,
+            notification_language: request.notification_language,
+        },
+    )
+    .await
+    .map_err(|error| match error {
+        StartPasswordRegistrationError::Repository(error) => {
+            BeginPasswordRegistrationError::Repository(error)
+        }
+        StartPasswordRegistrationError::Password(error) => {
+            BeginPasswordRegistrationError::Internal(error)
+        }
+    })?;
+
+    Ok(BeginPasswordRegistrationResult::Started(started))
 }
 
 pub async fn resend_pending_registration_verification(

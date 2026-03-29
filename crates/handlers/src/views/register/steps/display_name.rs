@@ -15,8 +15,8 @@ use ulid::Ulid;
 use crate::rest::DepotExt;
 use crate::{
     account_registration::{
-        LoadRegistrationProgressError, SetRegistrationDisplayNameError, load_registration_progress,
-        set_registration_display_name,
+        LoadRegistrationDisplayNameStepError, SetRegistrationDisplayNameError,
+        load_registration_display_name_step, set_registration_display_name,
     },
     rest,
     views::shared::OptionalPostAuthAction,
@@ -59,31 +59,26 @@ pub async fn get(
 
     let (csrf_token, cookie_jar) = cookie_jar.csrf_token(&clock, &mut rng);
 
-    let progress =
-        load_registration_progress(&mut repo, id)
-            .await
-            .map_err(|error| match error {
-                LoadRegistrationProgressError::NotFound => {
-                    InternalError::from_anyhow(anyhow::anyhow!("Could not find user registration"))
-                }
-                LoadRegistrationProgressError::Repository(error) => {
-                    InternalError::from_anyhow(error.into())
-                }
-            })?;
-    let registration = progress.registration;
+    match load_registration_display_name_step(&mut repo, id).await {
+        Ok(_) => {}
+        Err(LoadRegistrationDisplayNameStepError::NotFound) => {
+            return Err(InternalError::from_anyhow(anyhow::anyhow!(
+                "Could not find user registration"
+            )));
+        }
+        Err(LoadRegistrationDisplayNameStepError::RegistrationCompleted(registration)) => {
+            let post_auth_action: Option<PostAuthAction> = registration
+                .post_auth_action
+                .map(serde_json::from_value)
+                .transpose()?;
 
-    // If the registration is completed, we can go to the registration destination
-    // XXX: this might not be the right thing to do? Maybe an error page would be
-    // better?
-    if registration.completed_at.is_some() {
-        let post_auth_action: Option<PostAuthAction> = registration
-            .post_auth_action
-            .map(serde_json::from_value)
-            .transpose()?;
-
-        cookie_jar.write_to_response(res);
-        res.render(OptionalPostAuthAction::from(post_auth_action).go_next(&url_builder));
-        return Ok(());
+            cookie_jar.write_to_response(res);
+            res.render(OptionalPostAuthAction::from(post_auth_action).go_next(&url_builder));
+            return Ok(());
+        }
+        Err(LoadRegistrationDisplayNameStepError::Repository(error)) => {
+            return Err(InternalError::from_anyhow(error.into()));
+        }
     }
 
     let ctx = RegisterStepsDisplayNameContext::new()
@@ -116,32 +111,29 @@ pub async fn post(
         .await
         .map_err(|e| InternalError::from_anyhow(e.into()))?;
 
-    let progress =
-        load_registration_progress(&mut repo, id)
-            .await
-            .map_err(|error| match error {
-                LoadRegistrationProgressError::NotFound => {
-                    InternalError::from_anyhow(anyhow::anyhow!("Could not find user registration"))
-                }
-                LoadRegistrationProgressError::Repository(error) => {
-                    InternalError::from_anyhow(error.into())
-                }
-            })?;
-    let registration = progress.registration;
+    let step = match load_registration_display_name_step(&mut repo, id).await {
+        Ok(step) => step,
+        Err(LoadRegistrationDisplayNameStepError::NotFound) => {
+            return Err(InternalError::from_anyhow(anyhow::anyhow!(
+                "Could not find user registration"
+            )));
+        }
+        Err(LoadRegistrationDisplayNameStepError::RegistrationCompleted(registration)) => {
+            let post_auth_action: Option<PostAuthAction> = registration
+                .post_auth_action
+                .map(serde_json::from_value)
+                .transpose()?;
 
-    // If the registration is completed, we can go to the registration destination
-    // XXX: this might not be the right thing to do? Maybe an error page would be
-    // better?
-    if registration.completed_at.is_some() {
-        let post_auth_action: Option<PostAuthAction> = registration
-            .post_auth_action
-            .map(serde_json::from_value)
-            .transpose()?;
+            cookie_jar.write_to_response(res);
+            res.render(OptionalPostAuthAction::from(post_auth_action).go_next(&url_builder));
+            return Ok(());
+        }
+        Err(LoadRegistrationDisplayNameStepError::Repository(error)) => {
+            return Err(InternalError::from_anyhow(error.into()));
+        }
+    };
 
-        cookie_jar.write_to_response(res);
-        res.render(OptionalPostAuthAction::from(post_auth_action).go_next(&url_builder));
-        return Ok(());
-    }
+    let registration = step.registration;
 
     let form = cookie_jar.verify_form(&clock, form)?;
 

@@ -1,4 +1,3 @@
-use anyhow::Context;
 use pasion_router::PostAuthAction;
 use pasion_salvo_utils::{
     InternalError,
@@ -16,8 +15,8 @@ use ulid::Ulid;
 use crate::rest::DepotExt;
 use crate::{
     account_registration::{
-        LoadRegistrationProgressError, VerifyRegistrationEmailCodeError,
-        load_registration_progress, verify_registration_email_code,
+        LoadRegistrationEmailStepError, VerifyRegistrationEmailCodeError,
+        load_registration_email_step, verify_registration_email_code,
     },
     rest,
     views::shared::OptionalPostAuthAction,
@@ -49,52 +48,40 @@ pub async fn get(
 
     let (csrf_token, cookie_jar) = cookie_jar.csrf_token(&clock, &mut rng);
 
-    let progress =
-        load_registration_progress(&mut repo, id)
-            .await
-            .map_err(|error| match error {
-                LoadRegistrationProgressError::NotFound => {
-                    InternalError::from_anyhow(anyhow::anyhow!("Could not find user registration"))
-                }
-                LoadRegistrationProgressError::Repository(error) => {
-                    InternalError::from_anyhow(error.into())
-                }
-            })?;
-    let registration = progress.registration;
+    let step = match load_registration_email_step(&mut repo, id).await {
+        Ok(step) => step,
+        Err(LoadRegistrationEmailStepError::NotFound) => {
+            return Err(InternalError::from_anyhow(anyhow::anyhow!(
+                "Could not find user registration"
+            )));
+        }
+        Err(LoadRegistrationEmailStepError::RegistrationCompleted(registration)) => {
+            let post_auth_action: Option<PostAuthAction> = registration
+                .post_auth_action
+                .map(serde_json::from_value)
+                .transpose()?;
 
-    // If the registration is completed, we can go to the registration destination
-    // XXX: this might not be the right thing to do? Maybe an error page would be
-    // better?
-    if registration.completed_at.is_some() {
-        let post_auth_action: Option<PostAuthAction> = registration
-            .post_auth_action
-            .map(serde_json::from_value)
-            .transpose()?;
-
-        cookie_jar.write_to_response(res);
-        res.render(OptionalPostAuthAction::from(post_auth_action).go_next(&url_builder));
-        return Ok(());
-    }
-
-    let email_authentication = if registration.email_authentication_id.is_none() {
-        return Err(InternalError::from_anyhow(anyhow::anyhow!(
-            "No email authentication started for this registration"
-        )));
-    } else {
-        progress
-            .email_authentication
-            .context("Could not find email authentication")
-            .map_err(InternalError::from_anyhow)?
+            cookie_jar.write_to_response(res);
+            res.render(OptionalPostAuthAction::from(post_auth_action).go_next(&url_builder));
+            return Ok(());
+        }
+        Err(LoadRegistrationEmailStepError::NoEmailAuthentication)
+        | Err(LoadRegistrationEmailStepError::EmailAuthenticationMissing) => {
+            return Err(InternalError::from_anyhow(anyhow::anyhow!(
+                "No email authentication started for this registration"
+            )));
+        }
+        Err(LoadRegistrationEmailStepError::EmailAlreadyVerified) => {
+            return Err(InternalError::from_anyhow(anyhow::anyhow!(
+                "Email authentication already completed"
+            )));
+        }
+        Err(LoadRegistrationEmailStepError::Repository(error)) => {
+            return Err(InternalError::from_anyhow(error.into()));
+        }
     };
 
-    if email_authentication.completed_at.is_some() {
-        // XXX: display a better error here
-        return Err(InternalError::from_anyhow(anyhow::anyhow!(
-            "Email authentication already completed"
-        )));
-    }
-
-    let ctx = RegisterStepsVerifyEmailContext::new(email_authentication)
+    let ctx = RegisterStepsVerifyEmailContext::new(step.email_authentication)
         .with_csrf(csrf_token.form_value())
         .with_language(locale);
 
@@ -127,50 +114,41 @@ pub async fn post(
 
     let form = cookie_jar.verify_form(&clock, form)?;
 
-    let progress =
-        load_registration_progress(&mut repo, id)
-            .await
-            .map_err(|error| match error {
-                LoadRegistrationProgressError::NotFound => {
-                    InternalError::from_anyhow(anyhow::anyhow!("Could not find user registration"))
-                }
-                LoadRegistrationProgressError::Repository(error) => {
-                    InternalError::from_anyhow(error.into())
-                }
-            })?;
-    let registration = progress.registration;
+    let step = match load_registration_email_step(&mut repo, id).await {
+        Ok(step) => step,
+        Err(LoadRegistrationEmailStepError::NotFound) => {
+            return Err(InternalError::from_anyhow(anyhow::anyhow!(
+                "Could not find user registration"
+            )));
+        }
+        Err(LoadRegistrationEmailStepError::RegistrationCompleted(registration)) => {
+            let post_auth_action: Option<PostAuthAction> = registration
+                .post_auth_action
+                .map(serde_json::from_value)
+                .transpose()?;
 
-    // If the registration is completed, we can go to the registration destination
-    // XXX: this might not be the right thing to do? Maybe an error page would be
-    // better?
-    if registration.completed_at.is_some() {
-        let post_auth_action: Option<PostAuthAction> = registration
-            .post_auth_action
-            .map(serde_json::from_value)
-            .transpose()?;
-
-        cookie_jar.write_to_response(res);
-        res.render(OptionalPostAuthAction::from(post_auth_action).go_next(&url_builder));
-        return Ok(());
-    }
-
-    let email_authentication = if registration.email_authentication_id.is_none() {
-        return Err(InternalError::from_anyhow(anyhow::anyhow!(
-            "No email authentication started for this registration"
-        )));
-    } else {
-        progress
-            .email_authentication
-            .context("Could not find email authentication")
-            .map_err(InternalError::from_anyhow)?
+            cookie_jar.write_to_response(res);
+            res.render(OptionalPostAuthAction::from(post_auth_action).go_next(&url_builder));
+            return Ok(());
+        }
+        Err(LoadRegistrationEmailStepError::NoEmailAuthentication)
+        | Err(LoadRegistrationEmailStepError::EmailAuthenticationMissing) => {
+            return Err(InternalError::from_anyhow(anyhow::anyhow!(
+                "Could not find email authentication"
+            )));
+        }
+        Err(LoadRegistrationEmailStepError::EmailAlreadyVerified) => {
+            return Err(InternalError::from_anyhow(anyhow::anyhow!(
+                "Email authentication already completed"
+            )));
+        }
+        Err(LoadRegistrationEmailStepError::Repository(error)) => {
+            return Err(InternalError::from_anyhow(error.into()));
+        }
     };
 
-    if email_authentication.completed_at.is_some() {
-        // XXX: display a better error here
-        return Err(InternalError::from_anyhow(anyhow::anyhow!(
-            "Email authentication already completed"
-        )));
-    }
+    let registration = step.registration.clone();
+    let email_authentication = step.email_authentication;
 
     match verify_registration_email_code(repo, &limiter, &clock, id, &form.code).await {
         Ok(_) => {}

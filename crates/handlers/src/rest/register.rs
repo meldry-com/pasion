@@ -5,33 +5,25 @@
 //! constraints, delegate to service functions, and map results to JSON
 //! responses.
 
-use std::str::FromStr;
-
-use lettre::Address;
-use pasion_matrix::HomeserverConnection;
 use pasion_salvo_utils::SessionInfoExt;
-use pasion_storage::{
-    RepositoryAccess,
-    user::{UserEmailFilter, UserEmailRepository, UserPhoneRepository, UserRepository},
-};
 use salvo::oapi::ToSchema;
 use salvo::prelude::*;
 use serde::{Deserialize, Serialize};
 use ulid::Ulid;
-use zeroize::Zeroizing;
 
 use super::{DepotExt, RouteError, extract_bound_activity_tracker, make_clock, make_rng};
 use crate::{
     RequesterFingerprint,
     account_registration::{
+        BeginPasswordRegistrationError, BeginPasswordRegistrationRequest,
+        BeginPasswordRegistrationResult, EmailAvailabilityCheck,
         LoadRegistrationFinishPreparationError, LoadRegistrationProgressError,
         ResendRegistrationVerificationError, ResendRegistrationVerificationStatus,
-        SetRegistrationDisplayNameError, StartPasswordRegistrationRequest,
-        VerifyRegistrationEmailCodeError, VerifyRegistrationPhoneCodeError, complete_registration,
-        load_registration_finish_preparation, load_registration_progress, next_registration_step,
+        SetRegistrationDisplayNameError, VerifyRegistrationEmailCodeError,
+        VerifyRegistrationPhoneCodeError, begin_password_registration, complete_registration,
+        load_registration_finish_preparation, load_registration_status, next_registration_step,
         resend_pending_registration_verification, set_registration_display_name,
-        start_password_registration, verify_registration_email_code,
-        verify_registration_phone_code,
+        verify_registration_email_code, verify_registration_phone_code,
     },
 };
 
@@ -92,184 +84,55 @@ pub async fn post_register(
         .map(|s| s.to_owned());
     let ip_address = activity_tracker.ip();
 
-    if !site_config.password_registration_enabled {
-        return Ok(Json(RegisterResponse {
-            status: "error",
-            id: None,
-            next_step: None,
-            error: Some("registration_disabled".into()),
-        }));
-    }
+    let repo = repo_factory.create().await?;
 
-    let mut repo = repo_factory.create().await?;
-
-    // ── Validate inputs ────────────────────────────────────────
-    let mut errors: Vec<String> = Vec::new();
-
-    // Username checks
-    if input.username.is_empty() {
-        errors.push("username_required".into());
-    } else if repo.user().exists(&input.username).await? {
-        errors.push("username_exists".into());
-    } else {
-        match homeserver.is_localpart_available(&input.username).await {
-            Ok(false) => errors.push("username_exists".into()),
-            Ok(true) => {}
-            Err(e) => {
-                tracing::warn!(
-                    error = &*e as &dyn std::error::Error,
-                    "Failed to check localpart availability, skipping homeserver check"
-                );
-            }
-        }
-    }
-
-    // Contact check: at least one of email or phone must be provided
-    let email_str = input.email.clone().unwrap_or_default();
-    let phone_str = input.phone.clone().unwrap_or_default();
-
-    if site_config.password_registration_contact_required
-        && email_str.is_empty()
-        && phone_str.is_empty()
-    {
-        errors.push("email_or_phone_required".into());
-    }
-
-    // Validate email if provided
-    let email = if !email_str.is_empty() {
-        if Address::from_str(&email_str).is_err() {
-            errors.push("email_invalid".into());
-            None
-        } else if repo
-            .user_email()
-            .count(UserEmailFilter::new().for_email(&email_str))
-            .await?
-            > 0
-        {
-            errors.push("email_in_use".into());
-            None
-        } else {
-            Some(email_str)
-        }
-    } else {
-        None
-    };
-
-    // Validate phone if provided
-    let phone = if !phone_str.is_empty() {
-        if repo.user_phone().find_by_phone(&phone_str).await?.is_some() {
-            errors.push("phone_in_use".into());
-            None
-        } else {
-            Some(phone_str)
-        }
-    } else {
-        None
-    };
-
-    // Password checks
-    if input.password.is_empty() {
-        errors.push("password_required".into());
-    }
-    if input.password_confirm.is_empty() {
-        errors.push("password_confirm_required".into());
-    }
-    if input.password != input.password_confirm {
-        errors.push("password_mismatch".into());
-    }
-
-    if errors.is_empty()
-        && !password_manager
-            .is_password_complex_enough(&input.password)
-            .map_err(|e| RouteError::Internal(e.into()))?
-    {
-        errors.push("password_too_weak".into());
-    }
-
-    // Policy evaluation
-    if errors.is_empty() {
-        let mut policy = policy_factory
-            .instantiate()
-            .await
-            .map_err(|e| RouteError::Internal(e.into()))?;
-
-        let result = policy
-            .evaluate_register(pasion_policy::RegisterInput {
-                registration_method: pasion_policy::RegistrationMethod::Password,
-                username: &input.username,
-                email: email.as_deref(),
-                requester: pasion_policy::Requester {
-                    ip_address: activity_tracker.ip(),
-                    user_agent: user_agent.clone(),
-                    ..Default::default()
-                },
-            })
-            .await
-            .map_err(|e| RouteError::Internal(e.into()))?;
-
-        for violation in result.violations {
-            let field = violation.field.as_deref().unwrap_or("form");
-            errors.push(format!("policy_{field}:{}", violation.msg));
-        }
-    }
-
-    // Rate limit checks
-    if errors.is_empty() {
-        if let Err(e) = limiter.check_registration(requester) {
-            tracing::warn!(error = &e as &dyn std::error::Error);
-            errors.push("rate_limited".into());
-        }
-
-        if let Some(email) = &email {
-            if let Err(e) = limiter.check_email_authentication_email(requester, email) {
-                tracing::warn!(error = &e as &dyn std::error::Error);
-                errors.push("rate_limited".into());
-            }
-        }
-
-        if let Some(phone) = &phone {
-            if let Err(e) = limiter.check_phone_authentication_phone(requester, phone) {
-                tracing::warn!(error = &e as &dyn std::error::Error);
-                errors.push("rate_limited".into());
-            }
-        }
-    }
-
-    if !errors.is_empty() {
-        return Ok(Json(RegisterResponse {
-            status: "error",
-            id: None,
-            next_step: None,
-            error: Some(errors.join(", ")),
-        }));
-    }
-
-    let started = start_password_registration(
+    let started = match begin_password_registration(
         repo,
         &mut rng,
         &clock,
         &password_manager,
-        StartPasswordRegistrationRequest {
+        homeserver.as_ref(),
+        policy_factory.as_ref(),
+        &limiter,
+        BeginPasswordRegistrationRequest {
             username: input.username,
-            email,
-            phone,
-            password: Zeroizing::new(input.password),
+            email: input.email,
+            phone: input.phone,
+            password: input.password,
+            password_confirm: input.password_confirm,
             user_agent,
             ip_address,
-            post_auth_action: None,
-            terms_url: site_config.tos_uri.clone(),
+            requester,
             notification_language,
+            post_auth_action: None,
+            password_registration_enabled: site_config.password_registration_enabled,
+            password_registration_contact_required: site_config
+                .password_registration_contact_required,
+            terms_url: site_config.tos_uri.clone(),
+            email_availability: EmailAvailabilityCheck::Precheck,
         },
     )
     .await
     .map_err(|error| match error {
-        crate::account_registration::StartPasswordRegistrationError::Repository(error) => {
-            RouteError::from(error)
+        BeginPasswordRegistrationError::Repository(error) => RouteError::from(error),
+        BeginPasswordRegistrationError::Internal(error) => RouteError::Internal(error.into()),
+    })? {
+        BeginPasswordRegistrationResult::Started(started) => started,
+        BeginPasswordRegistrationResult::Rejected { issues } => {
+            return Ok(Json(RegisterResponse {
+                status: "error",
+                id: None,
+                next_step: None,
+                error: Some(
+                    issues
+                        .into_iter()
+                        .map(|issue| issue.as_api_error())
+                        .collect::<Vec<_>>()
+                        .join(", "),
+                ),
+            }));
         }
-        crate::account_registration::StartPasswordRegistrationError::Password(error) => {
-            RouteError::Internal(error.into())
-        }
-    })?;
+    };
 
     let registration = started.registration;
     let email_verified = started.email_verified;
@@ -311,31 +174,22 @@ pub async fn get_registration(
     let repo_factory = depot.repo_factory()?;
     let mut repo = repo_factory.create().await?;
 
-    let progress =
-        load_registration_progress(&mut repo, id)
-            .await
-            .map_err(|error| match error {
-                LoadRegistrationProgressError::NotFound => RouteError::NotFound,
-                LoadRegistrationProgressError::Repository(error) => RouteError::from(error),
-            })?;
-
-    let email_pending =
-        progress.registration.email_authentication_id.is_some() && !progress.email_verified();
-    let phone_pending =
-        progress.registration.phone_authentication_id.is_some() && !progress.phone_verified();
+    let status = load_registration_status(&mut repo, id)
+        .await
+        .map_err(|error| match error {
+            LoadRegistrationProgressError::NotFound => RouteError::NotFound,
+            LoadRegistrationProgressError::Repository(error) => RouteError::from(error),
+        })?;
 
     repo.cancel().await?;
 
-    let completed = progress.completed_steps();
-    let step = progress.next_step();
-
     Ok(Json(RegistrationStatusResponse {
-        id: progress.registration.id.to_string(),
-        username: progress.registration.username,
-        email_pending,
-        phone_pending,
-        steps_completed: completed,
-        next_step: step,
+        id: status.registration.id.to_string(),
+        username: status.registration.username,
+        email_pending: status.email_pending,
+        phone_pending: status.phone_pending,
+        steps_completed: status.steps_completed,
+        next_step: status.next_step,
     }))
 }
 
