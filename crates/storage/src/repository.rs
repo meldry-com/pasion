@@ -4,6 +4,7 @@ use thiserror::Error;
 
 use crate::{
     app_session::AppSessionRepository,
+    notification::NotificationRepository,
     oauth2::{
         OAuth2AccessTokenRepository, OAuth2AuthorizationGrantRepository, OAuth2ClientRepository,
         OAuth2DeviceCodeGrantRepository, OAuth2RefreshTokenRepository, OAuth2SessionRepository,
@@ -159,6 +160,9 @@ pub trait RepositoryAccess: Send {
     /// Get a [`AppSessionRepository`]
     fn app_session<'c>(&'c mut self) -> Box<dyn AppSessionRepository<Error = Self::Error> + 'c>;
 
+    /// Get a [`NotificationRepository`]
+    fn notification<'c>(&'c mut self) -> Box<dyn NotificationRepository<Error = Self::Error> + 'c>;
+
     /// Get an [`OAuth2ClientRepository`]
     fn oauth2_client<'c>(&'c mut self)
     -> Box<dyn OAuth2ClientRepository<Error = Self::Error> + 'c>;
@@ -222,6 +226,7 @@ mod impls {
     use crate::{
         MapErr, Repository, RepositoryTransaction,
         app_session::AppSessionRepository,
+        notification::NotificationRepository,
         oauth2::{
             OAuth2AccessTokenRepository, OAuth2AuthorizationGrantRepository,
             OAuth2ClientRepository, OAuth2DeviceCodeGrantRepository, OAuth2RefreshTokenRepository,
@@ -363,6 +368,12 @@ mod impls {
             &'c mut self,
         ) -> Box<dyn AppSessionRepository<Error = Self::Error> + 'c> {
             Box::new(MapErr::new(self.inner.app_session(), &mut self.mapper))
+        }
+
+        fn notification<'c>(
+            &'c mut self,
+        ) -> Box<dyn NotificationRepository<Error = Self::Error> + 'c> {
+            Box::new(MapErr::new(self.inner.notification(), &mut self.mapper))
         }
 
         fn oauth2_client<'c>(
@@ -522,6 +533,12 @@ mod impls {
             &'c mut self,
         ) -> Box<dyn AppSessionRepository<Error = Self::Error> + 'c> {
             (**self).app_session()
+        }
+
+        fn notification<'c>(
+            &'c mut self,
+        ) -> Box<dyn NotificationRepository<Error = Self::Error> + 'c> {
+            (**self).notification()
         }
 
         fn oauth2_client<'c>(

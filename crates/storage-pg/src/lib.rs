@@ -10,13 +10,21 @@ use diesel::sql_types::{BigInt, Bool};
 use diesel_async::{AsyncPgConnection, RunQueryDsl, pooled_connection::deadpool::Pool};
 use diesel_migrations::{EmbeddedMigrations, MigrationHarness, embed_migrations};
 
+/// PostgreSQL app session repositories.
 pub mod app_session;
+/// PostgreSQL notification persistence repositories.
+pub mod notification;
+/// PostgreSQL OAuth 2.0 repositories.
 pub mod oauth2;
+/// PostgreSQL personal access repositories.
 pub mod personal;
+/// PostgreSQL queue repositories.
 pub mod queue;
 /// Diesel schema definitions generated from the database
 pub mod schema;
+/// PostgreSQL upstream OAuth 2.0 repositories.
 pub mod upstream_oauth2;
+/// PostgreSQL user repositories.
 pub mod user;
 
 // Define `lower()` as a SQL function for Diesel (Diesel doesn't ship one).

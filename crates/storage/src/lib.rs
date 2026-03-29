@@ -102,12 +102,21 @@ pub mod pagination;
 pub(crate) mod repository;
 mod utils;
 
+/// App session repositories.
 pub mod app_session;
+/// Notification persistence repositories.
+pub mod notification;
+/// OAuth 2.0 repositories.
 pub mod oauth2;
+/// Personal access repositories.
 pub mod personal;
+/// Policy data repositories.
 pub mod policy_data;
+/// Queue repositories.
 pub mod queue;
+/// Upstream OAuth 2.0 repositories.
 pub mod upstream_oauth2;
+/// User repositories.
 pub mod user;
 
 pub use self::{

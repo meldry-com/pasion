@@ -439,6 +439,57 @@ diesel::table! {
     }
 }
 
+diesel::table! {
+    notification_requests (notification_request_id) {
+        notification_request_id -> Uuid,
+        template_key -> Text,
+        locale -> Text,
+        source -> Jsonb,
+        payload -> Jsonb,
+        status -> Text,
+        dedupe_key -> Nullable<Text>,
+        correlation_key -> Nullable<Text>,
+        created_at -> Timestamptz,
+        scheduled_at -> Timestamptz,
+        started_at -> Nullable<Timestamptz>,
+        completed_at -> Nullable<Timestamptz>,
+        cancelled_at -> Nullable<Timestamptz>,
+    }
+}
+
+diesel::table! {
+    notification_deliveries (notification_delivery_id) {
+        notification_delivery_id -> Uuid,
+        notification_request_id -> Uuid,
+        channel -> Text,
+        destination -> Jsonb,
+        provider_binding_key -> Nullable<Text>,
+        provider_message_id -> Nullable<Text>,
+        attempt_count -> Int4,
+        status -> Text,
+        last_failure -> Nullable<Jsonb>,
+        created_at -> Timestamptz,
+        reserved_at -> Nullable<Timestamptz>,
+        sent_at -> Nullable<Timestamptz>,
+        delivered_at -> Nullable<Timestamptz>,
+        failed_at -> Nullable<Timestamptz>,
+        next_retry_at -> Nullable<Timestamptz>,
+    }
+}
+
+diesel::table! {
+    notification_event_logs (notification_event_log_id) {
+        notification_event_log_id -> Uuid,
+        notification_request_id -> Uuid,
+        notification_delivery_id -> Nullable<Uuid>,
+        kind -> Text,
+        actor -> Jsonb,
+        summary -> Nullable<Text>,
+        metadata -> Jsonb,
+        occurred_at -> Timestamptz,
+    }
+}
+
 // Foreign key relationships
 diesel::joinable!(user_passwords -> users (user_id));
 diesel::joinable!(user_emails -> users (user_id));
@@ -457,6 +508,9 @@ diesel::joinable!(upstream_oauth_links -> upstream_oauth_providers (upstream_oau
 diesel::joinable!(upstream_oauth_authorization_sessions -> upstream_oauth_providers (upstream_oauth_provider_id));
 diesel::joinable!(personal_access_tokens -> personal_sessions (personal_session_id));
 diesel::joinable!(queue_leader -> queue_workers (queue_worker_id));
+diesel::joinable!(notification_deliveries -> notification_requests (notification_request_id));
+diesel::joinable!(notification_event_logs -> notification_requests (notification_request_id));
+diesel::joinable!(notification_event_logs -> notification_deliveries (notification_delivery_id));
 
 diesel::allow_tables_to_appear_in_same_query!(
     users,
@@ -491,4 +545,7 @@ diesel::allow_tables_to_appear_in_same_query!(
     personal_sessions,
     personal_access_tokens,
     policy_data,
+    notification_requests,
+    notification_deliveries,
+    notification_event_logs,
 );
