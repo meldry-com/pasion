@@ -469,160 +469,107 @@ fn build_oauth_router(router: Router) -> Router {
 }
 
 fn build_rest_api_router(router: Router) -> Router {
-    router
-        // Viewer (combined viewer + session + site config)
-        .push(Router::with_path("/api/v1/viewer").get(pasion_handlers::rest::viewer::get_viewer))
-        // Site config
-        .push(Router::with_path("/api/v1/site-config").get(pasion_handlers::rest::site_config::get))
-        // Sessions
-        .push(
-            Router::with_path("/api/v1/sessions/{id}")
-                .get(pasion_handlers::rest::sessions::get_session),
-        )
-        .push(
-            Router::with_path("/api/v1/browser-sessions/{id}")
-                .delete(pasion_handlers::rest::sessions::end_browser_session),
-        )
-        .push(
-            Router::with_path("/api/v1/oauth2-sessions/{id}")
-                .delete(pasion_handlers::rest::sessions::end_oauth2_session),
-        )
-        .push(
-            Router::with_path("/api/v1/oauth2-sessions/{id}/name")
-                .put(pasion_handlers::rest::sessions::set_oauth2_session_name),
-        )
-        // OAuth2 clients
-        .push(
-            Router::with_path("/api/v1/oauth2-clients/{id}")
-                .get(pasion_handlers::rest::oauth2_clients::get_client),
-        )
-        // Password
-        .push(
-            Router::with_path("/api/v1/viewer/password")
-                .post(pasion_handlers::rest::password::set_password),
-        )
-        .push(
-            Router::with_path("/api/v1/password-recovery/set")
-                .post(pasion_handlers::rest::password::set_password_by_recovery),
-        )
-        .push(
-            Router::with_path("/api/v1/password-recovery/resend")
-                .post(pasion_handlers::rest::password::resend_recovery_email),
-        )
-        // Users (display name, cross-signing, deactivation)
-        .push(
-            Router::with_path("/api/v1/viewer/display-name")
-                .post(pasion_handlers::rest::users::set_display_name),
-        )
-        .push(
-            Router::with_path("/api/v1/viewer/cross-signing-reset")
-                .post(pasion_handlers::rest::users::allow_cross_signing_reset),
-        )
-        .push(
-            Router::with_path("/api/v1/viewer/deactivate")
-                .post(pasion_handlers::rest::users::deactivate_user),
-        )
-        // Email authentication
-        .push(
-            Router::with_path("/api/v1/email-auth/start")
-                .post(pasion_handlers::rest::emails::start_email_auth),
-        )
-        .push(
-            Router::with_path("/api/v1/email-auth/{id}")
-                .get(pasion_handlers::rest::emails::get_email_auth),
-        )
-        .push(
-            Router::with_path("/api/v1/email-auth/{id}/complete")
-                .post(pasion_handlers::rest::emails::complete_email_auth),
-        )
-        .push(
-            Router::with_path("/api/v1/email-auth/{id}/resend")
-                .post(pasion_handlers::rest::emails::resend_email_auth_code),
-        )
-        // User emails
-        .push(
-            Router::with_path("/api/v1/user-emails/{id}")
-                .delete(pasion_handlers::rest::emails::remove_email),
-        )
-        // Registration
-        .push(
-            Router::with_path("/api/v1/auth/register")
-                .post(pasion_handlers::rest::register::post_register),
-        )
-        .push(
-            Router::with_path("/api/v1/auth/register/{id}")
-                .get(pasion_handlers::rest::register::get_registration),
-        )
-        .push(
-            Router::with_path("/api/v1/auth/register/{id}/verify-email")
-                .post(pasion_handlers::rest::register::post_verify_email),
-        )
-        .push(
-            Router::with_path("/api/v1/auth/register/{id}/resend-verification")
-                .post(pasion_handlers::rest::register::post_resend_verification),
-        )
-        .push(
-            Router::with_path("/api/v1/auth/register/{id}/verify-phone")
-                .post(pasion_handlers::rest::register::post_verify_phone),
-        )
-        .push(
-            Router::with_path("/api/v1/auth/register/{id}/display-name")
-                .post(pasion_handlers::rest::register::post_display_name),
-        )
-        .push(
-            Router::with_path("/api/v1/auth/register/{id}/finish")
-                .post(pasion_handlers::rest::register::post_finish),
-        )
-        // Account recovery
-        .push(
-            Router::with_path("/api/v1/auth/recovery/start")
-                .post(pasion_handlers::rest::recovery::post_recovery_start),
-        )
-        .push(
-            Router::with_path("/api/v1/auth/recovery/{id}")
-                .get(pasion_handlers::rest::recovery::get_recovery),
-        )
-        .push(
-            Router::with_path("/api/v1/auth/recovery/{id}/resend")
-                .post(pasion_handlers::rest::recovery::post_recovery_resend),
-        )
-        // Auth (login, logout, providers)
-        .push(Router::with_path("/api/v1/auth/login").post(pasion_handlers::rest::auth::login))
-        .push(Router::with_path("/api/v1/auth/logout").post(pasion_handlers::rest::auth::logout))
-        .push(
-            Router::with_path("/api/v1/auth/providers").get(pasion_handlers::rest::auth::providers),
-        )
-        // OAuth2 consent (SPA)
-        .push(
-            Router::with_path("/api/v1/oauth2/consent/{grant_id}")
-                .get(pasion_handlers::rest::consent::oauth2_consent_get)
-                .post(pasion_handlers::rest::consent::oauth2_consent_post),
-        )
-        // Device code link & consent (SPA)
-        .push(
-            Router::with_path("/api/v1/device-link")
-                .get(pasion_handlers::rest::consent::device_link_get),
-        )
-        .push(
-            Router::with_path("/api/v1/device-consent/{id}")
-                .get(pasion_handlers::rest::consent::device_consent_get)
-                .post(pasion_handlers::rest::consent::device_consent_post),
-        )
-        // Linked accounts (view/unlink upstream OAuth providers)
-        .push(
-            Router::with_path("/api/v1/linked-accounts")
-                .get(pasion_handlers::rest::linked_accounts::list_linked_accounts),
-        )
-        .push(
-            Router::with_path("/api/v1/linked-accounts/{id}")
-                .delete(pasion_handlers::rest::linked_accounts::unlink_account),
-        )
-        // Upstream OAuth2 link (SPA)
-        .push(
-            Router::with_path("/api/v1/upstream-oauth2/link/{id}")
-                .get(pasion_handlers::rest::upstream_oauth2::get_link)
-                .post(pasion_handlers::rest::upstream_oauth2::post_link),
-        )
+    use pasion_handlers::rest::*;
+
+    router.push(
+        Router::with_path("/api/v1")
+            // Viewer
+            .push(
+                Router::with_path("viewer")
+                    .get(viewer::get_viewer)
+                    .push(Router::with_path("password").post(password::set_password))
+                    .push(Router::with_path("display-name").post(users::set_display_name))
+                    .push(Router::with_path("cross-signing-reset").post(users::allow_cross_signing_reset))
+                    .push(Router::with_path("deactivate").post(users::deactivate_user)),
+            )
+            // Site config
+            .push(Router::with_path("site-config").get(site_config::get))
+            // Sessions
+            .push(Router::with_path("sessions/{id}").get(sessions::get_session))
+            .push(Router::with_path("browser-sessions/{id}").delete(sessions::end_browser_session))
+            .push(
+                Router::with_path("oauth2-sessions/{id}")
+                    .delete(sessions::end_oauth2_session)
+                    .push(Router::with_path("name").put(sessions::set_oauth2_session_name)),
+            )
+            // OAuth2 clients
+            .push(Router::with_path("oauth2-clients/{id}").get(oauth2_clients::get_client))
+            // Password recovery
+            .push(
+                Router::with_path("password-recovery")
+                    .push(Router::with_path("set").post(password::set_password_by_recovery))
+                    .push(Router::with_path("resend").post(password::resend_recovery_email)),
+            )
+            // Email authentication
+            .push(
+                Router::with_path("email-auth")
+                    .push(Router::with_path("start").post(emails::start_email_auth))
+                    .push(
+                        Router::with_path("{id}")
+                            .get(emails::get_email_auth)
+                            .push(Router::with_path("complete").post(emails::complete_email_auth))
+                            .push(Router::with_path("resend").post(emails::resend_email_auth_code)),
+                    ),
+            )
+            // User emails
+            .push(Router::with_path("user-emails/{id}").delete(emails::remove_email))
+            // Auth (login, logout, providers, registration, recovery)
+            .push(
+                Router::with_path("auth")
+                    .push(Router::with_path("login").post(auth::login))
+                    .push(Router::with_path("logout").post(auth::logout))
+                    .push(Router::with_path("providers").get(auth::providers))
+                    // Registration
+                    .push(
+                        Router::with_path("register")
+                            .post(register::post_register)
+                            .push(
+                                Router::with_path("{id}")
+                                    .get(register::get_registration)
+                                    .push(Router::with_path("verify-email").post(register::post_verify_email))
+                                    .push(Router::with_path("verify-phone").post(register::post_verify_phone))
+                                    .push(Router::with_path("resend-verification").post(register::post_resend_verification))
+                                    .push(Router::with_path("display-name").post(register::post_display_name))
+                                    .push(Router::with_path("finish").post(register::post_finish)),
+                            ),
+                    )
+                    // Account recovery
+                    .push(
+                        Router::with_path("recovery")
+                            .push(Router::with_path("start").post(recovery::post_recovery_start))
+                            .push(
+                                Router::with_path("{id}")
+                                    .get(recovery::get_recovery)
+                                    .push(Router::with_path("resend").post(recovery::post_recovery_resend)),
+                            ),
+                    ),
+            )
+            // OAuth2 consent
+            .push(
+                Router::with_path("oauth2/consent/{grant_id}")
+                    .get(consent::oauth2_consent_get)
+                    .post(consent::oauth2_consent_post),
+            )
+            // Device code link & consent
+            .push(Router::with_path("device-link").get(consent::device_link_get))
+            .push(
+                Router::with_path("device-consent/{id}")
+                    .get(consent::device_consent_get)
+                    .post(consent::device_consent_post),
+            )
+            // Linked accounts
+            .push(
+                Router::with_path("linked-accounts")
+                    .get(linked_accounts::list_linked_accounts)
+                    .push(Router::with_path("{id}").delete(linked_accounts::unlink_account)),
+            )
+            // Upstream OAuth2 link
+            .push(
+                Router::with_path("upstream-oauth2/link/{id}")
+                    .get(upstream_oauth2::get_link)
+                    .post(upstream_oauth2::post_link),
+            ),
+    )
 }
 
 fn build_admin_router(router: Router) -> Router {
