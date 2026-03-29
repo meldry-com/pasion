@@ -1,4 +1,3 @@
-use anyhow::Context as _;
 use pasion_router::PostAuthAction;
 use pasion_salvo_utils::{
     InternalError,
@@ -14,7 +13,14 @@ use serde::{Deserialize, Serialize};
 use ulid::Ulid;
 
 use crate::rest::DepotExt;
-use crate::{rest, views::shared::OptionalPostAuthAction};
+use crate::{
+    account_registration::{
+        LoadRegistrationProgressError, SetRegistrationDisplayNameError, load_registration_progress,
+        set_registration_display_name,
+    },
+    rest,
+    views::shared::OptionalPostAuthAction,
+};
 
 #[derive(Deserialize, Default)]
 #[serde(rename_all = "snake_case")]
@@ -53,12 +59,18 @@ pub async fn get(
 
     let (csrf_token, cookie_jar) = cookie_jar.csrf_token(&clock, &mut rng);
 
-    let registration = repo
-        .user_registration()
-        .lookup(id)
-        .await?
-        .context("Could not find user registration")
-        .map_err(InternalError::from_anyhow)?;
+    let progress =
+        load_registration_progress(&mut repo, id)
+            .await
+            .map_err(|error| match error {
+                LoadRegistrationProgressError::NotFound => {
+                    InternalError::from_anyhow(anyhow::anyhow!("Could not find user registration"))
+                }
+                LoadRegistrationProgressError::Repository(error) => {
+                    InternalError::from_anyhow(error.into())
+                }
+            })?;
+    let registration = progress.registration;
 
     // If the registration is completed, we can go to the registration destination
     // XXX: this might not be the right thing to do? Maybe an error page would be
@@ -104,12 +116,18 @@ pub async fn post(
         .await
         .map_err(|e| InternalError::from_anyhow(e.into()))?;
 
-    let registration = repo
-        .user_registration()
-        .lookup(id)
-        .await?
-        .context("Could not find user registration")
-        .map_err(InternalError::from_anyhow)?;
+    let progress =
+        load_registration_progress(&mut repo, id)
+            .await
+            .map_err(|error| match error {
+                LoadRegistrationProgressError::NotFound => {
+                    InternalError::from_anyhow(anyhow::anyhow!("Could not find user registration"))
+                }
+                LoadRegistrationProgressError::Repository(error) => {
+                    InternalError::from_anyhow(error.into())
+                }
+            })?;
+    let registration = progress.registration;
 
     // If the registration is completed, we can go to the registration destination
     // XXX: this might not be the right thing to do? Maybe an error page would be
@@ -129,41 +147,49 @@ pub async fn post(
 
     let (csrf_token, cookie_jar) = cookie_jar.csrf_token(&clock, &mut rng);
 
-    let display_name = match form.action {
-        FormAction::Set => {
-            let display_name = form.display_name.trim();
+    let registration = match set_registration_display_name(
+        repo,
+        id,
+        Some(form.display_name.clone()),
+        matches!(form.action, FormAction::Skip),
+    )
+    .await
+    {
+        Ok(registration) => registration,
+        Err(SetRegistrationDisplayNameError::InvalidDisplayName) => {
+            let ctx = RegisterStepsDisplayNameContext::new()
+                .with_form_state(form.to_form_state().with_error_on_field(
+                    RegisterStepsDisplayNameFormField::DisplayName,
+                    FieldError::Invalid,
+                ))
+                .with_csrf(csrf_token.form_value())
+                .with_language(locale);
 
-            if display_name.is_empty() || display_name.len() > 255 {
-                let ctx = RegisterStepsDisplayNameContext::new()
-                    .with_form_state(form.to_form_state().with_error_on_field(
-                        RegisterStepsDisplayNameFormField::DisplayName,
-                        FieldError::Invalid,
-                    ))
-                    .with_csrf(csrf_token.form_value())
-                    .with_language(locale);
-
-                cookie_jar.write_to_response(res);
-                res.render(Text::Html(
-                    templates.render_register_steps_display_name(&ctx)?,
-                ));
-                return Ok(());
-            }
-
-            display_name.to_owned()
+            cookie_jar.write_to_response(res);
+            res.render(Text::Html(
+                templates.render_register_steps_display_name(&ctx)?,
+            ));
+            return Ok(());
         }
-        FormAction::Skip => {
-            // If the user chose to skip, we do the same as Palpo and use the localpart as
-            // default display name
-            registration.username.clone()
+        Err(SetRegistrationDisplayNameError::RegistrationCompleted) => {
+            let post_auth_action: Option<PostAuthAction> = registration
+                .post_auth_action
+                .map(serde_json::from_value)
+                .transpose()?;
+
+            cookie_jar.write_to_response(res);
+            res.render(OptionalPostAuthAction::from(post_auth_action).go_next(&url_builder));
+            return Ok(());
+        }
+        Err(SetRegistrationDisplayNameError::NotFound) => {
+            return Err(InternalError::from_anyhow(anyhow::anyhow!(
+                "Could not find user registration"
+            )));
+        }
+        Err(SetRegistrationDisplayNameError::Repository(error)) => {
+            return Err(InternalError::from_anyhow(error.into()));
         }
     };
-
-    let registration = repo
-        .user_registration()
-        .set_display_name(registration, display_name)
-        .await?;
-
-    repo.save().await?;
 
     let destination = pasion_router::RegisterFinish::new(registration.id);
     cookie_jar.write_to_response(res);

@@ -8,7 +8,6 @@ use std::str::FromStr;
 
 use chrono::Duration;
 use lettre::Address;
-use pasion_data_model::UserRegistration;
 use pasion_matrix::HomeserverConnection;
 use pasion_salvo_utils::SessionInfoExt;
 use pasion_storage::{
@@ -26,72 +25,15 @@ use super::{DepotExt, RouteError, extract_bound_activity_tracker, make_clock, ma
 use crate::{
     RequesterFingerprint,
     account_registration::{
-        ResendRegistrationVerificationError, ResendRegistrationVerificationStatus,
-        StartPasswordRegistrationRequest, resend_pending_registration_verification,
-        start_password_registration,
+        LoadRegistrationProgressError, ResendRegistrationVerificationError,
+        ResendRegistrationVerificationStatus, SetRegistrationDisplayNameError,
+        StartPasswordRegistrationRequest, VerifyRegistrationEmailCodeError,
+        VerifyRegistrationPhoneCodeError, load_registration_progress, next_registration_step,
+        resend_pending_registration_verification, set_registration_display_name,
+        start_password_registration, verify_registration_email_code,
+        verify_registration_phone_code,
     },
 };
-
-// ── Shared helpers ─────────────────────────────────────────────
-
-/// Determine the next verification step for a registration.
-///
-/// The registration flow supports pluggable verification steps. Each
-/// verification target (email, phone, …) has its own endpoint
-/// (`verify-email`, `verify-phone`, …) and its own authentication record on
-/// the registration.  This function inspects which verifications have been
-/// configured and returns the first one that is still pending.
-///
-/// **Current default flow:** `register → verify_email → verify_phone → display_name → finish`
-fn next_step(
-    registration: &UserRegistration,
-    email_verified: bool,
-    phone_verified: bool,
-) -> &'static str {
-    // Email verification (checked first)
-    if registration.email_authentication_id.is_some() && !email_verified {
-        return "verify_email";
-    }
-
-    // Phone verification (checked after email)
-    if registration.phone_authentication_id.is_some() && !phone_verified {
-        return "verify_phone";
-    }
-
-    if registration.display_name.is_none() {
-        return "display_name";
-    }
-
-    "finish"
-}
-
-/// Build the list of steps that have been completed so far.
-fn steps_completed(
-    registration: &UserRegistration,
-    email_verified: bool,
-    phone_verified: bool,
-) -> Vec<&'static str> {
-    let mut steps = Vec::new();
-    steps.push("register"); // the initial registration step is always done
-
-    if registration.email_authentication_id.is_some() && email_verified {
-        steps.push("verify_email");
-    }
-
-    if registration.phone_authentication_id.is_some() && phone_verified {
-        steps.push("verify_phone");
-    }
-
-    if registration.display_name.is_some() {
-        steps.push("display_name");
-    }
-
-    if registration.completed_at.is_some() {
-        steps.push("finish");
-    }
-
-    steps
-}
 
 // ── POST /api/v1/auth/register ─────────────────────────────────
 
@@ -333,7 +275,7 @@ pub async fn post_register(
     let email_verified = started.email_verified;
     let phone_verified = started.phone_verified;
 
-    let step = next_step(&registration, email_verified, phone_verified);
+    let step = next_registration_step(&registration, email_verified, phone_verified);
 
     Ok(Json(RegisterResponse {
         status: "success",
@@ -369,47 +311,27 @@ pub async fn get_registration(
     let repo_factory = depot.repo_factory()?;
     let mut repo = repo_factory.create().await?;
 
-    let registration = repo
-        .user_registration()
-        .lookup(id)
-        .await?
-        .ok_or(RouteError::NotFound)?;
+    let progress =
+        load_registration_progress(&mut repo, id)
+            .await
+            .map_err(|error| match error {
+                LoadRegistrationProgressError::NotFound => RouteError::NotFound,
+                LoadRegistrationProgressError::Repository(error) => RouteError::from(error),
+            })?;
 
-    // Check if email has been verified
-    let email_verified = if let Some(email_auth_id) = registration.email_authentication_id {
-        let email_auth = repo
-            .user_email()
-            .lookup_authentication(email_auth_id)
-            .await?
-            .ok_or(RouteError::NotFound)?;
-        email_auth.completed_at.is_some()
-    } else {
-        true // no email auth means no email step needed
-    };
-
-    // Check if phone has been verified
-    let phone_verified = if let Some(phone_auth_id) = registration.phone_authentication_id {
-        let phone_auth = repo
-            .user_phone()
-            .lookup_authentication(phone_auth_id)
-            .await?
-            .ok_or(RouteError::NotFound)?;
-        phone_auth.completed_at.is_some()
-    } else {
-        true // no phone auth means no phone step needed
-    };
-
-    let email_pending = registration.email_authentication_id.is_some() && !email_verified;
-    let phone_pending = registration.phone_authentication_id.is_some() && !phone_verified;
+    let email_pending =
+        progress.registration.email_authentication_id.is_some() && !progress.email_verified();
+    let phone_pending =
+        progress.registration.phone_authentication_id.is_some() && !progress.phone_verified();
 
     repo.cancel().await?;
 
-    let completed = steps_completed(&registration, email_verified, phone_verified);
-    let step = next_step(&registration, email_verified, phone_verified);
+    let completed = progress.completed_steps();
+    let step = progress.next_step();
 
     Ok(Json(RegistrationStatusResponse {
-        id: registration.id.to_string(),
-        username: registration.username,
+        id: progress.registration.id.to_string(),
+        username: progress.registration.username,
         email_pending,
         phone_pending,
         steps_completed: completed,
@@ -452,87 +374,56 @@ pub async fn post_verify_email(
     let repo_factory = depot.repo_factory()?;
     let limiter = depot.limiter()?;
     let clock = make_clock();
+    let repo = repo_factory.create().await?;
 
-    let mut repo = repo_factory.create().await?;
-
-    let registration = repo
-        .user_registration()
-        .lookup(id)
-        .await?
-        .ok_or(RouteError::NotFound)?;
-
-    if registration.completed_at.is_some() {
-        return Ok(Json(VerifyEmailResponse {
-            status: "error",
-            next_step: None,
-            error: Some("registration_already_completed".into()),
-        }));
-    }
-
-    let email_authentication_id = registration.email_authentication_id.ok_or_else(|| {
-        RouteError::BadRequest("no email authentication for this registration".into())
-    })?;
-
-    let email_authentication = repo
-        .user_email()
-        .lookup_authentication(email_authentication_id)
-        .await?
-        .ok_or(RouteError::NotFound)?;
-
-    if email_authentication.completed_at.is_some() {
-        return Ok(Json(VerifyEmailResponse {
-            status: "error",
-            next_step: None,
-            error: Some("email_already_verified".into()),
-        }));
-    }
-
-    // Rate limit check
-    if let Err(e) = limiter.check_email_authentication_attempt(&email_authentication) {
-        tracing::warn!(error = &e as &dyn std::error::Error);
-        return Ok(Json(VerifyEmailResponse {
-            status: "error",
-            next_step: None,
-            error: Some("rate_limited".into()),
-        }));
-    }
-
-    // Look up the code
-    let Some(code) = repo
-        .user_email()
-        .find_authentication_code(&email_authentication, &input.code)
-        .await?
-    else {
-        return Ok(Json(VerifyEmailResponse {
-            status: "error",
-            next_step: None,
-            error: Some("invalid_code".into()),
-        }));
-    };
-
-    // Complete the email authentication
-    repo.user_email()
-        .complete_authentication_with_code(&clock, email_authentication, &code)
-        .await?;
-
-    // Look up phone verification status for next_step (before save consumes repo)
-    let phone_verified = if let Some(phone_auth_id) = registration.phone_authentication_id {
-        let phone_auth = repo
-            .user_phone()
-            .lookup_authentication(phone_auth_id)
-            .await?
-            .map(|a| a.completed_at.is_some())
-            .unwrap_or(false);
-        phone_auth
-    } else {
-        true
-    };
-
-    repo.save().await?;
+    let progress =
+        match verify_registration_email_code(repo, &limiter, &clock, id, &input.code).await {
+            Ok(progress) => progress,
+            Err(VerifyRegistrationEmailCodeError::NotFound)
+            | Err(VerifyRegistrationEmailCodeError::EmailAuthenticationMissing) => {
+                return Err(RouteError::NotFound);
+            }
+            Err(VerifyRegistrationEmailCodeError::NoEmailAuthentication) => {
+                return Err(RouteError::BadRequest(
+                    "no email authentication for this registration".into(),
+                ));
+            }
+            Err(VerifyRegistrationEmailCodeError::RegistrationCompleted) => {
+                return Ok(Json(VerifyEmailResponse {
+                    status: "error",
+                    next_step: None,
+                    error: Some("registration_already_completed".into()),
+                }));
+            }
+            Err(VerifyRegistrationEmailCodeError::EmailAlreadyVerified) => {
+                return Ok(Json(VerifyEmailResponse {
+                    status: "error",
+                    next_step: None,
+                    error: Some("email_already_verified".into()),
+                }));
+            }
+            Err(VerifyRegistrationEmailCodeError::RateLimited) => {
+                return Ok(Json(VerifyEmailResponse {
+                    status: "error",
+                    next_step: None,
+                    error: Some("rate_limited".into()),
+                }));
+            }
+            Err(VerifyRegistrationEmailCodeError::InvalidCode) => {
+                return Ok(Json(VerifyEmailResponse {
+                    status: "error",
+                    next_step: None,
+                    error: Some("invalid_code".into()),
+                }));
+            }
+            Err(VerifyRegistrationEmailCodeError::Repository(error)) => {
+                return Err(error.into());
+            }
+        };
 
     Ok(Json(VerifyEmailResponse {
         status: "success",
-        next_step: Some(next_step(&registration, true, phone_verified)),
+        next_step: Some(progress.next_step()),
         error: None,
     }))
 }
@@ -645,86 +536,56 @@ pub async fn post_verify_phone(
     let repo_factory = depot.repo_factory()?;
     let limiter = depot.limiter()?;
     let clock = make_clock();
+    let repo = repo_factory.create().await?;
 
-    let mut repo = repo_factory.create().await?;
-
-    let registration = repo
-        .user_registration()
-        .lookup(id)
-        .await?
-        .ok_or(RouteError::NotFound)?;
-
-    if registration.completed_at.is_some() {
-        return Ok(Json(VerifyPhoneResponse {
-            status: "error",
-            next_step: None,
-            error: Some("registration_already_completed".into()),
-        }));
-    }
-
-    let phone_authentication_id = registration.phone_authentication_id.ok_or_else(|| {
-        RouteError::BadRequest("no phone authentication for this registration".into())
-    })?;
-
-    let phone_authentication = repo
-        .user_phone()
-        .lookup_authentication(phone_authentication_id)
-        .await?
-        .ok_or(RouteError::NotFound)?;
-
-    if phone_authentication.completed_at.is_some() {
-        return Ok(Json(VerifyPhoneResponse {
-            status: "error",
-            next_step: None,
-            error: Some("phone_already_verified".into()),
-        }));
-    }
-
-    if let Err(e) = limiter.check_phone_authentication_attempt(&phone_authentication) {
-        tracing::warn!(error = &e as &dyn std::error::Error);
-        return Ok(Json(VerifyPhoneResponse {
-            status: "error",
-            next_step: None,
-            error: Some("rate_limited".into()),
-        }));
-    }
-
-    // Look up the code
-    let Some(code) = repo
-        .user_phone()
-        .find_authentication_code(&phone_authentication, &input.code)
-        .await?
-    else {
-        return Ok(Json(VerifyPhoneResponse {
-            status: "error",
-            next_step: None,
-            error: Some("invalid_code".into()),
-        }));
-    };
-
-    // Complete the phone authentication
-    repo.user_phone()
-        .complete_authentication_with_code(&clock, phone_authentication, &code)
-        .await?;
-
-    // Look up email verification status for next_step (before save consumes repo)
-    let email_verified = if let Some(email_auth_id) = registration.email_authentication_id {
-        let email_auth = repo
-            .user_email()
-            .lookup_authentication(email_auth_id)
-            .await?
-            .map(|a| a.completed_at.is_some())
-            .unwrap_or(false);
-        email_auth
-    } else {
-        true
-    };
-
-    repo.save().await?;
+    let progress =
+        match verify_registration_phone_code(repo, &limiter, &clock, id, &input.code).await {
+            Ok(progress) => progress,
+            Err(VerifyRegistrationPhoneCodeError::NotFound)
+            | Err(VerifyRegistrationPhoneCodeError::PhoneAuthenticationMissing) => {
+                return Err(RouteError::NotFound);
+            }
+            Err(VerifyRegistrationPhoneCodeError::NoPhoneAuthentication) => {
+                return Err(RouteError::BadRequest(
+                    "no phone authentication for this registration".into(),
+                ));
+            }
+            Err(VerifyRegistrationPhoneCodeError::RegistrationCompleted) => {
+                return Ok(Json(VerifyPhoneResponse {
+                    status: "error",
+                    next_step: None,
+                    error: Some("registration_already_completed".into()),
+                }));
+            }
+            Err(VerifyRegistrationPhoneCodeError::PhoneAlreadyVerified) => {
+                return Ok(Json(VerifyPhoneResponse {
+                    status: "error",
+                    next_step: None,
+                    error: Some("phone_already_verified".into()),
+                }));
+            }
+            Err(VerifyRegistrationPhoneCodeError::RateLimited) => {
+                return Ok(Json(VerifyPhoneResponse {
+                    status: "error",
+                    next_step: None,
+                    error: Some("rate_limited".into()),
+                }));
+            }
+            Err(VerifyRegistrationPhoneCodeError::InvalidCode) => {
+                return Ok(Json(VerifyPhoneResponse {
+                    status: "error",
+                    next_step: None,
+                    error: Some("invalid_code".into()),
+                }));
+            }
+            Err(VerifyRegistrationPhoneCodeError::Repository(error)) => {
+                return Err(error.into());
+            }
+        };
 
     Ok(Json(VerifyPhoneResponse {
         status: "success",
-        next_step: Some(next_step(&registration, email_verified, true)),
+        next_step: Some(progress.next_step()),
         error: None,
     }))
 }
@@ -765,50 +626,31 @@ pub async fn post_display_name(
         .map_err(|_| RouteError::BadRequest("invalid json body".into()))?;
 
     let repo_factory = depot.repo_factory()?;
-    let mut repo = repo_factory.create().await?;
+    let repo = repo_factory.create().await?;
 
-    let registration = repo
-        .user_registration()
-        .lookup(id)
-        .await?
-        .ok_or(RouteError::NotFound)?;
-
-    if registration.completed_at.is_some() {
-        return Ok(Json(DisplayNameResponse {
-            status: "error",
-            next_step: None,
-            error: Some("registration_already_completed".into()),
-        }));
-    }
-
-    let display_name = if input.skip.unwrap_or(false) {
-        // Use the username as default display name when skipping
-        registration.username.clone()
-    } else {
-        let display_name = input
-            .display_name
-            .as_deref()
-            .unwrap_or("")
-            .trim()
-            .to_owned();
-
-        if display_name.is_empty() || display_name.len() > 255 {
+    match set_registration_display_name(repo, id, input.display_name, input.skip.unwrap_or(false))
+        .await
+    {
+        Ok(_) => {}
+        Err(SetRegistrationDisplayNameError::NotFound) => return Err(RouteError::NotFound),
+        Err(SetRegistrationDisplayNameError::RegistrationCompleted) => {
+            return Ok(Json(DisplayNameResponse {
+                status: "error",
+                next_step: None,
+                error: Some("registration_already_completed".into()),
+            }));
+        }
+        Err(SetRegistrationDisplayNameError::InvalidDisplayName) => {
             return Ok(Json(DisplayNameResponse {
                 status: "error",
                 next_step: None,
                 error: Some("invalid_display_name".into()),
             }));
         }
-
-        display_name
-    };
-
-    let _registration = repo
-        .user_registration()
-        .set_display_name(registration, display_name)
-        .await?;
-
-    repo.save().await?;
+        Err(SetRegistrationDisplayNameError::Repository(error)) => {
+            return Err(error.into());
+        }
+    }
 
     Ok(Json(DisplayNameResponse {
         status: "success",
