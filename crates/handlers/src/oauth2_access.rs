@@ -1,7 +1,9 @@
 use std::{net::IpAddr, time::Duration};
 
 use oauth2_types::requests::AuthorizationResponse;
-use pasion_data_model::{AuthorizationGrantStage, BoxClock, BoxRng, BrowserSession, Clock, Client, Session};
+use pasion_data_model::{
+    AuthorizationGrantStage, BoxClock, BoxRng, BrowserSession, Client, Clock, Session,
+};
 use pasion_keystore::Keystore;
 use pasion_matrix::HomeserverConnection;
 use pasion_policy::{Policy, PolicyFactory};
@@ -140,8 +142,8 @@ pub async fn accept_authorization_consent(
         .await?
         .ok_or(OAuth2AccessError::NotFound)?;
 
-    let callback_destination =
-        CallbackDestination::try_from(&grant).map_err(|error| OAuth2AccessError::Internal(Box::new(error)))?;
+    let callback_destination = CallbackDestination::try_from(&grant)
+        .map_err(|error| OAuth2AccessError::Internal(Box::new(error)))?;
 
     if !matches!(grant.stage, AuthorizationGrantStage::Pending) {
         return Err(OAuth2AccessError::GrantNotPending);

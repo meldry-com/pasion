@@ -12,12 +12,10 @@ use super::{
     DepotExt, RouteError, extract_bound_activity_tracker, extract_session_info, make_clock,
     make_rng,
 };
-use crate::{
-    oauth2_access::{
-        ConsentScreen, DeviceConsentAction, DeviceConsentStatus, OAuth2AccessError,
-        accept_authorization_consent, load_authorization_consent, load_device_consent,
-        lookup_device_link, submit_device_consent,
-    },
+use crate::oauth2_access::{
+    ConsentScreen, DeviceConsentAction, DeviceConsentStatus, OAuth2AccessError,
+    accept_authorization_consent, load_authorization_consent, load_device_consent,
+    lookup_device_link, submit_device_consent,
 };
 
 // ── Response types ─────────────────────────────────────────────
