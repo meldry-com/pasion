@@ -11,7 +11,6 @@ use pasion_salvo_utils::{
 };
 use pasion_storage::{
     RepositoryAccess,
-    queue::{QueueJobRepositoryExt as _, SendEmailAuthenticationCodeJob},
     user::{UserEmailRepository, UserRepository},
 };
 use pasion_templates::{
@@ -24,8 +23,9 @@ use zeroize::Zeroizing;
 
 use super::cookie::UserRegistrationSessions;
 use crate::{
-    RequesterFingerprint, SiteConfig, captcha::Form as CaptchaForm, passwords::PasswordManager,
-    rest, views::shared::OptionalPostAuthAction,
+    RequesterFingerprint, SiteConfig, captcha::Form as CaptchaForm,
+    notification_dispatch::schedule_email_authentication_code, passwords::PasswordManager, rest,
+    views::shared::OptionalPostAuthAction,
 };
 
 #[derive(Debug, Deserialize, Serialize)]
@@ -376,13 +376,14 @@ pub async fn post(
             .await?;
 
         // Schedule a job to verify the email
-        repo.queue_job()
-            .schedule_job(
-                &mut rng,
-                &clock,
-                SendEmailAuthenticationCodeJob::new(&user_email_authentication, locale.to_string()),
-            )
-            .await?;
+        schedule_email_authentication_code(
+            &mut repo,
+            &mut rng,
+            &clock,
+            &user_email_authentication,
+            locale.to_string(),
+        )
+        .await?;
 
         repo.user_registration()
             .set_email_authentication(registration, &user_email_authentication)

@@ -1,5 +1,4 @@
 use anyhow::Context as _;
-use pasion_storage::queue::{QueueJobRepositoryExt as _, SendAccountRecoveryEmailsJob};
 use salvo::oapi::ToSchema;
 use salvo::prelude::*;
 use serde::{Deserialize, Serialize};
@@ -9,6 +8,7 @@ use super::{
     DepotExt, NodeType, RouteError, extract_bound_activity_tracker, extract_session_info,
     get_requester, make_clock, make_rng,
 };
+use crate::notification_dispatch::schedule_account_recovery;
 
 // ── POST /api/v1/viewer/password ───────────────────────────────
 
@@ -288,13 +288,7 @@ pub async fn resend_recovery_email(
         }));
     }
 
-    repo.queue_job()
-        .schedule_job(
-            &mut rng,
-            &clock,
-            SendAccountRecoveryEmailsJob::new(&session),
-        )
-        .await?;
+    schedule_account_recovery(&mut repo, &mut rng, &clock, &session).await?;
 
     repo.save().await?;
 

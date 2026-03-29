@@ -98,6 +98,70 @@ impl InsertableJob for SendSmsAuthenticationCodeJob {
     const QUEUE_NAME: &'static str = "send-sms-authentication-code";
 }
 
+/// A generic job to dispatch user-facing notifications.
+#[derive(Serialize, Deserialize, Debug, Clone)]
+pub enum DispatchNotificationJob {
+    /// Send an email verification code.
+    EmailAuthenticationCode {
+        /// The email authentication session to send the code for.
+        user_email_authentication_id: Ulid,
+        /// The language to use for the email.
+        language: String,
+    },
+
+    /// Send an SMS verification code.
+    SmsAuthenticationCode {
+        /// The phone authentication session to send the code for.
+        user_phone_authentication_id: Ulid,
+        /// The language to use for the SMS.
+        language: String,
+    },
+
+    /// Send account recovery emails for a recovery session.
+    AccountRecovery {
+        /// The recovery session for which to send recovery emails.
+        user_recovery_session_id: Ulid,
+    },
+}
+
+impl DispatchNotificationJob {
+    /// Create a new notification dispatch job for email verification.
+    #[must_use]
+    pub fn email_authentication_code(
+        user_email_authentication: &UserEmailAuthentication,
+        language: String,
+    ) -> Self {
+        Self::EmailAuthenticationCode {
+            user_email_authentication_id: user_email_authentication.id,
+            language,
+        }
+    }
+
+    /// Create a new notification dispatch job for SMS verification.
+    #[must_use]
+    pub fn sms_authentication_code(
+        user_phone_authentication: &UserPhoneAuthentication,
+        language: String,
+    ) -> Self {
+        Self::SmsAuthenticationCode {
+            user_phone_authentication_id: user_phone_authentication.id,
+            language,
+        }
+    }
+
+    /// Create a new notification dispatch job for account recovery.
+    #[must_use]
+    pub fn account_recovery(user_recovery_session: &UserRecoverySession) -> Self {
+        Self::AccountRecovery {
+            user_recovery_session_id: user_recovery_session.id,
+        }
+    }
+}
+
+impl InsertableJob for DispatchNotificationJob {
+    const QUEUE_NAME: &'static str = "dispatch-notification";
+}
+
 /// A job to provision the user on the homeserver.
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct ProvisionUserJob {

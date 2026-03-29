@@ -1,6 +1,4 @@
-use pasion_storage::queue::{
-    ProvisionUserJob, QueueJobRepositoryExt as _, SendEmailAuthenticationCodeJob,
-};
+use pasion_storage::queue::{ProvisionUserJob, QueueJobRepositoryExt as _};
 use salvo::oapi::ToSchema;
 use salvo::prelude::*;
 use serde::{Deserialize, Serialize};
@@ -9,6 +7,7 @@ use super::{
     DepotExt, NodeType, RouteError, extract_bound_activity_tracker, extract_session_info,
     get_requester, make_clock, make_rng, verify_password_if_needed,
 };
+use crate::notification_dispatch::schedule_email_authentication_code;
 
 // ── Response types ─────────────────────────────────────────────
 
@@ -90,12 +89,8 @@ pub async fn get_email_auth(
 pub struct StartEmailAuthInput {
     pub email: String,
     pub password: Option<String>,
-    #[serde(default = "default_language")]
-    pub language: String,
-}
-
-fn default_language() -> String {
-    "en".to_owned()
+    #[serde(default)]
+    pub language: Option<String>,
 }
 
 #[endpoint]
@@ -114,6 +109,7 @@ pub async fn start_email_auth(
     let limiter = depot.limiter()?;
     let clock = make_clock();
     let mut rng = make_rng();
+    let notification_language = crate::notification_language(req, depot, input.language.as_deref());
 
     let activity_tracker = extract_bound_activity_tracker(req, depot);
     let session_info = extract_session_info(req, depot);
@@ -178,12 +174,7 @@ pub async fn start_email_auth(
         .await?;
 
     // Schedule email sending
-    repo.queue_job()
-        .schedule_job(
-            &mut rng,
-            &clock,
-            SendEmailAuthenticationCodeJob::new(&auth, input.language.clone()),
-        )
+    schedule_email_authentication_code(&mut repo, &mut rng, &clock, &auth, notification_language)
         .await?;
 
     repo.save().await?;
@@ -307,8 +298,8 @@ pub async fn complete_email_auth(
 #[derive(Deserialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct ResendEmailAuthInput {
-    #[serde(default = "default_language")]
-    pub language: String,
+    #[serde(default)]
+    pub language: Option<String>,
 }
 
 #[endpoint]
@@ -321,14 +312,16 @@ pub async fn resend_email_auth_code(
         .ok_or(RouteError::BadRequest("missing id".into()))?;
     let ulid = NodeType::UserEmailAuthentication.extract_ulid(&id)?;
 
-    let input: ResendEmailAuthInput = req.parse_json().await.unwrap_or(ResendEmailAuthInput {
-        language: "en".to_owned(),
-    });
+    let input: ResendEmailAuthInput = req
+        .parse_json()
+        .await
+        .unwrap_or(ResendEmailAuthInput { language: None });
 
     let repo_factory = depot.repo_factory()?;
     let limiter = depot.limiter()?;
     let clock = make_clock();
     let mut rng = make_rng();
+    let notification_language = crate::notification_language(req, depot, input.language.as_deref());
 
     let activity_tracker = extract_bound_activity_tracker(req, depot);
     let session_info = extract_session_info(req, depot);
@@ -363,12 +356,7 @@ pub async fn resend_email_auth_code(
         }));
     }
 
-    repo.queue_job()
-        .schedule_job(
-            &mut rng,
-            &clock,
-            SendEmailAuthenticationCodeJob::new(&auth, input.language.clone()),
-        )
+    schedule_email_authentication_code(&mut repo, &mut rng, &clock, &auth, notification_language)
         .await?;
 
     repo.save().await?;

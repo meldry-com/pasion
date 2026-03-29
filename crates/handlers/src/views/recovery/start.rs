@@ -6,7 +6,6 @@ use pasion_salvo_utils::{
     cookies::CookieJar,
     csrf::{CsrfExt, ProtectedForm},
 };
-use pasion_storage::queue::{QueueJobRepositoryExt as _, SendAccountRecoveryEmailsJob};
 use pasion_templates::{
     EmptyContext, FieldError, FormError, FormState, RecoveryStartContext, RecoveryStartFormField,
     TemplateContext, Templates,
@@ -15,7 +14,7 @@ use salvo::{prelude::*, writing::Text};
 use serde::{Deserialize, Serialize};
 
 use crate::rest::DepotExt;
-use crate::{RequesterFingerprint, rest};
+use crate::{RequesterFingerprint, notification_dispatch::schedule_account_recovery, rest};
 
 #[derive(Deserialize, Serialize)]
 pub(crate) struct StartRecoveryForm {
@@ -163,13 +162,7 @@ pub async fn post(
         )
         .await?;
 
-    repo.queue_job()
-        .schedule_job(
-            &mut rng,
-            &clock,
-            SendAccountRecoveryEmailsJob::new(&session),
-        )
-        .await?;
+    schedule_account_recovery(&mut repo, &mut rng, &clock, &session).await?;
 
     repo.save().await?;
 

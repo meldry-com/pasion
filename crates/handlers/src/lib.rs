@@ -60,6 +60,8 @@ pub(crate) mod views;
 
 mod activity_tracker;
 mod captcha;
+mod notification_dispatch;
+mod notification_language;
 mod preferred_language;
 mod rate_limit;
 mod session;
@@ -96,6 +98,7 @@ pub use pasion_salvo_utils::{ErrorWrapper, cookies::CookieManager};
 
 pub use self::{
     activity_tracker::{ActivityTracker, Bound as BoundActivityTracker},
+    notification_language::notification_language,
     preferred_language::preferred_language,
     rate_limit::{Limiter, RequesterFingerprint},
     upstream_oauth2::cache::MetadataCache,

@@ -13,10 +13,7 @@ use pasion_matrix::HomeserverConnection;
 use pasion_salvo_utils::SessionInfoExt;
 use pasion_storage::{
     RepositoryAccess,
-    queue::{
-        ProvisionUserJob, QueueJobRepositoryExt as _, SendEmailAuthenticationCodeJob,
-        SendSmsAuthenticationCodeJob,
-    },
+    queue::{ProvisionUserJob, QueueJobRepositoryExt as _},
     user::{UserEmailFilter, UserEmailRepository, UserFilter, UserPhoneRepository, UserRepository},
 };
 use salvo::oapi::ToSchema;
@@ -26,7 +23,10 @@ use ulid::Ulid;
 use zeroize::Zeroizing;
 
 use super::{DepotExt, RouteError, extract_bound_activity_tracker, make_clock, make_rng};
-use crate::RequesterFingerprint;
+use crate::{
+    RequesterFingerprint,
+    notification_dispatch::{schedule_email_authentication_code, schedule_sms_authentication_code},
+};
 
 // ── Shared helpers ─────────────────────────────────────────────
 
@@ -129,6 +129,7 @@ pub async fn post_register(
     let policy_factory = depot.policy_factory()?;
     let limiter = depot.limiter()?;
     let repo_factory = depot.repo_factory()?;
+    let notification_language = crate::notification_language(req, depot, None);
 
     let clock = make_clock();
     let mut rng = make_rng();
@@ -328,13 +329,14 @@ pub async fn post_register(
             .await?;
 
         // Schedule email sending
-        repo.queue_job()
-            .schedule_job(
-                &mut rng,
-                &clock,
-                SendEmailAuthenticationCodeJob::new(&user_email_authentication, "en".to_owned()),
-            )
-            .await?;
+        schedule_email_authentication_code(
+            &mut repo,
+            &mut rng,
+            &clock,
+            &user_email_authentication,
+            notification_language.clone(),
+        )
+        .await?;
 
         let reg = repo
             .user_registration()
@@ -353,13 +355,14 @@ pub async fn post_register(
             .add_authentication_for_registration(&mut rng, &clock, phone, &registration)
             .await?;
 
-        repo.queue_job()
-            .schedule_job(
-                &mut rng,
-                &clock,
-                SendSmsAuthenticationCodeJob::new(&user_phone_authentication, "en".to_owned()),
-            )
-            .await?;
+        schedule_sms_authentication_code(
+            &mut repo,
+            &mut rng,
+            &clock,
+            &user_phone_authentication,
+            notification_language.clone(),
+        )
+        .await?;
 
         let reg = repo
             .user_registration()
@@ -617,6 +620,7 @@ pub async fn post_resend_verification(
     let limiter = depot.limiter()?;
     let clock = make_clock();
     let mut rng = make_rng();
+    let notification_language = crate::notification_language(req, depot, None);
 
     let activity_tracker = extract_bound_activity_tracker(req, depot);
     let requester = activity_tracker
@@ -655,13 +659,14 @@ pub async fn post_resend_verification(
                 }));
             }
 
-            repo.queue_job()
-                .schedule_job(
-                    &mut rng,
-                    &clock,
-                    SendEmailAuthenticationCodeJob::new(&auth, "en".to_owned()),
-                )
-                .await?;
+            schedule_email_authentication_code(
+                &mut repo,
+                &mut rng,
+                &clock,
+                &auth,
+                notification_language.clone(),
+            )
+            .await?;
 
             repo.save().await?;
 
@@ -688,13 +693,14 @@ pub async fn post_resend_verification(
                 }));
             }
 
-            repo.queue_job()
-                .schedule_job(
-                    &mut rng,
-                    &clock,
-                    SendSmsAuthenticationCodeJob::new(&auth, "en".to_owned()),
-                )
-                .await?;
+            schedule_sms_authentication_code(
+                &mut repo,
+                &mut rng,
+                &clock,
+                &auth,
+                notification_language.clone(),
+            )
+            .await?;
 
             repo.save().await?;
 

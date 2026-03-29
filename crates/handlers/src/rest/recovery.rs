@@ -7,14 +7,13 @@
 use std::str::FromStr;
 
 use lettre::Address;
-use pasion_storage::queue::{QueueJobRepositoryExt as _, SendAccountRecoveryEmailsJob};
 use salvo::oapi::ToSchema;
 use salvo::prelude::*;
 use serde::{Deserialize, Serialize};
 use ulid::Ulid;
 
 use super::{DepotExt, RouteError, extract_bound_activity_tracker, make_clock, make_rng};
-use crate::RequesterFingerprint;
+use crate::{RequesterFingerprint, notification_dispatch::schedule_account_recovery};
 
 // ── POST /api/v1/auth/recovery/start ───────────────────────────
 
@@ -45,6 +44,7 @@ pub async fn post_recovery_start(
     let site_config = depot.site_config()?;
     let repo_factory = depot.repo_factory()?;
     let limiter = depot.limiter()?;
+    let notification_language = crate::notification_language(req, depot, None);
 
     let clock = make_clock();
     let mut rng = make_rng();
@@ -100,18 +100,12 @@ pub async fn post_recovery_start(
             input.email,
             user_agent,
             ip_address,
-            "en".to_owned(),
+            notification_language,
         )
         .await?;
 
     // Schedule recovery emails
-    repo.queue_job()
-        .schedule_job(
-            &mut rng,
-            &clock,
-            SendAccountRecoveryEmailsJob::new(&session),
-        )
-        .await?;
+    schedule_account_recovery(&mut repo, &mut rng, &clock, &session).await?;
 
     repo.save().await?;
 
@@ -237,13 +231,7 @@ pub async fn post_recovery_resend(
     }
 
     // Schedule a new batch of recovery emails
-    repo.queue_job()
-        .schedule_job(
-            &mut rng,
-            &clock,
-            SendAccountRecoveryEmailsJob::new(&session),
-        )
-        .await?;
+    schedule_account_recovery(&mut repo, &mut rng, &clock, &session).await?;
 
     repo.save().await?;
 

@@ -3,13 +3,12 @@ use pasion_salvo_utils::{
     cookies::CookieJar,
     csrf::{CsrfExt, ProtectedForm},
 };
-use pasion_storage::queue::{QueueJobRepositoryExt as _, SendAccountRecoveryEmailsJob};
 use pasion_templates::{EmptyContext, RecoveryProgressContext, TemplateContext, Templates};
 use salvo::{prelude::*, writing::Text};
 use ulid::Ulid;
 
 use crate::rest::DepotExt;
-use crate::{RequesterFingerprint, rest};
+use crate::{RequesterFingerprint, notification_dispatch::schedule_account_recovery, rest};
 
 #[handler]
 pub async fn get(
@@ -152,13 +151,7 @@ pub async fn post(
     }
 
     // Schedule a new batch of emails
-    repo.queue_job()
-        .schedule_job(
-            &mut rng,
-            &clock,
-            SendAccountRecoveryEmailsJob::new(&recovery_session),
-        )
-        .await?;
+    schedule_account_recovery(&mut repo, &mut rng, &clock, &recovery_session).await?;
 
     repo.save().await?;
 

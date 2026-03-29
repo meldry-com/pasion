@@ -39,6 +39,7 @@ mod cleanup;
 mod email;
 mod matrix;
 mod new_queue;
+mod notifications;
 mod recovery;
 mod sessions;
 mod sms;
@@ -173,6 +174,7 @@ pub async fn init(
         .register_handler::<pasion_storage::queue::ProvisionDeviceJob>()
         .register_handler::<pasion_storage::queue::ProvisionUserJob>()
         .register_handler::<pasion_storage::queue::ReactivateUserJob>()
+        .register_handler::<pasion_storage::queue::DispatchNotificationJob>()
         .register_handler::<pasion_storage::queue::SendAccountRecoveryEmailsJob>()
         .register_handler::<pasion_storage::queue::SendEmailAuthenticationCodeJob>()
         .register_handler::<pasion_storage::queue::SendSmsAuthenticationCodeJob>()
