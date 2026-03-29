@@ -58,6 +58,7 @@ pub mod user_registration_cookie;
 #[cfg(test)]
 pub(crate) mod views;
 
+mod account_access;
 mod account_contacts;
 mod account_password;
 mod account_recovery;

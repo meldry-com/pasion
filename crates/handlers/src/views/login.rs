@@ -10,11 +10,7 @@ use pasion_salvo_utils::{
     cookies::CookieJar,
     csrf::{CsrfExt, ProtectedForm},
 };
-use pasion_storage::{
-    RepositoryAccess,
-    upstream_oauth2::UpstreamOAuthProviderRepository,
-    user::{BrowserSessionRepository, UserPasswordRepository, UserRepository},
-};
+use pasion_storage::RepositoryAccess;
 use pasion_templates::{
     AccountInactiveContext, FieldError, FormError, FormState, LoginContext, LoginFormField,
     PostAuthContext, PostAuthContextInner, TemplateContext, Templates, ToFormState,
@@ -27,7 +23,11 @@ use zeroize::Zeroizing;
 use super::shared::OptionalPostAuthAction;
 use crate::{
     METER, RequesterFingerprint, SiteConfig,
-    passwords::{PasswordManager, PasswordVerificationResult},
+    account_access::{
+        PasswordLoginOutcome, PasswordLoginRequest, load_enabled_upstream_providers,
+        login_with_password,
+    },
+    passwords::PasswordManager,
     rest,
     session::{SessionOrFallback, load_session_or_fallback},
 };
@@ -96,7 +96,7 @@ pub async fn get(
         return Ok(());
     }
 
-    let providers = repo.upstream_oauth_provider().all_enabled().await?;
+    let providers = load_enabled_upstream_providers(&mut repo).await?;
 
     // If password-based login is disabled, and there is only one upstream provider,
     // we can directly start an authorization flow
@@ -201,113 +201,38 @@ pub async fn post(
         .await;
     }
 
-    // Extract the localpart of the MXID, fallback to the bare username
-    let username = homeserver
-        .localpart(&form.username)
-        .unwrap_or(&form.username);
-
-    // First, lookup the user
-    let Some(user) = get_user_by_email_or_by_username(&site_config, &mut repo, username).await?
-    else {
-        tracing::warn!(username, "User not found");
-        let form_state = form_state.with_error_on_form(FormError::InvalidCredentials);
-        PASSWORD_LOGIN_COUNTER.add(1, &[KeyValue::new(RESULT, "error")]);
-        return render(
-            locale,
-            cookie_jar,
-            form_state,
-            query,
-            &mut repo,
-            &clock,
-            &mut rng,
-            &templates,
-            &homeserver,
-            &site_config,
-            res,
-        )
-        .await;
-    };
-
-    // Check the rate limit
-    if let Err(e) = limiter.check_password(requester, &user) {
-        tracing::warn!(error = &e as &dyn std::error::Error, "ratelimit exceeded");
-        let form_state = form_state.with_error_on_form(FormError::RateLimitExceeded);
-        PASSWORD_LOGIN_COUNTER.add(1, &[KeyValue::new(RESULT, "error")]);
-        return render(
-            locale,
-            cookie_jar,
-            form_state,
-            query,
-            &mut repo,
-            &clock,
-            &mut rng,
-            &templates,
-            &homeserver,
-            &site_config,
-            res,
-        )
-        .await;
-    }
-
-    // And its password
-    let Some(user_password) = repo.user_password().active(&user).await? else {
-        // There is no password for this user, but we don't want to disclose that. Show
-        // a generic 'invalid credentials' error instead
-        tracing::warn!(username, "No password for user");
-        let form_state = form_state.with_error_on_form(FormError::InvalidCredentials);
-        PASSWORD_LOGIN_COUNTER.add(1, &[KeyValue::new(RESULT, "error")]);
-        return render(
-            locale,
-            cookie_jar,
-            form_state,
-            query,
-            &mut repo,
-            &clock,
-            &mut rng,
-            &templates,
-            &homeserver,
-            &site_config,
-            res,
-        )
-        .await;
-    };
-
-    let password = Zeroizing::new(form.password);
-
-    // Verify the password, and upgrade it on-the-fly if needed
-    let user_password = match password_manager
-        .verify_and_upgrade(
-            &mut rng,
-            user_password.version,
-            password,
-            user_password.hashed_password.clone(),
-        )
-        .await
+    match login_with_password(
+        repo,
+        &mut rng,
+        &clock,
+        &password_manager,
+        &limiter,
+        homeserver.as_ref(),
+        &site_config,
+        PasswordLoginRequest {
+            username_or_email: form.username,
+            password: Zeroizing::new(form.password),
+            user_agent,
+            requester,
+        },
+    )
+    .await
+    .map_err(|error| InternalError::from_anyhow(error.into()))?
     {
-        Ok(PasswordVerificationResult::Success(Some((version, new_password_hash)))) => {
-            // Save the upgraded password
-            repo.user_password()
-                .add(
-                    &mut rng,
-                    &clock,
-                    &user,
-                    version,
-                    new_password_hash,
-                    Some(&user_password),
-                )
-                .await?
+        PasswordLoginOutcome::Disabled => {
+            res.status_code(StatusCode::METHOD_NOT_ALLOWED);
+            Ok(())
         }
-        Ok(PasswordVerificationResult::Success(None)) => user_password,
-        Ok(PasswordVerificationResult::Failure) => {
-            tracing::warn!(username, "Failed to verify/upgrade password for user");
+        PasswordLoginOutcome::InvalidCredentials => {
             let form_state = form_state.with_error_on_form(FormError::InvalidCredentials);
-            PASSWORD_LOGIN_COUNTER.add(1, &[KeyValue::new(RESULT, "mismatch")]);
-            return render(
+            PASSWORD_LOGIN_COUNTER.add(1, &[KeyValue::new(RESULT, "error")]);
+            let mut render_repo = depot.repo_factory()?.create().await?;
+            render(
                 locale,
                 cookie_jar,
                 form_state,
                 query,
-                &mut repo,
+                &mut render_repo,
                 &clock,
                 &mut rng,
                 &templates,
@@ -315,89 +240,63 @@ pub async fn post(
                 &site_config,
                 res,
             )
-            .await;
+            .await
         }
-        Err(err) => return Err(InternalError::from_anyhow(err)),
-    };
+        PasswordLoginOutcome::RateLimited => {
+            let form_state = form_state.with_error_on_form(FormError::RateLimitExceeded);
+            PASSWORD_LOGIN_COUNTER.add(1, &[KeyValue::new(RESULT, "error")]);
+            let mut render_repo = depot.repo_factory()?.create().await?;
+            render(
+                locale,
+                cookie_jar,
+                form_state,
+                query,
+                &mut render_repo,
+                &clock,
+                &mut rng,
+                &templates,
+                &homeserver,
+                &site_config,
+                res,
+            )
+            .await
+        }
+        PasswordLoginOutcome::AccountDeactivated { user } => {
+            PASSWORD_LOGIN_COUNTER.add(1, &[KeyValue::new(RESULT, "error")]);
+            let (csrf_token, cookie_jar) = cookie_jar.csrf_token(&clock, &mut rng);
+            let ctx = AccountInactiveContext::new(user)
+                .with_csrf(csrf_token.form_value())
+                .with_language(locale);
+            let content = templates.render_account_deactivated(&ctx)?;
+            cookie_jar.write_to_response(res);
+            res.render(Text::Html(content));
+            Ok(())
+        }
+        PasswordLoginOutcome::AccountLocked { user } => {
+            PASSWORD_LOGIN_COUNTER.add(1, &[KeyValue::new(RESULT, "error")]);
+            let (csrf_token, cookie_jar) = cookie_jar.csrf_token(&clock, &mut rng);
+            let ctx = AccountInactiveContext::new(user)
+                .with_csrf(csrf_token.form_value())
+                .with_language(locale);
+            let content = templates.render_account_locked(&ctx)?;
+            cookie_jar.write_to_response(res);
+            res.render(Text::Html(content));
+            Ok(())
+        }
+        PasswordLoginOutcome::Authenticated { user_session, .. } => {
+            PASSWORD_LOGIN_COUNTER.add(1, &[KeyValue::new(RESULT, "success")]);
 
-    // Now that we have checked the user password, we now want to show an error if
-    // the user is locked or deactivated
-    if user.deactivated_at.is_some() {
-        tracing::warn!(username, "User is deactivated");
-        PASSWORD_LOGIN_COUNTER.add(1, &[KeyValue::new(RESULT, "error")]);
-        let (csrf_token, cookie_jar) = cookie_jar.csrf_token(&clock, &mut rng);
-        let ctx = AccountInactiveContext::new(user)
-            .with_csrf(csrf_token.form_value())
-            .with_language(locale);
-        let content = templates.render_account_deactivated(&ctx)?;
-        cookie_jar.write_to_response(res);
-        res.render(Text::Html(content));
-        return Ok(());
-    }
+            activity_tracker
+                .record_browser_session(&clock, &user_session)
+                .await;
 
-    if user.locked_at.is_some() {
-        tracing::warn!(username, "User is locked");
-        PASSWORD_LOGIN_COUNTER.add(1, &[KeyValue::new(RESULT, "error")]);
-        let (csrf_token, cookie_jar) = cookie_jar.csrf_token(&clock, &mut rng);
-        let ctx = AccountInactiveContext::new(user)
-            .with_csrf(csrf_token.form_value())
-            .with_language(locale);
-        let content = templates.render_account_locked(&ctx)?;
-        cookie_jar.write_to_response(res);
-        res.render(Text::Html(content));
-        return Ok(());
-    }
-
-    // At this point, we should have a 'valid' user. In case we missed something, we
-    // want it to crash in tests/debug builds
-    debug_assert!(user.is_valid());
-
-    // Start a new session
-    let user_session = repo
-        .browser_session()
-        .add(&mut rng, &clock, &user, user_agent)
-        .await?;
-
-    // And mark it as authenticated by the password
-    repo.browser_session()
-        .authenticate_with_password(&mut rng, &clock, &user_session, &user_password)
-        .await?;
-
-    repo.save().await?;
-
-    PASSWORD_LOGIN_COUNTER.add(1, &[KeyValue::new(RESULT, "success")]);
-
-    activity_tracker
-        .record_browser_session(&clock, &user_session)
-        .await;
-
-    let cookie_jar = cookie_jar.set_session(&user_session);
-    let reply = query.go_next(&url_builder);
-    cookie_jar.write_to_response(res);
-    res.render(reply);
-    Ok(())
-}
-
-async fn get_user_by_email_or_by_username<R: RepositoryAccess>(
-    site_config: &SiteConfig,
-    repo: &mut R,
-    username_or_email: &str,
-) -> Result<Option<pasion_data_model::User>, R::Error> {
-    if site_config.login_with_email_allowed && username_or_email.contains('@') {
-        let maybe_user_email = repo.user_email().find_by_email(username_or_email).await?;
-
-        if let Some(user_email) = maybe_user_email {
-            let user = repo.user().lookup(user_email.user_id).await?;
-
-            if user.is_some() {
-                return Ok(user);
-            }
+            let cookie_jar = cookie_jar.set_session(&user_session);
+            let reply = query.go_next(&url_builder);
+            cookie_jar.write_to_response(res);
+            res.render(reply);
+            Ok(())
         }
     }
-
-    let user = repo.user().find_by_username(username_or_email).await?;
-
-    Ok(user)
 }
 
 fn handle_login_hint(
@@ -441,7 +340,7 @@ async fn render(
     res: &mut Response,
 ) -> Result<(), InternalError> {
     let (csrf_token, cookie_jar) = cookie_jar.csrf_token(clock, rng);
-    let providers = repo.upstream_oauth_provider().all_enabled().await?;
+    let providers = load_enabled_upstream_providers(repo).await?;
 
     let ctx = LoginContext::default()
         .with_form_state(form_state)

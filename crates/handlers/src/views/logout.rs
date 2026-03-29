@@ -4,9 +4,9 @@ use pasion_salvo_utils::{
     cookies::CookieJar,
     csrf::{CsrfExt, ProtectedForm},
 };
-use pasion_storage::user::BrowserSessionRepository;
 use salvo::prelude::*;
 
+use crate::account_access::logout_browser_session;
 use crate::rest;
 use crate::rest::DepotExt;
 
@@ -17,7 +17,7 @@ pub async fn post(
     res: &mut Response,
 ) -> Result<(), InternalError> {
     let clock = rest::make_clock();
-    let mut repo = depot.repo_factory()?.create().await?;
+    let repo = depot.repo_factory()?.create().await?;
     let cookie_jar = depot.cookie_jar(req)?;
     let url_builder = depot.url_builder()?;
     let activity_tracker = rest::extract_bound_activity_tracker(req, depot);
@@ -30,20 +30,13 @@ pub async fn post(
 
     let (session_info, cookie_jar) = cookie_jar.session_info();
 
-    if let Some(session_id) = session_info.current_session_id() {
-        let maybe_session = repo.browser_session().lookup(session_id).await?;
-        if let Some(session) = maybe_session
-            && session.finished_at.is_none()
-        {
-            activity_tracker
-                .record_browser_session(&clock, &session)
-                .await;
-
-            repo.browser_session().finish(&clock, session).await?;
-        }
+    if let Some(session) =
+        logout_browser_session(repo, &clock, session_info.current_session_id()).await?
+    {
+        activity_tracker
+            .record_browser_session(&clock, &session)
+            .await;
     }
-
-    repo.save().await?;
 
     // We always want to clear out the session cookie, even if the session was
     // invalid

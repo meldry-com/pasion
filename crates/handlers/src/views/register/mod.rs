@@ -4,6 +4,7 @@ use pasion_templates::{RegisterContext, TemplateContext, Templates};
 use salvo::{prelude::*, writing::Text};
 
 use super::shared::OptionalPostAuthAction;
+use crate::account_access::load_enabled_upstream_providers;
 use crate::rest;
 use crate::rest::DepotExt;
 
@@ -46,7 +47,7 @@ pub async fn get(
         return Ok(());
     }
 
-    let providers = repo.upstream_oauth_provider().all_enabled().await?;
+    let providers = load_enabled_upstream_providers(&mut repo).await?;
 
     // If password-based login is disabled, and there is only one upstream provider,
     // we can directly start an authorization flow
