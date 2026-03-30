@@ -10,7 +10,7 @@
 
 use crate::handlers::rest::DepotExt;
 use pasion_router::UrlBuilder;
-use pasion_salvo_utils::InternalError;
+use crate::salvo_utils::InternalError;
 use pasion_templates::{ApiDocContext, Templates};
 use salvo::prelude::*;
 use serde::Serialize;

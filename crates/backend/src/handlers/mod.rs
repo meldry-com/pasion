@@ -89,7 +89,7 @@ static METER: LazyLock<Meter> = LazyLock::new(|| {
     opentelemetry::global::meter_with_scope(scope)
 });
 
-pub use pasion_salvo_utils::cookies::CookieManager;
+pub use crate::salvo_utils::cookies::CookieManager;
 
 pub use self::{
     activity_tracker::{ActivityTracker, Bound as BoundActivityTracker},

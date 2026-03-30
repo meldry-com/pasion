@@ -6,7 +6,7 @@ use oauth2_types::{
 };
 use pasion_data_model::{AuthorizationCode, BoxClock, BoxRng, Pkce, SystemClock};
 use pasion_router::{PostAuthAction, UrlBuilder};
-use pasion_salvo_utils::{
+use crate::salvo_utils::{
     GenericError, InternalError, SessionInfoExt, cookies::CookieJar, sentry::SentryEventID,
 };
 use pasion_storage::{
@@ -60,7 +60,7 @@ impl Scribe for RouteError {
             }
         }
 
-        let sentry_event_id = pasion_salvo_utils::sentry::SentryEventID::from(event_id);
+        let sentry_event_id = crate::salvo_utils::sentry::SentryEventID::from(event_id);
         sentry_event_id.write_to_response(res);
     }
 }
@@ -129,7 +129,7 @@ async fn handle_get(req: &mut Request, depot: &Depot) -> Result<(Response, Cooki
         .expect("BoxRepositoryFactory not found in depot");
     let activity_tracker = crate::handlers::rest::extract_bound_activity_tracker(req, depot);
     let cookie_manager = depot
-        .get::<pasion_salvo_utils::cookies::CookieManager>("cookie_manager")
+        .get::<crate::salvo_utils::cookies::CookieManager>("cookie_manager")
         .expect("CookieManager not found in depot");
 
     let clock: BoxClock = Box::new(SystemClock::default());

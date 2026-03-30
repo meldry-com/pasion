@@ -1,7 +1,7 @@
 use std::str::FromStr as _;
 
 use pasion_data_model::BoxRng;
-use pasion_salvo_utils::record_error;
+use crate::record_error;
 use pasion_storage::{
     queue::{ProvisionUserJob, QueueJobRepositoryExt as _},
     user::UserEmailFilter,

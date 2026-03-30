@@ -10,7 +10,7 @@ use pasion_keystore::Keystore;
 use pasion_matrix::HomeserverConnection;
 use pasion_policy::Policy;
 use pasion_router::UrlBuilder;
-use pasion_salvo_utils::client_authorization::{ClientAuthorization, CredentialsVerificationError};
+use crate::salvo_utils::client_authorization::{ClientAuthorization, CredentialsVerificationError};
 use pasion_storage::{BoxRepository, BoxRepositoryFactory};
 use pasion_templates::Templates;
 use rand::{SeedableRng, thread_rng};
@@ -230,13 +230,13 @@ impl Scribe for RouteError {
             }
         }
 
-        let sentry_event_id = pasion_salvo_utils::sentry::SentryEventID::from(event_id);
+        let sentry_event_id = crate::salvo_utils::sentry::SentryEventID::from(event_id);
         sentry_event_id.write_to_response(res);
     }
 }
 
 impl_from_error_for_route!(pasion_storage::RepositoryError);
-impl_from_error_for_route!(pasion_salvo_utils::client_authorization::ClientAuthorizationError);
+impl_from_error_for_route!(crate::salvo_utils::client_authorization::ClientAuthorizationError);
 
 // ---------------------------------------------------------------------------
 // Map service-level errors into RouteError

@@ -4,7 +4,7 @@
 use pasion_data_model::{BrowserSession, Clock, User};
 use pasion_i18n::DataLocale;
 use pasion_policy::model::SessionCounts;
-use pasion_salvo_utils::{SessionInfoExt, cookies::CookieJar, csrf::CsrfExt};
+use crate::salvo_utils::{SessionInfoExt, cookies::CookieJar, csrf::CsrfExt};
 use pasion_storage::{
     BoxRepository, RepositoryError, oauth2::OAuth2SessionFilter, personal::PersonalSessionFilter,
 };

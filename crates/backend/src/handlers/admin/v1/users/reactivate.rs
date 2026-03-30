@@ -1,5 +1,5 @@
 use pasion_matrix::HomeserverConnection;
-use pasion_salvo_utils::record_error;
+use crate::record_error;
 use pasion_storage::RepositoryAccess;
 use salvo::{http::StatusCode, prelude::*};
 use ulid::Ulid;

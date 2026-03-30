@@ -4,7 +4,7 @@
 //! Since the [`NotificationCenter`] is not available in the HTTP depot,
 //! channel availability is inferred from the site configuration flags.
 
-use pasion_salvo_utils::record_error;
+use crate::record_error;
 use salvo::{http::StatusCode, prelude::*};
 use schemars::JsonSchema;
 use serde::Serialize;

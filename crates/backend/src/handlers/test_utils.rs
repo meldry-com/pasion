@@ -18,7 +18,7 @@ use pasion_matrix::{HomeserverConnection, MockHomeserverConnection};
 use pasion_messaging::{MailTransport, Mailer, NotificationCenter};
 use pasion_policy::{InstantiateError, Policy, PolicyFactory};
 use pasion_router::{Route, SimpleRoute, UrlBuilder};
-use pasion_salvo_utils::cookies::{CookieJar, CookieManager};
+use crate::salvo_utils::cookies::{CookieJar, CookieManager};
 use pasion_storage::{BoxRepository, BoxRepositoryFactory, RepositoryError, RepositoryFactory};
 use pasion_storage_pg::PgRepositoryFactory;
 use pasion_tasks::QueueWorker;

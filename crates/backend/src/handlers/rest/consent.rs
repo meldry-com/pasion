@@ -126,7 +126,7 @@ fn map_oauth2_access_error(error: OAuth2AccessError) -> RouteError {
 /// JSON error if the user is not authenticated. Returns `None` when the
 /// unauthenticated response has already been written to `res`.
 async fn require_authenticated_session(
-    session_info: &pasion_salvo_utils::SessionInfo,
+    session_info: &crate::salvo_utils::SessionInfo,
     repo: &mut pasion_storage::BoxRepository,
     activity_tracker: &crate::handlers::BoundActivityTracker,
     clock: &dyn pasion_data_model::Clock,

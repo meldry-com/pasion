@@ -1,5 +1,5 @@
 use pasion_data_model::audit::AdminOperation;
-use pasion_salvo_utils::record_error;
+use crate::record_error;
 use pasion_storage::audit::NewAdminOperationLog;
 use salvo::{http::StatusCode, prelude::*};
 use schemars::JsonSchema;

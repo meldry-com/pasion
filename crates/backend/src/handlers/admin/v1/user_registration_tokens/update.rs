@@ -1,5 +1,5 @@
 use chrono::{DateTime, Utc};
-use pasion_salvo_utils::record_error;
+use crate::record_error;
 use salvo::{http::StatusCode, prelude::*};
 use schemars::JsonSchema;
 use serde::{Deserialize, Deserializer};

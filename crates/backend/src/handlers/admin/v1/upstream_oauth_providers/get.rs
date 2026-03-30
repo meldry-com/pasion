@@ -1,4 +1,4 @@
-use pasion_salvo_utils::record_error;
+use crate::record_error;
 use pasion_storage::{RepositoryAccess, upstream_oauth2::UpstreamOAuthProviderRepository};
 use salvo::{http::StatusCode, prelude::*};
 

@@ -4,7 +4,7 @@
 //! - `POST /api/admin/v1/notification-templates/publish` — placeholder for
 //!   publishing a template version (returns 501 Not Implemented)
 
-use pasion_salvo_utils::record_error;
+use crate::record_error;
 use salvo::{http::StatusCode, prelude::*};
 use schemars::JsonSchema;
 use serde::Serialize;

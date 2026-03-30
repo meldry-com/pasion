@@ -8,7 +8,7 @@
 use chrono::Utc;
 use pasion_data_model::flow::{FlowSession, FlowSessionStatus};
 use pasion_data_model::new_id;
-use pasion_salvo_utils::SessionInfoExt;
+use crate::salvo_utils::SessionInfoExt;
 use salvo::oapi::ToSchema;
 use salvo::prelude::*;
 use serde::{Deserialize, Serialize};

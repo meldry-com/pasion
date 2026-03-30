@@ -3,7 +3,7 @@
 //! This handler renders the `app.html` template, which loads the Dioxus WASM
 //! frontend. The client-side router then handles all page routing.
 
-use pasion_salvo_utils::InternalError;
+use crate::salvo_utils::InternalError;
 use pasion_templates::{AppContext, TemplateContext, Templates};
 use salvo::{prelude::*, writing::Text};
 

@@ -1,5 +1,5 @@
 use pasion_router::PostAuthAction;
-use pasion_salvo_utils::{
+use crate::salvo_utils::{
     InternalError,
     cookies::CookieJar,
     csrf::{CsrfExt as _, ProtectedForm},

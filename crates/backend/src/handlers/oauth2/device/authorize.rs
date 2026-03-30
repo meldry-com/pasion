@@ -4,9 +4,9 @@ use oauth2_types::{
     requests::{DeviceAuthorizationRequest, DeviceAuthorizationResponse, GrantType},
     scope::ScopeToken,
 };
-use pasion_salvo_utils::{
+use crate::record_error;
+use crate::salvo_utils::{
     client_authorization::{ClientAuthorization, CredentialsVerificationError},
-    record_error,
     sentry::SentryEventID,
 };
 use pasion_storage::oauth2::OAuth2DeviceCodeGrantParams;
@@ -45,7 +45,7 @@ pub enum RouteError {
 
 impl_from_error_for_route!(pasion_storage::RepositoryError);
 impl_from_error_for_route!(crate::handlers::rest::RouteError);
-impl_from_error_for_route!(pasion_salvo_utils::client_authorization::ClientAuthorizationError);
+impl_from_error_for_route!(crate::salvo_utils::client_authorization::ClientAuthorizationError);
 
 impl Scribe for RouteError {
     fn render(self, res: &mut Response) {

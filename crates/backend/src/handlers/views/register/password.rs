@@ -2,7 +2,7 @@ use std::sync::Arc;
 
 use pasion_data_model::CaptchaConfig;
 use pasion_i18n::DataLocale;
-use pasion_salvo_utils::{
+use crate::salvo_utils::{
     InternalError, SessionInfoExt,
     cookies::CookieJar,
     csrf::{CsrfExt, CsrfToken, ProtectedForm},

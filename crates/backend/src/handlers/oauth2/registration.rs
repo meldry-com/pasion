@@ -12,7 +12,8 @@ use pasion_data_model::{BoxClock, BoxRng, SystemClock};
 use pasion_iana::oauth::OAuthClientAuthenticationMethod;
 use pasion_keystore::Encrypter;
 use pasion_policy::{EvaluationResult, Policy, PolicyFactory};
-use pasion_salvo_utils::{record_error, sentry::SentryEventID};
+use crate::record_error;
+use crate::salvo_utils::sentry::SentryEventID;
 use pasion_storage::{BoxRepository, BoxRepositoryFactory, oauth2::OAuth2ClientRepository};
 use psl::Psl;
 use rand::{
@@ -148,7 +149,7 @@ impl Scribe for RouteError {
             }
         }
 
-        let sentry_event_id = pasion_salvo_utils::sentry::SentryEventID::from(event_id);
+        let sentry_event_id = crate::salvo_utils::sentry::SentryEventID::from(event_id);
         sentry_event_id.write_to_response(res);
     }
 }

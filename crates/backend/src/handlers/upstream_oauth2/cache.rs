@@ -6,7 +6,7 @@ use pasion_data_model::{
     UpstreamOAuthProvider, UpstreamOAuthProviderDiscoveryMode, UpstreamOAuthProviderPkceMode,
 };
 use pasion_iana::oauth::PkceCodeChallengeMethod;
-use pasion_oidc_client::error::DiscoveryError;
+use crate::oidc_client::error::DiscoveryError;
 use pasion_storage::{RepositoryAccess, upstream_oauth2::UpstreamOAuthProviderRepository};
 use tokio::sync::RwLock;
 use url::Url;
@@ -212,7 +212,7 @@ impl MetadataCache {
     ) -> Result<Arc<VerifiedProviderMetadata>, DiscoveryError> {
         if verify {
             let metadata =
-                pasion_oidc_client::requests::discovery::discover(client, issuer).await?;
+                crate::oidc_client::requests::discovery::discover(client, issuer).await?;
             let metadata = Arc::new(metadata);
 
             self.cache
@@ -223,7 +223,7 @@ impl MetadataCache {
             Ok(metadata)
         } else {
             let metadata =
-                pasion_oidc_client::requests::discovery::insecure_discover(client, issuer).await?;
+                crate::oidc_client::requests::discovery::insecure_discover(client, issuer).await?;
             let metadata = Arc::new(metadata);
 
             self.insecure_cache

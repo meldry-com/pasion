@@ -5,8 +5,8 @@ use pasion_jose::{
 };
 use pasion_keystore::Keystore;
 use pasion_router::UrlBuilder;
-use pasion_salvo_utils::{
-    record_error,
+use crate::record_error;
+use crate::salvo_utils::{
     sentry::SentryEventID,
     user_authorization::{AuthorizationVerificationError, UserAuthorization},
 };
@@ -79,7 +79,7 @@ impl Scribe for RouteError {
             }
         }
 
-        let sentry_event_id = pasion_salvo_utils::sentry::SentryEventID::from(event_id);
+        let sentry_event_id = crate::salvo_utils::sentry::SentryEventID::from(event_id);
         sentry_event_id.write_to_response(res);
     }
 }
@@ -130,7 +130,7 @@ async fn handle_get(req: &mut Request, depot: &Depot) -> Result<UserinfoResponse
     let user_authorization = UserAuthorization::<()>::extract_from_request(req)
         .await
         .map_err(|e| match e {
-            pasion_salvo_utils::user_authorization::UserAuthorizationError::Internal(e) => {
+            crate::salvo_utils::user_authorization::UserAuthorizationError::Internal(e) => {
                 RouteError::Internal(e)
             }
             _ => RouteError::Unauthorized,

@@ -1,7 +1,7 @@
 use std::str::FromStr;
 
 use oauth2_types::scope::{Scope, ScopeToken};
-use pasion_salvo_utils::record_error;
+use crate::record_error;
 use pasion_storage::{Page, oauth2::OAuth2SessionFilter};
 use salvo::{http::StatusCode, prelude::*};
 use schemars::JsonSchema;

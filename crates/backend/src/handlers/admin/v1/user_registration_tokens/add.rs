@@ -1,6 +1,6 @@
 use chrono::{DateTime, Utc};
 use pasion_data_model::BoxRng;
-use pasion_salvo_utils::record_error;
+use crate::record_error;
 use rand::distributions::{Alphanumeric, DistString};
 use salvo::{http::StatusCode, prelude::*};
 use schemars::JsonSchema;

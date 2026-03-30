@@ -5,7 +5,7 @@ use pasion_data_model::{Clock, oauth2::LoginHint};
 use pasion_i18n::DataLocale;
 use pasion_matrix::HomeserverConnection;
 use pasion_router::UpstreamOAuth2Authorize;
-use pasion_salvo_utils::{
+use crate::salvo_utils::{
     InternalError, SessionInfoExt,
     cookies::CookieJar,
     csrf::{CsrfExt, ProtectedForm},

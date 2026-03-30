@@ -1,5 +1,5 @@
 use pasion_data_model::BoxRng;
-use pasion_salvo_utils::record_error;
+use crate::record_error;
 use pasion_storage::queue::{QueueJobRepositoryExt as _, SyncDevicesJob};
 use salvo::{http::StatusCode, prelude::*};
 use ulid::Ulid;

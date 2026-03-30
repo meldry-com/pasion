@@ -3,7 +3,7 @@
 use chrono::{DateTime, Duration, Utc};
 use pasion_data_model::Clock;
 use pasion_router::PostAuthAction;
-use pasion_salvo_utils::cookies::CookieJar;
+use crate::salvo_utils::cookies::CookieJar;
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 use ulid::Ulid;

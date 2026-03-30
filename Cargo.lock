@@ -5584,6 +5584,7 @@ dependencies = [
  "bytes",
  "camino",
  "chrono",
+ "cookie",
  "cookie_store",
  "crc",
  "deadpool",
@@ -5591,6 +5592,7 @@ dependencies = [
  "diesel-async",
  "diesel_migrations",
  "elliptic-curve",
+ "form_urlencoded",
  "futures-util",
  "governor",
  "headers",
@@ -5600,10 +5602,12 @@ dependencies = [
  "http-body-util",
  "hyper",
  "hyper-util",
+ "icu_locid",
  "icu_normalizer 1.5.0",
  "indexmap 2.13.0",
  "insta",
  "ipnetwork",
+ "language-tags",
  "lettre",
  "listenfd",
  "mime",
@@ -5621,6 +5625,7 @@ dependencies = [
  "opentelemetry-semantic-conventions",
  "opentelemetry-stdout",
  "opentelemetry_sdk",
+ "p256",
  "pasion-config",
  "pasion-context",
  "pasion-data-model",
@@ -5632,10 +5637,8 @@ dependencies = [
  "pasion-matrix",
  "pasion-matrix-palpo",
  "pasion-messaging",
- "pasion-oidc-client",
  "pasion-policy",
  "pasion-router",
- "pasion-salvo-utils",
  "pasion-storage",
  "pasion-storage-pg",
  "pasion-tasks",
@@ -5937,42 +5940,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "pasion-oidc-client"
-version = "1.8.0"
-dependencies = [
- "assert_matches",
- "async-trait",
- "base64ct",
- "bitflags",
- "chrono",
- "elliptic-curve",
- "form_urlencoded",
- "headers",
- "http",
- "http-body-util",
- "language-tags",
- "mime",
- "oauth2-types",
- "p256",
- "pasion-http",
- "pasion-iana",
- "pasion-jose",
- "pasion-keystore",
- "rand 0.8.5",
- "rand_chacha 0.3.1",
- "reqwest 0.13.2",
- "rustls",
- "serde",
- "serde_json",
- "serde_urlencoded",
- "thiserror 2.0.18",
- "tokio",
- "tracing",
- "url",
- "wiremock",
-]
-
-[[package]]
 name = "pasion-policy"
 version = "1.8.0"
 dependencies = [
@@ -6000,41 +5967,6 @@ dependencies = [
  "salvo",
  "serde",
  "serde_urlencoded",
- "ulid",
- "url",
-]
-
-[[package]]
-name = "pasion-salvo-utils"
-version = "1.8.0"
-dependencies = [
- "anyhow",
- "async-trait",
- "base64ct",
- "chrono",
- "cookie",
- "headers",
- "http",
- "icu_locid",
- "mime",
- "oauth2-types",
- "pasion-data-model",
- "pasion-http",
- "pasion-iana",
- "pasion-jose",
- "pasion-keystore",
- "pasion-storage",
- "pasion-templates",
- "rand 0.8.5",
- "reqwest 0.13.2",
- "salvo",
- "sentry",
- "serde",
- "serde_json",
- "serde_with",
- "thiserror 2.0.18",
- "tokio",
- "tracing",
  "ulid",
  "url",
 ]

@@ -10,7 +10,7 @@ use pasion_jose::jwt::Jwt;
 use pasion_matrix::HomeserverConnection;
 use pasion_policy::{Policy, RegisterInput, RegistrationMethod, Requester as PolicyRequester};
 use pasion_router::{PostAuthAction, RegisterFinish, UrlBuilder};
-use pasion_salvo_utils::SessionInfo;
+use crate::salvo_utils::SessionInfo;
 use pasion_storage::{
     BoxRepository, Pagination, RepositoryAccess, RepositoryError,
     upstream_oauth2::{

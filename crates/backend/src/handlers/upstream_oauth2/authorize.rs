@@ -1,7 +1,7 @@
 use pasion_data_model::UpstreamOAuthProvider;
-use pasion_oidc_client::requests::authorization_code::AuthorizationRequestData;
+use crate::oidc_client::requests::authorization_code::AuthorizationRequestData;
 use pasion_router::PostAuthAction;
-use pasion_salvo_utils::{GenericError, InternalError, cookies::CookieJar};
+use crate::salvo_utils::{GenericError, InternalError, cookies::CookieJar};
 use pasion_storage::upstream_oauth2::{
     UpstreamOAuthProviderRepository, UpstreamOAuthSessionRepository,
 };
@@ -22,8 +22,8 @@ pub enum RouteError {
     Internal(Box<dyn std::error::Error + Send + Sync + 'static>),
 }
 
-impl_from_error_for_route!(pasion_oidc_client::error::DiscoveryError);
-impl_from_error_for_route!(pasion_oidc_client::error::AuthorizationError);
+impl_from_error_for_route!(crate::oidc_client::error::DiscoveryError);
+impl_from_error_for_route!(crate::oidc_client::error::AuthorizationError);
 impl_from_error_for_route!(pasion_storage::RepositoryError);
 impl_from_error_for_route!(crate::handlers::rest::RouteError);
 
@@ -103,7 +103,7 @@ pub async fn get(
 
     // Build an authorization request for it
     let (mut url, data) =
-        pasion_oidc_client::requests::authorization_code::build_authorization_url(
+        crate::oidc_client::requests::authorization_code::build_authorization_url(
             lazy_metadata.authorization_endpoint().await?.clone(),
             data,
             &mut rng,

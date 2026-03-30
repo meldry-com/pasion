@@ -1,5 +1,5 @@
 use pasion_router::PostAuthAction;
-use pasion_salvo_utils::{
+use crate::salvo_utils::{
     GenericError, InternalError,
     csrf::{CsrfExt, ProtectedForm},
 };
@@ -20,7 +20,7 @@ pub enum RouteError {
     Internal(Box<dyn std::error::Error + Send + Sync>),
 
     #[error(transparent)]
-    Csrf(#[from] pasion_salvo_utils::csrf::CsrfError),
+    Csrf(#[from] crate::salvo_utils::csrf::CsrfError),
 
     #[error("Authorization grant not found")]
     GrantNotFound,

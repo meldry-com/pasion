@@ -5,7 +5,7 @@ use chrono::Duration;
 use oauth2_types::scope::Scope;
 use pasion_data_model::{BoxRng, TokenType};
 use pasion_matrix::HomeserverConnection;
-use pasion_salvo_utils::record_error;
+use crate::record_error;
 use salvo::{http::StatusCode, prelude::*};
 use schemars::JsonSchema;
 use serde::Deserialize;

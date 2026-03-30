@@ -1,5 +1,5 @@
 use pasion_router::{PasswordRegister, UpstreamOAuth2Authorize};
-use pasion_salvo_utils::{InternalError, SessionInfoExt, cookies::CookieJar, csrf::CsrfExt as _};
+use crate::salvo_utils::{InternalError, SessionInfoExt, cookies::CookieJar, csrf::CsrfExt as _};
 use pasion_templates::{RegisterContext, TemplateContext, Templates};
 use salvo::{prelude::*, writing::Text};
 

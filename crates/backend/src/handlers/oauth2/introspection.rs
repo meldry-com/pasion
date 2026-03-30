@@ -9,7 +9,7 @@ use pasion_data_model::{BoxClock, SystemClock};
 use pasion_iana::oauth::{OAuthClientAuthenticationMethod, OAuthTokenTypeHint};
 use pasion_keystore::Encrypter;
 use pasion_matrix::HomeserverConnection;
-use pasion_salvo_utils::client_authorization::{
+use crate::salvo_utils::client_authorization::{
     ClientAuthorization, CredentialsVerificationError,
 };
 use pasion_storage::{BoxRepository, BoxRepositoryFactory};
@@ -143,13 +143,13 @@ impl Scribe for RouteError {
             }
         }
 
-        let sentry_event_id = pasion_salvo_utils::sentry::SentryEventID::from(event_id);
+        let sentry_event_id = crate::salvo_utils::sentry::SentryEventID::from(event_id);
         sentry_event_id.write_to_response(res);
     }
 }
 
 impl_from_error_for_route!(pasion_storage::RepositoryError);
-impl_from_error_for_route!(pasion_salvo_utils::client_authorization::ClientAuthorizationError);
+impl_from_error_for_route!(crate::salvo_utils::client_authorization::ClientAuthorizationError);
 
 #[handler]
 #[tracing::instrument(name = "handlers.oauth2.introspection.post", skip_all)]

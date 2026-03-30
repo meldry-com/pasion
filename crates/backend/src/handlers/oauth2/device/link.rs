@@ -1,6 +1,6 @@
 use crate::handlers::rest::DepotExt;
 use pasion_data_model::Clock;
-use pasion_salvo_utils::InternalError;
+use crate::salvo_utils::InternalError;
 use pasion_templates::{
     DeviceLinkContext, DeviceLinkFormField, FieldError, FormState, TemplateContext,
 };

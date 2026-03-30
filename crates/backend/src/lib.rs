@@ -8,6 +8,10 @@ pub mod app_state;
 pub mod lifecycle;
 /// Network listener infrastructure: TCP/Unix sockets, TLS, and PROXY protocol.
 pub mod listener;
+/// OpenID Connect client library.
+pub mod oidc_client;
+/// Salvo web-framework utilities: middleware, extractors, and helpers.
+pub mod salvo_utils;
 pub mod server;
 pub mod sync;
 pub mod telemetry;

@@ -71,7 +71,7 @@ use pasion_data_model::{
 use pasion_matrix::HomeserverConnection;
 use pasion_policy::PolicyFactory;
 use pasion_router::UrlBuilder;
-use pasion_salvo_utils::{SessionInfo, SessionInfoExt, cookies::CookieJar};
+use crate::salvo_utils::{SessionInfo, SessionInfoExt, cookies::CookieJar};
 use pasion_storage::{BoxRepository, BoxRepositoryFactory, RepositoryError};
 use rand::{SeedableRng, thread_rng};
 use rand_chacha::ChaChaRng;

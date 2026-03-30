@@ -1,4 +1,4 @@
-use pasion_salvo_utils::{InternalError, cookies::CookieJar, csrf::CsrfExt};
+use crate::salvo_utils::{InternalError, cookies::CookieJar, csrf::CsrfExt};
 use pasion_templates::{IndexContext, TemplateContext, Templates};
 use salvo::{prelude::*, writing::Text};
 

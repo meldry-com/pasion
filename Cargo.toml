@@ -1,7 +1,7 @@
 [workspace]
 default-members = ["crates/cli"]
 members = ["crates/*"]
-exclude = ["crates/iana-codegen", "crates/email", "crates/sms"]
+exclude = ["crates/iana-codegen"]
 resolver = "3"
 
 # Updated in the CI with a `sed` command
@@ -29,7 +29,6 @@ broken_intra_doc_links = "deny"
 [workspace.dependencies]
 
 # Workspace crates
-pasion-salvo-utils = { path = "./crates/salvo-utils/", version = "=1.8.0" }
 pasion = { path = "./crates/cli/", version = "=1.8.0" }
 pasion-backend = { path = "./crates/backend/", version = "=1.8.0" }
 pasion-config = { path = "./crates/config/", version = "=1.8.0" }
@@ -45,7 +44,6 @@ pasion-jose = { path = "./crates/jose/", version = "=1.8.0" }
 pasion-keystore = { path = "./crates/keystore/", version = "=1.8.0" }
 pasion-matrix = { path = "./crates/matrix/", version = "=1.8.0" }
 pasion-matrix-palpo = { path = "./crates/matrix-palpo/", version = "=1.8.0" }
-pasion-oidc-client = { path = "./crates/oidc-client/", version = "=1.8.0" }
 pasion-policy = { path = "./crates/policy/", version = "=1.8.0" }
 pasion-router = { path = "./crates/router/", version = "=1.8.0" }
 pasion-storage = { path = "./crates/storage/", version = "=1.8.0" }

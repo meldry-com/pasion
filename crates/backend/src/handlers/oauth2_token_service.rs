@@ -20,7 +20,7 @@ use pasion_data_model::{
 use pasion_i18n::DataLocale;
 use pasion_keystore::Keystore;
 use pasion_matrix::HomeserverConnection;
-use pasion_oidc_client::types::scope::ScopeToken;
+use crate::oidc_client::types::scope::ScopeToken;
 use pasion_policy::Policy;
 use pasion_router::UrlBuilder;
 use pasion_storage::{

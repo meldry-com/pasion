@@ -1,7 +1,7 @@
 use std::sync::LazyLock;
 
 use opentelemetry::{Key, KeyValue, metrics::Counter};
-use pasion_salvo_utils::{
+use crate::salvo_utils::{
     GenericError, SessionInfoExt,
     csrf::{CsrfExt, ProtectedForm},
     record_error,
@@ -64,7 +64,7 @@ pub enum RouteError {
 }
 
 impl_from_error_for_route!(pasion_templates::TemplateError);
-impl_from_error_for_route!(pasion_salvo_utils::csrf::CsrfError);
+impl_from_error_for_route!(crate::salvo_utils::csrf::CsrfError);
 impl_from_error_for_route!(super::cookie::UpstreamSessionNotFound);
 impl_from_error_for_route!(pasion_storage::RepositoryError);
 impl_from_error_for_route!(crate::handlers::rest::RouteError);

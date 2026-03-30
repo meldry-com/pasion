@@ -1,5 +1,5 @@
 use pasion_router::PostAuthAction;
-use pasion_salvo_utils::{InternalError, cookies::CookieJar};
+use crate::salvo_utils::{InternalError, cookies::CookieJar};
 use pasion_templates::{AppContext, TemplateContext, Templates};
 use salvo::{prelude::*, writing::Text};
 use serde::Deserialize;

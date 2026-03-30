@@ -3,7 +3,7 @@ use pasion_data_model::{
     BoxClock, Session, TokenFormatError, TokenType, User,
     personal::session::{PersonalSession, PersonalSessionOwner},
 };
-use pasion_salvo_utils::record_error;
+use crate::record_error;
 use pasion_storage::{BoxRepository, RepositoryError};
 use salvo::{http::StatusCode, prelude::*};
 use ulid::Ulid;

@@ -1,7 +1,7 @@
 //! Admin endpoint for checking connector provider health.
 
 use pasion_matrix::ConnectorRegistry;
-use pasion_salvo_utils::record_error;
+use crate::record_error;
 use salvo::{http::StatusCode, prelude::*};
 use schemars::JsonSchema;
 use serde::Serialize;

@@ -4,10 +4,10 @@ use oauth2_types::{errors::ClientErrorCode, requests::AccessTokenRequest};
 use opentelemetry::{Key, KeyValue, metrics::Counter};
 use pasion_data_model::{Clock, UpstreamOAuthProvider, UpstreamOAuthProviderResponseMode};
 use pasion_jose::claims::TokenHash;
-use pasion_oidc_client::{
+use crate::oidc_client::{
     requests::jose::JwtVerificationData, types::client_credentials::ClientCredentials,
 };
-use pasion_salvo_utils::{GenericError, InternalError, cookies::CookieJar};
+use crate::salvo_utils::{GenericError, InternalError, cookies::CookieJar};
 use pasion_storage::upstream_oauth2::{
     UpstreamOAuthLinkRepository, UpstreamOAuthProviderRepository, UpstreamOAuthSessionRepository,
 };
@@ -127,11 +127,11 @@ pub enum RouteError {
 impl_from_error_for_route!(pasion_templates::TemplateError);
 impl_from_error_for_route!(pasion_storage::RepositoryError);
 impl_from_error_for_route!(crate::handlers::rest::RouteError);
-impl_from_error_for_route!(pasion_oidc_client::error::DiscoveryError);
-impl_from_error_for_route!(pasion_oidc_client::error::JwksError);
-impl_from_error_for_route!(pasion_oidc_client::error::TokenRequestError);
-impl_from_error_for_route!(pasion_oidc_client::error::IdTokenError);
-impl_from_error_for_route!(pasion_oidc_client::error::UserInfoError);
+impl_from_error_for_route!(crate::oidc_client::error::DiscoveryError);
+impl_from_error_for_route!(crate::oidc_client::error::JwksError);
+impl_from_error_for_route!(crate::oidc_client::error::TokenRequestError);
+impl_from_error_for_route!(crate::oidc_client::error::IdTokenError);
+impl_from_error_for_route!(crate::oidc_client::error::UserInfoError);
 impl_from_error_for_route!(super::ProviderCredentialsError);
 impl_from_error_for_route!(super::cookie::UpstreamSessionNotFound);
 
@@ -311,7 +311,7 @@ pub async fn handler(
             client_secret,
         } => {
             // 1. Exchange code for access token
-            let token_response = pasion_oidc_client::requests::qq_connect::request_access_token(
+            let token_response = crate::oidc_client::requests::qq_connect::request_access_token(
                 &client,
                 lazy_metadata.token_endpoint().await?,
                 client_id,
@@ -322,14 +322,14 @@ pub async fn handler(
             .await?;
 
             // 2. Fetch OpenID (user subject identifier)
-            let openid_response = pasion_oidc_client::requests::qq_connect::fetch_openid(
+            let openid_response = crate::oidc_client::requests::qq_connect::fetch_openid(
                 &client,
                 &token_response.access_token,
             )
             .await?;
 
             // 3. Fetch user info
-            let mut userinfo_claims = pasion_oidc_client::requests::qq_connect::fetch_userinfo(
+            let mut userinfo_claims = crate::oidc_client::requests::qq_connect::fetch_userinfo(
                 &client,
                 &token_response.access_token,
                 client_id,
@@ -370,13 +370,13 @@ pub async fn handler(
         } => {
             let app_token_endpoint =
                 if matches!(&client_credentials, ClientCredentials::Lark { .. }) {
-                    pasion_oidc_client::requests::feishu::LARK_APP_TOKEN_ENDPOINT
+                    crate::oidc_client::requests::feishu::LARK_APP_TOKEN_ENDPOINT
                 } else {
-                    pasion_oidc_client::requests::feishu::FEISHU_APP_TOKEN_ENDPOINT
+                    crate::oidc_client::requests::feishu::FEISHU_APP_TOKEN_ENDPOINT
                 };
 
             // 1. Get app_access_token
-            let app_token = pasion_oidc_client::requests::feishu::get_app_access_token(
+            let app_token = crate::oidc_client::requests::feishu::get_app_access_token(
                 &client,
                 app_token_endpoint,
                 client_id,
@@ -385,7 +385,7 @@ pub async fn handler(
             .await?;
 
             // 2. Exchange code using app_access_token as Bearer
-            let feishu_response = pasion_oidc_client::requests::feishu::request_access_token(
+            let feishu_response = crate::oidc_client::requests::feishu::request_access_token(
                 &client,
                 lazy_metadata.token_endpoint().await?,
                 &app_token,
@@ -395,7 +395,7 @@ pub async fn handler(
 
             // 3. Optionally fetch full userinfo
             let userinfo = if provider.fetch_userinfo {
-                let ui = pasion_oidc_client::requests::feishu::fetch_userinfo(
+                let ui = crate::oidc_client::requests::feishu::fetch_userinfo(
                     &client,
                     lazy_metadata.userinfo_endpoint().await?,
                     &feishu_response.access_token,
@@ -431,7 +431,7 @@ pub async fn handler(
             client_secret,
         } => {
             // 1. Exchange code for access token
-            let token_response = pasion_oidc_client::requests::dingtalk::request_access_token(
+            let token_response = crate::oidc_client::requests::dingtalk::request_access_token(
                 &client,
                 lazy_metadata.token_endpoint().await?,
                 client_id,
@@ -442,7 +442,7 @@ pub async fn handler(
 
             // 2. Fetch user info
             let userinfo = if provider.fetch_userinfo {
-                let ui = pasion_oidc_client::requests::dingtalk::fetch_userinfo(
+                let ui = crate::oidc_client::requests::dingtalk::fetch_userinfo(
                     &client,
                     lazy_metadata.userinfo_endpoint().await?,
                     &token_response.access_token,
@@ -476,7 +476,7 @@ pub async fn handler(
             client_secret,
         } => {
             // 1. Exchange code for access token (includes openid)
-            let token_response = pasion_oidc_client::requests::wechat::request_access_token(
+            let token_response = crate::oidc_client::requests::wechat::request_access_token(
                 &client,
                 lazy_metadata.token_endpoint().await?,
                 client_id,
@@ -486,7 +486,7 @@ pub async fn handler(
             .await?;
 
             // 2. Fetch user info using openid
-            let mut userinfo_claims = pasion_oidc_client::requests::wechat::fetch_userinfo(
+            let mut userinfo_claims = crate::oidc_client::requests::wechat::fetch_userinfo(
                 &client,
                 &token_response.access_token,
                 &token_response.openid,
@@ -527,7 +527,7 @@ pub async fn handler(
             client_secret,
         } => {
             // 1. Get corp access_token
-            let corp_token = pasion_oidc_client::requests::wecom::get_corp_access_token(
+            let corp_token = crate::oidc_client::requests::wecom::get_corp_access_token(
                 &client,
                 client_id,
                 client_secret,
@@ -536,7 +536,7 @@ pub async fn handler(
 
             // 2. Get user identity from authorization code
             let identity =
-                pasion_oidc_client::requests::wecom::get_user_identity(&client, &corp_token, &code)
+                crate::oidc_client::requests::wecom::get_user_identity(&client, &corp_token, &code)
                     .await?;
 
             // Determine the subject (UserId for members, OpenId for external)
@@ -550,7 +550,7 @@ pub async fn handler(
             // 3. Fetch full user profile if we have a userid and userinfo is enabled
             let userinfo = if provider.fetch_userinfo {
                 if let Some(ref userid) = identity.user_id {
-                    let ui = pasion_oidc_client::requests::wecom::fetch_userinfo(
+                    let ui = crate::oidc_client::requests::wecom::fetch_userinfo(
                         &client,
                         &corp_token,
                         userid,
@@ -590,7 +590,7 @@ pub async fn handler(
 
         // ── Standard OIDC flow ──────────────────────────────────────
         _ => {
-            let token_response = pasion_oidc_client::requests::token::request_access_token(
+            let token_response = crate::oidc_client::requests::token::request_access_token(
                 &client,
                 client_credentials,
                 lazy_metadata.token_endpoint().await?,
@@ -612,7 +612,7 @@ pub async fn handler(
             let mut context = AttributeMappingContext::new();
             if let Some(id_token) = token_response.id_token.as_ref() {
                 jwks = Some(
-                    pasion_oidc_client::requests::jose::fetch_jwks(
+                    crate::oidc_client::requests::jose::fetch_jwks(
                         &client,
                         lazy_metadata.jwks_uri().await?,
                     )
@@ -626,7 +626,7 @@ pub async fn handler(
                     client_id: &provider.client_id,
                 };
 
-                let id_token = pasion_oidc_client::requests::jose::verify_id_token(
+                let id_token = crate::oidc_client::requests::jose::verify_id_token(
                     id_token,
                     id_token_verification_data,
                     None,
@@ -648,19 +648,19 @@ pub async fn handler(
                             &token_response.access_token,
                         ),
                     )
-                    .map_err(pasion_oidc_client::error::IdTokenError::from)?;
+                    .map_err(crate::oidc_client::error::IdTokenError::from)?;
 
                 pasion_jose::claims::C_HASH
                     .extract_optional_with_options(
                         &mut claims,
                         TokenHash::new(id_token_verification_data.signing_algorithm, &code),
                     )
-                    .map_err(pasion_oidc_client::error::IdTokenError::from)?;
+                    .map_err(crate::oidc_client::error::IdTokenError::from)?;
 
                 if let Some(nonce) = session.nonce.as_deref() {
                     pasion_jose::claims::NONCE
                         .extract_required_with_options(&mut claims, nonce)
-                        .map_err(pasion_oidc_client::error::IdTokenError::from)?;
+                        .map_err(crate::oidc_client::error::IdTokenError::from)?;
                 }
 
                 context = context.with_id_token_claims(claims);
@@ -676,7 +676,7 @@ pub async fn handler(
                         let jwks = match jwks {
                             Some(jwks) => jwks,
                             None => {
-                                pasion_oidc_client::requests::jose::fetch_jwks(
+                                crate::oidc_client::requests::jose::fetch_jwks(
                                     &client,
                                     lazy_metadata.jwks_uri().await?,
                                 )
@@ -684,7 +684,7 @@ pub async fn handler(
                             }
                         };
 
-                        pasion_oidc_client::requests::userinfo::fetch_userinfo(
+                        crate::oidc_client::requests::userinfo::fetch_userinfo(
                             &client,
                             lazy_metadata.userinfo_endpoint().await?,
                             token_response.access_token.as_str(),
@@ -698,7 +698,7 @@ pub async fn handler(
                         .await?
                     }
                     None => {
-                        pasion_oidc_client::requests::userinfo::fetch_userinfo(
+                        crate::oidc_client::requests::userinfo::fetch_userinfo(
                             &client,
                             lazy_metadata.userinfo_endpoint().await?,
                             token_response.access_token.as_str(),

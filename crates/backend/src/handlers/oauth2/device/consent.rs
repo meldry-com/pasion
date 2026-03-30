@@ -3,7 +3,7 @@ use std::time::Duration;
 use anyhow::Context;
 use pasion_data_model::{Clock, MatrixUser};
 use pasion_policy::Policy;
-use pasion_salvo_utils::{
+use crate::salvo_utils::{
     InternalError,
     csrf::{CsrfExt, ProtectedForm},
 };

@@ -3,7 +3,7 @@ use std::sync::{Arc, LazyLock};
 use opentelemetry::metrics::Counter;
 use pasion_matrix::HomeserverConnection;
 use pasion_router::PostAuthAction;
-use pasion_salvo_utils::{InternalError, SessionInfoExt as _, cookies::CookieJar};
+use crate::salvo_utils::{InternalError, SessionInfoExt as _, cookies::CookieJar};
 use pasion_templates::{RegisterStepsEmailInUseContext, TemplateContext as _, Templates};
 use salvo::{prelude::*, writing::Text};
 use ulid::Ulid;

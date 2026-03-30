@@ -1,4 +1,4 @@
-use pasion_salvo_utils::record_error;
+use crate::record_error;
 use pasion_storage::queue::{DeactivateUserJob, QueueJobRepositoryExt as _};
 use salvo::{http::StatusCode, prelude::*};
 use schemars::JsonSchema;

@@ -1,5 +1,5 @@
 use pasion_data_model::AppVersion;
-use pasion_salvo_utils::InternalError;
+use crate::salvo_utils::InternalError;
 use salvo::prelude::*;
 use schemars::JsonSchema;
 use serde::Serialize;

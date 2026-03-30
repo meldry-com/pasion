@@ -6,11 +6,11 @@ use pasion_jose::{
     claims::{self, Claim, TimeOptions},
     jwt::JwtDecodeError,
 };
-use pasion_oidc_client::{
+use crate::oidc_client::{
     error::JwtVerificationError,
     requests::jose::{JwtVerificationData, verify_signed_jwt},
 };
-use pasion_salvo_utils::record_error;
+use crate::record_error;
 use pasion_storage::{
     Pagination,
     oauth2::OAuth2SessionFilter,
@@ -101,8 +101,8 @@ impl Scribe for RouteError {
 
 impl_from_error_for_route!(pasion_storage::RepositoryError);
 impl_from_error_for_route!(crate::handlers::rest::RouteError);
-impl_from_error_for_route!(pasion_oidc_client::error::DiscoveryError);
-impl_from_error_for_route!(pasion_oidc_client::error::JwksError);
+impl_from_error_for_route!(crate::oidc_client::error::DiscoveryError);
+impl_from_error_for_route!(crate::oidc_client::error::JwksError);
 
 #[derive(Deserialize)]
 pub struct BackchannelLogoutRequest {
@@ -143,7 +143,7 @@ pub async fn post(req: &mut Request, depot: &mut Depot) -> Result<(), RouteError
     let mut lazy_metadata = LazyProviderInfos::new(&metadata_cache, &provider, &client);
 
     let jwks =
-        pasion_oidc_client::requests::jose::fetch_jwks(&client, lazy_metadata.jwks_uri().await?)
+        crate::oidc_client::requests::jose::fetch_jwks(&client, lazy_metadata.jwks_uri().await?)
             .await?;
 
     // Validate the logout token. The rules are defined in
