@@ -63,7 +63,7 @@ impl Options {
         }
 
         let http_client = pasion_http::reqwest_client();
-        let conn = homeserver_connection_from_config(&config.matrix, http_client).await?;
+        let (conn, _registry) = homeserver_connection_from_config(&config.matrix, http_client).await?;
 
         let database_url = database_url_from_config(&config.database)?;
 

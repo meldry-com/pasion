@@ -165,7 +165,7 @@ impl Options {
 
         let http_client = pasion_http::reqwest_client();
 
-        let homeserver_connection =
+        let (homeserver_connection, connector_registry) =
             homeserver_connection_from_config(&config.matrix, http_client.clone()).await?;
 
         if !self.no_worker {
@@ -245,6 +245,7 @@ impl Options {
                 encrypter,
                 url_builder,
                 homeserver_connection,
+                connector_registry,
                 policy_factory,
                 http_client,
                 password_manager,

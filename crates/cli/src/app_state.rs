@@ -11,7 +11,7 @@ use pasion_handlers::{
 };
 use pasion_i18n::Translator;
 use pasion_keystore::{Encrypter, Keystore};
-use pasion_matrix::HomeserverConnection;
+use pasion_matrix::{ConnectorRegistry, HomeserverConnection};
 use pasion_policy::{Policy, PolicyFactory};
 use pasion_router::UrlBuilder;
 use pasion_storage::{BoxRepository, BoxRepositoryFactory, RepositoryFactory};
@@ -35,6 +35,7 @@ pub struct AppState {
     pub encrypter: Encrypter,
     pub url_builder: UrlBuilder,
     pub homeserver_connection: Arc<dyn HomeserverConnection>,
+    pub connector_registry: ConnectorRegistry,
     pub policy_factory: Arc<PolicyFactory>,
     pub http_client: reqwest::Client,
     pub password_manager: PasswordManager,
@@ -157,6 +158,10 @@ pub async fn inject_app_state(
         "homeserver_connection",
         Arc::clone(&state.homeserver_connection),
     );
+    depot.insert(
+        "connector_registry",
+        state.connector_registry.clone(),
+    );
     depot.insert("app_version", AppVersion(VERSION));
     depot.insert("activity_tracker", state.activity_tracker.clone());
     depot.insert("trusted_proxies", state.trusted_proxies.clone());
@@ -184,6 +189,7 @@ pub trait DepotExt {
     fn get_limiter(&self) -> Option<&Limiter>;
     fn get_policy_factory(&self) -> Option<&Arc<PolicyFactory>>;
     fn get_homeserver_connection(&self) -> Option<&Arc<dyn HomeserverConnection>>;
+    fn get_connector_registry(&self) -> Option<&ConnectorRegistry>;
     fn get_app_version(&self) -> Option<&AppVersion>;
     fn get_activity_tracker(&self) -> Option<&ActivityTracker>;
     fn get_trusted_proxies(&self) -> Option<&Vec<IpNetwork>>;
@@ -250,6 +256,10 @@ impl DepotExt for Depot {
     fn get_homeserver_connection(&self) -> Option<&Arc<dyn HomeserverConnection>> {
         self.get::<Arc<dyn HomeserverConnection>>("homeserver_connection")
             .ok()
+    }
+
+    fn get_connector_registry(&self) -> Option<&ConnectorRegistry> {
+        self.get::<ConnectorRegistry>("connector_registry").ok()
     }
 
     fn get_app_version(&self) -> Option<&AppVersion> {

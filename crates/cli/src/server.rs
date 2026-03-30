@@ -483,7 +483,13 @@ fn build_rest_api_router(router: Router) -> Router {
                         Router::with_path("cross-signing-reset")
                             .post(users::allow_cross_signing_reset),
                     )
-                    .push(Router::with_path("deactivate").post(users::deactivate_user)),
+                    .push(Router::with_path("deactivate").post(users::deactivate_user))
+                    .push(
+                        Router::with_path("notification-preferences")
+                            .get(notification_prefs::get_notification_preferences)
+                            .put(notification_prefs::put_notification_preferences),
+                    )
+                    .push(Router::with_path("workflow-inbox").get(viewer::get_workflow_inbox)),
             )
             // Site config
             .push(Router::with_path("site-config").get(site_config::get))
@@ -611,6 +617,8 @@ fn build_admin_router(router: Router) -> Router {
             // Operational health
             .push(Router::with_path("connector-health").get(connector_health::handler))
             .push(Router::with_path("notification-channels").get(notification_channels::handler))
+            // Audit feed
+            .push(Router::with_path("audit-feed").get(audit_feed::handler))
             // Users
             .push(
                 Router::with_path("users")

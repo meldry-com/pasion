@@ -726,3 +726,11 @@ pub struct SecuritySummaryResponse {
 pub struct LinkedAccountsResponse {
     pub accounts: Vec<LinkedAccount>,
 }
+
+// ── Workflow inbox (GET /api/v1/viewer/workflow-inbox) ───────
+
+#[derive(Debug, Clone, PartialEq, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct WorkflowInboxResponse {
+    pub pending_count: usize,
+}

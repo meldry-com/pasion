@@ -6,6 +6,7 @@
 
 pub mod authenticator_validate;
 pub mod captcha;
+pub mod consent;
 pub mod email_verification;
 pub mod identification;
 pub mod password_write;
@@ -130,7 +131,11 @@ pub async fn execute_stage(
             StageResponse::AuthenticatorValidate { code, .. },
         ) => authenticator_validate::execute(code, context).await,
 
-        // Consent — no side effects in MVP
+        (StageKind::Consent, StageResponse::Consent { granted }) => {
+            consent::execute(*granted, context).await
+        }
+
+        // Fallback for mismatched stage/response pairs
         _ => Ok(StageOutcome::Continue),
     }
 }

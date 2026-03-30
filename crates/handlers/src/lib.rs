@@ -60,6 +60,7 @@ pub mod user_registration_cookie;
 #[cfg(test)]
 pub(crate) mod views;
 
+pub(crate) mod admin_audit_helper;
 mod account_access;
 mod account_connections;
 mod account_contacts;

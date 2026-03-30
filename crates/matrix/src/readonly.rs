@@ -1,6 +1,6 @@
 use std::collections::HashSet;
 
-use crate::{HomeserverConnection, MatrixUser, ProvisionRequest};
+use crate::{ConnectorCapabilities, ConnectorProvider, HomeserverConnection, MatrixUser, ProvisionRequest};
 
 /// A wrapper around a [`HomeserverConnection`] that only allows read
 /// operations.
@@ -91,5 +91,22 @@ impl<C: HomeserverConnection> HomeserverConnection for ReadOnlyHomeserverConnect
 
     async fn allow_cross_signing_reset(&self, _localpart: &str) -> Result<(), anyhow::Error> {
         anyhow::bail!("Allowing cross-signing reset is not supported in read-only mode");
+    }
+}
+
+impl<C: ConnectorProvider> ConnectorProvider for ReadOnlyHomeserverConnection<C> {
+    fn provider_name(&self) -> &str {
+        self.inner.provider_name()
+    }
+
+    fn capabilities(&self) -> ConnectorCapabilities {
+        // Read-only mode: none of the write capabilities are available.
+        ConnectorCapabilities {
+            can_provision_users: false,
+            can_delete_users: false,
+            can_manage_devices: false,
+            can_set_displayname: false,
+            can_cross_signing_reset: false,
+        }
     }
 }

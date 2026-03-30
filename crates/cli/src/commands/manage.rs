@@ -612,7 +612,7 @@ impl Options {
                     MatrixConfig::extract(figment).map_err(anyhow::Error::from_boxed)?;
 
                 let password_manager = password_manager_from_config(&password_config).await?;
-                let homeserver =
+                let (homeserver, _registry) =
                     homeserver_connection_from_config(&matrix_config, http_client).await?;
                 let pool = diesel_pool_from_config(&database_config).await?;
                 let conn = pool

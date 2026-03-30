@@ -12,7 +12,7 @@ use pasion_config::{
 use pasion_context::LogContext;
 use pasion_data_model::{SessionExpirationConfig, SessionLimitConfig, SiteConfig};
 use pasion_handlers::passwords::PasswordManager;
-use pasion_matrix::{HomeserverConnection, ReadOnlyHomeserverConnection};
+use pasion_matrix::{ConnectorRegistry, HomeserverConnection, ReadOnlyHomeserverConnection};
 use pasion_matrix_palpo::PalpoConnection;
 use pasion_messaging::{MailTransport, Mailer, NotificationCenter, SmsSender, SmsTransport};
 use pasion_policy::PolicyFactory;
@@ -506,19 +506,29 @@ pub async fn load_policy_factory_dynamic_data(
     Ok(())
 }
 
-/// Create a clonable, type-erased [`HomeserverConnection`] from the
-/// configuration
+/// Create a clonable, type-erased [`HomeserverConnection`] and a
+/// [`ConnectorRegistry`] from the configuration.
+///
+/// The returned registry contains the connector as its primary provider,
+/// while the `Arc<dyn HomeserverConnection>` is kept for backward
+/// compatibility with code that accesses the homeserver directly.
 pub async fn homeserver_connection_from_config(
     config: &MatrixConfig,
     http_client: reqwest::Client,
-) -> anyhow::Result<Arc<dyn HomeserverConnection>> {
+) -> anyhow::Result<(Arc<dyn HomeserverConnection>, ConnectorRegistry)> {
+    let mut registry = ConnectorRegistry::new();
+
     Ok(match config.kind {
-        HomeserverKind::Palpo | HomeserverKind::PalpoModern => Arc::new(PalpoConnection::new(
-            config.homeserver.clone(),
-            config.endpoint.clone(),
-            config.secret().await?,
-            http_client,
-        )),
+        HomeserverKind::Palpo | HomeserverKind::PalpoModern => {
+            let palpo = Arc::new(PalpoConnection::new(
+                config.homeserver.clone(),
+                config.endpoint.clone(),
+                config.secret().await?,
+                http_client,
+            ));
+            registry.register(Arc::clone(&palpo) as _);
+            (palpo as Arc<dyn HomeserverConnection>, registry)
+        }
         HomeserverKind::PalpoReadOnly => {
             let connection = PalpoConnection::new(
                 config.homeserver.clone(),
@@ -526,8 +536,9 @@ pub async fn homeserver_connection_from_config(
                 config.secret().await?,
                 http_client,
             );
-            let readonly = ReadOnlyHomeserverConnection::new(connection);
-            Arc::new(readonly)
+            let readonly = Arc::new(ReadOnlyHomeserverConnection::new(connection));
+            registry.register(Arc::clone(&readonly) as _);
+            (readonly as Arc<dyn HomeserverConnection>, registry)
         }
     })
 }

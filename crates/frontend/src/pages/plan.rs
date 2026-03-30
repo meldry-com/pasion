@@ -22,7 +22,7 @@ pub fn Plan() -> Element {
                 }
             }
             None => {
-                nav.push(Route::AccountSettings {});
+                nav.push(Route::AccountOverview {});
                 rsx! {}
             }
         },

@@ -1,4 +1,6 @@
+use pasion_data_model::audit::AdminOperation;
 use pasion_salvo_utils::record_error;
+use pasion_storage::audit::NewAdminOperationLog;
 use salvo::{http::StatusCode, prelude::*};
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
@@ -86,9 +88,13 @@ pub async fn handler(
 ) -> Result<Json<RiskActionResponse>, RouteError> {
     let call_context = extract_call_context(req, depot).await?;
     let crate::admin::call_context::CallContext {
-        mut repo, clock, ..
+        mut repo,
+        clock,
+        user: admin_user,
+        ..
     } = call_context;
     let id = extract_ulid_param(req)?;
+    let mut rng = crate::rest::make_rng();
     let params: RequestBody = req
         .parse_json()
         .await
@@ -122,6 +128,33 @@ pub async fn handler(
 
         other => return Err(RouteError::UnknownAction(other.to_owned())),
     };
+
+    // Record audit log for the risk action
+    if let Some(admin_user) = &admin_user {
+        let operation = match params.action.as_str() {
+            "lock" | "force_password_reset" => AdminOperation::UserLocked,
+            "terminate_sessions" => {
+                AdminOperation::Other("terminate_sessions".into())
+            }
+            _ => AdminOperation::Other(params.action.clone()),
+        };
+        repo.audit()
+            .add_admin_operation(
+                &mut rng,
+                &clock,
+                NewAdminOperationLog::new(
+                    admin_user.id,
+                    operation,
+                    "user",
+                    serde_json::json!({
+                        "action": params.action,
+                        "reason": params.reason,
+                    }),
+                )
+                .with_resource_id(user.id),
+            )
+            .await?;
+    }
 
     repo.save().await?;
 

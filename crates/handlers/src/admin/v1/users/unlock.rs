@@ -1,6 +1,5 @@
 use pasion_data_model::audit::AdminOperation;
 use pasion_salvo_utils::record_error;
-use pasion_storage::audit::NewAdminOperationLog;
 use salvo::{http::StatusCode, prelude::*};
 use ulid::Ulid;
 
@@ -70,21 +69,17 @@ pub async fn handler(
 
     let user = repo.user().unlock(user).await?;
 
-    if let Some(admin_user) = &admin_user {
-        repo.audit()
-            .add_admin_operation(
-                &mut rng,
-                &clock,
-                NewAdminOperationLog::new(
-                    admin_user.id,
-                    AdminOperation::UserUnlocked,
-                    "user",
-                    serde_json::json!({}),
-                )
-                .with_resource_id(user.id),
-            )
-            .await?;
-    }
+    crate::admin_audit_helper::record_admin_operation(
+        &mut repo,
+        &mut rng,
+        &*clock,
+        admin_user.as_ref(),
+        AdminOperation::UserUnlocked,
+        "user",
+        Some(user.id),
+        serde_json::json!({}),
+    )
+    .await?;
 
     repo.save().await?;
 

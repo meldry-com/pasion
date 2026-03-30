@@ -1,9 +1,5 @@
 use pasion_data_model::SiteConfig;
-use pasion_storage::{
-    RepositoryAccess,
-    upstream_oauth2::UpstreamOAuthLinkFilter,
-    user::BrowserSessionFilter,
-};
+use pasion_storage::RepositoryAccess;
 use salvo::oapi::ToSchema;
 use salvo::prelude::*;
 use serde::Serialize;
@@ -302,32 +298,74 @@ pub async fn get_security_summary(
         _ => return Err(RouteError::Unauthorized),
     };
 
-    // Check password existence
-    let has_password = repo.user_password().active(user).await?.is_some();
-
-    // Count active browser sessions
-    let session_filter = BrowserSessionFilter::new().for_user(user).active_only();
-    let active_sessions_count = repo.browser_session().count(session_filter).await?;
-
-    // Count linked upstream OAuth providers
-    let link_filter = UpstreamOAuthLinkFilter::new().for_user(user);
-    let linked_providers_count = repo.upstream_oauth_link().count(link_filter).await?;
-
-    // Count verified emails (all emails in the repository are verified)
-    let emails = repo.user_email().all(user).await?;
-    let verified_emails_count = emails.len();
-
-    // Count verified phones
-    let phones = repo.user_phone().all(user).await?;
-    let verified_phones_count = phones.len();
+    let summary = repo.account().security_summary(user.id).await?;
 
     repo.cancel().await?;
 
     Ok(Json(SecuritySummaryResponse {
-        has_password,
-        active_sessions_count,
-        linked_providers_count,
-        verified_emails_count,
-        verified_phones_count,
+        has_password: summary.has_password,
+        active_sessions_count: summary.active_sessions_count,
+        linked_providers_count: summary.linked_providers_count,
+        verified_emails_count: summary.verified_emails_count,
+        verified_phones_count: summary.verified_phones_count,
     }))
+}
+
+// ── Response types for workflow inbox ────────────────────────
+
+/// A single pending workflow item in the inbox.
+#[derive(Serialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct WorkflowInboxItem {
+    pub session_id: String,
+    pub flow_slug: String,
+    pub flow_title: String,
+    pub current_stage: String,
+    pub started_at: String,
+}
+
+/// Response for `GET /api/v1/viewer/workflow-inbox`.
+#[derive(Serialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct WorkflowInboxResponse {
+    pub pending: Vec<WorkflowInboxItem>,
+    pub total: usize,
+}
+
+// ── GET /api/v1/viewer/workflow-inbox ────────────────────────
+
+/// Returns the list of pending flow sessions for the current user.
+///
+/// Flow sessions are currently in-memory and do not have a user-id
+/// association, so this endpoint always returns an empty list. Once
+/// persistent flow sessions with user ownership are implemented, this
+/// will return actual pending items.
+#[endpoint]
+pub async fn get_workflow_inbox(
+    req: &mut Request,
+    depot: &Depot,
+) -> Result<Json<WorkflowInboxResponse>, RouteError> {
+    let repo_factory = depot.repo_factory()?;
+    let clock = make_clock();
+
+    let activity_tracker = extract_bound_activity_tracker(req, depot);
+    let session_info = extract_session_info(req, depot);
+
+    let repo = repo_factory.create().await?;
+    let (requester, repo) =
+        get_requester(&clock, &activity_tracker, repo, &session_info).await?;
+
+    // Require an authenticated user.
+    match &requester.entity {
+        super::RequestingEntity::BrowserSession(_) => {}
+        _ => return Err(RouteError::Unauthorized),
+    };
+
+    repo.cancel().await?;
+
+    // Placeholder: flow sessions are in-memory and not user-associated yet.
+    let pending: Vec<WorkflowInboxItem> = Vec::new();
+    let total = pending.len();
+
+    Ok(Json(WorkflowInboxResponse { pending, total }))
 }

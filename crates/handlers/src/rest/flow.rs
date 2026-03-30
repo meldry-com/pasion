@@ -18,7 +18,7 @@ use serde_json::Value;
 use ulid::Ulid;
 
 use super::{RouteError, make_rng};
-use crate::flow::{FlowExecutor, FlowPlan, flow_session_store_read, flow_session_store_write};
+use crate::flow::{FlowExecutor, FlowPlan, flow_session_store_write};
 
 // ---------------------------------------------------------------------------
 // Request / response types
@@ -136,7 +136,8 @@ pub async fn start_flow(req: &mut Request) -> Result<Json<FlowResponse>, RouteEr
         completed_at: None,
     };
 
-    let challenge = FlowExecutor::current_challenge(&plan, &session)
+    let mut session = session;
+    let challenge = FlowExecutor::current_challenge(&plan, &mut session)
         .map_err(|e| RouteError::Internal(Box::new(e)))?;
 
     let response = build_response(&plan, &session, challenge, None);
@@ -163,8 +164,8 @@ pub async fn get_flow_session(req: &mut Request) -> Result<Json<FlowResponse>, R
         .parse()
         .map_err(|_| RouteError::BadRequest("invalid session id".into()))?;
 
-    let store = flow_session_store_read().await;
-    let (plan, session) = store.get(&id).ok_or(RouteError::NotFound)?;
+    let mut store = flow_session_store_write().await;
+    let (plan, session) = store.get_mut(&id).ok_or(RouteError::NotFound)?;
 
     if session.status.is_terminal() {
         // Return a FlowDone challenge for completed sessions

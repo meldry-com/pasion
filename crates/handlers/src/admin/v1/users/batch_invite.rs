@@ -1,5 +1,7 @@
 use chrono::Duration;
+use pasion_data_model::audit::AdminOperation;
 use pasion_salvo_utils::record_error;
+use pasion_storage::audit::NewAdminOperationLog;
 use rand::distributions::{Alphanumeric, DistString};
 use salvo::{http::StatusCode, prelude::*};
 use schemars::JsonSchema;
@@ -75,7 +77,10 @@ pub async fn handler(
 ) -> Result<(StatusCode, Json<BatchInviteResponse>), RouteError> {
     let call_context = extract_call_context(req, depot).await?;
     let crate::admin::call_context::CallContext {
-        mut repo, clock, ..
+        mut repo,
+        clock,
+        user: admin_user,
+        ..
     } = call_context;
     let mut rng = crate::rest::make_rng();
     let params: RequestBody = req
@@ -107,6 +112,22 @@ pub async fn handler(
                 expires_at,
             )
             .await?;
+
+        if let Some(admin_user) = &admin_user {
+            repo.audit()
+                .add_admin_operation(
+                    &mut rng,
+                    &clock,
+                    NewAdminOperationLog::new(
+                        admin_user.id,
+                        AdminOperation::RegistrationTokenCreated,
+                        "registration_token",
+                        serde_json::json!({}),
+                    )
+                    .with_resource_id(registration_token.id),
+                )
+                .await?;
+        }
 
         let model = UserRegistrationToken::new(registration_token, clock.now());
         tokens.push(SingleResponse::new_canonical(model));

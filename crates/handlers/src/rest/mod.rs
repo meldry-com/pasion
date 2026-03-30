@@ -43,6 +43,7 @@ pub mod consent;
 pub mod emails;
 pub mod flow;
 pub mod linked_accounts;
+pub mod notification_prefs;
 pub mod oauth2_clients;
 pub mod openapi;
 pub mod password;

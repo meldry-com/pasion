@@ -1,3 +1,4 @@
+pub mod audit_feed;
 pub mod connector_health;
 pub mod notification_channels;
 pub mod oauth2_sessions;

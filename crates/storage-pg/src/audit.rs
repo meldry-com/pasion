@@ -7,7 +7,9 @@ use pasion_data_model::{
     Clock, new_id,
     audit::{AccountSecurityEvent, AdminOperation, AdminOperationLog, SecurityEventType},
 };
-use pasion_storage::audit::{AuditRepository, NewAccountSecurityEvent, NewAdminOperationLog};
+use pasion_storage::audit::{
+    AdminOperationFilter, AuditRepository, NewAccountSecurityEvent, NewAdminOperationLog,
+};
 use rand::RngCore;
 use ulid::Ulid;
 use uuid::Uuid;
@@ -235,23 +237,41 @@ impl AuditRepository for PgAuditRepository<'_> {
         name = "db.audit.list_admin_operations",
         skip_all,
         fields(
-            filter.admin_user_id = filter_admin_user_id.map(|id| id.to_string()),
+            filter.admin_user_id = filter.admin_user_id.map(|id| id.to_string()),
+            filter.resource_type = filter.resource_type.as_deref(),
         ),
         err,
     )]
     async fn list_admin_operations(
         &mut self,
-        filter_admin_user_id: Option<Ulid>,
+        filter: AdminOperationFilter,
     ) -> Result<Vec<AdminOperationLog>, Self::Error> {
+        let limit = filter
+            .limit
+            .and_then(|l| i64::try_from(l).ok())
+            .unwrap_or(100);
+
         let mut query = admin_operation_logs::table
             .order(admin_operation_logs::created_at.desc())
-            .limit(100)
+            .limit(limit)
             .select(AdminOperationLogRow::as_select())
             .into_boxed();
 
-        if let Some(admin_user_id) = filter_admin_user_id {
+        if let Some(admin_user_id) = filter.admin_user_id {
             query =
                 query.filter(admin_operation_logs::admin_user_id.eq(Uuid::from(admin_user_id)));
+        }
+
+        if let Some(ref resource_type) = filter.resource_type {
+            query = query.filter(admin_operation_logs::resource_type.eq(resource_type));
+        }
+
+        if let Some(created_after) = filter.created_after {
+            query = query.filter(admin_operation_logs::created_at.ge(created_after));
+        }
+
+        if let Some(created_before) = filter.created_before {
+            query = query.filter(admin_operation_logs::created_at.le(created_before));
         }
 
         query
@@ -261,6 +281,43 @@ impl AuditRepository for PgAuditRepository<'_> {
             .map(TryInto::try_into)
             .collect::<Result<Vec<_>, _>>()
             .map_err(Into::into)
+    }
+
+    #[tracing::instrument(
+        name = "db.audit.count_admin_operations",
+        skip_all,
+        fields(
+            filter.admin_user_id = filter.admin_user_id.map(|id| id.to_string()),
+            filter.resource_type = filter.resource_type.as_deref(),
+        ),
+        err,
+    )]
+    async fn count_admin_operations(
+        &mut self,
+        filter: AdminOperationFilter,
+    ) -> Result<usize, Self::Error> {
+        let mut query = admin_operation_logs::table.into_boxed();
+
+        if let Some(admin_user_id) = filter.admin_user_id {
+            query =
+                query.filter(admin_operation_logs::admin_user_id.eq(Uuid::from(admin_user_id)));
+        }
+
+        if let Some(ref resource_type) = filter.resource_type {
+            query = query.filter(admin_operation_logs::resource_type.eq(resource_type));
+        }
+
+        if let Some(created_after) = filter.created_after {
+            query = query.filter(admin_operation_logs::created_at.ge(created_after));
+        }
+
+        if let Some(created_before) = filter.created_before {
+            query = query.filter(admin_operation_logs::created_at.le(created_before));
+        }
+
+        let count: i64 = query.count().get_result(self.conn).await?;
+
+        Ok(count as usize)
     }
 
     #[tracing::instrument(

@@ -1,9 +1,6 @@
 use pasion_data_model::{BoxRng, audit::AdminOperation};
 use pasion_salvo_utils::record_error;
-use pasion_storage::{
-    audit::NewAdminOperationLog,
-    queue::{DeactivateUserJob, QueueJobRepositoryExt as _},
-};
+use pasion_storage::queue::{DeactivateUserJob, QueueJobRepositoryExt as _};
 use salvo::{http::StatusCode, prelude::*};
 use schemars::JsonSchema;
 use serde::Deserialize;
@@ -97,21 +94,17 @@ pub async fn handler(
         )
         .await?;
 
-    if let Some(admin_user) = &admin_user {
-        repo.audit()
-            .add_admin_operation(
-                &mut rng,
-                &clock,
-                NewAdminOperationLog::new(
-                    admin_user.id,
-                    AdminOperation::UserDeactivated,
-                    "user",
-                    serde_json::json!({}),
-                )
-                .with_resource_id(user.id),
-            )
-            .await?;
-    }
+    crate::admin_audit_helper::record_admin_operation(
+        &mut repo,
+        &mut rng,
+        &*clock,
+        admin_user.as_ref(),
+        AdminOperation::UserDeactivated,
+        "user",
+        Some(user.id),
+        serde_json::json!({}),
+    )
+    .await?;
 
     repo.save().await?;
 

@@ -1,4 +1,5 @@
 use async_trait::async_trait;
+use chrono::{DateTime, Utc};
 use pasion_data_model::{
     Clock,
     audit::{AccountSecurityEvent, AdminOperation, AdminOperationLog, SecurityEventType},
@@ -173,6 +174,64 @@ impl NewAccountSecurityEvent {
     }
 }
 
+/// Filter criteria for querying admin operation logs.
+#[derive(Debug, Clone, Default)]
+pub struct AdminOperationFilter {
+    /// Only return operations performed by this admin user.
+    pub admin_user_id: Option<Ulid>,
+    /// Only return operations on this resource type.
+    pub resource_type: Option<String>,
+    /// Only return operations created after this time.
+    pub created_after: Option<DateTime<Utc>>,
+    /// Only return operations created before this time.
+    pub created_before: Option<DateTime<Utc>>,
+    /// Maximum number of results to return.
+    pub limit: Option<usize>,
+}
+
+impl AdminOperationFilter {
+    /// Create a new empty filter.
+    #[must_use]
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    /// Filter by admin user ID.
+    #[must_use]
+    pub fn for_admin_user(mut self, admin_user_id: Ulid) -> Self {
+        self.admin_user_id = Some(admin_user_id);
+        self
+    }
+
+    /// Filter by resource type.
+    #[must_use]
+    pub fn for_resource_type(mut self, resource_type: impl Into<String>) -> Self {
+        self.resource_type = Some(resource_type.into());
+        self
+    }
+
+    /// Filter by created-after timestamp.
+    #[must_use]
+    pub fn created_after(mut self, after: DateTime<Utc>) -> Self {
+        self.created_after = Some(after);
+        self
+    }
+
+    /// Filter by created-before timestamp.
+    #[must_use]
+    pub fn created_before(mut self, before: DateTime<Utc>) -> Self {
+        self.created_before = Some(before);
+        self
+    }
+
+    /// Limit the number of results.
+    #[must_use]
+    pub fn with_limit(mut self, limit: usize) -> Self {
+        self.limit = Some(limit);
+        self
+    }
+}
+
 /// Repository for admin operation logs and account security events.
 #[async_trait]
 pub trait AuditRepository: Send + Sync {
@@ -190,8 +249,14 @@ pub trait AuditRepository: Send + Sync {
     /// List admin operation log entries, optionally filtered by admin user.
     async fn list_admin_operations(
         &mut self,
-        filter_admin_user_id: Option<Ulid>,
+        filter: AdminOperationFilter,
     ) -> Result<Vec<AdminOperationLog>, Self::Error>;
+
+    /// Count admin operation log entries matching the given filter.
+    async fn count_admin_operations(
+        &mut self,
+        filter: AdminOperationFilter,
+    ) -> Result<usize, Self::Error>;
 
     /// Record a new account security event.
     async fn add_security_event(
@@ -217,8 +282,12 @@ repository_impl!(AuditRepository:
     ) -> Result<AdminOperationLog, Self::Error>;
     async fn list_admin_operations(
         &mut self,
-        filter_admin_user_id: Option<Ulid>,
+        filter: AdminOperationFilter,
     ) -> Result<Vec<AdminOperationLog>, Self::Error>;
+    async fn count_admin_operations(
+        &mut self,
+        filter: AdminOperationFilter,
+    ) -> Result<usize, Self::Error>;
     async fn add_security_event(
         &mut self,
         rng: &mut (dyn RngCore + Send),

@@ -53,7 +53,12 @@ pub fn AccountPage() -> Element {
                                 display_name_change_allowed: display_name_change_allowed,
                             }
                             NavBar {
+                                NavItem { to: Route::AccountOverview {}, "Overview" }
                                 NavItem { to: Route::AccountSettings {}, "Settings" }
+                                NavItem { to: Route::SecurityCenter {}, "Security" }
+                                NavItem { to: Route::ContactManagement {}, "Contacts" }
+                                NavItem { to: Route::IdentityBindings {}, "Identities" }
+                                NavItem { to: Route::NotificationPreferences {}, "Notifications" }
                                 NavItem { to: Route::Sessions {}, "Devices" }
                                 if has_plan {
                                     NavItem { to: Route::Plan {}, "Plan" }

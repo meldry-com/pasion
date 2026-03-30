@@ -1,4 +1,5 @@
 pub mod account;
+pub mod account_overview;
 pub mod account_settings;
 pub mod browser_sessions;
 pub mod client_detail;
@@ -26,6 +27,7 @@ pub mod sessions;
 pub mod upstream_link;
 
 // Re-export page components for the router
+use account_overview::AccountOverview;
 use account_settings::AccountSettings;
 use browser_sessions::BrowserSessions;
 use client_detail::ClientDetail;
@@ -90,6 +92,8 @@ pub enum Route {
     // Account layout with nested routes (authenticated)
     #[layout(AccountLayout)]
         #[route("/")]
+        AccountOverview {},
+        #[route("/settings")]
         AccountSettings {},
         #[route("/sessions")]
         Sessions {},

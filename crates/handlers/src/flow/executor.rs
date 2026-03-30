@@ -39,12 +39,25 @@ impl FlowExecutor {
     }
 
     /// Get the challenge for the current stage of a flow session.
+    ///
+    /// Before returning the challenge, this advances past any stages whose
+    /// requirements are already satisfied by the session context (auto-skip).
     pub fn current_challenge(
         plan: &FlowPlan,
-        session: &FlowSession,
+        session: &mut FlowSession,
     ) -> Result<StageChallenge, FlowPlannerError> {
         if session.status.is_terminal() {
             return Err(FlowPlannerError::AlreadyCompleted);
+        }
+
+        // Auto-skip stages that are already satisfied by the context.
+        while session.current_stage_index < plan.stages.len() {
+            let binding = &plan.stages[session.current_stage_index];
+            if is_stage_satisfied(&binding.stage, &session.context) {
+                session.current_stage_index += 1;
+                continue;
+            }
+            break;
         }
 
         let binding = plan
@@ -313,5 +326,27 @@ fn validate_response(
                 }],
             }
         }
+    }
+}
+
+/// Check whether a stage's requirements are already satisfied by the
+/// current session context, allowing the executor to auto-skip it.
+fn is_stage_satisfied(stage: &StageKind, context: &Value) -> bool {
+    match stage {
+        StageKind::Identification { .. } => context.get("user_id").is_some(),
+        StageKind::EmailVerification { .. } => {
+            context.get("email_verified") == Some(&Value::Bool(true))
+        }
+        StageKind::PasswordWrite { .. } => {
+            context.get("password_set") == Some(&Value::Bool(true))
+        }
+        StageKind::UserWrite { .. } => {
+            context.get("user_created") == Some(&Value::Bool(true))
+        }
+        StageKind::AuthenticatorValidate { .. } => {
+            context.get("mfa_validated") == Some(&Value::Bool(true))
+        }
+        StageKind::Captcha => context.get("captcha_verified") == Some(&Value::Bool(true)),
+        _ => false,
     }
 }

@@ -168,10 +168,10 @@ fn LoginForm(providers: ProvidersResponse) -> Element {
                                             if kind == "continue_authorization_grant" {
                                                 nav.push(Route::Consent { grant_id: id });
                                             } else {
-                                                nav.push(Route::AccountSettings {});
+                                                nav.push(Route::AccountOverview {});
                                             }
                                         } else {
-                                            nav.push(Route::AccountSettings {});
+                                            nav.push(Route::AccountOverview {});
                                         }
                                     }
                                     Ok(resp) => {
