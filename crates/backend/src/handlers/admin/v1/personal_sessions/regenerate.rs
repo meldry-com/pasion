@@ -13,6 +13,7 @@ use crate::handlers::admin::{
     response::{ErrorResponse, SingleResponse},
     v1::personal_sessions::personal_session_owner_from_caller,
 };
+use crate::handlers::admin::CreatedJson;
 
 #[derive(Debug, thiserror::Error)]
 pub enum RouteError {
@@ -66,12 +67,21 @@ pub struct RequestBody {
     expires_in: Option<u32>,
 }
 
+
+impl_endpoint_out_register!(RouteError, [
+    ("400", "Bad request"),
+    ("401", "Unauthorized"),
+    ("404", "Not found"),
+    ("409", "Conflict"),
+    ("500", "Internal server error"),
+]);
+
 #[endpoint]
 #[tracing::instrument(name = "handler.admin.v1.personal_sessions.add", skip_all)]
 pub async fn handler(
     req: &mut Request,
     depot: &Depot,
-) -> Result<(StatusCode, Json<SingleResponse<PersonalSession>>), RouteError> {
+) -> Result<CreatedJson<SingleResponse<PersonalSession>>, RouteError> {
     let call_context = extract_call_context(req, depot).await?;
     let crate::handlers::admin::call_context::CallContext {
         mut repo,
@@ -138,13 +148,10 @@ pub async fn handler(
 
     repo.save().await?;
 
-    Ok((
-        StatusCode::CREATED,
-        Json(SingleResponse::new_canonical(
+    Ok(CreatedJson(SingleResponse::new_canonical(
             PersonalSession::try_from((session, Some(access_token)))?
                 .with_token(access_token_string),
-        )),
-    ))
+        )))
 }
 
 #[cfg(test)]

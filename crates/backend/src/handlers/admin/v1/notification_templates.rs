@@ -7,12 +7,13 @@
 use crate::record_error;
 use salvo::{http::StatusCode, prelude::*};
 use schemars::JsonSchema;
+use salvo::oapi::ToSchema;
 use serde::Serialize;
 
 use crate::handlers::{admin::call_context::extract_call_context, admin::response::ErrorResponse};
 
 /// Describes a single notification template key.
-#[derive(Serialize, JsonSchema)]
+#[derive(Serialize, JsonSchema, ToSchema)]
 pub struct NotificationTemplate {
     /// The template key, e.g. `"verification"` or `"recovery"`.
     pub key: String,
@@ -22,7 +23,7 @@ pub struct NotificationTemplate {
 }
 
 /// Response listing all known notification template keys.
-#[derive(Serialize, JsonSchema)]
+#[derive(Serialize, JsonSchema, ToSchema)]
 pub struct NotificationTemplatesResponse {
     /// The list of known notification templates.
     pub templates: Vec<NotificationTemplate>,
@@ -59,6 +60,15 @@ impl Scribe for RouteError {
 }
 
 /// List all known notification template keys.
+
+impl_endpoint_out_register!(RouteError, [
+    ("400", "Bad request"),
+    ("401", "Unauthorized"),
+    ("404", "Not found"),
+    ("409", "Conflict"),
+    ("500", "Internal server error"),
+]);
+
 #[endpoint]
 #[tracing::instrument(name = "handler.admin.v1.notification_templates.list", skip_all)]
 pub async fn list_handler(
@@ -86,6 +96,7 @@ pub async fn list_handler(
 ///
 /// Returns `501 Not Implemented` until the template publishing workflow
 /// is fully designed.
+
 #[endpoint]
 #[tracing::instrument(name = "handler.admin.v1.notification_templates.publish", skip_all)]
 pub async fn publish_handler(

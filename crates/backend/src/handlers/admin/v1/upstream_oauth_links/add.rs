@@ -10,6 +10,7 @@ use crate::handlers::admin::{
     model::{Resource, UpstreamOAuthLink},
     response::{ErrorResponse, SingleResponse},
 };
+use crate::handlers::admin::CreatedJson;
 
 #[derive(Debug, thiserror::Error)]
 pub enum RouteError {
@@ -67,12 +68,21 @@ pub struct RequestBody {
     human_account_name: Option<String>,
 }
 
+
+impl_endpoint_out_register!(RouteError, [
+    ("400", "Bad request"),
+    ("401", "Unauthorized"),
+    ("404", "Not found"),
+    ("409", "Conflict"),
+    ("500", "Internal server error"),
+]);
+
 #[endpoint]
 #[tracing::instrument(name = "handler.admin.v1.upstream_oauth_links.post", skip_all)]
 pub async fn handler(
     req: &mut Request,
     depot: &Depot,
-) -> Result<(StatusCode, Json<SingleResponse<UpstreamOAuthLink>>), RouteError> {
+) -> Result<CreatedJson<SingleResponse<UpstreamOAuthLink>>, RouteError> {
     let call_context = extract_call_context(req, depot).await?;
     let crate::handlers::admin::call_context::CallContext {
         mut repo, clock, ..
@@ -116,10 +126,7 @@ pub async fn handler(
 
         repo.save().await?;
 
-        return Ok((
-            StatusCode::OK,
-            Json(SingleResponse::new_canonical(link.into())),
-        ));
+        return Ok(CreatedJson(SingleResponse::new_canonical(link.into())));
     }
 
     let mut link = repo
@@ -140,10 +147,7 @@ pub async fn handler(
 
     repo.save().await?;
 
-    Ok((
-        StatusCode::CREATED,
-        Json(SingleResponse::new_canonical(link.into())),
-    ))
+    Ok(CreatedJson(SingleResponse::new_canonical(link.into())))
 }
 
 #[cfg(test)]

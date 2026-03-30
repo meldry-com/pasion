@@ -95,3 +95,18 @@ impl InternalError {
         }
     }
 }
+
+impl salvo::oapi::EndpointOutRegister for InternalError {
+    fn register(
+        _components: &mut salvo::oapi::Components,
+        _operation: &mut salvo::oapi::Operation,
+    ) {
+        use salvo::oapi::*;
+        let error_schema = Object::new()
+            .property("error", Object::new().schema_type(BasicType::String))
+            .required("error");
+        let response = Response::new("Internal server error")
+            .add_content("text/plain", Content::new(error_schema));
+        _operation.responses.insert("500", RefOr::Type(response));
+    }
+}

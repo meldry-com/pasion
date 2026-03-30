@@ -24,50 +24,6 @@ pub mod v1;
 
 pub use self::call_context::CallContext;
 
-/// Implement [`salvo::oapi::EndpointOutRegister`] for an admin `RouteError`.
-///
-/// Accepts a list of `(status_code, description)` tuples.  The generated
-/// implementation adds each pair as an error response with a JSON error
-/// body to the OpenAPI operation.
-///
-/// # Example
-///
-/// ```ignore
-/// impl_endpoint_out_register!(RouteError, [
-///     ("404", "Not found"),
-///     ("500", "Internal server error"),
-/// ]);
-/// ```
-macro_rules! impl_endpoint_out_register {
-    ($ty:ty, [ $(($status:expr, $desc:expr)),* $(,)? ]) => {
-        impl salvo::oapi::EndpointOutRegister for $ty {
-            fn register(
-                _components: &mut salvo::oapi::Components,
-                _operation: &mut salvo::oapi::Operation,
-            ) {
-                use salvo::oapi::*;
-
-                let error_schema = Object::new()
-                    .property("errors", Array::new(
-                        Object::new()
-                            .property("title", Object::new().schema_type(BasicType::String))
-                            .required("title")
-                    ));
-
-                $(
-                    {
-                        let response = Response::new($desc)
-                            .add_content("application/json", Content::new(error_schema.clone()));
-                        _operation.responses.insert($status, RefOr::Type(response));
-                    }
-                )*
-            }
-        }
-    };
-}
-
-pub(crate) use impl_endpoint_out_register;
-
 /// Common error response shape for admin API endpoints.
 ///
 /// Individual handlers keep their own `RouteError` enums but can convert
@@ -115,4 +71,30 @@ pub async fn swagger_callback(depot: &Depot, res: &mut Response) -> Result<(), I
     let content = templates.render_swagger_callback(&ctx)?;
     res.render(salvo::writing::Text::Html(content));
     Ok(())
+}
+
+/// JSON response wrapper that sets HTTP 201 Created status code.
+///
+/// Drop-in replacement for `(StatusCode, Json<T>)` tuples that works with
+/// Salvo's `#[endpoint]` macro by implementing both [`Scribe`] and
+/// [`salvo::oapi::EndpointOutRegister`].
+pub struct CreatedJson<T: Serialize + Send>(pub T);
+
+impl<T: Serialize + Send> Scribe for CreatedJson<T> {
+    fn render(self, res: &mut Response) {
+        res.status_code(StatusCode::CREATED);
+        res.render(Json(self.0));
+    }
+}
+
+impl<T: Serialize + Send + salvo::oapi::ToSchema + 'static> salvo::oapi::EndpointOutRegister for CreatedJson<T> {
+    fn register(
+        components: &mut salvo::oapi::Components,
+        operation: &mut salvo::oapi::Operation,
+    ) {
+        let schema = T::to_schema(components);
+        let response = salvo::oapi::Response::new("Created")
+            .add_content("application/json", salvo::oapi::Content::new(schema));
+        operation.responses.insert("201", salvo::oapi::RefOr::Type(response));
+    }
 }

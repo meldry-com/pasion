@@ -11,6 +11,7 @@ use crate::handlers::admin::{
     model::UserRegistrationToken,
     response::{ErrorResponse, SingleResponse},
 };
+use crate::handlers::admin::CreatedJson;
 
 #[derive(Debug, thiserror::Error)]
 pub enum RouteError {
@@ -57,12 +58,21 @@ pub struct RequestBody {
     expires_at: Option<DateTime<Utc>>,
 }
 
+
+impl_endpoint_out_register!(RouteError, [
+    ("400", "Bad request"),
+    ("401", "Unauthorized"),
+    ("404", "Not found"),
+    ("409", "Conflict"),
+    ("500", "Internal server error"),
+]);
+
 #[endpoint]
 #[tracing::instrument(name = "handler.admin.v1.user_registration_tokens.post", skip_all)]
 pub async fn handler(
     req: &mut Request,
     depot: &Depot,
-) -> Result<(StatusCode, Json<SingleResponse<UserRegistrationToken>>), RouteError> {
+) -> Result<CreatedJson<SingleResponse<UserRegistrationToken>>, RouteError> {
     let call_context = extract_call_context(req, depot).await?;
     let crate::handlers::admin::call_context::CallContext {
         mut repo, clock, ..
@@ -97,13 +107,9 @@ pub async fn handler(
 
     repo.save().await?;
 
-    Ok((
-        StatusCode::CREATED,
-        Json(SingleResponse::new_canonical(UserRegistrationToken::new(
+    Ok(CreatedJson(SingleResponse::new_canonical(UserRegistrationToken::new(
             registration_token,
-            clock.now(),
-        ))),
-    ))
+            clock.now()))))
 }
 
 #[cfg(test)]

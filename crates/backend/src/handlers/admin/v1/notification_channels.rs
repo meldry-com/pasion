@@ -7,6 +7,7 @@
 use crate::record_error;
 use salvo::{http::StatusCode, prelude::*};
 use schemars::JsonSchema;
+use salvo::oapi::ToSchema;
 use serde::Serialize;
 
 use crate::handlers::{
@@ -14,7 +15,7 @@ use crate::handlers::{
 };
 
 /// Status of an individual notification channel.
-#[derive(Serialize, JsonSchema)]
+#[derive(Serialize, JsonSchema, ToSchema)]
 pub struct ChannelStatus {
     /// Channel name, e.g. `"email"` or `"sms"`.
     channel: String,
@@ -24,7 +25,7 @@ pub struct ChannelStatus {
 }
 
 /// Response listing all known notification channels.
-#[derive(Serialize, JsonSchema)]
+#[derive(Serialize, JsonSchema, ToSchema)]
 pub struct NotificationChannelsResponse {
     /// The list of notification channels and their configuration status.
     channels: Vec<ChannelStatus>,
@@ -56,6 +57,15 @@ impl Scribe for RouteError {
         res.render(Json(error));
     }
 }
+
+
+impl_endpoint_out_register!(RouteError, [
+    ("400", "Bad request"),
+    ("401", "Unauthorized"),
+    ("404", "Not found"),
+    ("409", "Conflict"),
+    ("500", "Internal server error"),
+]);
 
 #[endpoint]
 #[tracing::instrument(name = "handler.admin.v1.notification_channels", skip_all)]

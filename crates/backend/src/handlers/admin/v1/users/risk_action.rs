@@ -3,6 +3,7 @@ use pasion_data::audit::AdminOperation;
 use pasion_data::audit::NewAdminOperationLog;
 use salvo::{http::StatusCode, prelude::*};
 use schemars::JsonSchema;
+use salvo::oapi::ToSchema;
 use serde::{Deserialize, Serialize};
 use ulid::Ulid;
 
@@ -61,7 +62,7 @@ pub struct RequestBody {
 }
 
 /// Response indicating which risk action was taken
-#[derive(Serialize, JsonSchema)]
+#[derive(Serialize, JsonSchema, ToSchema)]
 pub struct RiskActionResponse {
     /// The action that was performed
     action: String,
@@ -76,6 +77,15 @@ pub struct RiskActionResponse {
     #[serde(skip_serializing_if = "Option::is_none")]
     sessions_terminated: Option<usize>,
 }
+
+
+impl_endpoint_out_register!(RouteError, [
+    ("400", "Bad request"),
+    ("401", "Unauthorized"),
+    ("404", "Not found"),
+    ("409", "Conflict"),
+    ("500", "Internal server error"),
+]);
 
 #[endpoint]
 #[tracing::instrument(name = "handler.admin.v1.users.risk_action", skip_all)]

@@ -75,6 +75,15 @@ impl Scribe for RouteError {
     }
 }
 
+
+impl_endpoint_out_register!(RouteError, [
+    ("400", "Bad request"),
+    ("401", "Unauthorized"),
+    ("404", "Not found"),
+    ("409", "Conflict"),
+    ("500", "Internal server error"),
+]);
+
 #[endpoint]
 #[tracing::instrument(name = "handler.admin.v1.user_registration_tokens.update", skip_all)]
 pub async fn handler(

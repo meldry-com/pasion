@@ -8,12 +8,13 @@ use crate::record_error;
 use chrono::{DateTime, Utc};
 use salvo::{http::StatusCode, prelude::*};
 use schemars::JsonSchema;
+use salvo::oapi::ToSchema;
 use serde::{Deserialize, Serialize};
 
 use crate::handlers::{admin::call_context::extract_call_context, admin::response::ErrorResponse};
 
 /// A single entry in the admin audit feed.
-#[derive(Serialize, JsonSchema)]
+#[derive(Serialize, JsonSchema, ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct AuditEntry {
     /// Unique identifier for this audit entry.
@@ -41,7 +42,7 @@ pub struct AuditEntry {
 }
 
 /// Response body for the audit feed endpoint.
-#[derive(Serialize, JsonSchema)]
+#[derive(Serialize, JsonSchema, ToSchema)]
 pub struct AuditFeedResponse {
     /// The list of audit entries, ordered by most recent first.
     pub data: Vec<AuditEntry>,
@@ -87,6 +88,15 @@ impl Scribe for RouteError {
         res.render(Json(error));
     }
 }
+
+
+impl_endpoint_out_register!(RouteError, [
+    ("400", "Bad request"),
+    ("401", "Unauthorized"),
+    ("404", "Not found"),
+    ("409", "Conflict"),
+    ("500", "Internal server error"),
+]);
 
 #[endpoint]
 #[tracing::instrument(name = "handler.admin.v1.audit_feed", skip_all)]
