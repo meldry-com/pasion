@@ -1,4 +1,14 @@
 -- This migration drops all tables. Only use in development.
+DROP TABLE IF EXISTS account_security_events CASCADE;
+DROP TABLE IF EXISTS admin_operation_logs CASCADE;
+DROP TABLE IF EXISTS workflow_audit_logs CASCADE;
+DROP TABLE IF EXISTS workflow_deadlines CASCADE;
+DROP TABLE IF EXISTS workflow_events CASCADE;
+DROP TABLE IF EXISTS workflow_steps CASCADE;
+DROP TABLE IF EXISTS workflow_instances CASCADE;
+DROP TABLE IF EXISTS notification_event_logs CASCADE;
+DROP TABLE IF EXISTS notification_deliveries CASCADE;
+DROP TABLE IF EXISTS notification_requests CASCADE;
 DROP TABLE IF EXISTS personal_access_tokens CASCADE;
 DROP TABLE IF EXISTS personal_sessions CASCADE;
 DROP TABLE IF EXISTS queue_leader CASCADE;

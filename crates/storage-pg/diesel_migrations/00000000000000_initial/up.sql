@@ -411,3 +411,212 @@ CREATE TABLE IF NOT EXISTS policy_data (
     created_at TIMESTAMPTZ NOT NULL,
     data JSONB NOT NULL
 );
+
+-- ── Notification persistence ───────────────────────────────────
+
+CREATE TABLE IF NOT EXISTS notification_requests (
+    notification_request_id UUID PRIMARY KEY,
+    template_key TEXT NOT NULL,
+    locale TEXT NOT NULL,
+    source JSONB NOT NULL,
+    payload JSONB NOT NULL,
+    status TEXT NOT NULL,
+    dedupe_key TEXT NULL,
+    correlation_key TEXT NULL,
+    created_at TIMESTAMPTZ NOT NULL,
+    scheduled_at TIMESTAMPTZ NOT NULL,
+    started_at TIMESTAMPTZ NULL,
+    completed_at TIMESTAMPTZ NULL,
+    cancelled_at TIMESTAMPTZ NULL
+);
+
+CREATE INDEX notification_requests_status_scheduled_idx
+    ON notification_requests (status, scheduled_at, notification_request_id);
+
+CREATE UNIQUE INDEX notification_requests_dedupe_key_idx
+    ON notification_requests (dedupe_key)
+    WHERE dedupe_key IS NOT NULL;
+
+CREATE TABLE IF NOT EXISTS notification_deliveries (
+    notification_delivery_id UUID PRIMARY KEY,
+    notification_request_id UUID NOT NULL REFERENCES notification_requests (notification_request_id) ON DELETE CASCADE,
+    channel TEXT NOT NULL,
+    destination JSONB NOT NULL,
+    provider_binding_key TEXT NULL,
+    provider_message_id TEXT NULL,
+    attempt_count INTEGER NOT NULL,
+    status TEXT NOT NULL,
+    last_failure JSONB NULL,
+    created_at TIMESTAMPTZ NOT NULL,
+    reserved_at TIMESTAMPTZ NULL,
+    sent_at TIMESTAMPTZ NULL,
+    delivered_at TIMESTAMPTZ NULL,
+    failed_at TIMESTAMPTZ NULL,
+    next_retry_at TIMESTAMPTZ NULL
+);
+
+CREATE INDEX notification_deliveries_request_idx
+    ON notification_deliveries (notification_request_id, notification_delivery_id);
+
+CREATE INDEX notification_deliveries_status_retry_idx
+    ON notification_deliveries (status, next_retry_at, created_at, notification_delivery_id);
+
+CREATE INDEX notification_deliveries_provider_binding_idx
+    ON notification_deliveries (provider_binding_key)
+    WHERE provider_binding_key IS NOT NULL;
+
+CREATE TABLE IF NOT EXISTS notification_event_logs (
+    notification_event_log_id UUID PRIMARY KEY,
+    notification_request_id UUID NOT NULL REFERENCES notification_requests (notification_request_id) ON DELETE CASCADE,
+    notification_delivery_id UUID NULL REFERENCES notification_deliveries (notification_delivery_id) ON DELETE CASCADE,
+    kind TEXT NOT NULL,
+    actor JSONB NOT NULL,
+    summary TEXT NULL,
+    metadata JSONB NOT NULL,
+    occurred_at TIMESTAMPTZ NOT NULL
+);
+
+CREATE INDEX notification_event_logs_request_idx
+    ON notification_event_logs (notification_request_id, notification_event_log_id);
+
+CREATE INDEX notification_event_logs_delivery_idx
+    ON notification_event_logs (notification_delivery_id, notification_event_log_id)
+    WHERE notification_delivery_id IS NOT NULL;
+
+-- ── Workflow engine ────────────────────────────────────────────
+
+CREATE TABLE IF NOT EXISTS workflow_instances (
+    workflow_instance_id UUID PRIMARY KEY,
+    workflow_key TEXT NOT NULL,
+    subject JSONB NOT NULL,
+    trigger JSONB NOT NULL,
+    status TEXT NOT NULL,
+    current_step_key TEXT NULL,
+    input JSONB NOT NULL,
+    context JSONB NOT NULL DEFAULT '{}',
+    correlation_key TEXT NULL,
+    started_at TIMESTAMPTZ NULL,
+    completed_at TIMESTAMPTZ NULL,
+    failed_at TIMESTAMPTZ NULL,
+    cancelled_at TIMESTAMPTZ NULL,
+    expires_at TIMESTAMPTZ NULL,
+    created_at TIMESTAMPTZ NOT NULL,
+    updated_at TIMESTAMPTZ NOT NULL
+);
+
+CREATE INDEX workflow_instances_key_status_idx
+    ON workflow_instances (workflow_key, status);
+
+CREATE INDEX workflow_instances_correlation_key_idx
+    ON workflow_instances (correlation_key)
+    WHERE correlation_key IS NOT NULL;
+
+CREATE INDEX workflow_instances_status_expires_idx
+    ON workflow_instances (status, expires_at)
+    WHERE expires_at IS NOT NULL;
+
+CREATE TABLE IF NOT EXISTS workflow_steps (
+    workflow_step_id UUID PRIMARY KEY,
+    workflow_instance_id UUID NOT NULL REFERENCES workflow_instances (workflow_instance_id) ON DELETE CASCADE,
+    step_key TEXT NOT NULL,
+    sequence INTEGER NOT NULL,
+    status TEXT NOT NULL,
+    assignee JSONB NULL,
+    input JSONB NOT NULL,
+    output JSONB NULL,
+    attempt_count INTEGER NOT NULL,
+    last_error_code TEXT NULL,
+    last_error_message TEXT NULL,
+    scheduled_at TIMESTAMPTZ NULL,
+    started_at TIMESTAMPTZ NULL,
+    completed_at TIMESTAMPTZ NULL,
+    failed_at TIMESTAMPTZ NULL,
+    created_at TIMESTAMPTZ NOT NULL,
+    updated_at TIMESTAMPTZ NOT NULL
+);
+
+CREATE INDEX workflow_steps_instance_sequence_idx
+    ON workflow_steps (workflow_instance_id, sequence);
+
+CREATE TABLE IF NOT EXISTS workflow_events (
+    workflow_event_id UUID PRIMARY KEY,
+    workflow_instance_id UUID NOT NULL REFERENCES workflow_instances (workflow_instance_id) ON DELETE CASCADE,
+    workflow_step_id UUID NULL REFERENCES workflow_steps (workflow_step_id) ON DELETE CASCADE,
+    kind TEXT NOT NULL,
+    actor JSONB NOT NULL,
+    payload JSONB NOT NULL,
+    occurred_at TIMESTAMPTZ NOT NULL
+);
+
+CREATE INDEX workflow_events_instance_idx
+    ON workflow_events (workflow_instance_id, workflow_event_id);
+
+CREATE TABLE IF NOT EXISTS workflow_deadlines (
+    workflow_deadline_id UUID PRIMARY KEY,
+    workflow_instance_id UUID NOT NULL REFERENCES workflow_instances (workflow_instance_id) ON DELETE CASCADE,
+    workflow_step_id UUID NULL REFERENCES workflow_steps (workflow_step_id) ON DELETE CASCADE,
+    deadline_key TEXT NOT NULL,
+    status TEXT NOT NULL,
+    payload JSONB NOT NULL,
+    due_at TIMESTAMPTZ NOT NULL,
+    satisfied_at TIMESTAMPTZ NULL,
+    cancelled_at TIMESTAMPTZ NULL,
+    created_at TIMESTAMPTZ NOT NULL
+);
+
+CREATE INDEX workflow_deadlines_status_due_idx
+    ON workflow_deadlines (status, due_at);
+
+CREATE TABLE IF NOT EXISTS workflow_audit_logs (
+    workflow_audit_log_id UUID PRIMARY KEY,
+    workflow_instance_id UUID NOT NULL REFERENCES workflow_instances (workflow_instance_id) ON DELETE CASCADE,
+    workflow_step_id UUID NULL REFERENCES workflow_steps (workflow_step_id) ON DELETE CASCADE,
+    action TEXT NOT NULL,
+    actor JSONB NOT NULL,
+    summary TEXT NULL,
+    metadata JSONB NOT NULL,
+    occurred_at TIMESTAMPTZ NOT NULL
+);
+
+CREATE INDEX workflow_audit_logs_instance_idx
+    ON workflow_audit_logs (workflow_instance_id, workflow_audit_log_id);
+
+-- ── Audit ──────────────────────────────────────────────────────
+
+CREATE TABLE IF NOT EXISTS admin_operation_logs (
+    admin_operation_log_id UUID PRIMARY KEY,
+    admin_user_id UUID NOT NULL,
+    operation TEXT NOT NULL,
+    resource_type TEXT NOT NULL,
+    resource_id UUID NULL,
+    details JSONB NOT NULL DEFAULT '{}',
+    ip_address INET NULL,
+    user_agent TEXT NULL,
+    created_at TIMESTAMPTZ NOT NULL
+);
+
+CREATE INDEX admin_operation_logs_user_created_idx
+    ON admin_operation_logs (admin_user_id, created_at);
+
+CREATE INDEX admin_operation_logs_resource_idx
+    ON admin_operation_logs (resource_type, resource_id)
+    WHERE resource_id IS NOT NULL;
+
+CREATE INDEX admin_operation_logs_created_idx
+    ON admin_operation_logs (created_at);
+
+CREATE TABLE IF NOT EXISTS account_security_events (
+    account_security_event_id UUID PRIMARY KEY,
+    user_id UUID NOT NULL,
+    event_type TEXT NOT NULL,
+    metadata JSONB NOT NULL DEFAULT '{}',
+    ip_address INET NULL,
+    user_agent TEXT NULL,
+    created_at TIMESTAMPTZ NOT NULL
+);
+
+CREATE INDEX account_security_events_user_created_idx
+    ON account_security_events (user_id, created_at);
+
+CREATE INDEX account_security_events_type_created_idx
+    ON account_security_events (event_type, created_at);
