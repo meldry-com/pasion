@@ -597,6 +597,9 @@ fn build_admin_router(router: Router) -> Router {
             .push(Router::with_path("version").get(version::handler))
             // Site config
             .push(Router::with_path("site-config").get(site_config::handler))
+            // Operational health
+            .push(Router::with_path("connector-health").get(connector_health::handler))
+            .push(Router::with_path("notification-channels").get(notification_channels::handler))
             // Users
             .push(
                 Router::with_path("users")

@@ -275,9 +275,9 @@ Error details: {e}
             }
 
             // Try to reach an authenticated Pasion API endpoint
-            let mas_api = hs_api.join("/_palpo/mas/is_localpart_available")?;
+            let pasion_api = hs_api.join("/_palpo/mas/is_localpart_available")?;
             let result = http_client
-                .get(mas_api.as_str())
+                .get(pasion_api.as_str())
                 .bearer_auth(&secret)
                 .send_traced()
                 .await;
@@ -292,11 +292,11 @@ Error details: {e}
                     // Palpo will return a 404 Not found.
                     if status == StatusCode::BAD_REQUEST {
                         info!(
-                            r#"✅ The Palpo Pasion API is reachable with authentication at "{mas_api}"."#
+                            r#"✅ The Palpo Pasion API is reachable with authentication at "{pasion_api}"."#
                         );
                     } else {
                         error!(
-                            r#"❌ A Palpo Pasion API endpoint at "{mas_api}" replied with {status}.
+                            r#"❌ A Palpo Pasion API endpoint at "{pasion_api}" replied with {status}.
 Make sure the homeserver is running, and that the Pasion config has the correct `matrix.secret`.
 It should match the `secret` set in the Palpo config.
 
@@ -317,7 +317,7 @@ And in the Pasion config:
                     }
                 }
                 Err(e) => error!(
-                    r#"❌ Can't reach the Palpo Pasion API at "{mas_api}".
+                    r#"❌ Can't reach the Palpo Pasion API at "{pasion_api}".
 Make sure the homeserver is running, and that the Pasion config has the correct `matrix.secret`.
 
 Error details: {e}

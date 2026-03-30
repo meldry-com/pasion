@@ -3,12 +3,15 @@ pub mod account_settings;
 pub mod browser_sessions;
 pub mod client_detail;
 pub mod consent;
+pub mod contact_management;
 pub mod device_consent;
 pub mod device_link;
 pub mod device_redirect;
 pub mod email_in_use;
 pub mod email_verify;
+pub mod identity_bindings;
 pub mod login;
+pub mod notification_preferences;
 pub mod password_change;
 pub mod password_change_success;
 pub mod password_recovery;
@@ -17,6 +20,7 @@ pub mod recovery_progress;
 pub mod recovery_start;
 pub mod register;
 pub mod reset_cross_signing;
+pub mod security_center;
 pub mod session_detail;
 pub mod sessions;
 pub mod upstream_link;
@@ -26,13 +30,16 @@ use account_settings::AccountSettings;
 use browser_sessions::BrowserSessions;
 use client_detail::ClientDetail;
 use consent::Consent;
+use contact_management::ContactManagement;
 use device_consent::DeviceConsent;
 use device_link::DeviceLink;
 use device_redirect::DeviceRedirect;
 use dioxus::prelude::*;
 use email_in_use::EmailInUse;
 use email_verify::EmailVerify;
+use identity_bindings::IdentityBindings;
 use login::Login;
+use notification_preferences::NotificationPreferences;
 use password_change::PasswordChange;
 use password_change_success::PasswordChangeSuccess;
 use password_recovery::PasswordRecovery;
@@ -43,6 +50,7 @@ use register::{
     Register, RegisterDisplayName, RegisterFinish, RegisterVerifyEmail, RegisterVerifyPhone,
 };
 use reset_cross_signing::ResetCrossSigning;
+use security_center::SecurityCenter;
 use session_detail::SessionDetail;
 use sessions::Sessions;
 use upstream_link::UpstreamLink;
@@ -89,6 +97,14 @@ pub enum Route {
         BrowserSessions {},
         #[route("/plan")]
         Plan {},
+        #[route("/security")]
+        SecurityCenter {},
+        #[route("/notifications")]
+        NotificationPreferences {},
+        #[route("/identities")]
+        IdentityBindings {},
+        #[route("/contacts")]
+        ContactManagement {},
     #[end_layout]
 
     // Standalone pages

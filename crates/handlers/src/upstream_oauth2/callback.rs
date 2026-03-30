@@ -44,7 +44,7 @@ pub struct Params {
     /// An extra parameter to track whether the POST request was re-made by us
     /// to the same URL to escape Same-Site cookies restrictions
     #[serde(default)]
-    did_mas_repost_to_itself: bool,
+    did_repost_to_itself: bool,
 
     #[serde(skip_serializing_if = "Option::is_none")]
     code: Option<String>,
@@ -173,7 +173,7 @@ pub async fn handler(
     let params: Params = if method == http::Method::POST {
         req.parse_form().await.unwrap_or_else(|_| Params {
             state: None,
-            did_mas_repost_to_itself: false,
+            did_repost_to_itself: false,
             code: None,
             error: None,
             error_description: None,
@@ -183,7 +183,7 @@ pub async fn handler(
     } else {
         req.parse_queries().unwrap_or_else(|_| Params {
             state: None,
-            did_mas_repost_to_itself: false,
+            did_repost_to_itself: false,
             code: None,
             error: None,
             error_description: None,
@@ -219,9 +219,9 @@ pub async fn handler(
             // same values, which posts back to the same URL. However, there are
             // other valid reasons for the cookie to be missing, so to track whether we did
             // this POST ourselves, we set a flag.
-            if sessions_cookie.is_empty() && !params.did_mas_repost_to_itself {
+            if sessions_cookie.is_empty() && !params.did_repost_to_itself {
                 let params = Params {
-                    did_mas_repost_to_itself: true,
+                    did_repost_to_itself: true,
                     ..params
                 };
                 let context = FormPostContext::new_for_current_url(params).with_language(&locale);
