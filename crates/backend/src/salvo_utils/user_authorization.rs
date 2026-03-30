@@ -1,4 +1,4 @@
-use std::{collections::HashMap, error::Error};
+use std::{collections::HashMap, error::Error, sync::LazyLock};
 
 use headers::{
     Header, HeaderMapExt, HeaderName,
@@ -10,7 +10,10 @@ use pasion_data::{
     RepositoryAccess,
     oauth2::{OAuth2AccessTokenRepository, OAuth2SessionRepository},
 };
-use salvo::prelude::*;
+use salvo::{
+    extract::{Extractible, Metadata},
+    prelude::*,
+};
 use serde::{Deserialize, de::DeserializeOwned};
 use thiserror::Error;
 
@@ -115,6 +118,7 @@ impl<F: Send> UserAuthorization<F> {
     }
 }
 
+#[derive(Debug)]
 pub enum UserAuthorizationError {
     InvalidHeader,
     TokenInFormAndHeader,
@@ -335,5 +339,25 @@ impl<F: DeserializeOwned + Send> UserAuthorization<F> {
         };
 
         Ok(UserAuthorization { access_token, form })
+    }
+}
+
+static USER_AUTHORIZATION_METADATA: LazyLock<Metadata> =
+    LazyLock::new(|| Metadata::new("UserAuthorization"));
+
+impl<'ex, F> Extractible<'ex> for UserAuthorization<F>
+where
+    F: DeserializeOwned + Send,
+{
+    fn metadata() -> &'static Metadata {
+        &USER_AUTHORIZATION_METADATA
+    }
+
+    #[allow(refining_impl_trait)]
+    async fn extract(
+        req: &'ex mut Request,
+        _depot: &'ex mut Depot,
+    ) -> Result<Self, UserAuthorizationError> {
+        Self::extract_from_request(req).await
     }
 }

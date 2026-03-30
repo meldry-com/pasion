@@ -8,7 +8,7 @@ use pasion_data::{BoxRepository, BoxRepositoryFactory};
 use pasion_keystore::Encrypter;
 use rand::{SeedableRng, thread_rng};
 use rand_chacha::ChaChaRng;
-use salvo::prelude::*;
+use salvo::{Extractible, prelude::*};
 use thiserror::Error;
 use ulid::Ulid;
 
@@ -107,7 +107,7 @@ impl_from_error_for_route!(crate::salvo_utils::client_authorization::ClientAutho
 
 #[handler]
 #[tracing::instrument(name = "handlers.oauth2.revoke.post", skip_all)]
-pub async fn post(req: &mut Request, depot: &Depot, res: &mut Response) {
+pub async fn post(req: &mut Request, depot: &mut Depot, res: &mut Response) {
     match handle_post(req, depot).await {
         Ok(()) => {
             res.status_code(StatusCode::OK);
@@ -116,7 +116,10 @@ pub async fn post(req: &mut Request, depot: &Depot, res: &mut Response) {
     }
 }
 
-async fn handle_post(req: &mut Request, depot: &Depot) -> Result<(), RouteError> {
+async fn handle_post(req: &mut Request, depot: &mut Depot) -> Result<(), RouteError> {
+    let client_authorization: ClientAuthorization<RevocationRequest> =
+        ClientAuthorization::extract(req, depot).await?;
+
     let http_client = depot
         .get::<reqwest::Client>("http_client")
         .expect("reqwest::Client not found in depot");
@@ -133,9 +136,6 @@ async fn handle_post(req: &mut Request, depot: &Depot) -> Result<(), RouteError>
     let mut rng: BoxRng = Box::new(ChaChaRng::from_rng(thread_rng()).expect("Failed to seed rng"));
 
     let mut repo: BoxRepository = repo_factory.create().await?;
-
-    let client_authorization: ClientAuthorization<RevocationRequest> =
-        ClientAuthorization::extract_from_request(req).await?;
 
     let client = client_authorization
         .credentials

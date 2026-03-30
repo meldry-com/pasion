@@ -1,7 +1,12 @@
 //! Private (encrypted) cookie jar for Salvo
 
-use cookie::{Cookie, Key, SameSite};
-use salvo::{http::HeaderValue, prelude::*};
+use std::sync::LazyLock;
+
+use cookie::{Cookie, CookieJar as RawCookieJar, Key, SameSite};
+use salvo::{
+    extract::{Extractible, Metadata},
+    prelude::*,
+};
 use serde::{Serialize, de::DeserializeOwned};
 use thiserror::Error;
 use url::Url;
@@ -48,20 +53,11 @@ impl CookieManager {
     }
 
     #[must_use]
-    pub fn cookie_jar_from_headers(&self, headers: &http::HeaderMap) -> CookieJar {
-        let mut inner = cookie::CookieJar::new();
+    pub fn cookie_jar_from_request(&self, request_cookies: &RawCookieJar) -> CookieJar {
+        let mut inner = RawCookieJar::new();
 
-        // Parse cookies from headers
-        for header_value in headers.get_all(http::header::COOKIE) {
-            if let Ok(value) = header_value.to_str() {
-                for cookie_str in value.split(';') {
-                    if let Ok(cookie) = Cookie::parse_encoded(cookie_str.trim().to_owned()) {
-                        // Store the encrypted cookie as-is; `private().get(...)`
-                        // will decrypt it on read.
-                        inner.add_original(cookie);
-                    }
-                }
-            }
+        for cookie in request_cookies.iter() {
+            inner.add_original(cookie.clone());
         }
 
         let options = self.options.clone();
@@ -103,7 +99,7 @@ impl CookieOption {
 
 /// A cookie jar which encrypts cookies & sets secure options
 pub struct CookieJar {
-    inner: cookie::CookieJar,
+    inner: RawCookieJar,
     key: Key,
     options: CookieOption,
     pending_cookies: Vec<Cookie<'static>>,
@@ -173,9 +169,7 @@ impl CookieJar {
     /// Write pending cookies to the response
     pub fn write_to_response(&self, res: &mut Response) {
         for cookie in &self.pending_cookies {
-            if let Ok(value) = HeaderValue::from_str(&cookie.to_string()) {
-                res.headers_mut().append(http::header::SET_COOKIE, value);
-            }
+            res.add_cookie(cookie.clone());
         }
     }
 
@@ -191,9 +185,22 @@ impl CookieJar {
     pub fn extract_from_request(req: &Request, depot: &Depot) -> Result<Self, StatusError> {
         // Try to get CookieManager from depot
         if let Ok(manager) = depot.get::<CookieManager>("cookie_manager") {
-            Ok(manager.cookie_jar_from_headers(req.headers()))
+            Ok(manager.cookie_jar_from_request(req.cookies()))
         } else {
             Err(StatusError::internal_server_error().brief("CookieManager not found in depot"))
         }
+    }
+}
+
+static COOKIE_JAR_METADATA: LazyLock<Metadata> = LazyLock::new(|| Metadata::new("CookieJar"));
+
+impl<'ex> Extractible<'ex> for CookieJar {
+    fn metadata() -> &'static Metadata {
+        &COOKIE_JAR_METADATA
+    }
+
+    #[allow(refining_impl_trait)]
+    async fn extract(req: &'ex mut Request, depot: &'ex mut Depot) -> Result<Self, StatusError> {
+        Self::extract_from_request(req, depot)
     }
 }

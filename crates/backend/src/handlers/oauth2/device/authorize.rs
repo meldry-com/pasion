@@ -11,7 +11,7 @@ use oauth2_types::{
 };
 use pasion_data::oauth2::OAuth2DeviceCodeGrantParams;
 use rand::distributions::{Alphanumeric, DistString};
-use salvo::prelude::*;
+use salvo::{Extractible, prelude::*};
 use thiserror::Error;
 use ulid::Ulid;
 
@@ -77,7 +77,7 @@ impl Scribe for RouteError {
 
 #[handler]
 #[tracing::instrument(name = "handlers.oauth2.device.request.post", skip_all)]
-pub async fn post(req: &mut Request, depot: &Depot, res: &mut Response) {
+pub async fn post(req: &mut Request, depot: &mut Depot, res: &mut Response) {
     match handle_post(req, depot).await {
         Ok(response) => {
             res.headers_mut().insert(
@@ -96,8 +96,11 @@ pub async fn post(req: &mut Request, depot: &Depot, res: &mut Response) {
 
 async fn handle_post(
     req: &mut Request,
-    depot: &Depot,
+    depot: &mut Depot,
 ) -> Result<DeviceAuthorizationResponse, RouteError> {
+    let client_authorization: ClientAuthorization<DeviceAuthorizationRequest> =
+        ClientAuthorization::extract(req, depot).await?;
+
     let url_builder = depot.url_builder()?;
     let http_client = depot.http_client()?;
     let encrypter = depot.encrypter()?;
@@ -108,9 +111,6 @@ async fn handle_post(
     let clock = crate::handlers::rest::make_clock();
 
     let user_agent: Option<String> = req.header("user-agent");
-
-    let client_authorization: ClientAuthorization<DeviceAuthorizationRequest> =
-        ClientAuthorization::extract_from_request(req).await?;
 
     let client = client_authorization
         .credentials

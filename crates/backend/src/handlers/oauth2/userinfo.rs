@@ -13,7 +13,7 @@ use pasion_jose::{
 use pasion_keystore::Keystore;
 use rand::{SeedableRng, thread_rng};
 use rand_chacha::ChaChaRng;
-use salvo::prelude::*;
+use salvo::{Extractible, prelude::*};
 use serde::Serialize;
 use serde_with::skip_serializing_none;
 use thiserror::Error;
@@ -85,7 +85,7 @@ impl Scribe for RouteError {
 
 #[handler]
 #[tracing::instrument(name = "handlers.oauth2.userinfo.get", skip_all)]
-pub async fn get(req: &mut Request, depot: &Depot, res: &mut Response) {
+pub async fn get(req: &mut Request, depot: &mut Depot, res: &mut Response) {
     match handle_get(req, depot).await {
         Ok(response) => match response {
             UserinfoResponse::Json(user_info) => {
@@ -108,7 +108,16 @@ enum UserinfoResponse {
     Jwt(String),
 }
 
-async fn handle_get(req: &mut Request, depot: &Depot) -> Result<UserinfoResponse, RouteError> {
+async fn handle_get(req: &mut Request, depot: &mut Depot) -> Result<UserinfoResponse, RouteError> {
+    let user_authorization: UserAuthorization<()> = UserAuthorization::<()>::extract(req, depot)
+        .await
+        .map_err(|e| match e {
+            crate::salvo_utils::user_authorization::UserAuthorizationError::Internal(e) => {
+                RouteError::Internal(e)
+            }
+            _ => RouteError::Unauthorized,
+        })?;
+
     let url_builder = depot
         .get::<UrlBuilder>("url_builder")
         .expect("UrlBuilder not found in depot");
@@ -125,15 +134,6 @@ async fn handle_get(req: &mut Request, depot: &Depot) -> Result<UserinfoResponse
     let mut rng: BoxRng = Box::new(ChaChaRng::from_rng(thread_rng()).expect("Failed to seed rng"));
 
     let mut repo: BoxRepository = repo_factory.create().await?;
-
-    let user_authorization = UserAuthorization::<()>::extract_from_request(req)
-        .await
-        .map_err(|e| match e {
-            crate::salvo_utils::user_authorization::UserAuthorizationError::Internal(e) => {
-                RouteError::Internal(e)
-            }
-            _ => RouteError::Unauthorized,
-        })?;
     let session = user_authorization.protected(&mut repo, &clock).await?;
 
     // This endpoint requires the `openid` scope.

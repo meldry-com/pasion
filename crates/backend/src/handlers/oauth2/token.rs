@@ -15,7 +15,7 @@ use pasion_policy::Policy;
 use pasion_templates::Templates;
 use rand::{SeedableRng, thread_rng};
 use rand_chacha::ChaChaRng;
-use salvo::prelude::*;
+use salvo::{Extractible, prelude::*};
 use thiserror::Error;
 use ulid::Ulid;
 
@@ -332,7 +332,7 @@ impl From<DeviceCodeExchangeError> for RouteError {
 
 #[handler]
 #[tracing::instrument(name = "handlers.oauth2.token.post", skip_all)]
-pub async fn post(req: &mut Request, depot: &Depot, res: &mut Response) {
+pub async fn post(req: &mut Request, depot: &mut Depot, res: &mut Response) {
     match handle_post(req, depot).await {
         Ok(reply) => {
             res.headers_mut().insert(
@@ -349,7 +349,13 @@ pub async fn post(req: &mut Request, depot: &Depot, res: &mut Response) {
     }
 }
 
-async fn handle_post(req: &mut Request, depot: &Depot) -> Result<AccessTokenResponse, RouteError> {
+async fn handle_post(
+    req: &mut Request,
+    depot: &mut Depot,
+) -> Result<AccessTokenResponse, RouteError> {
+    let client_authorization: ClientAuthorization<AccessTokenRequest> =
+        ClientAuthorization::extract(req, depot).await?;
+
     let http_client = depot
         .get::<reqwest::Client>("http_client")
         .expect("reqwest::Client not found in depot");
@@ -390,9 +396,6 @@ async fn handle_post(req: &mut Request, depot: &Depot) -> Result<AccessTokenResp
         .map_err(|e| RouteError::Internal(Box::new(e)))?;
 
     let user_agent: Option<String> = req.header("user-agent");
-
-    let client_authorization: ClientAuthorization<AccessTokenRequest> =
-        ClientAuthorization::extract_from_request(req).await?;
 
     let client = client_authorization
         .credentials

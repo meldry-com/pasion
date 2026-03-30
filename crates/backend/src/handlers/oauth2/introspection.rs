@@ -11,7 +11,7 @@ use pasion_data::{BoxRepository, BoxRepositoryFactory};
 use pasion_iana::oauth::{OAuthClientAuthenticationMethod, OAuthTokenTypeHint};
 use pasion_keystore::Encrypter;
 use pasion_matrix::HomeserverConnection;
-use salvo::prelude::*;
+use salvo::{Extractible, prelude::*};
 use thiserror::Error;
 use ulid::Ulid;
 
@@ -151,7 +151,7 @@ impl_from_error_for_route!(crate::salvo_utils::client_authorization::ClientAutho
 
 #[handler]
 #[tracing::instrument(name = "handlers.oauth2.introspection.post", skip_all)]
-pub async fn post(req: &mut Request, depot: &Depot, res: &mut Response) {
+pub async fn post(req: &mut Request, depot: &mut Depot, res: &mut Response) {
     match handle_post(req, depot).await {
         Ok(reply) => {
             res.render(Json(reply));
@@ -162,8 +162,11 @@ pub async fn post(req: &mut Request, depot: &Depot, res: &mut Response) {
 
 async fn handle_post(
     req: &mut Request,
-    depot: &Depot,
+    depot: &mut Depot,
 ) -> Result<IntrospectionResponse, RouteError> {
+    let ClientAuthorization { credentials, form } =
+        ClientAuthorization::<IntrospectionRequest>::extract(req, depot).await?;
+
     let http_client = depot
         .get::<reqwest::Client>("http_client")
         .expect("reqwest::Client not found in depot");
@@ -183,9 +186,6 @@ async fn handle_post(
     let clock: BoxClock = Box::new(SystemClock::default());
 
     let mut repo: BoxRepository = repo_factory.create().await?;
-
-    let ClientAuthorization { credentials, form } =
-        ClientAuthorization::<IntrospectionRequest>::extract_from_request(req).await?;
 
     if let Some(token) = credentials.bearer_token() {
         // If the client presented a bearer token, we check with the homeserver

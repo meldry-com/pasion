@@ -1,5 +1,8 @@
+use std::sync::LazyLock;
+
 use pasion_data::BrowserSession;
 use pasion_data::RepositoryAccess;
+use salvo::extract::{Extractible, Metadata};
 use serde::{Deserialize, Serialize};
 use ulid::Ulid;
 
@@ -91,5 +94,23 @@ impl SessionInfoExt for CookieJar {
 
     fn update_session_info(self, info: &SessionInfo) -> Self {
         self.save("session", info, true)
+    }
+}
+
+static SESSION_INFO_METADATA: LazyLock<Metadata> = LazyLock::new(|| Metadata::new("SessionInfo"));
+
+impl<'ex> Extractible<'ex> for SessionInfo {
+    fn metadata() -> &'static Metadata {
+        &SESSION_INFO_METADATA
+    }
+
+    #[allow(refining_impl_trait)]
+    async fn extract(
+        req: &'ex mut salvo::Request,
+        depot: &'ex mut salvo::Depot,
+    ) -> Result<Self, salvo::http::StatusError> {
+        let cookie_jar = CookieJar::extract(req, depot).await?;
+        let (session_info, _) = cookie_jar.session_info();
+        Ok(session_info)
     }
 }

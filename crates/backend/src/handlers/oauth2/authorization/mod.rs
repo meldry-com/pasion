@@ -109,9 +109,8 @@ fn resolve_response_mode(
 pub async fn get(req: &mut Request, depot: &Depot, res: &mut Response) {
     match handle_get(req, depot).await {
         Ok((response, cookie_jar)) => {
-            // Set cookies
-            cookie_jar.write_to_response(res);
             *res = response;
+            cookie_jar.write_to_response(res);
         }
         Err(e) => e.render(res),
     }
@@ -128,9 +127,6 @@ async fn handle_get(req: &mut Request, depot: &Depot) -> Result<(Response, Cooki
         .get::<BoxRepositoryFactory>("box_repository_factory")
         .expect("BoxRepositoryFactory not found in depot");
     let activity_tracker = crate::handlers::rest::extract_bound_activity_tracker(req, depot);
-    let cookie_manager = depot
-        .get::<crate::salvo_utils::cookies::CookieManager>("cookie_manager")
-        .expect("CookieManager not found in depot");
 
     let clock: BoxClock = Box::new(SystemClock::default());
     #[allow(clippy::disallowed_methods)]
@@ -147,7 +143,8 @@ async fn handle_get(req: &mut Request, depot: &Depot) -> Result<(Response, Cooki
         .map_err(|e| RouteError::Internal(Box::new(e)))?;
 
     // Get cookie jar
-    let cookie_jar = cookie_manager.cookie_jar_from_headers(req.headers());
+    let cookie_jar = CookieJar::extract_from_request(req, depot)
+        .map_err(|e| RouteError::Internal(Box::new(e)))?;
 
     // First, figure out what client it is
     let client = repo

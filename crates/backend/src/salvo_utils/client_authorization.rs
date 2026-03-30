@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use std::{collections::HashMap, sync::LazyLock};
 
 use headers::authorization::{Basic, Bearer, Credentials as _};
 use http::StatusCode;
@@ -9,7 +9,10 @@ use pasion_http::RequestBuilderExt;
 use pasion_iana::oauth::OAuthClientAuthenticationMethod;
 use pasion_jose::{jwk::PublicJsonWebKeySet, jwt::Jwt};
 use pasion_keystore::Encrypter;
-use salvo::prelude::*;
+use salvo::{
+    extract::{Extractible, Metadata},
+    prelude::*,
+};
 use serde::{Deserialize, de::DeserializeOwned};
 use serde_json::Value;
 use thiserror::Error;
@@ -502,6 +505,26 @@ impl<F: DeserializeOwned + Send> ClientAuthorization<F> {
         };
 
         Ok(ClientAuthorization { credentials, form })
+    }
+}
+
+static CLIENT_AUTHORIZATION_METADATA: LazyLock<Metadata> =
+    LazyLock::new(|| Metadata::new("ClientAuthorization"));
+
+impl<'ex, F> Extractible<'ex> for ClientAuthorization<F>
+where
+    F: DeserializeOwned + Send,
+{
+    fn metadata() -> &'static Metadata {
+        &CLIENT_AUTHORIZATION_METADATA
+    }
+
+    #[allow(refining_impl_trait)]
+    async fn extract(
+        req: &'ex mut Request,
+        _depot: &'ex mut Depot,
+    ) -> Result<Self, ClientAuthorizationError> {
+        Self::extract_from_request(req).await
     }
 }
 

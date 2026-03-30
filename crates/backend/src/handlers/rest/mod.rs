@@ -388,7 +388,7 @@ impl DepotExt for Depot {
 
     fn cookie_jar(&self, req: &Request) -> Result<CookieJar, RouteError> {
         let cm = self.cookie_manager()?;
-        Ok(cm.cookie_jar_from_headers(req.headers()))
+        Ok(cm.cookie_jar_from_request(req.cookies()))
     }
 }
 
