@@ -9,7 +9,7 @@ use minijinja::{
     value::{Kwargs, Object, ViaDeserialize, from_args},
 };
 use pasion_i18n::{Argument, ArgumentList, DataLocale, Translator, sprintf::FormattedMessagePart};
-use pasion_router::UrlBuilder;
+use pasion_data_model::UrlBuilder;
 use std::{
     collections::{BTreeMap, HashMap},
     fmt::Formatter,

@@ -432,21 +432,21 @@ impl TestState {
             )
             // OAuth2 authorization
             .push(
-                Router::with_path(pasion_router::OAuth2AuthorizationEndpoint::route())
+                Router::with_path("/authorize")
                     .get(crate::handlers::oauth2::authorization::get),
             )
             // Upstream OAuth2
             .push(
-                Router::with_path(pasion_router::UpstreamOAuth2Authorize::route())
+                Router::with_path("/upstream/authorize/{provider_id}")
                     .get(crate::handlers::upstream_oauth2::authorize::get),
             )
             .push(
-                Router::with_path(pasion_router::UpstreamOAuth2Callback::route())
+                Router::with_path("/upstream/callback/{provider_id}")
                     .get(crate::handlers::upstream_oauth2::callback::handler)
                     .post(crate::handlers::upstream_oauth2::callback::handler),
             )
             .push(
-                Router::with_path(pasion_router::UpstreamOAuth2BackchannelLogout::route())
+                Router::with_path("/upstream/backchannel-logout/{provider_id}")
                     .post(crate::handlers::upstream_oauth2::backchannel_logout::post),
             )
             // Admin API
@@ -624,7 +624,7 @@ impl TestState {
     /// Get a token with the given scope
     pub async fn token_with_scope(&mut self, scope: &str) -> String {
         // Provision a client
-        let request = Request::post(pasion_router::OAuth2RegistrationEndpoint::PATH).json(
+        let request = Request::post("/oauth2/registration").json(
             serde_json::json!({
                 "client_uri": "https://example.com/",
                 "token_endpoint_auth_method": "client_secret_post",
@@ -653,7 +653,7 @@ impl TestState {
 
         // Ask for a token with the admin scope
         let request =
-            Request::post(pasion_router::OAuth2TokenEndpoint::PATH).form(serde_json::json!({
+            Request::post("/oauth2/token").form(serde_json::json!({
                 "grant_type": "client_credentials",
                 "client_id": client_id,
                 "client_secret": client_secret,
@@ -688,7 +688,7 @@ impl TestState {
     ///
     /// Panics if the response status code is not 200 or 401.
     pub async fn is_access_token_valid(&self, token: &str) -> bool {
-        let request = Request::get(pasion_router::OidcUserinfo::PATH)
+        let request = Request::get("/oauth2/userinfo")
             .bearer(token)
             .empty();
 

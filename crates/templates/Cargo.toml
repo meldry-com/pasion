@@ -36,7 +36,6 @@ pasion-data-model.workspace = true
 pasion-i18n.workspace = true
 pasion-iana.workspace = true
 pasion-policy.workspace = true
-pasion-router.workspace = true
 
 [dev-dependencies]
 rand_chacha.workspace = true

@@ -72,7 +72,7 @@ impl Options {
                     rand_chacha::ChaChaRng::from_entropy()
                 };
                 let url_builder =
-                    pasion_router::UrlBuilder::new("https://example.com/".parse()?, None, None);
+                    pasion_data_model::UrlBuilder::new("https://example.com/".parse()?, None, None);
                 let site_config = site_config_from_config(
                     &branding_config,
                     &matrix_config,

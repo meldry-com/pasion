@@ -24,7 +24,7 @@ use pasion_data_model::{
 use pasion_i18n::DataLocale;
 use pasion_iana::jose::JsonWebSignatureAlg;
 use pasion_policy::{Violation, ViolationCode};
-use pasion_router::{Account, PostAuthAction, UrlBuilder};
+use pasion_data_model::{PostAuthAction, UrlBuilder};
 use rand::{
     Rng, SeedableRng,
     distributions::{Alphanumeric, DistString},
@@ -402,7 +402,7 @@ impl AppContext {
     /// path (discovered from the Dioxus build output at startup).
     #[must_use]
     pub fn new(url_builder: &UrlBuilder, script_src: &str) -> Self {
-        let root = url_builder.relative_url_for(&Account::default());
+        let root = url_builder.relative_url("/account/");
         let prefix = url_builder.prefix().unwrap_or_default();
         let api_endpoint = format!("{prefix}/api/v1");
         Self {
@@ -442,8 +442,8 @@ impl ApiDocContext {
     #[must_use]
     pub fn from_url_builder(url_builder: &UrlBuilder) -> Self {
         Self {
-            openapi_url: url_builder.absolute_url_for(&pasion_router::ApiSpec),
-            callback_url: url_builder.absolute_url_for(&pasion_router::ApiDocCallback),
+            openapi_url: url_builder.absolute_url("/api/spec.json"),
+            callback_url: url_builder.absolute_url("/api/doc/oauth2-callback"),
         }
     }
 }

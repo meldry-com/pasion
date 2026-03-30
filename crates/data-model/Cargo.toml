@@ -28,7 +28,6 @@ ruma-common.workspace = true
 lettre.workspace = true
 
 serde_urlencoded.workspace = true
-url.workspace = true
 
 pasion-iana.workspace = true
 pasion-jose.workspace = true

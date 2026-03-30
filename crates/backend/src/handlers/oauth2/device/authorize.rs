@@ -196,7 +196,6 @@ mod tests {
     use oauth2_types::{
         registration::ClientRegistrationResponse, requests::DeviceAuthorizationResponse,
     };
-    use pasion_router::SimpleRoute;
 
     use crate::handlers::test_utils::{RequestBuilderExt, ResponseExt, TestState, setup};
 
@@ -207,7 +206,7 @@ mod tests {
         let state = TestState::from_pool(pool.clone()).await.unwrap();
 
         // Provision a client
-        let request = Request::post(pasion_router::OAuth2RegistrationEndpoint::PATH).json(
+        let request = Request::post("/oauth2/registration").json(
             serde_json::json!({
                 "client_uri": "https://example.com/",
                 "token_endpoint_auth_method": "none",
@@ -223,7 +222,7 @@ mod tests {
         let client_id = response.client_id;
 
         // Test the happy path: the client is allowed to use the device code grant type
-        let request = Request::post(pasion_router::OAuth2DeviceAuthorizationEndpoint::PATH).form(
+        let request = Request::post("/oauth2/device").form(
             serde_json::json!({
                 "client_id": client_id,
                 "scope": "openid",

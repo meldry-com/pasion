@@ -38,7 +38,6 @@ pasion-data-model.workspace = true
 pasion-messaging.workspace = true
 pasion-i18n.workspace = true
 pasion-matrix.workspace = true
-pasion-router.workspace = true
 pasion-storage-pg.workspace = true
 pasion-storage.workspace = true
 pasion-templates.workspace = true

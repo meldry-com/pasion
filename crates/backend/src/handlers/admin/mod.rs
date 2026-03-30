@@ -9,7 +9,6 @@
 //! [`swagger`] handler.
 
 use crate::handlers::rest::DepotExt;
-use pasion_data_model::UrlBuilder;
 use crate::salvo_utils::InternalError;
 use pasion_templates::{ApiDocContext, Templates};
 use salvo::prelude::*;

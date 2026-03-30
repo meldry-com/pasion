@@ -45,7 +45,6 @@ pasion-keystore = { path = "./crates/keystore/", version = "=1.8.0" }
 pasion-matrix = { path = "./crates/matrix/", version = "=1.8.0" }
 pasion-matrix-palpo = { path = "./crates/matrix-palpo/", version = "=1.8.0" }
 pasion-policy = { path = "./crates/policy/", version = "=1.8.0" }
-pasion-router = { path = "./crates/router/", version = "=1.8.0" }
 pasion-storage = { path = "./crates/storage/", version = "=1.8.0" }
 pasion-storage-pg = { path = "./crates/storage-pg/", version = "=1.8.0" }
 pasion-tasks = { path = "./crates/tasks/", version = "=1.8.0" }

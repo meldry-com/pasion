@@ -12,7 +12,7 @@ use pasion_context::LogContext;
 use pasion_data_model::SystemClock;
 use pasion_backend::handlers::{ActivityTracker, CookieManager, Limiter, MetadataCache};
 use pasion_backend::listener::server::Server;
-use pasion_router::UrlBuilder;
+use pasion_data_model::UrlBuilder;
 use pasion_storage_pg::PgRepositoryFactory;
 use tracing::{info, info_span, warn};
 

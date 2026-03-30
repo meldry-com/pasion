@@ -27,7 +27,7 @@ use opentelemetry::metrics::Meter;
 use pasion_data_model::{Clock, SiteConfig};
 use pasion_matrix::HomeserverConnection;
 use pasion_messaging::NotificationCenter;
-use pasion_router::UrlBuilder;
+use pasion_data_model::UrlBuilder;
 use pasion_storage::{BoxRepository, RepositoryError, RepositoryFactory};
 use pasion_storage_pg::PgRepositoryFactory;
 use rand::SeedableRng;

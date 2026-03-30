@@ -304,26 +304,19 @@ pub fn build_router(
     router = router.hoop(InjectAppState(state));
 
     // Build sub-routers for each resource
+    use crate::handlers::{health, oauth2::discovery, oauth2::webfinger};
+
     for resource in resources {
         router = match resource {
-            pasion_config::HttpResource::Health => router.push(
-                Router::with_path("/health")
-                    .get(crate::handlers::health::get),
-            ),
+            pasion_config::HttpResource::Health => {
+                router.push(Router::with_path("/health").get(health::get))
+            }
             pasion_config::HttpResource::Prometheus => {
                 router.push(Router::with_path("/metrics").get(crate::telemetry::prometheus_handler))
             }
             pasion_config::HttpResource::Discovery => router
-                .push(
-                    Router::with_path("/.well-known/openid-configuration")
-                        .hoop(public_oidc_browser_cors())
-                        .get(crate::handlers::oauth2::discovery::get),
-                )
-                .push(
-                    Router::with_path("/.well-known/webfinger")
-                        .hoop(public_oidc_browser_cors())
-                        .get(crate::handlers::oauth2::webfinger::get),
-                ),
+                .push(Router::with_path("/.well-known/openid-configuration").hoop(public_oidc_browser_cors()).get(discovery::get))
+                .push(Router::with_path("/.well-known/webfinger").hoop(public_oidc_browser_cors()).get(webfinger::get)),
             pasion_config::HttpResource::Human => build_human_router(router, templates.clone()),
             pasion_config::HttpResource::RestApi {
                 playground: _,
@@ -367,100 +360,48 @@ pub fn build_router(
 }
 
 fn build_human_router(router: Router, _templates: Templates) -> Router {
+    use crate::handlers::{oauth2::authorization, spa, upstream_oauth2};
+
     router
-        // ── OAuth2 protocol endpoints (server-side redirects, MUST stay) ──
-        .push(
-            Router::with_path("/authorize")
-                .get(crate::handlers::oauth2::authorization::get),
-        )
+        // ── OAuth2 protocol endpoints (server-side redirects) ──
+        .push(Router::with_path("/authorize").get(authorization::get))
         // ── Upstream OAuth2 (server-side redirect & callback) ──
-        .push(
-            Router::with_path("/upstream/authorize/{provider_id}")
-                .get(crate::handlers::upstream_oauth2::authorize::get),
-        )
-        .push(
-            Router::with_path("/upstream/callback/{provider_id}")
-                .get(crate::handlers::upstream_oauth2::callback::handler)
-                .post(crate::handlers::upstream_oauth2::callback::handler),
-        )
-        // Upstream link page is now served by the SPA frontend
-        .push(
-            Router::with_path("/upstream/link/{link_id}")
-                .get(crate::handlers::spa::get),
-        )
-        .push(
-            Router::with_path("/upstream/backchannel-logout/{provider_id}")
-                .post(crate::handlers::upstream_oauth2::backchannel_logout::post),
-        )
+        .push(Router::with_path("/upstream/authorize/{provider_id}").get(upstream_oauth2::authorize::get))
+        .push(Router::with_path("/upstream/callback/{provider_id}").get(upstream_oauth2::callback::handler).post(upstream_oauth2::callback::handler))
+        .push(Router::with_path("/upstream/link/{link_id}").get(spa::get))
+        .push(Router::with_path("/upstream/backchannel-logout/{provider_id}").post(upstream_oauth2::backchannel_logout::post))
         // ── Well-known redirect ──
-        .push(
-            Router::with_path("/.well-known/change-password")
-                .get(change_password_redirect_handler),
-        )
-        // ── SPA shell: all user-facing pages are rendered by the Dioxus frontend ──
-        // In production these serve the SPA HTML shell; the client-side router
-        // handles the actual page rendering.
-        .push(Router::with_path("/").get(crate::handlers::spa::get))
-        .push(Router::with_path("/login").get(crate::handlers::spa::get))
-        .push(Router::with_path("/register").get(crate::handlers::spa::get))
-        .push(Router::with_path("/register/{**rest}").get(crate::handlers::spa::get))
-        .push(Router::with_path("/recover").get(crate::handlers::spa::get))
-        .push(Router::with_path("/recover/{**rest}").get(crate::handlers::spa::get))
-        .push(Router::with_path("/consent/{**rest}").get(crate::handlers::spa::get))
-        .push(Router::with_path("/link").get(crate::handlers::spa::get))
-        .push(Router::with_path("/device/{**rest}").get(crate::handlers::spa::get))
+        .push(Router::with_path("/.well-known/change-password").get(change_password_redirect_handler))
+        // ── SPA shell ──
+        .push(Router::with_path("/").get(spa::get))
+        .push(Router::with_path("/login").get(spa::get))
+        .push(Router::with_path("/register").get(spa::get))
+        .push(Router::with_path("/register/{**rest}").get(spa::get))
+        .push(Router::with_path("/recover").get(spa::get))
+        .push(Router::with_path("/recover/{**rest}").get(spa::get))
+        .push(Router::with_path("/consent/{**rest}").get(spa::get))
+        .push(Router::with_path("/link").get(spa::get))
+        .push(Router::with_path("/device/{**rest}").get(spa::get))
         .push(Router::with_path("/account").get(account_redirect_handler))
-        .push(Router::with_path("/account/").get(crate::handlers::spa::get))
-        .push(
-            Router::with_path("/account/{*rest}")
-                .get(crate::handlers::spa::get),
-        )
+        .push(Router::with_path("/account/").get(spa::get))
+        .push(Router::with_path("/account/{*rest}").get(spa::get))
 }
 
 fn build_oauth_router(router: Router) -> Router {
+    use crate::handlers::oauth2::{
+        device, introspection, keys, registration, revoke, token, userinfo,
+    };
+
+    let cors = || public_oidc_browser_cors();
+
     router
-        .push(
-            Router::with_path("/oauth2/keys.json")
-                .hoop(public_oidc_browser_cors())
-                .get(crate::handlers::oauth2::keys::get),
-        )
-        .push(
-            Router::with_path("/oauth2/userinfo")
-                .hoop(public_oidc_browser_cors())
-                .options(oidc_preflight_handler)
-                .get(crate::handlers::oauth2::userinfo::get)
-                .post(crate::handlers::oauth2::userinfo::get),
-        )
-        .push(
-            Router::with_path("/oauth2/introspect")
-                .hoop(public_oidc_browser_cors())
-                .options(oidc_preflight_handler)
-                .post(crate::handlers::oauth2::introspection::post),
-        )
-        .push(
-            Router::with_path("/oauth2/revoke")
-                .hoop(public_oidc_browser_cors())
-                .options(oidc_preflight_handler)
-                .post(crate::handlers::oauth2::revoke::post),
-        )
-        .push(
-            Router::with_path("/oauth2/token")
-                .hoop(public_oidc_browser_cors())
-                .options(oidc_preflight_handler)
-                .post(crate::handlers::oauth2::token::post),
-        )
-        .push(
-            Router::with_path("/oauth2/registration")
-                .hoop(public_oidc_browser_cors())
-                .options(oidc_preflight_handler)
-                .post(crate::handlers::oauth2::registration::post),
-        )
-        .push(
-            Router::with_path("/oauth2/device")
-                .hoop(public_oidc_browser_cors())
-                .options(oidc_preflight_handler)
-                .post(crate::handlers::oauth2::device::authorize::post),
-        )
+        .push(Router::with_path("/oauth2/keys.json").hoop(cors()).get(keys::get))
+        .push(Router::with_path("/oauth2/userinfo").hoop(cors()).options(oidc_preflight_handler).get(userinfo::get).post(userinfo::get))
+        .push(Router::with_path("/oauth2/introspect").hoop(cors()).options(oidc_preflight_handler).post(introspection::post))
+        .push(Router::with_path("/oauth2/revoke").hoop(cors()).options(oidc_preflight_handler).post(revoke::post))
+        .push(Router::with_path("/oauth2/token").hoop(cors()).options(oidc_preflight_handler).post(token::post))
+        .push(Router::with_path("/oauth2/registration").hoop(cors()).options(oidc_preflight_handler).post(registration::post))
+        .push(Router::with_path("/oauth2/device").hoop(cors()).options(oidc_preflight_handler).post(device::authorize::post))
 }
 
 fn build_rest_api_router(router: Router) -> Router {

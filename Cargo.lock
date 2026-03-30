@@ -5544,7 +5544,6 @@ dependencies = [
  "pasion-matrix-palpo",
  "pasion-messaging",
  "pasion-policy",
- "pasion-router",
  "pasion-storage",
  "pasion-storage-pg",
  "pasion-tasks",
@@ -5638,7 +5637,6 @@ dependencies = [
  "pasion-matrix-palpo",
  "pasion-messaging",
  "pasion-policy",
- "pasion-router",
  "pasion-storage",
  "pasion-storage-pg",
  "pasion-tasks",
@@ -5744,6 +5742,7 @@ dependencies = [
  "ruma-common",
  "serde",
  "serde_json",
+ "serde_urlencoded",
  "thiserror 2.0.18",
  "ulid",
  "url",
@@ -5961,17 +5960,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "pasion-router"
-version = "1.8.0"
-dependencies = [
- "salvo",
- "serde",
- "serde_urlencoded",
- "ulid",
- "url",
-]
-
-[[package]]
 name = "pasion-storage"
 version = "1.8.0"
 dependencies = [
@@ -6045,7 +6033,6 @@ dependencies = [
  "pasion-i18n",
  "pasion-matrix",
  "pasion-messaging",
- "pasion-router",
  "pasion-storage",
  "pasion-storage-pg",
  "pasion-templates",
@@ -6078,7 +6065,6 @@ dependencies = [
  "pasion-i18n",
  "pasion-iana",
  "pasion-policy",
- "pasion-router",
  "rand 0.8.5",
  "rand_chacha 0.3.1",
  "serde",

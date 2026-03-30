@@ -4,7 +4,7 @@ use clap::Parser;
 use figment::Figment;
 use pasion_config::{AppConfig, ConfigurationSection};
 use pasion_data_model::SystemClock;
-use pasion_router::UrlBuilder;
+use pasion_data_model::UrlBuilder;
 use pasion_storage_pg::PgRepositoryFactory;
 use tracing::{info, info_span};
 

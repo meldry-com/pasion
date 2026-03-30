@@ -492,7 +492,7 @@ fn parse_payload<T: for<'de> Deserialize<'de>>(
 
 async fn prepare_delivery(
     repo: &mut BoxRepository,
-    url_builder: &pasion_router::UrlBuilder,
+    url_builder: &pasion_data_model::UrlBuilder,
     request: &PersistedNotificationRequest,
     delivery: &NotificationDelivery,
 ) -> Result<PreparedDelivery, anyhow::Error> {
