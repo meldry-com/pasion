@@ -1,28 +1,15 @@
-use std::{
-    net::IpAddr,
-    sync::{Arc, LazyLock},
-};
+use std::sync::LazyLock;
 
-use minijinja::Environment;
 use opentelemetry::{Key, KeyValue, metrics::Counter};
-use pasion_data_model::{
-    UpstreamOAuthAuthorizationSession, UpstreamOAuthProviderOnConflict, UserRegistration,
-};
-use pasion_jose::jwt::Jwt;
-use pasion_matrix::HomeserverConnection;
 use pasion_salvo_utils::{
     GenericError, SessionInfoExt,
-    cookies::CookieJar,
     csrf::{CsrfExt, ProtectedForm},
     record_error,
 };
 use pasion_storage::{
-    Pagination, RepositoryAccess,
-    upstream_oauth2::{
-        UpstreamOAuthLinkFilter, UpstreamOAuthLinkRepository, UpstreamOAuthProviderRepository,
-        UpstreamOAuthSessionRepository,
-    },
-    user::{BrowserSessionRepository, UserEmailRepository, UserRepository},
+    RepositoryAccess,
+    upstream_oauth2::{UpstreamOAuthLinkRepository, UpstreamOAuthProviderRepository},
+    user::UserRepository,
 };
 use pasion_templates::{
     AccountInactiveContext, ErrorContext, FieldError, FormError, TemplateContext, Templates,
@@ -33,13 +20,14 @@ use serde::{Deserialize, Serialize};
 use thiserror::Error;
 use ulid::Ulid;
 
-use super::{
-    UpstreamSessionsCookie,
-    template::{AttributeMappingContext, environment},
-};
+use super::UpstreamSessionsCookie;
 use crate::{
-    BoundActivityTracker, METER, SiteConfig, impl_from_error_for_route,
-    post_auth::OptionalPostAuthAction,
+    METER, impl_from_error_for_route,
+    upstream_link_workflow::{
+        LoadUpstreamLinkOutcome, SubmitUpstreamLinkError, SubmitUpstreamLinkOutcome,
+        UpstreamLinkAction, UpstreamLinkRegistrationAction, UpstreamLinkWorkflowError,
+        load_upstream_link_context, load_upstream_link_state, submit_upstream_link_action,
+    },
     user_registration_cookie::UserRegistrationSessions as UserRegistrationSessionsCookie,
 };
 
@@ -59,55 +47,17 @@ static REGISTRATION_COUNTER: LazyLock<Counter<u64>> = LazyLock::new(|| {
 });
 const PROVIDER: Key = Key::from_static_str("provider");
 
-const DEFAULT_LOCALPART_TEMPLATE: &str = "{{ user.preferred_username }}";
-const DEFAULT_DISPLAYNAME_TEMPLATE: &str = "{{ user.name }}";
-const DEFAULT_EMAIL_TEMPLATE: &str = "{{ user.email }}";
-
 #[derive(Debug, Error)]
 pub enum RouteError {
     /// Couldn't find the link specified in the URL
     #[error("Link not found")]
     LinkNotFound,
 
-    /// Couldn't find the session on the link
-    #[error("Session {0} not found")]
-    SessionNotFound(Ulid),
-
-    /// Couldn't find the user
-    #[error("User {0} not found")]
-    UserNotFound(Ulid),
-
-    /// Couldn't find upstream provider
-    #[error("Upstream provider {0} not found")]
-    ProviderNotFound(Ulid),
-
-    /// Required attribute rendered to an empty string
-    #[error("Template {template:?} rendered to an empty string")]
-    RequiredAttributeEmpty { template: String },
-
-    /// Required claim was missing in `id_token`
-    #[error(
-        "Template {template:?} could not be rendered from the upstream provider's response for required claim"
-    )]
-    RequiredAttributeRender {
-        template: String,
-
-        #[source]
-        source: minijinja::Error,
-    },
-
-    /// Session was already consumed
-    #[error("Session {0} already consumed")]
-    SessionConsumed(Ulid),
-
-    #[error("Missing session cookie")]
-    MissingCookie,
-
     #[error("Invalid form action")]
     InvalidFormAction,
 
-    #[error("Homeserver connection error")]
-    HomeserverConnection(#[source] anyhow::Error),
+    #[error("Upstream link workflow error")]
+    Workflow(#[source] UpstreamLinkWorkflowError),
 
     #[error(transparent)]
     Internal(Box<dyn std::error::Error + Send + Sync + 'static>),
@@ -118,22 +68,21 @@ impl_from_error_for_route!(pasion_salvo_utils::csrf::CsrfError);
 impl_from_error_for_route!(super::cookie::UpstreamSessionNotFound);
 impl_from_error_for_route!(pasion_storage::RepositoryError);
 impl_from_error_for_route!(crate::rest::RouteError);
-impl_from_error_for_route!(pasion_policy::EvaluationError);
 impl_from_error_for_route!(pasion_policy::InstantiateError);
-impl_from_error_for_route!(pasion_jose::jwt::JwtDecodeError);
 impl_from_error_for_route!(salvo::http::ParseError);
+
+impl From<UpstreamLinkWorkflowError> for RouteError {
+    fn from(error: UpstreamLinkWorkflowError) -> Self {
+        Self::Workflow(error)
+    }
+}
 
 impl Scribe for RouteError {
     fn render(self, res: &mut Response) {
         let sentry_event_id = record_error!(
             self,
             Self::Internal(_)
-                | Self::RequiredAttributeEmpty { .. }
-                | Self::RequiredAttributeRender { .. }
-                | Self::SessionNotFound(_)
-                | Self::ProviderNotFound(_)
-                | Self::UserNotFound(_)
-                | Self::HomeserverConnection(_)
+                | Self::Workflow(_)
         );
 
         let status_code = match self {
@@ -145,51 +94,6 @@ impl Scribe for RouteError {
 
         if let Some(event_id) = sentry_event_id {
             event_id.write_to_response(res);
-        }
-    }
-}
-
-/// Utility function to render an attribute template.
-///
-/// # Parameters
-///
-/// * `environment` - The minijinja environment to use to render the template
-/// * `template` - The template to use to render the claim
-/// * `required` - Whether the attribute is required or not
-///
-/// # Errors
-///
-/// Returns an error if the attribute is required but fails to render or is
-/// empty
-fn render_attribute_template(
-    environment: &Environment,
-    template: &str,
-    context: &minijinja::Value,
-    required: bool,
-) -> Result<Option<String>, RouteError> {
-    match environment.render_str(template, context) {
-        Ok(value) if value.is_empty() => {
-            if required {
-                return Err(RouteError::RequiredAttributeEmpty {
-                    template: template.to_owned(),
-                });
-            }
-
-            Ok(None)
-        }
-
-        Ok(value) => Ok(Some(value)),
-
-        Err(source) => {
-            if required {
-                return Err(RouteError::RequiredAttributeRender {
-                    template: template.to_owned(),
-                    source,
-                });
-            }
-
-            tracing::warn!(error = &source as &dyn std::error::Error, %template, "Error while rendering template");
-            Ok(None)
         }
     }
 }
@@ -230,7 +134,6 @@ pub async fn get(
     let url_builder = depot.url_builder()?;
     let homeserver = depot.homeserver()?;
     let cookie_jar = depot.cookie_jar(req)?;
-    let activity_tracker = crate::rest::extract_bound_activity_tracker(req, depot);
     let user_agent = req
         .headers()
         .get(http::header::USER_AGENT)
@@ -239,611 +142,256 @@ pub async fn get(
 
     let policy_factory = depot.policy_factory()?;
     let mut policy = policy_factory.instantiate().await?;
+    let site_config = depot.site_config()?;
+    let ip_address = crate::rest::extract_bound_activity_tracker(req, depot).ip();
 
     let sessions_cookie = UpstreamSessionsCookie::load(&cookie_jar);
-    let (session_id, post_auth_action) = sessions_cookie
-        .lookup_link(link_id)
-        .map_err(|_| RouteError::MissingCookie)?;
+    let (session_info, cookie_jar) = cookie_jar.session_info();
+    let (csrf_token, cookie_jar) = cookie_jar.csrf_token(&clock, &mut rng);
 
-    let link = repo
-        .upstream_oauth_link()
-        .lookup(link_id)
-        .await?
-        .ok_or(RouteError::LinkNotFound)?;
+    let context = load_upstream_link_context(&mut repo, &session_info, &sessions_cookie, link_id)
+        .await?;
 
-    let upstream_session = repo
-        .upstream_oauth_session()
-        .lookup(session_id)
-        .await?
-        .ok_or(RouteError::SessionNotFound(session_id))?;
+    // We need to stash the browser session before it's consumed by
+    // load_upstream_link_state, so we can use it for template rendering.
+    let browser_session_for_template = context.browser_session.clone();
 
-    // This checks that we're in a browser session which is allowed to consume this
-    // link: the upstream auth session should have been started in this browser.
-    if upstream_session.link_id() != Some(link.id) {
-        return Err(RouteError::SessionNotFound(session_id));
-    }
+    let outcome = match load_upstream_link_state(
+        &mut repo,
+        &mut *rng,
+        &*clock,
+        &url_builder,
+        &*homeserver,
+        &mut policy,
+        &site_config,
+        user_agent,
+        ip_address,
+        context,
+    )
+    .await
+    {
+        Ok(outcome) => outcome,
+        Err(
+            UpstreamLinkWorkflowError::ConflictFail { ref localpart }
+            | UpstreamLinkWorkflowError::ConflictSetBlocked { ref localpart },
+        ) => {
+            // TODO: translate
+            let ctx = ErrorContext::new()
+                .with_code("User exists")
+                .with_description(format!(
+                    "Upstream account provider returned {localpart:?} as username, \
+                     which could not be linked automatically."
+                ))
+                .with_language(&locale);
 
-    if upstream_session.is_consumed() {
-        return Err(RouteError::SessionConsumed(session_id));
-    }
+            cookie_jar.write_to_response(&mut *res);
+            res.render(Text::Html(templates.render_error(&ctx)?));
+            return Ok(());
+        }
+        Err(UpstreamLinkWorkflowError::PolicyDeniedLocalpart {
+            ref localpart,
+            ref detail,
+        }) => {
+            // TODO: translate
+            let ctx = ErrorContext::new()
+                .with_code("Policy error")
+                .with_description(format!(
+                    "Upstream account provider returned {localpart:?} as username, \
+                     which does not pass the policy check: {detail}"
+                ))
+                .with_language(&locale);
 
-    let (user_session_info, cookie_jar) = cookie_jar.session_info();
-    let (csrf_token, mut cookie_jar) = cookie_jar.csrf_token(&clock, &mut rng);
-    let maybe_user_session = user_session_info.load_active_session(&mut repo).await?;
+            cookie_jar.write_to_response(&mut *res);
+            res.render(Text::Html(templates.render_error(&ctx)?));
+            return Ok(());
+        }
+        Err(UpstreamLinkWorkflowError::LocalpartUnavailable { ref localpart }) => {
+            // TODO: translate
+            let ctx = ErrorContext::new()
+                .with_code("Localpart not available")
+                .with_description(format!(
+                    "Localpart {localpart:?} is not available on this homeserver"
+                ))
+                .with_language(&locale);
 
-    let response = match (maybe_user_session, link.user_id) {
-        (Some(session), Some(user_id)) if session.user.id == user_id => {
-            // Session already linked, and link matches the currently logged
-            // user. Mark the session as consumed and renew the authentication.
-            let upstream_session = repo
-                .upstream_oauth_session()
-                .consume(&clock, upstream_session, &session)
-                .await?;
+            cookie_jar.write_to_response(&mut *res);
+            res.render(Text::Html(templates.render_error(&ctx)?));
+            return Ok(());
+        }
+        Err(e) => return Err(e.into()),
+    };
 
-            repo.browser_session()
-                .authenticate_with_upstream(&mut rng, &clock, &session, &upstream_session)
-                .await?;
+    match outcome {
+        LoadUpstreamLinkOutcome::Authenticated {
+            session,
+            redirect_url,
+        } => {
+            let cookie_jar = cookie_jar.set_session(&session);
+            repo.save().await?;
 
-            cookie_jar = cookie_jar.set_session(&session);
+            cookie_jar.write_to_response(res);
+            res.render(Redirect::other(&redirect_url));
+        }
+
+        LoadUpstreamLinkOutcome::LoggedIn {
+            session,
+            redirect_url,
+            provider_id,
+        } => {
+            let cookie_jar = sessions_cookie
+                .consume_link(link_id)?
+                .save(cookie_jar, &clock)
+                .set_session(&session);
 
             repo.save().await?;
 
-            let post_auth_action = OptionalPostAuthAction {
-                post_auth_action: post_auth_action.cloned(),
-            };
+            LOGIN_COUNTER.add(1, &[KeyValue::new(PROVIDER, provider_id.to_string())]);
 
             cookie_jar.write_to_response(res);
-            res.render(post_auth_action.go_next(&url_builder));
-            return Ok(());
+            res.render(Redirect::other(&redirect_url));
         }
 
-        (Some(user_session), Some(user_id)) => {
-            // Session already linked, but link doesn't match the currently
-            // logged user. Suggest logging out of the current user
-            // and logging in with the new one
+        LoadUpstreamLinkOutcome::LinkMismatch { existing_username } => {
+            // Look up the user again for the template context (needs the full User object)
             let user = repo
                 .user()
-                .lookup(user_id)
+                .find_by_username(&existing_username)
                 .await?
-                .ok_or(RouteError::UserNotFound(user_id))?;
+                .ok_or_else(|| {
+                    RouteError::Internal(
+                        format!("User {existing_username:?} not found for link mismatch template")
+                            .into(),
+                    )
+                })?;
+
+            // LinkMismatch only occurs when there's a logged-in user session
+            let user_session = browser_session_for_template.ok_or_else(|| {
+                RouteError::Internal("LinkMismatch without a browser session".into())
+            })?;
 
             let ctx = UpstreamExistingLinkContext::new(user)
                 .with_session(user_session)
                 .with_csrf(csrf_token.form_value())
                 .with_language(locale);
 
-            templates.render_upstream_oauth2_link_mismatch(&ctx)?
+            cookie_jar.write_to_response(res);
+            res.render(Text::Html(
+                templates.render_upstream_oauth2_link_mismatch(&ctx)?,
+            ));
         }
 
-        (Some(user_session), None) => {
-            // Session not linked, but user logged in: suggest linking account
+        LoadUpstreamLinkOutcome::SuggestLink {
+            provider_name: _,
+            upstream_subject: _,
+        } => {
+            // Re-load the link to construct the template context.
+            let link = repo
+                .upstream_oauth_link()
+                .lookup(link_id)
+                .await?
+                .ok_or(RouteError::LinkNotFound)?;
+
+            // SuggestLink only occurs when there's a logged-in user session
+            let user_session = browser_session_for_template.ok_or_else(|| {
+                RouteError::Internal("SuggestLink without a browser session".into())
+            })?;
+
             let ctx = UpstreamSuggestLink::new(&link)
                 .with_session(user_session)
                 .with_csrf(csrf_token.form_value())
                 .with_language(locale);
 
-            templates.render_upstream_oauth2_suggest_link(&ctx)?
-        }
-
-        (None, Some(user_id)) => {
-            // Session linked, but user not logged in: do the login
-            let user = repo
-                .user()
-                .lookup(user_id)
-                .await?
-                .ok_or(RouteError::UserNotFound(user_id))?;
-
-            // Check that the user is not locked or deactivated
-            if user.deactivated_at.is_some() {
-                // The account is deactivated, show the 'account deactivated' fallback
-                let ctx = AccountInactiveContext::new(user)
-                    .with_csrf(csrf_token.form_value())
-                    .with_language(locale);
-                let fallback = templates.render_account_deactivated(&ctx)?;
-                cookie_jar.write_to_response(res);
-                res.render(Text::Html(fallback));
-                return Ok(());
-            }
-
-            if user.locked_at.is_some() {
-                // The account is locked, show the 'account locked' fallback
-                let ctx = AccountInactiveContext::new(user)
-                    .with_csrf(csrf_token.form_value())
-                    .with_language(locale);
-                let fallback = templates.render_account_locked(&ctx)?;
-                cookie_jar.write_to_response(res);
-                res.render(Text::Html(fallback));
-                return Ok(());
-            }
-
-            let session = repo
-                .browser_session()
-                .add(&mut rng, &clock, &user, user_agent.clone())
-                .await?;
-
-            let upstream_session = repo
-                .upstream_oauth_session()
-                .consume(&clock, upstream_session, &session)
-                .await?;
-
-            repo.browser_session()
-                .authenticate_with_upstream(&mut rng, &clock, &session, &upstream_session)
-                .await?;
-
-            let post_auth_action = OptionalPostAuthAction {
-                post_auth_action: post_auth_action.cloned(),
-            };
-
-            cookie_jar = sessions_cookie
-                .consume_link(link_id)?
-                .save(cookie_jar, &clock);
-            cookie_jar = cookie_jar.set_session(&session);
-
-            repo.save().await?;
-
-            LOGIN_COUNTER.add(
-                1,
-                &[KeyValue::new(
-                    PROVIDER,
-                    upstream_session.provider_id.to_string(),
-                )],
-            );
-
             cookie_jar.write_to_response(res);
-            res.render(post_auth_action.go_next(&url_builder));
-            return Ok(());
+            res.render(Text::Html(
+                templates.render_upstream_oauth2_suggest_link(&ctx)?,
+            ));
         }
 
-        (None, None) => {
-            // Session not linked and used not logged in: suggest creating an
-            // account or logging in an existing user
-            let id_token = upstream_session.id_token().map(Jwt::try_from).transpose()?;
+        LoadUpstreamLinkOutcome::Register { screen } => {
+            let mut ctx = UpstreamRegister::new(screen.link, screen.provider);
 
-            let provider = repo
-                .upstream_oauth_provider()
-                .lookup(link.provider_id)
-                .await?
-                .ok_or(RouteError::ProviderNotFound(link.provider_id))?;
-
-            let env = environment();
-
-            let mut context = AttributeMappingContext::new();
-            if let Some(id_token) = id_token {
-                let (_, payload) = id_token.into_parts();
-                context = context.with_id_token_claims(payload);
-            }
-            if let Some(extra_callback_parameters) = upstream_session.extra_callback_parameters() {
-                context = context.with_extra_callback_parameters(extra_callback_parameters.clone());
-            }
-            if let Some(userinfo) = upstream_session.userinfo() {
-                context = context.with_userinfo_claims(userinfo.clone());
-            }
-            let context = context.build();
-
-            let displayname = if provider.claims_imports.displayname.ignore() {
-                None
-            } else {
-                let template = provider
-                    .claims_imports
-                    .displayname
-                    .template
-                    .as_deref()
-                    .unwrap_or(DEFAULT_DISPLAYNAME_TEMPLATE);
-
-                render_attribute_template(
-                    &env,
-                    template,
-                    &context,
-                    provider.claims_imports.displayname.is_required(),
-                )?
-            };
-
-            let email = if provider.claims_imports.email.ignore() {
-                None
-            } else {
-                let template = provider
-                    .claims_imports
-                    .email
-                    .template
-                    .as_deref()
-                    .unwrap_or(DEFAULT_EMAIL_TEMPLATE);
-
-                render_attribute_template(
-                    &env,
-                    template,
-                    &context,
-                    provider.claims_imports.email.is_required(),
-                )?
-            };
-
-            // We do a bunch of checks for the localpart. Instead of using nested ifs all
-            // the way, we use a labelled block, and use `break` for 'exiting' early when
-            // needed
-            let localpart = 'localpart: {
-                if provider.claims_imports.localpart.ignore() {
-                    break 'localpart None;
-                }
-
-                let template = provider
-                    .claims_imports
-                    .localpart
-                    .template
-                    .as_deref()
-                    .unwrap_or(DEFAULT_LOCALPART_TEMPLATE);
-
-                let Some(localpart) = render_attribute_template(
-                    &env,
-                    template,
-                    &context,
-                    provider.claims_imports.localpart.is_required(),
-                )?
-                else {
-                    break 'localpart None;
-                };
-
-                let forced_or_required = provider.claims_imports.localpart.is_forced_or_required();
-
-                // We've got a localpart from the template. Let's run the policy
-                // engine on this registration and react early to a problem on
-                // the username
-                let eval_result = policy
-                    .evaluate_register(pasion_policy::RegisterInput {
-                        registration_method: pasion_policy::RegistrationMethod::UpstreamOAuth2,
-                        username: &localpart,
-                        email: email.as_deref(),
-                        requester: pasion_policy::Requester {
-                            ip_address: activity_tracker.ip(),
-                            user_agent: user_agent.clone(),
-                            ..Default::default()
-                        },
-                    })
-                    .await?;
-
-                // We don't do a full policy check at this point, only look for violations on
-                // the username
-                if eval_result
-                    .violations
-                    .iter()
-                    .any(|violation| violation.field.as_deref() == Some("username"))
-                {
-                    if !forced_or_required {
-                        tracing::warn!(
-                            upstream_oauth_provider.id = %provider.id,
-                            upstream_oauth_link.id = %link.id,
-                            "Upstream provider returned a localpart {localpart:?} which was denied by the policy ({eval_result}). As the username is just a suggestion, it was ignored."
-                        );
-                        break 'localpart None;
-                    }
-
-                    // If the username policy check fails, we display an error message.
-                    // TODO: translate
-                    let ctx = ErrorContext::new()
-                        .with_code("Policy error")
-                        .with_description(format!(
-                            r"Upstream account provider returned {localpart:?} as username,
-                            which does not pass the policy check: {eval_result}"
-                        ))
-                        .with_language(&locale);
-
-                    cookie_jar.write_to_response(&mut *res);
-                    res.render(Text::Html(templates.render_error(&ctx)?));
-                    return Ok(());
-                }
-
-                // We got a localpart from the template. We need to check if it's
-                // available, and if it's not apply the conflict resolution setup in
-                // the config
-                let maybe_existing_user = repo.user().find_by_username(&localpart).await?;
-                if let Some(existing_user) = maybe_existing_user {
-                    if !forced_or_required {
-                        tracing::warn!(
-                            upstream_oauth_provider.id = %provider.id,
-                            upstream_oauth_link.id = %link.id,
-                            user.id = %existing_user.id,
-                            "Upstream provider returned a localpart {localpart:?} which is already used by another user. As the username is just a suggestion, it was ignored."
-                        );
-                        break 'localpart None;
-                    }
-
-                    match provider.claims_imports.localpart.on_conflict {
-                        // We matched an existing user, but the server doesn't allow us to link to
-                        // existing users automatically. In this case, we error out
-                        UpstreamOAuthProviderOnConflict::Fail => {
-                            tracing::warn!(
-                                upstream_oauth_provider.id = %provider.id,
-                                upstream_oauth_link.id = %link.id,
-                                user.id = %existing_user.id,
-                                "Upstream provider returned a localpart {localpart:?} which is already used by another user. Configuration doesn't allow for automatic linking of existing users."
-                            );
-
-                            // TODO: translate
-                            let ctx = ErrorContext::new()
-                                .with_code("User exists")
-                                .with_description(format!(
-                                    r"Upstream account provider returned {localpart:?} as username,
-                                    which is not linked to that upstream account. Your homeserver does not allow
-                                    linking an upstream account to an existing account"
-                                ))
-                                .with_language(&locale);
-
-                            cookie_jar.write_to_response(&mut *res);
-                            res.render(Text::Html(templates.render_error(&ctx)?));
-                            return Ok(());
-                        }
-
-                        // We matched an existing user and the conflict resolution is to add the
-                        // link to the existing user. In this case, we add the link
-                        UpstreamOAuthProviderOnConflict::Add => {
-                            tracing::info!(
-                                user.id = %existing_user.id,
-                                upstream_oauth_provider.id = %provider.id,
-                                upstream_oauth_link.id = %link.id,
-                                upstream_oauth_link.subject = link.subject,
-                                "Upstream account mapped localpart {localpart:?} matched an existing user, linking"
-                            );
-
-                            // Add link to the user
-                            repo.upstream_oauth_link()
-                                .associate_to_user(&link, &existing_user)
-                                .await?;
-                        }
-
-                        // We matched an existing user and the conflict resolution is to replace any
-                        // link on the existing user with this one
-                        UpstreamOAuthProviderOnConflict::Replace => {
-                            // Find existing links for this provider and user
-                            let filter = UpstreamOAuthLinkFilter::new()
-                                .for_provider(&provider)
-                                .for_user(&existing_user);
-                            let mut cursor = Pagination::first(100);
-                            let mut removed = 0;
-                            loop {
-                                let page = repo.upstream_oauth_link().list(filter, cursor).await?;
-                                for edge in page.edges {
-                                    // Remove any existing links for this provider and user
-                                    repo.upstream_oauth_link().remove(&clock, edge.node).await?;
-                                    cursor = cursor.after(edge.cursor);
-                                    removed += 1;
-                                }
-
-                                if !page.has_next_page {
-                                    break;
-                                }
-                            }
-
-                            if removed > 0 {
-                                tracing::warn!(
-                                    user.id = %existing_user.id,
-                                    upstream_oauth_provider.id = %provider.id,
-                                    upstream_oauth_link.id = %link.id,
-                                    upstream_oauth_link.subject = link.subject,
-                                    "Upstream account mapped localpart {localpart:?} matched an existing user, replaced {removed} links"
-                                );
-                            } else {
-                                tracing::info!(
-                                    user.id = %existing_user.id,
-                                    upstream_oauth_provider.id = %provider.id,
-                                    upstream_oauth_link.id = %link.id,
-                                    upstream_oauth_link.subject = link.subject,
-                                    "Upstream account mapped localpart {localpart:?} matched an existing user, linking"
-                                );
-                            }
-
-                            // Add link to the user
-                            repo.upstream_oauth_link()
-                                .associate_to_user(&link, &existing_user)
-                                .await?;
-                        }
-
-                        // We matched an existing user and the conflict resolution is to link to the
-                        // existing user *only if* there is no existing link on that user
-                        UpstreamOAuthProviderOnConflict::Set => {
-                            // Find existing links for this provider and user
-                            let filter = UpstreamOAuthLinkFilter::new()
-                                .for_provider(&provider)
-                                .for_user(&existing_user);
-
-                            let count = repo.upstream_oauth_link().count(filter).await?;
-                            if count > 0 {
-                                tracing::warn!(
-                                    upstream_oauth_provider.id = %provider.id,
-                                    upstream_oauth_link.id = %link.id,
-                                    user.id = %existing_user.id,
-                                    "Upstream provider returned a localpart {localpart:?} matching an existing user who already has {count} link(s) to this provider, which isn't allowed by the conflict resolution"
-                                );
-
-                                // TODO: translate
-                                let ctx = ErrorContext::new()
-                                    .with_code("User exists")
-                                    .with_description(format!(
-                                        r"Upstream account provider returned {localpart:?} as username,
-                                        but this user already has an existing link to this provider.
-                                        Your homeserver does not allow replacing upstream account links automatically."
-                                    ))
-                                    .with_language(&locale);
-
-                                cookie_jar.write_to_response(&mut *res);
-                                res.render(Text::Html(templates.render_error(&ctx)?));
-                                return Ok(());
-                            }
-
-                            // Add link to the user
-                            repo.upstream_oauth_link()
-                                .associate_to_user(&link, &existing_user)
-                                .await?;
-                        }
-                    }
-
-                    // Now that we've resolved the conflict, log in that existing user
-
-                    // Check that the user is not locked or deactivated
-                    if existing_user.deactivated_at.is_some() {
-                        // The account is deactivated, show the 'account deactivated' fallback
-                        let ctx = AccountInactiveContext::new(existing_user)
-                            .with_csrf(csrf_token.form_value())
-                            .with_language(locale);
-                        let fallback = templates.render_account_deactivated(&ctx)?;
-                        cookie_jar.write_to_response(res);
-                        res.render(Text::Html(fallback));
-                        return Ok(());
-                    }
-
-                    if existing_user.locked_at.is_some() {
-                        // The account is locked, show the 'account locked' fallback
-                        let ctx = AccountInactiveContext::new(existing_user)
-                            .with_csrf(csrf_token.form_value())
-                            .with_language(locale);
-                        let fallback = templates.render_account_locked(&ctx)?;
-                        cookie_jar.write_to_response(res);
-                        res.render(Text::Html(fallback));
-                        return Ok(());
-                    }
-
-                    let session = repo
-                        .browser_session()
-                        .add(&mut rng, &clock, &existing_user, user_agent.clone())
-                        .await?;
-
-                    let upstream_session = repo
-                        .upstream_oauth_session()
-                        .consume(&clock, upstream_session, &session)
-                        .await?;
-
-                    repo.browser_session()
-                        .authenticate_with_upstream(&mut rng, &clock, &session, &upstream_session)
-                        .await?;
-
-                    let post_auth_action = OptionalPostAuthAction {
-                        post_auth_action: post_auth_action.cloned(),
-                    };
-
-                    let cookie_jar = sessions_cookie
-                        .consume_link(link_id)?
-                        .save(cookie_jar, &clock)
-                        .set_session(&session);
-
-                    repo.save().await?;
-
-                    // Count this 'on-the-fly' linking as a login
-                    LOGIN_COUNTER.add(
-                        1,
-                        &[KeyValue::new(
-                            PROVIDER,
-                            upstream_session.provider_id.to_string(),
-                        )],
-                    );
-
-                    cookie_jar.write_to_response(res);
-                    res.render(post_auth_action.go_next(&url_builder));
-                    return Ok(());
-                }
-
-                // Now let's check if the localpart is allowed by the homeserver. It's possible
-                // that it's plain invalid (although that should have been caught by the
-                // policy), or just reserved by an application service
-                let is_available = homeserver
-                    .is_localpart_available(&localpart)
-                    .await
-                    .map_err(RouteError::HomeserverConnection)?;
-
-                if !is_available {
-                    if !forced_or_required {
-                        tracing::warn!(
-                            upstream_oauth_provider.id = %provider.id,
-                            upstream_oauth_link.id = %link.id,
-                            "Upstream provider returned a localpart {localpart:?} which isn't available on the homeserver. As the username is just a suggestion, it was ignored."
-                        );
-                        break 'localpart None;
-                    }
-
-                    // TODO: translate
-                    let ctx = ErrorContext::new()
-                        .with_code("Localpart not available")
-                        .with_description(format!(
-                            r"Localpart {localpart:?} is not available on this homeserver"
-                        ))
-                        .with_language(&locale);
-
-                    cookie_jar.write_to_response(&mut *res);
-                    res.render(Text::Html(templates.render_error(&ctx)?));
-                    return Ok(());
-                }
-
-                Some(localpart)
-            };
-
-            if provider.claims_imports.skip_confirmation {
-                let Some(localpart) = localpart else {
-                    return Err(RouteError::Internal(
-                        "No localpart available even though the provider is configured to skip confirmation, this is a bug!".into()
-                    ));
-                };
-
-                // Register on the fly
-                REGISTRATION_COUNTER.add(1, &[KeyValue::new(PROVIDER, provider.id.to_string())]);
-
-                let registration = prepare_user_registration(
-                    &mut rng,
-                    &clock,
-                    &mut repo,
-                    upstream_session,
-                    localpart,
-                    displayname,
-                    email,
-                    activity_tracker.ip(),
-                    user_agent,
-                    post_auth_action.map(|action| serde_json::json!(action)),
-                )
-                .await?;
-
-                let registrations = UserRegistrationSessionsCookie::load(&cookie_jar);
-
-                let cookie_jar = sessions_cookie
-                    .consume_link(link_id)?
-                    .save(cookie_jar, &clock);
-
-                let cookie_jar = registrations.add(&registration).save(cookie_jar, &clock);
-
-                repo.save().await?;
-
-                // Redirect to the user registration flow, in case we have any other step to
-                // finish
-                cookie_jar.write_to_response(&mut *res);
-                res.render(
-                    url_builder.redirect(&pasion_router::RegisterFinish::new(registration.id)),
-                );
-                return Ok(());
+            if let Some(localpart) = screen.suggested_username {
+                ctx = ctx.with_localpart(localpart, screen.username_forced);
             }
 
-            // Else we show the upstream registration screen
-            let mut ctx = UpstreamRegister::new(link.clone(), provider.clone());
-
-            if let Some(localpart) = localpart {
-                ctx = ctx.with_localpart(
-                    localpart,
-                    provider.claims_imports.localpart.is_forced_or_required(),
-                );
+            if let Some(display_name) = screen.suggested_display_name {
+                ctx = ctx.with_display_name(display_name, screen.display_name_forced);
             }
 
-            if let Some(displayname) = displayname {
-                ctx = ctx.with_display_name(
-                    displayname,
-                    provider.claims_imports.displayname.is_forced_or_required(),
-                );
-            }
-
-            if let Some(email) = email {
-                ctx = ctx.with_email(email, provider.claims_imports.email.is_forced_or_required());
+            if let Some(email) = screen.suggested_email {
+                ctx = ctx.with_email(email, screen.email_forced);
             }
 
             let ctx = ctx.with_csrf(csrf_token.form_value()).with_language(locale);
 
-            templates.render_upstream_oauth2_do_register(&ctx)?
+            cookie_jar.write_to_response(res);
+            res.render(Text::Html(
+                templates.render_upstream_oauth2_do_register(&ctx)?,
+            ));
         }
-    };
 
-    cookie_jar.write_to_response(res);
-    res.render(Text::Html(response));
+        LoadUpstreamLinkOutcome::Registered {
+            registration,
+            redirect_url: _,
+            provider_id,
+        } => {
+            let registrations = UserRegistrationSessionsCookie::load(&cookie_jar);
+            let cookie_jar = sessions_cookie
+                .consume_link(link_id)?
+                .save(cookie_jar, &clock);
+            let cookie_jar = registrations.add(&registration).save(cookie_jar, &clock);
+
+            repo.save().await?;
+
+            REGISTRATION_COUNTER.add(1, &[KeyValue::new(PROVIDER, provider_id.to_string())]);
+
+            cookie_jar.write_to_response(&mut *res);
+            res.render(
+                url_builder.redirect(&pasion_router::RegisterFinish::new(registration.id)),
+            );
+        }
+
+        LoadUpstreamLinkOutcome::AccountDeactivated { username } => {
+            let user = repo
+                .user()
+                .find_by_username(&username)
+                .await?
+                .ok_or_else(|| {
+                    RouteError::Internal(
+                        format!("User {username:?} not found for deactivated template").into(),
+                    )
+                })?;
+
+            let ctx = AccountInactiveContext::new(user)
+                .with_csrf(csrf_token.form_value())
+                .with_language(locale);
+            let fallback = templates.render_account_deactivated(&ctx)?;
+
+            cookie_jar.write_to_response(res);
+            res.render(Text::Html(fallback));
+        }
+
+        LoadUpstreamLinkOutcome::AccountLocked { username } => {
+            let user = repo
+                .user()
+                .find_by_username(&username)
+                .await?
+                .ok_or_else(|| {
+                    RouteError::Internal(
+                        format!("User {username:?} not found for locked template").into(),
+                    )
+                })?;
+
+            let ctx = AccountInactiveContext::new(user)
+                .with_csrf(csrf_token.form_value())
+                .with_language(locale);
+            let fallback = templates.render_account_locked(&ctx)?;
+
+            cookie_jar.write_to_response(res);
+            res.render(Text::Html(fallback));
+        }
+    }
+
     Ok(())
 }
 
@@ -867,400 +415,163 @@ pub async fn post(
     let policy_factory = depot.policy_factory()?;
     let mut policy = policy_factory.instantiate().await?;
     let locale = crate::preferred_language(req, depot);
-    let activity_tracker = crate::rest::extract_bound_activity_tracker(req, depot);
     let templates = depot.templates()?;
     let homeserver = depot.homeserver()?;
     let url_builder = depot.url_builder()?;
     let site_config = depot.site_config()?;
+    let ip_address = crate::rest::extract_bound_activity_tracker(req, depot).ip();
 
     let form: ProtectedForm<FormData> = req.parse_form().await?;
     let form = cookie_jar.verify_form(&clock, form)?;
 
     let sessions_cookie = UpstreamSessionsCookie::load(&cookie_jar);
-    let (session_id, post_auth_action) = sessions_cookie
-        .lookup_link(link_id)
-        .map_err(|_| RouteError::MissingCookie)?;
-
-    let link = repo
-        .upstream_oauth_link()
-        .lookup(link_id)
-        .await?
-        .ok_or(RouteError::LinkNotFound)?;
-
-    let upstream_session = repo
-        .upstream_oauth_session()
-        .lookup(session_id)
-        .await?
-        .ok_or(RouteError::SessionNotFound(session_id))?;
-
-    // This checks that we're in a browser session which is allowed to consume this
-    // link: the upstream auth session should have been started in this browser.
-    if upstream_session.link_id() != Some(link.id) {
-        return Err(RouteError::SessionNotFound(session_id));
-    }
-
-    if upstream_session.is_consumed() {
-        return Err(RouteError::SessionConsumed(session_id));
-    }
-
+    let (session_info, cookie_jar) = cookie_jar.session_info();
     let (csrf_token, cookie_jar) = cookie_jar.csrf_token(&clock, &mut rng);
-    let (user_session_info, cookie_jar) = cookie_jar.session_info();
-    let maybe_user_session = user_session_info.load_active_session(&mut repo).await?;
     let form_state = form.to_form_state();
 
-    match (maybe_user_session, link.user_id, form) {
-        (Some(session), None, FormData::Link) => {
-            // The user is already logged in, the link is not linked to any user, and the
-            // user asked to link their account.
-            repo.upstream_oauth_link()
-                .associate_to_user(&link, &session.user)
-                .await?;
+    let context =
+        load_upstream_link_context(&mut repo, &session_info, &sessions_cookie, link_id).await?;
 
-            let upstream_session = repo
-                .upstream_oauth_session()
-                .consume(&clock, upstream_session, &session)
-                .await?;
+    let action = match form {
+        FormData::Link => UpstreamLinkAction::LinkCurrentSession,
+        FormData::Register {
+            username,
+            import_email,
+            import_display_name,
+            accept_terms,
+        } => UpstreamLinkAction::Register(UpstreamLinkRegistrationAction {
+            username,
+            import_email: import_email.is_some(),
+            import_display_name: import_display_name.is_some(),
+            accept_terms: accept_terms.is_some(),
+        }),
+    };
 
-            repo.browser_session()
-                .authenticate_with_upstream(&mut rng, &clock, &session, &upstream_session)
-                .await?;
+    let outcome = submit_upstream_link_action(
+        &mut repo,
+        &mut *rng,
+        &*clock,
+        &url_builder,
+        &*homeserver,
+        &mut policy,
+        &site_config,
+        user_agent,
+        ip_address,
+        context,
+        action,
+    )
+    .await;
 
-            let post_auth_action = OptionalPostAuthAction {
-                post_auth_action: post_auth_action.cloned(),
-            };
-
+    match outcome {
+        Ok(SubmitUpstreamLinkOutcome::Linked {
+            session,
+            redirect_url,
+        }) => {
             let cookie_jar = sessions_cookie
                 .consume_link(link_id)?
-                .save(cookie_jar, &clock);
-            let cookie_jar = cookie_jar.set_session(&session);
+                .save(cookie_jar, &clock)
+                .set_session(&session);
 
             repo.save().await?;
 
             cookie_jar.write_to_response(res);
-            res.render(post_auth_action.go_next(&url_builder));
+            res.render(Redirect::other(&redirect_url));
             Ok(())
         }
 
-        (
-            None,
-            None,
-            FormData::Register {
-                username,
-                import_email,
-                import_display_name,
-                accept_terms,
-            },
-        ) => {
-            // The user got the form to register a new account, and is not logged in.
-            // Depending on the claims_imports, we've let the user choose their username,
-            // choose whether they want to import the email and display name, or
-            // not.
+        Ok(SubmitUpstreamLinkOutcome::Registered {
+            registration,
+            redirect_url: _,
+            provider_id,
+        }) => {
+            let registrations = UserRegistrationSessionsCookie::load(&cookie_jar);
+            let cookie_jar = sessions_cookie
+                .consume_link(link_id)?
+                .save(cookie_jar, &clock);
+            let cookie_jar = registrations.add(&registration).save(cookie_jar, &clock);
 
-            // Those fields are Some("on") if the checkbox is checked
-            let import_email = import_email.is_some();
-            let import_display_name = import_display_name.is_some();
-            let accept_terms = accept_terms.is_some();
+            repo.save().await?;
 
-            let id_token = upstream_session.id_token().map(Jwt::try_from).transpose()?;
+            REGISTRATION_COUNTER.add(1, &[KeyValue::new(PROVIDER, provider_id.to_string())]);
+
+            cookie_jar.write_to_response(res);
+            res.render(
+                url_builder.redirect(&pasion_router::RegisterFinish::new(registration.id)),
+            );
+            Ok(())
+        }
+
+        Err(SubmitUpstreamLinkError::InvalidAction) => Err(RouteError::InvalidFormAction),
+
+        Err(SubmitUpstreamLinkError::Validation { field_errors }) => {
+            // Re-render the registration form with validation errors.
+            // We need to re-load the link and provider to rebuild the template context.
+            let link = repo
+                .upstream_oauth_link()
+                .lookup(link_id)
+                .await?
+                .ok_or(RouteError::LinkNotFound)?;
 
             let provider = repo
                 .upstream_oauth_provider()
                 .lookup(link.provider_id)
                 .await?
-                .ok_or(RouteError::ProviderNotFound(link.provider_id))?;
+                .ok_or_else(|| {
+                    RouteError::Internal(
+                        format!("Provider {} not found for validation re-render", link.provider_id)
+                            .into(),
+                    )
+                })?;
 
-            // Let's try to import the claims from the ID token
-            let env = environment();
-
-            let mut context = AttributeMappingContext::new();
-            if let Some(id_token) = id_token {
-                let (_, payload) = id_token.into_parts();
-                context = context.with_id_token_claims(payload);
-            }
-            if let Some(extra_callback_parameters) = upstream_session.extra_callback_parameters() {
-                context = context.with_extra_callback_parameters(extra_callback_parameters.clone());
-            }
-            if let Some(userinfo) = upstream_session.userinfo() {
-                context = context.with_userinfo_claims(userinfo.clone());
-            }
-            let context = context.build();
-
-            // Create a template context in case we need to re-render because of an error
-            let mut ctx = UpstreamRegister::new(link.clone(), provider.clone());
-
-            let display_name = if provider
-                .claims_imports
-                .displayname
-                .should_import(import_display_name)
-            {
-                let template = provider
-                    .claims_imports
-                    .displayname
-                    .template
-                    .as_deref()
-                    .unwrap_or(DEFAULT_DISPLAYNAME_TEMPLATE);
-
-                render_attribute_template(
-                    &env,
-                    template,
-                    &context,
-                    provider.claims_imports.displayname.is_required(),
-                )?
-            } else {
-                None
-            };
-
-            if let Some(ref display_name) = display_name {
-                ctx = ctx.with_display_name(
-                    display_name.clone(),
-                    provider.claims_imports.displayname.is_forced_or_required(),
-                );
-            }
-
-            let email = if provider.claims_imports.email.should_import(import_email) {
-                let template = provider
-                    .claims_imports
-                    .email
-                    .template
-                    .as_deref()
-                    .unwrap_or(DEFAULT_EMAIL_TEMPLATE);
-
-                render_attribute_template(
-                    &env,
-                    template,
-                    &context,
-                    provider.claims_imports.email.is_required(),
-                )?
-            } else {
-                None
-            };
-
-            if let Some(ref email) = email {
-                ctx = ctx.with_email(
-                    email.clone(),
-                    provider.claims_imports.email.is_forced_or_required(),
-                );
-            }
-
-            let username = if provider.claims_imports.localpart.is_forced_or_required() {
-                let template = provider
-                    .claims_imports
-                    .localpart
-                    .template
-                    .as_deref()
-                    .unwrap_or(DEFAULT_LOCALPART_TEMPLATE);
-
-                render_attribute_template(&env, template, &context, true)?
-            } else {
-                // If there is no forced username, we can use the one the user entered
-                username
-            }
-            .unwrap_or_default();
-
-            ctx = ctx.with_localpart(
-                username.clone(),
-                provider.claims_imports.localpart.is_forced_or_required(),
-            );
-
-            // Validate the form
-            let form_state = {
-                let mut form_state = form_state;
-                let mut homeserver_denied_username = false;
-                if username.is_empty() {
-                    form_state.add_error_on_field(
-                        pasion_templates::UpstreamRegisterFormField::Username,
-                        FieldError::Required,
-                    );
-                } else if repo.user().exists(&username).await? {
-                    form_state.add_error_on_field(
-                        pasion_templates::UpstreamRegisterFormField::Username,
-                        FieldError::Exists,
-                    );
-                } else if !homeserver
-                    .is_localpart_available(&username)
-                    .await
-                    .map_err(RouteError::HomeserverConnection)?
-                {
-                    // The user already exists on the homeserver
-                    tracing::warn!(
-                        %username,
-                        "Homeserver denied username provided by user"
-                    );
-
-                    // We defer adding the error on the field, until we know whether we had another
-                    // error from the policy, to avoid showing both
-                    homeserver_denied_username = true;
-                }
-
-                // If we have a TOS in the config, make sure the user has accepted it
-                if site_config.tos_uri.is_some() && !accept_terms {
-                    form_state.add_error_on_field(
-                        pasion_templates::UpstreamRegisterFormField::AcceptTerms,
-                        FieldError::Required,
-                    );
-                }
-
-                // Policy check
-                let eval_result = policy
-                    .evaluate_register(pasion_policy::RegisterInput {
-                        registration_method: pasion_policy::RegistrationMethod::UpstreamOAuth2,
-                        username: &username,
-                        email: email.as_deref(),
-                        requester: pasion_policy::Requester {
-                            ip_address: activity_tracker.ip(),
-                            user_agent: user_agent.clone(),
-                            ..Default::default()
-                        },
-                    })
-                    .await?;
-
-                for violation in eval_result.violations {
-                    match violation.field.as_deref() {
-                        Some("username") => {
-                            // If the homeserver denied the username, but we also had an error on
-                            // the policy side, we don't want to show
-                            // both, so we reset the state here
-                            homeserver_denied_username = false;
+            let mut form_state = form_state;
+            if let Some(errors) = field_errors.as_object() {
+                for (field, code) in errors {
+                    let code_str = code.as_str().unwrap_or("unknown");
+                    match field.as_str() {
+                        "username" => {
+                            let error = match code_str {
+                                "required" => FieldError::Required,
+                                "exists" => FieldError::Exists,
+                                _ => FieldError::Policy {
+                                    code: None,
+                                    message: code_str.to_owned(),
+                                },
+                            };
                             form_state.add_error_on_field(
                                 pasion_templates::UpstreamRegisterFormField::Username,
-                                FieldError::Policy {
-                                    code: violation.code.map(|c| c.as_str()),
-                                    message: violation.msg,
-                                },
+                                error,
                             );
                         }
-                        _ => form_state.add_error_on_form(FormError::Policy {
-                            code: violation.code.map(|c| c.as_str()),
-                            message: violation.msg,
-                        }),
+                        "accept_terms" => {
+                            form_state.add_error_on_field(
+                                pasion_templates::UpstreamRegisterFormField::AcceptTerms,
+                                FieldError::Required,
+                            );
+                        }
+                        _ => {
+                            form_state.add_error_on_form(FormError::Policy {
+                                code: None,
+                                message: code_str.to_owned(),
+                            });
+                        }
                     }
                 }
-
-                if homeserver_denied_username {
-                    // XXX: we may want to return different errors like "this username is reserved"
-                    form_state.add_error_on_field(
-                        pasion_templates::UpstreamRegisterFormField::Username,
-                        FieldError::Exists,
-                    );
-                }
-
-                form_state
-            };
-
-            if !form_state.is_valid() {
-                let ctx = ctx
-                    .with_form_state(form_state)
-                    .with_csrf(csrf_token.form_value())
-                    .with_language(locale);
-
-                cookie_jar.write_to_response(res);
-                res.render(Text::Html(
-                    templates.render_upstream_oauth2_do_register(&ctx)?,
-                ));
-                return Ok(());
             }
 
-            REGISTRATION_COUNTER.add(1, &[KeyValue::new(PROVIDER, provider.id.to_string())]);
+            let ctx = UpstreamRegister::new(link, provider)
+                .with_form_state(form_state)
+                .with_csrf(csrf_token.form_value())
+                .with_language(locale);
 
-            let mut registration = prepare_user_registration(
-                &mut rng,
-                &clock,
-                &mut repo,
-                upstream_session,
-                username,
-                display_name,
-                email,
-                activity_tracker.ip(),
-                user_agent,
-                post_auth_action.map(|action| serde_json::json!(action)),
-            )
-            .await?;
-
-            if let Some(terms_url) = &site_config.tos_uri {
-                registration = repo
-                    .user_registration()
-                    .set_terms_url(registration, terms_url.clone())
-                    .await?;
-            }
-
-            let registrations = UserRegistrationSessionsCookie::load(&cookie_jar);
-
-            let cookie_jar = sessions_cookie
-                .consume_link(link_id)?
-                .save(cookie_jar, &clock);
-
-            let cookie_jar = registrations.add(&registration).save(cookie_jar, &clock);
-
-            repo.save().await?;
-
-            // Redirect to the user registration flow, in case we have any other step to
-            // finish
             cookie_jar.write_to_response(res);
-            res.render(url_builder.redirect(&pasion_router::RegisterFinish::new(registration.id)));
+            res.render(Text::Html(
+                templates.render_upstream_oauth2_do_register(&ctx)?,
+            ));
             Ok(())
         }
 
-        _ => Err(RouteError::InvalidFormAction),
+        Err(SubmitUpstreamLinkError::Workflow(e)) => Err(e.into()),
     }
-}
-
-/// Create a user registration using attributes got from the upstream
-/// authorization session
-async fn prepare_user_registration(
-    rng: &mut pasion_data_model::BoxRng,
-    clock: &pasion_data_model::BoxClock,
-    repo: &mut pasion_storage::BoxRepository,
-    upstream_session: UpstreamOAuthAuthorizationSession,
-    localpart: String,
-    displayname: Option<String>,
-    email: Option<String>,
-    ip_address: Option<IpAddr>,
-    user_agent: Option<String>,
-    post_auth_action: Option<serde_json::Value>,
-) -> Result<UserRegistration, RouteError> {
-    let mut registration = repo
-        .user_registration()
-        .add(
-            rng,
-            clock,
-            localpart,
-            ip_address,
-            user_agent,
-            post_auth_action,
-        )
-        .await?;
-
-    // If we have an email, add an email authentication and complete it
-    if let Some(email) = email {
-        let authentication = repo
-            .user_email()
-            .add_authentication_for_registration(rng, clock, email, &registration)
-            .await?;
-        let authentication = repo
-            .user_email()
-            .complete_authentication_with_upstream(clock, authentication, &upstream_session)
-            .await?;
-
-        registration = repo
-            .user_registration()
-            .set_email_authentication(registration, &authentication)
-            .await?;
-    }
-
-    // If we have a display name, add it to the registration
-    if let Some(name) = displayname {
-        registration = repo
-            .user_registration()
-            .set_display_name(registration, name)
-            .await?;
-    }
-
-    let registration = repo
-        .user_registration()
-        .set_upstream_oauth_authorization_session(registration, &upstream_session)
-        .await?;
-
-    Ok(registration)
 }
 
 #[cfg(test)]

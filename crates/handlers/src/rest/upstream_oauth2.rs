@@ -129,6 +129,12 @@ pub async fn get_link(
     let url_builder = depot.url_builder()?;
     let site_config = depot.site_config()?;
     let ip_address = extract_bound_activity_tracker(req, depot).ip();
+    let homeserver = depot.homeserver()?;
+    let mut policy = depot
+        .policy_factory()?
+        .instantiate()
+        .await
+        .map_err(|e| RouteError::Internal(e.into()))?;
 
     let sessions_cookie = UpstreamSessionsCookie::load(&cookie_jar);
     let (session_info, cookie_jar) = cookie_jar.session_info();
@@ -140,6 +146,8 @@ pub async fn get_link(
         &mut *rng,
         &*clock,
         &url_builder,
+        &*homeserver,
+        &mut policy,
         &site_config,
         user_agent,
         ip_address,
@@ -440,6 +448,12 @@ fn map_upstream_link_workflow_error(error: UpstreamLinkWorkflowError) -> RouteEr
         }
         UpstreamLinkWorkflowError::UserNotFound | UpstreamLinkWorkflowError::ProviderNotFound => {
             RouteError::LoadFailed
+        }
+        UpstreamLinkWorkflowError::ConflictFail { .. }
+        | UpstreamLinkWorkflowError::ConflictSetBlocked { .. }
+        | UpstreamLinkWorkflowError::PolicyDeniedLocalpart { .. }
+        | UpstreamLinkWorkflowError::LocalpartUnavailable { .. } => {
+            RouteError::BadRequest(error.to_string().into())
         }
         UpstreamLinkWorkflowError::RequiredAttributeEmpty { .. }
         | UpstreamLinkWorkflowError::RequiredAttributeRender { .. }

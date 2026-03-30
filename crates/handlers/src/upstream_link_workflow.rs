@@ -4,7 +4,7 @@ use anyhow::Error as AnyhowError;
 use minijinja::Environment;
 use pasion_data_model::{
     BrowserSession, Clock, SiteConfig, UpstreamOAuthAuthorizationSession, UpstreamOAuthLink,
-    UpstreamOAuthProvider, UserRegistration,
+    UpstreamOAuthProvider, UpstreamOAuthProviderOnConflict, User, UserRegistration,
 };
 use pasion_jose::jwt::Jwt;
 use pasion_matrix::HomeserverConnection;
@@ -12,9 +12,9 @@ use pasion_policy::{Policy, RegisterInput, RegistrationMethod, Requester as Poli
 use pasion_router::{PostAuthAction, RegisterFinish, UrlBuilder};
 use pasion_salvo_utils::SessionInfo;
 use pasion_storage::{
-    BoxRepository, RepositoryAccess, RepositoryError,
+    BoxRepository, Pagination, RepositoryAccess, RepositoryError,
     upstream_oauth2::{
-        UpstreamOAuthLinkRepository, UpstreamOAuthProviderRepository,
+        UpstreamOAuthLinkFilter, UpstreamOAuthLinkRepository, UpstreamOAuthProviderRepository,
         UpstreamOAuthSessionRepository,
     },
     user::{
@@ -68,6 +68,27 @@ pub enum UpstreamLinkWorkflowError {
         source: minijinja::Error,
     },
 
+    #[error("localpart conflict: existing user cannot be linked (on_conflict=fail)")]
+    ConflictFail {
+        localpart: String,
+    },
+
+    #[error("localpart conflict: existing user already has a link to this provider (on_conflict=set)")]
+    ConflictSetBlocked {
+        localpart: String,
+    },
+
+    #[error("policy denied the suggested localpart")]
+    PolicyDeniedLocalpart {
+        localpart: String,
+        detail: String,
+    },
+
+    #[error("localpart not available on homeserver")]
+    LocalpartUnavailable {
+        localpart: String,
+    },
+
     #[error("homeserver connection failed")]
     HomeserverConnection(#[source] AnyhowError),
 
@@ -99,6 +120,8 @@ pub struct LoadedUpstreamLinkContext {
 }
 
 pub struct UpstreamRegisterScreen {
+    pub link: UpstreamOAuthLink,
+    pub provider: UpstreamOAuthProvider,
     pub suggested_username: Option<String>,
     pub username_forced: bool,
     pub suggested_display_name: Option<String>,
@@ -223,6 +246,8 @@ pub async fn load_upstream_link_state(
     rng: &mut (dyn RngCore + Send),
     clock: &dyn Clock,
     url_builder: &UrlBuilder,
+    homeserver: &dyn HomeserverConnection,
+    policy: &mut Policy,
     site_config: &SiteConfig,
     user_agent: Option<String>,
     ip_address: Option<IpAddr>,
@@ -325,6 +350,8 @@ pub async fn load_upstream_link_state(
                 rng,
                 clock,
                 url_builder,
+                homeserver,
+                policy,
                 site_config,
                 user_agent,
                 ip_address,
@@ -451,6 +478,8 @@ async fn load_upstream_registration_screen(
     rng: &mut (dyn RngCore + Send),
     clock: &dyn Clock,
     url_builder: &UrlBuilder,
+    homeserver: &dyn HomeserverConnection,
+    policy: &mut Policy,
     site_config: &SiteConfig,
     user_agent: Option<String>,
     ip_address: Option<IpAddr>,
@@ -465,9 +494,68 @@ async fn load_upstream_registration_screen(
         .ok_or(UpstreamLinkWorkflowError::ProviderNotFound)?;
 
     let suggestions = resolve_registration_suggestions(&provider, &upstream_session)?;
+    let redirect_url =
+        OptionalPostAuthAction::from(post_auth_action.clone()).next_relative_url(url_builder);
+
+    // If we have a suggested username, run pre-checks (policy, conflicts,
+    // homeserver availability)
+    let localpart = match pre_check_localpart(
+        repo,
+        clock,
+        homeserver,
+        policy,
+        &provider,
+        &link,
+        suggestions.suggested_username,
+        suggestions.suggested_email.as_deref(),
+        user_agent.clone(),
+        ip_address,
+    )
+    .await?
+    {
+        LocalpartPreCheckResult::Available(localpart) => localpart,
+        LocalpartPreCheckResult::ConflictResolved {
+            user: existing_user,
+            provider_id,
+        } => {
+            // Conflict was resolved by linking to an existing user. Check
+            // user status and log them in.
+            if existing_user.deactivated_at.is_some() {
+                return Ok(LoadUpstreamLinkOutcome::AccountDeactivated {
+                    username: existing_user.username,
+                });
+            }
+
+            if existing_user.locked_at.is_some() {
+                return Ok(LoadUpstreamLinkOutcome::AccountLocked {
+                    username: existing_user.username,
+                });
+            }
+
+            let session = repo
+                .browser_session()
+                .add(rng, clock, &existing_user, user_agent)
+                .await?;
+
+            let upstream_session = repo
+                .upstream_oauth_session()
+                .consume(clock, upstream_session, &session)
+                .await?;
+
+            repo.browser_session()
+                .authenticate_with_upstream(rng, clock, &session, &upstream_session)
+                .await?;
+
+            return Ok(LoadUpstreamLinkOutcome::LoggedIn {
+                session,
+                redirect_url,
+                provider_id,
+            });
+        }
+    };
 
     if provider.claims_imports.skip_confirmation {
-        let Some(ref localpart) = suggestions.suggested_username else {
+        let Some(ref localpart) = localpart else {
             return Err(UpstreamLinkWorkflowError::Internal(AnyhowError::msg(
                 "No localpart available even though the provider is configured to skip confirmation",
             )));
@@ -494,18 +582,227 @@ async fn load_upstream_registration_screen(
         });
     }
 
+    let username_forced = provider.claims_imports.localpart.is_forced_or_required();
+    let display_name_forced = provider.claims_imports.displayname.is_forced_or_required();
+    let email_forced = provider.claims_imports.email.is_forced_or_required();
+    let provider_name = provider.human_name.clone();
     Ok(LoadUpstreamLinkOutcome::Register {
         screen: UpstreamRegisterScreen {
-            suggested_username: suggestions.suggested_username,
-            username_forced: provider.claims_imports.localpart.is_forced_or_required(),
+            link,
+            provider,
+            suggested_username: localpart,
+            username_forced,
             suggested_display_name: suggestions.suggested_display_name,
-            display_name_forced: provider.claims_imports.displayname.is_forced_or_required(),
+            display_name_forced,
             suggested_email: suggestions.suggested_email,
-            email_forced: provider.claims_imports.email.is_forced_or_required(),
-            provider_name: provider.human_name,
+            email_forced,
+            provider_name,
             has_tos: site_config.tos_uri.is_some(),
         },
     })
+}
+
+/// Result of pre-checking a suggested localpart from the upstream provider.
+enum LocalpartPreCheckResult {
+    /// The localpart is valid and available for registration.
+    Available(Option<String>),
+    /// The localpart matched an existing user whose conflict was resolved by
+    /// linking. The caller should log this user in.
+    ConflictResolved {
+        user: User,
+        provider_id: Ulid,
+    },
+}
+
+/// Pre-check a suggested localpart from the upstream provider.
+///
+/// This runs policy checks, user conflict resolution (using the provider's
+/// `on_conflict` setting), and homeserver availability checks on the suggested
+/// localpart.
+#[allow(clippy::too_many_arguments)]
+async fn pre_check_localpart(
+    repo: &mut BoxRepository,
+    clock: &dyn Clock,
+    homeserver: &dyn HomeserverConnection,
+    policy: &mut Policy,
+    provider: &UpstreamOAuthProvider,
+    link: &UpstreamOAuthLink,
+    suggested_localpart: Option<String>,
+    email: Option<&str>,
+    user_agent: Option<String>,
+    ip_address: Option<IpAddr>,
+) -> Result<LocalpartPreCheckResult, UpstreamLinkWorkflowError> {
+    let Some(localpart) = suggested_localpart else {
+        return Ok(LocalpartPreCheckResult::Available(None));
+    };
+
+    let forced_or_required = provider.claims_imports.localpart.is_forced_or_required();
+
+    // Run policy check on the suggested localpart
+    let eval_result = policy
+        .evaluate_register(RegisterInput {
+            registration_method: RegistrationMethod::UpstreamOAuth2,
+            username: &localpart,
+            email,
+            requester: PolicyRequester {
+                ip_address,
+                user_agent: user_agent.clone(),
+                ..Default::default()
+            },
+        })
+        .await
+        .map_err(UpstreamLinkWorkflowError::internal)?;
+
+    // Only look for violations on the username field at this stage
+    if eval_result
+        .violations
+        .iter()
+        .any(|violation| violation.field.as_deref() == Some("username"))
+    {
+        if !forced_or_required {
+            tracing::warn!(
+                upstream_oauth_provider.id = %provider.id,
+                upstream_oauth_link.id = %link.id,
+                "Upstream provider returned a localpart {localpart:?} which was denied by the policy ({eval_result}). As the username is just a suggestion, it was ignored."
+            );
+            return Ok(LocalpartPreCheckResult::Available(None));
+        }
+
+        return Err(UpstreamLinkWorkflowError::PolicyDeniedLocalpart {
+            localpart,
+            detail: eval_result.to_string(),
+        });
+    }
+
+    // Check if the localpart conflicts with an existing user
+    let maybe_existing_user = repo.user().find_by_username(&localpart).await?;
+    if let Some(existing_user) = maybe_existing_user {
+        if !forced_or_required {
+            tracing::warn!(
+                upstream_oauth_provider.id = %provider.id,
+                upstream_oauth_link.id = %link.id,
+                user.id = %existing_user.id,
+                "Upstream provider returned a localpart {localpart:?} which is already used by another user. As the username is just a suggestion, it was ignored."
+            );
+            return Ok(LocalpartPreCheckResult::Available(None));
+        }
+
+        // Apply conflict resolution
+        match provider.claims_imports.localpart.on_conflict {
+            UpstreamOAuthProviderOnConflict::Fail => {
+                tracing::warn!(
+                    upstream_oauth_provider.id = %provider.id,
+                    upstream_oauth_link.id = %link.id,
+                    user.id = %existing_user.id,
+                    "Upstream provider returned a localpart {localpart:?} which is already used by another user. Configuration doesn't allow for automatic linking of existing users."
+                );
+                return Err(UpstreamLinkWorkflowError::ConflictFail { localpart });
+            }
+
+            UpstreamOAuthProviderOnConflict::Add => {
+                tracing::info!(
+                    user.id = %existing_user.id,
+                    upstream_oauth_provider.id = %provider.id,
+                    upstream_oauth_link.id = %link.id,
+                    upstream_oauth_link.subject = link.subject,
+                    "Upstream account mapped localpart {localpart:?} matched an existing user, linking"
+                );
+                repo.upstream_oauth_link()
+                    .associate_to_user(link, &existing_user)
+                    .await?;
+            }
+
+            UpstreamOAuthProviderOnConflict::Replace => {
+                let filter = UpstreamOAuthLinkFilter::new()
+                    .for_provider(provider)
+                    .for_user(&existing_user);
+                let mut cursor = Pagination::first(100);
+                let mut removed = 0;
+                loop {
+                    let page = repo.upstream_oauth_link().list(filter, cursor).await?;
+                    for edge in page.edges {
+                        repo.upstream_oauth_link().remove(clock, edge.node).await?;
+                        cursor = cursor.after(edge.cursor);
+                        removed += 1;
+                    }
+
+                    if !page.has_next_page {
+                        break;
+                    }
+                }
+
+                if removed > 0 {
+                    tracing::warn!(
+                        user.id = %existing_user.id,
+                        upstream_oauth_provider.id = %provider.id,
+                        upstream_oauth_link.id = %link.id,
+                        upstream_oauth_link.subject = link.subject,
+                        "Upstream account mapped localpart {localpart:?} matched an existing user, replaced {removed} links"
+                    );
+                } else {
+                    tracing::info!(
+                        user.id = %existing_user.id,
+                        upstream_oauth_provider.id = %provider.id,
+                        upstream_oauth_link.id = %link.id,
+                        upstream_oauth_link.subject = link.subject,
+                        "Upstream account mapped localpart {localpart:?} matched an existing user, linking"
+                    );
+                }
+
+                repo.upstream_oauth_link()
+                    .associate_to_user(link, &existing_user)
+                    .await?;
+            }
+
+            UpstreamOAuthProviderOnConflict::Set => {
+                let filter = UpstreamOAuthLinkFilter::new()
+                    .for_provider(provider)
+                    .for_user(&existing_user);
+
+                let count = repo.upstream_oauth_link().count(filter).await?;
+                if count > 0 {
+                    tracing::warn!(
+                        upstream_oauth_provider.id = %provider.id,
+                        upstream_oauth_link.id = %link.id,
+                        user.id = %existing_user.id,
+                        "Upstream provider returned a localpart {localpart:?} matching an existing user who already has {count} link(s) to this provider, which isn't allowed by the conflict resolution"
+                    );
+                    return Err(UpstreamLinkWorkflowError::ConflictSetBlocked { localpart });
+                }
+
+                repo.upstream_oauth_link()
+                    .associate_to_user(link, &existing_user)
+                    .await?;
+            }
+        }
+
+        // Conflict resolved by linking. The caller should log this user in.
+        return Ok(LocalpartPreCheckResult::ConflictResolved {
+            user: existing_user,
+            provider_id: provider.id,
+        });
+    }
+
+    // Check homeserver availability
+    let is_available = homeserver
+        .is_localpart_available(&localpart)
+        .await
+        .map_err(UpstreamLinkWorkflowError::homeserver)?;
+
+    if !is_available {
+        if !forced_or_required {
+            tracing::warn!(
+                upstream_oauth_provider.id = %provider.id,
+                upstream_oauth_link.id = %link.id,
+                "Upstream provider returned a localpart {localpart:?} which isn't available on the homeserver. As the username is just a suggestion, it was ignored."
+            );
+            return Ok(LocalpartPreCheckResult::Available(None));
+        }
+
+        return Err(UpstreamLinkWorkflowError::LocalpartUnavailable { localpart });
+    }
+
+    Ok(LocalpartPreCheckResult::Available(Some(localpart)))
 }
 
 struct RegistrationSuggestions {
