@@ -1,5 +1,5 @@
 use anyhow::Context;
-use pasion_router::{PostAuthAction, Route, UrlBuilder};
+use pasion_data_model::{PostAuthAction, UrlBuilder};
 use pasion_storage::{
     RepositoryAccess,
     oauth2::OAuth2AuthorizationGrantRepository,
@@ -23,40 +23,51 @@ impl From<Option<PostAuthAction>> for OptionalPostAuthAction {
 impl OptionalPostAuthAction {
     pub fn next_relative_url(&self, url_builder: &UrlBuilder) -> String {
         self.post_auth_action.as_ref().map_or_else(
-            || url_builder.relative_url_for(&pasion_router::Index),
+            || url_builder.relative_url("/"),
             |action| match action {
                 PostAuthAction::ContinueAuthorizationGrant { id } => {
-                    url_builder.relative_url_for(&pasion_router::Consent(*id))
+                    url_builder.relative_url(&format!("/consent/{id}"))
                 }
                 PostAuthAction::ContinueDeviceCodeGrant { id } => {
-                    url_builder.relative_url_for(&pasion_router::DeviceCodeConsent::new(*id))
+                    url_builder.relative_url(&format!("/device/{id}"))
                 }
                 PostAuthAction::ChangePassword => {
-                    url_builder.relative_url_for(&pasion_router::AccountPasswordChange)
+                    url_builder.relative_url("/account/password/change")
                 }
                 PostAuthAction::LinkUpstream { id } => {
-                    url_builder.relative_url_for(&pasion_router::UpstreamOAuth2Link::new(*id))
+                    url_builder.relative_url(&format!("/upstream/link/{id}"))
                 }
                 PostAuthAction::ManageAccount { action } => {
-                    url_builder.relative_url_for(&pasion_router::Account::new(action.clone()))
+                    let base = "/account/";
+                    if let Some(action) = action {
+                        let query = serde_urlencoded::to_string(action).unwrap_or_default();
+                        if query.is_empty() {
+                            url_builder.relative_url(base)
+                        } else {
+                            url_builder.relative_url(&format!("{base}?{query}"))
+                        }
+                    } else {
+                        url_builder.relative_url(base)
+                    }
                 }
             },
         )
     }
 
-    pub fn go_next_or_default<T: Route>(
+    pub fn go_next_or_default(
         &self,
         url_builder: &UrlBuilder,
-        default: &T,
+        default_path: &str,
     ) -> salvo::writing::Redirect {
-        self.post_auth_action.as_ref().map_or_else(
-            || url_builder.redirect(default),
-            |action| action.go_next(url_builder),
-        )
+        let url = self.post_auth_action.as_ref().map_or_else(
+            || url_builder.relative_url(default_path),
+            |action| post_auth_action_relative_url(action, url_builder),
+        );
+        salvo::writing::Redirect::other(&url)
     }
 
     pub fn go_next(&self, url_builder: &UrlBuilder) -> salvo::writing::Redirect {
-        self.go_next_or_default(url_builder, &pasion_router::Index)
+        self.go_next_or_default(url_builder, "/")
     }
 
     pub async fn load_context<'a>(
@@ -115,4 +126,47 @@ impl OptionalPostAuthAction {
             ctx,
         }))
     }
+}
+
+/// Compute the relative URL for a `PostAuthAction`.
+pub fn post_auth_action_relative_url(
+    action: &PostAuthAction,
+    url_builder: &UrlBuilder,
+) -> String {
+    match action {
+        PostAuthAction::ContinueAuthorizationGrant { id } => {
+            url_builder.relative_url(&format!("/consent/{id}"))
+        }
+        PostAuthAction::ContinueDeviceCodeGrant { id } => {
+            url_builder.relative_url(&format!("/device/{id}"))
+        }
+        PostAuthAction::ChangePassword => {
+            url_builder.relative_url("/account/password/change")
+        }
+        PostAuthAction::LinkUpstream { id } => {
+            url_builder.relative_url(&format!("/upstream/link/{id}"))
+        }
+        PostAuthAction::ManageAccount { action } => {
+            let base = "/account/";
+            if let Some(action) = action {
+                let query = serde_urlencoded::to_string(action).unwrap_or_default();
+                if query.is_empty() {
+                    url_builder.relative_url(base)
+                } else {
+                    url_builder.relative_url(&format!("{base}?{query}"))
+                }
+            } else {
+                url_builder.relative_url(base)
+            }
+        }
+    }
+}
+
+/// Produce a redirect response for a `PostAuthAction`.
+pub fn post_auth_action_redirect(
+    action: &PostAuthAction,
+    url_builder: &UrlBuilder,
+) -> salvo::writing::Redirect {
+    let url = post_auth_action_relative_url(action, url_builder);
+    salvo::writing::Redirect::other(&url)
 }

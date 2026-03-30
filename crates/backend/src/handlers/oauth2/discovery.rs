@@ -10,7 +10,7 @@ use pasion_iana::oauth::{
 };
 use pasion_jose::jwa::SUPPORTED_SIGNING_ALGORITHMS;
 use pasion_keystore::Keystore;
-use pasion_router::UrlBuilder;
+use pasion_data_model::UrlBuilder;
 use salvo::prelude::*;
 use serde::Serialize;
 
@@ -198,7 +198,7 @@ fn get_inner(depot: &Depot) -> Json<DiscoveryResponse> {
 #[cfg(test)]
 mod tests {
     use pasion_keystore::{JsonWebKey, JsonWebKeySet, PrivateKey};
-    use pasion_router::UrlBuilder;
+    use pasion_data_model::UrlBuilder;
     use rand::SeedableRng;
     use rand_chacha::ChaChaRng;
 

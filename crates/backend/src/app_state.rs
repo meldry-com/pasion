@@ -13,7 +13,7 @@ use pasion_i18n::Translator;
 use pasion_keystore::{Encrypter, Keystore};
 use pasion_matrix::{ConnectorRegistry, HomeserverConnection};
 use pasion_policy::{Policy, PolicyFactory};
-use pasion_router::UrlBuilder;
+use pasion_data_model::UrlBuilder;
 use pasion_storage::{BoxRepository, BoxRepositoryFactory, RepositoryFactory};
 use pasion_storage_pg::PgRepositoryFactory;
 use pasion_templates::Templates;

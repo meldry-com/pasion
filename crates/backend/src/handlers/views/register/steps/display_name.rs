@@ -1,4 +1,4 @@
-use pasion_router::PostAuthAction;
+use pasion_data_model::PostAuthAction;
 use crate::salvo_utils::{
     InternalError,
     cookies::CookieJar,
@@ -183,8 +183,9 @@ pub async fn post(
         }
     };
 
-    let destination = pasion_router::RegisterFinish::new(registration.id);
     cookie_jar.write_to_response(res);
-    res.render(url_builder.redirect(&destination));
+    res.render(salvo::writing::Redirect::other(&url_builder.relative_url(
+        &format!("/register/steps/{}/finish", registration.id),
+    )));
     Ok(())
 }

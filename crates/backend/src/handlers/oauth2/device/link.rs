@@ -53,7 +53,9 @@ async fn handle_get(
         if let Some(grant) = grant {
             // This is a valid code, redirect to the consent page
             // This will in turn redirect to the login page if the user is not logged in
-            let redirect = url_builder.redirect(&pasion_router::DeviceCodeConsent::new(grant.id));
+            let redirect = salvo::writing::Redirect::other(&url_builder.relative_url(
+                &format!("/device/{}", grant.id),
+            ));
 
             cookie_jar.write_to_response(res);
             res.render(redirect);

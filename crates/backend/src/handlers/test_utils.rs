@@ -17,7 +17,7 @@ use pasion_keystore::{Encrypter, JsonWebKey, JsonWebKeySet, Keystore, PrivateKey
 use pasion_matrix::{HomeserverConnection, MockHomeserverConnection};
 use pasion_messaging::{MailTransport, Mailer, NotificationCenter};
 use pasion_policy::{InstantiateError, Policy, PolicyFactory};
-use pasion_router::{Route, SimpleRoute, UrlBuilder};
+use pasion_data_model::UrlBuilder;
 use crate::salvo_utils::cookies::{CookieJar, CookieManager};
 use pasion_storage::{BoxRepository, BoxRepositoryFactory, RepositoryError, RepositoryFactory};
 use pasion_storage_pg::PgRepositoryFactory;
@@ -325,43 +325,43 @@ impl TestState {
         Router::new()
             .hoop(InjectTestState(self.clone()))
             // Health
-            .push(Router::with_path(pasion_router::Healthcheck::route()).get(crate::handlers::health::get))
+            .push(Router::with_path("/health").get(crate::handlers::health::get))
             // OAuth2 discovery
             .push(
-                Router::with_path(pasion_router::OidcConfiguration::route())
+                Router::with_path("/.well-known/openid-configuration")
                     .get(crate::handlers::oauth2::discovery::get),
             )
             .push(
-                Router::with_path(pasion_router::Webfinger::route())
+                Router::with_path("/.well-known/webfinger")
                     .get(crate::handlers::oauth2::webfinger::get),
             )
             // OAuth2 endpoints
             .push(
-                Router::with_path(pasion_router::OAuth2Keys::route()).get(crate::handlers::oauth2::keys::get),
+                Router::with_path("/oauth2/keys.json").get(crate::handlers::oauth2::keys::get),
             )
             .push(
-                Router::with_path(pasion_router::OidcUserinfo::route())
+                Router::with_path("/oauth2/userinfo")
                     .get(crate::handlers::oauth2::userinfo::get)
                     .post(crate::handlers::oauth2::userinfo::get),
             )
             .push(
-                Router::with_path(pasion_router::OAuth2Introspection::route())
+                Router::with_path("/oauth2/introspect")
                     .post(crate::handlers::oauth2::introspection::post),
             )
             .push(
-                Router::with_path(pasion_router::OAuth2Revocation::route())
+                Router::with_path("/oauth2/revoke")
                     .post(crate::handlers::oauth2::revoke::post),
             )
             .push(
-                Router::with_path(pasion_router::OAuth2TokenEndpoint::route())
+                Router::with_path("/oauth2/token")
                     .post(crate::handlers::oauth2::token::post),
             )
             .push(
-                Router::with_path(pasion_router::OAuth2RegistrationEndpoint::route())
+                Router::with_path("/oauth2/registration")
                     .post(crate::handlers::oauth2::registration::post),
             )
             .push(
-                Router::with_path(pasion_router::OAuth2DeviceAuthorizationEndpoint::route())
+                Router::with_path("/oauth2/device")
                     .post(crate::handlers::oauth2::device::authorize::post),
             )
             // REST API

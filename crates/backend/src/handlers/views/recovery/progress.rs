@@ -48,7 +48,7 @@ pub async fn get(
     if maybe_session.is_some() {
         // TODO: redirect to continue whatever action was going on
         cookie_jar.write_to_response(res);
-        res.render(url_builder.redirect(&pasion_router::Index));
+        res.render(salvo::writing::Redirect::other(&url_builder.relative_url("/")));
         return Ok(());
     }
 
@@ -56,7 +56,7 @@ pub async fn get(
         Ok(session) => session,
         Err(LoadAccountRecoverySessionError::NotFound) => {
             cookie_jar.write_to_response(res);
-            res.render(url_builder.redirect(&pasion_router::AccountRecoveryStart));
+            res.render(salvo::writing::Redirect::other(&url_builder.relative_url("/recover")));
             return Ok(());
         }
         Err(LoadAccountRecoverySessionError::Repository(error)) => {
@@ -124,7 +124,7 @@ pub async fn post(
     if maybe_session.is_some() {
         // TODO: redirect to continue whatever action was going on
         cookie_jar.write_to_response(res);
-        res.render(url_builder.redirect(&pasion_router::Index));
+        res.render(salvo::writing::Redirect::other(&url_builder.relative_url("/")));
         return Ok(());
     }
 
@@ -132,7 +132,7 @@ pub async fn post(
         Ok(session) => session,
         Err(LoadAccountRecoverySessionError::NotFound) => {
             cookie_jar.write_to_response(res);
-            res.render(url_builder.redirect(&pasion_router::AccountRecoveryStart));
+            res.render(salvo::writing::Redirect::other(&url_builder.relative_url("/recover")));
             return Ok(());
         }
         Err(LoadAccountRecoverySessionError::Repository(error)) => {
@@ -182,7 +182,7 @@ pub async fn post(
         }
         Err(ResendAccountRecoveryError::NotFound) => {
             cookie_jar.write_to_response(res);
-            res.render(url_builder.redirect(&pasion_router::AccountRecoveryStart));
+            res.render(salvo::writing::Redirect::other(&url_builder.relative_url("/recover")));
             return Ok(());
         }
         Err(ResendAccountRecoveryError::Repository(error)) => {

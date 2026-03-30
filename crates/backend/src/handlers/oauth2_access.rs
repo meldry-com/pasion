@@ -8,7 +8,7 @@ use pasion_data_model::{
 use pasion_keystore::Keystore;
 use pasion_matrix::HomeserverConnection;
 use pasion_policy::{Policy, PolicyFactory};
-use pasion_router::UrlBuilder;
+use pasion_data_model::UrlBuilder;
 use pasion_storage::{
     BoxRepository, RepositoryAccess, RepositoryError,
     oauth2::{

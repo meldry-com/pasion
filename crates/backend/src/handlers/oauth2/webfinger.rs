@@ -1,5 +1,5 @@
 use oauth2_types::webfinger::WebFingerResponse;
-use pasion_router::UrlBuilder;
+use pasion_data_model::UrlBuilder;
 use salvo::prelude::*;
 use serde::Deserialize;
 

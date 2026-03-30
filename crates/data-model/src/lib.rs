@@ -38,12 +38,15 @@ pub mod flow;
 pub mod notification;
 /// OAuth 2.0 client and session models.
 pub mod oauth2;
+/// Post-authentication action types.
+pub mod post_auth_action;
 /// Personal access token types.
 pub mod personal;
 pub(crate) mod policy_data;
 mod site_config;
 pub(crate) mod tokens;
 pub(crate) mod upstream_oauth2;
+mod url_builder;
 pub(crate) mod user_agent;
 pub(crate) mod users;
 mod utils;
@@ -141,4 +144,6 @@ pub use self::{
     },
     utils::{BoxClock, BoxRng},
     version::AppVersion,
+    post_auth_action::{AccountAction, PostAuthAction},
+    url_builder::UrlBuilder,
 };

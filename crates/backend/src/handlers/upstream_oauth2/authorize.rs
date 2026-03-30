@@ -1,6 +1,6 @@
 use pasion_data_model::UpstreamOAuthProvider;
 use crate::oidc_client::requests::authorization_code::AuthorizationRequestData;
-use pasion_router::PostAuthAction;
+use pasion_data_model::PostAuthAction;
 use crate::salvo_utils::{GenericError, InternalError, cookies::CookieJar};
 use pasion_storage::upstream_oauth2::{
     UpstreamOAuthProviderRepository, UpstreamOAuthSessionRepository,

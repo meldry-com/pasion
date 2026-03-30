@@ -5,7 +5,7 @@ use oauth2_types::{
     response_type::ResponseType,
 };
 use pasion_data_model::{AuthorizationCode, BoxClock, BoxRng, Pkce, SystemClock};
-use pasion_router::{PostAuthAction, UrlBuilder};
+use pasion_data_model::{PostAuthAction, UrlBuilder};
 use crate::salvo_utils::{
     GenericError, InternalError, SessionInfoExt, cookies::CookieJar, sentry::SentryEventID,
 };
@@ -298,14 +298,30 @@ async fn handle_get(req: &mut Request, depot: &Depot) -> Result<(Response, Cooki
                     // Client asked for a registration, show the registration prompt
                     repo.save().await?;
 
-                    url_builder.redirect(&pasion_router::Register::and_then(continue_grant))
+                    {
+                        let query_str = serde_urlencoded::to_string(&continue_grant).unwrap_or_default();
+                        let path = if query_str.is_empty() {
+                            "/register".to_owned()
+                        } else {
+                            format!("/register?{query_str}")
+                        };
+                        salvo::writing::Redirect::other(&url_builder.relative_url(&path))
+                    }
                 }
 
                 None => {
                     // Other cases where we don't have a session, ask for a login
                     repo.save().await?;
 
-                    url_builder.redirect(&pasion_router::Login::and_then(continue_grant))
+                    {
+                        let query_str = serde_urlencoded::to_string(&continue_grant).unwrap_or_default();
+                        let path = if query_str.is_empty() {
+                            "/login".to_owned()
+                        } else {
+                            format!("/login?{query_str}")
+                        };
+                        salvo::writing::Redirect::other(&url_builder.relative_url(&path))
+                    }
                 }
 
                 Some(user_session) => {
@@ -315,7 +331,9 @@ async fn handle_get(req: &mut Request, depot: &Depot) -> Result<(Response, Cooki
                     activity_tracker
                         .record_browser_session(&clock, &user_session)
                         .await;
-                    url_builder.redirect(&pasion_router::Consent(grant.id))
+                    salvo::writing::Redirect::other(&url_builder.relative_url(
+                        &format!("/consent/{}", grant.id),
+                    ))
                 }
             };
 

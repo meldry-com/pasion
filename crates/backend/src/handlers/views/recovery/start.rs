@@ -52,7 +52,7 @@ pub async fn get(
     if maybe_session.is_some() {
         // TODO: redirect to continue whatever action was going on
         cookie_jar.write_to_response(res);
-        res.render(url_builder.redirect(&pasion_router::Index));
+        res.render(salvo::writing::Redirect::other(&url_builder.relative_url("/")));
         return Ok(());
     }
 
@@ -113,7 +113,7 @@ pub async fn post(
     if maybe_session.is_some() {
         // TODO: redirect to continue whatever action was going on
         cookie_jar.write_to_response(res);
-        res.render(url_builder.redirect(&pasion_router::Index));
+        res.render(salvo::writing::Redirect::other(&url_builder.relative_url("/")));
         return Ok(());
     }
 
@@ -167,6 +167,8 @@ pub async fn post(
     };
 
     cookie_jar.write_to_response(res);
-    res.render(url_builder.redirect(&pasion_router::AccountRecoveryProgress::new(session.id)));
+    res.render(salvo::writing::Redirect::other(&url_builder.relative_url(
+            &format!("/recover/progress/{}", session.id),
+        )));
     Ok(())
 }

@@ -27,6 +27,9 @@ woothee.workspace = true
 ruma-common.workspace = true
 lettre.workspace = true
 
+serde_urlencoded.workspace = true
+url.workspace = true
+
 pasion-iana.workspace = true
 pasion-jose.workspace = true
 oauth2-types.workspace = true

@@ -16,7 +16,7 @@ use pasion_matrix::{ConnectorRegistry, HomeserverConnection, ReadOnlyHomeserverC
 use pasion_matrix_palpo::PalpoConnection;
 use pasion_messaging::{MailTransport, Mailer, NotificationCenter, SmsSender, SmsTransport};
 use pasion_policy::PolicyFactory;
-use pasion_router::UrlBuilder;
+use pasion_data_model::UrlBuilder;
 use pasion_storage::{BoxRepositoryFactory, RepositoryAccess, RepositoryFactory};
 use pasion_templates::{SiteConfigExt, Templates};
 use tokio_util::{sync::CancellationToken, task::TaskTracker};

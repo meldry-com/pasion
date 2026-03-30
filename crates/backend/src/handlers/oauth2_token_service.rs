@@ -22,7 +22,7 @@ use pasion_keystore::Keystore;
 use pasion_matrix::HomeserverConnection;
 use crate::oidc_client::types::scope::ScopeToken;
 use pasion_policy::Policy;
-use pasion_router::UrlBuilder;
+use pasion_data_model::UrlBuilder;
 use pasion_storage::{
     BoxRepository, RepositoryAccess, RepositoryError,
     oauth2::{

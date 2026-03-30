@@ -9,7 +9,7 @@ use pasion_data_model::{BoxClock, BoxRng, SiteConfig, SystemClock};
 use pasion_keystore::Keystore;
 use pasion_matrix::HomeserverConnection;
 use pasion_policy::Policy;
-use pasion_router::UrlBuilder;
+use pasion_data_model::UrlBuilder;
 use crate::salvo_utils::client_authorization::{ClientAuthorization, CredentialsVerificationError};
 use pasion_storage::{BoxRepository, BoxRepositoryFactory};
 use pasion_templates::Templates;

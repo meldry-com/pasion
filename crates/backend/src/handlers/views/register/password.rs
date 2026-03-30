@@ -84,9 +84,17 @@ pub async fn get(
 
     if !site_config.password_registration_enabled {
         // If password-based registration is disabled, redirect to the login page here
-        res.render(
-            url_builder.redirect(&pasion_router::Login::from(query.action.post_auth_action)),
-        );
+        let path = if let Some(action) = &query.action.post_auth_action {
+            let query_str = serde_urlencoded::to_string(action).unwrap_or_default();
+            if query_str.is_empty() {
+                "/login".to_owned()
+            } else {
+                format!("/login?{query_str}")
+            }
+        } else {
+            "/login".to_owned()
+        };
+        res.render(salvo::writing::Redirect::other(&url_builder.relative_url(&path)));
         return Ok(());
     }
 
@@ -270,7 +278,9 @@ pub async fn post(
         .save(cookie_jar, &clock);
 
     cookie_jar.write_to_response(res);
-    res.render(url_builder.redirect(&pasion_router::RegisterFinish::new(registration.id)));
+    res.render(salvo::writing::Redirect::other(&url_builder.relative_url(
+        &format!("/register/steps/{}/finish", registration.id),
+    )));
     Ok(())
 }
 
@@ -396,7 +406,6 @@ mod tests {
         Request, StatusCode,
         header::{CONTENT_TYPE, LOCATION},
     };
-    use pasion_router::Route;
 
     use pasion_data_model::SiteConfig;
 
@@ -421,12 +430,12 @@ mod tests {
         .unwrap();
 
         let request =
-            Request::get(&*pasion_router::PasswordRegister::default().path_and_query()).empty();
+            Request::get("/register/password").empty();
         let response = state.request(request).await;
         response.assert_status(StatusCode::SEE_OTHER);
         response.assert_header_value(LOCATION, "/login");
 
-        let request = Request::post(&*pasion_router::PasswordRegister::default().path_and_query())
+        let request = Request::post("/register/password")
             .form(serde_json::json!({
                 "csrf": "abc",
                 "username": "john",
@@ -448,7 +457,7 @@ mod tests {
 
         // Render the registration page and get the CSRF token
         let request =
-            Request::get(&*pasion_router::PasswordRegister::default().path_and_query()).empty();
+            Request::get("/register/password").empty();
         let request = cookies.with_cookies(request);
         let response = state.request(request).await;
         cookies.save_cookies(&response);
@@ -465,7 +474,7 @@ mod tests {
             .unwrap();
 
         // Submit the registration form
-        let request = Request::post(&*pasion_router::PasswordRegister::default().path_and_query())
+        let request = Request::post("/register/password")
             .form(serde_json::json!({
                 "csrf": csrf_token,
                 "username": "john",
@@ -515,7 +524,7 @@ mod tests {
 
         // Render the registration page and get the CSRF token
         let request =
-            Request::get(&*pasion_router::PasswordRegister::default().path_and_query()).empty();
+            Request::get("/register/password").empty();
         let request = cookies.with_cookies(request);
         let response = state.request(request).await;
         cookies.save_cookies(&response);
@@ -532,7 +541,7 @@ mod tests {
             .unwrap();
 
         // Submit the registration form
-        let request = Request::post(&*pasion_router::PasswordRegister::default().path_and_query())
+        let request = Request::post("/register/password")
             .form(serde_json::json!({
                 "csrf": csrf_token,
                 "username": "john",
@@ -557,7 +566,7 @@ mod tests {
 
         // Render the registration page and get the CSRF token
         let request =
-            Request::get(&*pasion_router::PasswordRegister::default().path_and_query()).empty();
+            Request::get("/register/password").empty();
         let request = cookies.with_cookies(request);
         let response = state.request(request).await;
         cookies.save_cookies(&response);
@@ -574,7 +583,7 @@ mod tests {
             .unwrap();
 
         // Submit the registration form
-        let request = Request::post(&*pasion_router::PasswordRegister::default().path_and_query())
+        let request = Request::post("/register/password")
             .form(serde_json::json!({
                 "csrf": csrf_token,
                 "username": "a".repeat(256),
@@ -613,7 +622,7 @@ mod tests {
 
         // Render the registration page and get the CSRF token
         let request =
-            Request::get(&*pasion_router::PasswordRegister::default().path_and_query()).empty();
+            Request::get("/register/password").empty();
         let request = cookies.with_cookies(request);
         let response = state.request(request).await;
         cookies.save_cookies(&response);
@@ -630,7 +639,7 @@ mod tests {
             .unwrap();
 
         // Submit the registration form
-        let request = Request::post(&*pasion_router::PasswordRegister::default().path_and_query())
+        let request = Request::post("/register/password")
             .form(serde_json::json!({
                 "csrf": csrf_token,
                 "username": "john",
@@ -657,7 +666,7 @@ mod tests {
 
         // Render the registration page and get the CSRF token
         let request =
-            Request::get(&*pasion_router::PasswordRegister::default().path_and_query()).empty();
+            Request::get("/register/password").empty();
         let request = cookies.with_cookies(request);
         let response = state.request(request).await;
         cookies.save_cookies(&response);
@@ -677,7 +686,7 @@ mod tests {
         state.homeserver_connection.reserve_localpart("john").await;
 
         // Submit the registration form
-        let request = Request::post(&*pasion_router::PasswordRegister::default().path_and_query())
+        let request = Request::post("/register/password")
             .form(serde_json::json!({
                 "csrf": csrf_token,
                 "username": "john",
@@ -711,7 +720,7 @@ mod tests {
 
         // Render the registration page and get the CSRF token
         let request =
-            Request::get(&*pasion_router::PasswordRegister::default().path_and_query()).empty();
+            Request::get("/register/password").empty();
         let request = cookies.with_cookies(request);
         let response = state.request(request).await;
         cookies.save_cookies(&response);
@@ -728,7 +737,7 @@ mod tests {
             .unwrap();
 
         // Submit the registration form without email
-        let request = Request::post(&*pasion_router::PasswordRegister::default().path_and_query())
+        let request = Request::post("/register/password")
             .form(serde_json::json!({
                 "csrf": csrf_token,
                 "username": "alice",
@@ -781,7 +790,7 @@ mod tests {
 
         // Render the registration page and get the CSRF token
         let request =
-            Request::get(&*pasion_router::PasswordRegister::default().path_and_query()).empty();
+            Request::get("/register/password").empty();
         let request = cookies.with_cookies(request);
         let response = state.request(request).await;
         cookies.save_cookies(&response);
@@ -798,7 +807,7 @@ mod tests {
             .unwrap();
 
         // Submit the registration form with valid email
-        let request = Request::post(&*pasion_router::PasswordRegister::default().path_and_query())
+        let request = Request::post("/register/password")
             .form(serde_json::json!({
                 "csrf": csrf_token,
                 "username": "charlie",
@@ -852,7 +861,7 @@ mod tests {
 
         // Render the registration page and get the CSRF token
         let request =
-            Request::get(&*pasion_router::PasswordRegister::default().path_and_query()).empty();
+            Request::get("/register/password").empty();
         let request = cookies.with_cookies(request);
         let response = state.request(request).await;
         cookies.save_cookies(&response);
@@ -869,7 +878,7 @@ mod tests {
             .unwrap();
 
         // Submit the registration form without email
-        let request = Request::post(&*pasion_router::PasswordRegister::default().path_and_query())
+        let request = Request::post("/register/password")
             .form(serde_json::json!({
                 "csrf": csrf_token,
                 "username": "david",
@@ -911,7 +920,7 @@ mod tests {
 
         // Render the registration page and get the CSRF token
         let request =
-            Request::get(&*pasion_router::PasswordRegister::default().path_and_query()).empty();
+            Request::get("/register/password").empty();
         let request = cookies.with_cookies(request);
         let response = state.request(request).await;
         cookies.save_cookies(&response);
@@ -928,7 +937,7 @@ mod tests {
             .unwrap();
 
         // Submit the registration form with empty email
-        let request = Request::post(&*pasion_router::PasswordRegister::default().path_and_query())
+        let request = Request::post("/register/password")
             .form(serde_json::json!({
                 "csrf": csrf_token,
                 "username": "eve",
@@ -971,7 +980,7 @@ mod tests {
 
         // Render the registration page and get the CSRF token
         let request =
-            Request::get(&*pasion_router::PasswordRegister::default().path_and_query()).empty();
+            Request::get("/register/password").empty();
         let request = cookies.with_cookies(request);
         let response = state.request(request).await;
         cookies.save_cookies(&response);
@@ -988,7 +997,7 @@ mod tests {
             .unwrap();
 
         // Submit the registration form with invalid email
-        let request = Request::post(&*pasion_router::PasswordRegister::default().path_and_query())
+        let request = Request::post("/register/password")
             .form(serde_json::json!({
                 "csrf": csrf_token,
                 "username": "grace",

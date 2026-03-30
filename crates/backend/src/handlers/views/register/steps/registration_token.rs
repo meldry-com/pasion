@@ -1,5 +1,5 @@
 use anyhow::Context as _;
-use pasion_router::PostAuthAction;
+use pasion_data_model::PostAuthAction;
 use crate::salvo_utils::{
     InternalError,
     cookies::CookieJar,
@@ -68,9 +68,10 @@ pub async fn get(
             return Ok(());
         }
         Err(LoadRegistrationTokenStepError::TokenAlreadyAttached(registration)) => {
-            let destination = pasion_router::RegisterDisplayName::new(registration.id);
             cookie_jar.write_to_response(res);
-            res.render(url_builder.redirect(&destination));
+            res.render(salvo::writing::Redirect::other(&url_builder.relative_url(
+                &format!("/register/steps/{}/display-name", registration.id),
+            )));
             return Ok(());
         }
         Err(LoadRegistrationTokenStepError::Repository(error)) => {
@@ -126,9 +127,10 @@ pub async fn post(
             return Ok(());
         }
         Err(LoadRegistrationTokenStepError::TokenAlreadyAttached(registration)) => {
-            let destination = pasion_router::RegisterDisplayName::new(registration.id);
             cookie_jar.write_to_response(res);
-            res.render(url_builder.redirect(&destination));
+            res.render(salvo::writing::Redirect::other(&url_builder.relative_url(
+                &format!("/register/steps/{}/display-name", registration.id),
+            )));
             return Ok(());
         }
         Err(LoadRegistrationTokenStepError::Repository(error)) => {
@@ -186,9 +188,10 @@ pub async fn post(
             return Ok(());
         }
         Err(AttachRegistrationTokenError::TokenAlreadyAttached(registration)) => {
-            let destination = pasion_router::RegisterDisplayName::new(registration.id);
             cookie_jar.write_to_response(res);
-            res.render(url_builder.redirect(&destination));
+            res.render(salvo::writing::Redirect::other(&url_builder.relative_url(
+                &format!("/register/steps/{}/display-name", registration.id),
+            )));
             return Ok(());
         }
         Err(AttachRegistrationTokenError::NotFound) => {
@@ -202,8 +205,9 @@ pub async fn post(
     };
 
     // Continue to the next step
-    let destination = pasion_router::RegisterFinish::new(registration.id);
     cookie_jar.write_to_response(res);
-    res.render(url_builder.redirect(&destination));
+    res.render(salvo::writing::Redirect::other(&url_builder.relative_url(
+        &format!("/register/steps/{}/finish", registration.id),
+    )));
     Ok(())
 }

@@ -4,7 +4,7 @@ use opentelemetry::{Key, KeyValue, metrics::Counter};
 use pasion_data_model::{Clock, oauth2::LoginHint};
 use pasion_i18n::DataLocale;
 use pasion_matrix::HomeserverConnection;
-use pasion_router::UpstreamOAuth2Authorize;
+use pasion_data_model::PostAuthAction;
 use crate::salvo_utils::{
     InternalError, SessionInfoExt,
     cookies::CookieJar,
@@ -105,14 +105,20 @@ pub async fn get(
     if !site_config.password_login_enabled && providers.len() == 1 {
         let provider = providers.into_iter().next().unwrap();
 
-        let mut destination = UpstreamOAuth2Authorize::new(provider.id);
-
-        if let Some(action) = query.post_auth_action {
-            destination = destination.and_then(action);
-        }
+        let base_path = format!("/upstream/authorize/{}", provider.id);
+        let path = if let Some(action) = &query.post_auth_action {
+            let query_str = serde_urlencoded::to_string(action).unwrap_or_default();
+            if query_str.is_empty() {
+                base_path
+            } else {
+                format!("{base_path}?{query_str}")
+            }
+        } else {
+            base_path
+        };
 
         cookie_jar.write_to_response(res);
-        res.render(url_builder.redirect(&destination));
+        res.render(salvo::writing::Redirect::other(&url_builder.relative_url(&path)));
         return Ok(());
     }
 
@@ -378,7 +384,6 @@ mod test {
         UpstreamOAuthProviderTokenAuthMethod,
     };
     use pasion_iana::jose::JsonWebSignatureAlg;
-    use pasion_router::Route;
     use pasion_storage::{
         RepositoryAccess,
         upstream_oauth2::{UpstreamOAuthProviderParams, UpstreamOAuthProviderRepository},
@@ -457,11 +462,11 @@ mod test {
             .unwrap();
         repo.save().await.unwrap();
 
-        let first_provider_login = pasion_router::UpstreamOAuth2Authorize::new(first_provider.id);
+        let first_provider_path = format!("/upstream/authorize/{}", first_provider.id);
 
         let response = state.request(Request::get("/login").empty()).await;
         response.assert_status(StatusCode::SEE_OTHER);
-        response.assert_header_value(LOCATION, &first_provider_login.path_and_query());
+        response.assert_header_value(LOCATION, &first_provider_path);
 
         // Adding a second provider should show a login page with both providers
         let mut repo = state.repository().await.unwrap();
@@ -500,7 +505,7 @@ mod test {
             .unwrap();
         repo.save().await.unwrap();
 
-        let second_provider_login = pasion_router::UpstreamOAuth2Authorize::new(second_provider.id);
+        let second_provider_path = format!("/upstream/authorize/{}", second_provider.id);
 
         let response = state.request(Request::get("/login").empty()).await;
         response.assert_status(StatusCode::OK);
@@ -509,13 +514,13 @@ mod test {
         assert!(
             response
                 .body()
-                .contains(&escape_html(&first_provider_login.path_and_query()))
+                .contains(&escape_html(&first_provider_path))
         );
         assert!(response.body().contains(&escape_html("second.com")));
         assert!(
             response
                 .body()
-                .contains(&escape_html(&second_provider_login.path_and_query()))
+                .contains(&escape_html(&second_provider_path))
         );
     }
 

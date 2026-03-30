@@ -82,8 +82,10 @@ async fn handle_get(
     let (csrf_token, cookie_jar) = cookie_jar.csrf_token(&clock, &mut rng);
 
     let Some(session) = maybe_session else {
-        let login = pasion_router::Login::and_continue_device_code_grant(grant_id);
-        let redirect = url_builder.redirect(&login);
+        let action = pasion_data_model::PostAuthAction::continue_device_code_grant(grant_id);
+        let query_str = serde_urlencoded::to_string(&action).unwrap_or_default();
+        let path = format!("/login?{query_str}");
+        let redirect = salvo::writing::Redirect::other(&url_builder.relative_url(&path));
         cookie_jar.write_to_response(res);
         res.render(redirect);
         return Ok(());
@@ -254,8 +256,10 @@ async fn handle_post(
     let (csrf_token, cookie_jar) = cookie_jar.csrf_token(&clock, &mut rng);
 
     let Some(session) = maybe_session else {
-        let login = pasion_router::Login::and_continue_device_code_grant(grant_id);
-        let redirect = url_builder.redirect(&login);
+        let action = pasion_data_model::PostAuthAction::continue_device_code_grant(grant_id);
+        let query_str = serde_urlencoded::to_string(&action).unwrap_or_default();
+        let path = format!("/login?{query_str}");
+        let redirect = salvo::writing::Redirect::other(&url_builder.relative_url(&path));
         cookie_jar.write_to_response(res);
         res.render(redirect);
         return Ok(());

@@ -9,7 +9,7 @@ use pasion_data_model::{
 use pasion_jose::jwt::Jwt;
 use pasion_matrix::HomeserverConnection;
 use pasion_policy::{Policy, RegisterInput, RegistrationMethod, Requester as PolicyRequester};
-use pasion_router::{PostAuthAction, RegisterFinish, UrlBuilder};
+use pasion_data_model::{PostAuthAction, UrlBuilder};
 use crate::salvo_utils::SessionInfo;
 use pasion_storage::{
     BoxRepository, Pagination, RepositoryAccess, RepositoryError,
@@ -463,7 +463,7 @@ pub async fn submit_upstream_link_action(
             }
 
             Ok(SubmitUpstreamLinkOutcome::Registered {
-                redirect_url: url_builder.relative_url_for(&RegisterFinish::new(registration.id)),
+                redirect_url: url_builder.relative_url(&format!("/register/steps/{}/finish", registration.id)),
                 registration,
                 provider_id: provider.id,
             })
@@ -576,7 +576,7 @@ async fn load_upstream_registration_screen(
         .await?;
 
         return Ok(LoadUpstreamLinkOutcome::Registered {
-            redirect_url: url_builder.relative_url_for(&RegisterFinish::new(registration.id)),
+            redirect_url: url_builder.relative_url(&format!("/register/steps/{}/finish", registration.id)),
             registration,
             provider_id: provider.id,
         });

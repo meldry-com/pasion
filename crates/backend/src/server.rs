@@ -20,7 +20,6 @@ use opentelemetry_semantic_conventions::trace::{
 use pasion_config::{HttpBindConfig, HttpResource, HttpTlsConfig, UnixOrTcp};
 use pasion_context::LogContext;
 use crate::listener::{ConnectionInfo, unix_or_tcp::UnixOrTcpListener};
-use pasion_router::Route;
 use pasion_templates::Templates;
 use rustls::ServerConfig;
 use salvo::{
@@ -308,7 +307,7 @@ pub fn build_router(
     for resource in resources {
         router = match resource {
             pasion_config::HttpResource::Health => router.push(
-                Router::with_path(pasion_router::Healthcheck::route())
+                Router::with_path("/health")
                     .get(crate::handlers::health::get),
             ),
             pasion_config::HttpResource::Prometheus => {
@@ -316,12 +315,12 @@ pub fn build_router(
             }
             pasion_config::HttpResource::Discovery => router
                 .push(
-                    Router::with_path(pasion_router::OidcConfiguration::route())
+                    Router::with_path("/.well-known/openid-configuration")
                         .hoop(public_oidc_browser_cors())
                         .get(crate::handlers::oauth2::discovery::get),
                 )
                 .push(
-                    Router::with_path(pasion_router::Webfinger::route())
+                    Router::with_path("/.well-known/webfinger")
                         .hoop(public_oidc_browser_cors())
                         .get(crate::handlers::oauth2::webfinger::get),
                 ),
@@ -331,10 +330,7 @@ pub fn build_router(
                 undocumented_oauth2_access: _,
             } => build_rest_api_router(router),
             pasion_config::HttpResource::Assets { path } => router.push(
-                Router::with_path(&format!(
-                    "{}/{{**path}}",
-                    pasion_router::StaticAsset::route()
-                ))
+                Router::with_path("/assets/{**path}")
                 .hoop(cache_control_middleware)
                 .get(
                     StaticDir::new([path.join("assets")])
@@ -374,37 +370,37 @@ fn build_human_router(router: Router, _templates: Templates) -> Router {
     router
         // ── OAuth2 protocol endpoints (server-side redirects, MUST stay) ──
         .push(
-            Router::with_path(pasion_router::OAuth2AuthorizationEndpoint::route())
+            Router::with_path("/authorize")
                 .get(crate::handlers::oauth2::authorization::get),
         )
         // ── Upstream OAuth2 (server-side redirect & callback) ──
         .push(
-            Router::with_path(pasion_router::UpstreamOAuth2Authorize::route())
+            Router::with_path("/upstream/authorize/{provider_id}")
                 .get(crate::handlers::upstream_oauth2::authorize::get),
         )
         .push(
-            Router::with_path(pasion_router::UpstreamOAuth2Callback::route())
+            Router::with_path("/upstream/callback/{provider_id}")
                 .get(crate::handlers::upstream_oauth2::callback::handler)
                 .post(crate::handlers::upstream_oauth2::callback::handler),
         )
         // Upstream link page is now served by the SPA frontend
         .push(
-            Router::with_path(pasion_router::UpstreamOAuth2Link::route())
+            Router::with_path("/upstream/link/{link_id}")
                 .get(crate::handlers::spa::get),
         )
         .push(
-            Router::with_path(pasion_router::UpstreamOAuth2BackchannelLogout::route())
+            Router::with_path("/upstream/backchannel-logout/{provider_id}")
                 .post(crate::handlers::upstream_oauth2::backchannel_logout::post),
         )
         // ── Well-known redirect ──
         .push(
-            Router::with_path(pasion_router::ChangePasswordDiscovery::route())
+            Router::with_path("/.well-known/change-password")
                 .get(change_password_redirect_handler),
         )
         // ── SPA shell: all user-facing pages are rendered by the Dioxus frontend ──
         // In production these serve the SPA HTML shell; the client-side router
         // handles the actual page rendering.
-        .push(Router::with_path(pasion_router::Index::route()).get(crate::handlers::spa::get))
+        .push(Router::with_path("/").get(crate::handlers::spa::get))
         .push(Router::with_path("/login").get(crate::handlers::spa::get))
         .push(Router::with_path("/register").get(crate::handlers::spa::get))
         .push(Router::with_path("/register/{**rest}").get(crate::handlers::spa::get))
@@ -414,9 +410,9 @@ fn build_human_router(router: Router, _templates: Templates) -> Router {
         .push(Router::with_path("/link").get(crate::handlers::spa::get))
         .push(Router::with_path("/device/{**rest}").get(crate::handlers::spa::get))
         .push(Router::with_path("/account").get(account_redirect_handler))
-        .push(Router::with_path(pasion_router::Account::route()).get(crate::handlers::spa::get))
+        .push(Router::with_path("/account/").get(crate::handlers::spa::get))
         .push(
-            Router::with_path(pasion_router::AccountWildcard::route())
+            Router::with_path("/account/{*rest}")
                 .get(crate::handlers::spa::get),
         )
 }
@@ -424,43 +420,43 @@ fn build_human_router(router: Router, _templates: Templates) -> Router {
 fn build_oauth_router(router: Router) -> Router {
     router
         .push(
-            Router::with_path(pasion_router::OAuth2Keys::route())
+            Router::with_path("/oauth2/keys.json")
                 .hoop(public_oidc_browser_cors())
                 .get(crate::handlers::oauth2::keys::get),
         )
         .push(
-            Router::with_path(pasion_router::OidcUserinfo::route())
+            Router::with_path("/oauth2/userinfo")
                 .hoop(public_oidc_browser_cors())
                 .options(oidc_preflight_handler)
                 .get(crate::handlers::oauth2::userinfo::get)
                 .post(crate::handlers::oauth2::userinfo::get),
         )
         .push(
-            Router::with_path(pasion_router::OAuth2Introspection::route())
+            Router::with_path("/oauth2/introspect")
                 .hoop(public_oidc_browser_cors())
                 .options(oidc_preflight_handler)
                 .post(crate::handlers::oauth2::introspection::post),
         )
         .push(
-            Router::with_path(pasion_router::OAuth2Revocation::route())
+            Router::with_path("/oauth2/revoke")
                 .hoop(public_oidc_browser_cors())
                 .options(oidc_preflight_handler)
                 .post(crate::handlers::oauth2::revoke::post),
         )
         .push(
-            Router::with_path(pasion_router::OAuth2TokenEndpoint::route())
+            Router::with_path("/oauth2/token")
                 .hoop(public_oidc_browser_cors())
                 .options(oidc_preflight_handler)
                 .post(crate::handlers::oauth2::token::post),
         )
         .push(
-            Router::with_path(pasion_router::OAuth2RegistrationEndpoint::route())
+            Router::with_path("/oauth2/registration")
                 .hoop(public_oidc_browser_cors())
                 .options(oidc_preflight_handler)
                 .post(crate::handlers::oauth2::registration::post),
         )
         .push(
-            Router::with_path(pasion_router::OAuth2DeviceAuthorizationEndpoint::route())
+            Router::with_path("/oauth2/device")
                 .hoop(public_oidc_browser_cors())
                 .options(oidc_preflight_handler)
                 .post(crate::handlers::oauth2::device::authorize::post),
@@ -760,11 +756,9 @@ async fn account_redirect_handler(depot: &Depot) -> impl Writer + use<> {
 
     let url_builder = depot.get_url_builder().cloned();
     if let Some(url_builder) = url_builder {
-        let prefix = url_builder.prefix().unwrap_or_default();
-        let route = pasion_router::Account::route();
-        Redirect::found(format!("{prefix}{route}"))
+        Redirect::found(url_builder.relative_url("/account/"))
     } else {
-        Redirect::found(pasion_router::Account::route())
+        Redirect::found("/account/")
     }
 }
 
@@ -776,7 +770,7 @@ async fn change_password_redirect_handler(depot: &Depot) -> impl Writer + use<> 
     if let Some(url_builder) = url_builder {
         Redirect::found(
             url_builder
-                .absolute_url_for(&pasion_router::AccountPasswordChange)
+                .absolute_url("/account/password/change")
                 .to_string(),
         )
     } else {

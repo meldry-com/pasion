@@ -4,7 +4,7 @@ use pasion_jose::{
     jwt::{JsonWebSignatureHeader, Jwt},
 };
 use pasion_keystore::Keystore;
-use pasion_router::UrlBuilder;
+use pasion_data_model::UrlBuilder;
 use crate::record_error;
 use crate::salvo_utils::{
     sentry::SentryEventID,

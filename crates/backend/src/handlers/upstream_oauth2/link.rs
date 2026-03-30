@@ -347,7 +347,9 @@ pub async fn get(
 
             cookie_jar.write_to_response(&mut *res);
             res.render(
-                url_builder.redirect(&pasion_router::RegisterFinish::new(registration.id)),
+                salvo::writing::Redirect::other(&url_builder.relative_url(
+                    &format!("/register/steps/{}/finish", registration.id),
+                )),
             );
         }
 
@@ -496,7 +498,9 @@ pub async fn post(
 
             cookie_jar.write_to_response(res);
             res.render(
-                url_builder.redirect(&pasion_router::RegisterFinish::new(registration.id)),
+                salvo::writing::Redirect::other(&url_builder.relative_url(
+                    &format!("/register/steps/{}/finish", registration.id),
+                )),
             );
             Ok(())
         }
@@ -586,7 +590,6 @@ mod tests {
     use pasion_iana::jose::JsonWebSignatureAlg;
     use pasion_jose::jwt::{JsonWebSignatureHeader, Jwt};
     use pasion_keystore::Keystore;
-    use pasion_router::Route;
     use pasion_storage::{
         Repository, RepositoryError, upstream_oauth2::UpstreamOAuthProviderParams,
     };
@@ -729,7 +732,7 @@ mod tests {
         cookies.import(cookie_jar);
 
         let request =
-            Request::get(&*pasion_router::UpstreamOAuth2Link::new(link.id).path()).empty();
+            Request::get(&format!("/upstream/link/{}", link.id)).empty();
         let request = cookies.with_cookies(request);
         let response = state.request(request).await;
         cookies.save_cookies(&response);
@@ -746,7 +749,7 @@ mod tests {
             .next()
             .unwrap();
 
-        let request = Request::post(&*pasion_router::UpstreamOAuth2Link::new(link.id).path()).form(
+        let request = Request::post(&format!("/upstream/link/{}", link.id)).form(
             serde_json::json!({
                 "csrf": csrf_token,
                 "action": "register",
@@ -928,7 +931,7 @@ mod tests {
         cookies.import(cookie_jar);
 
         let request =
-            Request::get(&*pasion_router::UpstreamOAuth2Link::new(link.id).path()).empty();
+            Request::get(&format!("/upstream/link/{}", link.id)).empty();
         let request = cookies.with_cookies(request);
         let response = state.request(request).await;
         cookies.save_cookies(&response);
@@ -1071,7 +1074,7 @@ mod tests {
         repo.save().await.unwrap();
 
         let request =
-            Request::get(&*pasion_router::UpstreamOAuth2Link::new(link.id).path()).empty();
+            Request::get(&format!("/upstream/link/{}", link.id)).empty();
         let request = cookies.with_cookies(request);
         let response = state.request(request).await;
         cookies.save_cookies(&response);
@@ -1188,7 +1191,7 @@ mod tests {
         cookies.import(cookie_jar);
 
         let request =
-            Request::get(&*pasion_router::UpstreamOAuth2Link::new(link.id).path()).empty();
+            Request::get(&format!("/upstream/link/{}", link.id)).empty();
         let request = cookies.with_cookies(request);
         let response = state.request(request).await;
         cookies.save_cookies(&response);
@@ -1379,7 +1382,7 @@ mod tests {
         cookies.import(cookie_jar);
 
         let request =
-            Request::get(&*pasion_router::UpstreamOAuth2Link::new(link.id).path()).empty();
+            Request::get(&format!("/upstream/link/{}", link.id)).empty();
         let request = cookies.with_cookies(request);
         let response = state.request(request).await;
         cookies.save_cookies(&response);
@@ -1511,7 +1514,7 @@ mod tests {
         cookies.import(cookie_jar);
 
         let request =
-            Request::get(&*pasion_router::UpstreamOAuth2Link::new(link.id).path()).empty();
+            Request::get(&format!("/upstream/link/{}", link.id)).empty();
         let request = cookies.with_cookies(request);
         let response = state.request(request).await;
         cookies.save_cookies(&response);
@@ -1650,7 +1653,7 @@ mod tests {
         cookies.import(cookie_jar);
 
         let request =
-            Request::get(&*pasion_router::UpstreamOAuth2Link::new(link.id).path()).empty();
+            Request::get(&format!("/upstream/link/{}", link.id)).empty();
         let request = cookies.with_cookies(request);
         let response = state.request(request).await;
         cookies.save_cookies(&response);

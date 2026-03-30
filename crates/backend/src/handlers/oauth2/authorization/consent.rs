@@ -1,4 +1,4 @@
-use pasion_router::PostAuthAction;
+use pasion_data_model::PostAuthAction;
 use crate::salvo_utils::{
     GenericError, InternalError,
     csrf::{CsrfExt, ProtectedForm},
@@ -111,8 +111,10 @@ async fn handle_get(
     session_repo.cancel().await?;
 
     let Some(session) = maybe_session else {
-        let login = pasion_router::Login::and_continue_grant(grant_id);
-        let redirect = url_builder.redirect(&login);
+        let action = PostAuthAction::continue_grant(grant_id);
+        let query_str = serde_urlencoded::to_string(&action).unwrap_or_default();
+        let path = format!("/login?{query_str}");
+        let redirect = salvo::writing::Redirect::other(&url_builder.relative_url(&path));
         cookie_jar.write_to_response(res);
         res.render(redirect);
         return Ok(());
@@ -215,8 +217,9 @@ async fn handle_post(
 
     let Some(browser_session) = maybe_session else {
         let next = PostAuthAction::continue_grant(grant_id);
-        let login = pasion_router::Login::and_then(next);
-        let redirect = url_builder.redirect(&login);
+        let query_str = serde_urlencoded::to_string(&next).unwrap_or_default();
+        let path = format!("/login?{query_str}");
+        let redirect = salvo::writing::Redirect::other(&url_builder.relative_url(&path));
         cookie_jar.write_to_response(res);
         res.render(redirect);
         return Ok(());

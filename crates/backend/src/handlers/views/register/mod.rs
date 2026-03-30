@@ -1,4 +1,4 @@
-use pasion_router::{PasswordRegister, UpstreamOAuth2Authorize};
+use pasion_data_model::PostAuthAction;
 use crate::salvo_utils::{InternalError, SessionInfoExt, cookies::CookieJar, csrf::CsrfExt as _};
 use pasion_templates::{RegisterContext, TemplateContext, Templates};
 use salvo::{prelude::*, writing::Text};
@@ -54,28 +54,40 @@ pub async fn get(
     if !site_config.password_registration_enabled && providers.len() == 1 {
         let provider = providers.into_iter().next().unwrap();
 
-        let mut destination = UpstreamOAuth2Authorize::new(provider.id);
-
-        if let Some(action) = query.post_auth_action {
-            destination = destination.and_then(action);
-        }
+        let base_path = format!("/upstream/authorize/{}", provider.id);
+        let path = if let Some(action) = &query.post_auth_action {
+            let query_str = serde_urlencoded::to_string(action).unwrap_or_default();
+            if query_str.is_empty() {
+                base_path
+            } else {
+                format!("{base_path}?{query_str}")
+            }
+        } else {
+            base_path
+        };
 
         cookie_jar.write_to_response(res);
-        res.render(url_builder.redirect(&destination));
+        res.render(salvo::writing::Redirect::other(&url_builder.relative_url(&path)));
         return Ok(());
     }
 
     // If password-based registration is enabled and there are no upstream
     // providers, we redirect to the password registration page
     if site_config.password_registration_enabled && providers.is_empty() {
-        let mut destination = PasswordRegister::default();
-
-        if let Some(action) = query.post_auth_action {
-            destination = destination.and_then(action);
-        }
+        let base_path = "/register/password";
+        let path = if let Some(action) = &query.post_auth_action {
+            let query_str = serde_urlencoded::to_string(action).unwrap_or_default();
+            if query_str.is_empty() {
+                base_path.to_owned()
+            } else {
+                format!("{base_path}?{query_str}")
+            }
+        } else {
+            base_path.to_owned()
+        };
 
         cookie_jar.write_to_response(res);
-        res.render(url_builder.redirect(&destination));
+        res.render(salvo::writing::Redirect::other(&url_builder.relative_url(&path)));
         return Ok(());
     }
 

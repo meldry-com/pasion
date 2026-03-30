@@ -2,7 +2,7 @@ use std::sync::{Arc, LazyLock};
 
 use opentelemetry::metrics::Counter;
 use pasion_matrix::HomeserverConnection;
-use pasion_router::PostAuthAction;
+use pasion_data_model::PostAuthAction;
 use crate::salvo_utils::{InternalError, SessionInfoExt as _, cookies::CookieJar};
 use pasion_templates::{RegisterStepsEmailInUseContext, TemplateContext as _, Templates};
 use salvo::{prelude::*, writing::Text};
@@ -115,15 +115,15 @@ pub async fn get(
         }) => match source {
             crate::handlers::account_registration::PrepareRegistrationCompletionError::RegistrationTokenRequired => {
                 cookie_jar.write_to_response(res);
-                res.render(url_builder.redirect(&pasion_router::RegisterToken::new(
-                    registration.id,
+                res.render(salvo::writing::Redirect::other(&url_builder.relative_url(
+                    &format!("/register/steps/{}/token", registration.id),
                 )));
                 return Ok(());
             }
             crate::handlers::account_registration::PrepareRegistrationCompletionError::EmailNotVerified => {
                 cookie_jar.write_to_response(res);
-                res.render(url_builder.redirect(&pasion_router::RegisterVerifyEmail::new(
-                    registration.id,
+                res.render(salvo::writing::Redirect::other(&url_builder.relative_url(
+                    &format!("/register/steps/{}/verify-email", registration.id),
                 )));
                 return Ok(());
             }
@@ -144,8 +144,8 @@ pub async fn get(
             }
             crate::handlers::account_registration::PrepareRegistrationCompletionError::DisplayNameRequired => {
                 cookie_jar.write_to_response(res);
-                res.render(url_builder.redirect(&pasion_router::RegisterDisplayName::new(
-                    registration.id,
+                res.render(salvo::writing::Redirect::other(&url_builder.relative_url(
+                    &format!("/register/steps/{}/display-name", registration.id),
                 )));
                 return Ok(());
             }

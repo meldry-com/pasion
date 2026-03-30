@@ -1,4 +1,5 @@
-use pasion_router::PostAuthAction;
+use pasion_data_model::PostAuthAction;
+use crate::handlers::post_auth::post_auth_action_redirect;
 use crate::salvo_utils::{
     InternalError, SessionInfoExt,
     cookies::CookieJar,
@@ -43,9 +44,9 @@ pub async fn post(
     let cookie_jar = cookie_jar.update_session_info(&session_info.mark_session_ended());
 
     let destination = if let Some(action) = form {
-        action.go_next(&url_builder)
+        post_auth_action_redirect(&action, &url_builder)
     } else {
-        url_builder.redirect(&pasion_router::Login::default())
+        salvo::writing::Redirect::other(&url_builder.relative_url("/login"))
     };
 
     cookie_jar.write_to_response(res);

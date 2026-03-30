@@ -792,6 +792,8 @@ pub async fn handler(
     repo.save().await?;
 
     cookie_jar.write_to_response(res);
-    res.render(url_builder.redirect(&pasion_router::UpstreamOAuth2Link::new(link.id)));
+    res.render(salvo::writing::Redirect::other(&url_builder.relative_url(
+        &format!("/upstream/link/{}", link.id),
+    )));
     Ok(())
 }

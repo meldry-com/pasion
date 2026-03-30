@@ -1,5 +1,5 @@
 use anyhow::Context;
-use pasion_router::{PostAuthAction, Route, UrlBuilder};
+use pasion_data_model::{PostAuthAction, UrlBuilder};
 use pasion_storage::{
     RepositoryAccess,
     oauth2::OAuth2AuthorizationGrantRepository,
@@ -7,6 +7,8 @@ use pasion_storage::{
 };
 use pasion_templates::{PostAuthContext, PostAuthContextInner};
 use serde::{Deserialize, Serialize};
+
+use crate::handlers::post_auth::post_auth_action_redirect;
 
 #[derive(Serialize, Deserialize, Default, Debug, Clone)]
 pub(crate) struct OptionalPostAuthAction {
@@ -21,19 +23,19 @@ impl From<Option<PostAuthAction>> for OptionalPostAuthAction {
 }
 
 impl OptionalPostAuthAction {
-    pub fn go_next_or_default<T: Route>(
+    pub fn go_next_or_default(
         &self,
         url_builder: &UrlBuilder,
-        default: &T,
+        default_path: &str,
     ) -> salvo::writing::Redirect {
         self.post_auth_action.as_ref().map_or_else(
-            || url_builder.redirect(default),
-            |action| action.go_next(url_builder),
+            || salvo::writing::Redirect::other(&url_builder.relative_url(default_path)),
+            |action| post_auth_action_redirect(action, url_builder),
         )
     }
 
     pub fn go_next(&self, url_builder: &UrlBuilder) -> salvo::writing::Redirect {
-        self.go_next_or_default(url_builder, &pasion_router::Index)
+        self.go_next_or_default(url_builder, "/")
     }
 
     pub async fn load_context<'a>(

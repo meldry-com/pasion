@@ -1,4 +1,4 @@
-use pasion_router::PostAuthAction;
+use pasion_data_model::{AccountAction, PostAuthAction};
 use crate::salvo_utils::{InternalError, cookies::CookieJar};
 use pasion_templates::{AppContext, TemplateContext, Templates};
 use salvo::{prelude::*, writing::Text};
@@ -13,7 +13,7 @@ use crate::handlers::{
 #[derive(Deserialize, Default)]
 pub struct Params {
     #[serde(default, flatten)]
-    action: Option<pasion_router::AccountAction>,
+    action: Option<AccountAction>,
 }
 
 #[handler]
@@ -52,9 +52,14 @@ pub async fn get(
     // TODO: keep the full path, not just the action
     let Some(session) = maybe_session else {
         cookie_jar.write_to_response(res);
-        res.render(url_builder.redirect(&pasion_router::Login::and_then(
-            PostAuthAction::manage_account(action),
-        )));
+        let post_action = PostAuthAction::manage_account(action);
+        let query = serde_urlencoded::to_string(&post_action).unwrap_or_default();
+        let path = if query.is_empty() {
+            "/login".to_owned()
+        } else {
+            format!("/login?{query}")
+        };
+        res.render(salvo::writing::Redirect::other(&url_builder.relative_url(&path)));
         return Ok(());
     };
 
