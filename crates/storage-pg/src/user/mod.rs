@@ -5,7 +5,7 @@ use async_trait::async_trait;
 use chrono::{DateTime, Utc};
 use diesel::prelude::*;
 use diesel_async::RunQueryDsl;
-use pasion_data_model::{Clock, User};
+use pasion_data_model::{Clock, User, new_id};
 use pasion_storage::user::{UserFilter, UserRepository, UserState};
 use pasion_storage::{Pagination, pagination::PaginationDirection};
 use rand::RngCore;
@@ -151,7 +151,7 @@ impl UserRepository for PgUserRepository<'_> {
         username: String,
     ) -> Result<User, Self::Error> {
         let created_at = clock.now();
-        let id = Ulid::from_datetime_with_source(created_at.into(), rng);
+        let id = new_id(created_at, rng);
         tracing::Span::current().record("user.id", tracing::field::display(id));
 
         let new_user = NewUser {

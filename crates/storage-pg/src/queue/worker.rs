@@ -6,10 +6,9 @@ use chrono::Duration;
 use diesel::prelude::*;
 use diesel::sql_types::{Timestamptz, Uuid as DieselUuid};
 use diesel_async::RunQueryDsl;
-use pasion_data_model::Clock;
+use pasion_data_model::{Clock, new_id};
 use pasion_storage::queue::{QueueWorkerRepository, Worker};
 use rand::RngCore;
-use ulid::Ulid;
 use uuid::Uuid;
 
 use crate::DatabaseError;
@@ -33,7 +32,7 @@ impl<'c> PgQueueWorkerRepository<'c> {
 #[derive(Insertable)]
 #[diesel(table_name = queue_workers)]
 struct NewWorker {
-    queue_worker_id: Uuid,
+    id: Uuid,
     registered_at: chrono::DateTime<chrono::Utc>,
     last_seen_at: chrono::DateTime<chrono::Utc>,
 }
@@ -56,11 +55,11 @@ impl QueueWorkerRepository for PgQueueWorkerRepository<'_> {
         clock: &dyn Clock,
     ) -> Result<Worker, Self::Error> {
         let now = clock.now();
-        let worker_id = Ulid::from_datetime_with_source(now.into(), rng);
+        let worker_id = new_id(now, rng);
         tracing::Span::current().record("worker.id", tracing::field::display(worker_id));
 
         let new_worker = NewWorker {
-            queue_worker_id: Uuid::from(worker_id),
+            id: Uuid::from(worker_id),
             registered_at: now,
             last_seen_at: now,
         };
@@ -85,7 +84,7 @@ impl QueueWorkerRepository for PgQueueWorkerRepository<'_> {
         let now = clock.now();
         let rows_affected = diesel::update(
             queue_workers::table
-                .filter(queue_workers::queue_worker_id.eq(Uuid::from(worker.id)))
+                .filter(queue_workers::id.eq(Uuid::from(worker.id)))
                 .filter(queue_workers::shutdown_at.is_null()),
         )
         .set(queue_workers::last_seen_at.eq(now))
@@ -109,7 +108,7 @@ impl QueueWorkerRepository for PgQueueWorkerRepository<'_> {
     async fn shutdown(&mut self, clock: &dyn Clock, worker: &Worker) -> Result<(), Self::Error> {
         let now = clock.now();
         let rows_affected = diesel::update(
-            queue_workers::table.filter(queue_workers::queue_worker_id.eq(Uuid::from(worker.id))),
+            queue_workers::table.filter(queue_workers::id.eq(Uuid::from(worker.id))),
         )
         .set(queue_workers::shutdown_at.eq(Some(now)))
         .execute(self.conn)

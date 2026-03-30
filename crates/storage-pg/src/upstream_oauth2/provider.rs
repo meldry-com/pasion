@@ -2,7 +2,7 @@ use async_trait::async_trait;
 use chrono::{DateTime, Utc};
 use diesel::prelude::*;
 use diesel_async::RunQueryDsl;
-use pasion_data_model::{Clock, UpstreamOAuthProvider, UpstreamOAuthProviderClaimsImports};
+use pasion_data_model::{Clock, UpstreamOAuthProvider, UpstreamOAuthProviderClaimsImports, new_id};
 use pasion_storage::{
     Page, Pagination,
     pagination::{Node, PaginationDirection},
@@ -33,7 +33,7 @@ impl<'c> PgUpstreamOAuthProviderRepository<'c> {
 #[derive(Debug, Clone, Queryable, Selectable)]
 #[diesel(table_name = upstream_oauth_providers)]
 struct ProviderLookup {
-    upstream_oauth_provider_id: Uuid,
+    id: Uuid,
     issuer: Option<String>,
     human_name: Option<String>,
     brand_name: Option<String>,
@@ -62,7 +62,7 @@ struct ProviderLookup {
 
 impl Node<Ulid> for ProviderLookup {
     fn cursor(&self) -> Ulid {
-        self.upstream_oauth_provider_id.into()
+        self.id.into()
     }
 }
 
@@ -70,7 +70,7 @@ impl TryFrom<ProviderLookup> for UpstreamOAuthProvider {
     type Error = DatabaseInconsistencyError;
 
     fn try_from(value: ProviderLookup) -> Result<Self, Self::Error> {
-        let id = value.upstream_oauth_provider_id.into();
+        let id = value.id.into();
         let scope = value.scope.parse().map_err(|e| {
             DatabaseInconsistencyError::on("upstream_oauth_providers")
                 .column("scope")
@@ -236,7 +236,7 @@ impl TryFrom<ProviderLookup> for UpstreamOAuthProvider {
 #[derive(Insertable)]
 #[diesel(table_name = upstream_oauth_providers)]
 struct NewProvider {
-    upstream_oauth_provider_id: Uuid,
+    id: Uuid,
     issuer: Option<String>,
     human_name: Option<String>,
     brand_name: Option<String>,
@@ -308,11 +308,11 @@ impl UpstreamOAuthProviderRepository for PgUpstreamOAuthProviderRepository<'_> {
         params: UpstreamOAuthProviderParams,
     ) -> Result<UpstreamOAuthProvider, Self::Error> {
         let created_at = clock.now();
-        let id = Ulid::from_datetime_with_source(created_at.into(), rng);
+        let id = new_id(created_at, rng);
         tracing::Span::current().record("upstream_oauth_provider.id", tracing::field::display(id));
 
         let new_provider = NewProvider {
-            upstream_oauth_provider_id: Uuid::from(id),
+            id: Uuid::from(id),
             issuer: params.issuer.clone(),
             human_name: params.human_name.clone(),
             brand_name: params.brand_name.clone(),
@@ -442,7 +442,7 @@ impl UpstreamOAuthProviderRepository for PgUpstreamOAuthProviderRepository<'_> {
         let created_at = clock.now();
 
         let new_provider = NewProvider {
-            upstream_oauth_provider_id: Uuid::from(id),
+            id: Uuid::from(id),
             issuer: params.issuer.clone(),
             human_name: params.human_name.clone(),
             brand_name: params.brand_name.clone(),
@@ -489,7 +489,7 @@ impl UpstreamOAuthProviderRepository for PgUpstreamOAuthProviderRepository<'_> {
 
         let created_at: DateTime<Utc> = diesel::insert_into(upstream_oauth_providers::table)
             .values(&new_provider)
-            .on_conflict(upstream_oauth_providers::upstream_oauth_provider_id)
+            .on_conflict(upstream_oauth_providers::id)
             .do_update()
             .set((
                 upstream_oauth_providers::issuer.eq(params.issuer.as_deref()),
@@ -623,23 +623,23 @@ impl UpstreamOAuthProviderRepository for PgUpstreamOAuthProviderRepository<'_> {
         // Apply pagination
         if let Some(after) = pagination.after {
             query = query
-                .filter(upstream_oauth_providers::upstream_oauth_provider_id.gt(Uuid::from(after)));
+                .filter(upstream_oauth_providers::id.gt(Uuid::from(after)));
         }
         if let Some(before) = pagination.before {
             query = query.filter(
-                upstream_oauth_providers::upstream_oauth_provider_id.lt(Uuid::from(before)),
+                upstream_oauth_providers::id.lt(Uuid::from(before)),
             );
         }
 
         match pagination.direction {
             PaginationDirection::Forward => {
                 query = query
-                    .order(upstream_oauth_providers::upstream_oauth_provider_id.asc())
+                    .order(upstream_oauth_providers::id.asc())
                     .limit((pagination.count + 1) as i64);
             }
             PaginationDirection::Backward => {
                 query = query
-                    .order(upstream_oauth_providers::upstream_oauth_provider_id.desc())
+                    .order(upstream_oauth_providers::id.desc())
                     .limit((pagination.count + 1) as i64);
             }
         }
@@ -681,7 +681,7 @@ impl UpstreamOAuthProviderRepository for PgUpstreamOAuthProviderRepository<'_> {
             .filter(upstream_oauth_providers::disabled_at.is_null())
             .order((
                 upstream_oauth_providers::ui_order.asc(),
-                upstream_oauth_providers::upstream_oauth_provider_id.asc(),
+                upstream_oauth_providers::id.asc(),
             ))
             .select(ProviderLookup::as_select())
             .load(self.conn)

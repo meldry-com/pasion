@@ -2,7 +2,7 @@ use async_trait::async_trait;
 use chrono::{DateTime, Utc};
 use diesel::prelude::*;
 use diesel_async::RunQueryDsl;
-use pasion_data_model::{Clock, UserRegistrationToken};
+use pasion_data_model::{Clock, UserRegistrationToken, new_id};
 use pasion_storage::{
     Page, Pagination,
     pagination::{Node, PaginationDirection},
@@ -33,7 +33,7 @@ impl<'c> PgUserRegistrationTokenRepository<'c> {
 #[derive(Debug, Clone, Queryable, Selectable)]
 #[diesel(table_name = user_registration_tokens)]
 struct UserRegistrationTokenRow {
-    user_registration_token_id: Uuid,
+    id: Uuid,
     token: String,
     usage_limit: Option<i32>,
     times_used: i32,
@@ -45,7 +45,7 @@ struct UserRegistrationTokenRow {
 
 impl Node<Ulid> for UserRegistrationTokenRow {
     fn cursor(&self) -> Ulid {
-        self.user_registration_token_id.into()
+        self.id.into()
     }
 }
 
@@ -53,7 +53,7 @@ impl TryFrom<UserRegistrationTokenRow> for UserRegistrationToken {
     type Error = DatabaseInconsistencyError;
 
     fn try_from(res: UserRegistrationTokenRow) -> Result<Self, Self::Error> {
-        let id = Ulid::from(res.user_registration_token_id);
+        let id = Ulid::from(res.id);
 
         let usage_limit = res
             .usage_limit
@@ -90,7 +90,7 @@ impl TryFrom<UserRegistrationTokenRow> for UserRegistrationToken {
 #[derive(Insertable)]
 #[diesel(table_name = user_registration_tokens)]
 struct NewUserRegistrationToken {
-    user_registration_token_id: Uuid,
+    id: Uuid,
     token: String,
     usage_limit: Option<i32>,
     created_at: DateTime<Utc>,
@@ -198,23 +198,23 @@ impl UserRegistrationTokenRepository for PgUserRegistrationTokenRepository<'_> {
         // Apply pagination cursors
         if let Some(after) = pagination.after {
             query = query
-                .filter(user_registration_tokens::user_registration_token_id.gt(Uuid::from(after)));
+                .filter(user_registration_tokens::id.gt(Uuid::from(after)));
         }
         if let Some(before) = pagination.before {
             query = query.filter(
-                user_registration_tokens::user_registration_token_id.lt(Uuid::from(before)),
+                user_registration_tokens::id.lt(Uuid::from(before)),
             );
         }
 
         match pagination.direction {
             PaginationDirection::Forward => {
                 query = query
-                    .order(user_registration_tokens::user_registration_token_id.asc())
+                    .order(user_registration_tokens::id.asc())
                     .limit((pagination.count + 1) as i64);
             }
             PaginationDirection::Backward => {
                 query = query
-                    .order(user_registration_tokens::user_registration_token_id.desc())
+                    .order(user_registration_tokens::id.desc())
                     .limit((pagination.count + 1) as i64);
             }
         }
@@ -312,7 +312,7 @@ impl UserRegistrationTokenRepository for PgUserRegistrationTokenRepository<'_> {
         expires_at: Option<DateTime<Utc>>,
     ) -> Result<UserRegistrationToken, Self::Error> {
         let created_at = clock.now();
-        let id = Ulid::from_datetime_with_source(created_at.into(), rng);
+        let id = new_id(created_at, rng);
 
         let usage_limit_i32 = usage_limit
             .map(i32::try_from)
@@ -367,7 +367,7 @@ impl UserRegistrationTokenRepository for PgUserRegistrationTokenRepository<'_> {
             "UPDATE user_registration_tokens \
              SET times_used = times_used + 1, \
                  last_used_at = $2 \
-             WHERE user_registration_token_id = $1 AND revoked_at IS NULL \
+             WHERE id = $1 AND revoked_at IS NULL \
              RETURNING times_used",
         )
         .bind::<diesel::sql_types::Uuid, _>(Uuid::from(token.id))

@@ -4,6 +4,7 @@ use diesel::prelude::*;
 use diesel_async::RunQueryDsl;
 use pasion_data_model::{
     Clock, User, UserPhone, UserPhoneAuthentication, UserPhoneAuthenticationCode, UserRegistration,
+    new_id,
 };
 use pasion_storage::user::UserPhoneRepository;
 use rand::RngCore;
@@ -212,11 +213,11 @@ impl UserPhoneRepository for PgUserPhoneRepository<'_> {
         phone: String,
     ) -> Result<UserPhone, Self::Error> {
         let created_at = clock.now();
-        let id = Ulid::from_datetime_with_source(created_at.into(), rng);
+        let id = new_id(created_at, rng);
         tracing::Span::current().record("user_phone.id", tracing::field::display(id));
 
         let new_phone = NewUserPhone {
-            user_phone_id: Uuid::from(id),
+            id: Uuid::from(id),
             user_id: Uuid::from(user.id),
             phone: phone.clone(),
             created_at,
@@ -273,12 +274,12 @@ impl UserPhoneRepository for PgUserPhoneRepository<'_> {
         user_registration: &UserRegistration,
     ) -> Result<UserPhoneAuthentication, Self::Error> {
         let created_at = clock.now();
-        let id = Ulid::from_datetime_with_source(created_at.into(), rng);
+        let id = new_id(created_at, rng);
         tracing::Span::current()
             .record("user_phone_authentication.id", tracing::field::display(id));
 
         let new_auth = NewUserPhoneAuthentication {
-            user_phone_authentication_id: Uuid::from(id),
+            id: Uuid::from(id),
             user_registration_id: Some(Uuid::from(user_registration.id)),
             phone: phone.clone(),
             created_at,
@@ -319,14 +320,14 @@ impl UserPhoneRepository for PgUserPhoneRepository<'_> {
     ) -> Result<UserPhoneAuthenticationCode, Self::Error> {
         let created_at = clock.now();
         let expires_at = created_at + duration;
-        let id = Ulid::from_datetime_with_source(created_at.into(), rng);
+        let id = new_id(created_at, rng);
         tracing::Span::current().record(
             "user_phone_authentication_code.id",
             tracing::field::display(id),
         );
 
         let new_code = NewUserPhoneAuthenticationCode {
-            user_phone_authentication_code_id: Uuid::from(id),
+            id: Uuid::from(id),
             user_phone_authentication_id: Uuid::from(user_phone_authentication.id),
             code: code.clone(),
             created_at,

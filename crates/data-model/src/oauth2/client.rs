@@ -172,7 +172,7 @@ impl Client {
         vec![
             // A client with all the URIs set
             Self {
-                id: Ulid::from_datetime_with_source(now.into(), rng),
+                id: crate::new_id(now, rng),
                 client_id: "client1".to_owned(),
                 metadata_digest: None,
                 encrypted_client_secret: None,
@@ -198,7 +198,7 @@ impl Client {
             },
             // Another client without any URIs set
             Self {
-                id: Ulid::from_datetime_with_source(now.into(), rng),
+                id: crate::new_id(now, rng),
                 client_id: "client2".to_owned(),
                 metadata_digest: None,
                 encrypted_client_secret: None,

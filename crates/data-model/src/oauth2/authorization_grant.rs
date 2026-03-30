@@ -241,13 +241,13 @@ impl AuthorizationGrant {
     #[doc(hidden)]
     pub fn sample(now: DateTime<Utc>, rng: &mut impl RngCore) -> Self {
         Self {
-            id: Ulid::from_datetime_with_source(now.into(), rng),
+            id: crate::new_id(now, rng),
             stage: AuthorizationGrantStage::Pending,
             code: Some(AuthorizationCode {
                 code: Alphanumeric.sample_string(rng, 10),
                 pkce: None,
             }),
-            client_id: Ulid::from_datetime_with_source(now.into(), rng),
+            client_id: crate::new_id(now, rng),
             redirect_uri: Url::parse("http://localhost:8080").unwrap(),
             scope: Scope::from_iter([OPENID, PROFILE]),
             state: Some(Alphanumeric.sample_string(rng, 10)),

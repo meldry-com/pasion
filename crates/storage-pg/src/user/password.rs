@@ -2,7 +2,7 @@ use async_trait::async_trait;
 use chrono::{DateTime, Utc};
 use diesel::prelude::*;
 use diesel_async::RunQueryDsl;
-use pasion_data_model::{Clock, Password, User};
+use pasion_data_model::{Clock, Password, User, new_id};
 use pasion_storage::user::UserPasswordRepository;
 use rand::RngCore;
 use ulid::Ulid;
@@ -111,7 +111,7 @@ impl UserPasswordRepository for PgUserPasswordRepository<'_> {
         upgraded_from: Option<&Password>,
     ) -> Result<Password, Self::Error> {
         let created_at = clock.now();
-        let id = Ulid::from_datetime_with_source(created_at.into(), rng);
+        let id = new_id(created_at, rng);
         tracing::Span::current().record("user_password.id", tracing::field::display(id));
 
         let upgraded_from_id = upgraded_from.map(|p| p.id);

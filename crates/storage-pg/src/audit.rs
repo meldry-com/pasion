@@ -4,7 +4,7 @@ use diesel::prelude::*;
 use diesel_async::RunQueryDsl;
 use ipnetwork::IpNetwork;
 use pasion_data_model::{
-    Clock,
+    Clock, new_id,
     audit::{AccountSecurityEvent, AdminOperation, AdminOperationLog, SecurityEventType},
 };
 use pasion_storage::audit::{AuditRepository, NewAccountSecurityEvent, NewAdminOperationLog};
@@ -37,7 +37,7 @@ impl<'c> PgAuditRepository<'c> {
 #[derive(Debug, Clone, Queryable, Selectable)]
 #[diesel(table_name = admin_operation_logs)]
 struct AdminOperationLogRow {
-    admin_operation_log_id: Uuid,
+    id: Uuid,
     admin_user_id: Uuid,
     operation: String,
     resource_type: String,
@@ -52,7 +52,7 @@ impl TryFrom<AdminOperationLogRow> for AdminOperationLog {
     type Error = DatabaseInconsistencyError;
 
     fn try_from(value: AdminOperationLogRow) -> Result<Self, Self::Error> {
-        let id = value.admin_operation_log_id.into();
+        let id = value.id.into();
 
         let operation = parse_admin_operation(&value.operation, id)?;
 
@@ -73,7 +73,7 @@ impl TryFrom<AdminOperationLogRow> for AdminOperationLog {
 #[derive(Debug, Clone, Queryable, Selectable)]
 #[diesel(table_name = account_security_events)]
 struct AccountSecurityEventRow {
-    account_security_event_id: Uuid,
+    id: Uuid,
     user_id: Uuid,
     event_type: String,
     metadata: serde_json::Value,
@@ -86,7 +86,7 @@ impl TryFrom<AccountSecurityEventRow> for AccountSecurityEvent {
     type Error = DatabaseInconsistencyError;
 
     fn try_from(value: AccountSecurityEventRow) -> Result<Self, Self::Error> {
-        let id = value.account_security_event_id.into();
+        let id = value.id.into();
 
         let event_type = parse_security_event_type(&value.event_type, id)?;
 
@@ -109,7 +109,7 @@ impl TryFrom<AccountSecurityEventRow> for AccountSecurityEvent {
 #[derive(Insertable)]
 #[diesel(table_name = admin_operation_logs)]
 struct InsertableAdminOperationLog {
-    admin_operation_log_id: Uuid,
+    id: Uuid,
     admin_user_id: Uuid,
     operation: String,
     resource_type: String,
@@ -123,7 +123,7 @@ struct InsertableAdminOperationLog {
 #[derive(Insertable)]
 #[diesel(table_name = account_security_events)]
 struct InsertableAccountSecurityEvent {
-    account_security_event_id: Uuid,
+    id: Uuid,
     user_id: Uuid,
     event_type: String,
     metadata: serde_json::Value,
@@ -195,14 +195,14 @@ impl AuditRepository for PgAuditRepository<'_> {
         params: NewAdminOperationLog,
     ) -> Result<AdminOperationLog, Self::Error> {
         let created_at = clock.now();
-        let id = Ulid::from_datetime_with_source(created_at.into(), rng);
+        let id = new_id(created_at, rng);
         tracing::Span::current().record("admin_operation_log.id", tracing::field::display(id));
 
         let operation = params.operation().clone();
         let ip_address = params.ip_address();
 
         let row = InsertableAdminOperationLog {
-            admin_operation_log_id: Uuid::from(id),
+            id: Uuid::from(id),
             admin_user_id: Uuid::from(params.admin_user_id()),
             operation: admin_operation_to_db(&operation),
             resource_type: params.resource_type().to_owned(),
@@ -279,7 +279,7 @@ impl AuditRepository for PgAuditRepository<'_> {
         params: NewAccountSecurityEvent,
     ) -> Result<AccountSecurityEvent, Self::Error> {
         let created_at = clock.now();
-        let id = Ulid::from_datetime_with_source(created_at.into(), rng);
+        let id = new_id(created_at, rng);
         tracing::Span::current()
             .record("account_security_event.id", tracing::field::display(id));
 
@@ -287,7 +287,7 @@ impl AuditRepository for PgAuditRepository<'_> {
         let ip_address = params.ip_address();
 
         let row = InsertableAccountSecurityEvent {
-            account_security_event_id: Uuid::from(id),
+            id: Uuid::from(id),
             user_id: Uuid::from(params.user_id()),
             event_type: security_event_type_to_db(&event_type),
             metadata: params.metadata().clone(),

@@ -33,7 +33,7 @@ impl<'c> PgAppSessionRepository<'c> {
 #[derive(Debug, Clone, Queryable, Selectable)]
 #[diesel(table_name = oauth2_sessions)]
 struct AppSessionLookup {
-    oauth2_session_id: Uuid,
+    id: Uuid,
     oauth2_client_id: Uuid,
     user_session_id: Option<Uuid>,
     user_id: Option<Uuid>,
@@ -48,7 +48,7 @@ struct AppSessionLookup {
 
 impl pasion_storage::pagination::Node<Ulid> for AppSessionLookup {
     fn cursor(&self) -> Ulid {
-        self.oauth2_session_id.into()
+        self.id.into()
     }
 }
 
@@ -56,7 +56,7 @@ impl TryFrom<AppSessionLookup> for AppSession {
     type Error = DatabaseError;
 
     fn try_from(value: AppSessionLookup) -> Result<Self, Self::Error> {
-        let id: Ulid = value.oauth2_session_id.into();
+        let id: Ulid = value.id.into();
 
         let scope: Result<Scope, _> = value
             .scope_list
@@ -164,21 +164,21 @@ impl AppSessionRepository for PgAppSessionRepository<'_> {
 
         // Apply pagination
         if let Some(after) = pagination.after {
-            query = query.filter(oauth2_sessions::oauth2_session_id.gt(Uuid::from(after)));
+            query = query.filter(oauth2_sessions::id.gt(Uuid::from(after)));
         }
         if let Some(before) = pagination.before {
-            query = query.filter(oauth2_sessions::oauth2_session_id.lt(Uuid::from(before)));
+            query = query.filter(oauth2_sessions::id.lt(Uuid::from(before)));
         }
 
         match pagination.direction {
             PaginationDirection::Forward => {
                 query = query
-                    .order(oauth2_sessions::oauth2_session_id.asc())
+                    .order(oauth2_sessions::id.asc())
                     .limit((pagination.count + 1) as i64);
             }
             PaginationDirection::Backward => {
                 query = query
-                    .order(oauth2_sessions::oauth2_session_id.desc())
+                    .order(oauth2_sessions::id.desc())
                     .limit((pagination.count + 1) as i64);
             }
         }

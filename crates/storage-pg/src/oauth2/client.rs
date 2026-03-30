@@ -4,7 +4,7 @@ use async_trait::async_trait;
 use diesel::prelude::*;
 use diesel_async::RunQueryDsl;
 use oauth2_types::{oidc::ApplicationType, requests::GrantType};
-use pasion_data_model::{Client, Clock, JwksOrJwksUri};
+use pasion_data_model::{Client, Clock, JwksOrJwksUri, new_id};
 use pasion_iana::{jose::JsonWebSignatureAlg, oauth::OAuthClientAuthenticationMethod};
 use pasion_jose::jwk::PublicJsonWebKeySet;
 use pasion_storage::oauth2::OAuth2ClientRepository;
@@ -39,7 +39,7 @@ impl<'c> PgOAuth2ClientRepository<'c> {
 #[derive(Debug, Queryable, Selectable)]
 #[diesel(table_name = oauth2_clients)]
 struct OAuth2ClientRow {
-    oauth2_client_id: Uuid,
+    id: Uuid,
     metadata_digest: Option<String>,
     encrypted_client_secret: Option<String>,
     application_type: Option<String>,
@@ -66,7 +66,7 @@ impl TryFrom<OAuth2ClientRow> for Client {
     type Error = DatabaseInconsistencyError;
 
     fn try_from(row: OAuth2ClientRow) -> Result<Client, Self::Error> {
-        let id = Ulid::from(row.oauth2_client_id);
+        let id = Ulid::from(row.id);
 
         let redirect_uris: Result<Vec<Url>, _> =
             row.redirect_uris.iter().map(|s| s.parse()).collect();
@@ -240,7 +240,7 @@ impl TryFrom<OAuth2ClientRow> for Client {
 #[derive(Insertable)]
 #[diesel(table_name = oauth2_clients)]
 struct NewOAuth2Client {
-    oauth2_client_id: Uuid,
+    id: Uuid,
     metadata_digest: Option<String>,
     encrypted_client_secret: Option<String>,
     application_type: Option<String>,
@@ -314,7 +314,7 @@ impl OAuth2ClientRepository for PgOAuth2ClientRepository<'_> {
         let ids: Vec<Uuid> = ids.into_iter().map(Uuid::from).collect();
 
         let res: Vec<OAuth2ClientRow> = oauth2_clients::table
-            .filter(oauth2_clients::oauth2_client_id.eq_any(&ids))
+            .filter(oauth2_clients::id.eq_any(&ids))
             .select(OAuth2ClientRow::as_select())
             .load(self.conn)
             .await?;
@@ -360,7 +360,7 @@ impl OAuth2ClientRepository for PgOAuth2ClientRepository<'_> {
         initiate_login_uri: Option<Url>,
     ) -> Result<Client, Self::Error> {
         let now = clock.now();
-        let id = Ulid::from_datetime_with_source(now.into(), rng);
+        let id = new_id(now, rng);
         tracing::Span::current().record("client.id", tracing::field::display(id));
 
         let jwks_json = jwks
@@ -372,7 +372,7 @@ impl OAuth2ClientRepository for PgOAuth2ClientRepository<'_> {
         let redirect_uris_array = redirect_uris.iter().map(Url::to_string).collect::<Vec<_>>();
 
         let new_client = NewOAuth2Client {
-            oauth2_client_id: Uuid::from(id),
+            id: Uuid::from(id),
             metadata_digest,
             encrypted_client_secret: encrypted_client_secret.clone(),
             application_type: application_type.as_ref().map(ToString::to_string),
@@ -466,7 +466,7 @@ impl OAuth2ClientRepository for PgOAuth2ClientRepository<'_> {
         let redirect_uris_array = redirect_uris.iter().map(Url::to_string).collect::<Vec<_>>();
 
         let new_client = NewOAuth2Client {
-            oauth2_client_id: Uuid::from(client_id),
+            id: Uuid::from(client_id),
             metadata_digest: None,
             encrypted_client_secret: encrypted_client_secret.clone(),
             application_type: None,
@@ -492,7 +492,7 @@ impl OAuth2ClientRepository for PgOAuth2ClientRepository<'_> {
 
         diesel::insert_into(oauth2_clients::table)
             .values(&new_client)
-            .on_conflict(oauth2_clients::oauth2_client_id)
+            .on_conflict(oauth2_clients::id)
             .do_update()
             .set((
                 oauth2_clients::encrypted_client_secret.eq(encrypted_client_secret.clone()),
@@ -581,7 +581,7 @@ impl OAuth2ClientRepository for PgOAuth2ClientRepository<'_> {
                 oauth2_access_tokens::oauth2_session_id.eq_any(
                     oauth2_sessions::table
                         .filter(oauth2_sessions::oauth2_client_id.eq(client_uuid))
-                        .select(oauth2_sessions::oauth2_session_id),
+                        .select(oauth2_sessions::id),
                 ),
             ),
         )
@@ -594,7 +594,7 @@ impl OAuth2ClientRepository for PgOAuth2ClientRepository<'_> {
                 oauth2_refresh_tokens::oauth2_session_id.eq_any(
                     oauth2_sessions::table
                         .filter(oauth2_sessions::oauth2_client_id.eq(client_uuid))
-                        .select(oauth2_sessions::oauth2_session_id),
+                        .select(oauth2_sessions::id),
                 ),
             ),
         )
@@ -614,7 +614,7 @@ impl OAuth2ClientRepository for PgOAuth2ClientRepository<'_> {
                 personal_access_tokens::personal_session_id.eq_any(
                     personal_sessions::table
                         .filter(personal_sessions::owner_oauth2_client_id.eq(client_uuid))
-                        .select(personal_sessions::personal_session_id),
+                        .select(personal_sessions::id),
                 ),
             ),
         )

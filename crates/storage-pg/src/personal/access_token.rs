@@ -3,7 +3,7 @@ use chrono::{DateTime, Utc};
 use diesel::prelude::*;
 use diesel_async::RunQueryDsl;
 use pasion_data_model::{
-    Clock,
+    Clock, new_id,
     personal::{PersonalAccessToken, session::PersonalSession},
 };
 use pasion_storage::personal::PersonalAccessTokenRepository;
@@ -32,7 +32,7 @@ impl<'c> PgPersonalAccessTokenRepository<'c> {
 #[derive(Debug, Queryable, Selectable)]
 #[diesel(table_name = personal_access_tokens)]
 struct PersonalAccessTokenRow {
-    personal_access_token_id: Uuid,
+    id: Uuid,
     personal_session_id: Uuid,
     created_at: DateTime<Utc>,
     expires_at: Option<DateTime<Utc>>,
@@ -42,7 +42,7 @@ struct PersonalAccessTokenRow {
 impl From<PersonalAccessTokenRow> for PersonalAccessToken {
     fn from(value: PersonalAccessTokenRow) -> Self {
         Self {
-            id: Ulid::from(value.personal_access_token_id),
+            id: Ulid::from(value.id),
             session_id: Ulid::from(value.personal_session_id),
             created_at: value.created_at,
             expires_at: value.expires_at,
@@ -55,7 +55,7 @@ impl From<PersonalAccessTokenRow> for PersonalAccessToken {
 #[derive(Insertable)]
 #[diesel(table_name = personal_access_tokens)]
 struct NewPersonalAccessToken {
-    personal_access_token_id: Uuid,
+    id: Uuid,
     personal_session_id: Uuid,
     access_token_sha256: Vec<u8>,
     created_at: DateTime<Utc>,
@@ -140,14 +140,14 @@ impl PersonalAccessTokenRepository for PgPersonalAccessTokenRepository<'_> {
         expires_after: Option<chrono::Duration>,
     ) -> Result<PersonalAccessToken, Self::Error> {
         let created_at = clock.now();
-        let id = Ulid::from_datetime_with_source(created_at.into(), rng);
+        let id = new_id(created_at, rng);
         tracing::Span::current().record("personal_access_token.id", tracing::field::display(id));
 
         let token_sha256 = Sha256::digest(access_token.as_bytes()).to_vec();
         let expires_at = expires_after.map(|expires_after| created_at + expires_after);
 
         let new_token = NewPersonalAccessToken {
-            personal_access_token_id: Uuid::from(id),
+            id: Uuid::from(id),
             personal_session_id: Uuid::from(session.id),
             access_token_sha256: token_sha256,
             created_at,

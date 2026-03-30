@@ -6,7 +6,7 @@ use diesel::prelude::*;
 use diesel_async::RunQueryDsl;
 use ipnetwork::IpNetwork;
 use oauth2_types::scope::{Scope, ScopeToken};
-use pasion_data_model::{BrowserSession, Client, Clock, Session, SessionState, User};
+use pasion_data_model::{BrowserSession, Client, Clock, Session, SessionState, User, new_id};
 use pasion_storage::{
     Page, Pagination,
     oauth2::{OAuth2SessionFilter, OAuth2SessionRepository},
@@ -38,7 +38,7 @@ impl<'c> PgOAuth2SessionRepository<'c> {
 #[derive(Debug, Clone, Queryable, Selectable)]
 #[diesel(table_name = oauth2_sessions)]
 struct OAuthSessionLookup {
-    oauth2_session_id: Uuid,
+    id: Uuid,
     user_id: Option<Uuid>,
     user_session_id: Option<Uuid>,
     oauth2_client_id: Uuid,
@@ -53,7 +53,7 @@ struct OAuthSessionLookup {
 
 impl Node<Ulid> for OAuthSessionLookup {
     fn cursor(&self) -> Ulid {
-        self.oauth2_session_id.into()
+        self.id.into()
     }
 }
 
@@ -61,7 +61,7 @@ impl TryFrom<OAuthSessionLookup> for Session {
     type Error = DatabaseInconsistencyError;
 
     fn try_from(value: OAuthSessionLookup) -> Result<Self, Self::Error> {
-        let id = Ulid::from(value.oauth2_session_id);
+        let id = Ulid::from(value.id);
         let scope: Result<Scope, _> = value
             .scope_list
             .iter()
@@ -99,7 +99,7 @@ impl TryFrom<OAuthSessionLookup> for Session {
 #[derive(Insertable)]
 #[diesel(table_name = oauth2_sessions)]
 struct NewOAuthSession {
-    oauth2_session_id: Uuid,
+    id: Uuid,
     user_id: Option<Uuid>,
     user_session_id: Option<Uuid>,
     oauth2_client_id: Uuid,
@@ -132,7 +132,7 @@ macro_rules! apply_session_filter {
 
         if let Some(client_kind) = $filter.client_kind() {
             let static_client_ids = oauth2_clients::table
-                .select(oauth2_clients::oauth2_client_id)
+                .select(oauth2_clients::id)
                 .filter(oauth2_clients::is_static.eq(true));
 
             if client_kind.is_static() {
@@ -158,7 +158,7 @@ macro_rules! apply_session_filter {
 
         if let Some(browser_session_filter) = $filter.browser_session_filter() {
             let mut subquery = user_sessions::table
-                .select(user_sessions::user_session_id.nullable())
+                .select(user_sessions::id.nullable())
                 .into_boxed();
 
             if let Some(user) = browser_session_filter.user() {
@@ -262,13 +262,13 @@ impl OAuth2SessionRepository for PgOAuth2SessionRepository<'_> {
         scope: Scope,
     ) -> Result<Session, Self::Error> {
         let created_at = clock.now();
-        let id = Ulid::from_datetime_with_source(created_at.into(), rng);
+        let id = new_id(created_at, rng);
         tracing::Span::current().record("session.id", tracing::field::display(id));
 
         let scope_list: Vec<String> = scope.iter().map(|s| s.as_str().to_owned()).collect();
 
         let new_session = NewOAuthSession {
-            oauth2_session_id: Uuid::from(id),
+            id: Uuid::from(id),
             user_id: user.map(|u| Uuid::from(u.id)),
             user_session_id: user_session.map(|s| Uuid::from(s.id)),
             oauth2_client_id: Uuid::from(client.id),
@@ -307,13 +307,13 @@ impl OAuth2SessionRepository for PgOAuth2SessionRepository<'_> {
         // Build a filtered subquery to get the IDs to update
         let filtered_ids = apply_session_filter!(
             oauth2_sessions::table
-                .select(oauth2_sessions::oauth2_session_id)
+                .select(oauth2_sessions::id)
                 .into_boxed(),
             filter
         );
 
         let rows_affected = diesel::update(
-            oauth2_sessions::table.filter(oauth2_sessions::oauth2_session_id.eq_any(filtered_ids)),
+            oauth2_sessions::table.filter(oauth2_sessions::id.eq_any(filtered_ids)),
         )
         .set(oauth2_sessions::finished_at.eq(Some(finished_at)))
         .execute(self.conn)
@@ -365,21 +365,21 @@ impl OAuth2SessionRepository for PgOAuth2SessionRepository<'_> {
 
         // Apply pagination
         if let Some(after) = pagination.after {
-            query = query.filter(oauth2_sessions::oauth2_session_id.gt(Uuid::from(after)));
+            query = query.filter(oauth2_sessions::id.gt(Uuid::from(after)));
         }
         if let Some(before) = pagination.before {
-            query = query.filter(oauth2_sessions::oauth2_session_id.lt(Uuid::from(before)));
+            query = query.filter(oauth2_sessions::id.lt(Uuid::from(before)));
         }
 
         match pagination.direction {
             PaginationDirection::Forward => {
                 query = query
-                    .order(oauth2_sessions::oauth2_session_id.asc())
+                    .order(oauth2_sessions::id.asc())
                     .limit((pagination.count + 1) as i64);
             }
             PaginationDirection::Backward => {
                 query = query
-                    .order(oauth2_sessions::oauth2_session_id.desc())
+                    .order(oauth2_sessions::id.desc())
                     .limit((pagination.count + 1) as i64);
             }
         }
@@ -430,9 +430,9 @@ impl OAuth2SessionRepository for PgOAuth2SessionRepository<'_> {
                 FROM (
                     SELECT *
                     FROM UNNEST($1::uuid[], $2::timestamptz[], $3::inet[])
-                        AS t(oauth2_session_id, last_active_at, last_active_ip)
+                        AS t(id, last_active_at, last_active_ip)
                 ) AS t
-                WHERE oauth2_sessions.oauth2_session_id = t.oauth2_session_id
+                WHERE oauth2_sessions.id = t.id
             "#,
         )
         .bind::<diesel::sql_types::Array<diesel::sql_types::Uuid>, _>(&ids)
@@ -522,7 +522,7 @@ impl OAuth2SessionRepository for PgOAuth2SessionRepository<'_> {
             r#"
                 WITH
                     to_delete AS (
-                        SELECT oauth2_session_id, finished_at
+                        SELECT id, finished_at
                         FROM oauth2_sessions
                         WHERE finished_at IS NOT NULL
                           AND ($1::timestamptz IS NULL OR finished_at >= $1)
@@ -533,15 +533,15 @@ impl OAuth2SessionRepository for PgOAuth2SessionRepository<'_> {
                     ),
                     deleted_refresh_tokens AS (
                         DELETE FROM oauth2_refresh_tokens USING to_delete
-                        WHERE oauth2_refresh_tokens.oauth2_session_id = to_delete.oauth2_session_id
+                        WHERE oauth2_refresh_tokens.oauth2_session_id = to_delete.id
                     ),
                     deleted_access_tokens AS (
                         DELETE FROM oauth2_access_tokens USING to_delete
-                        WHERE oauth2_access_tokens.oauth2_session_id = to_delete.oauth2_session_id
+                        WHERE oauth2_access_tokens.oauth2_session_id = to_delete.id
                     ),
                     deleted_sessions AS (
                         DELETE FROM oauth2_sessions USING to_delete
-                        WHERE oauth2_sessions.oauth2_session_id = to_delete.oauth2_session_id
+                        WHERE oauth2_sessions.id = to_delete.id
                         RETURNING oauth2_sessions.finished_at
                     )
                 SELECT COUNT(*) as count, MAX(finished_at) as last_ts FROM deleted_sessions
@@ -575,7 +575,7 @@ impl OAuth2SessionRepository for PgOAuth2SessionRepository<'_> {
         let res: CleanupResult = diesel::sql_query(
             r#"
                 WITH to_update AS (
-                    SELECT oauth2_session_id, last_active_at
+                    SELECT id, last_active_at
                     FROM oauth2_sessions
                     WHERE last_active_ip IS NOT NULL
                       AND last_active_at IS NOT NULL
@@ -589,7 +589,7 @@ impl OAuth2SessionRepository for PgOAuth2SessionRepository<'_> {
                     UPDATE oauth2_sessions
                     SET last_active_ip = NULL
                     FROM to_update
-                    WHERE oauth2_sessions.oauth2_session_id = to_update.oauth2_session_id
+                    WHERE oauth2_sessions.id = to_update.id
                     RETURNING oauth2_sessions.last_active_at
                 )
                 SELECT COUNT(*) AS count, MAX(last_active_at) AS last_ts FROM updated

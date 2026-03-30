@@ -5,6 +5,7 @@ use diesel_async::RunQueryDsl;
 use oauth2_types::{requests::ResponseMode, scope::Scope};
 use pasion_data_model::{
     AuthorizationCode, AuthorizationGrant, AuthorizationGrantStage, Client, Clock, Pkce, Session,
+    new_id,
 };
 use pasion_iana::oauth::PkceCodeChallengeMethod;
 use pasion_storage::oauth2::OAuth2AuthorizationGrantRepository;
@@ -33,7 +34,7 @@ impl<'c> PgOAuth2AuthorizationGrantRepository<'c> {
 #[derive(Debug, Clone, Queryable, Selectable)]
 #[diesel(table_name = oauth2_authorization_grants)]
 struct GrantLookup {
-    oauth2_authorization_grant_id: Uuid,
+    id: Uuid,
     created_at: DateTime<Utc>,
     cancelled_at: Option<DateTime<Utc>>,
     fulfilled_at: Option<DateTime<Utc>>,
@@ -58,7 +59,7 @@ impl TryFrom<GrantLookup> for AuthorizationGrant {
     type Error = DatabaseInconsistencyError;
 
     fn try_from(value: GrantLookup) -> Result<Self, Self::Error> {
-        let id = value.oauth2_authorization_grant_id.into();
+        let id = value.id.into();
         let scope: Scope = value.scope.parse().map_err(|e| {
             DatabaseInconsistencyError::on("oauth2_authorization_grants")
                 .column("scope")
@@ -168,7 +169,7 @@ impl TryFrom<GrantLookup> for AuthorizationGrant {
 #[derive(Insertable)]
 #[diesel(table_name = oauth2_authorization_grants)]
 struct NewAuthorizationGrant {
-    oauth2_authorization_grant_id: Uuid,
+    id: Uuid,
     oauth2_client_id: Uuid,
     redirect_uri: String,
     scope: String,
@@ -225,11 +226,11 @@ impl OAuth2AuthorizationGrantRepository for PgOAuth2AuthorizationGrantRepository
         let code_str = code.as_ref().map(|c| c.code.clone());
 
         let created_at = clock.now();
-        let id = Ulid::from_datetime_with_source(created_at.into(), rng);
+        let id = new_id(created_at, rng);
         tracing::Span::current().record("grant.id", tracing::field::display(id));
 
         let new_grant = NewAuthorizationGrant {
-            oauth2_authorization_grant_id: Uuid::from(id),
+            id: Uuid::from(id),
             oauth2_client_id: Uuid::from(client.id),
             redirect_uri: redirect_uri.to_string(),
             scope: scope.to_string(),
@@ -389,23 +390,23 @@ impl OAuth2AuthorizationGrantRepository for PgOAuth2AuthorizationGrantRepository
         limit: usize,
     ) -> Result<(usize, Option<Ulid>), Self::Error> {
         // `MAX(uuid)` isn't a thing in Postgres, so we can't just re-select the
-        // deleted rows and do a MAX on the `oauth2_authorization_grant_id`.
+        // deleted rows and do a MAX on the `id`.
         // Instead, we do the aggregation on the client side, which is a little
         // less efficient, but good enough.
         let res: Vec<Uuid> = diesel::sql_query(
             r#"
                 WITH to_delete AS (
-                    SELECT oauth2_authorization_grant_id
+                    SELECT id
                     FROM oauth2_authorization_grants
-                    WHERE ($1::uuid IS NULL OR oauth2_authorization_grant_id > $1)
-                    AND oauth2_authorization_grant_id <= $2
-                    ORDER BY oauth2_authorization_grant_id
+                    WHERE ($1::uuid IS NULL OR id > $1)
+                    AND id <= $2
+                    ORDER BY id
                     LIMIT $3
                 )
                 DELETE FROM oauth2_authorization_grants
                 USING to_delete
-                WHERE oauth2_authorization_grants.oauth2_authorization_grant_id = to_delete.oauth2_authorization_grant_id
-                RETURNING oauth2_authorization_grants.oauth2_authorization_grant_id
+                WHERE oauth2_authorization_grants.id = to_delete.id
+                RETURNING oauth2_authorization_grants.id
             "#,
         )
         .bind::<diesel::sql_types::Nullable<diesel::sql_types::Uuid>, _>(since.map(Uuid::from))
@@ -414,7 +415,7 @@ impl OAuth2AuthorizationGrantRepository for PgOAuth2AuthorizationGrantRepository
         .load::<UuidRow>(self.conn)
         .await?
         .into_iter()
-        .map(|r| r.oauth2_authorization_grant_id)
+        .map(|r| r.id)
         .collect();
 
         let count = res.len();
@@ -428,5 +429,5 @@ impl OAuth2AuthorizationGrantRepository for PgOAuth2AuthorizationGrantRepository
 #[derive(QueryableByName)]
 struct UuidRow {
     #[diesel(sql_type = diesel::sql_types::Uuid)]
-    oauth2_authorization_grant_id: Uuid,
+    id: Uuid,
 }

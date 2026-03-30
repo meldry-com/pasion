@@ -6,7 +6,7 @@ use diesel::prelude::*;
 use diesel_async::RunQueryDsl;
 use pasion_data_model::{
     Clock, UpstreamOAuthAuthorizationSession, UserEmailAuthentication, UserPhoneAuthentication,
-    UserRegistration, UserRegistrationPassword, UserRegistrationToken,
+    UserRegistration, UserRegistrationPassword, UserRegistrationToken, new_id,
 };
 use rand::RngCore;
 use ulid::Ulid;
@@ -36,7 +36,7 @@ impl<'c> PgUserRegistrationRepository<'c> {
 #[derive(Debug, Clone, QueryableByName)]
 struct UserRegistrationLookupRow {
     #[diesel(sql_type = diesel::sql_types::Uuid)]
-    user_registration_id: Uuid,
+    id: Uuid,
     #[diesel(sql_type = diesel::sql_types::Nullable<diesel::sql_types::Text>)]
     ip_address_text: Option<String>,
     #[diesel(sql_type = diesel::sql_types::Nullable<diesel::sql_types::Text>)]
@@ -71,7 +71,7 @@ impl TryFrom<UserRegistrationLookupRow> for UserRegistration {
     type Error = DatabaseInconsistencyError;
 
     fn try_from(value: UserRegistrationLookupRow) -> Result<Self, Self::Error> {
-        let id = Ulid::from(value.user_registration_id);
+        let id = Ulid::from(value.id);
 
         let password = match (value.hashed_password, value.hashed_password_version) {
             (Some(hashed_password), Some(version)) => {
@@ -154,7 +154,7 @@ impl UserRegistrationRepository for PgUserRegistrationRepository<'_> {
         // Use raw SQL because the ip_address column is Inet, which requires
         // the network-address diesel feature. We cast it to text instead.
         let res: Option<UserRegistrationLookupRow> = diesel::sql_query(
-            "SELECT user_registration_id \
+            "SELECT id \
                   , ip_address::text AS ip_address_text \
                   , user_agent \
                   , post_auth_action \
@@ -170,7 +170,7 @@ impl UserRegistrationRepository for PgUserRegistrationRepository<'_> {
                   , created_at \
                   , completed_at \
              FROM user_registrations \
-             WHERE user_registration_id = $1",
+             WHERE id = $1",
         )
         .bind::<diesel::sql_types::Uuid, _>(Uuid::from(id))
         .get_result(self.conn)
@@ -200,14 +200,14 @@ impl UserRegistrationRepository for PgUserRegistrationRepository<'_> {
         post_auth_action: Option<serde_json::Value>,
     ) -> Result<UserRegistration, Self::Error> {
         let created_at = clock.now();
-        let id = Ulid::from_datetime_with_source(created_at.into(), rng);
+        let id = new_id(created_at, rng);
         tracing::Span::current().record("user_registration.id", tracing::field::display(id));
 
         // Use raw SQL because the ip_address column is Inet type.
         let ip_str = ip_address.map(|ip| ip.to_string());
         diesel::sql_query(
             "INSERT INTO user_registrations \
-               ( user_registration_id \
+               ( id \
                , ip_address \
                , user_agent \
                , post_auth_action \
@@ -520,17 +520,17 @@ impl UserRegistrationRepository for PgUserRegistrationRepository<'_> {
         // less efficient, but good enough.
         let res: Vec<UuidRow> = diesel::sql_query(
             "WITH to_delete AS ( \
-                 SELECT user_registration_id \
+                 SELECT id \
                  FROM user_registrations \
-                 WHERE ($1::uuid IS NULL OR user_registration_id > $1) \
-                 AND user_registration_id <= $2 \
-                 ORDER BY user_registration_id \
+                 WHERE ($1::uuid IS NULL OR id > $1) \
+                 AND id <= $2 \
+                 ORDER BY id \
                  LIMIT $3 \
              ) \
              DELETE FROM user_registrations \
              USING to_delete \
-             WHERE user_registrations.user_registration_id = to_delete.user_registration_id \
-             RETURNING user_registrations.user_registration_id",
+             WHERE user_registrations.id = to_delete.id \
+             RETURNING user_registrations.id",
         )
         .bind::<diesel::sql_types::Nullable<diesel::sql_types::Uuid>, _>(since.map(Uuid::from))
         .bind::<diesel::sql_types::Uuid, _>(Uuid::from(until))
@@ -539,7 +539,7 @@ impl UserRegistrationRepository for PgUserRegistrationRepository<'_> {
         .await?;
 
         let count = res.len();
-        let max_id = res.into_iter().map(|r| r.user_registration_id).max();
+        let max_id = res.into_iter().map(|r| r.id).max();
 
         Ok((count, max_id.map(Ulid::from)))
     }
@@ -549,7 +549,7 @@ impl UserRegistrationRepository for PgUserRegistrationRepository<'_> {
 #[derive(Debug, Clone, QueryableByName)]
 struct UuidRow {
     #[diesel(sql_type = diesel::sql_types::Uuid)]
-    user_registration_id: Uuid,
+    id: Uuid,
 }
 
 #[cfg(test)]

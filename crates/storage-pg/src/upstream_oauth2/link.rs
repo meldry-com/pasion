@@ -2,7 +2,7 @@ use async_trait::async_trait;
 use chrono::{DateTime, Utc};
 use diesel::prelude::*;
 use diesel_async::RunQueryDsl;
-use pasion_data_model::{Clock, UpstreamOAuthLink, UpstreamOAuthProvider, User};
+use pasion_data_model::{Clock, UpstreamOAuthLink, UpstreamOAuthProvider, User, new_id};
 use pasion_storage::{
     Page, Pagination,
     pagination::{Node, PaginationDirection},
@@ -34,7 +34,7 @@ impl<'c> PgUpstreamOAuthLinkRepository<'c> {
 #[derive(Debug, Clone, Queryable, Selectable)]
 #[diesel(table_name = upstream_oauth_links)]
 struct LinkLookup {
-    upstream_oauth_link_id: Uuid,
+    id: Uuid,
     upstream_oauth_provider_id: Uuid,
     user_id: Option<Uuid>,
     subject: String,
@@ -44,14 +44,14 @@ struct LinkLookup {
 
 impl Node<Ulid> for LinkLookup {
     fn cursor(&self) -> Ulid {
-        self.upstream_oauth_link_id.into()
+        self.id.into()
     }
 }
 
 impl From<LinkLookup> for UpstreamOAuthLink {
     fn from(value: LinkLookup) -> Self {
         UpstreamOAuthLink {
-            id: Ulid::from(value.upstream_oauth_link_id),
+            id: Ulid::from(value.id),
             provider_id: Ulid::from(value.upstream_oauth_provider_id),
             user_id: value.user_id.map(Ulid::from),
             subject: value.subject,
@@ -65,7 +65,7 @@ impl From<LinkLookup> for UpstreamOAuthLink {
 #[derive(Insertable)]
 #[diesel(table_name = upstream_oauth_links)]
 struct NewLink {
-    upstream_oauth_link_id: Uuid,
+    id: Uuid,
     upstream_oauth_provider_id: Uuid,
     user_id: Option<Uuid>,
     subject: String,
@@ -150,11 +150,11 @@ impl UpstreamOAuthLinkRepository for PgUpstreamOAuthLinkRepository<'_> {
         human_account_name: Option<String>,
     ) -> Result<UpstreamOAuthLink, Self::Error> {
         let created_at = clock.now();
-        let id = Ulid::from_datetime_with_source(created_at.into(), rng);
+        let id = new_id(created_at, rng);
         tracing::Span::current().record("upstream_oauth_link.id", tracing::field::display(id));
 
         let new_link = NewLink {
-            upstream_oauth_link_id: Uuid::from(id),
+            id: Uuid::from(id),
             upstream_oauth_provider_id: Uuid::from(upstream_oauth_provider.id),
             user_id: None,
             subject: subject.clone(),
@@ -228,12 +228,12 @@ impl UpstreamOAuthLinkRepository for PgUpstreamOAuthLinkRepository<'_> {
             let subquery = if enabled {
                 upstream_oauth_providers::table
                     .filter(upstream_oauth_providers::disabled_at.is_null())
-                    .select(upstream_oauth_providers::upstream_oauth_provider_id)
+                    .select(upstream_oauth_providers::id)
                     .into_boxed()
             } else {
                 upstream_oauth_providers::table
                     .filter(upstream_oauth_providers::disabled_at.is_not_null())
-                    .select(upstream_oauth_providers::upstream_oauth_provider_id)
+                    .select(upstream_oauth_providers::id)
                     .into_boxed()
             };
 
@@ -247,22 +247,22 @@ impl UpstreamOAuthLinkRepository for PgUpstreamOAuthLinkRepository<'_> {
         // Apply pagination
         if let Some(after) = pagination.after {
             query =
-                query.filter(upstream_oauth_links::upstream_oauth_link_id.gt(Uuid::from(after)));
+                query.filter(upstream_oauth_links::id.gt(Uuid::from(after)));
         }
         if let Some(before) = pagination.before {
             query =
-                query.filter(upstream_oauth_links::upstream_oauth_link_id.lt(Uuid::from(before)));
+                query.filter(upstream_oauth_links::id.lt(Uuid::from(before)));
         }
 
         match pagination.direction {
             PaginationDirection::Forward => {
                 query = query
-                    .order(upstream_oauth_links::upstream_oauth_link_id.asc())
+                    .order(upstream_oauth_links::id.asc())
                     .limit((pagination.count + 1) as i64);
             }
             PaginationDirection::Backward => {
                 query = query
-                    .order(upstream_oauth_links::upstream_oauth_link_id.desc())
+                    .order(upstream_oauth_links::id.desc())
                     .limit((pagination.count + 1) as i64);
             }
         }
@@ -292,12 +292,12 @@ impl UpstreamOAuthLinkRepository for PgUpstreamOAuthLinkRepository<'_> {
             let subquery = if enabled {
                 upstream_oauth_providers::table
                     .filter(upstream_oauth_providers::disabled_at.is_null())
-                    .select(upstream_oauth_providers::upstream_oauth_provider_id)
+                    .select(upstream_oauth_providers::id)
                     .into_boxed()
             } else {
                 upstream_oauth_providers::table
                     .filter(upstream_oauth_providers::disabled_at.is_not_null())
-                    .select(upstream_oauth_providers::upstream_oauth_provider_id)
+                    .select(upstream_oauth_providers::id)
                     .into_boxed()
             };
 
@@ -380,23 +380,23 @@ impl UpstreamOAuthLinkRepository for PgUpstreamOAuthLinkRepository<'_> {
             r#"
                 WITH
                   to_delete AS (
-                    SELECT upstream_oauth_link_id
+                    SELECT id
                     FROM upstream_oauth_links
                     WHERE user_id IS NULL
-                    AND ($1::uuid IS NULL OR upstream_oauth_link_id > $1)
-                    AND upstream_oauth_link_id <= $2
-                    ORDER BY upstream_oauth_link_id
+                    AND ($1::uuid IS NULL OR id > $1)
+                    AND id <= $2
+                    ORDER BY id
                     LIMIT $3
                   ),
                   deleted_sessions AS (
                     DELETE FROM upstream_oauth_authorization_sessions
                     USING to_delete
-                    WHERE upstream_oauth_authorization_sessions.upstream_oauth_link_id = to_delete.upstream_oauth_link_id
+                    WHERE upstream_oauth_authorization_sessions.upstream_oauth_link_id = to_delete.id
                   )
                 DELETE FROM upstream_oauth_links
                 USING to_delete
-                WHERE upstream_oauth_links.upstream_oauth_link_id = to_delete.upstream_oauth_link_id
-                RETURNING upstream_oauth_links.upstream_oauth_link_id
+                WHERE upstream_oauth_links.id = to_delete.id
+                RETURNING upstream_oauth_links.id
             "#,
         )
         .bind::<diesel::sql_types::Nullable<diesel::sql_types::Uuid>, _>(since.map(Uuid::from))
@@ -405,7 +405,7 @@ impl UpstreamOAuthLinkRepository for PgUpstreamOAuthLinkRepository<'_> {
         .load::<CleanupResult>(self.conn)
         .await?
         .into_iter()
-        .map(|r| r.upstream_oauth_link_id)
+        .map(|r| r.id)
         .collect();
 
         let count = res.len();
@@ -419,5 +419,5 @@ impl UpstreamOAuthLinkRepository for PgUpstreamOAuthLinkRepository<'_> {
 #[derive(QueryableByName)]
 struct CleanupResult {
     #[diesel(sql_type = diesel::sql_types::Uuid)]
-    upstream_oauth_link_id: Uuid,
+    id: Uuid,
 }

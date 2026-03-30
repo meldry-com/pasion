@@ -6,7 +6,7 @@ use diesel::prelude::*;
 use diesel_async::RunQueryDsl;
 use oauth2_types::scope::Scope;
 use pasion_data_model::{
-    Clock, User,
+    Clock, User, new_id,
     personal::{
         PersonalAccessToken,
         session::{PersonalSession, PersonalSessionOwner, SessionState},
@@ -45,7 +45,7 @@ impl<'c> PgPersonalSessionRepository<'c> {
 #[derive(Debug, Clone, Queryable, Selectable)]
 #[diesel(table_name = personal_sessions)]
 struct PersonalSessionRow {
-    personal_session_id: Uuid,
+    id: Uuid,
     owner_user_id: Option<Uuid>,
     owner_oauth2_client_id: Option<Uuid>,
     actor_user_id: Uuid,
@@ -59,7 +59,7 @@ struct PersonalSessionRow {
 
 impl Node<Ulid> for PersonalSessionRow {
     fn cursor(&self) -> Ulid {
-        self.personal_session_id.into()
+        self.id.into()
     }
 }
 
@@ -67,7 +67,7 @@ impl TryFrom<PersonalSessionRow> for PersonalSession {
     type Error = DatabaseInconsistencyError;
 
     fn try_from(value: PersonalSessionRow) -> Result<Self, Self::Error> {
-        let id = Ulid::from(value.personal_session_id);
+        let id = Ulid::from(value.id);
         let scope: Result<Scope, _> = value.scope_list.iter().map(|s| s.parse()).collect();
         let scope = scope.map_err(|e| {
             DatabaseInconsistencyError::on("personal_sessions")
@@ -111,7 +111,7 @@ impl TryFrom<PersonalSessionRow> for PersonalSession {
 #[derive(Debug, Clone, Queryable)]
 struct PersonalSessionAndAccessTokenRow {
     // personal_sessions fields
-    personal_session_id: Uuid,
+    id: Uuid,
     owner_user_id: Option<Uuid>,
     owner_oauth2_client_id: Option<Uuid>,
     actor_user_id: Uuid,
@@ -129,7 +129,7 @@ struct PersonalSessionAndAccessTokenRow {
 
 impl Node<Ulid> for PersonalSessionAndAccessTokenRow {
     fn cursor(&self) -> Ulid {
-        self.personal_session_id.into()
+        self.id.into()
     }
 }
 
@@ -138,7 +138,7 @@ impl TryFrom<PersonalSessionAndAccessTokenRow> for (PersonalSession, Option<Pers
 
     fn try_from(value: PersonalSessionAndAccessTokenRow) -> Result<Self, Self::Error> {
         let session = PersonalSession::try_from(PersonalSessionRow {
-            personal_session_id: value.personal_session_id,
+            id: value.id,
             owner_user_id: value.owner_user_id,
             owner_oauth2_client_id: value.owner_oauth2_client_id,
             actor_user_id: value.actor_user_id,
@@ -175,7 +175,7 @@ impl TryFrom<PersonalSessionAndAccessTokenRow> for (PersonalSession, Option<Pers
 #[derive(Insertable)]
 #[diesel(table_name = personal_sessions)]
 struct NewPersonalSession {
-    personal_session_id: Uuid,
+    id: Uuid,
     owner_user_id: Option<Uuid>,
     owner_oauth2_client_id: Option<Uuid>,
     actor_user_id: Uuid,
@@ -187,7 +187,7 @@ struct NewPersonalSession {
 /// Build the tuple of columns selected from the LEFT JOIN of
 /// personal_sessions with personal_access_tokens.
 fn session_with_token_select() -> (
-    personal_sessions::personal_session_id,
+    personal_sessions::id,
     personal_sessions::owner_user_id,
     personal_sessions::owner_oauth2_client_id,
     personal_sessions::actor_user_id,
@@ -197,12 +197,12 @@ fn session_with_token_select() -> (
     personal_sessions::revoked_at,
     personal_sessions::last_active_at,
     personal_sessions::last_active_ip,
-    diesel::dsl::Nullable<personal_access_tokens::personal_access_token_id>,
+    diesel::dsl::Nullable<personal_access_tokens::id>,
     diesel::dsl::Nullable<personal_access_tokens::created_at>,
     diesel::dsl::Nullable<personal_access_tokens::expires_at>,
 ) {
     (
-        personal_sessions::personal_session_id,
+        personal_sessions::id,
         personal_sessions::owner_user_id,
         personal_sessions::owner_oauth2_client_id,
         personal_sessions::actor_user_id,
@@ -212,7 +212,7 @@ fn session_with_token_select() -> (
         personal_sessions::revoked_at,
         personal_sessions::last_active_at,
         personal_sessions::last_active_ip,
-        personal_access_tokens::personal_access_token_id.nullable(),
+        personal_access_tokens::id.nullable(),
         personal_access_tokens::created_at.nullable(),
         personal_access_tokens::expires_at.nullable(),
     )
@@ -262,7 +262,7 @@ impl PersonalSessionRepository for PgPersonalSessionRepository<'_> {
         scope: Scope,
     ) -> Result<PersonalSession, Self::Error> {
         let created_at = clock.now();
-        let id = Ulid::from_datetime_with_source(created_at.into(), rng);
+        let id = new_id(created_at, rng);
         tracing::Span::current().record("session.id", tracing::field::display(id));
 
         let scope_list: Vec<String> = scope.iter().map(|s| s.as_str().to_owned()).collect();
@@ -273,7 +273,7 @@ impl PersonalSessionRepository for PgPersonalSessionRepository<'_> {
         };
 
         let new_session = NewPersonalSession {
-            personal_session_id: Uuid::from(id),
+            id: Uuid::from(id),
             owner_user_id,
             owner_oauth2_client_id,
             actor_user_id: Uuid::from(actor_user.id),
@@ -351,11 +351,11 @@ impl PersonalSessionRepository for PgPersonalSessionRepository<'_> {
         // reference token fields (expires_before, expires_after, expires).
         let mut sub = personal_sessions::table
             .left_join(
-                personal_access_tokens::table.on(personal_sessions::personal_session_id
+                personal_access_tokens::table.on(personal_sessions::id
                     .eq(personal_access_tokens::personal_session_id)
                     .and(personal_access_tokens::revoked_at.is_null())),
             )
-            .select(personal_sessions::personal_session_id)
+            .select(personal_sessions::id)
             .into_boxed();
 
         // Apply session-level filters
@@ -428,7 +428,7 @@ impl PersonalSessionRepository for PgPersonalSessionRepository<'_> {
         }
 
         let rows_affected = diesel::update(
-            personal_sessions::table.filter(personal_sessions::personal_session_id.eq_any(sub)),
+            personal_sessions::table.filter(personal_sessions::id.eq_any(sub)),
         )
         .set(personal_sessions::revoked_at.eq(Some(revoked_at)))
         .execute(self.conn)
@@ -445,7 +445,7 @@ impl PersonalSessionRepository for PgPersonalSessionRepository<'_> {
     ) -> Result<Page<(PersonalSession, Option<PersonalAccessToken>)>, Self::Error> {
         let mut query = personal_sessions::table
             .left_join(
-                personal_access_tokens::table.on(personal_sessions::personal_session_id
+                personal_access_tokens::table.on(personal_sessions::id
                     .eq(personal_access_tokens::personal_session_id)
                     .and(personal_access_tokens::revoked_at.is_null())),
             )
@@ -524,21 +524,21 @@ impl PersonalSessionRepository for PgPersonalSessionRepository<'_> {
 
         // Apply pagination
         if let Some(after) = pagination.after {
-            query = query.filter(personal_sessions::personal_session_id.gt(Uuid::from(after)));
+            query = query.filter(personal_sessions::id.gt(Uuid::from(after)));
         }
         if let Some(before) = pagination.before {
-            query = query.filter(personal_sessions::personal_session_id.lt(Uuid::from(before)));
+            query = query.filter(personal_sessions::id.lt(Uuid::from(before)));
         }
 
         match pagination.direction {
             PaginationDirection::Forward => {
                 query = query
-                    .order(personal_sessions::personal_session_id.asc())
+                    .order(personal_sessions::id.asc())
                     .limit((pagination.count + 1) as i64);
             }
             PaginationDirection::Backward => {
                 query = query
-                    .order(personal_sessions::personal_session_id.desc())
+                    .order(personal_sessions::id.desc())
                     .limit((pagination.count + 1) as i64);
             }
         }
@@ -554,11 +554,11 @@ impl PersonalSessionRepository for PgPersonalSessionRepository<'_> {
     async fn count(&mut self, filter: PersonalSessionFilter<'_>) -> Result<usize, Self::Error> {
         let mut query = personal_sessions::table
             .left_join(
-                personal_access_tokens::table.on(personal_sessions::personal_session_id
+                personal_access_tokens::table.on(personal_sessions::id
                     .eq(personal_access_tokens::personal_session_id)
                     .and(personal_access_tokens::revoked_at.is_null())),
             )
-            .select(diesel::dsl::count(personal_sessions::personal_session_id))
+            .select(diesel::dsl::count(personal_sessions::id))
             .into_boxed();
 
         // Apply session-level filters

@@ -4,7 +4,7 @@ use diesel::prelude::*;
 use diesel_async::RunQueryDsl;
 use ipnetwork::IpNetwork;
 use oauth2_types::scope::Scope;
-use pasion_data_model::{BrowserSession, Clock, DeviceCodeGrant, DeviceCodeGrantState, Session};
+use pasion_data_model::{BrowserSession, Clock, DeviceCodeGrant, DeviceCodeGrantState, Session, new_id};
 use pasion_storage::oauth2::{OAuth2DeviceCodeGrantParams, OAuth2DeviceCodeGrantRepository};
 use rand::RngCore;
 use ulid::Ulid;
@@ -29,7 +29,7 @@ impl<'c> PgOAuth2DeviceCodeGrantRepository<'c> {
 #[derive(Debug, Clone, Queryable, Selectable)]
 #[diesel(table_name = oauth2_device_code_grant)]
 struct OAuth2DeviceGrantLookup {
-    oauth2_device_code_grant_id: Uuid,
+    id: Uuid,
     oauth2_client_id: Uuid,
     scope: String,
     device_code: String,
@@ -50,7 +50,7 @@ impl TryFrom<OAuth2DeviceGrantLookup> for DeviceCodeGrant {
 
     fn try_from(
         OAuth2DeviceGrantLookup {
-            oauth2_device_code_grant_id,
+            id,
             oauth2_client_id,
             scope,
             device_code,
@@ -66,7 +66,7 @@ impl TryFrom<OAuth2DeviceGrantLookup> for DeviceCodeGrant {
             user_agent,
         }: OAuth2DeviceGrantLookup,
     ) -> Result<Self, Self::Error> {
-        let id = Ulid::from(oauth2_device_code_grant_id);
+        let id = Ulid::from(id);
         let client_id = Ulid::from(oauth2_client_id);
 
         let scope: Scope = scope.parse().map_err(|e| {
@@ -134,7 +134,7 @@ impl TryFrom<OAuth2DeviceGrantLookup> for DeviceCodeGrant {
 #[derive(Insertable)]
 #[diesel(table_name = oauth2_device_code_grant)]
 struct NewDeviceCodeGrant {
-    oauth2_device_code_grant_id: Uuid,
+    id: Uuid,
     oauth2_client_id: Uuid,
     scope: String,
     device_code: String,
@@ -166,7 +166,7 @@ impl OAuth2DeviceCodeGrantRepository for PgOAuth2DeviceCodeGrantRepository<'_> {
         params: OAuth2DeviceCodeGrantParams<'_>,
     ) -> Result<DeviceCodeGrant, Self::Error> {
         let now = clock.now();
-        let id = Ulid::from_datetime_with_source(now.into(), rng);
+        let id = new_id(now, rng);
         tracing::Span::current().record("oauth2_device_code.id", tracing::field::display(id));
 
         let created_at = now;
@@ -174,7 +174,7 @@ impl OAuth2DeviceCodeGrantRepository for PgOAuth2DeviceCodeGrantRepository<'_> {
         let client_id = params.client.id;
 
         let new_grant = NewDeviceCodeGrant {
-            oauth2_device_code_grant_id: Uuid::from(id),
+            id: Uuid::from(id),
             oauth2_client_id: Uuid::from(client_id),
             scope: params.scope.to_string(),
             device_code: params.device_code.clone(),
@@ -399,23 +399,23 @@ impl OAuth2DeviceCodeGrantRepository for PgOAuth2DeviceCodeGrantRepository<'_> {
         limit: usize,
     ) -> Result<(usize, Option<Ulid>), Self::Error> {
         // `MAX(uuid)` isn't a thing in Postgres, so we can't just re-select the
-        // deleted rows and do a MAX on the `oauth2_device_code_grant_id`.
+        // deleted rows and do a MAX on the `id`.
         // Instead, we do the aggregation on the client side, which is a little
         // less efficient, but good enough.
         let res: Vec<Uuid> = diesel::sql_query(
             r#"
                 WITH to_delete AS (
-                    SELECT oauth2_device_code_grant_id
+                    SELECT id
                     FROM oauth2_device_code_grant
-                    WHERE ($1::uuid IS NULL OR oauth2_device_code_grant_id > $1)
-                    AND oauth2_device_code_grant_id <= $2
-                    ORDER BY oauth2_device_code_grant_id
+                    WHERE ($1::uuid IS NULL OR id > $1)
+                    AND id <= $2
+                    ORDER BY id
                     LIMIT $3
                 )
                 DELETE FROM oauth2_device_code_grant
                 USING to_delete
-                WHERE oauth2_device_code_grant.oauth2_device_code_grant_id = to_delete.oauth2_device_code_grant_id
-                RETURNING oauth2_device_code_grant.oauth2_device_code_grant_id
+                WHERE oauth2_device_code_grant.id = to_delete.id
+                RETURNING oauth2_device_code_grant.id
             "#,
         )
         .bind::<diesel::sql_types::Nullable<diesel::sql_types::Uuid>, _>(since.map(Uuid::from))
@@ -424,7 +424,7 @@ impl OAuth2DeviceCodeGrantRepository for PgOAuth2DeviceCodeGrantRepository<'_> {
         .load::<DeviceCodeGrantUuidRow>(self.conn)
         .await?
         .into_iter()
-        .map(|r| r.oauth2_device_code_grant_id)
+        .map(|r| r.id)
         .collect();
 
         let count = res.len();
@@ -438,5 +438,5 @@ impl OAuth2DeviceCodeGrantRepository for PgOAuth2DeviceCodeGrantRepository<'_> {
 #[derive(QueryableByName)]
 struct DeviceCodeGrantUuidRow {
     #[diesel(sql_type = diesel::sql_types::Uuid)]
-    oauth2_device_code_grant_id: Uuid,
+    id: Uuid,
 }

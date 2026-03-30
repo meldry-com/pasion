@@ -675,6 +675,7 @@ features = ["serde", "uuid"]
 # UUID support
 [workspace.dependencies.uuid]
 version = "1.22.0"
+features = ["v7"]
 
 # HTML escaping
 [workspace.dependencies.v_htmlescape]

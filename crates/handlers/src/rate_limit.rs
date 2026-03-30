@@ -410,7 +410,7 @@ mod tests {
             .unwrap();
 
         let alice = User {
-            id: Ulid::from_datetime_with_source(now.into(), &mut rng),
+            id: pasion_data_model::new_id(now, &mut rng),
             username: "alice".to_owned(),
             sub: "123-456".to_owned(),
             created_at: now,
@@ -421,7 +421,7 @@ mod tests {
         };
 
         let bob = User {
-            id: Ulid::from_datetime_with_source(now.into(), &mut rng),
+            id: pasion_data_model::new_id(now, &mut rng),
             username: "bob".to_owned(),
             sub: "123-456".to_owned(),
             created_at: now,
@@ -471,7 +471,7 @@ mod tests {
         let limiter = Limiter::new(&RateLimitingConfig::default()).unwrap();
         let requester = RequesterFingerprint::new([127, 0, 0, 1].into());
         let auth = UserPhoneAuthentication {
-            id: Ulid::from_datetime_with_source(now.into(), &mut rng),
+            id: pasion_data_model::new_id(now, &mut rng),
             user_registration_id: None,
             phone: "+8613800138000".to_owned(),
             created_at: now,

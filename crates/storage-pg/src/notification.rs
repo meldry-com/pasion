@@ -6,7 +6,7 @@ use diesel_async::RunQueryDsl;
 use pasion_data_model::{
     Clock, NotificationChannel, NotificationDelivery, NotificationDeliveryFailure,
     NotificationDeliveryStatus, NotificationEventKind, NotificationEventLog, NotificationRequest,
-    NotificationRequestStatus,
+    NotificationRequestStatus, new_id,
 };
 use pasion_storage::notification::{
     NewNotificationDelivery, NewNotificationEventLog, NewNotificationRequest,
@@ -38,7 +38,7 @@ impl<'c> PgNotificationRepository<'c> {
 #[derive(Debug, Clone, Queryable, Selectable)]
 #[diesel(table_name = notification_requests)]
 struct NotificationRequestRow {
-    notification_request_id: Uuid,
+    id: Uuid,
     template_key: String,
     locale: String,
     source: serde_json::Value,
@@ -57,7 +57,7 @@ impl TryFrom<NotificationRequestRow> for NotificationRequest {
     type Error = DatabaseInconsistencyError;
 
     fn try_from(value: NotificationRequestRow) -> Result<Self, Self::Error> {
-        let id = value.notification_request_id.into();
+        let id = value.id.into();
 
         Ok(NotificationRequest {
             id,
@@ -80,7 +80,7 @@ impl TryFrom<NotificationRequestRow> for NotificationRequest {
 #[derive(Debug, Clone, Queryable, Selectable)]
 #[diesel(table_name = notification_deliveries)]
 struct NotificationDeliveryRow {
-    notification_delivery_id: Uuid,
+    id: Uuid,
     notification_request_id: Uuid,
     channel: String,
     destination: serde_json::Value,
@@ -101,7 +101,7 @@ impl TryFrom<NotificationDeliveryRow> for NotificationDelivery {
     type Error = DatabaseInconsistencyError;
 
     fn try_from(value: NotificationDeliveryRow) -> Result<Self, Self::Error> {
-        let id = value.notification_delivery_id.into();
+        let id = value.id.into();
 
         Ok(NotificationDelivery {
             id,
@@ -141,7 +141,7 @@ impl TryFrom<NotificationDeliveryRow> for NotificationDelivery {
 #[derive(Debug, Clone, Queryable, Selectable)]
 #[diesel(table_name = notification_event_logs)]
 struct NotificationEventLogRow {
-    notification_event_log_id: Uuid,
+    id: Uuid,
     notification_request_id: Uuid,
     notification_delivery_id: Option<Uuid>,
     kind: String,
@@ -155,7 +155,7 @@ impl TryFrom<NotificationEventLogRow> for NotificationEventLog {
     type Error = DatabaseInconsistencyError;
 
     fn try_from(value: NotificationEventLogRow) -> Result<Self, Self::Error> {
-        let id = value.notification_event_log_id.into();
+        let id = value.id.into();
 
         Ok(NotificationEventLog {
             id,
@@ -173,7 +173,7 @@ impl TryFrom<NotificationEventLogRow> for NotificationEventLog {
 #[derive(Insertable)]
 #[diesel(table_name = notification_requests)]
 struct NewNotificationRequestRow {
-    notification_request_id: Uuid,
+    id: Uuid,
     template_key: String,
     locale: String,
     source: serde_json::Value,
@@ -191,7 +191,7 @@ struct NewNotificationRequestRow {
 #[derive(Insertable)]
 #[diesel(table_name = notification_deliveries)]
 struct NewNotificationDeliveryRow {
-    notification_delivery_id: Uuid,
+    id: Uuid,
     notification_request_id: Uuid,
     channel: String,
     destination: serde_json::Value,
@@ -211,7 +211,7 @@ struct NewNotificationDeliveryRow {
 #[derive(Insertable)]
 #[diesel(table_name = notification_event_logs)]
 struct NewNotificationEventLogRow {
-    notification_event_log_id: Uuid,
+    id: Uuid,
     notification_request_id: Uuid,
     notification_delivery_id: Option<Uuid>,
     kind: String,
@@ -224,7 +224,7 @@ struct NewNotificationEventLogRow {
 #[derive(Debug, QueryableByName)]
 struct ReservedDeliveryRow {
     #[diesel(sql_type = DieselUuid)]
-    notification_delivery_id: Uuid,
+    id: Uuid,
     #[diesel(sql_type = DieselUuid)]
     notification_request_id: Uuid,
     #[diesel(sql_type = Text)]
@@ -260,7 +260,7 @@ impl TryFrom<ReservedDeliveryRow> for NotificationDelivery {
 
     fn try_from(value: ReservedDeliveryRow) -> Result<Self, Self::Error> {
         NotificationDeliveryRow {
-            notification_delivery_id: value.notification_delivery_id,
+            id: value.id,
             notification_request_id: value.notification_request_id,
             channel: value.channel,
             destination: value.destination,
@@ -323,7 +323,7 @@ impl NotificationRepository for PgNotificationRepository<'_> {
         params: NewNotificationRequest,
     ) -> Result<NotificationRequest, Self::Error> {
         let created_at = clock.now();
-        let id = Ulid::from_datetime_with_source(created_at.into(), rng);
+        let id = new_id(created_at, rng);
         tracing::Span::current().record("notification_request.id", tracing::field::display(id));
 
         let scheduled_at = params.scheduled_at().unwrap_or(created_at);
@@ -331,7 +331,7 @@ impl NotificationRepository for PgNotificationRepository<'_> {
             serde_json::to_value(params.source()).map_err(DatabaseError::to_invalid_operation)?;
 
         let row = NewNotificationRequestRow {
-            notification_request_id: Uuid::from(id),
+            id: Uuid::from(id),
             template_key: params.template_key().to_owned(),
             locale: params.locale().to_owned(),
             source,
@@ -413,7 +413,7 @@ impl NotificationRepository for PgNotificationRepository<'_> {
         }
 
         let rows_affected = diesel::update(notification_requests::table.filter(
-            notification_requests::notification_request_id.eq(Uuid::from(notification_request.id)),
+            notification_requests::id.eq(Uuid::from(notification_request.id)),
         ))
         .set((
             notification_requests::status.eq(request_status_to_db(notification_request.status)),
@@ -467,7 +467,7 @@ impl NotificationRepository for PgNotificationRepository<'_> {
                 notification_deliveries::notification_request_id
                     .eq(Uuid::from(notification_request.id)),
             )
-            .order(notification_deliveries::notification_delivery_id.asc())
+            .order(notification_deliveries::id.asc())
             .select(NotificationDeliveryRow::as_select())
             .load::<NotificationDeliveryRow>(self.conn)
             .await?
@@ -495,11 +495,11 @@ impl NotificationRepository for PgNotificationRepository<'_> {
         params: NewNotificationDelivery,
     ) -> Result<NotificationDelivery, Self::Error> {
         let created_at = clock.now();
-        let id = Ulid::from_datetime_with_source(created_at.into(), rng);
+        let id = new_id(created_at, rng);
         tracing::Span::current().record("notification_delivery.id", tracing::field::display(id));
 
         let row = NewNotificationDeliveryRow {
-            notification_delivery_id: Uuid::from(id),
+            id: Uuid::from(id),
             notification_request_id: Uuid::from(notification_request.id),
             channel: channel_to_db(params.channel()).to_owned(),
             destination: serde_json::to_value(params.destination())
@@ -558,7 +558,7 @@ impl NotificationRepository for PgNotificationRepository<'_> {
         let rows: Vec<ReservedDeliveryRow> = diesel::sql_query(
             r"
                 WITH locked_deliveries AS (
-                    SELECT notification_delivery_id
+                    SELECT id
                     FROM notification_deliveries
                     WHERE status = 'pending'
                        OR (
@@ -566,7 +566,7 @@ impl NotificationRepository for PgNotificationRepository<'_> {
                             AND next_retry_at IS NOT NULL
                             AND next_retry_at <= $1
                        )
-                    ORDER BY COALESCE(next_retry_at, created_at), notification_delivery_id
+                    ORDER BY COALESCE(next_retry_at, created_at), id
                     LIMIT $2
                     FOR UPDATE
                     SKIP LOCKED
@@ -576,9 +576,9 @@ impl NotificationRepository for PgNotificationRepository<'_> {
                     reserved_at = $1,
                     attempt_count = notification_deliveries.attempt_count + 1
                 FROM locked_deliveries
-                WHERE notification_deliveries.notification_delivery_id = locked_deliveries.notification_delivery_id
+                WHERE notification_deliveries.id = locked_deliveries.id
                 RETURNING
-                    notification_deliveries.notification_delivery_id,
+                    notification_deliveries.id,
                     notification_deliveries.notification_request_id,
                     notification_deliveries.channel,
                     notification_deliveries.destination,
@@ -721,10 +721,10 @@ impl NotificationRepository for PgNotificationRepository<'_> {
         params: NewNotificationEventLog,
     ) -> Result<NotificationEventLog, Self::Error> {
         let occurred_at = clock.now();
-        let id = Ulid::from_datetime_with_source(occurred_at.into(), rng);
+        let id = new_id(occurred_at, rng);
 
         let row = NewNotificationEventLogRow {
-            notification_event_log_id: Uuid::from(id),
+            id: Uuid::from(id),
             notification_request_id: Uuid::from(notification_request.id),
             notification_delivery_id: notification_delivery.map(|delivery| Uuid::from(delivery.id)),
             kind: event_kind_to_db(params.kind()).to_owned(),
@@ -769,7 +769,7 @@ impl NotificationRepository for PgNotificationRepository<'_> {
             )
             .order((
                 notification_event_logs::occurred_at.asc(),
-                notification_event_logs::notification_event_log_id.asc(),
+                notification_event_logs::id.asc(),
             ))
             .select(NotificationEventLogRow::as_select())
             .load::<NotificationEventLogRow>(self.conn)
@@ -786,7 +786,7 @@ async fn persist_delivery(
     notification_delivery: &NotificationDelivery,
 ) -> Result<(), DatabaseError> {
     let rows_affected = diesel::update(notification_deliveries::table.filter(
-        notification_deliveries::notification_delivery_id.eq(Uuid::from(notification_delivery.id)),
+        notification_deliveries::id.eq(Uuid::from(notification_delivery.id)),
     ))
     .set((
         notification_deliveries::provider_message_id

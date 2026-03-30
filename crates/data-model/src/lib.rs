@@ -53,6 +53,35 @@ pub struct InvalidTransitionError;
 
 pub use ulid::Ulid;
 
+/// Generate a new UUID v7-compatible identifier (RFC 9562).
+///
+/// Produces a 128-bit value with the UUID v7 bit layout:
+/// 48-bit millisecond timestamp | version 0111 | 12-bit random |
+/// variant 10 | 62-bit random.
+///
+/// The result is returned as a [`Ulid`] for type compatibility with the
+/// rest of the codebase; the underlying bytes are valid UUID v7.
+pub fn new_id(
+    ts: chrono::DateTime<chrono::Utc>,
+    rng: &mut (impl rand::RngCore + ?Sized),
+) -> Ulid {
+    let millis = ts.timestamp_millis() as u64;
+    let mut bytes = [0u8; 16];
+
+    // 48-bit Unix timestamp in milliseconds (big-endian)
+    bytes[0..6].copy_from_slice(&millis.to_be_bytes()[2..8]);
+
+    // Fill remaining 10 bytes with random data
+    rng.fill_bytes(&mut bytes[6..]);
+
+    // Set UUID version 7 (bits 48-51 = 0111)
+    bytes[6] = (bytes[6] & 0x0F) | 0x70;
+    // Set RFC 4122 variant (bits 64-65 = 10)
+    bytes[8] = (bytes[8] & 0x3F) | 0x80;
+
+    Ulid::from(uuid::Uuid::from_bytes(bytes))
+}
+
 pub use self::{
     account::{
         AccountContactPoint, AccountIdentityBinding, ContactChannel, IdentityProviderType,

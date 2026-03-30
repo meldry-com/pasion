@@ -3,10 +3,9 @@ use chrono::DateTime;
 use chrono::Utc;
 use diesel::prelude::*;
 use diesel_async::RunQueryDsl;
-use pasion_data_model::{Clock, User};
+use pasion_data_model::{Clock, User, new_id};
 use pasion_storage::user::UserTermsRepository;
 use rand::RngCore;
-use ulid::Ulid;
 use url::Url;
 use uuid::Uuid;
 
@@ -29,7 +28,7 @@ impl<'c> PgUserTermsRepository<'c> {
 #[derive(Insertable)]
 #[diesel(table_name = user_terms)]
 struct NewUserTerms {
-    user_terms_id: Uuid,
+    id: Uuid,
     user_id: Uuid,
     terms_url: String,
     created_at: DateTime<Utc>,
@@ -57,11 +56,11 @@ impl UserTermsRepository for PgUserTermsRepository<'_> {
         terms_url: Url,
     ) -> Result<(), Self::Error> {
         let created_at = clock.now();
-        let id = Ulid::from_datetime_with_source(created_at.into(), rng);
+        let id = new_id(created_at, rng);
         tracing::Span::current().record("user_terms.id", tracing::field::display(id));
 
         let new_terms = NewUserTerms {
-            user_terms_id: Uuid::from(id),
+            id: Uuid::from(id),
             user_id: Uuid::from(user.id),
             terms_url: terms_url.to_string(),
             created_at,

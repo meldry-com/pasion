@@ -4,7 +4,7 @@ use diesel::prelude::*;
 use diesel_async::RunQueryDsl;
 use pasion_data_model::{
     BrowserSession, Clock, UpstreamOAuthAuthorizationSession, User, UserEmail,
-    UserEmailAuthentication, UserEmailAuthenticationCode, UserRegistration,
+    UserEmailAuthentication, UserEmailAuthenticationCode, UserRegistration, new_id,
 };
 use pasion_storage::{
     Page, Pagination,
@@ -317,7 +317,7 @@ impl UserEmailRepository for PgUserEmailRepository<'_> {
         email: String,
     ) -> Result<UserEmail, Self::Error> {
         let created_at = clock.now();
-        let id = Ulid::from_datetime_with_source(created_at.into(), rng);
+        let id = new_id(created_at, rng);
         tracing::Span::current().record("user_email.id", tracing::field::display(id));
 
         let new_row = NewUserEmail {
@@ -412,7 +412,7 @@ impl UserEmailRepository for PgUserEmailRepository<'_> {
         session: &BrowserSession,
     ) -> Result<UserEmailAuthentication, Self::Error> {
         let created_at = clock.now();
-        let id = Ulid::from_datetime_with_source(created_at.into(), rng);
+        let id = new_id(created_at, rng);
         tracing::Span::current()
             .record("user_email_authentication.id", tracing::field::display(id));
 
@@ -457,7 +457,7 @@ impl UserEmailRepository for PgUserEmailRepository<'_> {
         user_registration: &UserRegistration,
     ) -> Result<UserEmailAuthentication, Self::Error> {
         let created_at = clock.now();
-        let id = Ulid::from_datetime_with_source(created_at.into(), rng);
+        let id = new_id(created_at, rng);
         tracing::Span::current()
             .record("user_email_authentication.id", tracing::field::display(id));
 
@@ -505,7 +505,7 @@ impl UserEmailRepository for PgUserEmailRepository<'_> {
     ) -> Result<UserEmailAuthenticationCode, Self::Error> {
         let created_at = clock.now();
         let expires_at = created_at + duration;
-        let id = Ulid::from_datetime_with_source(created_at.into(), rng);
+        let id = new_id(created_at, rng);
         tracing::Span::current().record(
             "user_email_authentication_code.id",
             tracing::field::display(id),

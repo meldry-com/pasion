@@ -2,7 +2,7 @@ use async_trait::async_trait;
 use chrono::{DateTime, Utc};
 use diesel::prelude::*;
 use diesel_async::RunQueryDsl;
-use pasion_data_model::{AccessToken, Clock, RefreshToken, RefreshTokenState, Session};
+use pasion_data_model::{AccessToken, Clock, RefreshToken, RefreshTokenState, Session, new_id};
 use rand::RngCore;
 use ulid::Ulid;
 use uuid::Uuid;
@@ -27,7 +27,7 @@ impl<'c> PgOAuth2RefreshTokenRepository<'c> {
 #[derive(Debug, Clone, Queryable, Selectable)]
 #[diesel(table_name = oauth2_refresh_tokens)]
 struct OAuth2RefreshTokenRow {
-    oauth2_refresh_token_id: Uuid,
+    id: Uuid,
     refresh_token: String,
     created_at: DateTime<Utc>,
     consumed_at: Option<DateTime<Utc>>,
@@ -41,7 +41,7 @@ impl TryFrom<OAuth2RefreshTokenRow> for RefreshToken {
     type Error = DatabaseInconsistencyError;
 
     fn try_from(value: OAuth2RefreshTokenRow) -> Result<Self, Self::Error> {
-        let id = value.oauth2_refresh_token_id.into();
+        let id = value.id.into();
         let state = match (
             value.revoked_at,
             value.consumed_at,
@@ -79,7 +79,7 @@ impl TryFrom<OAuth2RefreshTokenRow> for RefreshToken {
 #[derive(Insertable)]
 #[diesel(table_name = oauth2_refresh_tokens)]
 struct NewOAuth2RefreshToken {
-    oauth2_refresh_token_id: Uuid,
+    id: Uuid,
     oauth2_session_id: Uuid,
     oauth2_access_token_id: Uuid,
     refresh_token: String,
@@ -154,11 +154,11 @@ impl pasion_storage::oauth2::OAuth2RefreshTokenRepository for PgOAuth2RefreshTok
         refresh_token: String,
     ) -> Result<RefreshToken, Self::Error> {
         let created_at = clock.now();
-        let id = Ulid::from_datetime_with_source(created_at.into(), rng);
+        let id = new_id(created_at, rng);
         tracing::Span::current().record("refresh_token.id", tracing::field::display(id));
 
         let new_row = NewOAuth2RefreshToken {
-            oauth2_refresh_token_id: Uuid::from(id),
+            id: Uuid::from(id),
             oauth2_session_id: Uuid::from(session.id),
             oauth2_access_token_id: Uuid::from(access_token.id),
             refresh_token: refresh_token.clone(),
@@ -254,7 +254,7 @@ impl pasion_storage::oauth2::OAuth2RefreshTokenRepository for PgOAuth2RefreshTok
             r#"
                 WITH
                     to_delete AS (
-                        SELECT oauth2_refresh_token_id
+                        SELECT id
                         FROM oauth2_refresh_tokens
                         WHERE revoked_at IS NOT NULL
                           AND ($1::timestamptz IS NULL OR revoked_at >= $1::timestamptz)
@@ -267,7 +267,7 @@ impl pasion_storage::oauth2::OAuth2RefreshTokenRepository for PgOAuth2RefreshTok
                     deleted AS (
                         DELETE FROM oauth2_refresh_tokens
                         USING to_delete
-                        WHERE oauth2_refresh_tokens.oauth2_refresh_token_id = to_delete.oauth2_refresh_token_id
+                        WHERE oauth2_refresh_tokens.id = to_delete.id
                         RETURNING oauth2_refresh_tokens.revoked_at
                     )
 
@@ -299,10 +299,10 @@ impl pasion_storage::oauth2::OAuth2RefreshTokenRepository for PgOAuth2RefreshTok
             r#"
                 WITH
                     to_delete AS (
-                        SELECT rts_to_del.oauth2_refresh_token_id
+                        SELECT rts_to_del.id
                         FROM oauth2_refresh_tokens rts_to_del
                         LEFT JOIN oauth2_refresh_tokens next_rts
-                          ON rts_to_del.next_oauth2_refresh_token_id = next_rts.oauth2_refresh_token_id
+                          ON rts_to_del.next_oauth2_refresh_token_id = next_rts.id
                         WHERE rts_to_del.consumed_at IS NOT NULL
                           AND (rts_to_del.next_oauth2_refresh_token_id IS NULL OR next_rts.consumed_at IS NOT NULL)
                           AND ($1::timestamptz IS NULL OR rts_to_del.consumed_at >= $1::timestamptz)
@@ -314,7 +314,7 @@ impl pasion_storage::oauth2::OAuth2RefreshTokenRepository for PgOAuth2RefreshTok
                     deleted AS (
                         DELETE FROM oauth2_refresh_tokens
                         USING to_delete
-                        WHERE oauth2_refresh_tokens.oauth2_refresh_token_id = to_delete.oauth2_refresh_token_id
+                        WHERE oauth2_refresh_tokens.id = to_delete.id
                         RETURNING oauth2_refresh_tokens.consumed_at
                     )
 

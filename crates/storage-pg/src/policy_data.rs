@@ -5,11 +5,10 @@ use async_trait::async_trait;
 use chrono::{DateTime, Utc};
 use diesel::prelude::*;
 use diesel_async::RunQueryDsl;
-use pasion_data_model::{Clock, PolicyData};
+use pasion_data_model::{Clock, PolicyData, new_id};
 use pasion_storage::policy_data::PolicyDataRepository;
 use rand::RngCore;
 use serde_json::Value;
-use ulid::Ulid;
 use uuid::Uuid;
 
 use crate::{DatabaseError, schema::policy_data};
@@ -32,7 +31,7 @@ impl<'c> PgPolicyDataRepository<'c> {
 #[derive(Debug, Queryable, Selectable)]
 #[diesel(table_name = policy_data)]
 struct PolicyDataRow {
-    policy_data_id: Uuid,
+    id: Uuid,
     created_at: DateTime<Utc>,
     data: Value,
 }
@@ -40,7 +39,7 @@ struct PolicyDataRow {
 impl From<PolicyDataRow> for PolicyData {
     fn from(value: PolicyDataRow) -> Self {
         PolicyData {
-            id: value.policy_data_id.into(),
+            id: value.id.into(),
             created_at: value.created_at,
             data: value.data,
         }
@@ -51,7 +50,7 @@ impl From<PolicyDataRow> for PolicyData {
 #[derive(Insertable)]
 #[diesel(table_name = policy_data)]
 struct NewPolicyData {
-    policy_data_id: Uuid,
+    id: Uuid,
     created_at: DateTime<Utc>,
     data: Value,
 }
@@ -64,7 +63,7 @@ impl PolicyDataRepository for PgPolicyDataRepository<'_> {
     async fn get(&mut self) -> Result<Option<PolicyData>, Self::Error> {
         let row = policy_data::table
             .select(PolicyDataRow::as_select())
-            .order(policy_data::policy_data_id.desc())
+            .order(policy_data::id.desc())
             .first::<PolicyDataRow>(self.conn)
             .await
             .optional()?;
@@ -80,10 +79,10 @@ impl PolicyDataRepository for PgPolicyDataRepository<'_> {
         data: Value,
     ) -> Result<PolicyData, Self::Error> {
         let created_at = clock.now();
-        let id = Ulid::from_datetime_with_source(created_at.into(), rng);
+        let id = new_id(created_at, rng);
 
         let new_row = NewPolicyData {
-            policy_data_id: Uuid::from(id),
+            id: Uuid::from(id),
             created_at,
             data: data.clone(),
         };
@@ -106,8 +105,8 @@ impl PolicyDataRepository for PgPolicyDataRepository<'_> {
 
         // Get the IDs of entries to delete (all except the `keep` most recent)
         let ids_to_delete: Vec<Uuid> = policy_data::table
-            .select(policy_data::policy_data_id)
-            .order(policy_data::policy_data_id.desc())
+            .select(policy_data::id)
+            .order(policy_data::id.desc())
             .offset(offset)
             .load(self.conn)
             .await?;
@@ -117,7 +116,7 @@ impl PolicyDataRepository for PgPolicyDataRepository<'_> {
         }
 
         let rows_affected = diesel::delete(
-            policy_data::table.filter(policy_data::policy_data_id.eq_any(&ids_to_delete)),
+            policy_data::table.filter(policy_data::id.eq_any(&ids_to_delete)),
         )
         .execute(self.conn)
         .await?;

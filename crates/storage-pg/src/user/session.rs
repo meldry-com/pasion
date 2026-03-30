@@ -6,7 +6,7 @@ use diesel::prelude::*;
 use diesel_async::RunQueryDsl;
 use pasion_data_model::{
     Authentication, AuthenticationMethod, BrowserSession, Clock, Password,
-    UpstreamOAuthAuthorizationSession, User,
+    UpstreamOAuthAuthorizationSession, User, new_id,
 };
 use pasion_storage::{
     Page, Pagination,
@@ -42,7 +42,7 @@ impl<'c> PgBrowserSessionRepository<'c> {
 #[derive(Debug, Clone, Queryable, Selectable)]
 #[diesel(table_name = user_sessions)]
 struct UserSessionRow {
-    user_session_id: Uuid,
+    id: Uuid,
     user_id: Uuid,
     created_at: DateTime<Utc>,
     finished_at: Option<DateTime<Utc>>,
@@ -55,7 +55,7 @@ struct UserSessionRow {
 #[derive(Debug, Clone, Queryable, Selectable)]
 #[diesel(table_name = users)]
 struct UserRow {
-    user_id: Uuid,
+    id: Uuid,
     username: String,
     created_at: DateTime<Utc>,
     locked_at: Option<DateTime<Utc>>,
@@ -80,7 +80,7 @@ impl From<(UserSessionRow, UserRow)> for SessionLookup {
 
 impl Node<Ulid> for SessionLookup {
     fn cursor(&self) -> Ulid {
-        self.session.user_session_id.into()
+        self.session.id.into()
     }
 }
 
@@ -88,7 +88,7 @@ impl TryFrom<SessionLookup> for BrowserSession {
     type Error = DatabaseInconsistencyError;
 
     fn try_from(value: SessionLookup) -> Result<Self, Self::Error> {
-        let id = Ulid::from(value.user.user_id);
+        let id = Ulid::from(value.user.id);
         let user = User {
             id,
             username: value.user.username,
@@ -101,7 +101,7 @@ impl TryFrom<SessionLookup> for BrowserSession {
         };
 
         Ok(BrowserSession {
-            id: value.session.user_session_id.into(),
+            id: value.session.id.into(),
             user,
             created_at: value.session.created_at,
             finished_at: value.session.finished_at,
@@ -116,7 +116,7 @@ impl TryFrom<SessionLookup> for BrowserSession {
 #[derive(Debug, Clone, Queryable, Selectable)]
 #[diesel(table_name = user_session_authentications)]
 struct AuthenticationLookup {
-    user_session_authentication_id: Uuid,
+    id: Uuid,
     created_at: DateTime<Utc>,
     user_password_id: Option<Uuid>,
     upstream_oauth_authorization_session_id: Option<Uuid>,
@@ -126,7 +126,7 @@ impl TryFrom<AuthenticationLookup> for Authentication {
     type Error = DatabaseInconsistencyError;
 
     fn try_from(value: AuthenticationLookup) -> Result<Self, Self::Error> {
-        let id = Ulid::from(value.user_session_authentication_id);
+        let id = Ulid::from(value.id);
         let authentication_method = match (
             value.user_password_id.map(Into::into),
             value
@@ -155,7 +155,7 @@ impl TryFrom<AuthenticationLookup> for Authentication {
 #[derive(Insertable)]
 #[diesel(table_name = user_sessions)]
 struct NewUserSession {
-    user_session_id: Uuid,
+    id: Uuid,
     user_id: Uuid,
     created_at: DateTime<Utc>,
     user_agent: Option<String>,
@@ -165,7 +165,7 @@ struct NewUserSession {
 #[derive(Insertable)]
 #[diesel(table_name = user_session_authentications)]
 struct NewSessionAuthenticationPassword {
-    user_session_authentication_id: Uuid,
+    id: Uuid,
     user_session_id: Uuid,
     created_at: DateTime<Utc>,
     user_password_id: Option<Uuid>,
@@ -175,7 +175,7 @@ struct NewSessionAuthenticationPassword {
 #[derive(Insertable)]
 #[diesel(table_name = user_session_authentications)]
 struct NewSessionAuthenticationUpstream {
-    user_session_authentication_id: Uuid,
+    id: Uuid,
     user_session_id: Uuid,
     created_at: DateTime<Utc>,
     upstream_oauth_authorization_session_id: Option<Uuid>,
@@ -216,7 +216,7 @@ macro_rules! apply_session_filter {
                 .inner_join(
                     upstream_oauth_authorization_sessions::table.on(
                         user_session_authentications::upstream_oauth_authorization_session_id
-                            .eq(upstream_oauth_authorization_sessions::upstream_oauth_authorization_session_id
+                            .eq(upstream_oauth_authorization_sessions::id
                                 .nullable()),
                     ),
                 )
@@ -229,7 +229,7 @@ macro_rules! apply_session_filter {
                         .eq(Uuid::from(provider.id)),
                 );
             }
-            q = q.filter(user_sessions::user_session_id.eq_any(sub));
+            q = q.filter(user_sessions::id.eq_any(sub));
         }
         q
     }};
@@ -242,7 +242,7 @@ async fn load_session_lookup(
     session_id: Uuid,
 ) -> Result<Option<SessionLookup>, DatabaseError> {
     let session_row = user_sessions::table
-        .filter(user_sessions::user_session_id.eq(session_id))
+        .filter(user_sessions::id.eq(session_id))
         .select(UserSessionRow::as_select())
         .first::<UserSessionRow>(conn)
         .await
@@ -253,7 +253,7 @@ async fn load_session_lookup(
     };
 
     let user_row = users::table
-        .filter(users::user_id.eq(session_row.user_id))
+        .filter(users::id.eq(session_row.user_id))
         .select(UserRow::as_select())
         .first::<UserRow>(conn)
         .await
@@ -306,11 +306,11 @@ impl BrowserSessionRepository for PgBrowserSessionRepository<'_> {
         user_agent: Option<String>,
     ) -> Result<BrowserSession, Self::Error> {
         let created_at = clock.now();
-        let id = Ulid::from_datetime_with_source(created_at.into(), rng);
+        let id = new_id(created_at, rng);
         tracing::Span::current().record("user_session.id", tracing::field::display(id));
 
         let new_session = NewUserSession {
-            user_session_id: Uuid::from(id),
+            id: Uuid::from(id),
             user_id: Uuid::from(user.id),
             created_at,
             user_agent: user_agent.clone(),
@@ -351,7 +351,7 @@ impl BrowserSessionRepository for PgBrowserSessionRepository<'_> {
         let finished_at = clock.now();
         let rows_affected = diesel::update(
             user_sessions::table
-                .filter(user_sessions::user_session_id.eq(Uuid::from(user_session.id))),
+                .filter(user_sessions::id.eq(Uuid::from(user_session.id))),
         )
         .set(user_sessions::finished_at.eq(Some(finished_at)))
         .execute(self.conn)
@@ -398,21 +398,21 @@ impl BrowserSessionRepository for PgBrowserSessionRepository<'_> {
 
         // Apply pagination cursors
         if let Some(after) = pagination.after {
-            query = query.filter(user_sessions::user_session_id.gt(Uuid::from(after)));
+            query = query.filter(user_sessions::id.gt(Uuid::from(after)));
         }
         if let Some(before) = pagination.before {
-            query = query.filter(user_sessions::user_session_id.lt(Uuid::from(before)));
+            query = query.filter(user_sessions::id.lt(Uuid::from(before)));
         }
 
         match pagination.direction {
             PaginationDirection::Forward => {
                 query = query
-                    .order(user_sessions::user_session_id.asc())
+                    .order(user_sessions::id.asc())
                     .limit((pagination.count + 1) as i64);
             }
             PaginationDirection::Backward => {
                 query = query
-                    .order(user_sessions::user_session_id.desc())
+                    .order(user_sessions::id.desc())
                     .limit((pagination.count + 1) as i64);
             }
         }
@@ -428,13 +428,13 @@ impl BrowserSessionRepository for PgBrowserSessionRepository<'_> {
             .collect();
 
         let user_rows: Vec<UserRow> = users::table
-            .filter(users::user_id.eq_any(&user_ids))
+            .filter(users::id.eq_any(&user_ids))
             .select(UserRow::as_select())
             .load(self.conn)
             .await?;
 
         let user_map: std::collections::HashMap<Uuid, UserRow> =
-            user_rows.into_iter().map(|u| (u.user_id, u)).collect();
+            user_rows.into_iter().map(|u| (u.id, u)).collect();
 
         // Combine into SessionLookup entries
         let edges: Vec<SessionLookup> = session_rows
@@ -482,14 +482,14 @@ impl BrowserSessionRepository for PgBrowserSessionRepository<'_> {
         user_password: &Password,
     ) -> Result<Authentication, Self::Error> {
         let created_at = clock.now();
-        let id = Ulid::from_datetime_with_source(created_at.into(), rng);
+        let id = new_id(created_at, rng);
         tracing::Span::current().record(
             "user_session_authentication.id",
             tracing::field::display(id),
         );
 
         let new_auth = NewSessionAuthenticationPassword {
-            user_session_authentication_id: Uuid::from(id),
+            id: Uuid::from(id),
             user_session_id: Uuid::from(user_session.id),
             created_at,
             user_password_id: Some(Uuid::from(user_password.id)),
@@ -527,14 +527,14 @@ impl BrowserSessionRepository for PgBrowserSessionRepository<'_> {
         upstream_oauth_session: &UpstreamOAuthAuthorizationSession,
     ) -> Result<Authentication, Self::Error> {
         let created_at = clock.now();
-        let id = Ulid::from_datetime_with_source(created_at.into(), rng);
+        let id = new_id(created_at, rng);
         tracing::Span::current().record(
             "user_session_authentication.id",
             tracing::field::display(id),
         );
 
         let new_auth = NewSessionAuthenticationUpstream {
-            user_session_authentication_id: Uuid::from(id),
+            id: Uuid::from(id),
             user_session_id: Uuid::from(user_session.id),
             created_at,
             upstream_oauth_authorization_session_id: Some(Uuid::from(upstream_oauth_session.id)),

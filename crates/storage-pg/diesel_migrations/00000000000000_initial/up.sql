@@ -168,11 +168,11 @@ CREATE TABLE IF NOT EXISTS user_registrations (
 -- Add FK from email/phone auth to registrations
 ALTER TABLE user_email_authentications
     ADD CONSTRAINT fk_email_auth_registration
-    FOREIGN KEY (user_registration_id) REFERENCES user_registrations(user_registration_id) ON DELETE CASCADE;
+    FOREIGN KEY (user_registration_id) REFERENCES user_registrations(id) ON DELETE CASCADE;
 
 ALTER TABLE user_phone_authentications
     ADD CONSTRAINT fk_phone_auth_registration
-    FOREIGN KEY (user_registration_id) REFERENCES user_registrations(user_registration_id) ON DELETE CASCADE;
+    FOREIGN KEY (user_registration_id) REFERENCES user_registrations(id) ON DELETE CASCADE;
 
 -- ── Session authentication ──────────────────────────────────────
 
@@ -199,7 +199,7 @@ CREATE TABLE IF NOT EXISTS user_recovery_sessions (
 
 CREATE TABLE IF NOT EXISTS user_recovery_tickets (
     id UUID PRIMARY KEY,
-    user_recovery_session_id UUID NOT NULL REFERENCES user_recovery_sessions(user_recovery_session_id) ON DELETE CASCADE,
+    user_recovery_session_id UUID NOT NULL REFERENCES user_recovery_sessions(id) ON DELETE CASCADE,
     user_email_id UUID NOT NULL REFERENCES user_emails(id) ON DELETE CASCADE,
     ticket TEXT NOT NULL,
     created_at TIMESTAMPTZ NOT NULL,
@@ -263,7 +263,7 @@ CREATE TABLE IF NOT EXISTS oauth2_clients (
 CREATE TABLE IF NOT EXISTS oauth2_sessions (
     id UUID PRIMARY KEY,
     user_session_id UUID REFERENCES user_sessions(id) ON DELETE SET NULL,
-    oauth2_client_id UUID NOT NULL REFERENCES oauth2_clients(oauth2_client_id),
+    oauth2_client_id UUID NOT NULL REFERENCES oauth2_clients(id),
     user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
     scope_list TEXT[] NOT NULL,
     created_at TIMESTAMPTZ NOT NULL,
@@ -276,7 +276,7 @@ CREATE TABLE IF NOT EXISTS oauth2_sessions (
 
 CREATE TABLE IF NOT EXISTS oauth2_access_tokens (
     id UUID PRIMARY KEY,
-    oauth2_session_id UUID NOT NULL REFERENCES oauth2_sessions(oauth2_session_id),
+    oauth2_session_id UUID NOT NULL REFERENCES oauth2_sessions(id),
     access_token TEXT NOT NULL UNIQUE,
     created_at TIMESTAMPTZ NOT NULL,
     expires_at TIMESTAMPTZ,
@@ -286,19 +286,19 @@ CREATE TABLE IF NOT EXISTS oauth2_access_tokens (
 
 CREATE TABLE IF NOT EXISTS oauth2_refresh_tokens (
     id UUID PRIMARY KEY,
-    oauth2_session_id UUID NOT NULL REFERENCES oauth2_sessions(oauth2_session_id),
-    oauth2_access_token_id UUID REFERENCES oauth2_access_tokens(oauth2_access_token_id) ON DELETE SET NULL,
+    oauth2_session_id UUID NOT NULL REFERENCES oauth2_sessions(id),
+    oauth2_access_token_id UUID REFERENCES oauth2_access_tokens(id) ON DELETE SET NULL,
     refresh_token TEXT NOT NULL UNIQUE,
     created_at TIMESTAMPTZ NOT NULL,
     consumed_at TIMESTAMPTZ,
     revoked_at TIMESTAMPTZ,
-    next_oauth2_refresh_token_id UUID REFERENCES oauth2_refresh_tokens(oauth2_refresh_token_id) ON DELETE SET NULL
+    next_oauth2_refresh_token_id UUID REFERENCES oauth2_refresh_tokens(id) ON DELETE SET NULL
 );
 
 CREATE TABLE IF NOT EXISTS oauth2_authorization_grants (
     id UUID PRIMARY KEY,
-    oauth2_client_id UUID NOT NULL REFERENCES oauth2_clients(oauth2_client_id),
-    oauth2_session_id UUID REFERENCES oauth2_sessions(oauth2_session_id),
+    oauth2_client_id UUID NOT NULL REFERENCES oauth2_clients(id),
+    oauth2_session_id UUID REFERENCES oauth2_sessions(id),
     authorization_code TEXT UNIQUE,
     redirect_uri TEXT NOT NULL,
     scope TEXT NOT NULL,
@@ -320,7 +320,7 @@ CREATE TABLE IF NOT EXISTS oauth2_authorization_grants (
 
 CREATE TABLE IF NOT EXISTS oauth2_device_code_grant (
     id UUID PRIMARY KEY,
-    oauth2_client_id UUID NOT NULL REFERENCES oauth2_clients(oauth2_client_id) ON DELETE CASCADE,
+    oauth2_client_id UUID NOT NULL REFERENCES oauth2_clients(id) ON DELETE CASCADE,
     scope TEXT NOT NULL,
     user_code TEXT NOT NULL UNIQUE,
     device_code TEXT NOT NULL UNIQUE,
@@ -329,7 +329,7 @@ CREATE TABLE IF NOT EXISTS oauth2_device_code_grant (
     fulfilled_at TIMESTAMPTZ,
     rejected_at TIMESTAMPTZ,
     exchanged_at TIMESTAMPTZ,
-    oauth2_session_id UUID REFERENCES oauth2_sessions(oauth2_session_id) ON DELETE CASCADE,
+    oauth2_session_id UUID REFERENCES oauth2_sessions(id) ON DELETE CASCADE,
     user_session_id UUID REFERENCES user_sessions(id),
     ip_address INET,
     user_agent TEXT
@@ -355,7 +355,7 @@ CREATE TABLE IF NOT EXISTS queue_jobs (
     status TEXT NOT NULL DEFAULT 'available',
     created_at TIMESTAMPTZ NOT NULL,
     started_at TIMESTAMPTZ,
-    started_by UUID REFERENCES queue_workers(queue_worker_id),
+    started_by UUID REFERENCES queue_workers(id),
     completed_at TIMESTAMPTZ,
     queue_name TEXT NOT NULL,
     payload JSONB NOT NULL DEFAULT '{}',
@@ -363,7 +363,7 @@ CREATE TABLE IF NOT EXISTS queue_jobs (
     failed_at TIMESTAMPTZ,
     failed_reason TEXT,
     attempt INTEGER NOT NULL DEFAULT 0,
-    next_attempt_id UUID REFERENCES queue_jobs(queue_job_id),
+    next_attempt_id UUID REFERENCES queue_jobs(id),
     scheduled_at TIMESTAMPTZ,
     schedule_name TEXT REFERENCES queue_schedules(schedule_name)
 );
@@ -371,13 +371,13 @@ CREATE TABLE IF NOT EXISTS queue_jobs (
 -- FK from schedules back to jobs
 ALTER TABLE queue_schedules
     ADD CONSTRAINT fk_schedule_last_job
-    FOREIGN KEY (last_scheduled_job_id) REFERENCES queue_jobs(queue_job_id);
+    FOREIGN KEY (last_scheduled_job_id) REFERENCES queue_jobs(id);
 
 CREATE UNLOGGED TABLE IF NOT EXISTS queue_leader (
     active BOOLEAN NOT NULL DEFAULT TRUE UNIQUE,
     elected_at TIMESTAMPTZ NOT NULL,
     expires_at TIMESTAMPTZ NOT NULL,
-    queue_worker_id UUID NOT NULL REFERENCES queue_workers(queue_worker_id)
+    queue_worker_id UUID NOT NULL REFERENCES queue_workers(id)
 );
 
 -- ── Personal sessions ───────────────────────────────────────────
@@ -385,7 +385,7 @@ CREATE UNLOGGED TABLE IF NOT EXISTS queue_leader (
 CREATE TABLE IF NOT EXISTS personal_sessions (
     id UUID PRIMARY KEY,
     owner_user_id UUID REFERENCES users(id),
-    owner_oauth2_client_id UUID REFERENCES oauth2_clients(oauth2_client_id),
+    owner_oauth2_client_id UUID REFERENCES oauth2_clients(id),
     actor_user_id UUID NOT NULL REFERENCES users(id),
     human_name TEXT NOT NULL,
     scope_list TEXT[] NOT NULL,
@@ -397,7 +397,7 @@ CREATE TABLE IF NOT EXISTS personal_sessions (
 
 CREATE TABLE IF NOT EXISTS personal_access_tokens (
     id UUID PRIMARY KEY,
-    personal_session_id UUID NOT NULL REFERENCES personal_sessions(personal_session_id),
+    personal_session_id UUID NOT NULL REFERENCES personal_sessions(id),
     access_token_sha256 BYTEA NOT NULL UNIQUE CHECK (length(access_token_sha256) = 32),
     created_at TIMESTAMPTZ NOT NULL,
     expires_at TIMESTAMPTZ,
@@ -431,7 +431,7 @@ CREATE TABLE IF NOT EXISTS notification_requests (
 );
 
 CREATE INDEX notification_requests_status_scheduled_idx
-    ON notification_requests (status, scheduled_at, notification_request_id);
+    ON notification_requests (status, scheduled_at, id);
 
 CREATE UNIQUE INDEX notification_requests_dedupe_key_idx
     ON notification_requests (dedupe_key)
@@ -439,7 +439,7 @@ CREATE UNIQUE INDEX notification_requests_dedupe_key_idx
 
 CREATE TABLE IF NOT EXISTS notification_deliveries (
     id UUID PRIMARY KEY,
-    notification_request_id UUID NOT NULL REFERENCES notification_requests (notification_request_id) ON DELETE CASCADE,
+    notification_request_id UUID NOT NULL REFERENCES notification_requests (id) ON DELETE CASCADE,
     channel TEXT NOT NULL,
     destination JSONB NOT NULL,
     provider_binding_key TEXT NULL,
@@ -456,10 +456,10 @@ CREATE TABLE IF NOT EXISTS notification_deliveries (
 );
 
 CREATE INDEX notification_deliveries_request_idx
-    ON notification_deliveries (notification_request_id, notification_delivery_id);
+    ON notification_deliveries (notification_request_id, id);
 
 CREATE INDEX notification_deliveries_status_retry_idx
-    ON notification_deliveries (status, next_retry_at, created_at, notification_delivery_id);
+    ON notification_deliveries (status, next_retry_at, created_at, id);
 
 CREATE INDEX notification_deliveries_provider_binding_idx
     ON notification_deliveries (provider_binding_key)
@@ -467,8 +467,8 @@ CREATE INDEX notification_deliveries_provider_binding_idx
 
 CREATE TABLE IF NOT EXISTS notification_event_logs (
     id UUID PRIMARY KEY,
-    notification_request_id UUID NOT NULL REFERENCES notification_requests (notification_request_id) ON DELETE CASCADE,
-    notification_delivery_id UUID NULL REFERENCES notification_deliveries (notification_delivery_id) ON DELETE CASCADE,
+    notification_request_id UUID NOT NULL REFERENCES notification_requests (id) ON DELETE CASCADE,
+    notification_delivery_id UUID NULL REFERENCES notification_deliveries (id) ON DELETE CASCADE,
     kind TEXT NOT NULL,
     actor JSONB NOT NULL,
     summary TEXT NULL,
@@ -477,10 +477,10 @@ CREATE TABLE IF NOT EXISTS notification_event_logs (
 );
 
 CREATE INDEX notification_event_logs_request_idx
-    ON notification_event_logs (notification_request_id, notification_event_log_id);
+    ON notification_event_logs (notification_request_id, id);
 
 CREATE INDEX notification_event_logs_delivery_idx
-    ON notification_event_logs (notification_delivery_id, notification_event_log_id)
+    ON notification_event_logs (notification_delivery_id, id)
     WHERE notification_delivery_id IS NOT NULL;
 
 -- ── Workflow engine ────────────────────────────────────────────
@@ -517,7 +517,7 @@ CREATE INDEX workflow_instances_status_expires_idx
 
 CREATE TABLE IF NOT EXISTS workflow_steps (
     id UUID PRIMARY KEY,
-    workflow_instance_id UUID NOT NULL REFERENCES workflow_instances (workflow_instance_id) ON DELETE CASCADE,
+    workflow_instance_id UUID NOT NULL REFERENCES workflow_instances (id) ON DELETE CASCADE,
     step_key TEXT NOT NULL,
     sequence INTEGER NOT NULL,
     status TEXT NOT NULL,
@@ -540,8 +540,8 @@ CREATE INDEX workflow_steps_instance_sequence_idx
 
 CREATE TABLE IF NOT EXISTS workflow_events (
     id UUID PRIMARY KEY,
-    workflow_instance_id UUID NOT NULL REFERENCES workflow_instances (workflow_instance_id) ON DELETE CASCADE,
-    workflow_step_id UUID NULL REFERENCES workflow_steps (workflow_step_id) ON DELETE CASCADE,
+    workflow_instance_id UUID NOT NULL REFERENCES workflow_instances (id) ON DELETE CASCADE,
+    workflow_step_id UUID NULL REFERENCES workflow_steps (id) ON DELETE CASCADE,
     kind TEXT NOT NULL,
     actor JSONB NOT NULL,
     payload JSONB NOT NULL,
@@ -549,12 +549,12 @@ CREATE TABLE IF NOT EXISTS workflow_events (
 );
 
 CREATE INDEX workflow_events_instance_idx
-    ON workflow_events (workflow_instance_id, workflow_event_id);
+    ON workflow_events (workflow_instance_id, id);
 
 CREATE TABLE IF NOT EXISTS workflow_deadlines (
     id UUID PRIMARY KEY,
-    workflow_instance_id UUID NOT NULL REFERENCES workflow_instances (workflow_instance_id) ON DELETE CASCADE,
-    workflow_step_id UUID NULL REFERENCES workflow_steps (workflow_step_id) ON DELETE CASCADE,
+    workflow_instance_id UUID NOT NULL REFERENCES workflow_instances (id) ON DELETE CASCADE,
+    workflow_step_id UUID NULL REFERENCES workflow_steps (id) ON DELETE CASCADE,
     deadline_key TEXT NOT NULL,
     status TEXT NOT NULL,
     payload JSONB NOT NULL,
@@ -569,8 +569,8 @@ CREATE INDEX workflow_deadlines_status_due_idx
 
 CREATE TABLE IF NOT EXISTS workflow_audit_logs (
     id UUID PRIMARY KEY,
-    workflow_instance_id UUID NOT NULL REFERENCES workflow_instances (workflow_instance_id) ON DELETE CASCADE,
-    workflow_step_id UUID NULL REFERENCES workflow_steps (workflow_step_id) ON DELETE CASCADE,
+    workflow_instance_id UUID NOT NULL REFERENCES workflow_instances (id) ON DELETE CASCADE,
+    workflow_step_id UUID NULL REFERENCES workflow_steps (id) ON DELETE CASCADE,
     action TEXT NOT NULL,
     actor JSONB NOT NULL,
     summary TEXT NULL,
@@ -579,7 +579,7 @@ CREATE TABLE IF NOT EXISTS workflow_audit_logs (
 );
 
 CREATE INDEX workflow_audit_logs_instance_idx
-    ON workflow_audit_logs (workflow_instance_id, workflow_audit_log_id);
+    ON workflow_audit_logs (workflow_instance_id, id);
 
 -- ── Audit ──────────────────────────────────────────────────────
 

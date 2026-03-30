@@ -2,7 +2,7 @@ use async_trait::async_trait;
 use chrono::{DateTime, Duration, Utc};
 use diesel::prelude::*;
 use diesel_async::RunQueryDsl;
-use pasion_data_model::{AccessToken, AccessTokenState, Clock, Session};
+use pasion_data_model::{AccessToken, AccessTokenState, Clock, Session, new_id};
 use rand::RngCore;
 use ulid::Ulid;
 use uuid::Uuid;
@@ -27,7 +27,7 @@ impl<'c> PgOAuth2AccessTokenRepository<'c> {
 #[derive(Debug, Clone, Queryable, Selectable)]
 #[diesel(table_name = oauth2_access_tokens)]
 struct OAuth2AccessTokenRow {
-    oauth2_access_token_id: Uuid,
+    id: Uuid,
     oauth2_session_id: Uuid,
     access_token: String,
     created_at: DateTime<Utc>,
@@ -44,7 +44,7 @@ impl From<OAuth2AccessTokenRow> for AccessToken {
         };
 
         Self {
-            id: value.oauth2_access_token_id.into(),
+            id: value.id.into(),
             state,
             session_id: value.oauth2_session_id.into(),
             access_token: value.access_token,
@@ -59,7 +59,7 @@ impl From<OAuth2AccessTokenRow> for AccessToken {
 #[derive(Insertable)]
 #[diesel(table_name = oauth2_access_tokens)]
 struct NewOAuth2AccessToken {
-    oauth2_access_token_id: Uuid,
+    id: Uuid,
     oauth2_session_id: Uuid,
     access_token: String,
     created_at: DateTime<Utc>,
@@ -131,12 +131,12 @@ impl pasion_storage::oauth2::OAuth2AccessTokenRepository for PgOAuth2AccessToken
     ) -> Result<AccessToken, Self::Error> {
         let created_at = clock.now();
         let expires_at = expires_after.map(|d| created_at + d);
-        let id = Ulid::from_datetime_with_source(created_at.into(), rng);
+        let id = new_id(created_at, rng);
 
         tracing::Span::current().record("access_token.id", tracing::field::display(id));
 
         let new_row = NewOAuth2AccessToken {
-            oauth2_access_token_id: Uuid::from(id),
+            id: Uuid::from(id),
             oauth2_session_id: Uuid::from(session.id),
             access_token: access_token.clone(),
             created_at,
@@ -237,7 +237,7 @@ impl pasion_storage::oauth2::OAuth2AccessTokenRepository for PgOAuth2AccessToken
             r#"
                 WITH
                     to_delete AS (
-                        SELECT oauth2_access_token_id
+                        SELECT id
                         FROM oauth2_access_tokens
                         WHERE revoked_at IS NOT NULL
                           AND ($1::timestamptz IS NULL OR revoked_at >= $1::timestamptz)
@@ -250,7 +250,7 @@ impl pasion_storage::oauth2::OAuth2AccessTokenRepository for PgOAuth2AccessToken
                     deleted AS (
                         DELETE FROM oauth2_access_tokens
                         USING to_delete
-                        WHERE oauth2_access_tokens.oauth2_access_token_id = to_delete.oauth2_access_token_id
+                        WHERE oauth2_access_tokens.id = to_delete.id
                         RETURNING oauth2_access_tokens.revoked_at
                     )
 
@@ -291,7 +291,7 @@ impl pasion_storage::oauth2::OAuth2AccessTokenRepository for PgOAuth2AccessToken
             r#"
                 WITH
                     to_delete AS (
-                        SELECT oauth2_access_token_id
+                        SELECT id
                         FROM oauth2_access_tokens
                         WHERE expires_at IS NOT NULL
                           AND ($1::timestamptz IS NULL OR expires_at >= $1::timestamptz)
@@ -304,7 +304,7 @@ impl pasion_storage::oauth2::OAuth2AccessTokenRepository for PgOAuth2AccessToken
                     deleted AS (
                         DELETE FROM oauth2_access_tokens
                         USING to_delete
-                        WHERE oauth2_access_tokens.oauth2_access_token_id = to_delete.oauth2_access_token_id
+                        WHERE oauth2_access_tokens.id = to_delete.id
                         RETURNING oauth2_access_tokens.expires_at
                     )
 

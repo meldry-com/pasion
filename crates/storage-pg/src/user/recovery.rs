@@ -5,7 +5,7 @@ use chrono::{DateTime, Duration, Utc};
 use diesel::prelude::*;
 use diesel_async::RunQueryDsl;
 use ipnetwork::IpNetwork;
-use pasion_data_model::{Clock, UserEmail, UserRecoverySession, UserRecoveryTicket};
+use pasion_data_model::{Clock, UserEmail, UserRecoverySession, UserRecoveryTicket, new_id};
 use pasion_storage::user::UserRecoveryRepository;
 use rand::RngCore;
 use ulid::Ulid;
@@ -32,7 +32,7 @@ impl<'c> PgUserRecoveryRepository<'c> {
 #[derive(Debug, Clone, Queryable, Selectable)]
 #[diesel(table_name = user_recovery_sessions)]
 struct UserRecoverySessionRow {
-    user_recovery_session_id: Uuid,
+    id: Uuid,
     email: String,
     user_agent: String,
     ip_address: Option<IpNetwork>,
@@ -44,7 +44,7 @@ struct UserRecoverySessionRow {
 impl From<UserRecoverySessionRow> for UserRecoverySession {
     fn from(row: UserRecoverySessionRow) -> Self {
         UserRecoverySession {
-            id: row.user_recovery_session_id.into(),
+            id: row.id.into(),
             email: row.email,
             user_agent: row.user_agent,
             ip_address: row.ip_address.map(|ip| ip.ip()),
@@ -58,7 +58,7 @@ impl From<UserRecoverySessionRow> for UserRecoverySession {
 #[derive(Debug, Clone, Queryable, Selectable)]
 #[diesel(table_name = user_recovery_tickets)]
 struct UserRecoveryTicketRow {
-    user_recovery_ticket_id: Uuid,
+    id: Uuid,
     user_recovery_session_id: Uuid,
     user_email_id: Uuid,
     ticket: String,
@@ -69,7 +69,7 @@ struct UserRecoveryTicketRow {
 impl From<UserRecoveryTicketRow> for UserRecoveryTicket {
     fn from(row: UserRecoveryTicketRow) -> Self {
         Self {
-            id: row.user_recovery_ticket_id.into(),
+            id: row.id.into(),
             user_recovery_session_id: row.user_recovery_session_id.into(),
             user_email_id: row.user_email_id.into(),
             ticket: row.ticket,
@@ -83,7 +83,7 @@ impl From<UserRecoveryTicketRow> for UserRecoveryTicket {
 #[derive(Insertable)]
 #[diesel(table_name = user_recovery_sessions)]
 struct NewUserRecoverySession {
-    user_recovery_session_id: Uuid,
+    id: Uuid,
     email: String,
     user_agent: String,
     ip_address: Option<IpNetwork>,
@@ -95,7 +95,7 @@ struct NewUserRecoverySession {
 #[derive(Insertable)]
 #[diesel(table_name = user_recovery_tickets)]
 struct NewUserRecoveryTicket {
-    user_recovery_ticket_id: Uuid,
+    id: Uuid,
     user_recovery_session_id: Uuid,
     user_email_id: Uuid,
     ticket: String,
@@ -107,7 +107,7 @@ struct NewUserRecoveryTicket {
 #[derive(QueryableByName)]
 struct UuidRow {
     #[diesel(sql_type = diesel::sql_types::Uuid)]
-    user_recovery_session_id: Uuid,
+    id: Uuid,
 }
 
 #[async_trait]
@@ -160,11 +160,11 @@ impl UserRecoveryRepository for PgUserRecoveryRepository<'_> {
         locale: String,
     ) -> Result<UserRecoverySession, Self::Error> {
         let created_at = clock.now();
-        let id = Ulid::from_datetime_with_source(created_at.into(), rng);
+        let id = new_id(created_at, rng);
         tracing::Span::current().record("user_recovery_session.id", tracing::field::display(id));
 
         let new_session = NewUserRecoverySession {
-            user_recovery_session_id: Uuid::from(id),
+            id: Uuid::from(id),
             email: email.clone(),
             user_agent: user_agent.clone(),
             ip_address: ip_address.map(IpNetwork::from),
@@ -235,14 +235,14 @@ impl UserRecoveryRepository for PgUserRecoveryRepository<'_> {
         ticket: String,
     ) -> Result<UserRecoveryTicket, Self::Error> {
         let created_at = clock.now();
-        let id = Ulid::from_datetime_with_source(created_at.into(), rng);
+        let id = new_id(created_at, rng);
         tracing::Span::current().record("user_recovery_ticket.id", tracing::field::display(id));
 
         // TODO: move that to a parameter
         let expires_at = created_at + Duration::minutes(10);
 
         let new_ticket = NewUserRecoveryTicket {
-            user_recovery_ticket_id: Uuid::from(id),
+            id: Uuid::from(id),
             user_recovery_session_id: Uuid::from(user_recovery_session.id),
             user_email_id: Uuid::from(user_email.id),
             ticket: ticket.clone(),
@@ -330,17 +330,17 @@ impl UserRecoveryRepository for PgUserRecoveryRepository<'_> {
         let res: Vec<Uuid> = diesel::sql_query(
             r#"
                 WITH to_delete AS (
-                    SELECT user_recovery_session_id
+                    SELECT id
                     FROM user_recovery_sessions
-                    WHERE ($1::uuid IS NULL OR user_recovery_session_id > $1)
-                    AND user_recovery_session_id <= $2
-                    ORDER BY user_recovery_session_id
+                    WHERE ($1::uuid IS NULL OR id > $1)
+                    AND id <= $2
+                    ORDER BY id
                     LIMIT $3
                 )
                 DELETE FROM user_recovery_sessions
                 USING to_delete
-                WHERE user_recovery_sessions.user_recovery_session_id = to_delete.user_recovery_session_id
-                RETURNING user_recovery_sessions.user_recovery_session_id
+                WHERE user_recovery_sessions.id = to_delete.id
+                RETURNING user_recovery_sessions.id
             "#,
         )
         .bind::<diesel::sql_types::Nullable<diesel::sql_types::Uuid>, _>(since.map(Uuid::from))
@@ -349,7 +349,7 @@ impl UserRecoveryRepository for PgUserRecoveryRepository<'_> {
         .load::<UuidRow>(self.conn)
         .await?
         .into_iter()
-        .map(|r| r.user_recovery_session_id)
+        .map(|r| r.id)
         .collect();
 
         let count = res.len();
