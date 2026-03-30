@@ -3649,6 +3649,7 @@ checksum = "edba7861004dd3714265b4db54a3c390e880ab658fec5f7db895fae2046b5bb6"
 dependencies = [
  "displaydoc",
  "litemap 0.8.1",
+ "serde",
  "tinystr 0.8.2",
  "writeable 0.6.2",
  "zerovec 0.11.5",
@@ -3716,6 +3717,9 @@ dependencies = [
  "icu_properties 2.1.2",
  "icu_provider 2.1.1",
  "smallvec",
+ "utf16_iter",
+ "utf8_iter",
+ "write16",
  "zerovec 0.11.5",
 ]
 
@@ -3830,6 +3834,8 @@ checksum = "85962cf0ce02e1e0a629cc34e7ca3e373ce20dda4c4d7294bbd0bf1fdb59e614"
 dependencies = [
  "displaydoc",
  "icu_locale_core",
+ "serde",
+ "stable_deref_trait",
  "writeable 0.6.2",
  "yoke 0.8.1",
  "zerofrom",
@@ -5606,7 +5612,7 @@ dependencies = [
  "hex",
  "http",
  "hyper",
- "icu_normalizer 1.5.0",
+ "icu_normalizer 2.1.1",
  "indexmap 2.13.0",
  "insta",
  "ipnetwork",
@@ -5694,7 +5700,7 @@ dependencies = [
  "icu_locid",
  "icu_locid_transform",
  "icu_plurals",
- "icu_provider 1.5.0",
+ "icu_provider 2.1.1",
  "icu_provider_adapters",
  "pad",
  "pest",
@@ -8623,6 +8629,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "42d3e9c45c09de15d06dd8acf5f4e0e399e85927b7f00711024eb7ae10fa4869"
 dependencies = [
  "displaydoc",
+ "serde_core",
  "zerovec 0.11.5",
 ]
 
@@ -10422,6 +10429,7 @@ version = "0.11.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "6c28719294829477f525be0186d13efa9a3c602f7ec202ca9e353d310fb9a002"
 dependencies = [
+ "serde",
  "yoke 0.8.1",
  "zerofrom",
  "zerovec-derive 0.11.2",
