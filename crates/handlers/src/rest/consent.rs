@@ -122,6 +122,34 @@ fn map_oauth2_access_error(error: OAuth2AccessError) -> RouteError {
     }
 }
 
+/// Load the browser session from cookies, record activity, and render a 401
+/// JSON error if the user is not authenticated. Returns `None` when the
+/// unauthenticated response has already been written to `res`.
+async fn require_authenticated_session(
+    session_info: &pasion_salvo_utils::SessionInfo,
+    repo: &mut pasion_storage::BoxRepository,
+    activity_tracker: &crate::BoundActivityTracker,
+    clock: &dyn pasion_data_model::Clock,
+    res: &mut Response,
+) -> Result<Option<pasion_data_model::BrowserSession>, RouteError> {
+    let maybe_session = session_info.load_active_session(repo).await?;
+
+    let Some(session) = maybe_session else {
+        res.status_code(StatusCode::UNAUTHORIZED);
+        res.render(Json(serde_json::json!({
+            "status": "error",
+            "error": "not_authenticated"
+        })));
+        return Ok(None);
+    };
+
+    activity_tracker
+        .record_browser_session(clock, &session)
+        .await;
+
+    Ok(Some(session))
+}
+
 // ── GET /api/v1/oauth2/consent/:grant_id ───────────────────────
 
 /// Return the data needed to render a consent page for an OAuth2 authorization
@@ -144,21 +172,12 @@ pub async fn oauth2_consent_get(
         .param("grant_id")
         .ok_or_else(|| RouteError::BadRequest("missing grant_id".into()))?;
 
-    // Load the browser session from the cookie
-    let maybe_session = session_info.load_active_session(&mut repo).await?;
-
-    let Some(session) = maybe_session else {
-        res.status_code(StatusCode::UNAUTHORIZED);
-        res.render(Json(serde_json::json!({
-            "status": "error",
-            "error": "not_authenticated"
-        })));
+    let Some(session) =
+        require_authenticated_session(&session_info, &mut repo, &activity_tracker, &clock, res)
+            .await?
+    else {
         return Ok(());
     };
-
-    activity_tracker
-        .record_browser_session(&clock, &session)
-        .await;
 
     let screen = load_authorization_consent(
         repo,
@@ -210,21 +229,12 @@ pub async fn oauth2_consent_post(
         return Err(RouteError::BadRequest("invalid action".into()));
     }
 
-    // Load the browser session from the cookie
-    let maybe_session = session_info.load_active_session(&mut repo).await?;
-
-    let Some(browser_session) = maybe_session else {
-        res.status_code(StatusCode::UNAUTHORIZED);
-        res.render(Json(serde_json::json!({
-            "status": "error",
-            "error": "not_authenticated"
-        })));
+    let Some(browser_session) =
+        require_authenticated_session(&session_info, &mut repo, &activity_tracker, &clock, res)
+            .await?
+    else {
         return Ok(());
     };
-
-    activity_tracker
-        .record_browser_session(&clock, &browser_session)
-        .await;
 
     let decision = accept_authorization_consent(
         repo,
@@ -316,21 +326,12 @@ pub async fn device_consent_get(
         .param("id")
         .ok_or_else(|| RouteError::BadRequest("missing id".into()))?;
 
-    // Load the browser session from the cookie
-    let maybe_session = session_info.load_active_session(&mut repo).await?;
-
-    let Some(session) = maybe_session else {
-        res.status_code(StatusCode::UNAUTHORIZED);
-        res.render(Json(serde_json::json!({
-            "status": "error",
-            "error": "not_authenticated"
-        })));
+    let Some(session) =
+        require_authenticated_session(&session_info, &mut repo, &activity_tracker, &clock, res)
+            .await?
+    else {
         return Ok(());
     };
-
-    activity_tracker
-        .record_browser_session(&clock, &session)
-        .await;
 
     let screen = load_device_consent(
         repo,
@@ -380,21 +381,12 @@ pub async fn device_consent_post(
         _ => return Err(RouteError::BadRequest("invalid action".into())),
     };
 
-    // Load the browser session from the cookie
-    let maybe_session = session_info.load_active_session(&mut repo).await?;
-
-    let Some(session) = maybe_session else {
-        res.status_code(StatusCode::UNAUTHORIZED);
-        res.render(Json(serde_json::json!({
-            "status": "error",
-            "error": "not_authenticated"
-        })));
+    let Some(session) =
+        require_authenticated_session(&session_info, &mut repo, &activity_tracker, &clock, res)
+            .await?
+    else {
         return Ok(());
     };
-
-    activity_tracker
-        .record_browser_session(&clock, &session)
-        .await;
 
     let result_status = match submit_device_consent(
         repo,

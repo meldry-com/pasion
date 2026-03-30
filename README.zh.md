@@ -1,19 +1,22 @@
 # Pasion
 
-面向 [Palpo](https://palpo.im/) Matrix 聊天服务器的 OAuth 2.0 / OpenID Connect 身份认证与用户管理服务。
+面向 [Palpo](https://palpo.im/) 的身份、通知、运营与接入平台。
 
 ## 概述
 
-Pasion 基于 OpenID Connect 协议为 Matrix 聊天服务器提供身份认证服务，以现代化、标准化的方式替代 Matrix 传统的登录系统，实现 [MSC3861](https://github.com/matrix-org/matrix-doc/pull/3861) 规范。
+Pasion 不仅仅是一个认证服务，而是围绕 Palpo Matrix 服务器构建的完整用户身份和运营平台。它以 [MSC3861](https://github.com/matrix-org/matrix-doc/pull/3861) 为基础，提供 OAuth 2.0 / OpenID Connect 认证，同时将工作流编排、多渠道通知、外部系统接入和运营管理整合为一体，为 Matrix 生态提供企业级的用户全生命周期管理能力。
 
 ### 核心特性
 
-- **OAuth 2.0 与 OpenID Connect** — 完整的 OIDC 提供者，支持授权码、客户端凭证、设备码等授权流程
-- **上游 SSO 联合登录** — 对接外部身份提供商（Google、GitHub、GitLab、Apple、Keycloak、LDAP via Dex、QQ、微信、企业微信、飞书、Lark、钉钉等）
-- **管理 API** — RESTful JSON 接口，管理用户、会话和 OAuth 2.0 客户端
-- **策略引擎** — 基于 OPA (WebAssembly) 的可扩展策略引擎，实现细粒度访问控制
+- **工作流引擎** — 注册、恢复、验证流程以状态机方式管理，支持重试、审计和可观察性
+- **统一通知中心** — Email + SMS 发送，支持多渠道抽象（SMTP、Twilio、阿里云短信、腾讯云短信）
+- **Connector 平台** — 可插拔的外部系统接入（Palpo Matrix homeserver、上游 OAuth2 提供商）
+- **中国生态 SSO** — 原生支持 QQ、微信、企业微信、飞书、Lark、钉钉等中国平台的非标准 OAuth 流程
+- **Cedar + OPA 策略引擎** — 双策略后端支持，基于 WebAssembly 的细粒度访问控制
+- **Dioxus 前端** — 全 Rust 构建的 SPA 前端，无需 TypeScript/React
+- **运营管理 API** — 用户运营、风险处置、审计日志，RESTful JSON 接口
+- **多渠道验证** — 邮箱 + 手机短信验证码，覆盖国内外用户
 - **安全机制** — Argon2id 密码哈希、加密 Cookie、限流、CAPTCHA 支持
-- **国际化** — 多语言 UI，支持可配置模板
 - **可观测性** — OpenTelemetry 链路追踪和 Prometheus 指标导出
 
 ## 快速开始
@@ -87,7 +90,7 @@ http:
 database:
   uri: postgresql://pasion:password@localhost/pasion
 
-# Matrix 服务器集成
+# Matrix 服务器集成（Connector）
 matrix:
   homeserver: matrix.example.com
   secret: "与 homeserver 共享的密钥"
@@ -110,7 +113,7 @@ passwords:
     - version: 1
       algorithm: argon2id
 
-# 上游 SSO 提供商（可选）
+# 上游 SSO 提供商（Connector）
 upstream_oauth2:
   providers:
     - id: "01HFRQFT5QFBM3Y5BHNFHMP6M0"
@@ -120,19 +123,24 @@ upstream_oauth2:
       token_endpoint_auth_method: client_secret_post
       scope: "openid email profile"
 
-# 邮件（可选，用于验证和找回密码）
+# 邮件通知（多渠道通知中心）
 email:
   from: '"Pasion" <noreply@example.com>'
   transport: smtp
   mode: starttls
   hostname: smtp.example.com
+
+# 短信通知（多渠道通知中心，支持 Twilio / 阿里云 / 腾讯云）
+# sms:
+#   transport: aliyun
+#   ...
 ```
 
 完整配置参考请查阅[配置文档](docs/zh/reference/configuration.md)。
 
 ## 部署架构
 
-Pasion 部署在 Matrix homeserver 旁边，由反向代理统一接入。Pasion 处理所有认证流程，homeserver 处理 Matrix 协议（消息、房间等）。
+Pasion 部署在 Matrix homeserver 旁边，由反向代理统一接入。平台内部采用分层架构：HTTP 请求经路由层分发，由工作流引擎编排业务流程，底层通过仓储层（PostgreSQL）、Connector（Matrix homeserver / 上游 OAuth2）和通知中心（Email / SMS）完成交互。
 
 ```
               ┌───────────────┐
@@ -143,7 +151,7 @@ Pasion 部署在 Matrix homeserver 旁边，由反向代理统一接入。Pasion
          │            │            │
     ┌────▼────┐  ┌────▼─────┐  ┌──▼──────────┐
     │ Pasion  │  │  Palpo   │  │   静态资源   │
-    │ (认证)  │  │ (Matrix) │  │             │
+    │ (平台)  │  │ (Matrix) │  │             │
     │  :8080  │  │  :8008   │  │             │
     └────┬────┘  └──────────┘  └─────────────┘
          │
@@ -194,7 +202,7 @@ pasion server -c config.yaml --no-sync      # 跳过配置同步到数据库
 
 ## 上游 SSO 提供商
 
-Pasion 支持与外部身份提供商联合登录。任何标准 OIDC 提供商均可开箱即用，同时为以下中国平台提供了专用适配：
+Pasion 的 Connector 平台支持与外部身份提供商联合登录。任何标准 OIDC 提供商均可开箱即用，同时为以下中国平台提供了原生适配，处理它们的非标准 OAuth2 流程：
 
 | 提供商 | `token_endpoint_auth_method` | 说明 |
 |--------|------------------------------|------|
@@ -217,7 +225,7 @@ Pasion 支持与外部身份提供商联合登录。任何标准 OIDC 提供商�
 # HTTP 服务（可负载均衡）
 pasion server --no-worker -c config.yaml
 
-# 后台 worker（可多实例运行）
+# 后台 worker（可多实例运行，处理工作流状态推进、通知发送等异步任务）
 pasion worker -c config.yaml
 ```
 
@@ -230,7 +238,7 @@ pasion worker -c config.yaml
 | `/.well-known/openid-configuration` | OIDC 发现 |
 | `/oauth2/authorize` | OAuth 2.0 授权 |
 | `/oauth2/token` | Token 端点 |
-| `/api/admin/v1/*` | 管理 API |
+| `/api/admin/v1/*` | 运营管理 API |
 
 ## 文档
 

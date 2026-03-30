@@ -1,10 +1,10 @@
 use anyhow::{Context as _, Error as AnyhowError};
-use pasion_data_model::{Clock, SiteConfig, User};
+use pasion_data_model::{Clock, SiteConfig, User, UserEmail};
 use pasion_matrix::HomeserverConnection;
 use pasion_storage::{
     BoxRepository, RepositoryAccess, RepositoryError,
     queue::{DeactivateUserJob, QueueJobRepositoryExt as _},
-    user::UserRepository,
+    user::{UserEmailRepository, UserPasswordRepository, UserRepository},
 };
 use rand_chacha::rand_core::CryptoRngCore;
 use thiserror::Error;
@@ -169,4 +169,43 @@ pub async fn deactivate_current_account(
     repo.save().await?;
 
     Ok(DeactivateAccountOutcome::Deactivated)
+}
+
+/// Profile information for the current viewer, combining data from the
+/// repository and the homeserver.
+pub struct ViewerProfile {
+    pub emails: Vec<UserEmail>,
+    pub has_password: bool,
+    pub matrix_display_name: Option<String>,
+    pub mxid: String,
+}
+
+/// Load the viewer profile for a given user.
+///
+/// This fetches the user's email list, password status, and Matrix profile
+/// information in a single service call.
+pub async fn load_viewer_profile(
+    repo: &mut BoxRepository,
+    homeserver: &dyn HomeserverConnection,
+    user: &User,
+) -> Result<ViewerProfile, AccountProfileError> {
+    // Fetch matrix info
+    let mxid = homeserver.mxid(&user.username);
+    let matrix_display_name = match homeserver.query_user(&user.username).await {
+        Ok(info) => info.displayname,
+        Err(_) => None,
+    };
+
+    // Fetch emails
+    let emails = repo.user_email().all(user).await?;
+
+    // Check password
+    let has_password = repo.user_password().active(user).await?.is_some();
+
+    Ok(ViewerProfile {
+        emails,
+        has_password,
+        matrix_display_name,
+        mxid,
+    })
 }

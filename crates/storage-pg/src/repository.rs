@@ -7,6 +7,7 @@ use pasion_storage::{
     BoxRepository, BoxRepositoryFactory, MapErr, Repository, RepositoryAccess, RepositoryError,
     RepositoryFactory, RepositoryTransaction,
     app_session::AppSessionRepository,
+    audit::AuditRepository,
     notification::NotificationRepository,
     oauth2::{
         OAuth2AccessTokenRepository, OAuth2AuthorizationGrantRepository, OAuth2ClientRepository,
@@ -30,6 +31,7 @@ use tracing::Instrument;
 use crate::{
     DatabaseError,
     app_session::PgAppSessionRepository,
+    audit::PgAuditRepository,
     notification::PgNotificationRepository,
     oauth2::{
         PgOAuth2AccessTokenRepository, PgOAuth2AuthorizationGrantRepository,
@@ -241,6 +243,10 @@ impl RepositoryAccess for PgRepository {
 
     fn app_session<'c>(&'c mut self) -> Box<dyn AppSessionRepository<Error = Self::Error> + 'c> {
         Box::new(PgAppSessionRepository::new(&mut *self.conn))
+    }
+
+    fn audit<'c>(&'c mut self) -> Box<dyn AuditRepository<Error = Self::Error> + 'c> {
+        Box::new(PgAuditRepository::new(&mut *self.conn))
     }
 
     fn notification<'c>(&'c mut self) -> Box<dyn NotificationRepository<Error = Self::Error> + 'c> {

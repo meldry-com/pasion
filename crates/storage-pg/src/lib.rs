@@ -12,6 +12,8 @@ use diesel_migrations::{EmbeddedMigrations, MigrationHarness, embed_migrations};
 
 /// PostgreSQL app session repositories.
 pub mod app_session;
+/// PostgreSQL audit log repositories.
+mod audit;
 /// PostgreSQL notification persistence repositories.
 pub mod notification;
 /// PostgreSQL OAuth 2.0 repositories.
@@ -26,6 +28,7 @@ pub mod schema;
 pub mod upstream_oauth2;
 /// PostgreSQL user repositories.
 pub mod user;
+mod workflow;
 
 // Define `lower()` as a SQL function for Diesel (Diesel doesn't ship one).
 diesel::define_sql_function! {

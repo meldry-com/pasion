@@ -9,6 +9,21 @@ pub use self::{
     mock::HomeserverConnection as MockHomeserverConnection, readonly::ReadOnlyHomeserverConnection,
 };
 
+/// Describes what operations a connector provider supports.
+#[derive(Debug, Clone, Default)]
+pub struct ConnectorCapabilities {
+    /// Whether the connector can provision new users.
+    pub can_provision_users: bool,
+    /// Whether the connector can delete/deactivate users.
+    pub can_delete_users: bool,
+    /// Whether the connector can manage devices.
+    pub can_manage_devices: bool,
+    /// Whether the connector can set display names.
+    pub can_set_displayname: bool,
+    /// Whether the connector supports cross-signing reset.
+    pub can_cross_signing_reset: bool,
+}
+
 #[derive(Debug)]
 pub struct MatrixUser {
     pub displayname: Option<String>,
@@ -546,5 +561,20 @@ impl<T: HomeserverConnection + ?Sized> HomeserverConnection for Arc<T> {
 
     async fn allow_cross_signing_reset(&self, localpart: &str) -> Result<(), anyhow::Error> {
         (**self).allow_cross_signing_reset(localpart).await
+    }
+}
+
+/// A connector provider represents an external system that Pasion can
+/// provision users into, query state from, and synchronize with.
+///
+/// [`HomeserverConnection`] is the primary implementation of this trait
+/// for Matrix homeserver backends like Palpo.
+pub trait ConnectorProvider: HomeserverConnection {
+    /// A human-readable name for this connector (e.g. "Palpo", "Synapse").
+    fn provider_name(&self) -> &str;
+
+    /// Returns the set of capabilities this connector supports.
+    fn capabilities(&self) -> ConnectorCapabilities {
+        ConnectorCapabilities::default()
     }
 }

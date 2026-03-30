@@ -1,5 +1,4 @@
 use pasion_data_model::SiteConfig;
-use pasion_matrix::HomeserverConnection;
 use salvo::oapi::ToSchema;
 use salvo::prelude::*;
 use serde::Serialize;
@@ -9,6 +8,7 @@ use super::{
     extract_session_info, get_requester, make_clock, parse_user_agent,
 };
 use crate::account_connections::load_linked_accounts;
+use crate::account_profile::{AccountProfileError, load_viewer_profile};
 
 // ── Response types ─────────────────────────────────────────────
 
@@ -158,21 +158,18 @@ pub async fn get_viewer(
         super::RequestingEntity::BrowserSession(session) => {
             let user = &session.user;
 
-            // Fetch matrix info
-            let matrix = match homeserver.query_user(&user.username).await {
-                Ok(info) => Some(MatrixUserData {
-                    mxid: homeserver.mxid(&user.username),
-                    display_name: info.displayname,
-                }),
-                Err(_) => Some(MatrixUserData {
-                    mxid: homeserver.mxid(&user.username),
-                    display_name: None,
-                }),
-            };
+            // Load viewer profile from service
+            let profile = load_viewer_profile(&mut repo, homeserver.as_ref(), user)
+                .await
+                .map_err(map_account_profile_error)?;
 
-            // Fetch emails
-            let emails_list = repo.user_email().all(&user).await?;
-            let email_edges: Vec<EmailEdgeData> = emails_list
+            let matrix = Some(MatrixUserData {
+                mxid: profile.mxid,
+                display_name: profile.matrix_display_name,
+            });
+
+            let email_edges: Vec<EmailEdgeData> = profile
+                .emails
                 .into_iter()
                 .map(|e| EmailEdgeData {
                     cursor: NodeType::UserEmail.serialize(e.id),
@@ -185,8 +182,7 @@ pub async fn get_viewer(
                 .collect();
             let total = email_edges.len() as i64;
 
-            // Check password
-            let has_password = repo.user_password().active(user).await?.is_some();
+            let has_password = profile.has_password;
 
             // Fetch linked upstream OAuth accounts
             let linked_accounts: Vec<LinkedAccountData> =
@@ -246,4 +242,20 @@ pub async fn get_viewer(
         viewer_session,
         site_config: site_config_data(&config),
     }))
+}
+
+fn map_account_profile_error(error: AccountProfileError) -> RouteError {
+    match error {
+        AccountProfileError::NotFound => RouteError::NotFound,
+        AccountProfileError::Unauthorized | AccountProfileError::BrowserSessionRequired => {
+            RouteError::Unauthorized
+        }
+        AccountProfileError::DeactivationDisabled => {
+            RouteError::BadRequest("Account deactivation is not allowed".into())
+        }
+        AccountProfileError::Password(error) | AccountProfileError::Homeserver(error) => {
+            RouteError::Internal(error.into())
+        }
+        AccountProfileError::Repository(error) => RouteError::from(error),
+    }
 }

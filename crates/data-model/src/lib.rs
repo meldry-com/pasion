@@ -6,6 +6,7 @@
 //!
 //! # Main type categories
 //!
+//! - **Accounts** — [`AccountContactPoint`], [`AccountIdentityBinding`]
 //! - **Users** — [`User`], [`BrowserSession`], [`Password`], [`UserEmail`],
 //!   [`UserRegistration`], [`UserRecoveryTicket`]
 //! - **OAuth 2.0** — [`Client`], [`Session`], [`AuthorizationGrant`],
@@ -21,6 +22,10 @@
 
 use thiserror::Error;
 
+/// Unified contact points and external identity bindings for user accounts.
+pub mod account;
+/// Admin operation logs and account security event models.
+pub mod audit;
 /// Clock abstraction for testability (`SystemClock` in production, mock clock
 /// in tests).
 pub mod clock;
@@ -38,6 +43,8 @@ pub(crate) mod user_agent;
 pub(crate) mod users;
 mod utils;
 mod version;
+/// Persisted workflow instance, step, deadline, event, and audit models.
+pub mod workflow;
 
 /// Error when an invalid state transition is attempted.
 #[derive(Debug, Error)]
@@ -47,6 +54,12 @@ pub struct InvalidTransitionError;
 pub use ulid::Ulid;
 
 pub use self::{
+    account::{
+        AccountContactPoint, AccountIdentityBinding, ContactChannel, IdentityProviderType,
+    },
+    audit::{
+        AccountSecurityEvent, AdminOperation, AdminOperationLog, SecurityEventType,
+    },
     clock::{Clock, SystemClock},
     notification::{
         NotificationChannel, NotificationDelivery, NotificationDeliveryFailure,
@@ -80,6 +93,12 @@ pub use self::{
         UserEmail, UserEmailAuthentication, UserEmailAuthenticationCode, UserPhone,
         UserPhoneAuthentication, UserPhoneAuthenticationCode, UserRecoverySession,
         UserRecoveryTicket, UserRegistration, UserRegistrationPassword, UserRegistrationToken,
+    },
+    workflow::{
+        WorkflowActor, WorkflowAssignee, WorkflowAuditAction, WorkflowAuditLog,
+        WorkflowDeadline, WorkflowDeadlineStatus, WorkflowEvent, WorkflowEventKind,
+        WorkflowInstance, WorkflowInstanceStatus, WorkflowStep, WorkflowStepStatus,
+        WorkflowSubject,
     },
     utils::{BoxClock, BoxRng},
     version::AppVersion,

@@ -3,7 +3,7 @@ use std::collections::HashSet;
 use anyhow::Context as _;
 use http::{Method, StatusCode};
 use pasion_http::RequestBuilderExt;
-use pasion_matrix::{HomeserverConnection, MatrixUser, ProvisionRequest};
+use pasion_matrix::{ConnectorCapabilities, ConnectorProvider, HomeserverConnection, MatrixUser, ProvisionRequest};
 use serde::{Deserialize, Serialize};
 use tracing::debug;
 use url::Url;
@@ -558,5 +558,21 @@ impl HomeserverConnection for PalpoConnection {
             .context("Unexpected HTTP response while allowing cross-signing reset in Palpo")?;
 
         Ok(())
+    }
+}
+
+impl ConnectorProvider for PalpoConnection {
+    fn provider_name(&self) -> &str {
+        "palpo"
+    }
+
+    fn capabilities(&self) -> ConnectorCapabilities {
+        ConnectorCapabilities {
+            can_provision_users: true,
+            can_delete_users: true,
+            can_manage_devices: true,
+            can_set_displayname: true,
+            can_cross_signing_reset: true,
+        }
     }
 }

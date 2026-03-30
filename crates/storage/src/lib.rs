@@ -104,6 +104,8 @@ mod utils;
 
 /// App session repositories.
 pub mod app_session;
+/// Audit log repositories.
+pub mod audit;
 /// Notification persistence repositories.
 pub mod notification;
 /// OAuth 2.0 repositories.
@@ -118,6 +120,8 @@ pub mod queue;
 pub mod upstream_oauth2;
 /// User repositories.
 pub mod user;
+/// Workflow instance, step, and event repositories.
+pub mod workflow;
 
 pub use self::{
     pagination::{Page, Pagination},

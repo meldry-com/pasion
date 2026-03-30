@@ -4,6 +4,7 @@ use thiserror::Error;
 
 use crate::{
     app_session::AppSessionRepository,
+    audit::AuditRepository,
     notification::NotificationRepository,
     oauth2::{
         OAuth2AccessTokenRepository, OAuth2AuthorizationGrantRepository, OAuth2ClientRepository,
@@ -160,6 +161,9 @@ pub trait RepositoryAccess: Send {
     /// Get a [`AppSessionRepository`]
     fn app_session<'c>(&'c mut self) -> Box<dyn AppSessionRepository<Error = Self::Error> + 'c>;
 
+    /// Get an [`AuditRepository`]
+    fn audit<'c>(&'c mut self) -> Box<dyn AuditRepository<Error = Self::Error> + 'c>;
+
     /// Get a [`NotificationRepository`]
     fn notification<'c>(&'c mut self) -> Box<dyn NotificationRepository<Error = Self::Error> + 'c>;
 
@@ -226,6 +230,7 @@ mod impls {
     use crate::{
         MapErr, Repository, RepositoryTransaction,
         app_session::AppSessionRepository,
+        audit::AuditRepository,
         notification::NotificationRepository,
         oauth2::{
             OAuth2AccessTokenRepository, OAuth2AuthorizationGrantRepository,
@@ -368,6 +373,12 @@ mod impls {
             &'c mut self,
         ) -> Box<dyn AppSessionRepository<Error = Self::Error> + 'c> {
             Box::new(MapErr::new(self.inner.app_session(), &mut self.mapper))
+        }
+
+        fn audit<'c>(
+            &'c mut self,
+        ) -> Box<dyn AuditRepository<Error = Self::Error> + 'c> {
+            Box::new(MapErr::new(self.inner.audit(), &mut self.mapper))
         }
 
         fn notification<'c>(
@@ -533,6 +544,12 @@ mod impls {
             &'c mut self,
         ) -> Box<dyn AppSessionRepository<Error = Self::Error> + 'c> {
             (**self).app_session()
+        }
+
+        fn audit<'c>(
+            &'c mut self,
+        ) -> Box<dyn AuditRepository<Error = Self::Error> + 'c> {
+            (**self).audit()
         }
 
         fn notification<'c>(
