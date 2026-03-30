@@ -364,6 +364,7 @@ pub fn site_config_from_config(
                 soft_limit: c.soft_limit,
                 hard_limit: c.hard_limit,
             }),
+        flow_engine_enabled: false,
     })
 }
 

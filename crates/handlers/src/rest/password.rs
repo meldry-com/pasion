@@ -1,6 +1,10 @@
+use chrono::Utc;
+use pasion_data_model::flow::{FlowSession, FlowSessionStatus};
+use pasion_data_model::new_id;
 use salvo::oapi::ToSchema;
 use salvo::prelude::*;
 use serde::{Deserialize, Serialize};
+use serde_json::Value;
 use zeroize::Zeroizing;
 
 use super::{
@@ -13,6 +17,7 @@ use crate::{
         CompleteAccountRecoveryError, ResendAccountRecoveryByTicketError,
         complete_account_recovery, resend_account_recovery_by_ticket,
     },
+    flow::{FlowExecutor, defaults::default_password_change_flow, flow_session_store_write},
 };
 
 // ── POST /api/v1/viewer/password ───────────────────────────────
@@ -28,6 +33,11 @@ pub struct SetPasswordInput {
 #[derive(Serialize, ToSchema)]
 pub struct SetPasswordResponse {
     pub status: &'static str,
+    /// When the flow engine is enabled, the frontend should use this ID
+    /// with the flow session API (`/api/v1/flow/session/:id`) instead of
+    /// the legacy password-change endpoint.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub flow_session_id: Option<String>,
 }
 
 #[endpoint]
@@ -71,27 +81,72 @@ pub async fn set_password(
     )
     .await
     {
-        Ok(()) => Ok(Json(SetPasswordResponse { status: "ALLOWED" })),
+        Ok(()) => {
+            // If the flow engine is enabled, start a flow session alongside the
+            // legacy password change so the frontend can choose the flow-based
+            // path for any additional steps.
+            let flow_session_id = if config.flow_engine_enabled {
+                let mut rng = make_rng();
+                let (flow_def, bindings) = default_password_change_flow(&mut *rng);
+                let plan = FlowExecutor::plan(flow_def, bindings);
+
+                let now = Utc::now();
+                let session_id = new_id(now, &mut *rng);
+
+                let session = FlowSession {
+                    id: session_id,
+                    flow_id: plan.flow.id,
+                    current_stage_index: 0,
+                    status: FlowSessionStatus::InProgress,
+                    context: Value::Object(serde_json::Map::new()),
+                    ip_address: None,
+                    user_agent: None,
+                    created_at: now,
+                    updated_at: now,
+                    expires_at: now + chrono::Duration::hours(1),
+                    completed_at: None,
+                };
+
+                flow_session_store_write()
+                    .await
+                    .insert(session_id, (plan, session));
+
+                Some(session_id.to_string())
+            } else {
+                None
+            };
+
+            Ok(Json(SetPasswordResponse {
+                status: "ALLOWED",
+                flow_session_id,
+            }))
+        }
         Err(ChangePasswordError::PasswordDisabled) => Ok(Json(SetPasswordResponse {
             status: "PASSWORD_CHANGES_DISABLED",
+            flow_session_id: None,
         })),
         Err(ChangePasswordError::PasswordTooWeak) => Ok(Json(SetPasswordResponse {
             status: "INVALID_NEW_PASSWORD",
+            flow_session_id: None,
         })),
         Err(ChangePasswordError::UserNotFound) => Ok(Json(SetPasswordResponse {
             status: "NOT_FOUND",
+            flow_session_id: None,
         })),
         Err(ChangePasswordError::PasswordChangesDisabled) => Ok(Json(SetPasswordResponse {
             status: "PASSWORD_CHANGES_DISABLED",
+            flow_session_id: None,
         })),
         Err(ChangePasswordError::NoCurrentPassword) => Ok(Json(SetPasswordResponse {
             status: "NO_CURRENT_PASSWORD",
+            flow_session_id: None,
         })),
         Err(ChangePasswordError::CurrentPasswordRequired) => Err(RouteError::BadRequest(
             "currentPassword required for non-admins".into(),
         )),
         Err(ChangePasswordError::WrongPassword) => Ok(Json(SetPasswordResponse {
             status: "WRONG_PASSWORD",
+            flow_session_id: None,
         })),
         Err(ChangePasswordError::Password(error)) => Err(RouteError::Internal(error.into())),
         Err(ChangePasswordError::Repository(error)) => Err(error.into()),
@@ -136,24 +191,32 @@ pub async fn set_password_by_recovery(
     )
     .await
     {
-        Ok(()) => Ok(Json(SetPasswordResponse { status: "ALLOWED" })),
+        Ok(()) => Ok(Json(SetPasswordResponse {
+            status: "ALLOWED",
+            flow_session_id: None,
+        })),
         Err(CompleteAccountRecoveryError::PasswordDisabled) => Ok(Json(SetPasswordResponse {
             status: "PASSWORD_CHANGES_DISABLED",
+            flow_session_id: None,
         })),
         Err(CompleteAccountRecoveryError::PasswordTooWeak) => Ok(Json(SetPasswordResponse {
             status: "INVALID_NEW_PASSWORD",
+            flow_session_id: None,
         })),
         Err(CompleteAccountRecoveryError::TicketNotFound) => Ok(Json(SetPasswordResponse {
             status: "NO_SUCH_RECOVERY_TICKET",
+            flow_session_id: None,
         })),
         Err(CompleteAccountRecoveryError::SessionNotFound) => Err(RouteError::Internal(Box::new(
             std::io::Error::other("Could not load recovery session"),
         ))),
         Err(CompleteAccountRecoveryError::AlreadyConsumed) => Ok(Json(SetPasswordResponse {
             status: "RECOVERY_TICKET_ALREADY_USED",
+            flow_session_id: None,
         })),
         Err(CompleteAccountRecoveryError::TicketExpired) => Ok(Json(SetPasswordResponse {
             status: "EXPIRED_RECOVERY_TICKET",
+            flow_session_id: None,
         })),
         Err(CompleteAccountRecoveryError::EmailNotFound) => Err(RouteError::Internal(Box::new(
             std::io::Error::other("Unknown email for recovery ticket"),
@@ -163,6 +226,7 @@ pub async fn set_password_by_recovery(
         ))),
         Err(CompleteAccountRecoveryError::AccountLocked) => Ok(Json(SetPasswordResponse {
             status: "ACCOUNT_LOCKED",
+            flow_session_id: None,
         })),
         Err(CompleteAccountRecoveryError::Password(error)) => {
             Err(RouteError::Internal(error.into()))

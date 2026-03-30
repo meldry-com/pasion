@@ -4,9 +4,12 @@
 //! actual work (DB writes, email sending, etc.) after the executor
 //! validates the response shape.
 
+pub mod authenticator_validate;
+pub mod captcha;
 pub mod email_verification;
 pub mod identification;
 pub mod password_write;
+pub mod prompt;
 pub mod user_write;
 
 use pasion_data_model::flow::{StageKind, StageOutcome, StageResponse};
@@ -113,7 +116,21 @@ pub async fn execute_stage(
             .await
         }
 
-        // Captcha, Consent, Prompt — no side effects in MVP
+        (StageKind::Captcha, StageResponse::Captcha { token }) => {
+            captcha::execute(token, context).await
+        }
+
+        (
+            StageKind::Prompt { fields },
+            StageResponse::Prompt { data },
+        ) => prompt::execute(data, fields, context).await,
+
+        (
+            StageKind::AuthenticatorValidate { .. },
+            StageResponse::AuthenticatorValidate { code, .. },
+        ) => authenticator_validate::execute(code, context).await,
+
+        // Consent — no side effects in MVP
         _ => Ok(StageOutcome::Continue),
     }
 }

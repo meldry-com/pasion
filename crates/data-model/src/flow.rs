@@ -112,6 +112,11 @@ pub enum StageKind {
         /// The fields to present to the user.
         fields: Vec<PromptField>,
     },
+    /// Validate a second factor (TOTP, WebAuthn, etc.)
+    AuthenticatorValidate {
+        /// Which authenticator types are accepted.
+        allowed_types: Vec<AuthenticatorType>,
+    },
 }
 
 /// Fields accepted by the identification stage.
@@ -124,6 +129,17 @@ pub enum IdentificationField {
     Email,
     /// Identify by phone number.
     Phone,
+}
+
+/// Types of second-factor authenticators accepted by the
+/// [`StageKind::AuthenticatorValidate`] stage.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum AuthenticatorType {
+    /// Time-based one-time password (RFC 6238).
+    Totp,
+    /// WebAuthn / FIDO2 security key or passkey.
+    WebAuthn,
 }
 
 /// A prompted field definition used by the [`StageKind::Prompt`] variant.
@@ -301,6 +317,11 @@ pub enum StageChallenge {
         /// The fields to display.
         fields: Vec<PromptField>,
     },
+    /// Second-factor authenticator validation challenge.
+    AuthenticatorValidate {
+        /// Which authenticator types the user may choose from.
+        allowed_types: Vec<AuthenticatorType>,
+    },
     /// Terminal challenge — the flow is done, redirect the user.
     FlowDone {
         /// URL to redirect to, if any.
@@ -356,6 +377,13 @@ pub enum StageResponse {
     Prompt {
         /// Collected field values as a JSON object.
         data: Value,
+    },
+    /// Response to an authenticator validation challenge.
+    AuthenticatorValidate {
+        /// The type of authenticator the user chose.
+        authenticator_type: AuthenticatorType,
+        /// The one-time code (for TOTP) or assertion payload (for WebAuthn).
+        code: String,
     },
 }
 

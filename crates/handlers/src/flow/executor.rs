@@ -137,6 +137,11 @@ fn challenge_for_stage(stage: &StageKind, context: &Value) -> StageChallenge {
         StageKind::Prompt { fields } => StageChallenge::Prompt {
             fields: fields.clone(),
         },
+        StageKind::AuthenticatorValidate { allowed_types } => {
+            StageChallenge::AuthenticatorValidate {
+                allowed_types: allowed_types.clone(),
+            }
+        }
     }
 }
 
@@ -233,6 +238,69 @@ fn validate_response(
                 StageOutcome::Done {
                     redirect_to: None,
                 }
+            }
+        }
+        (StageKind::Captcha, StageResponse::Captcha { token }) => {
+            if token.is_empty() {
+                StageOutcome::Retry {
+                    errors: vec![StageValidationError {
+                        field: Some("token".into()),
+                        message: "CAPTCHA token is required".into(),
+                        code: "required".into(),
+                    }],
+                }
+            } else {
+                StageOutcome::Continue
+            }
+        }
+        (
+            StageKind::Prompt { fields },
+            StageResponse::Prompt { data },
+        ) => {
+            let mut errors = vec![];
+            for field in fields {
+                if field.required {
+                    let value = data.get(&field.field_key);
+                    let is_missing = match value {
+                        None | Some(Value::Null) => true,
+                        Some(Value::String(s)) if s.is_empty() => true,
+                        _ => false,
+                    };
+                    if is_missing {
+                        errors.push(StageValidationError {
+                            field: Some(field.field_key.clone()),
+                            message: format!("{} is required", field.label),
+                            code: "required".into(),
+                        });
+                    }
+                }
+            }
+            if errors.is_empty() {
+                if let Some(ctx) = context.as_object_mut() {
+                    ctx.insert("prompt_data".into(), data.clone());
+                }
+                StageOutcome::Continue
+            } else {
+                StageOutcome::Retry { errors }
+            }
+        }
+        (
+            StageKind::AuthenticatorValidate { .. },
+            StageResponse::AuthenticatorValidate { code, .. },
+        ) => {
+            if code.len() != 6 || !code.chars().all(|c| c.is_ascii_digit()) {
+                StageOutcome::Retry {
+                    errors: vec![StageValidationError {
+                        field: Some("code".into()),
+                        message: "Code must be exactly 6 digits".into(),
+                        code: "invalid_totp_code".into(),
+                    }],
+                }
+            } else {
+                if let Some(ctx) = context.as_object_mut() {
+                    ctx.insert("mfa_validated".into(), Value::Bool(true));
+                }
+                StageOutcome::Continue
             }
         }
         _ => {

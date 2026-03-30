@@ -6,9 +6,6 @@
 //! Session state is stored in-memory for now; a proper repository-backed store
 //! will replace this once `FlowSession` has a database repository.
 
-use std::collections::HashMap;
-use std::sync::LazyLock;
-
 use chrono::Utc;
 use pasion_data_model::flow::{
     FlowSession, FlowSessionStatus, StageChallenge, StageOutcome, StageResponse,
@@ -18,23 +15,10 @@ use pasion_data_model::new_id;
 use salvo::prelude::*;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
-use tokio::sync::RwLock;
 use ulid::Ulid;
 
 use super::{RouteError, make_rng};
-use crate::flow::{FlowExecutor, FlowPlan};
-
-// ---------------------------------------------------------------------------
-// In-memory session store
-// ---------------------------------------------------------------------------
-
-/// In-memory store for active flow sessions.
-///
-/// Maps `session_id -> (FlowPlan, FlowSession)`.  This is intentionally
-/// simple — a proper database-backed store will replace this once
-/// `FlowSession` gets a repository implementation.
-static SESSION_STORE: LazyLock<RwLock<HashMap<Ulid, (FlowPlan, FlowSession)>>> =
-    LazyLock::new(|| RwLock::new(HashMap::new()));
+use crate::flow::{FlowExecutor, FlowPlan, flow_session_store_read, flow_session_store_write};
 
 // ---------------------------------------------------------------------------
 // Request / response types
@@ -158,10 +142,10 @@ pub async fn start_flow(req: &mut Request) -> Result<Json<FlowResponse>, RouteEr
     let response = build_response(&plan, &session, challenge, None);
 
     // Store in memory
-    SESSION_STORE
-        .write()
-        .await
-        .insert(session_id, (plan, session));
+    {
+        let mut store = flow_session_store_write().await;
+        store.insert(session_id, (plan, session));
+    }
 
     Ok(Json(response))
 }
@@ -179,7 +163,7 @@ pub async fn get_flow_session(req: &mut Request) -> Result<Json<FlowResponse>, R
         .parse()
         .map_err(|_| RouteError::BadRequest("invalid session id".into()))?;
 
-    let store = SESSION_STORE.read().await;
+    let store = flow_session_store_read().await;
     let (plan, session) = store.get(&id).ok_or(RouteError::NotFound)?;
 
     if session.status.is_terminal() {
@@ -221,7 +205,7 @@ pub async fn respond_flow(req: &mut Request) -> Result<Json<FlowResponse>, Route
         .await
         .map_err(|_| RouteError::BadRequest("invalid json body".into()))?;
 
-    let mut store = SESSION_STORE.write().await;
+    let mut store = flow_session_store_write().await;
     let (plan, session) = store.get_mut(&id).ok_or(RouteError::NotFound)?;
 
     if session.status.is_terminal() {

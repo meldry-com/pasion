@@ -102,4 +102,8 @@ pub struct SiteConfig {
 
     /// Limits on the number of application sessions that each user can have
     pub session_limit: Option<SessionLimitConfig>,
+
+    /// When true, registration/recovery/password-change use the flow engine
+    /// instead of the legacy service modules.
+    pub flow_engine_enabled: bool,
 }

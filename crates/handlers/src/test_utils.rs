@@ -130,6 +130,7 @@ pub fn test_site_config() -> SiteConfig {
         login_with_email_allowed: true,
         plan_management_iframe_uri: None,
         session_limit: None,
+        flow_engine_enabled: false,
     }
 }
 

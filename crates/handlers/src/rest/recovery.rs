@@ -3,12 +3,17 @@
 //! These endpoints serve as thin HTTP adapters over the business logic in
 //! [`crate::account_recovery`]. They parse requests, delegate to service
 //! functions, and map results to JSON responses.
+use chrono::Utc;
+use pasion_data_model::flow::{FlowSession, FlowSessionStatus};
+use pasion_data_model::new_id;
 use salvo::oapi::ToSchema;
 use salvo::prelude::*;
 use serde::{Deserialize, Serialize};
+use serde_json::Value;
 use ulid::Ulid;
 
 use super::{DepotExt, RouteError, extract_bound_activity_tracker, make_clock, make_rng};
+use crate::flow::{FlowExecutor, defaults::default_recovery_flow, flow_session_store_write};
 use crate::{
     RequesterFingerprint,
     account_recovery::{
@@ -32,6 +37,11 @@ pub struct StartRecoveryResponse {
     pub id: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub error: Option<String>,
+    /// When the flow engine is enabled, the frontend should use this ID
+    /// with the flow session API (`/api/v1/flow/session/:id`) instead of
+    /// the legacy recovery step endpoints.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub flow_session_id: Option<String>,
 }
 
 #[endpoint]
@@ -70,6 +80,7 @@ pub async fn post_recovery_start(
             status: "error",
             id: None,
             error: Some("recovery_disabled".into()),
+            flow_session_id: None,
         }));
     }
 
@@ -94,6 +105,7 @@ pub async fn post_recovery_start(
                 status: "error",
                 id: None,
                 error: Some("invalid_email".into()),
+                flow_session_id: None,
             }));
         }
         Err(StartAccountRecoveryError::RateLimited) => {
@@ -101,6 +113,7 @@ pub async fn post_recovery_start(
                 status: "error",
                 id: None,
                 error: Some("rate_limited".into()),
+                flow_session_id: None,
             }));
         }
         Err(StartAccountRecoveryError::Repository(error)) => {
@@ -108,10 +121,44 @@ pub async fn post_recovery_start(
         }
     };
 
+    // If the flow engine is enabled, start a flow session alongside the
+    // legacy recovery session so the frontend can choose the flow-based path.
+    let flow_session_id = if site_config.flow_engine_enabled {
+        let mut rng = make_rng();
+        let (flow_def, bindings) = default_recovery_flow(&mut *rng);
+        let plan = FlowExecutor::plan(flow_def, bindings);
+
+        let now = Utc::now();
+        let flow_sid = new_id(now, &mut *rng);
+
+        let flow_session = FlowSession {
+            id: flow_sid,
+            flow_id: plan.flow.id,
+            current_stage_index: 0,
+            status: FlowSessionStatus::InProgress,
+            context: Value::Object(serde_json::Map::new()),
+            ip_address: None,
+            user_agent: None,
+            created_at: now,
+            updated_at: now,
+            expires_at: now + chrono::Duration::hours(1),
+            completed_at: None,
+        };
+
+        flow_session_store_write()
+            .await
+            .insert(flow_sid, (plan, flow_session));
+
+        Some(flow_sid.to_string())
+    } else {
+        None
+    };
+
     Ok(Json(StartRecoveryResponse {
         status: "success",
         id: Some(session.id.to_string()),
         error: None,
+        flow_session_id,
     }))
 }
 
