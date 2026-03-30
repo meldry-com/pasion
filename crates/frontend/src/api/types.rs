@@ -731,8 +731,19 @@ pub struct LinkedAccountsResponse {
 
 #[derive(Debug, Clone, PartialEq, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]
+pub struct WorkflowInboxItem {
+    pub session_id: String,
+    pub flow_slug: String,
+    pub flow_title: String,
+    pub current_stage: String,
+    pub started_at: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
 pub struct WorkflowInboxResponse {
-    pub pending_count: usize,
+    pub pending: Vec<WorkflowInboxItem>,
+    pub total: usize,
 }
 
 // ── Notification preferences (GET/PUT /api/v1/viewer/notification-preferences)

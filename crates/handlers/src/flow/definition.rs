@@ -43,6 +43,10 @@ pub struct FlowDefinitionFile {
     pub title: String,
     /// Flow designation — determines when the flow is triggered.
     pub designation: String,
+    /// Optional template override key. When set, the template engine
+    /// looks for templates under this key instead of the default.
+    #[serde(default)]
+    pub template_override: Option<String>,
     /// Ordered list of stage definitions.
     pub stages: Vec<StageDefinition>,
 }
@@ -137,6 +141,7 @@ impl FlowDefinitionFile {
             title: self.title,
             designation,
             enabled: true,
+            template_override: self.template_override,
             created_at: now,
             updated_at: now,
         };

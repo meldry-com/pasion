@@ -25,6 +25,7 @@ pub fn default_registration_flow(
         title: "Default Registration".into(),
         designation: FlowDesignation::Registration,
         enabled: true,
+        template_override: None,
         created_at: now,
         updated_at: now,
     };
@@ -76,6 +77,7 @@ pub fn default_recovery_flow(
         title: "Default Recovery".into(),
         designation: FlowDesignation::Recovery,
         enabled: true,
+        template_override: None,
         created_at: now,
         updated_at: now,
     };
@@ -137,6 +139,7 @@ pub fn default_password_change_flow(
         title: "Default Password Change".into(),
         designation: FlowDesignation::PasswordChange,
         enabled: true,
+        template_override: None,
         created_at: now,
         updated_at: now,
     };
@@ -170,6 +173,7 @@ pub fn default_authentication_flow(
         title: "Default Authentication".into(),
         designation: FlowDesignation::Authentication,
         enabled: true,
+        template_override: None,
         created_at: now,
         updated_at: now,
     };
@@ -186,6 +190,99 @@ pub fn default_authentication_flow(
         policy_expression: None,
         created_at: now,
     }];
+
+    (flow, bindings)
+}
+
+/// Create the default authorization consent flow:
+/// 1. `Consent` — show scope and client, get user approval
+pub fn default_authorization_flow(
+    rng: &mut (dyn rand::RngCore + Send),
+) -> (FlowDefinition, Vec<FlowStageBinding>) {
+    let now = Utc::now();
+    let flow_id = new_id(now, rng);
+
+    let flow = FlowDefinition {
+        id: flow_id,
+        slug: "default-authorization".into(),
+        title: "Authorization Consent".into(),
+        designation: FlowDesignation::Authorization,
+        enabled: true,
+        template_override: None,
+        created_at: now,
+        updated_at: now,
+    };
+
+    let bindings = vec![FlowStageBinding {
+        id: new_id(now, rng),
+        flow_id,
+        stage: StageKind::Consent,
+        order: 10,
+        evaluate_on_plan: false,
+        policy_expression: None,
+        created_at: now,
+    }];
+
+    (flow, bindings)
+}
+
+/// Create the default enrollment flow (invitation-based registration):
+/// 1. `EnrollmentToken` — validate an invitation token
+/// 2. `UserWrite` — collect username / display name
+/// 3. `EmailVerification` — verify the user's email address
+pub fn default_enrollment_flow(
+    rng: &mut (dyn rand::RngCore + Send),
+) -> (FlowDefinition, Vec<FlowStageBinding>) {
+    let now = Utc::now();
+    let flow_id = new_id(now, rng);
+
+    let flow = FlowDefinition {
+        id: flow_id,
+        slug: "default-enrollment".into(),
+        title: "Invitation Registration".into(),
+        designation: FlowDesignation::Enrollment,
+        enabled: true,
+        template_override: None,
+        created_at: now,
+        updated_at: now,
+    };
+
+    let bindings = vec![
+        FlowStageBinding {
+            id: new_id(now, rng),
+            flow_id,
+            stage: StageKind::EnrollmentToken { required: true },
+            order: 10,
+            evaluate_on_plan: false,
+            policy_expression: None,
+            created_at: now,
+        },
+        FlowStageBinding {
+            id: new_id(now, rng),
+            flow_id,
+            stage: StageKind::UserWrite {
+                create_users_as_inactive: false,
+            },
+            order: 20,
+            evaluate_on_plan: false,
+            policy_expression: None,
+            created_at: now,
+        },
+        FlowStageBinding {
+            id: new_id(now, rng),
+            flow_id,
+            stage: StageKind::EmailVerification {
+                purpose: "registration".into(),
+                template_key: "verification".into(),
+                code_expiry_seconds: 300,
+                max_attempts: 5,
+            },
+            order: 30,
+            evaluate_on_plan: false,
+            policy_expression: None,
+            created_at: now,
+        },
+    ];
 
     (flow, bindings)
 }
@@ -293,15 +390,57 @@ mod tests {
     }
 
     #[test]
+    fn authorization_flow_has_correct_designation_and_stages() {
+        let mut rng = test_rng();
+        let (flow, bindings) = default_authorization_flow(&mut rng);
+
+        assert_eq!(flow.slug, "default-authorization");
+        assert_eq!(flow.designation, FlowDesignation::Authorization);
+        assert!(flow.enabled);
+        assert_eq!(bindings.len(), 1);
+
+        assert!(matches!(bindings[0].stage, StageKind::Consent));
+        assert_eq!(bindings[0].flow_id, flow.id);
+    }
+
+    #[test]
+    fn enrollment_flow_has_correct_designation_and_stages() {
+        let mut rng = test_rng();
+        let (flow, bindings) = default_enrollment_flow(&mut rng);
+
+        assert_eq!(flow.slug, "default-enrollment");
+        assert_eq!(flow.designation, FlowDesignation::Enrollment);
+        assert!(flow.enabled);
+        assert_eq!(bindings.len(), 3);
+
+        if let StageKind::EnrollmentToken { required } = &bindings[0].stage {
+            assert!(required);
+        } else {
+            panic!("expected EnrollmentToken stage");
+        }
+
+        assert!(matches!(bindings[1].stage, StageKind::UserWrite { .. }));
+        assert!(matches!(
+            bindings[2].stage,
+            StageKind::EmailVerification { .. }
+        ));
+
+        assert!(bindings.windows(2).all(|w| w[0].order < w[1].order));
+        assert!(bindings.iter().all(|b| b.flow_id == flow.id));
+    }
+
+    #[test]
     fn all_ids_are_unique() {
         let mut rng = test_rng();
         let (f1, b1) = default_registration_flow(&mut rng);
         let (f2, b2) = default_recovery_flow(&mut rng);
         let (f3, b3) = default_password_change_flow(&mut rng);
         let (f4, b4) = default_authentication_flow(&mut rng);
+        let (f5, b5) = default_authorization_flow(&mut rng);
+        let (f6, b6) = default_enrollment_flow(&mut rng);
 
-        let mut ids = vec![f1.id, f2.id, f3.id, f4.id];
-        for b in b1.iter().chain(&b2).chain(&b3).chain(&b4) {
+        let mut ids = vec![f1.id, f2.id, f3.id, f4.id, f5.id, f6.id];
+        for b in b1.iter().chain(&b2).chain(&b3).chain(&b4).chain(&b5).chain(&b6) {
             ids.push(b.id);
         }
 

@@ -43,7 +43,7 @@ pub fn AccountOverview() -> Element {
     };
 
     let pending_count = match &*wf_binding {
-        Some(Ok(wf)) => Some(wf.pending_count),
+        Some(Ok(wf)) => Some(wf.total),
         Some(Err(_)) => None, // silently degrade
         None => None,
     };
@@ -129,6 +129,11 @@ pub fn AccountOverview() -> Element {
                         }
                     },
                 }
+                Link {
+                    class: "btn btn-secondary btn-sm",
+                    to: Route::WorkflowInbox {},
+                    "View workflows"
+                }
             }
 
             Separator { kind: SeparatorKind::Section }
@@ -161,6 +166,11 @@ pub fn AccountOverview() -> Element {
                         class: "btn btn-secondary btn-sm",
                         to: Route::Sessions {},
                         "Sessions"
+                    }
+                    Link {
+                        class: "btn btn-secondary btn-sm",
+                        to: Route::WorkflowInbox {},
+                        "Workflows"
                     }
                 }
             }

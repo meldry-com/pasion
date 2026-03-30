@@ -59,6 +59,9 @@ pub struct FlowDefinition {
     pub designation: FlowDesignation,
     /// Whether the flow is currently active.
     pub enabled: bool,
+    /// Optional template override key. When set, the template engine
+    /// looks for templates under this key instead of the default.
+    pub template_override: Option<String>,
     /// Timestamp when this definition was created.
     pub created_at: DateTime<Utc>,
     /// Timestamp when this definition was last modified.
@@ -116,6 +119,11 @@ pub enum StageKind {
     AuthenticatorValidate {
         /// Which authenticator types are accepted.
         allowed_types: Vec<AuthenticatorType>,
+    },
+    /// Validate an enrollment/invitation token.
+    EnrollmentToken {
+        /// Whether the token is required or optional.
+        required: bool,
     },
 }
 
@@ -322,6 +330,11 @@ pub enum StageChallenge {
         /// Which authenticator types the user may choose from.
         allowed_types: Vec<AuthenticatorType>,
     },
+    /// Enrollment token challenge — prompt for an invitation token.
+    EnrollmentToken {
+        /// Whether the token is required or optional.
+        required: bool,
+    },
     /// Terminal challenge — the flow is done, redirect the user.
     FlowDone {
         /// URL to redirect to, if any.
@@ -384,6 +397,11 @@ pub enum StageResponse {
         authenticator_type: AuthenticatorType,
         /// The one-time code (for TOTP) or assertion payload (for WebAuthn).
         code: String,
+    },
+    /// Response to an enrollment token challenge.
+    EnrollmentToken {
+        /// The invitation/enrollment token string.
+        token: String,
     },
 }
 

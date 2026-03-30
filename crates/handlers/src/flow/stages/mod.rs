@@ -8,6 +8,7 @@ pub mod authenticator_validate;
 pub mod captcha;
 pub mod consent;
 pub mod email_verification;
+pub mod enrollment_token;
 pub mod identification;
 pub mod password_write;
 pub mod prompt;
@@ -134,6 +135,11 @@ pub async fn execute_stage(
         (StageKind::Consent, StageResponse::Consent { granted }) => {
             consent::execute(*granted, context).await
         }
+
+        (
+            StageKind::EnrollmentToken { required },
+            StageResponse::EnrollmentToken { token },
+        ) => enrollment_token::execute(repo, *required, token, context).await,
 
         // Fallback for mismatched stage/response pairs
         _ => Ok(StageOutcome::Continue),

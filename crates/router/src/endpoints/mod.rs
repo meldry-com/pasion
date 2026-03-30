@@ -1,13 +1,11 @@
 mod account;
 mod auth;
-mod compat;
 mod oauth2;
 mod system;
 mod upstream;
 
 pub use self::account::*;
 pub use self::auth::*;
-pub use self::compat::*;
 pub use self::oauth2::*;
 pub use self::system::*;
 pub use self::upstream::*;

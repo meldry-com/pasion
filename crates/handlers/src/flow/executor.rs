@@ -155,6 +155,9 @@ fn challenge_for_stage(stage: &StageKind, context: &Value) -> StageChallenge {
                 allowed_types: allowed_types.clone(),
             }
         }
+        StageKind::EnrollmentToken { required } => StageChallenge::EnrollmentToken {
+            required: *required,
+        },
     }
 }
 
@@ -316,6 +319,23 @@ fn validate_response(
                 StageOutcome::Continue
             }
         }
+        (
+            StageKind::EnrollmentToken { required },
+            StageResponse::EnrollmentToken { token },
+        ) => {
+            if token.is_empty() && *required {
+                StageOutcome::Retry {
+                    errors: vec![StageValidationError {
+                        field: Some("token".into()),
+                        message: "Enrollment token is required".into(),
+                        code: "required".into(),
+                    }],
+                }
+            } else {
+                // Actual token validation happens in the stage side-effect.
+                StageOutcome::Continue
+            }
+        }
         _ => {
             // Mismatched stage/response types
             StageOutcome::Retry {
@@ -347,6 +367,9 @@ fn is_stage_satisfied(stage: &StageKind, context: &Value) -> bool {
             context.get("mfa_validated") == Some(&Value::Bool(true))
         }
         StageKind::Captcha => context.get("captcha_verified") == Some(&Value::Bool(true)),
+        StageKind::EnrollmentToken { .. } => {
+            context.get("enrollment_token_id").is_some()
+        }
         _ => false,
     }
 }

@@ -77,6 +77,12 @@ fn resolve_flow_by_slug(
         "default-authentication" => {
             Some(crate::flow::defaults::default_authentication_flow(rng))
         }
+        "default-authorization" => {
+            Some(crate::flow::defaults::default_authorization_flow(rng))
+        }
+        "default-enrollment" => {
+            Some(crate::flow::defaults::default_enrollment_flow(rng))
+        }
         _ => None,
     }
 }

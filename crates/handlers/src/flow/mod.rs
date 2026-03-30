@@ -17,8 +17,8 @@ mod executor;
 pub mod stages;
 
 pub use self::defaults::{
-    default_authentication_flow, default_password_change_flow, default_recovery_flow,
-    default_registration_flow,
+    default_authentication_flow, default_authorization_flow, default_enrollment_flow,
+    default_password_change_flow, default_recovery_flow, default_registration_flow,
 };
 pub use self::executor::{FlowExecutor, FlowPlan, FlowPlannerError};
 

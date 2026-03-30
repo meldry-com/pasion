@@ -60,6 +60,7 @@ pub fn AccountPage() -> Element {
                                 NavItem { to: Route::IdentityBindings {}, "Identities" }
                                 NavItem { to: Route::NotificationPreferences {}, "Notifications" }
                                 NavItem { to: Route::Sessions {}, "Devices" }
+                                NavItem { to: Route::WorkflowInbox {}, "Workflows" }
                                 if has_plan {
                                     NavItem { to: Route::Plan {}, "Plan" }
                                 }
