@@ -51,15 +51,6 @@ pub mod upstream_oauth2;
 /// Cookie management for user registration sessions.
 pub mod user_registration_cookie;
 
-/// Legacy server-rendered HTML views.
-///
-/// These handlers are no longer used in production routing (the Dioxus SPA
-/// handles all user-facing pages). They are retained only for test
-/// infrastructure compatibility. New code should use the REST API endpoints
-/// in [`rest`] instead.
-#[cfg(test)]
-pub(crate) mod views;
-
 pub(crate) mod admin_audit_helper;
 pub(crate) mod admin_operations;
 mod account_access;

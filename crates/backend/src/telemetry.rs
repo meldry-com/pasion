@@ -254,7 +254,7 @@ fn resource() -> Resource {
             Box::new(opentelemetry_resource_detectors::ProcessResourceDetector),
         ])
         .with_attributes([
-            KeyValue::new(semcov::resource::SERVICE_VERSION, crate::VERSION),
+            KeyValue::new(semcov::resource::SERVICE_VERSION, crate::version()),
             KeyValue::new(semcov::resource::PROCESS_RUNTIME_NAME, "rust"),
             KeyValue::new(
                 semcov::resource::PROCESS_RUNTIME_VERSION,

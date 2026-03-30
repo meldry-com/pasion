@@ -22,7 +22,7 @@ use ulid::Ulid;
 
 use super::UpstreamSessionsCookie;
 use crate::{
-    METER, impl_from_error_for_route,
+    METER, impl_from_error_for_route, rest::DepotExt,
     upstream_link_workflow::{
         LoadUpstreamLinkOutcome, SubmitUpstreamLinkError, SubmitUpstreamLinkOutcome,
         UpstreamLinkAction, UpstreamLinkRegistrationAction, UpstreamLinkWorkflowError,

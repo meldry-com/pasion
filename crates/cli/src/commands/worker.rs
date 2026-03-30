@@ -8,7 +8,7 @@ use pasion_router::UrlBuilder;
 use pasion_storage_pg::PgRepositoryFactory;
 use tracing::{info, info_span};
 
-use crate::{
+use pasion_backend::{
     lifecycle::LifecycleManager,
     util::{
         database_url_from_config, diesel_pool_from_config, homeserver_connection_from_config,

@@ -10,7 +10,7 @@ use rand::SeedableRng;
 use tokio::io::AsyncWriteExt;
 use tracing::{info, info_span};
 
-use crate::util::{database_url_from_config, diesel_pool_from_config};
+use pasion_backend::util::{database_url_from_config, diesel_pool_from_config};
 
 #[derive(Parser, Debug)]
 pub(super) struct Options {
@@ -116,7 +116,7 @@ impl Options {
                     .await
                     .context("could not get connection from pool")?;
 
-                crate::sync::config_sync(
+                pasion_backend::sync::config_sync(
                     config.upstream_oauth2,
                     config.clients,
                     conn,

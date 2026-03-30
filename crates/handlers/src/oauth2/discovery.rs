@@ -30,6 +30,10 @@ struct DiscoveryResponse {
 #[handler]
 #[tracing::instrument(name = "handlers.oauth2.discovery.get", skip_all)]
 pub async fn get(depot: &Depot) -> Json<DiscoveryResponse> {
+    get_inner(depot)
+}
+
+fn get_inner(depot: &Depot) -> Json<DiscoveryResponse> {
     let key_store = depot
         .get::<Keystore>("keystore")
         .expect("Keystore not found in depot");
@@ -222,7 +226,7 @@ mod tests {
     async fn discovery_reports_extended_signing_algorithms() {
         crate::test_utils::setup();
 
-        let Json(response) = get(&test_depot()).await;
+        let Json(response) = get_inner(&test_depot());
         let body = serde_json::to_value(response).unwrap();
 
         let id_token_algs: Vec<_> = body["id_token_signing_alg_values_supported"]

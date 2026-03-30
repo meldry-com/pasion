@@ -24,8 +24,6 @@ use self::callback::CallbackDestination;
 use crate::impl_from_error_for_route;
 
 pub(crate) mod callback;
-#[cfg(test)]
-pub(crate) mod consent;
 
 #[derive(Debug, Error)]
 pub enum RouteError {

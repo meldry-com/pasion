@@ -21,7 +21,7 @@ use rand::SeedableRng;
 use salvo::prelude::*;
 use tracing::Instrument;
 
-use crate::{VERSION, telemetry::METER};
+use crate::telemetry::METER;
 
 /// Shared application state that is cloned into the Salvo [`Depot`] for every
 /// incoming request. Holds all the service-level dependencies (database pool,
@@ -162,7 +162,7 @@ pub async fn inject_app_state(
         "connector_registry",
         state.connector_registry.clone(),
     );
-    depot.insert("app_version", AppVersion(VERSION));
+    depot.insert("app_version", AppVersion(crate::version()));
     depot.insert("activity_tracker", state.activity_tracker.clone());
     depot.insert("trusted_proxies", state.trusted_proxies.clone());
     depot.insert("frontend_script_src", state.frontend_script_src.clone());

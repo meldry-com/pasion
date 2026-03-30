@@ -21,14 +21,16 @@ use serde::{Deserialize, Serialize};
 use zeroize::Zeroizing;
 
 use super::shared::OptionalPostAuthAction;
+use pasion_data_model::SiteConfig;
+
 use crate::{
-    METER, RequesterFingerprint, SiteConfig,
+    METER, RequesterFingerprint,
     account_access::{
         PasswordLoginOutcome, PasswordLoginRequest, load_enabled_upstream_providers,
         login_with_password,
     },
     passwords::PasswordManager,
-    rest,
+    rest::{self, DepotExt},
     session::{SessionOrFallback, load_session_or_fallback},
 };
 
@@ -384,12 +386,11 @@ mod test {
     use pasion_templates::escape_html;
     use zeroize::Zeroizing;
 
+    use pasion_data_model::SiteConfig;
+
     use crate::rest::DepotExt;
-    use crate::{
-        SiteConfig,
-        test_utils::{
-            CookieHelper, RequestBuilderExt, ResponseExt, TestState, setup, test_site_config,
-        },
+    use crate::test_utils::{
+        CookieHelper, RequestBuilderExt, ResponseExt, TestState, setup, test_site_config,
     };
 
     #[tokio::test]

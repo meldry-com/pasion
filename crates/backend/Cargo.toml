@@ -1,13 +1,7 @@
 [package]
-name = "pasion"
+name = "pasion-backend"
 version.workspace = true
-authors.workspace = true
 edition.workspace = true
-homepage.workspace = true
-repository.workspace = true
-publish.workspace = true
-
-build = "build.rs"
 
 [lints]
 workspace = true
@@ -15,22 +9,15 @@ workspace = true
 [dependencies]
 anyhow.workspace = true
 bytes.workspace = true
-camino.workspace = true
 chrono.workspace = true
-clap.workspace = true
-console.workspace = true
 crc.workspace = true
 deadpool.workspace = true
-dialoguer.workspace = true
-dotenvy.workspace = true
-figment.workspace = true
 futures-util.workspace = true
 headers.workspace = true
 http.workspace = true
 http-body-util.workspace = true
 hyper.workspace = true
 ipnetwork.workspace = true
-itertools.workspace = true
 listenfd.workspace = true
 rand.workspace = true
 rand_chacha.workspace = true
@@ -48,8 +35,6 @@ url.workspace = true
 zeroize.workspace = true
 
 tracing.workspace = true
-tracing-appender.workspace = true
-tracing-subscriber.workspace = true
 tracing-opentelemetry.workspace = true
 opentelemetry.workspace = true
 opentelemetry-http.workspace = true
@@ -65,7 +50,6 @@ opentelemetry_sdk.workspace = true
 sentry.workspace = true
 sentry-tracing.workspace = true
 
-pasion-backend.workspace = true
 pasion-config.workspace = true
 pasion-context.workspace = true
 pasion-data-model.workspace = true
@@ -84,6 +68,7 @@ pasion-storage-pg.workspace = true
 pasion-tasks.workspace = true
 pasion-templates.workspace = true
 
+camino.workspace = true
 tokio-postgres.workspace = true
 uuid.workspace = true
 
@@ -95,12 +80,6 @@ anyhow.workspace = true
 vergen-gitcl.workspace = true
 
 [features]
-# Features used for the prebuilt binaries
-dist = ["pasion-config/dist"]
-
-# Features used in the Docker image
-docker = ["pasion-config/docker"]
-
 # Policy engine backends
-cedar = ["pasion-backend/cedar"]
-remote = ["pasion-backend/remote"]
+cedar = ["pasion-policy/cedar"]
+remote = ["pasion-policy/remote"]

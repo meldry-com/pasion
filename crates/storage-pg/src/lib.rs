@@ -43,8 +43,12 @@ mod errors;
 pub(crate) mod policy_data;
 pub(crate) mod repository;
 pub(crate) mod telemetry;
-#[cfg(test)]
-pub(crate) mod test_utils;
+/// Test utilities for creating temporary test databases.
+///
+/// This module is always compiled (not `#[cfg(test)]`) so that other crates
+/// can use `pasion_storage_pg::test_utils::setup_test_pool()` in their own
+/// test code.
+pub mod test_utils;
 pub(crate) mod tracing;
 
 pub(crate) use self::errors::DatabaseInconsistencyError;

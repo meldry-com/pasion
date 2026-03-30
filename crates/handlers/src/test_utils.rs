@@ -17,7 +17,7 @@ use pasion_keystore::{Encrypter, JsonWebKey, JsonWebKeySet, Keystore, PrivateKey
 use pasion_matrix::{HomeserverConnection, MockHomeserverConnection};
 use pasion_messaging::{MailTransport, Mailer, NotificationCenter};
 use pasion_policy::{InstantiateError, Policy, PolicyFactory};
-use pasion_router::{SimpleRoute, UrlBuilder};
+use pasion_router::{Route, SimpleRoute, UrlBuilder};
 use pasion_salvo_utils::cookies::{CookieJar, CookieManager};
 use pasion_storage::{BoxRepository, BoxRepositoryFactory, RepositoryError, RepositoryFactory};
 use pasion_storage_pg::PgRepositoryFactory;
@@ -25,7 +25,7 @@ use pasion_tasks::QueueWorker;
 use pasion_templates::{SiteConfigExt, Templates};
 use rand::SeedableRng;
 use rand_chacha::ChaChaRng;
-use salvo::{prelude::*, test::TestClient};
+use salvo::{prelude::*, test::TestClient, test::ResponseExt as SalvoResponseExt};
 use serde::{Serialize, de::DeserializeOwned};
 use tokio_util::{
     sync::{CancellationToken, DropGuard},
@@ -196,7 +196,6 @@ impl TestState {
         let templates = Templates::load(
             workspace_root.join("templates"),
             url_builder.clone(),
-            Some(workspace_root.join("dist/manifest.json")),
             workspace_root.join("translations"),
             site_config.templates_branding(),
             site_config.templates_features(),
@@ -306,7 +305,7 @@ impl TestState {
     /// Reset the test utils to a fresh state, with the same configuration.
     pub async fn reset(self) -> Self {
         let site_config = self.site_config.clone();
-        let pool = self.repository_factory.pool();
+        let pool = self.repository_factory.pool().clone();
         let task_tracker = self.task_tracker.clone();
 
         // This should trigger the cancellation drop guard
@@ -431,49 +430,10 @@ impl TestState {
                 Router::with_path("/api/v1/user-emails/<id>")
                     .delete(crate::rest::emails::remove_email),
             )
-            // Human/Views
-            .push(
-                Router::with_path(pasion_router::Login::route())
-                    .get(crate::views::login::get)
-                    .post(crate::views::login::post),
-            )
-            .push(
-                Router::with_path(pasion_router::Register::route())
-                    .get(crate::views::register::get),
-            )
-            .push(
-                Router::with_path(pasion_router::PasswordRegister::route())
-                    .get(crate::views::register::password::get)
-                    .post(crate::views::register::password::post),
-            )
-            .push(
-                Router::with_path(pasion_router::RegisterVerifyEmail::route())
-                    .get(crate::views::register::steps::verify_email::get)
-                    .post(crate::views::register::steps::verify_email::post),
-            )
-            .push(
-                Router::with_path(pasion_router::RegisterToken::route())
-                    .get(crate::views::register::steps::registration_token::get)
-                    .post(crate::views::register::steps::registration_token::post),
-            )
-            .push(
-                Router::with_path(pasion_router::RegisterDisplayName::route())
-                    .get(crate::views::register::steps::display_name::get)
-                    .post(crate::views::register::steps::display_name::post),
-            )
-            .push(
-                Router::with_path(pasion_router::RegisterFinish::route())
-                    .get(crate::views::register::steps::finish::get),
-            )
             // OAuth2 authorization
             .push(
                 Router::with_path(pasion_router::OAuth2AuthorizationEndpoint::route())
                     .get(crate::oauth2::authorization::get),
-            )
-            .push(
-                Router::with_path(pasion_router::Consent::route())
-                    .get(crate::oauth2::authorization::consent::get)
-                    .post(crate::oauth2::authorization::consent::post),
             )
             // Upstream OAuth2
             .push(
@@ -486,42 +446,138 @@ impl TestState {
                     .post(crate::upstream_oauth2::callback::handler),
             )
             .push(
-                Router::with_path(pasion_router::UpstreamOAuth2Link::route())
-                    .get(crate::upstream_oauth2::link::get)
-                    .post(crate::upstream_oauth2::link::post),
-            )
-            .push(
                 Router::with_path(pasion_router::UpstreamOAuth2BackchannelLogout::route())
                     .post(crate::upstream_oauth2::backchannel_logout::post),
             )
-            // Device code
+            // Admin API
             .push(
-                Router::with_path(pasion_router::DeviceCodeLink::route())
-                    .get(crate::oauth2::device::link::get),
-            )
-            .push(
-                Router::with_path(pasion_router::DeviceCodeConsent::route())
-                    .get(crate::oauth2::device::consent::get)
-                    .post(crate::oauth2::device::consent::post),
-            )
-            // Account recovery
-            .push(
-                Router::with_path(pasion_router::AccountRecoveryStart::route())
-                    .get(crate::views::recovery::start::get)
-                    .post(crate::views::recovery::start::post),
-            )
-            .push(
-                Router::with_path(pasion_router::AccountRecoveryProgress::route())
-                    .get(crate::views::recovery::progress::get)
-                    .post(crate::views::recovery::progress::post),
-            )
-            // Admin API (catch-all for admin routes)
-            .push(
-                Router::with_path("/api/admin/v1/<**path>")
-                    .get(crate::admin::v1::handler)
-                    .post(crate::admin::v1::handler)
-                    .put(crate::admin::v1::handler)
-                    .delete(crate::admin::v1::handler),
+                Router::with_path("/api/admin/v1")
+                    .push(Router::with_path("version").get(crate::admin::v1::version::handler))
+                    .push(Router::with_path("site-config").get(crate::admin::v1::site_config::handler))
+                    .push(Router::with_path("connector-health").get(crate::admin::v1::connector_health::handler))
+                    .push(Router::with_path("notification-channels").get(crate::admin::v1::notification_channels::handler))
+                    .push(
+                        Router::with_path("notification-templates")
+                            .get(crate::admin::v1::notification_templates::list_handler)
+                            .push(
+                                Router::with_path("publish")
+                                    .post(crate::admin::v1::notification_templates::publish_handler),
+                            ),
+                    )
+                    .push(Router::with_path("audit-feed").get(crate::admin::v1::audit_feed::handler))
+                    .push(
+                        Router::with_path("users")
+                            .get(crate::admin::v1::users::list::handler)
+                            .post(crate::admin::v1::users::add::handler)
+                            .push(
+                                Router::with_path("by-username/<username>")
+                                    .get(crate::admin::v1::users::by_username::handler),
+                            )
+                            .push(
+                                Router::with_path("batch-invite")
+                                    .post(crate::admin::v1::users::batch_invite::handler),
+                            )
+                            .push(
+                                Router::with_path("<id>")
+                                    .get(crate::admin::v1::users::get::handler)
+                                    .push(
+                                        Router::with_path("set-password")
+                                            .post(crate::admin::v1::users::set_password::handler),
+                                    )
+                                    .push(Router::with_path("set-admin").post(crate::admin::v1::users::set_admin::handler))
+                                    .push(Router::with_path("deactivate").post(crate::admin::v1::users::deactivate::handler))
+                                    .push(Router::with_path("reactivate").post(crate::admin::v1::users::reactivate::handler))
+                                    .push(Router::with_path("lock").post(crate::admin::v1::users::lock::handler))
+                                    .push(Router::with_path("unlock").post(crate::admin::v1::users::unlock::handler))
+                                    .push(Router::with_path("risk-action").post(crate::admin::v1::users::risk_action::handler)),
+                            ),
+                    )
+                    .push(
+                        Router::with_path("user-emails")
+                            .get(crate::admin::v1::user_emails::list::handler)
+                            .post(crate::admin::v1::user_emails::add::handler)
+                            .push(
+                                Router::with_path("<id>")
+                                    .get(crate::admin::v1::user_emails::get::handler)
+                                    .delete(crate::admin::v1::user_emails::delete::handler),
+                            ),
+                    )
+                    .push(
+                        Router::with_path("user-sessions")
+                            .get(crate::admin::v1::user_sessions::list::handler)
+                            .push(
+                                Router::with_path("<id>")
+                                    .get(crate::admin::v1::user_sessions::get::handler)
+                                    .push(Router::with_path("finish").post(crate::admin::v1::user_sessions::finish::handler)),
+                            ),
+                    )
+                    .push(
+                        Router::with_path("oauth2-sessions")
+                            .get(crate::admin::v1::oauth2_sessions::list::handler)
+                            .push(
+                                Router::with_path("<id>")
+                                    .get(crate::admin::v1::oauth2_sessions::get::handler)
+                                    .push(
+                                        Router::with_path("finish").post(crate::admin::v1::oauth2_sessions::finish::handler),
+                                    ),
+                            ),
+                    )
+                    .push(
+                        Router::with_path("personal-sessions")
+                            .get(crate::admin::v1::personal_sessions::list::handler)
+                            .post(crate::admin::v1::personal_sessions::add::handler)
+                            .push(
+                                Router::with_path("<id>")
+                                    .get(crate::admin::v1::personal_sessions::get::handler)
+                                    .push(
+                                        Router::with_path("regenerate")
+                                            .post(crate::admin::v1::personal_sessions::regenerate::handler),
+                                    )
+                                    .push(
+                                        Router::with_path("revoke")
+                                            .post(crate::admin::v1::personal_sessions::revoke::handler),
+                                    ),
+                            ),
+                    )
+                    .push(
+                        Router::with_path("user-registration-tokens")
+                            .get(crate::admin::v1::user_registration_tokens::list::handler)
+                            .post(crate::admin::v1::user_registration_tokens::add::handler)
+                            .push(
+                                Router::with_path("<id>")
+                                    .get(crate::admin::v1::user_registration_tokens::get::handler)
+                                    .put(crate::admin::v1::user_registration_tokens::update::handler)
+                                    .push(
+                                        Router::with_path("revoke")
+                                            .post(crate::admin::v1::user_registration_tokens::revoke::handler),
+                                    )
+                                    .push(
+                                        Router::with_path("unrevoke")
+                                            .post(crate::admin::v1::user_registration_tokens::unrevoke::handler),
+                                    ),
+                            ),
+                    )
+                    .push(
+                        Router::with_path("upstream-oauth-providers")
+                            .get(crate::admin::v1::upstream_oauth_providers::list::handler)
+                            .push(Router::with_path("<id>").get(crate::admin::v1::upstream_oauth_providers::get::handler)),
+                    )
+                    .push(
+                        Router::with_path("upstream-oauth-links")
+                            .get(crate::admin::v1::upstream_oauth_links::list::handler)
+                            .post(crate::admin::v1::upstream_oauth_links::add::handler)
+                            .push(
+                                Router::with_path("<id>")
+                                    .get(crate::admin::v1::upstream_oauth_links::get::handler)
+                                    .delete(crate::admin::v1::upstream_oauth_links::delete::handler),
+                            ),
+                    )
+                    .push(
+                        Router::with_path("policy-data")
+                            .push(Router::with_path("latest").get(crate::admin::v1::policy_data::get_latest::handler))
+                            .push(Router::with_path("<id>").get(crate::admin::v1::policy_data::get::handler))
+                            .put(crate::admin::v1::policy_data::set::handler),
+                    ),
             )
     }
 

@@ -13,7 +13,7 @@ use pasion_data_model::{Clock, SystemClock};
 use rand::SeedableRng;
 use tracing::info_span;
 
-use crate::util::{site_config_from_config, templates_from_config};
+use pasion_backend::util::{site_config_from_config, templates_from_config};
 
 #[derive(Parser, Debug)]
 pub(super) struct Options {

@@ -16,7 +16,7 @@ use pasion_router::UrlBuilder;
 use pasion_storage_pg::PgRepositoryFactory;
 use tracing::{info, info_span, warn};
 
-use crate::{
+use pasion_backend::{
     app_state::AppState,
     lifecycle::LifecycleManager,
     util::{
@@ -96,7 +96,7 @@ impl Options {
             let upstream_oauth2_config = UpstreamOAuth2Config::extract_or_default(figment)
                 .map_err(anyhow::Error::from_boxed)?;
 
-            crate::sync::config_sync(
+            pasion_backend::sync::config_sync(
                 upstream_oauth2_config,
                 clients_config,
                 conn,
@@ -199,7 +199,7 @@ impl Options {
             .flat_map(|l| &l.resources)
             .find_map(|r| {
                 if let HttpResource::Assets { path } = r {
-                    crate::server::discover_frontend_script(path)
+                    pasion_backend::server::discover_frontend_script(path)
                 } else {
                     None
                 }
@@ -271,19 +271,19 @@ impl Options {
             let listener_label = listener_name.as_deref().unwrap_or("<unnamed>");
 
             // Let's first grab all the listeners
-            let listeners = crate::server::build_listeners(&mut fd_manager, &config.binds)
+            let listeners = pasion_backend::server::build_listeners(&mut fd_manager, &config.binds)
                 .with_context(|| format!("could not initialize listener `{listener_label}`"))?;
 
             // Load the TLS config
             let tls_config = if let Some(tls_config) = config.tls.as_ref() {
-                let tls_config = crate::server::build_tls_server_config(tls_config)?;
+                let tls_config = pasion_backend::server::build_tls_server_config(tls_config)?;
                 Some(Arc::new(tls_config))
             } else {
                 None
             };
 
             // and build the router
-            let router = crate::server::build_router(
+            let router = pasion_backend::server::build_router(
                 state.clone(),
                 &config.resources,
                 config.prefix.as_deref(),

@@ -9,7 +9,7 @@ use pasion_config::{
 use pasion_storage_pg::PgRepositoryFactory;
 use tracing::{info, info_span};
 
-use crate::util::{
+use pasion_backend::util::{
     diesel_pool_from_config, load_policy_factory_dynamic_data, policy_factory_from_config,
 };
 

@@ -5,6 +5,10 @@ use salvo::prelude::*;
 #[handler]
 #[tracing::instrument(name = "handlers.oauth2.keys.get", skip_all)]
 pub async fn get(depot: &Depot) -> Json<PublicJsonWebKeySet> {
+    get_inner(depot)
+}
+
+fn get_inner(depot: &Depot) -> Json<PublicJsonWebKeySet> {
     let key_store = depot
         .get::<Keystore>("keystore")
         .expect("Keystore not found in depot");
@@ -35,7 +39,7 @@ mod tests {
     async fn jwks_exposes_p521_and_ed25519_public_keys() {
         crate::test_utils::setup();
 
-        let Json(jwks) = get(&test_depot()).await;
+        let Json(jwks) = get_inner(&test_depot());
         let body = serde_json::to_value(jwks).unwrap();
         let keys = body["keys"].as_array().unwrap();
 

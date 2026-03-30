@@ -16,14 +16,16 @@ use salvo::{prelude::*, writing::Text};
 use serde::{Deserialize, Serialize};
 
 use super::cookie::UserRegistrationSessions;
+use pasion_data_model::SiteConfig;
+
 use crate::{
-    RequesterFingerprint, SiteConfig,
+    RequesterFingerprint,
     account_registration::{
         BeginPasswordRegistrationIssue, BeginPasswordRegistrationRequest,
         BeginPasswordRegistrationResult, EmailAvailabilityCheck, begin_password_registration,
     },
     captcha::Form as CaptchaForm,
-    rest,
+    rest::{self, DepotExt},
     views::shared::OptionalPostAuthAction,
 };
 
@@ -396,12 +398,11 @@ mod tests {
     };
     use pasion_router::Route;
 
+    use pasion_data_model::SiteConfig;
+
     use crate::rest::DepotExt;
-    use crate::{
-        SiteConfig,
-        test_utils::{
-            CookieHelper, RequestBuilderExt, ResponseExt, TestState, setup, test_site_config,
-        },
+    use crate::test_utils::{
+        CookieHelper, RequestBuilderExt, ResponseExt, TestState, setup, test_site_config,
     };
 
     #[tokio::test]

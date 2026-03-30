@@ -32,7 +32,7 @@ use rand::{
 use tracing::{error, info, info_span, warn};
 use zeroize::Zeroizing;
 
-use crate::util::{
+use pasion_backend::util::{
     diesel_pool_from_config, homeserver_connection_from_config, password_manager_from_config,
 };
 

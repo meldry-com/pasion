@@ -6,14 +6,10 @@
 //!
 //! # Architecture
 //!
-//! - [`app_state`] — Shared application state injected into every HTTP request
 //! - [`commands`] — CLI sub-command implementations (`server`, `config`,
 //!   `manage`, …)
-//! - [`server`] — Salvo router construction, middleware, and listener setup
-//! - [`telemetry`] — OpenTelemetry tracing + Prometheus metrics
-//! - [`lifecycle`] — Graceful shutdown and signal handling
-//! - [`sync`] — Sync configuration (clients, providers) to the database
-//! - [`util`] — Shared helpers for building service dependencies
+//!
+//! Backend/server infrastructure lives in the `pasion-backend` crate.
 
 #![allow(clippy::module_name_repetitions)]
 
@@ -30,13 +26,7 @@ use tracing_subscriber::{
     util::SubscriberInitExt,
 };
 
-mod app_state;
 mod commands;
-mod lifecycle;
-mod server;
-mod sync;
-mod telemetry;
-mod util;
 
 /// The application version, as reported by `git describe` at build time
 static VERSION: &str = env!("VERGEN_GIT_DESCRIBE");
@@ -64,6 +54,10 @@ impl sentry::TransportFactory for SentryTransportFactory {
 }
 
 fn main() -> anyhow::Result<ExitCode> {
+    // Publish the application version so that pasion-backend can use it for
+    // telemetry, the AppVersion depot entry, etc.
+    pasion_backend::set_version(VERSION);
+
     let mut builder = tokio::runtime::Builder::new_multi_thread();
     builder.enable_all();
 
@@ -84,7 +78,7 @@ async fn async_main() -> anyhow::Result<ExitCode> {
     // chance to shutdown the telemetry exporters regardless of if there was an
     // error or not
     let res = try_main().await;
-    if let Err(err) = self::telemetry::shutdown() {
+    if let Err(err) = pasion_backend::telemetry::shutdown() {
         eprintln!("Failed to shutdown telemetry exporters: {err}");
     }
     res
@@ -158,9 +152,9 @@ async fn try_main() -> anyhow::Result<ExitCode> {
     });
 
     // Setup OpenTelemetry tracing and metrics
-    self::telemetry::setup(&telemetry_config).context("failed to setup OpenTelemetry")?;
+    pasion_backend::telemetry::setup(&telemetry_config).context("failed to setup OpenTelemetry")?;
 
-    let tracer = self::telemetry::TRACER
+    let tracer = pasion_backend::telemetry::TRACER
         .get()
         .context("TRACER was not set")?;
 
