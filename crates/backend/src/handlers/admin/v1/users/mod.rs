@@ -1,12 +1,8 @@
 pub mod add;
 pub mod batch_invite;
 pub mod by_username;
-pub mod deactivate;
 pub mod get;
 pub mod list;
-pub mod lock;
-pub mod reactivate;
 pub mod risk_action;
-pub mod set_admin;
 pub mod set_password;
-pub mod unlock;
+pub mod update;

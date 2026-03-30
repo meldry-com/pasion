@@ -1,12 +1,10 @@
 use dioxus::prelude::*;
 
 #[component]
-pub fn AddEmailForm(user_id: String, on_add: Option<EventHandler<String>>) -> Element {
+pub fn AddEmailForm(on_add: Option<EventHandler<String>>) -> Element {
     let mut email_value = use_signal(String::new);
     let mut submitting = use_signal(|| false);
     let mut error = use_signal(|| None::<String>);
-
-    let user_id_clone = user_id.clone();
 
     rsx! {
         form {
@@ -17,7 +15,6 @@ pub fn AddEmailForm(user_id: String, on_add: Option<EventHandler<String>>) -> El
                 if email.is_empty() {
                     return;
                 }
-                let uid = user_id_clone.clone();
                 submitting.set(true);
                 error.set(None);
                 let on_add = on_add;

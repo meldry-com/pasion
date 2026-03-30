@@ -12,7 +12,7 @@
 //! - [`viewer`] — Current-user ("viewer") profile information
 //! - [`site_config`] — Public site configuration
 //! - [`password`] — Password change and recovery
-//! - [`users`] — Display name, cross-signing reset, account deactivation
+//! - [`users`] — Viewer profile patching, cross-signing reset, account deactivation
 //! - [`oauth2_clients`] — OAuth 2.0 client details
 //!
 //! # API classification
@@ -27,7 +27,7 @@
 //! GET  /api/v1/viewer/overview                   -> dashboard overview
 //! GET  /api/v1/viewer/security                   -> security summary
 //! GET  /api/v1/viewer/workflow-inbox              -> pending workflows
-//! GET  /api/v1/viewer/notification-preferences    -> notification prefs
+//! GET  /api/v1/viewer/preferences                 -> notification prefs
 //! POST /api/v1/auth/register                     -> registration
 //! POST /api/v1/auth/recovery/start               -> recovery
 //! GET  /api/v1/email-auth/*                      -> email verification

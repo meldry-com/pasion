@@ -1,7 +1,7 @@
 use async_trait::async_trait;
 use pasion_data_model::{
     BrowserSession, Clock, UpstreamOAuthAuthorizationSession, User, UserEmail,
-    UserEmailAuthentication, UserEmailAuthenticationCode, UserRegistration,
+    UserEmailAuthentication, UserEmailAuthenticationCode, UserEmailPatch, UserRegistration,
 };
 use rand_core::RngCore;
 use ulid::Ulid;
@@ -164,6 +164,14 @@ pub trait UserEmailRepository: Send + Sync {
         clock: &dyn Clock,
         user: &User,
         email: String,
+    ) -> Result<UserEmail, Self::Error>;
+
+    /// Apply an in-place patch to an existing [`UserEmail`].
+    async fn patch(
+        &mut self,
+        clock: &dyn Clock,
+        user_email: UserEmail,
+        patch: UserEmailPatch,
     ) -> Result<UserEmail, Self::Error>;
 
     /// Delete a [`UserEmail`]
@@ -375,6 +383,12 @@ repository_impl!(UserEmailRepository:
         clock: &dyn Clock,
         user: &User,
         email: String,
+    ) -> Result<UserEmail, Self::Error>;
+    async fn patch(
+        &mut self,
+        clock: &dyn Clock,
+        user_email: UserEmail,
+        patch: UserEmailPatch,
     ) -> Result<UserEmail, Self::Error>;
     async fn remove(&mut self, user_email: UserEmail) -> Result<(), Self::Error>;
 

@@ -5,7 +5,7 @@ use async_trait::async_trait;
 use chrono::{DateTime, Utc};
 use diesel::prelude::*;
 use diesel_async::RunQueryDsl;
-use pasion_data_model::{Clock, User, new_id};
+use pasion_data_model::{Clock, User, UserPatch, UserProfilePatch, new_id};
 use pasion_storage::user::{UserFilter, UserRepository, UserState};
 use pasion_storage::{Pagination, pagination::PaginationDirection};
 use rand::RngCore;
@@ -52,10 +52,14 @@ struct UserRow {
     id: Uuid,
     username: String,
     created_at: DateTime<Utc>,
+    updated_at: DateTime<Utc>,
     locked_at: Option<DateTime<Utc>>,
     deactivated_at: Option<DateTime<Utc>>,
     can_request_admin: bool,
     is_guest: bool,
+    display_name: Option<String>,
+    avatar_url: Option<String>,
+    preferred_locale: Option<String>,
 }
 
 impl pasion_storage::pagination::Node<Ulid> for UserRow {
@@ -72,10 +76,14 @@ impl From<UserRow> for User {
             username: row.username,
             sub: id.to_string(),
             created_at: row.created_at,
+            updated_at: row.updated_at,
             locked_at: row.locked_at,
             deactivated_at: row.deactivated_at,
             can_request_admin: row.can_request_admin,
             is_guest: row.is_guest,
+            display_name: row.display_name,
+            avatar_url: row.avatar_url,
+            preferred_locale: row.preferred_locale,
         }
     }
 }
@@ -87,6 +95,7 @@ struct NewUser {
     id: Uuid,
     username: String,
     created_at: DateTime<Utc>,
+    updated_at: DateTime<Utc>,
 }
 
 #[async_trait]
@@ -158,6 +167,7 @@ impl UserRepository for PgUserRepository<'_> {
             id: Uuid::from(id),
             username: username.clone(),
             created_at,
+            updated_at: created_at,
         };
 
         let rows_affected = diesel::insert_into(users::table)
@@ -174,11 +184,116 @@ impl UserRepository for PgUserRepository<'_> {
             username,
             sub: id.to_string(),
             created_at,
+            updated_at: created_at,
             locked_at: None,
             deactivated_at: None,
             can_request_admin: false,
             is_guest: false,
+            display_name: None,
+            avatar_url: None,
+            preferred_locale: None,
         })
+    }
+
+    #[tracing::instrument(
+        name = "db.user.update_profile",
+        skip_all,
+        fields(%user.id),
+        err,
+    )]
+    async fn update_profile(
+        &mut self,
+        clock: &dyn Clock,
+        user: User,
+        patch: UserProfilePatch,
+    ) -> Result<User, Self::Error> {
+        self.patch(clock, user, patch.into()).await
+    }
+
+    #[tracing::instrument(
+        name = "db.user.patch",
+        skip_all,
+        fields(%user.id),
+        err,
+    )]
+    async fn patch(
+        &mut self,
+        clock: &dyn Clock,
+        mut user: User,
+        patch: UserPatch,
+    ) -> Result<User, Self::Error> {
+        if patch.is_empty() {
+            return Ok(user);
+        }
+
+        let mut changed = false;
+        let now = clock.now();
+
+        if let Some(display_name) = patch.display_name {
+            user.display_name = display_name;
+            changed = true;
+        }
+
+        if let Some(avatar_url) = patch.avatar_url {
+            user.avatar_url = avatar_url;
+            changed = true;
+        }
+
+        if let Some(preferred_locale) = patch.preferred_locale {
+            user.preferred_locale = preferred_locale;
+            changed = true;
+        }
+
+        if let Some(can_request_admin) = patch.can_request_admin {
+            user.can_request_admin = can_request_admin;
+            changed = true;
+        }
+
+        if let Some(locked) = patch.locked {
+            let next_locked_at = if locked {
+                user.locked_at.or(Some(now))
+            } else {
+                None
+            };
+            if user.locked_at != next_locked_at {
+                user.locked_at = next_locked_at;
+                changed = true;
+            }
+        }
+
+        if let Some(deactivated) = patch.deactivated {
+            let next_deactivated_at = if deactivated {
+                user.deactivated_at.or(Some(now))
+            } else {
+                None
+            };
+            if user.deactivated_at != next_deactivated_at {
+                user.deactivated_at = next_deactivated_at;
+                changed = true;
+            }
+        }
+
+        if !changed {
+            return Ok(user);
+        }
+
+        user.updated_at = now;
+
+        let rows_affected = diesel::update(users::table.find(Uuid::from(user.id)))
+            .set((
+                users::updated_at.eq(user.updated_at),
+                users::locked_at.eq(user.locked_at),
+                users::deactivated_at.eq(user.deactivated_at),
+                users::can_request_admin.eq(user.can_request_admin),
+                users::display_name.eq(user.display_name.as_deref()),
+                users::avatar_url.eq(user.avatar_url.as_deref()),
+                users::preferred_locale.eq(user.preferred_locale.as_deref()),
+            ))
+            .execute(self.conn)
+            .await?;
+
+        DatabaseError::ensure_affected_rows_usize(rows_affected, 1)?;
+        Ok(user)
     }
 
     #[tracing::instrument(
@@ -212,14 +327,15 @@ impl UserRepository for PgUserRepository<'_> {
         }
 
         let locked_at = clock.now();
-        let rows_affected = diesel::update(users::table.find(Uuid::from(user.id)))
-            .set(users::locked_at.eq(Some(locked_at)))
-            .execute(self.conn)
-            .await?;
-
-        DatabaseError::ensure_affected_rows_usize(rows_affected, 1)?;
-        user.locked_at = Some(locked_at);
-        Ok(user)
+        self.patch(
+            clock,
+            user,
+            UserPatch {
+                locked: Some(true),
+                ..UserPatch::default()
+            },
+        )
+        .await
     }
 
     #[tracing::instrument(
@@ -232,14 +348,18 @@ impl UserRepository for PgUserRepository<'_> {
         if user.locked_at.is_none() {
             return Ok(user);
         }
+        user.locked_at = None;
+        user.updated_at = Utc::now();
 
         let rows_affected = diesel::update(users::table.find(Uuid::from(user.id)))
-            .set(users::locked_at.eq(None::<DateTime<Utc>>))
+            .set((
+                users::locked_at.eq(None::<DateTime<Utc>>),
+                users::updated_at.eq(user.updated_at),
+            ))
             .execute(self.conn)
             .await?;
 
         DatabaseError::ensure_affected_rows_usize(rows_affected, 1)?;
-        user.locked_at = None;
         Ok(user)
     }
 
@@ -249,24 +369,19 @@ impl UserRepository for PgUserRepository<'_> {
         fields(%user.id),
         err,
     )]
-    async fn deactivate(&mut self, clock: &dyn Clock, mut user: User) -> Result<User, Self::Error> {
+    async fn deactivate(&mut self, clock: &dyn Clock, user: User) -> Result<User, Self::Error> {
         if user.deactivated_at.is_some() {
             return Ok(user);
         }
-
-        let deactivated_at = clock.now();
-        let rows_affected = diesel::update(
-            users::table
-                .find(Uuid::from(user.id))
-                .filter(users::deactivated_at.is_null()),
+        self.patch(
+            clock,
+            user,
+            UserPatch {
+                deactivated: Some(true),
+                ..UserPatch::default()
+            },
         )
-        .set(users::deactivated_at.eq(Some(deactivated_at)))
-        .execute(self.conn)
-        .await?;
-
-        DatabaseError::ensure_affected_rows_usize(rows_affected, 1)?;
-        user.deactivated_at = Some(deactivated_at);
-        Ok(user)
+        .await
     }
 
     #[tracing::instrument(
@@ -279,14 +394,18 @@ impl UserRepository for PgUserRepository<'_> {
         if user.deactivated_at.is_none() {
             return Ok(user);
         }
+        user.deactivated_at = None;
+        user.updated_at = Utc::now();
 
         let rows_affected = diesel::update(users::table.find(Uuid::from(user.id)))
-            .set(users::deactivated_at.eq(None::<DateTime<Utc>>))
+            .set((
+                users::deactivated_at.eq(None::<DateTime<Utc>>),
+                users::updated_at.eq(user.updated_at),
+            ))
             .execute(self.conn)
             .await?;
 
         DatabaseError::ensure_affected_rows_usize(rows_affected, 1)?;
-        user.deactivated_at = None;
         Ok(user)
     }
 
@@ -301,13 +420,18 @@ impl UserRepository for PgUserRepository<'_> {
         mut user: User,
         can_request_admin: bool,
     ) -> Result<User, Self::Error> {
+        user.can_request_admin = can_request_admin;
+        user.updated_at = Utc::now();
+
         let rows_affected = diesel::update(users::table.find(Uuid::from(user.id)))
-            .set(users::can_request_admin.eq(can_request_admin))
+            .set((
+                users::can_request_admin.eq(can_request_admin),
+                users::updated_at.eq(user.updated_at),
+            ))
             .execute(self.conn)
             .await?;
 
         DatabaseError::ensure_affected_rows_usize(rows_affected, 1)?;
-        user.can_request_admin = can_request_admin;
         Ok(user)
     }
 

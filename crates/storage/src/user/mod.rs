@@ -1,7 +1,7 @@
 //! Repositories to interact with entities related to user accounts
 
 use async_trait::async_trait;
-use pasion_data_model::{Clock, User};
+use pasion_data_model::{Clock, User, UserPatch, UserProfilePatch};
 use rand_core::RngCore;
 use ulid::Ulid;
 
@@ -224,6 +224,22 @@ pub trait UserRepository: Send + Sync {
         username: String,
     ) -> Result<User, Self::Error>;
 
+    /// Update the editable profile fields of a [`User`].
+    async fn update_profile(
+        &mut self,
+        clock: &dyn Clock,
+        user: User,
+        patch: UserProfilePatch,
+    ) -> Result<User, Self::Error>;
+
+    /// Apply a unified patch to a [`User`].
+    async fn patch(
+        &mut self,
+        clock: &dyn Clock,
+        user: User,
+        patch: UserPatch,
+    ) -> Result<User, Self::Error>;
+
     /// Check if a [`User`] exists
     ///
     /// Returns `true` if the [`User`] exists, `false` otherwise
@@ -357,6 +373,18 @@ repository_impl!(UserRepository:
         rng: &mut (dyn RngCore + Send),
         clock: &dyn Clock,
         username: String,
+    ) -> Result<User, Self::Error>;
+    async fn update_profile(
+        &mut self,
+        clock: &dyn Clock,
+        user: User,
+        patch: UserProfilePatch,
+    ) -> Result<User, Self::Error>;
+    async fn patch(
+        &mut self,
+        clock: &dyn Clock,
+        user: User,
+        patch: UserPatch,
     ) -> Result<User, Self::Error>;
     async fn exists(&mut self, username: &str) -> Result<bool, Self::Error>;
     async fn lock(&mut self, clock: &dyn Clock, user: User) -> Result<User, Self::Error>;

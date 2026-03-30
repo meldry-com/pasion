@@ -1613,6 +1613,7 @@ impl TemplateContext for UpstreamRegister {
                 subject: "subject".to_owned(),
                 human_account_name: Some("@john".to_owned()),
                 created_at: now,
+                updated_at: now,
             },
             UpstreamOAuthProvider {
                 id: Ulid::nil(),

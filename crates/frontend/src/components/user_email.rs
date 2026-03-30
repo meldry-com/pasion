@@ -3,7 +3,7 @@ use dioxus::prelude::*;
 use crate::api::types::{RemoveEmailStatus, UserEmail};
 
 #[component]
-pub fn UserEmailItem(email: UserEmail) -> Element {
+pub fn UserEmailItem(email: UserEmail, on_removed: Option<EventHandler<String>>) -> Element {
     let is_confirmed = email.confirmed_at.is_some();
     let mut removing = use_signal(|| false);
     let mut error = use_signal(|| None::<String>);
@@ -15,6 +15,9 @@ pub fn UserEmailItem(email: UserEmail) -> Element {
         div { class: "user-email",
             div { class: "flex items-center gap-2 flex-1",
                 span { class: "email-address", "{email.email}" }
+                if email.is_primary {
+                    span { class: "email-badge primary", "Primary" }
+                }
                 if is_confirmed {
                     span { class: "email-badge primary", "Verified" }
                 } else {
@@ -46,9 +49,9 @@ pub fn UserEmailItem(email: UserEmail) -> Element {
                                     match result {
                                         Ok(data) => match data.status {
                                             RemoveEmailStatus::Removed => {
-                                                // Reload the page to reflect the change
-                                                let nav = navigator();
-                                                nav.push(crate::pages::Route::AccountSettings {});
+                                                if let Some(handler) = on_removed {
+                                                    handler.call(eid.clone());
+                                                }
                                             }
                                             RemoveEmailStatus::NotFound => {
                                                 error.set(Some("Email not found.".to_string()));
@@ -87,10 +90,19 @@ pub fn UserEmailItem(email: UserEmail) -> Element {
 
 #[component]
 pub fn UserEmailList(emails: Vec<UserEmail>, email_change_allowed: bool) -> Element {
+    let _ = email_change_allowed;
+    let mut items = use_signal(|| emails.clone());
+
     rsx! {
         div { class: "flex flex-col",
-            for email in emails.iter() {
-                UserEmailItem { key: "{email.id}", email: email.clone() }
+            for email in items.read().iter() {
+                UserEmailItem {
+                    key: "{email.id}",
+                    email: email.clone(),
+                    on_removed: move |removed_id: String| {
+                        items.write().retain(|item| item.id != removed_id);
+                    },
+                }
             }
         }
     }

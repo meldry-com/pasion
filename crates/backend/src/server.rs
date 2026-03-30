@@ -416,16 +416,16 @@ fn build_rest_api_router(router: Router) -> Router {
                     .push(Router::with_path("overview").get(viewer::get_viewer_overview))
                     .push(Router::with_path("security").get(viewer::get_security_summary))
                     .push(Router::with_path("password").post(password::set_password))
-                    .push(Router::with_path("display-name").post(users::set_display_name))
+                    .push(Router::with_path("profile").patch(users::patch_profile))
                     .push(
                         Router::with_path("cross-signing-reset")
                             .post(users::allow_cross_signing_reset),
                     )
                     .push(Router::with_path("deactivate").post(users::deactivate_user))
                     .push(
-                        Router::with_path("notification-preferences")
+                        Router::with_path("preferences")
                             .get(notification_prefs::get_notification_preferences)
-                            .put(notification_prefs::put_notification_preferences),
+                            .patch(notification_prefs::patch_notification_preferences),
                     )
                     .push(Router::with_path("workflow-inbox").get(viewer::get_workflow_inbox)),
             )
@@ -572,7 +572,7 @@ fn build_admin_router(router: Router) -> Router {
                     .get(users::list::handler)
                     .post(users::add::handler)
                     .push(
-                        Router::with_path("by-username/<username>")
+                        Router::with_path("by-username/{username}")
                             .get(users::by_username::handler),
                     )
                     .push(
@@ -580,17 +580,13 @@ fn build_admin_router(router: Router) -> Router {
                             .post(users::batch_invite::handler),
                     )
                     .push(
-                        Router::with_path("<id>")
+                        Router::with_path("{id}")
                             .get(users::get::handler)
+                            .patch(users::update::handler)
                             .push(
                                 Router::with_path("set-password")
                                     .post(users::set_password::handler),
                             )
-                            .push(Router::with_path("set-admin").post(users::set_admin::handler))
-                            .push(Router::with_path("deactivate").post(users::deactivate::handler))
-                            .push(Router::with_path("reactivate").post(users::reactivate::handler))
-                            .push(Router::with_path("lock").post(users::lock::handler))
-                            .push(Router::with_path("unlock").post(users::unlock::handler))
                             .push(Router::with_path("risk-action").post(users::risk_action::handler)),
                     ),
             )
@@ -600,8 +596,9 @@ fn build_admin_router(router: Router) -> Router {
                     .get(user_emails::list::handler)
                     .post(user_emails::add::handler)
                     .push(
-                        Router::with_path("<id>")
+                        Router::with_path("{id}")
                             .get(user_emails::get::handler)
+                            .patch(user_emails::update::handler)
                             .delete(user_emails::delete::handler),
                     ),
             )
@@ -610,7 +607,7 @@ fn build_admin_router(router: Router) -> Router {
                 Router::with_path("user-sessions")
                     .get(user_sessions::list::handler)
                     .push(
-                        Router::with_path("<id>")
+                        Router::with_path("{id}")
                             .get(user_sessions::get::handler)
                             .push(Router::with_path("finish").post(user_sessions::finish::handler)),
                     ),
@@ -620,7 +617,7 @@ fn build_admin_router(router: Router) -> Router {
                 Router::with_path("oauth2-sessions")
                     .get(oauth2_sessions::list::handler)
                     .push(
-                        Router::with_path("<id>")
+                        Router::with_path("{id}")
                             .get(oauth2_sessions::get::handler)
                             .push(
                                 Router::with_path("finish").post(oauth2_sessions::finish::handler),
@@ -633,7 +630,7 @@ fn build_admin_router(router: Router) -> Router {
                     .get(personal_sessions::list::handler)
                     .post(personal_sessions::add::handler)
                     .push(
-                        Router::with_path("<id>")
+                        Router::with_path("{id}")
                             .get(personal_sessions::get::handler)
                             .push(
                                 Router::with_path("regenerate")
@@ -651,7 +648,7 @@ fn build_admin_router(router: Router) -> Router {
                     .get(user_registration_tokens::list::handler)
                     .post(user_registration_tokens::add::handler)
                     .push(
-                        Router::with_path("<id>")
+                        Router::with_path("{id}")
                             .get(user_registration_tokens::get::handler)
                             .put(user_registration_tokens::update::handler)
                             .push(
@@ -668,7 +665,7 @@ fn build_admin_router(router: Router) -> Router {
             .push(
                 Router::with_path("upstream-oauth-providers")
                     .get(upstream_oauth_providers::list::handler)
-                    .push(Router::with_path("<id>").get(upstream_oauth_providers::get::handler)),
+                    .push(Router::with_path("{id}").get(upstream_oauth_providers::get::handler)),
             )
             // Upstream OAuth links
             .push(
@@ -676,8 +673,9 @@ fn build_admin_router(router: Router) -> Router {
                     .get(upstream_oauth_links::list::handler)
                     .post(upstream_oauth_links::add::handler)
                     .push(
-                        Router::with_path("<id>")
+                        Router::with_path("{id}")
                             .get(upstream_oauth_links::get::handler)
+                            .patch(upstream_oauth_links::update::handler)
                             .delete(upstream_oauth_links::delete::handler),
                     ),
             )
@@ -685,7 +683,7 @@ fn build_admin_router(router: Router) -> Router {
             .push(
                 Router::with_path("policy-data")
                     .push(Router::with_path("latest").get(policy_data::get_latest::handler))
-                    .push(Router::with_path("<id>").get(policy_data::get::handler))
+                    .push(Router::with_path("{id}").get(policy_data::get::handler))
                     .put(policy_data::set::handler),
             ),
     )

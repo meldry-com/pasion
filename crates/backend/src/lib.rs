@@ -13,6 +13,7 @@ pub mod oidc_client;
 /// Salvo web-framework utilities: middleware, extractors, and helpers.
 pub mod salvo_utils;
 pub mod server;
+pub mod services;
 pub mod sync;
 pub mod telemetry;
 pub mod util;

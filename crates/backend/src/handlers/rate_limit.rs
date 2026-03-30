@@ -414,10 +414,14 @@ mod tests {
             username: "alice".to_owned(),
             sub: "123-456".to_owned(),
             created_at: now,
+            updated_at: now,
             locked_at: None,
             deactivated_at: None,
             can_request_admin: false,
             is_guest: true,
+            display_name: Some("alice".to_owned()),
+            avatar_url: None,
+            preferred_locale: Some("en".to_owned()),
         };
 
         let bob = User {
@@ -425,10 +429,14 @@ mod tests {
             username: "bob".to_owned(),
             sub: "123-456".to_owned(),
             created_at: now,
+            updated_at: now,
             locked_at: None,
             deactivated_at: None,
             can_request_admin: false,
             is_guest: true,
+            display_name: Some("bob".to_owned()),
+            avatar_url: None,
+            preferred_locale: Some("en".to_owned()),
         };
 
         // Three times the same IP address should be allowed

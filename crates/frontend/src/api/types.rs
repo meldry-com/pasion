@@ -30,6 +30,10 @@ pub struct Anonymous {
 pub struct User {
     pub id: String,
     #[serde(default)]
+    pub username: String,
+    #[serde(default)]
+    pub profile: Option<UserProfile>,
+    #[serde(default)]
     pub matrix: Option<MatrixUser>,
     #[serde(default)]
     pub has_password: Option<bool>,
@@ -48,6 +52,18 @@ pub struct User {
 pub struct MatrixUser {
     pub mxid: String,
     pub display_name: Option<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct UserProfile {
+    #[serde(default)]
+    pub display_name: Option<String>,
+    #[serde(default)]
+    pub avatar_url: Option<String>,
+    #[serde(default)]
+    pub preferred_locale: Option<String>,
+    pub updated_at: String,
 }
 
 // ── Linked accounts ───────────────────────────────────────────
@@ -180,6 +196,8 @@ pub struct UserEmail {
     pub email: String,
     #[serde(default)]
     pub confirmed_at: Option<String>,
+    #[serde(default)]
+    pub is_primary: bool,
 }
 
 #[derive(Debug, Clone, PartialEq, Deserialize, Serialize)]
@@ -297,6 +315,54 @@ pub enum SetDisplayNameStatus {
     Set,
     Invalid,
     NotFound,
+}
+
+#[derive(Debug, Clone, PartialEq, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ProfilePatchRequest {
+    #[serde(default)]
+    pub display_name: Option<Option<String>>,
+    #[serde(default)]
+    pub avatar_url: Option<Option<String>>,
+    #[serde(default)]
+    pub preferred_locale: Option<Option<String>>,
+}
+
+#[derive(Debug, Clone, PartialEq, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PatchViewerProfileResponse {
+    pub profile: UserProfile,
+    pub matrix: MatrixUser,
+}
+
+#[derive(Debug, Clone, PartialEq, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct AdminUserPatchRequest {
+    #[serde(default)]
+    pub display_name: Option<Option<String>>,
+    #[serde(default)]
+    pub avatar_url: Option<Option<String>>,
+    #[serde(default)]
+    pub preferred_locale: Option<Option<String>>,
+    #[serde(default)]
+    pub admin: Option<bool>,
+    #[serde(default)]
+    pub locked: Option<bool>,
+    #[serde(default)]
+    pub deactivated: Option<bool>,
+    #[serde(default)]
+    pub hs_erase: Option<bool>,
+}
+
+#[derive(Debug, Clone, PartialEq, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct UserEmailPatchRequest {
+    #[serde(default)]
+    pub email: Option<String>,
+    #[serde(default)]
+    pub confirmed: Option<bool>,
+    #[serde(default)]
+    pub is_primary: Option<bool>,
 }
 
 #[derive(Debug, Clone, PartialEq, Deserialize, Serialize)]
@@ -746,7 +812,7 @@ pub struct WorkflowInboxResponse {
     pub total: usize,
 }
 
-// ── Notification preferences (GET/PUT /api/v1/viewer/notification-preferences)
+// ── Notification preferences (GET/PATCH /api/v1/viewer/preferences)
 
 #[derive(Debug, Clone, PartialEq, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]

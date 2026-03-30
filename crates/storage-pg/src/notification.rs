@@ -5,8 +5,8 @@ use diesel::sql_types::{BigInt, Jsonb, Nullable, Text, Timestamptz, Uuid as Dies
 use diesel_async::RunQueryDsl;
 use pasion_data_model::{
     Clock, NotificationChannel, NotificationDelivery, NotificationDeliveryFailure,
-    NotificationDeliveryStatus, NotificationEventKind, NotificationEventLog, NotificationRequest,
-    NotificationRequestStatus, new_id,
+    NotificationDeliveryStatus, NotificationEventKind, NotificationEventLog,
+    NotificationPreference, NotificationRequest, NotificationRequestStatus, User, new_id,
 };
 use pasion_storage::notification::{
     NewNotificationDelivery, NewNotificationEventLog, NewNotificationRequest,
@@ -19,7 +19,10 @@ use uuid::Uuid;
 
 use crate::{
     DatabaseError, DatabaseInconsistencyError,
-    schema::{notification_deliveries, notification_event_logs, notification_requests},
+    schema::{
+        notification_deliveries, notification_event_logs, notification_preferences,
+        notification_requests,
+    },
 };
 
 /// PostgreSQL implementation of [`NotificationRepository`].
@@ -151,6 +154,32 @@ struct NotificationEventLogRow {
     occurred_at: DateTime<Utc>,
 }
 
+#[derive(Debug, Clone, Queryable, Selectable)]
+#[diesel(table_name = notification_preferences)]
+struct NotificationPreferenceRow {
+    id: Uuid,
+    user_id: Uuid,
+    channel: String,
+    enabled: bool,
+    updated_at: DateTime<Utc>,
+}
+
+impl TryFrom<NotificationPreferenceRow> for NotificationPreference {
+    type Error = DatabaseInconsistencyError;
+
+    fn try_from(value: NotificationPreferenceRow) -> Result<Self, Self::Error> {
+        let id = value.id.into();
+
+        Ok(Self {
+            id,
+            user_id: value.user_id.into(),
+            channel: parse_channel(&value.channel, id)?,
+            enabled: value.enabled,
+            updated_at: value.updated_at,
+        })
+    }
+}
+
 impl TryFrom<NotificationEventLogRow> for NotificationEventLog {
     type Error = DatabaseInconsistencyError;
 
@@ -219,6 +248,16 @@ struct NewNotificationEventLogRow {
     summary: Option<String>,
     metadata: serde_json::Value,
     occurred_at: DateTime<Utc>,
+}
+
+#[derive(Insertable)]
+#[diesel(table_name = notification_preferences)]
+struct NewNotificationPreferenceRow {
+    id: Uuid,
+    user_id: Uuid,
+    channel: String,
+    enabled: bool,
+    updated_at: DateTime<Utc>,
 }
 
 #[derive(Debug, QueryableByName)]
@@ -776,6 +815,82 @@ impl NotificationRepository for PgNotificationRepository<'_> {
             .await?
             .into_iter()
             .map(TryInto::try_into)
+            .collect::<Result<Vec<_>, _>>()
+            .map_err(Into::into)
+    }
+
+    #[tracing::instrument(
+        name = "db.notification.list_preferences",
+        skip_all,
+        fields(user.id = %user.id),
+        err,
+    )]
+    async fn list_preferences(
+        &mut self,
+        user: &User,
+    ) -> Result<Vec<NotificationPreference>, Self::Error> {
+        notification_preferences::table
+            .filter(notification_preferences::user_id.eq(Uuid::from(user.id)))
+            .order(notification_preferences::channel.asc())
+            .select(NotificationPreferenceRow::as_select())
+            .load::<NotificationPreferenceRow>(self.conn)
+            .await?
+            .into_iter()
+            .map(TryInto::try_into)
+            .collect::<Result<Vec<_>, _>>()
+            .map_err(Into::into)
+    }
+
+    #[tracing::instrument(
+        name = "db.notification.replace_preferences",
+        skip_all,
+        fields(user.id = %user.id),
+        err,
+    )]
+    async fn replace_preferences(
+        &mut self,
+        rng: &mut (dyn RngCore + Send),
+        clock: &dyn Clock,
+        user: &User,
+        preferences: Vec<(NotificationChannel, bool)>,
+    ) -> Result<Vec<NotificationPreference>, Self::Error> {
+        diesel::delete(
+            notification_preferences::table
+                .filter(notification_preferences::user_id.eq(Uuid::from(user.id))),
+        )
+        .execute(self.conn)
+        .await?;
+
+        let updated_at = clock.now();
+        let rows: Vec<NewNotificationPreferenceRow> = preferences
+            .into_iter()
+            .map(|(channel, enabled)| NewNotificationPreferenceRow {
+                id: Uuid::from(new_id(updated_at, rng)),
+                user_id: Uuid::from(user.id),
+                channel: channel_to_db(channel).to_owned(),
+                enabled,
+                updated_at,
+            })
+            .collect();
+
+        if !rows.is_empty() {
+            diesel::insert_into(notification_preferences::table)
+                .values(&rows)
+                .execute(self.conn)
+                .await?;
+        }
+
+        rows.into_iter()
+            .map(|row| {
+                NotificationPreferenceRow {
+                    id: row.id,
+                    user_id: row.user_id,
+                    channel: row.channel,
+                    enabled: row.enabled,
+                    updated_at: row.updated_at,
+                }
+                .try_into()
+            })
             .collect::<Result<Vec<_>, _>>()
             .map_err(Into::into)
     }

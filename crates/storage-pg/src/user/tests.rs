@@ -1,7 +1,7 @@
 use chrono::Duration;
 use diesel_async::RunQueryDsl;
 use oauth2_types::scope::{OPENID, Scope};
-use pasion_data_model::{Clock, clock::MockClock};
+use pasion_data_model::{Clock, UserEmailPatch, UserPatch, UserProfilePatch, clock::MockClock};
 use pasion_iana::jose::JsonWebSignatureAlg;
 use pasion_storage::{
     Pagination, RepositoryAccess,
@@ -276,6 +276,139 @@ async fn test_user_repo_find_by_username() {
 
     // If none match, we should return None
     assert!(repo.user().find_by_username("bob").await.unwrap().is_none());
+}
+
+#[tokio::test]
+async fn test_user_patch_updates_profile_and_state() {
+    let pool = crate::test_utils::setup_test_pool().await;
+    let mut repo = PgRepositoryFactory::new(pool.clone())
+        .create()
+        .await
+        .unwrap();
+    let mut rng = ChaChaRng::seed_from_u64(42);
+    let clock = MockClock::default();
+
+    let user = repo
+        .user()
+        .add(&mut rng, &clock, "alice".to_owned())
+        .await
+        .unwrap();
+
+    clock.advance(chrono::Duration::seconds(5));
+
+    let updated = repo
+        .user()
+        .patch(
+            &clock,
+            user,
+            UserPatch {
+                display_name: Some(Some("Alice Example".to_owned())),
+                avatar_url: Some(Some("mxc://example.com/alice".to_owned())),
+                preferred_locale: Some(Some("zh-CN".to_owned())),
+                can_request_admin: Some(true),
+                locked: Some(true),
+                deactivated: Some(true),
+            },
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(updated.display_name.as_deref(), Some("Alice Example"));
+    assert_eq!(updated.avatar_url.as_deref(), Some("mxc://example.com/alice"));
+    assert_eq!(updated.preferred_locale.as_deref(), Some("zh-CN"));
+    assert!(updated.can_request_admin);
+    assert!(updated.locked_at.is_some());
+    assert!(updated.deactivated_at.is_some());
+
+    let reloaded = repo.user().lookup(updated.id).await.unwrap().unwrap();
+    assert_eq!(reloaded.display_name.as_deref(), Some("Alice Example"));
+    assert_eq!(reloaded.avatar_url.as_deref(), Some("mxc://example.com/alice"));
+    assert_eq!(reloaded.preferred_locale.as_deref(), Some("zh-CN"));
+    assert!(reloaded.can_request_admin);
+    assert!(reloaded.locked_at.is_some());
+    assert!(reloaded.deactivated_at.is_some());
+}
+
+#[tokio::test]
+async fn test_user_update_profile_empty_patch_is_noop() {
+    let pool = crate::test_utils::setup_test_pool().await;
+    let mut repo = PgRepositoryFactory::new(pool.clone())
+        .create()
+        .await
+        .unwrap();
+    let mut rng = ChaChaRng::seed_from_u64(42);
+    let clock = MockClock::default();
+
+    let user = repo
+        .user()
+        .add(&mut rng, &clock, "alice".to_owned())
+        .await
+        .unwrap();
+
+    let updated = repo
+        .user()
+        .update_profile(&clock, user.clone(), UserProfilePatch::default())
+        .await
+        .unwrap();
+
+    assert_eq!(updated, user);
+}
+
+#[tokio::test]
+async fn test_user_email_patch_swaps_primary_email() {
+    let pool = crate::test_utils::setup_test_pool().await;
+    let mut repo = PgRepositoryFactory::new(pool.clone())
+        .create()
+        .await
+        .unwrap();
+    let mut rng = ChaChaRng::seed_from_u64(42);
+    let clock = MockClock::default();
+
+    let user = repo
+        .user()
+        .add(&mut rng, &clock, "alice".to_owned())
+        .await
+        .unwrap();
+    let primary = repo
+        .user_email()
+        .add(&mut rng, &clock, &user, "alice@example.com".to_owned())
+        .await
+        .unwrap();
+    let secondary = repo
+        .user_email()
+        .add(
+            &mut rng,
+            &clock,
+            &user,
+            "alice+secondary@example.com".to_owned(),
+        )
+        .await
+        .unwrap();
+
+    clock.advance(chrono::Duration::seconds(5));
+
+    let updated = repo
+        .user_email()
+        .patch(
+            &clock,
+            secondary,
+            UserEmailPatch {
+                email: Some("alice+updated@example.com".to_owned()),
+                confirmed: Some(false),
+                is_primary: Some(true),
+            },
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(updated.email, "alice+updated@example.com");
+    assert!(updated.confirmed_at.is_none());
+    assert!(updated.is_primary);
+
+    let reloaded_primary = repo.user_email().lookup(primary.id).await.unwrap().unwrap();
+    let reloaded_updated = repo.user_email().lookup(updated.id).await.unwrap().unwrap();
+    assert!(!reloaded_primary.is_primary);
+    assert!(reloaded_updated.is_primary);
 }
 
 /// Test the user email repository, by trying out most of its methods

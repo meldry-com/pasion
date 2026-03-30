@@ -1,4 +1,11 @@
-use std::sync::{Arc, Mutex, RwLock};
+use std::{
+    process,
+    sync::{
+        Arc, Mutex, RwLock,
+        atomic::{AtomicU64, Ordering},
+    },
+    time::{SystemTime, UNIX_EPOCH},
+};
 
 use chrono::Duration;
 use cookie_store::{CookieStore, RawCookie};
@@ -9,9 +16,12 @@ use hyper::{
     Request, Response, StatusCode,
     header::{CONTENT_TYPE, COOKIE, SET_COOKIE},
 };
-use oauth2_types::{registration::ClientRegistrationResponse, requests::AccessTokenResponse};
+use oauth2_types::scope::Scope;
 use pasion_config::RateLimitingConfig;
-use pasion_data_model::{AppVersion, BoxClock, BoxRng, SiteConfig, clock::MockClock};
+use pasion_data_model::{
+    AppVersion, BoxClock, BoxRng, SiteConfig, SystemClock, TokenType, clock::MockClock,
+    personal::session::PersonalSessionOwner,
+};
 use pasion_i18n::Translator;
 use pasion_keystore::{Encrypter, JsonWebKey, JsonWebKeySet, Keystore, PrivateKey};
 use pasion_matrix::{HomeserverConnection, MockHomeserverConnection};
@@ -19,7 +29,11 @@ use pasion_messaging::{MailTransport, Mailer, NotificationCenter};
 use pasion_policy::{InstantiateError, Policy, PolicyFactory};
 use pasion_data_model::UrlBuilder;
 use crate::salvo_utils::cookies::{CookieJar, CookieManager};
-use pasion_storage::{BoxRepository, BoxRepositoryFactory, RepositoryError, RepositoryFactory};
+use pasion_storage::{
+    BoxRepository, BoxRepositoryFactory, RepositoryAccess, RepositoryError, RepositoryFactory,
+    personal::{PersonalAccessTokenRepository, PersonalSessionRepository},
+    user::UserRepository,
+};
 use pasion_storage_pg::PgRepositoryFactory;
 use pasion_tasks::QueueWorker;
 use pasion_templates::{SiteConfigExt, Templates};
@@ -31,6 +45,7 @@ use tokio_util::{
     sync::{CancellationToken, DropGuard},
     task::TaskTracker,
 };
+use ulid::Ulid;
 use url::Url;
 
 use crate::handlers::{
@@ -38,6 +53,8 @@ use crate::handlers::{
     passwords::{Hasher, PasswordManager},
     upstream_oauth2::cache::MetadataCache,
 };
+
+static UNIQUE_TEST_NONCE: AtomicU64 = AtomicU64::new(0);
 
 /// Setup rustcrypto and tracing for tests.
 #[allow(unused_must_use)]
@@ -48,6 +65,18 @@ pub(crate) fn setup() {
         .with_max_level(tracing::Level::INFO)
         .with_test_writer()
         .try_init();
+}
+
+pub(crate) fn unique_test_nonce() -> u64 {
+    let epoch_millis = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .expect("system clock is before unix epoch")
+        .as_millis() as u64;
+    let counter = UNIQUE_TEST_NONCE.fetch_add(1, Ordering::Relaxed) % 1_000_000;
+    let time_component = epoch_millis % 1_000_000;
+    let pid_component = (process::id() as u64 % 1_000) * 1_000_000;
+
+    pid_component + time_component + counter
 }
 
 pub(crate) async fn policy_factory(
@@ -207,8 +236,10 @@ impl TestState {
         let http_client = pasion_http::reqwest_client();
 
         // TODO: add more test keys to the store
-        let rsa =
-            PrivateKey::load_pem(include_str!("../../keystore/tests/keys/rsa.pkcs1.pem")).unwrap();
+        let rsa = PrivateKey::load_pem(include_str!(
+            "../../../keystore/tests/keys/rsa.pkcs1.pem"
+        ))
+        .unwrap();
         let rsa = JsonWebKey::new(rsa).with_kid("test-rsa");
 
         let jwks = JsonWebKeySet::new(vec![rsa]);
@@ -368,22 +399,22 @@ impl TestState {
             .push(Router::with_path("/api/v1/viewer").get(crate::handlers::rest::viewer::get_viewer))
             .push(Router::with_path("/api/v1/site-config").get(crate::handlers::rest::site_config::get))
             .push(
-                Router::with_path("/api/v1/sessions/<id>").get(crate::handlers::rest::sessions::get_session),
+                Router::with_path("/api/v1/sessions/{id}").get(crate::handlers::rest::sessions::get_session),
             )
             .push(
-                Router::with_path("/api/v1/browser-sessions/<id>")
+                Router::with_path("/api/v1/browser-sessions/{id}")
                     .delete(crate::handlers::rest::sessions::end_browser_session),
             )
             .push(
-                Router::with_path("/api/v1/oauth2-sessions/<id>")
+                Router::with_path("/api/v1/oauth2-sessions/{id}")
                     .delete(crate::handlers::rest::sessions::end_oauth2_session),
             )
             .push(
-                Router::with_path("/api/v1/oauth2-sessions/<id>/name")
+                Router::with_path("/api/v1/oauth2-sessions/{id}/name")
                     .put(crate::handlers::rest::sessions::set_oauth2_session_name),
             )
             .push(
-                Router::with_path("/api/v1/oauth2-clients/<id>")
+                Router::with_path("/api/v1/oauth2-clients/{id}")
                     .get(crate::handlers::rest::oauth2_clients::get_client),
             )
             .push(
@@ -399,8 +430,8 @@ impl TestState {
                     .post(crate::handlers::rest::password::resend_recovery_email),
             )
             .push(
-                Router::with_path("/api/v1/viewer/display-name")
-                    .post(crate::handlers::rest::users::set_display_name),
+                Router::with_path("/api/v1/viewer/profile")
+                    .patch(crate::handlers::rest::users::patch_profile),
             )
             .push(
                 Router::with_path("/api/v1/viewer/cross-signing-reset")
@@ -411,23 +442,28 @@ impl TestState {
                     .post(crate::handlers::rest::users::deactivate_user),
             )
             .push(
+                Router::with_path("/api/v1/viewer/preferences")
+                    .get(crate::handlers::rest::notification_prefs::get_notification_preferences)
+                    .patch(crate::handlers::rest::notification_prefs::patch_notification_preferences),
+            )
+            .push(
                 Router::with_path("/api/v1/email-auth/start")
                     .post(crate::handlers::rest::emails::start_email_auth),
             )
             .push(
-                Router::with_path("/api/v1/email-auth/<id>")
+                Router::with_path("/api/v1/email-auth/{id}")
                     .get(crate::handlers::rest::emails::get_email_auth),
             )
             .push(
-                Router::with_path("/api/v1/email-auth/<id>/complete")
+                Router::with_path("/api/v1/email-auth/{id}/complete")
                     .post(crate::handlers::rest::emails::complete_email_auth),
             )
             .push(
-                Router::with_path("/api/v1/email-auth/<id>/resend")
+                Router::with_path("/api/v1/email-auth/{id}/resend")
                     .post(crate::handlers::rest::emails::resend_email_auth_code),
             )
             .push(
-                Router::with_path("/api/v1/user-emails/<id>")
+                Router::with_path("/api/v1/user-emails/{id}")
                     .delete(crate::handlers::rest::emails::remove_email),
             )
             // OAuth2 authorization
@@ -470,7 +506,7 @@ impl TestState {
                             .get(crate::handlers::admin::v1::users::list::handler)
                             .post(crate::handlers::admin::v1::users::add::handler)
                             .push(
-                                Router::with_path("by-username/<username>")
+                                Router::with_path("by-username/{username}")
                                     .get(crate::handlers::admin::v1::users::by_username::handler),
                             )
                             .push(
@@ -478,17 +514,13 @@ impl TestState {
                                     .post(crate::handlers::admin::v1::users::batch_invite::handler),
                             )
                             .push(
-                                Router::with_path("<id>")
+                                Router::with_path("{id}")
                                     .get(crate::handlers::admin::v1::users::get::handler)
+                                    .patch(crate::handlers::admin::v1::users::update::handler)
                                     .push(
                                         Router::with_path("set-password")
                                             .post(crate::handlers::admin::v1::users::set_password::handler),
                                     )
-                                    .push(Router::with_path("set-admin").post(crate::handlers::admin::v1::users::set_admin::handler))
-                                    .push(Router::with_path("deactivate").post(crate::handlers::admin::v1::users::deactivate::handler))
-                                    .push(Router::with_path("reactivate").post(crate::handlers::admin::v1::users::reactivate::handler))
-                                    .push(Router::with_path("lock").post(crate::handlers::admin::v1::users::lock::handler))
-                                    .push(Router::with_path("unlock").post(crate::handlers::admin::v1::users::unlock::handler))
                                     .push(Router::with_path("risk-action").post(crate::handlers::admin::v1::users::risk_action::handler)),
                             ),
                     )
@@ -497,8 +529,9 @@ impl TestState {
                             .get(crate::handlers::admin::v1::user_emails::list::handler)
                             .post(crate::handlers::admin::v1::user_emails::add::handler)
                             .push(
-                                Router::with_path("<id>")
+                                Router::with_path("{id}")
                                     .get(crate::handlers::admin::v1::user_emails::get::handler)
+                                    .patch(crate::handlers::admin::v1::user_emails::update::handler)
                                     .delete(crate::handlers::admin::v1::user_emails::delete::handler),
                             ),
                     )
@@ -506,7 +539,7 @@ impl TestState {
                         Router::with_path("user-sessions")
                             .get(crate::handlers::admin::v1::user_sessions::list::handler)
                             .push(
-                                Router::with_path("<id>")
+                                Router::with_path("{id}")
                                     .get(crate::handlers::admin::v1::user_sessions::get::handler)
                                     .push(Router::with_path("finish").post(crate::handlers::admin::v1::user_sessions::finish::handler)),
                             ),
@@ -515,7 +548,7 @@ impl TestState {
                         Router::with_path("oauth2-sessions")
                             .get(crate::handlers::admin::v1::oauth2_sessions::list::handler)
                             .push(
-                                Router::with_path("<id>")
+                                Router::with_path("{id}")
                                     .get(crate::handlers::admin::v1::oauth2_sessions::get::handler)
                                     .push(
                                         Router::with_path("finish").post(crate::handlers::admin::v1::oauth2_sessions::finish::handler),
@@ -527,7 +560,7 @@ impl TestState {
                             .get(crate::handlers::admin::v1::personal_sessions::list::handler)
                             .post(crate::handlers::admin::v1::personal_sessions::add::handler)
                             .push(
-                                Router::with_path("<id>")
+                                Router::with_path("{id}")
                                     .get(crate::handlers::admin::v1::personal_sessions::get::handler)
                                     .push(
                                         Router::with_path("regenerate")
@@ -544,7 +577,7 @@ impl TestState {
                             .get(crate::handlers::admin::v1::user_registration_tokens::list::handler)
                             .post(crate::handlers::admin::v1::user_registration_tokens::add::handler)
                             .push(
-                                Router::with_path("<id>")
+                                Router::with_path("{id}")
                                     .get(crate::handlers::admin::v1::user_registration_tokens::get::handler)
                                     .put(crate::handlers::admin::v1::user_registration_tokens::update::handler)
                                     .push(
@@ -560,22 +593,23 @@ impl TestState {
                     .push(
                         Router::with_path("upstream-oauth-providers")
                             .get(crate::handlers::admin::v1::upstream_oauth_providers::list::handler)
-                            .push(Router::with_path("<id>").get(crate::handlers::admin::v1::upstream_oauth_providers::get::handler)),
+                            .push(Router::with_path("{id}").get(crate::handlers::admin::v1::upstream_oauth_providers::get::handler)),
                     )
                     .push(
                         Router::with_path("upstream-oauth-links")
                             .get(crate::handlers::admin::v1::upstream_oauth_links::list::handler)
                             .post(crate::handlers::admin::v1::upstream_oauth_links::add::handler)
                             .push(
-                                Router::with_path("<id>")
+                                Router::with_path("{id}")
                                     .get(crate::handlers::admin::v1::upstream_oauth_links::get::handler)
+                                    .patch(crate::handlers::admin::v1::upstream_oauth_links::update::handler)
                                     .delete(crate::handlers::admin::v1::upstream_oauth_links::delete::handler),
                             ),
                     )
                     .push(
                         Router::with_path("policy-data")
                             .push(Router::with_path("latest").get(crate::handlers::admin::v1::policy_data::get_latest::handler))
-                            .push(Router::with_path("<id>").get(crate::handlers::admin::v1::policy_data::get::handler))
+                            .push(Router::with_path("{id}").get(crate::handlers::admin::v1::policy_data::get::handler))
                             .put(crate::handlers::admin::v1::policy_data::set::handler),
                     ),
             )
@@ -621,48 +655,54 @@ impl TestState {
         builder.body(body_str).unwrap()
     }
 
-    /// Get a token with the given scope
+    /// Create an OAuth 2.0 access token with the given scope for admin API tests.
     pub async fn token_with_scope(&mut self, scope: &str) -> String {
-        // Provision a client
-        let request = Request::post("/oauth2/registration").json(
-            serde_json::json!({
-                "client_uri": "https://example.com/",
-                "token_endpoint_auth_method": "client_secret_post",
-                "grant_types": ["client_credentials"],
-            }),
-        );
-        let response = self.request(request).await;
-        response.assert_status(StatusCode::CREATED);
-        let response: ClientRegistrationResponse = response.json();
-        let client_id = response.client_id;
-        let client_secret = response.client_secret.expect("to have a client secret");
+        let parsed_scope: Scope = if scope.is_empty() {
+            std::iter::empty().collect()
+        } else {
+            scope.parse().expect("test scope must parse")
+        };
 
-        // Make the client admin
-        let state = {
-            let mut state = self.clone();
-            state.policy_factory = policy_factory(
-                "example.com",
-                serde_json::json!({
-                    "admin_clients": [client_id],
-                }),
+        let mut repo = self.repository().await.unwrap();
+        let unique = unique_test_nonce();
+        let clock = SystemClock::default();
+        let mut rng = ChaChaRng::seed_from_u64(unique);
+        let user = repo
+            .user()
+            .add(
+                &mut rng,
+                &clock,
+                format!("admin{}", Ulid::new().to_string().to_lowercase()),
             )
             .await
             .unwrap();
-            state
-        };
 
-        // Ask for a token with the admin scope
-        let request =
-            Request::post("/oauth2/token").form(serde_json::json!({
-                "grant_type": "client_credentials",
-                "client_id": client_id,
-                "client_secret": client_secret,
-                "scope": scope,
-            }));
+        let session = repo
+            .personal_session()
+            .add(
+                &mut rng,
+                &clock,
+                PersonalSessionOwner::User(user.id),
+                &user,
+                "Admin test token".to_owned(),
+                parsed_scope,
+            )
+            .await
+            .unwrap();
 
-        let response = state.request(request).await;
-        response.assert_status(StatusCode::OK);
-        let AccessTokenResponse { access_token, .. } = response.json();
+        let access_token = TokenType::PersonalAccessToken.generate(&mut rng);
+        repo.personal_access_token()
+            .add(
+                &mut rng,
+                &clock,
+                &session,
+                &access_token,
+                Some(self.site_config.access_token_ttl),
+            )
+            .await
+            .unwrap();
+
+        repo.save().await.unwrap();
 
         access_token
     }
@@ -818,7 +858,18 @@ impl ResponseExt for Response<String> {
 
     #[track_caller]
     fn json<T: DeserializeOwned>(&self) -> T {
-        self.assert_header_value(CONTENT_TYPE, "application/json");
+        let content_type = self
+            .headers()
+            .get(CONTENT_TYPE)
+            .unwrap_or_else(|| panic!("Missing header {CONTENT_TYPE}"))
+            .to_str()
+            .expect("Content-Type header is not valid ASCII");
+
+        assert!(
+            content_type.starts_with("application/json"),
+            "Header mismatch: got {:?}, expected content type starting with \"application/json\"",
+            self.headers().get(CONTENT_TYPE)
+        );
         serde_json::from_str(self.body()).expect("JSON deserialization failed")
     }
 }

@@ -1,5 +1,4 @@
-use salvo::oapi::ToSchema;
-use salvo::prelude::*;
+use salvo::{oapi::ToSchema, prelude::*};
 use serde::{Deserialize, Serialize};
 
 use super::{
@@ -7,31 +6,50 @@ use super::{
     get_requester, make_clock, make_rng,
 };
 use crate::handlers::account_profile::{
-    AccountProfileError, DeactivateAccountOutcome, SetDisplayNameOutcome,
-    allow_cross_signing_reset as allow_cross_signing_reset_service, deactivate_current_account,
-    set_display_name as set_display_name_service,
+    AccountProfileError, DeactivateAccountOutcome, allow_cross_signing_reset as allow_cross_signing_reset_service,
+    deactivate_current_account,
 };
+use crate::services::user_profile::{self, UserProfileServiceError};
 
-// ── POST /api/v1/viewer/display-name ───────────────────────────
+// ── PATCH /api/v1/viewer/profile ────────────────────────────────
 
-#[derive(Deserialize, ToSchema)]
+#[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
-pub struct SetDisplayNameInput {
-    pub user_id: String,
-    pub display_name: Option<String>,
+pub struct PatchViewerProfileInput {
+    pub display_name: Option<Option<String>>,
+    pub avatar_url: Option<Option<String>>,
+    pub preferred_locale: Option<Option<String>>,
 }
 
 #[derive(Serialize, ToSchema)]
-pub struct SetDisplayNameResponse {
-    pub status: &'static str,
+#[serde(rename_all = "camelCase")]
+pub struct PatchViewerProfileResponse {
+    pub profile: ViewerProfileData,
+    pub matrix: MatrixUserData,
+}
+
+#[derive(Serialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct ViewerProfileData {
+    pub display_name: Option<String>,
+    pub avatar_url: Option<String>,
+    pub preferred_locale: Option<String>,
+    pub updated_at: String,
+}
+
+#[derive(Serialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct MatrixUserData {
+    pub mxid: String,
+    pub display_name: Option<String>,
 }
 
 #[endpoint]
-pub async fn set_display_name(
+pub async fn patch_profile(
     req: &mut Request,
     depot: &Depot,
-) -> Result<Json<SetDisplayNameResponse>, RouteError> {
-    let input: SetDisplayNameInput = req
+) -> Result<Json<PatchViewerProfileResponse>, RouteError> {
+    let input: PatchViewerProfileInput = req
         .parse_json()
         .await
         .map_err(|_| RouteError::BadRequest("invalid json body".into()))?;
@@ -44,41 +62,55 @@ pub async fn set_display_name(
     let session_info = extract_session_info(req, depot);
 
     let repo = repo_factory.create().await?;
-    let (requester, repo) = get_requester(&clock, &activity_tracker, repo, &session_info).await?;
+    let (requester, mut repo) =
+        get_requester(&clock, &activity_tracker, repo, &session_info).await?;
 
-    let user_id = NodeType::User.extract_ulid(&input.user_id)?;
-
-    let status = match set_display_name_service(
-        repo,
-        &requester,
-        homeserver.as_ref(),
-        user_id,
-        input.display_name,
-    )
-    .await
-    .map_err(map_account_profile_error)?
-    {
-        SetDisplayNameOutcome::Set => "SET",
-        SetDisplayNameOutcome::Invalid => "INVALID",
+    let patch = pasion_data_model::UserProfilePatch {
+        display_name: input.display_name,
+        avatar_url: input.avatar_url,
+        preferred_locale: input.preferred_locale,
     };
 
-    Ok(Json(SetDisplayNameResponse { status }))
+    let user = user_profile::patch_viewer_profile(
+        &mut repo,
+        &requester,
+        &clock,
+        homeserver.as_ref(),
+        patch,
+    )
+    .await
+    .map_err(map_user_profile_error)?;
+
+    repo.save().await?;
+
+    Ok(Json(PatchViewerProfileResponse {
+        profile: ViewerProfileData {
+            display_name: user.display_name.clone(),
+            avatar_url: user.avatar_url.clone(),
+            preferred_locale: user.preferred_locale.clone(),
+            updated_at: user.updated_at.to_rfc3339(),
+        },
+        matrix: MatrixUserData {
+            mxid: homeserver.mxid(&user.username),
+            display_name: user.display_name,
+        },
+    }))
 }
 
 // ── POST /api/v1/viewer/cross-signing-reset ────────────────────
 
-#[derive(Deserialize, ToSchema)]
+#[derive(Deserialize, salvo::oapi::ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct AllowCrossSigningResetInput {
     pub user_id: String,
 }
 
-#[derive(Serialize, ToSchema)]
+#[derive(Serialize, salvo::oapi::ToSchema)]
 pub struct AllowCrossSigningResetResponse {
     pub user: Option<UserBrief>,
 }
 
-#[derive(Serialize, ToSchema)]
+#[derive(Serialize, salvo::oapi::ToSchema)]
 pub struct UserBrief {
     pub id: String,
 }
@@ -118,14 +150,14 @@ pub async fn allow_cross_signing_reset(
 
 // ── POST /api/v1/viewer/deactivate ─────────────────────────────
 
-#[derive(Deserialize, ToSchema)]
+#[derive(Deserialize, salvo::oapi::ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct DeactivateUserInput {
     pub hs_erase: bool,
     pub password: Option<String>,
 }
 
-#[derive(Serialize, ToSchema)]
+#[derive(Serialize, salvo::oapi::ToSchema)]
 pub struct DeactivateUserResponse {
     pub status: &'static str,
 }
@@ -185,5 +217,107 @@ fn map_account_profile_error(error: AccountProfileError) -> RouteError {
             RouteError::Internal(error.into())
         }
         AccountProfileError::Repository(error) => RouteError::from(error),
+    }
+}
+
+fn map_user_profile_error(error: UserProfileServiceError) -> RouteError {
+    match error {
+        UserProfileServiceError::NotFound => RouteError::NotFound,
+        UserProfileServiceError::Unauthorized => RouteError::Unauthorized,
+        UserProfileServiceError::InvalidDisplayName => {
+            RouteError::BadRequest("Invalid display name".into())
+        }
+        UserProfileServiceError::UnsupportedNotificationChannel(channel) => {
+            RouteError::BadRequest(format!("Unsupported notification channel: {channel}"))
+        }
+        UserProfileServiceError::DuplicateNotificationChannel(channel) => {
+            RouteError::BadRequest(format!("Duplicate notification channel: {channel}"))
+        }
+        UserProfileServiceError::Homeserver(error) => RouteError::Internal(error.into()),
+        UserProfileServiceError::Repository(error) => RouteError::from(error),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use chrono::Duration;
+    use hyper::{Request, StatusCode};
+    use pasion_matrix::{HomeserverConnection, ProvisionRequest};
+    use pasion_storage::{
+        RepositoryAccess,
+        user::{BrowserSessionRepository, UserRepository},
+    };
+    use rand::SeedableRng;
+    use rand_chacha::ChaChaRng;
+    use ulid::Ulid;
+
+    use crate::{
+        handlers::test_utils::{
+            CookieHelper, RequestBuilderExt, ResponseExt, TestState, setup, unique_test_nonce,
+        },
+        salvo_utils::SessionInfoExt,
+    };
+
+    #[tokio::test]
+    async fn test_patch_profile_updates_user_and_matrix_profile() {
+        setup();
+        let pool = pasion_storage_pg::test_utils::setup_test_pool().await;
+        let state = TestState::from_pool(pool.clone()).await.unwrap();
+        let unique = unique_test_nonce();
+        state.clock.advance(Duration::seconds(unique as i64));
+        let mut rng = ChaChaRng::seed_from_u64(unique);
+        let mut repo = state.repository().await.unwrap();
+        let username = format!("alice{}", Ulid::new().to_string().to_lowercase());
+
+        let user = repo
+            .user()
+            .add(&mut rng, &state.clock, username.clone())
+            .await
+            .unwrap();
+        let session = repo
+            .browser_session()
+            .add(&mut rng, &state.clock, &user, None)
+            .await
+            .unwrap();
+        repo.save().await.unwrap();
+
+        state
+            .homeserver_connection
+            .provision_user(&ProvisionRequest::new(&user.username, &user.sub))
+            .await
+            .unwrap();
+
+        let cookies = CookieHelper::new();
+        cookies.import(state.cookie_jar().set_session(&session));
+
+        let request = cookies.with_cookies(
+            Request::patch("/api/v1/viewer/profile").json(serde_json::json!({
+                "displayName": "Alice Example",
+                "avatarUrl": "mxc://example.com/alice",
+                "preferredLocale": "zh-CN"
+            })),
+        );
+
+        let response = state.request(request).await;
+        response.assert_status(StatusCode::OK);
+        let body: serde_json::Value = response.json();
+
+        assert_eq!(body["profile"]["displayName"], "Alice Example");
+        assert_eq!(body["profile"]["avatarUrl"], "mxc://example.com/alice");
+        assert_eq!(body["profile"]["preferredLocale"], "zh-CN");
+        assert_eq!(body["matrix"]["displayName"], "Alice Example");
+
+        let mut repo = state.repository().await.unwrap();
+        let stored = repo.user().lookup(user.id).await.unwrap().unwrap();
+        assert_eq!(stored.display_name.as_deref(), Some("Alice Example"));
+        assert_eq!(stored.avatar_url.as_deref(), Some("mxc://example.com/alice"));
+        assert_eq!(stored.preferred_locale.as_deref(), Some("zh-CN"));
+
+        let matrix_user = state
+            .homeserver_connection
+            .query_user(&username)
+            .await
+            .unwrap();
+        assert_eq!(matrix_user.displayname.as_deref(), Some("Alice Example"));
     }
 }

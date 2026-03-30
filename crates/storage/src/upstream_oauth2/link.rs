@@ -1,5 +1,7 @@
 use async_trait::async_trait;
-use pasion_data_model::{Clock, UpstreamOAuthLink, UpstreamOAuthProvider, User};
+use pasion_data_model::{
+    Clock, UpstreamOAuthLink, UpstreamOAuthLinkPatch, UpstreamOAuthProvider, User,
+};
 use rand_core::RngCore;
 use ulid::Ulid;
 
@@ -168,6 +170,14 @@ pub trait UpstreamOAuthLinkRepository: Send + Sync {
         user: &User,
     ) -> Result<(), Self::Error>;
 
+    /// Apply a patch to an upstream OAuth link.
+    async fn patch(
+        &mut self,
+        clock: &dyn Clock,
+        upstream_oauth_link: UpstreamOAuthLink,
+        patch: UpstreamOAuthLinkPatch,
+    ) -> Result<UpstreamOAuthLink, Self::Error>;
+
     /// List [`UpstreamOAuthLink`] with the given filter and pagination
     ///
     /// # Parameters
@@ -259,6 +269,12 @@ repository_impl!(UpstreamOAuthLinkRepository:
         upstream_oauth_link: &UpstreamOAuthLink,
         user: &User,
     ) -> Result<(), Self::Error>;
+    async fn patch(
+        &mut self,
+        clock: &dyn Clock,
+        upstream_oauth_link: UpstreamOAuthLink,
+        patch: UpstreamOAuthLinkPatch,
+    ) -> Result<UpstreamOAuthLink, Self::Error>;
 
     async fn list(
         &mut self,

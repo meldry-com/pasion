@@ -2,8 +2,8 @@ use async_trait::async_trait;
 use chrono::{DateTime, Utc};
 use pasion_data_model::{
     Clock, NotificationDelivery, NotificationDeliveryFailure, NotificationDestination,
-    NotificationEventActor, NotificationEventKind, NotificationEventLog, NotificationRequest,
-    NotificationRequestSource, NotificationRequestStatus,
+    NotificationEventActor, NotificationEventKind, NotificationEventLog, NotificationPreference,
+    NotificationRequest, NotificationRequestSource, NotificationRequestStatus, User,
 };
 use rand_core::RngCore;
 use serde_json::Value;
@@ -315,6 +315,21 @@ pub trait NotificationRepository: Send + Sync {
         &mut self,
         notification_request: &NotificationRequest,
     ) -> Result<Vec<NotificationEventLog>, Self::Error>;
+
+    /// List persisted per-channel preferences for a user.
+    async fn list_preferences(
+        &mut self,
+        user: &User,
+    ) -> Result<Vec<NotificationPreference>, Self::Error>;
+
+    /// Replace the persisted preferences for the given user.
+    async fn replace_preferences(
+        &mut self,
+        rng: &mut (dyn RngCore + Send),
+        clock: &dyn Clock,
+        user: &User,
+        preferences: Vec<(pasion_data_model::NotificationChannel, bool)>,
+    ) -> Result<Vec<NotificationPreference>, Self::Error>;
 }
 
 repository_impl!(NotificationRepository:
@@ -387,4 +402,15 @@ repository_impl!(NotificationRepository:
         &mut self,
         notification_request: &NotificationRequest,
     ) -> Result<Vec<NotificationEventLog>, Self::Error>;
+    async fn list_preferences(
+        &mut self,
+        user: &User,
+    ) -> Result<Vec<NotificationPreference>, Self::Error>;
+    async fn replace_preferences(
+        &mut self,
+        rng: &mut (dyn RngCore + Send),
+        clock: &dyn Clock,
+        user: &User,
+        preferences: Vec<(pasion_data_model::NotificationChannel, bool)>,
+    ) -> Result<Vec<NotificationPreference>, Self::Error>;
 );

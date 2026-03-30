@@ -20,13 +20,27 @@ pub struct User {
     pub username: String,
     pub sub: String,
     pub created_at: DateTime<Utc>,
+    pub updated_at: DateTime<Utc>,
     pub locked_at: Option<DateTime<Utc>>,
     pub deactivated_at: Option<DateTime<Utc>>,
     pub can_request_admin: bool,
     pub is_guest: bool,
+    pub display_name: Option<String>,
+    pub avatar_url: Option<String>,
+    pub preferred_locale: Option<String>,
 }
 
 impl User {
+    #[must_use]
+    pub fn profile(&self) -> UserProfile {
+        UserProfile {
+            display_name: self.display_name.clone(),
+            avatar_url: self.avatar_url.clone(),
+            preferred_locale: self.preferred_locale.clone(),
+            updated_at: self.updated_at,
+        }
+    }
+
     /// Returns `true` unless the user is locked or deactivated.
     #[must_use]
     pub fn is_valid(&self) -> bool {
@@ -57,11 +71,113 @@ impl User {
             username: "john".to_owned(),
             sub: "123-456".to_owned(),
             created_at: now,
+            updated_at: now,
             locked_at: None,
             deactivated_at: None,
             can_request_admin: false,
             is_guest: false,
+            display_name: Some("John".to_owned()),
+            avatar_url: None,
+            preferred_locale: Some("en".to_owned()),
         }]
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct UserProfile {
+    pub display_name: Option<String>,
+    pub avatar_url: Option<String>,
+    pub preferred_locale: Option<String>,
+    pub updated_at: DateTime<Utc>,
+}
+
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct UserProfilePatch {
+    pub display_name: Option<Option<String>>,
+    pub avatar_url: Option<Option<String>>,
+    pub preferred_locale: Option<Option<String>>,
+}
+
+impl UserProfilePatch {
+    #[must_use]
+    pub fn is_empty(&self) -> bool {
+        self.display_name.is_none()
+            && self.avatar_url.is_none()
+            && self.preferred_locale.is_none()
+    }
+}
+
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct UserPatch {
+    pub display_name: Option<Option<String>>,
+    pub avatar_url: Option<Option<String>>,
+    pub preferred_locale: Option<Option<String>>,
+    pub can_request_admin: Option<bool>,
+    pub locked: Option<bool>,
+    pub deactivated: Option<bool>,
+}
+
+impl UserPatch {
+    #[must_use]
+    pub fn is_empty(&self) -> bool {
+        self.display_name.is_none()
+            && self.avatar_url.is_none()
+            && self.preferred_locale.is_none()
+            && self.can_request_admin.is_none()
+            && self.locked.is_none()
+            && self.deactivated.is_none()
+    }
+}
+
+impl From<UserProfilePatch> for UserPatch {
+    fn from(value: UserProfilePatch) -> Self {
+        Self {
+            display_name: value.display_name,
+            avatar_url: value.avatar_url,
+            preferred_locale: value.preferred_locale,
+            can_request_admin: None,
+            locked: None,
+            deactivated: None,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct AdminUserPatch {
+    pub display_name: Option<Option<String>>,
+    pub avatar_url: Option<Option<String>>,
+    pub preferred_locale: Option<Option<String>>,
+    pub can_request_admin: Option<bool>,
+    pub locked: Option<bool>,
+    pub deactivated: Option<bool>,
+}
+
+impl AdminUserPatch {
+    #[must_use]
+    pub fn is_empty(&self) -> bool {
+        self.display_name.is_none()
+            && self.avatar_url.is_none()
+            && self.preferred_locale.is_none()
+            && self.can_request_admin.is_none()
+            && self.locked.is_none()
+            && self.deactivated.is_none()
+    }
+}
+
+impl From<AdminUserPatch> for UserPatch {
+    fn from(value: AdminUserPatch) -> Self {
+        Self {
+            display_name: value.display_name,
+            avatar_url: value.avatar_url,
+            preferred_locale: value.preferred_locale,
+            can_request_admin: value.can_request_admin,
+            locked: value.locked,
+            deactivated: value.deactivated,
+        }
     }
 }
 
@@ -191,6 +307,9 @@ pub struct UserEmail {
     pub user_id: Ulid,
     pub email: String,
     pub created_at: DateTime<Utc>,
+    pub updated_at: DateTime<Utc>,
+    pub confirmed_at: Option<DateTime<Utc>>,
+    pub is_primary: bool,
 }
 
 impl UserEmail {
@@ -202,14 +321,35 @@ impl UserEmail {
                 user_id: new_id(now, rng),
                 email: "alice@example.com".to_owned(),
                 created_at: now,
+                updated_at: now,
+                confirmed_at: Some(now),
+                is_primary: true,
             },
             Self {
                 id: new_id(now, rng),
                 user_id: new_id(now, rng),
                 email: "bob@example.com".to_owned(),
                 created_at: now,
+                updated_at: now,
+                confirmed_at: None,
+                is_primary: false,
             },
         ]
+    }
+}
+
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct UserEmailPatch {
+    pub email: Option<String>,
+    pub confirmed: Option<bool>,
+    pub is_primary: Option<bool>,
+}
+
+impl UserEmailPatch {
+    #[must_use]
+    pub fn is_empty(&self) -> bool {
+        self.email.is_none() && self.confirmed.is_none() && self.is_primary.is_none()
     }
 }
 

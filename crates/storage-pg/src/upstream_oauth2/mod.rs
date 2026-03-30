@@ -16,7 +16,7 @@ mod tests {
     use oauth2_types::scope::{OPENID, Scope};
     use pasion_data_model::{
         UpstreamOAuthProviderClaimsImports, UpstreamOAuthProviderOnBackchannelLogout,
-        UpstreamOAuthProviderTokenAuthMethod, clock::MockClock,
+        UpstreamOAuthLinkPatch, UpstreamOAuthProviderTokenAuthMethod, clock::MockClock,
     };
     use pasion_iana::jose::JsonWebSignatureAlg;
     use pasion_storage::{
@@ -668,5 +668,99 @@ mod tests {
                 Some("one")
             );
         }
+    }
+
+    #[tokio::test]
+    async fn test_upstream_oauth_link_patch_updates_fields() {
+        let pool = crate::test_utils::setup_test_pool().await;
+        let mut rng = rand_chacha::ChaChaRng::seed_from_u64(42);
+        let clock = MockClock::default();
+        let mut repo = PgRepositoryFactory::new(pool.clone())
+            .create()
+            .await
+            .unwrap();
+
+        let user = repo
+            .user()
+            .add(&mut rng, &clock, "alice".to_owned())
+            .await
+            .unwrap();
+        let provider = repo
+            .upstream_oauth_provider()
+            .add(
+                &mut rng,
+                &clock,
+                UpstreamOAuthProviderParams {
+                    issuer: Some("https://example.com/".to_owned()),
+                    human_name: Some("Example".to_owned()),
+                    brand_name: Some("Example".to_owned()),
+                    scope: Scope::from_iter([OPENID]),
+                    token_endpoint_auth_method: UpstreamOAuthProviderTokenAuthMethod::None,
+                    token_endpoint_signing_alg: None,
+                    id_token_signed_response_alg: JsonWebSignatureAlg::Rs256,
+                    fetch_userinfo: false,
+                    userinfo_signed_response_alg: None,
+                    client_id: "client".to_owned(),
+                    encrypted_client_secret: None,
+                    claims_imports: UpstreamOAuthProviderClaimsImports::default(),
+                    discovery_mode: Default::default(),
+                    pkce_mode: Default::default(),
+                    response_mode: None,
+                    authorization_endpoint_override: None,
+                    token_endpoint_override: None,
+                    userinfo_endpoint_override: None,
+                    jwks_uri_override: None,
+                    additional_authorization_parameters: Vec::new(),
+                    forward_login_hint: false,
+                    ui_order: 0,
+                    on_backchannel_logout: UpstreamOAuthProviderOnBackchannelLogout::DoNothing,
+                },
+            )
+            .await
+            .unwrap();
+        let link = repo
+            .upstream_oauth_link()
+            .add(
+                &mut rng,
+                &clock,
+                &provider,
+                "subject1".to_owned(),
+                Some("Alice".to_owned()),
+            )
+            .await
+            .unwrap();
+
+        clock.advance(Duration::seconds(5));
+
+        let updated = repo
+            .upstream_oauth_link()
+            .patch(
+                &clock,
+                link,
+                UpstreamOAuthLinkPatch {
+                    user_id: Some(Some(user.id)),
+                    subject: Some("subject2".to_owned()),
+                    human_account_name: Some(Some("Alice Updated".to_owned())),
+                },
+            )
+            .await
+            .unwrap();
+
+        assert_eq!(updated.user_id, Some(user.id));
+        assert_eq!(updated.subject, "subject2");
+        assert_eq!(updated.human_account_name.as_deref(), Some("Alice Updated"));
+
+        let reloaded = repo
+            .upstream_oauth_link()
+            .lookup(updated.id)
+            .await
+            .unwrap()
+            .unwrap();
+        assert_eq!(reloaded.user_id, Some(user.id));
+        assert_eq!(reloaded.subject, "subject2");
+        assert_eq!(
+            reloaded.human_account_name.as_deref(),
+            Some("Alice Updated")
+        );
     }
 }

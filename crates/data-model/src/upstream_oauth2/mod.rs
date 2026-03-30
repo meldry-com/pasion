@@ -3,7 +3,7 @@ mod provider;
 mod session;
 
 pub use self::{
-    link::UpstreamOAuthLink,
+    link::{UpstreamOAuthLink, UpstreamOAuthLinkPatch},
     provider::{
         ClaimsImports as UpstreamOAuthProviderClaimsImports,
         DiscoveryMode as UpstreamOAuthProviderDiscoveryMode,

@@ -58,10 +58,14 @@ struct UserRow {
     id: Uuid,
     username: String,
     created_at: DateTime<Utc>,
+    updated_at: DateTime<Utc>,
     locked_at: Option<DateTime<Utc>>,
     can_request_admin: bool,
     is_guest: bool,
     deactivated_at: Option<DateTime<Utc>>,
+    display_name: Option<String>,
+    avatar_url: Option<String>,
+    preferred_locale: Option<String>,
 }
 
 /// Combined result from joining user_sessions + users.
@@ -94,10 +98,14 @@ impl TryFrom<SessionLookup> for BrowserSession {
             username: value.user.username,
             sub: id.to_string(),
             created_at: value.user.created_at,
+            updated_at: value.user.updated_at,
             locked_at: value.user.locked_at,
             deactivated_at: value.user.deactivated_at,
             can_request_admin: value.user.can_request_admin,
             is_guest: value.user.is_guest,
+            display_name: value.user.display_name,
+            avatar_url: value.user.avatar_url,
+            preferred_locale: value.user.preferred_locale,
         };
 
         Ok(BrowserSession {

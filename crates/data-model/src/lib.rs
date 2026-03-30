@@ -107,7 +107,7 @@ pub use self::{
         NotificationChannel, NotificationDelivery, NotificationDeliveryFailure,
         NotificationDeliveryStatus, NotificationDestination, NotificationEventActor,
         NotificationEventKind, NotificationEventLog, NotificationRequest,
-        NotificationRequestSource, NotificationRequestStatus,
+        NotificationPreference, NotificationRequestSource, NotificationRequestStatus,
     },
     oauth2::{
         AuthorizationCode, AuthorizationGrant, AuthorizationGrantStage, Client, DeviceCodeGrant,
@@ -122,7 +122,8 @@ pub use self::{
     },
     upstream_oauth2::{
         UpstreamOAuthAuthorizationSession, UpstreamOAuthAuthorizationSessionState,
-        UpstreamOAuthLink, UpstreamOAuthProvider, UpstreamOAuthProviderClaimsImports,
+        UpstreamOAuthLink, UpstreamOAuthLinkPatch, UpstreamOAuthProvider,
+        UpstreamOAuthProviderClaimsImports,
         UpstreamOAuthProviderDiscoveryMode, UpstreamOAuthProviderImportAction,
         UpstreamOAuthProviderImportPreference, UpstreamOAuthProviderLocalpartPreference,
         UpstreamOAuthProviderOnBackchannelLogout, UpstreamOAuthProviderOnConflict,
@@ -131,9 +132,10 @@ pub use self::{
     },
     user_agent::{DeviceType, UserAgent},
     users::{
-        Authentication, AuthenticationMethod, BrowserSession, MatrixUser, Password, User,
-        UserEmail, UserEmailAuthentication, UserEmailAuthenticationCode, UserPhone,
-        UserPhoneAuthentication, UserPhoneAuthenticationCode, UserRecoverySession,
+        AdminUserPatch, Authentication, AuthenticationMethod, BrowserSession, MatrixUser,
+        Password, User, UserEmail, UserEmailAuthentication, UserEmailAuthenticationCode,
+        UserEmailPatch, UserPatch, UserPhone, UserPhoneAuthentication,
+        UserPhoneAuthenticationCode, UserProfile, UserProfilePatch, UserRecoverySession,
         UserRecoveryTicket, UserRegistration, UserRegistrationPassword, UserRegistrationToken,
     },
     workflow::{

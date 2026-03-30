@@ -42,6 +42,9 @@ pub struct User {
     /// When the user was created
     created_at: DateTime<Utc>,
 
+    /// When the user was last updated through the local account model.
+    updated_at: DateTime<Utc>,
+
     /// When the user was locked. If null, the user is not locked.
     locked_at: Option<DateTime<Utc>>,
 
@@ -53,6 +56,15 @@ pub struct User {
 
     /// Whether the user was a guest before migrating to Pasion,
     legacy_guest: bool,
+
+    /// Human-facing display name stored by Pasion.
+    display_name: Option<String>,
+
+    /// Optional avatar URL stored by Pasion.
+    avatar_url: Option<String>,
+
+    /// Preferred locale stored for this user.
+    preferred_locale: Option<String>,
 }
 
 impl User {
@@ -63,28 +75,40 @@ impl User {
                 id: Ulid::from_bytes([0x01; 16]),
                 username: "alice".to_owned(),
                 created_at: DateTime::default(),
+                updated_at: DateTime::default(),
                 locked_at: None,
                 deactivated_at: None,
                 admin: false,
                 legacy_guest: false,
+                display_name: Some("Alice".to_owned()),
+                avatar_url: None,
+                preferred_locale: Some("zh-CN".to_owned()),
             },
             Self {
                 id: Ulid::from_bytes([0x02; 16]),
                 username: "bob".to_owned(),
                 created_at: DateTime::default(),
+                updated_at: DateTime::default(),
                 locked_at: None,
                 deactivated_at: None,
                 admin: true,
                 legacy_guest: false,
+                display_name: Some("Bob".to_owned()),
+                avatar_url: Some("mxc://example.org/avatar".to_owned()),
+                preferred_locale: Some("en".to_owned()),
             },
             Self {
                 id: Ulid::from_bytes([0x03; 16]),
                 username: "charlie".to_owned(),
                 created_at: DateTime::default(),
+                updated_at: DateTime::default(),
                 locked_at: Some(DateTime::default()),
                 deactivated_at: None,
                 admin: false,
                 legacy_guest: true,
+                display_name: None,
+                avatar_url: None,
+                preferred_locale: None,
             },
         ]
     }
@@ -96,10 +120,14 @@ impl From<pasion_data_model::User> for User {
             id: user.id,
             username: user.username,
             created_at: user.created_at,
+            updated_at: user.updated_at,
             locked_at: user.locked_at,
             deactivated_at: user.deactivated_at,
             admin: user.can_request_admin,
             legacy_guest: user.is_guest,
+            display_name: user.display_name,
+            avatar_url: user.avatar_url,
+            preferred_locale: user.preferred_locale,
         }
     }
 }
@@ -122,12 +150,21 @@ pub struct UserEmail {
     /// When the object was created
     created_at: DateTime<Utc>,
 
+    /// When the object was last updated
+    updated_at: DateTime<Utc>,
+
     /// The ID of the user who owns this email address
     #[schemars(with = "super::schema::Ulid")]
     user_id: Ulid,
 
     /// The email address
     email: String,
+
+    /// When the email was confirmed, if ever.
+    confirmed_at: Option<DateTime<Utc>>,
+
+    /// Whether this email is the primary email for the account.
+    is_primary: bool,
 }
 
 impl Resource for UserEmail {
@@ -144,8 +181,11 @@ impl From<pasion_data_model::UserEmail> for UserEmail {
         Self {
             id: value.id,
             created_at: value.created_at,
+            updated_at: value.updated_at,
             user_id: value.user_id,
             email: value.email,
+            confirmed_at: value.confirmed_at,
+            is_primary: value.is_primary,
         }
     }
 }
@@ -155,8 +195,11 @@ impl UserEmail {
         [Self {
             id: Ulid::from_bytes([0x01; 16]),
             created_at: DateTime::default(),
+            updated_at: DateTime::default(),
             user_id: Ulid::from_bytes([0x02; 16]),
             email: "alice@example.com".to_owned(),
+            confirmed_at: Some(DateTime::default()),
+            is_primary: true,
         }]
     }
 }
@@ -368,6 +411,9 @@ pub struct UpstreamOAuthLink {
     /// When the object was created
     created_at: DateTime<Utc>,
 
+    /// When the object was last updated
+    updated_at: DateTime<Utc>,
+
     /// The ID of the provider
     #[schemars(with = "super::schema::Ulid")]
     provider_id: Ulid,
@@ -397,6 +443,7 @@ impl From<pasion_data_model::UpstreamOAuthLink> for UpstreamOAuthLink {
         Self {
             id: value.id,
             created_at: value.created_at,
+            updated_at: value.updated_at,
             provider_id: value.provider_id,
             subject: value.subject,
             user_id: value.user_id,
@@ -412,6 +459,7 @@ impl UpstreamOAuthLink {
             Self {
                 id: Ulid::from_bytes([0x01; 16]),
                 created_at: DateTime::default(),
+                updated_at: DateTime::default(),
                 provider_id: Ulid::from_bytes([0x02; 16]),
                 subject: "john-42".to_owned(),
                 user_id: Some(Ulid::from_bytes([0x03; 16])),
@@ -420,6 +468,7 @@ impl UpstreamOAuthLink {
             Self {
                 id: Ulid::from_bytes([0x02; 16]),
                 created_at: DateTime::default(),
+                updated_at: DateTime::default(),
                 provider_id: Ulid::from_bytes([0x03; 16]),
                 subject: "jane-123".to_owned(),
                 user_id: None,
@@ -428,6 +477,7 @@ impl UpstreamOAuthLink {
             Self {
                 id: Ulid::from_bytes([0x03; 16]),
                 created_at: DateTime::default(),
+                updated_at: DateTime::default(),
                 provider_id: Ulid::from_bytes([0x04; 16]),
                 subject: "bob@social.example.com".to_owned(),
                 user_id: Some(Ulid::from_bytes([0x05; 16])),

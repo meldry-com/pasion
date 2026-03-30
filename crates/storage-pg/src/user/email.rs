@@ -4,7 +4,8 @@ use diesel::prelude::*;
 use diesel_async::RunQueryDsl;
 use pasion_data_model::{
     BrowserSession, Clock, UpstreamOAuthAuthorizationSession, User, UserEmail,
-    UserEmailAuthentication, UserEmailAuthenticationCode, UserRegistration, new_id,
+    UserEmailAuthentication, UserEmailAuthenticationCode, UserEmailPatch, UserRegistration,
+    new_id,
 };
 use pasion_storage::{
     Page, Pagination,
@@ -40,6 +41,9 @@ struct UserEmailLookup {
     user_id: Uuid,
     email: String,
     created_at: DateTime<Utc>,
+    updated_at: DateTime<Utc>,
+    confirmed_at: Option<DateTime<Utc>>,
+    is_primary: bool,
 }
 
 impl Node<Ulid> for UserEmailLookup {
@@ -55,6 +59,9 @@ impl From<UserEmailLookup> for UserEmail {
             user_id: e.user_id.into(),
             email: e.email,
             created_at: e.created_at,
+            updated_at: e.updated_at,
+            confirmed_at: e.confirmed_at,
+            is_primary: e.is_primary,
         }
     }
 }
@@ -113,6 +120,9 @@ struct NewUserEmail {
     user_id: Uuid,
     email: String,
     created_at: DateTime<Utc>,
+    updated_at: DateTime<Utc>,
+    confirmed_at: Option<DateTime<Utc>>,
+    is_primary: bool,
 }
 
 /// Insertable row for creating a new user email authentication
@@ -319,12 +329,21 @@ impl UserEmailRepository for PgUserEmailRepository<'_> {
         let created_at = clock.now();
         let id = new_id(created_at, rng);
         tracing::Span::current().record("user_email.id", tracing::field::display(id));
+        let existing_count: i64 = user_emails::table
+            .filter(user_emails::user_id.eq(Uuid::from(user.id)))
+            .count()
+            .get_result(self.conn)
+            .await?;
+        let is_primary = existing_count == 0;
 
         let new_row = NewUserEmail {
             id: Uuid::from(id),
             user_id: Uuid::from(user.id),
             email: email.clone(),
             created_at,
+            updated_at: created_at,
+            confirmed_at: Some(created_at),
+            is_primary,
         };
 
         diesel::insert_into(user_emails::table)
@@ -337,7 +356,89 @@ impl UserEmailRepository for PgUserEmailRepository<'_> {
             user_id: user.id,
             email,
             created_at,
+            updated_at: created_at,
+            confirmed_at: Some(created_at),
+            is_primary,
         })
+    }
+
+    #[tracing::instrument(
+        name = "db.user_email.patch",
+        skip_all,
+        fields(
+            user.id = %user_email.user_id,
+            %user_email.id,
+        ),
+        err,
+    )]
+    async fn patch(
+        &mut self,
+        clock: &dyn Clock,
+        mut user_email: UserEmail,
+        patch: UserEmailPatch,
+    ) -> Result<UserEmail, Self::Error> {
+        if patch.is_empty() {
+            return Ok(user_email);
+        }
+
+        let mut changed = false;
+
+        if let Some(email) = patch.email {
+            user_email.email = email;
+            changed = true;
+        }
+
+        if let Some(confirmed) = patch.confirmed {
+            let next = if confirmed {
+                user_email.confirmed_at.or(Some(clock.now()))
+            } else {
+                None
+            };
+            if user_email.confirmed_at != next {
+                user_email.confirmed_at = next;
+                changed = true;
+            }
+        }
+
+        if let Some(is_primary) = patch.is_primary
+            && user_email.is_primary != is_primary
+        {
+            user_email.is_primary = is_primary;
+            changed = true;
+        }
+
+        if !changed {
+            return Ok(user_email);
+        }
+
+        user_email.updated_at = clock.now();
+
+        if user_email.is_primary {
+            diesel::update(
+                user_emails::table
+                    .filter(user_emails::user_id.eq(Uuid::from(user_email.user_id)))
+                    .filter(user_emails::id.ne(Uuid::from(user_email.id))),
+            )
+            .set((
+                user_emails::is_primary.eq(false),
+                user_emails::updated_at.eq(user_email.updated_at),
+            ))
+            .execute(self.conn)
+            .await?;
+        }
+
+        let rows_affected = diesel::update(user_emails::table.find(Uuid::from(user_email.id)))
+            .set((
+                user_emails::email.eq(&user_email.email),
+                user_emails::updated_at.eq(user_email.updated_at),
+                user_emails::confirmed_at.eq(user_email.confirmed_at),
+                user_emails::is_primary.eq(user_email.is_primary),
+            ))
+            .execute(self.conn)
+            .await?;
+
+        DatabaseError::ensure_affected_rows_usize(rows_affected, 1)?;
+        Ok(user_email)
     }
 
     #[tracing::instrument(

@@ -45,8 +45,12 @@ pub enum AdminOperation {
     UserPasswordSet,
     /// A user's admin flag was modified.
     UserAdminSet,
+    /// A user's profile or state was updated through the unified patch flow.
+    UserUpdated,
     /// An email address was added to a user account.
     UserEmailAdded,
+    /// An email address was modified.
+    UserEmailUpdated,
     /// An email address was removed from a user account.
     UserEmailRemoved,
     /// A browser or OAuth session was terminated.
@@ -61,6 +65,8 @@ pub enum AdminOperation {
     UpstreamProviderModified,
     /// An upstream OAuth link was created.
     UpstreamLinkCreated,
+    /// An upstream OAuth link was updated.
+    UpstreamLinkUpdated,
     /// An upstream OAuth link was deleted.
     UpstreamLinkDeleted,
     /// An operation not covered by the enumerated variants.

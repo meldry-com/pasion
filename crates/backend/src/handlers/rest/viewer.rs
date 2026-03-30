@@ -11,7 +11,7 @@ use super::{
 use super::linked_accounts::LinkedAccount;
 use super::site_config::{SiteConfigResponse, from_site_config};
 use crate::handlers::account_connections::load_linked_accounts;
-use crate::handlers::account_profile::{AccountProfileError, load_viewer_profile};
+use crate::services::user_profile::{UserProfileServiceError, load_viewer_profile};
 
 // ── Response types ─────────────────────────────────────────────
 
@@ -34,7 +34,9 @@ enum ViewerData {
 #[serde(rename_all = "camelCase")]
 struct ViewerUser {
     id: String,
+    username: String,
     has_password: bool,
+    profile: UserProfileData,
     matrix: Option<MatrixUserData>,
     emails: Option<EmailListData>,
     linked_accounts: Option<Vec<LinkedAccount>>,
@@ -72,6 +74,15 @@ struct MatrixUserData {
 
 #[derive(Serialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
+struct UserProfileData {
+    display_name: Option<String>,
+    avatar_url: Option<String>,
+    preferred_locale: Option<String>,
+    updated_at: String,
+}
+
+#[derive(Serialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
 struct EmailListData {
     total_count: i64,
     edges: Vec<EmailEdgeData>,
@@ -90,6 +101,7 @@ struct EmailData {
     id: String,
     email: String,
     confirmed_at: Option<String>,
+    is_primary: bool,
 }
 
 // ── GET /api/v1/viewer ─────────────────────────────────────────
@@ -120,7 +132,7 @@ pub async fn get_viewer(
             // Load viewer profile from service
             let profile = load_viewer_profile(&mut repo, homeserver.as_ref(), user)
                 .await
-                .map_err(map_account_profile_error)?;
+                .map_err(map_user_profile_error)?;
 
             let matrix = Some(MatrixUserData {
                 mxid: profile.mxid,
@@ -135,7 +147,8 @@ pub async fn get_viewer(
                     node: EmailData {
                         id: NodeType::UserEmail.serialize(e.id),
                         email: e.email,
-                        confirmed_at: Some(e.created_at.to_rfc3339()),
+                        confirmed_at: e.confirmed_at.map(|confirmed_at| confirmed_at.to_rfc3339()),
+                        is_primary: e.is_primary,
                     },
                 })
                 .collect();
@@ -161,7 +174,14 @@ pub async fn get_viewer(
 
             let viewer_user = ViewerUser {
                 id: NodeType::User.serialize(user.id),
+                username: user.username.clone(),
                 has_password,
+                profile: UserProfileData {
+                    display_name: profile.profile.display_name,
+                    avatar_url: profile.profile.avatar_url,
+                    preferred_locale: profile.profile.preferred_locale,
+                    updated_at: profile.profile.updated_at.to_rfc3339(),
+                },
                 matrix,
                 emails: Some(EmailListData {
                     total_count: total,
@@ -203,19 +223,21 @@ pub async fn get_viewer(
     }))
 }
 
-fn map_account_profile_error(error: AccountProfileError) -> RouteError {
+fn map_user_profile_error(error: UserProfileServiceError) -> RouteError {
     match error {
-        AccountProfileError::NotFound => RouteError::NotFound,
-        AccountProfileError::Unauthorized | AccountProfileError::BrowserSessionRequired => {
-            RouteError::Unauthorized
+        UserProfileServiceError::NotFound => RouteError::NotFound,
+        UserProfileServiceError::Unauthorized => RouteError::Unauthorized,
+        UserProfileServiceError::InvalidDisplayName => {
+            RouteError::BadRequest("Invalid display name".into())
         }
-        AccountProfileError::DeactivationDisabled => {
-            RouteError::BadRequest("Account deactivation is not allowed".into())
+        UserProfileServiceError::UnsupportedNotificationChannel(channel) => {
+            RouteError::BadRequest(format!("Unsupported notification channel: {channel}"))
         }
-        AccountProfileError::Password(error) | AccountProfileError::Homeserver(error) => {
-            RouteError::Internal(error.into())
+        UserProfileServiceError::DuplicateNotificationChannel(channel) => {
+            RouteError::BadRequest(format!("Duplicate notification channel: {channel}"))
         }
-        AccountProfileError::Repository(error) => RouteError::from(error),
+        UserProfileServiceError::Homeserver(error) => RouteError::Internal(error.into()),
+        UserProfileServiceError::Repository(error) => RouteError::from(error),
     }
 }
 

@@ -7,10 +7,14 @@ diesel::table! {
         id -> Uuid,
         username -> Text,
         created_at -> Timestamptz,
+        updated_at -> Timestamptz,
         locked_at -> Nullable<Timestamptz>,
         can_request_admin -> Bool,
         is_guest -> Bool,
         deactivated_at -> Nullable<Timestamptz>,
+        display_name -> Nullable<Text>,
+        avatar_url -> Nullable<Text>,
+        preferred_locale -> Nullable<Text>,
     }
 }
 
@@ -31,6 +35,9 @@ diesel::table! {
         user_id -> Uuid,
         email -> Text,
         created_at -> Timestamptz,
+        updated_at -> Timestamptz,
+        confirmed_at -> Nullable<Timestamptz>,
+        is_primary -> Bool,
     }
 }
 
@@ -334,8 +341,19 @@ diesel::table! {
         user_id -> Nullable<Uuid>,
         subject -> Text,
         created_at -> Timestamptz,
+        updated_at -> Timestamptz,
         human_account_name -> Nullable<Text>,
         unlinked_at -> Nullable<Timestamptz>,
+    }
+}
+
+diesel::table! {
+    notification_preferences (id) {
+        id -> Uuid,
+        user_id -> Uuid,
+        channel -> Text,
+        enabled -> Bool,
+        updated_at -> Timestamptz,
     }
 }
 
@@ -605,6 +623,7 @@ diesel::joinable!(user_emails -> users (user_id));
 diesel::joinable!(user_sessions -> users (user_id));
 diesel::joinable!(user_terms -> users (user_id));
 diesel::joinable!(user_phones -> users (user_id));
+diesel::joinable!(notification_preferences -> users (user_id));
 diesel::joinable!(user_email_authentication_codes -> user_email_authentications (user_email_authentication_id));
 diesel::joinable!(user_phone_authentication_codes -> user_phone_authentications (user_phone_authentication_id));
 diesel::joinable!(user_recovery_tickets -> user_recovery_sessions (user_recovery_session_id));
@@ -664,6 +683,7 @@ diesel::allow_tables_to_appear_in_same_query!(
     notification_requests,
     notification_deliveries,
     notification_event_logs,
+    notification_preferences,
     admin_operation_logs,
     account_security_events,
     workflow_instances,

@@ -2,7 +2,9 @@ use async_trait::async_trait;
 use chrono::{DateTime, Utc};
 use diesel::prelude::*;
 use diesel_async::RunQueryDsl;
-use pasion_data_model::{Clock, UpstreamOAuthLink, UpstreamOAuthProvider, User, new_id};
+use pasion_data_model::{
+    Clock, UpstreamOAuthLink, UpstreamOAuthLinkPatch, UpstreamOAuthProvider, User, new_id,
+};
 use pasion_storage::{
     Page, Pagination,
     pagination::{Node, PaginationDirection},
@@ -40,6 +42,7 @@ struct LinkLookup {
     subject: String,
     human_account_name: Option<String>,
     created_at: DateTime<Utc>,
+    updated_at: DateTime<Utc>,
 }
 
 impl Node<Ulid> for LinkLookup {
@@ -57,6 +60,7 @@ impl From<LinkLookup> for UpstreamOAuthLink {
             subject: value.subject,
             human_account_name: value.human_account_name,
             created_at: value.created_at,
+            updated_at: value.updated_at,
         }
     }
 }
@@ -71,6 +75,7 @@ struct NewLink {
     subject: String,
     human_account_name: Option<String>,
     created_at: DateTime<Utc>,
+    updated_at: DateTime<Utc>,
 }
 
 #[async_trait]
@@ -160,6 +165,7 @@ impl UpstreamOAuthLinkRepository for PgUpstreamOAuthLinkRepository<'_> {
             subject: subject.clone(),
             human_account_name: human_account_name.clone(),
             created_at,
+            updated_at: created_at,
         };
 
         diesel::insert_into(upstream_oauth_links::table)
@@ -174,6 +180,7 @@ impl UpstreamOAuthLinkRepository for PgUpstreamOAuthLinkRepository<'_> {
             subject,
             human_account_name,
             created_at,
+            updated_at: created_at,
         })
     }
 
@@ -194,11 +201,76 @@ impl UpstreamOAuthLinkRepository for PgUpstreamOAuthLinkRepository<'_> {
         user: &User,
     ) -> Result<(), Self::Error> {
         diesel::update(upstream_oauth_links::table.find(Uuid::from(upstream_oauth_link.id)))
-            .set(upstream_oauth_links::user_id.eq(Some(Uuid::from(user.id))))
+            .set((
+                upstream_oauth_links::user_id.eq(Some(Uuid::from(user.id))),
+                upstream_oauth_links::updated_at.eq(Utc::now()),
+            ))
             .execute(self.conn)
             .await?;
 
         Ok(())
+    }
+
+    #[tracing::instrument(
+        name = "db.upstream_oauth_link.patch",
+        skip_all,
+        fields(%upstream_oauth_link.id),
+        err,
+    )]
+    async fn patch(
+        &mut self,
+        clock: &dyn Clock,
+        mut upstream_oauth_link: UpstreamOAuthLink,
+        patch: UpstreamOAuthLinkPatch,
+    ) -> Result<UpstreamOAuthLink, Self::Error> {
+        if patch.is_empty() {
+            return Ok(upstream_oauth_link);
+        }
+
+        let mut changed = false;
+
+        if let Some(user_id) = patch.user_id {
+            if upstream_oauth_link.user_id != user_id {
+                upstream_oauth_link.user_id = user_id;
+                changed = true;
+            }
+        }
+
+        if let Some(subject) = patch.subject
+            && upstream_oauth_link.subject != subject
+        {
+            upstream_oauth_link.subject = subject;
+            changed = true;
+        }
+
+        if let Some(human_account_name) = patch.human_account_name
+            && upstream_oauth_link.human_account_name != human_account_name
+        {
+            upstream_oauth_link.human_account_name = human_account_name;
+            changed = true;
+        }
+
+        if !changed {
+            return Ok(upstream_oauth_link);
+        }
+
+        upstream_oauth_link.updated_at = clock.now();
+
+        let rows_affected = diesel::update(
+            upstream_oauth_links::table.find(Uuid::from(upstream_oauth_link.id)),
+        )
+        .set((
+            upstream_oauth_links::user_id.eq(upstream_oauth_link.user_id.map(Uuid::from)),
+            upstream_oauth_links::subject.eq(&upstream_oauth_link.subject),
+            upstream_oauth_links::human_account_name
+                .eq(upstream_oauth_link.human_account_name.as_deref()),
+            upstream_oauth_links::updated_at.eq(upstream_oauth_link.updated_at),
+        ))
+        .execute(self.conn)
+        .await?;
+
+        DatabaseError::ensure_affected_rows_usize(rows_affected, 1)?;
+        Ok(upstream_oauth_link)
     }
 
     #[tracing::instrument(name = "db.upstream_oauth_link.list", skip_all, err)]
