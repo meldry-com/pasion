@@ -862,8 +862,8 @@ async fn process_single_delivery(state: &State) -> Result<bool, JobError> {
                 clock,
                 &request,
                 Some(&delivery),
-                NotificationEventKind::DeliverySending,
-                Some("Notification delivery sending"),
+                NotificationEventKind::DeliverySendStarted,
+                Some("Notification delivery send started"),
                 json!({
                     "attempt_count": delivery.attempt_count,
                 }),

@@ -320,7 +320,7 @@ pub enum WorkflowAuditAction {
     StatusChanged,
     StepRequeued,
     DeadlineAdjusted,
-    ManualOverride,
+    ManuallyOverridden,
     NotificationScheduled,
     ExternalCallRecorded,
     DataPatched,

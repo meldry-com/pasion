@@ -260,7 +260,7 @@ pub enum NotificationEventKind {
     /// Delivery was claimed by a worker.
     DeliveryReserved,
     /// Delivery began sending.
-    DeliverySending,
+    DeliverySendStarted,
     /// Delivery completed successfully.
     DeliveryDelivered,
     /// Delivery completed unsuccessfully.
