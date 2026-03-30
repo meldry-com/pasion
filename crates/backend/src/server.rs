@@ -19,7 +19,7 @@ use opentelemetry_semantic_conventions::trace::{
 };
 use pasion_config::{HttpBindConfig, HttpResource, HttpTlsConfig, UnixOrTcp};
 use pasion_context::LogContext;
-use pasion_listener::{ConnectionInfo, unix_or_tcp::UnixOrTcpListener};
+use crate::listener::{ConnectionInfo, unix_or_tcp::UnixOrTcpListener};
 use pasion_router::Route;
 use pasion_templates::Templates;
 use rustls::ServerConfig;
@@ -309,7 +309,7 @@ pub fn build_router(
         router = match resource {
             pasion_config::HttpResource::Health => router.push(
                 Router::with_path(pasion_router::Healthcheck::route())
-                    .get(pasion_handlers::health::get),
+                    .get(crate::handlers::health::get),
             ),
             pasion_config::HttpResource::Prometheus => {
                 router.push(Router::with_path("/metrics").get(crate::telemetry::prometheus_handler))
@@ -318,12 +318,12 @@ pub fn build_router(
                 .push(
                     Router::with_path(pasion_router::OidcConfiguration::route())
                         .hoop(public_oidc_browser_cors())
-                        .get(pasion_handlers::oauth2::discovery::get),
+                        .get(crate::handlers::oauth2::discovery::get),
                 )
                 .push(
                     Router::with_path(pasion_router::Webfinger::route())
                         .hoop(public_oidc_browser_cors())
-                        .get(pasion_handlers::oauth2::webfinger::get),
+                        .get(crate::handlers::oauth2::webfinger::get),
                 ),
             pasion_config::HttpResource::Human => build_human_router(router, templates.clone()),
             pasion_config::HttpResource::RestApi {
@@ -375,26 +375,26 @@ fn build_human_router(router: Router, _templates: Templates) -> Router {
         // ── OAuth2 protocol endpoints (server-side redirects, MUST stay) ──
         .push(
             Router::with_path(pasion_router::OAuth2AuthorizationEndpoint::route())
-                .get(pasion_handlers::oauth2::authorization::get),
+                .get(crate::handlers::oauth2::authorization::get),
         )
         // ── Upstream OAuth2 (server-side redirect & callback) ──
         .push(
             Router::with_path(pasion_router::UpstreamOAuth2Authorize::route())
-                .get(pasion_handlers::upstream_oauth2::authorize::get),
+                .get(crate::handlers::upstream_oauth2::authorize::get),
         )
         .push(
             Router::with_path(pasion_router::UpstreamOAuth2Callback::route())
-                .get(pasion_handlers::upstream_oauth2::callback::handler)
-                .post(pasion_handlers::upstream_oauth2::callback::handler),
+                .get(crate::handlers::upstream_oauth2::callback::handler)
+                .post(crate::handlers::upstream_oauth2::callback::handler),
         )
         // Upstream link page is now served by the SPA frontend
         .push(
             Router::with_path(pasion_router::UpstreamOAuth2Link::route())
-                .get(pasion_handlers::spa::get),
+                .get(crate::handlers::spa::get),
         )
         .push(
             Router::with_path(pasion_router::UpstreamOAuth2BackchannelLogout::route())
-                .post(pasion_handlers::upstream_oauth2::backchannel_logout::post),
+                .post(crate::handlers::upstream_oauth2::backchannel_logout::post),
         )
         // ── Well-known redirect ──
         .push(
@@ -404,20 +404,20 @@ fn build_human_router(router: Router, _templates: Templates) -> Router {
         // ── SPA shell: all user-facing pages are rendered by the Dioxus frontend ──
         // In production these serve the SPA HTML shell; the client-side router
         // handles the actual page rendering.
-        .push(Router::with_path(pasion_router::Index::route()).get(pasion_handlers::spa::get))
-        .push(Router::with_path("/login").get(pasion_handlers::spa::get))
-        .push(Router::with_path("/register").get(pasion_handlers::spa::get))
-        .push(Router::with_path("/register/{**rest}").get(pasion_handlers::spa::get))
-        .push(Router::with_path("/recover").get(pasion_handlers::spa::get))
-        .push(Router::with_path("/recover/{**rest}").get(pasion_handlers::spa::get))
-        .push(Router::with_path("/consent/{**rest}").get(pasion_handlers::spa::get))
-        .push(Router::with_path("/link").get(pasion_handlers::spa::get))
-        .push(Router::with_path("/device/{**rest}").get(pasion_handlers::spa::get))
+        .push(Router::with_path(pasion_router::Index::route()).get(crate::handlers::spa::get))
+        .push(Router::with_path("/login").get(crate::handlers::spa::get))
+        .push(Router::with_path("/register").get(crate::handlers::spa::get))
+        .push(Router::with_path("/register/{**rest}").get(crate::handlers::spa::get))
+        .push(Router::with_path("/recover").get(crate::handlers::spa::get))
+        .push(Router::with_path("/recover/{**rest}").get(crate::handlers::spa::get))
+        .push(Router::with_path("/consent/{**rest}").get(crate::handlers::spa::get))
+        .push(Router::with_path("/link").get(crate::handlers::spa::get))
+        .push(Router::with_path("/device/{**rest}").get(crate::handlers::spa::get))
         .push(Router::with_path("/account").get(account_redirect_handler))
-        .push(Router::with_path(pasion_router::Account::route()).get(pasion_handlers::spa::get))
+        .push(Router::with_path(pasion_router::Account::route()).get(crate::handlers::spa::get))
         .push(
             Router::with_path(pasion_router::AccountWildcard::route())
-                .get(pasion_handlers::spa::get),
+                .get(crate::handlers::spa::get),
         )
 }
 
@@ -426,49 +426,49 @@ fn build_oauth_router(router: Router) -> Router {
         .push(
             Router::with_path(pasion_router::OAuth2Keys::route())
                 .hoop(public_oidc_browser_cors())
-                .get(pasion_handlers::oauth2::keys::get),
+                .get(crate::handlers::oauth2::keys::get),
         )
         .push(
             Router::with_path(pasion_router::OidcUserinfo::route())
                 .hoop(public_oidc_browser_cors())
                 .options(oidc_preflight_handler)
-                .get(pasion_handlers::oauth2::userinfo::get)
-                .post(pasion_handlers::oauth2::userinfo::get),
+                .get(crate::handlers::oauth2::userinfo::get)
+                .post(crate::handlers::oauth2::userinfo::get),
         )
         .push(
             Router::with_path(pasion_router::OAuth2Introspection::route())
                 .hoop(public_oidc_browser_cors())
                 .options(oidc_preflight_handler)
-                .post(pasion_handlers::oauth2::introspection::post),
+                .post(crate::handlers::oauth2::introspection::post),
         )
         .push(
             Router::with_path(pasion_router::OAuth2Revocation::route())
                 .hoop(public_oidc_browser_cors())
                 .options(oidc_preflight_handler)
-                .post(pasion_handlers::oauth2::revoke::post),
+                .post(crate::handlers::oauth2::revoke::post),
         )
         .push(
             Router::with_path(pasion_router::OAuth2TokenEndpoint::route())
                 .hoop(public_oidc_browser_cors())
                 .options(oidc_preflight_handler)
-                .post(pasion_handlers::oauth2::token::post),
+                .post(crate::handlers::oauth2::token::post),
         )
         .push(
             Router::with_path(pasion_router::OAuth2RegistrationEndpoint::route())
                 .hoop(public_oidc_browser_cors())
                 .options(oidc_preflight_handler)
-                .post(pasion_handlers::oauth2::registration::post),
+                .post(crate::handlers::oauth2::registration::post),
         )
         .push(
             Router::with_path(pasion_router::OAuth2DeviceAuthorizationEndpoint::route())
                 .hoop(public_oidc_browser_cors())
                 .options(oidc_preflight_handler)
-                .post(pasion_handlers::oauth2::device::authorize::post),
+                .post(crate::handlers::oauth2::device::authorize::post),
         )
 }
 
 fn build_rest_api_router(router: Router) -> Router {
-    use pasion_handlers::rest::*;
+    use crate::handlers::rest::*;
 
     router.push(
         Router::with_path("/api/v1")
@@ -603,8 +603,8 @@ fn build_rest_api_router(router: Router) -> Router {
 }
 
 fn build_admin_router(router: Router) -> Router {
-    use pasion_handlers::admin;
-    use pasion_handlers::admin::v1::*;
+    use crate::handlers::admin;
+    use crate::handlers::admin::v1::*;
 
     router.push(
         Router::with_path("/api/admin/v1")

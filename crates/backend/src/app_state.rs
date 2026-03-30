@@ -6,7 +6,7 @@ use ipnetwork::IpNetwork;
 use opentelemetry::KeyValue;
 use pasion_context::LogContext;
 use pasion_data_model::{AppVersion, BoxClock, BoxRng, SiteConfig, SystemClock};
-use pasion_handlers::{
+use crate::handlers::{
     ActivityTracker, CookieManager, Limiter, MetadataCache, passwords::PasswordManager,
 };
 use pasion_i18n::Translator;
@@ -315,7 +315,7 @@ pub async fn extract_repository(
 }
 
 fn infer_client_ip(req: &Request, trusted_proxies: &[IpNetwork]) -> Option<IpAddr> {
-    let connection_info = req.extensions().get::<pasion_listener::ConnectionInfo>();
+    let connection_info = req.extensions().get::<crate::listener::ConnectionInfo>();
 
     let peer = if let Some(info) = connection_info {
         // We can always trust the proxy protocol to give us the correct IP address

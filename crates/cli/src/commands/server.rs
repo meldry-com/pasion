@@ -10,8 +10,8 @@ use pasion_config::{
 };
 use pasion_context::LogContext;
 use pasion_data_model::SystemClock;
-use pasion_handlers::{ActivityTracker, CookieManager, Limiter, MetadataCache};
-use pasion_listener::server::Server;
+use pasion_backend::handlers::{ActivityTracker, CookieManager, Limiter, MetadataCache};
+use pasion_backend::listener::server::Server;
 use pasion_router::UrlBuilder;
 use pasion_storage_pg::PgRepositoryFactory;
 use tracing::{info, info_span, warn};
@@ -357,7 +357,7 @@ impl Options {
         shutdown
             .task_tracker()
             .spawn(LogContext::new("run-servers").run(|| {
-                pasion_listener::server::run_servers(
+                pasion_backend::listener::server::run_servers(
                     servers,
                     shutdown.soft_shutdown_token(),
                     shutdown.hard_shutdown_token(),

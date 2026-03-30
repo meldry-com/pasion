@@ -11,7 +11,7 @@ use pasion_config::{
 };
 use pasion_context::LogContext;
 use pasion_data_model::{SessionExpirationConfig, SessionLimitConfig, SiteConfig};
-use pasion_handlers::passwords::PasswordManager;
+use crate::handlers::passwords::PasswordManager;
 use pasion_matrix::{ConnectorRegistry, HomeserverConnection, ReadOnlyHomeserverConnection};
 use pasion_matrix_palpo::PalpoConnection;
 use pasion_messaging::{MailTransport, Mailer, NotificationCenter, SmsSender, SmsTransport};
@@ -31,7 +31,7 @@ pub async fn password_manager_from_config(
 
     let schemes = config.load().await?.into_iter().map(
         |(version, algorithm, cost, secret, unicode_normalization)| {
-            use pasion_handlers::passwords::Hasher;
+            use crate::handlers::passwords::Hasher;
             let hasher = match algorithm {
                 pasion_config::PasswordAlgorithm::Pbkdf2 => {
                     Hasher::pbkdf2(secret, unicode_normalization)

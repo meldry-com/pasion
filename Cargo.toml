@@ -36,7 +36,6 @@ pasion-config = { path = "./crates/config/", version = "=1.8.0" }
 pasion-context = { path = "./crates/context/", version = "=1.8.0" }
 pasion-data-model = { path = "./crates/data-model/", version = "=1.8.0" }
 pasion-messaging = { path = "./crates/messaging/", version = "=1.8.0" }
-pasion-handlers = { path = "./crates/handlers/", version = "=1.8.0" }
 pasion-http = { path = "./crates/http/", version = "=1.8.0" }
 pasion-i18n = { path = "./crates/i18n/", version = "=1.8.0" }
 pasion-i18n-scan = { path = "./crates/i18n-scan/", version = "=1.8.0" }
@@ -44,7 +43,6 @@ pasion-iana = { path = "./crates/iana/", version = "=1.8.0" }
 pasion-iana-codegen = { path = "./crates/iana-codegen/", version = "=1.8.0" }
 pasion-jose = { path = "./crates/jose/", version = "=1.8.0" }
 pasion-keystore = { path = "./crates/keystore/", version = "=1.8.0" }
-pasion-listener = { path = "./crates/listener/", version = "=1.8.0" }
 pasion-matrix = { path = "./crates/matrix/", version = "=1.8.0" }
 pasion-matrix-palpo = { path = "./crates/matrix-palpo/", version = "=1.8.0" }
 pasion-oidc-client = { path = "./crates/oidc-client/", version = "=1.8.0" }

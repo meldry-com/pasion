@@ -1,0 +1,54 @@
+use pasion_router::PostAuthAction;
+use pasion_salvo_utils::{
+    InternalError, SessionInfoExt,
+    cookies::CookieJar,
+    csrf::{CsrfExt, ProtectedForm},
+};
+use salvo::prelude::*;
+
+use crate::handlers::account_access::logout_browser_session;
+use crate::handlers::rest;
+use crate::handlers::rest::DepotExt;
+
+#[handler]
+pub async fn post(
+    req: &mut Request,
+    depot: &Depot,
+    res: &mut Response,
+) -> Result<(), InternalError> {
+    let clock = rest::make_clock();
+    let repo = depot.repo_factory()?.create().await?;
+    let cookie_jar = depot.cookie_jar(req)?;
+    let url_builder = depot.url_builder()?;
+    let activity_tracker = rest::extract_bound_activity_tracker(req, depot);
+    let form: ProtectedForm<Option<PostAuthAction>> = req
+        .parse_form()
+        .await
+        .map_err(|e| InternalError::from_anyhow(e.into()))?;
+
+    let form = cookie_jar.verify_form(&clock, form)?;
+
+    let (session_info, cookie_jar) = cookie_jar.session_info();
+
+    if let Some(session) =
+        logout_browser_session(repo, &clock, session_info.current_session_id()).await?
+    {
+        activity_tracker
+            .record_browser_session(&clock, &session)
+            .await;
+    }
+
+    // We always want to clear out the session cookie, even if the session was
+    // invalid
+    let cookie_jar = cookie_jar.update_session_info(&session_info.mark_session_ended());
+
+    let destination = if let Some(action) = form {
+        action.go_next(&url_builder)
+    } else {
+        url_builder.redirect(&pasion_router::Login::default())
+    };
+
+    cookie_jar.write_to_response(res);
+    res.render(destination);
+    Ok(())
+}

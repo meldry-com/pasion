@@ -1,7 +1,7 @@
 use std::{process::ExitCode, time::Duration};
 
 use futures_util::future::{BoxFuture, Either};
-use pasion_handlers::ActivityTracker;
+use crate::handlers::ActivityTracker;
 use pasion_templates::Templates;
 use tokio_util::{sync::CancellationToken, task::TaskTracker};
 

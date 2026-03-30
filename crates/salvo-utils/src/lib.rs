@@ -1,7 +1,7 @@
 //! Salvo web-framework utilities for the Pasion authentication service.
 //!
 //! Provides middleware, extractors, and helpers that sit between the Salvo
-//! framework and the handler logic in [`pasion_handlers`].
+//! framework and the handler logic in [`pasion_backend::handlers`].
 //!
 //! # Modules
 //!
