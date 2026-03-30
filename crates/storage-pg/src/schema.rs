@@ -3,8 +3,8 @@
 #![allow(missing_docs)]
 
 diesel::table! {
-    users (user_id) {
-        user_id -> Uuid,
+    users (id) {
+        id -> Uuid,
         username -> Text,
         created_at -> Timestamptz,
         locked_at -> Nullable<Timestamptz>,
@@ -15,8 +15,8 @@ diesel::table! {
 }
 
 diesel::table! {
-    user_passwords (user_password_id) {
-        user_password_id -> Uuid,
+    user_passwords (id) {
+        id -> Uuid,
         user_id -> Uuid,
         hashed_password -> Text,
         created_at -> Timestamptz,
@@ -26,8 +26,8 @@ diesel::table! {
 }
 
 diesel::table! {
-    user_emails (user_email_id) {
-        user_email_id -> Uuid,
+    user_emails (id) {
+        id -> Uuid,
         user_id -> Uuid,
         email -> Text,
         created_at -> Timestamptz,
@@ -35,8 +35,8 @@ diesel::table! {
 }
 
 diesel::table! {
-    user_email_authentications (user_email_authentication_id) {
-        user_email_authentication_id -> Uuid,
+    user_email_authentications (id) {
+        id -> Uuid,
         user_session_id -> Nullable<Uuid>,
         user_registration_id -> Nullable<Uuid>,
         email -> Text,
@@ -46,8 +46,8 @@ diesel::table! {
 }
 
 diesel::table! {
-    user_email_authentication_codes (user_email_authentication_code_id) {
-        user_email_authentication_code_id -> Uuid,
+    user_email_authentication_codes (id) {
+        id -> Uuid,
         user_email_authentication_id -> Uuid,
         code -> Text,
         created_at -> Timestamptz,
@@ -56,8 +56,8 @@ diesel::table! {
 }
 
 diesel::table! {
-    user_sessions (user_session_id) {
-        user_session_id -> Uuid,
+    user_sessions (id) {
+        id -> Uuid,
         user_id -> Uuid,
         created_at -> Timestamptz,
         finished_at -> Nullable<Timestamptz>,
@@ -68,8 +68,8 @@ diesel::table! {
 }
 
 diesel::table! {
-    user_session_authentications (user_session_authentication_id) {
-        user_session_authentication_id -> Uuid,
+    user_session_authentications (id) {
+        id -> Uuid,
         user_session_id -> Uuid,
         user_password_id -> Nullable<Uuid>,
         upstream_oauth_authorization_session_id -> Nullable<Uuid>,
@@ -79,8 +79,8 @@ diesel::table! {
 }
 
 diesel::table! {
-    user_recovery_sessions (user_recovery_session_id) {
-        user_recovery_session_id -> Uuid,
+    user_recovery_sessions (id) {
+        id -> Uuid,
         email -> Text,
         user_agent -> Text,
         ip_address -> Nullable<Inet>,
@@ -91,8 +91,8 @@ diesel::table! {
 }
 
 diesel::table! {
-    user_recovery_tickets (user_recovery_ticket_id) {
-        user_recovery_ticket_id -> Uuid,
+    user_recovery_tickets (id) {
+        id -> Uuid,
         user_recovery_session_id -> Uuid,
         user_email_id -> Uuid,
         ticket -> Text,
@@ -102,8 +102,8 @@ diesel::table! {
 }
 
 diesel::table! {
-    user_terms (user_terms_id) {
-        user_terms_id -> Uuid,
+    user_terms (id) {
+        id -> Uuid,
         user_id -> Uuid,
         terms_url -> Text,
         created_at -> Timestamptz,
@@ -111,8 +111,8 @@ diesel::table! {
 }
 
 diesel::table! {
-    user_registrations (user_registration_id) {
-        user_registration_id -> Uuid,
+    user_registrations (id) {
+        id -> Uuid,
         ip_address -> Nullable<Inet>,
         user_agent -> Nullable<Text>,
         post_auth_action -> Nullable<Jsonb>,
@@ -131,8 +131,8 @@ diesel::table! {
 }
 
 diesel::table! {
-    user_registration_tokens (user_registration_token_id) {
-        user_registration_token_id -> Uuid,
+    user_registration_tokens (id) {
+        id -> Uuid,
         token -> Text,
         usage_limit -> Nullable<Int4>,
         times_used -> Int4,
@@ -144,8 +144,8 @@ diesel::table! {
 }
 
 diesel::table! {
-    user_phones (user_phone_id) {
-        user_phone_id -> Uuid,
+    user_phones (id) {
+        id -> Uuid,
         user_id -> Uuid,
         phone -> Text,
         created_at -> Timestamptz,
@@ -153,8 +153,8 @@ diesel::table! {
 }
 
 diesel::table! {
-    user_phone_authentications (user_phone_authentication_id) {
-        user_phone_authentication_id -> Uuid,
+    user_phone_authentications (id) {
+        id -> Uuid,
         user_registration_id -> Nullable<Uuid>,
         phone -> Text,
         created_at -> Timestamptz,
@@ -163,8 +163,8 @@ diesel::table! {
 }
 
 diesel::table! {
-    user_phone_authentication_codes (user_phone_authentication_code_id) {
-        user_phone_authentication_code_id -> Uuid,
+    user_phone_authentication_codes (id) {
+        id -> Uuid,
         user_phone_authentication_id -> Uuid,
         code -> Text,
         created_at -> Timestamptz,
@@ -182,8 +182,8 @@ diesel::table! {
 }
 
 diesel::table! {
-    oauth2_clients (oauth2_client_id) {
-        oauth2_client_id -> Uuid,
+    oauth2_clients (id) {
+        id -> Uuid,
         encrypted_client_secret -> Nullable<Text>,
         grant_type_authorization_code -> Bool,
         grant_type_refresh_token -> Bool,
@@ -211,8 +211,8 @@ diesel::table! {
 }
 
 diesel::table! {
-    oauth2_sessions (oauth2_session_id) {
-        oauth2_session_id -> Uuid,
+    oauth2_sessions (id) {
+        id -> Uuid,
         user_session_id -> Nullable<Uuid>,
         oauth2_client_id -> Uuid,
         user_id -> Nullable<Uuid>,
@@ -227,8 +227,8 @@ diesel::table! {
 }
 
 diesel::table! {
-    oauth2_access_tokens (oauth2_access_token_id) {
-        oauth2_access_token_id -> Uuid,
+    oauth2_access_tokens (id) {
+        id -> Uuid,
         oauth2_session_id -> Uuid,
         access_token -> Text,
         created_at -> Timestamptz,
@@ -239,8 +239,8 @@ diesel::table! {
 }
 
 diesel::table! {
-    oauth2_refresh_tokens (oauth2_refresh_token_id) {
-        oauth2_refresh_token_id -> Uuid,
+    oauth2_refresh_tokens (id) {
+        id -> Uuid,
         oauth2_session_id -> Uuid,
         oauth2_access_token_id -> Nullable<Uuid>,
         refresh_token -> Text,
@@ -252,8 +252,8 @@ diesel::table! {
 }
 
 diesel::table! {
-    oauth2_authorization_grants (oauth2_authorization_grant_id) {
-        oauth2_authorization_grant_id -> Uuid,
+    oauth2_authorization_grants (id) {
+        id -> Uuid,
         oauth2_client_id -> Uuid,
         oauth2_session_id -> Nullable<Uuid>,
         authorization_code -> Nullable<Text>,
@@ -277,8 +277,8 @@ diesel::table! {
 }
 
 diesel::table! {
-    oauth2_device_code_grant (oauth2_device_code_grant_id) {
-        oauth2_device_code_grant_id -> Uuid,
+    oauth2_device_code_grant (id) {
+        id -> Uuid,
         oauth2_client_id -> Uuid,
         scope -> Text,
         user_code -> Text,
@@ -296,8 +296,8 @@ diesel::table! {
 }
 
 diesel::table! {
-    upstream_oauth_providers (upstream_oauth_provider_id) {
-        upstream_oauth_provider_id -> Uuid,
+    upstream_oauth_providers (id) {
+        id -> Uuid,
         issuer -> Nullable<Text>,
         scope -> Text,
         client_id -> Text,
@@ -328,8 +328,8 @@ diesel::table! {
 }
 
 diesel::table! {
-    upstream_oauth_links (upstream_oauth_link_id) {
-        upstream_oauth_link_id -> Uuid,
+    upstream_oauth_links (id) {
+        id -> Uuid,
         upstream_oauth_provider_id -> Uuid,
         user_id -> Nullable<Uuid>,
         subject -> Text,
@@ -340,8 +340,8 @@ diesel::table! {
 }
 
 diesel::table! {
-    upstream_oauth_authorization_sessions (upstream_oauth_authorization_session_id) {
-        upstream_oauth_authorization_session_id -> Uuid,
+    upstream_oauth_authorization_sessions (id) {
+        id -> Uuid,
         upstream_oauth_provider_id -> Uuid,
         upstream_oauth_link_id -> Nullable<Uuid>,
         id_token -> Nullable<Text>,
@@ -360,8 +360,8 @@ diesel::table! {
 }
 
 diesel::table! {
-    queue_workers (queue_worker_id) {
-        queue_worker_id -> Uuid,
+    queue_workers (id) {
+        id -> Uuid,
         registered_at -> Timestamptz,
         last_seen_at -> Timestamptz,
         shutdown_at -> Nullable<Timestamptz>,
@@ -378,8 +378,8 @@ diesel::table! {
 }
 
 diesel::table! {
-    queue_jobs (queue_job_id) {
-        queue_job_id -> Uuid,
+    queue_jobs (id) {
+        id -> Uuid,
         status -> Text,
         created_at -> Timestamptz,
         started_at -> Nullable<Timestamptz>,
@@ -406,8 +406,8 @@ diesel::table! {
 }
 
 diesel::table! {
-    personal_sessions (personal_session_id) {
-        personal_session_id -> Uuid,
+    personal_sessions (id) {
+        id -> Uuid,
         owner_user_id -> Nullable<Uuid>,
         owner_oauth2_client_id -> Nullable<Uuid>,
         actor_user_id -> Uuid,
@@ -421,8 +421,8 @@ diesel::table! {
 }
 
 diesel::table! {
-    personal_access_tokens (personal_access_token_id) {
-        personal_access_token_id -> Uuid,
+    personal_access_tokens (id) {
+        id -> Uuid,
         personal_session_id -> Uuid,
         access_token_sha256 -> Bytea,
         created_at -> Timestamptz,
@@ -432,16 +432,16 @@ diesel::table! {
 }
 
 diesel::table! {
-    policy_data (policy_data_id) {
-        policy_data_id -> Uuid,
+    policy_data (id) {
+        id -> Uuid,
         created_at -> Timestamptz,
         data -> Jsonb,
     }
 }
 
 diesel::table! {
-    notification_requests (notification_request_id) {
-        notification_request_id -> Uuid,
+    notification_requests (id) {
+        id -> Uuid,
         template_key -> Text,
         locale -> Text,
         source -> Jsonb,
@@ -458,8 +458,8 @@ diesel::table! {
 }
 
 diesel::table! {
-    notification_deliveries (notification_delivery_id) {
-        notification_delivery_id -> Uuid,
+    notification_deliveries (id) {
+        id -> Uuid,
         notification_request_id -> Uuid,
         channel -> Text,
         destination -> Jsonb,
@@ -478,8 +478,8 @@ diesel::table! {
 }
 
 diesel::table! {
-    notification_event_logs (notification_event_log_id) {
-        notification_event_log_id -> Uuid,
+    notification_event_logs (id) {
+        id -> Uuid,
         notification_request_id -> Uuid,
         notification_delivery_id -> Nullable<Uuid>,
         kind -> Text,
@@ -491,8 +491,8 @@ diesel::table! {
 }
 
 diesel::table! {
-    admin_operation_logs (admin_operation_log_id) {
-        admin_operation_log_id -> Uuid,
+    admin_operation_logs (id) {
+        id -> Uuid,
         admin_user_id -> Uuid,
         operation -> Text,
         resource_type -> Text,
@@ -505,8 +505,8 @@ diesel::table! {
 }
 
 diesel::table! {
-    account_security_events (account_security_event_id) {
-        account_security_event_id -> Uuid,
+    account_security_events (id) {
+        id -> Uuid,
         user_id -> Uuid,
         event_type -> Text,
         metadata -> Jsonb,

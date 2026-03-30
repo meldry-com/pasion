@@ -49,7 +49,7 @@ impl<'c> PgUserRepository<'c> {
 #[derive(Debug, Clone, Queryable, Selectable)]
 #[diesel(table_name = users)]
 struct UserRow {
-    user_id: Uuid,
+    id: Uuid,
     username: String,
     created_at: DateTime<Utc>,
     locked_at: Option<DateTime<Utc>>,
@@ -60,13 +60,13 @@ struct UserRow {
 
 impl pasion_storage::pagination::Node<Ulid> for UserRow {
     fn cursor(&self) -> Ulid {
-        self.user_id.into()
+        self.id.into()
     }
 }
 
 impl From<UserRow> for User {
     fn from(row: UserRow) -> Self {
-        let id: Ulid = row.user_id.into();
+        let id: Ulid = row.id.into();
         Self {
             id,
             username: row.username,
@@ -84,7 +84,7 @@ impl From<UserRow> for User {
 #[derive(Insertable)]
 #[diesel(table_name = users)]
 struct NewUser {
-    user_id: Uuid,
+    id: Uuid,
     username: String,
     created_at: DateTime<Utc>,
 }
@@ -155,7 +155,7 @@ impl UserRepository for PgUserRepository<'_> {
         tracing::Span::current().record("user.id", tracing::field::display(id));
 
         let new_user = NewUser {
-            user_id: Uuid::from(id),
+            id: Uuid::from(id),
             username: username.clone(),
             created_at,
         };
@@ -351,21 +351,21 @@ impl UserRepository for PgUserRepository<'_> {
 
         // Apply pagination
         if let Some(after) = pagination.after {
-            query = query.filter(users::user_id.gt(Uuid::from(after)));
+            query = query.filter(users::id.gt(Uuid::from(after)));
         }
         if let Some(before) = pagination.before {
-            query = query.filter(users::user_id.lt(Uuid::from(before)));
+            query = query.filter(users::id.lt(Uuid::from(before)));
         }
 
         match pagination.direction {
             PaginationDirection::Forward => {
                 query = query
-                    .order(users::user_id.asc())
+                    .order(users::id.asc())
                     .limit((pagination.count + 1) as i64);
             }
             PaginationDirection::Backward => {
                 query = query
-                    .order(users::user_id.desc())
+                    .order(users::id.desc())
                     .limit((pagination.count + 1) as i64);
             }
         }

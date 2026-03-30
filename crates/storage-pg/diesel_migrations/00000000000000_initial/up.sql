@@ -5,7 +5,7 @@
 -- ── Users ───────────────────────────────────────────────────────
 
 CREATE TABLE IF NOT EXISTS users (
-    user_id UUID PRIMARY KEY,
+    id UUID PRIMARY KEY,
     username TEXT NOT NULL UNIQUE,
     created_at TIMESTAMPTZ NOT NULL,
     locked_at TIMESTAMPTZ,
@@ -15,24 +15,24 @@ CREATE TABLE IF NOT EXISTS users (
 );
 
 CREATE TABLE IF NOT EXISTS user_passwords (
-    user_password_id UUID PRIMARY KEY,
-    user_id UUID NOT NULL REFERENCES users(user_id),
+    id UUID PRIMARY KEY,
+    user_id UUID NOT NULL REFERENCES users(id),
     hashed_password TEXT NOT NULL,
     created_at TIMESTAMPTZ NOT NULL,
     version INTEGER NOT NULL,
-    upgraded_from_id UUID REFERENCES user_passwords(user_password_id)
+    upgraded_from_id UUID REFERENCES user_passwords(id)
 );
 
 CREATE TABLE IF NOT EXISTS user_emails (
-    user_email_id UUID PRIMARY KEY,
-    user_id UUID NOT NULL REFERENCES users(user_id) ON DELETE CASCADE,
+    id UUID PRIMARY KEY,
+    user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
     email TEXT NOT NULL,
     created_at TIMESTAMPTZ NOT NULL
 );
 
 CREATE TABLE IF NOT EXISTS user_sessions (
-    user_session_id UUID PRIMARY KEY,
-    user_id UUID NOT NULL REFERENCES users(user_id),
+    id UUID PRIMARY KEY,
+    user_id UUID NOT NULL REFERENCES users(id),
     created_at TIMESTAMPTZ NOT NULL,
     finished_at TIMESTAMPTZ,
     user_agent TEXT,
@@ -41,7 +41,7 @@ CREATE TABLE IF NOT EXISTS user_sessions (
 );
 
 CREATE TABLE IF NOT EXISTS user_registration_tokens (
-    user_registration_token_id UUID PRIMARY KEY,
+    id UUID PRIMARY KEY,
     token TEXT NOT NULL UNIQUE,
     usage_limit INTEGER,
     times_used INTEGER NOT NULL DEFAULT 0,
@@ -54,7 +54,7 @@ CREATE TABLE IF NOT EXISTS user_registration_tokens (
 -- ── Upstream OAuth ──────────────────────────────────────────────
 
 CREATE TABLE IF NOT EXISTS upstream_oauth_providers (
-    upstream_oauth_provider_id UUID PRIMARY KEY,
+    id UUID PRIMARY KEY,
     issuer TEXT,
     scope TEXT NOT NULL,
     client_id TEXT NOT NULL,
@@ -84,9 +84,9 @@ CREATE TABLE IF NOT EXISTS upstream_oauth_providers (
 );
 
 CREATE TABLE IF NOT EXISTS upstream_oauth_links (
-    upstream_oauth_link_id UUID PRIMARY KEY,
-    upstream_oauth_provider_id UUID NOT NULL REFERENCES upstream_oauth_providers(upstream_oauth_provider_id),
-    user_id UUID REFERENCES users(user_id),
+    id UUID PRIMARY KEY,
+    upstream_oauth_provider_id UUID NOT NULL REFERENCES upstream_oauth_providers(id),
+    user_id UUID REFERENCES users(id),
     subject TEXT NOT NULL,
     created_at TIMESTAMPTZ NOT NULL,
     human_account_name TEXT,
@@ -95,9 +95,9 @@ CREATE TABLE IF NOT EXISTS upstream_oauth_links (
 );
 
 CREATE TABLE IF NOT EXISTS upstream_oauth_authorization_sessions (
-    upstream_oauth_authorization_session_id UUID PRIMARY KEY,
-    upstream_oauth_provider_id UUID NOT NULL REFERENCES upstream_oauth_providers(upstream_oauth_provider_id),
-    upstream_oauth_link_id UUID REFERENCES upstream_oauth_links(upstream_oauth_link_id),
+    id UUID PRIMARY KEY,
+    upstream_oauth_provider_id UUID NOT NULL REFERENCES upstream_oauth_providers(id),
+    upstream_oauth_link_id UUID REFERENCES upstream_oauth_links(id),
     id_token TEXT,
     state TEXT NOT NULL UNIQUE,
     code_challenge_verifier TEXT,
@@ -106,14 +106,14 @@ CREATE TABLE IF NOT EXISTS upstream_oauth_authorization_sessions (
     completed_at TIMESTAMPTZ,
     consumed_at TIMESTAMPTZ,
     id_token_claims JSONB,
-    user_session_id UUID REFERENCES user_sessions(user_session_id) ON DELETE SET NULL
+    user_session_id UUID REFERENCES user_sessions(id) ON DELETE SET NULL
 );
 
 -- ── Email / Phone authentication ────────────────────────────────
 
 CREATE TABLE IF NOT EXISTS user_email_authentications (
-    user_email_authentication_id UUID PRIMARY KEY,
-    user_session_id UUID REFERENCES user_sessions(user_session_id) ON DELETE SET NULL,
+    id UUID PRIMARY KEY,
+    user_session_id UUID REFERENCES user_sessions(id) ON DELETE SET NULL,
     user_registration_id UUID, -- FK added after user_registrations created
     email TEXT NOT NULL,
     created_at TIMESTAMPTZ NOT NULL,
@@ -121,8 +121,8 @@ CREATE TABLE IF NOT EXISTS user_email_authentications (
 );
 
 CREATE TABLE IF NOT EXISTS user_email_authentication_codes (
-    user_email_authentication_code_id UUID PRIMARY KEY,
-    user_email_authentication_id UUID NOT NULL REFERENCES user_email_authentications(user_email_authentication_id) ON DELETE CASCADE,
+    id UUID PRIMARY KEY,
+    user_email_authentication_id UUID NOT NULL REFERENCES user_email_authentications(id) ON DELETE CASCADE,
     code TEXT NOT NULL,
     created_at TIMESTAMPTZ NOT NULL,
     expires_at TIMESTAMPTZ NOT NULL,
@@ -130,7 +130,7 @@ CREATE TABLE IF NOT EXISTS user_email_authentication_codes (
 );
 
 CREATE TABLE IF NOT EXISTS user_phone_authentications (
-    user_phone_authentication_id UUID PRIMARY KEY,
+    id UUID PRIMARY KEY,
     user_registration_id UUID, -- FK added after user_registrations created
     phone TEXT NOT NULL,
     created_at TIMESTAMPTZ NOT NULL,
@@ -138,7 +138,7 @@ CREATE TABLE IF NOT EXISTS user_phone_authentications (
 );
 
 CREATE TABLE IF NOT EXISTS user_phone_authentication_codes (
-    user_phone_authentication_code_id UUID PRIMARY KEY,
+    id UUID PRIMARY KEY,
     user_phone_authentication_id UUID NOT NULL REFERENCES user_phone_authentications(user_phone_authentication_id) ON DELETE CASCADE,
     code TEXT NOT NULL,
     created_at TIMESTAMPTZ NOT NULL,
@@ -148,18 +148,18 @@ CREATE TABLE IF NOT EXISTS user_phone_authentication_codes (
 -- ── User registrations ──────────────────────────────────────────
 
 CREATE TABLE IF NOT EXISTS user_registrations (
-    user_registration_id UUID PRIMARY KEY,
+    id UUID PRIMARY KEY,
     ip_address INET,
     user_agent TEXT,
     post_auth_action JSONB,
     username TEXT NOT NULL,
     display_name TEXT,
     terms_url TEXT,
-    email_authentication_id UUID REFERENCES user_email_authentications(user_email_authentication_id) ON DELETE SET NULL,
+    email_authentication_id UUID REFERENCES user_email_authentications(id) ON DELETE SET NULL,
     hashed_password TEXT,
     hashed_password_version INTEGER,
-    user_registration_token_id UUID REFERENCES user_registration_tokens(user_registration_token_id) ON DELETE SET NULL,
-    upstream_oauth_authorization_session_id UUID REFERENCES upstream_oauth_authorization_sessions(upstream_oauth_authorization_session_id) ON DELETE SET NULL,
+    user_registration_token_id UUID REFERENCES user_registration_tokens(id) ON DELETE SET NULL,
+    upstream_oauth_authorization_session_id UUID REFERENCES upstream_oauth_authorization_sessions(id) ON DELETE SET NULL,
     phone_authentication_id UUID REFERENCES user_phone_authentications(user_phone_authentication_id) ON DELETE SET NULL,
     created_at TIMESTAMPTZ NOT NULL,
     completed_at TIMESTAMPTZ
@@ -177,10 +177,10 @@ ALTER TABLE user_phone_authentications
 -- ── Session authentication ──────────────────────────────────────
 
 CREATE TABLE IF NOT EXISTS user_session_authentications (
-    user_session_authentication_id UUID PRIMARY KEY,
-    user_session_id UUID NOT NULL REFERENCES user_sessions(user_session_id),
-    user_password_id UUID REFERENCES user_passwords(user_password_id),
-    upstream_oauth_authorization_session_id UUID REFERENCES upstream_oauth_authorization_sessions(upstream_oauth_authorization_session_id),
+    id UUID PRIMARY KEY,
+    user_session_id UUID NOT NULL REFERENCES user_sessions(id),
+    user_password_id UUID REFERENCES user_passwords(id),
+    upstream_oauth_authorization_session_id UUID REFERENCES upstream_oauth_authorization_sessions(id),
     created_at TIMESTAMPTZ NOT NULL,
     authentication_source TEXT
 );
@@ -188,7 +188,7 @@ CREATE TABLE IF NOT EXISTS user_session_authentications (
 -- ── Recovery ────────────────────────────────────────────────────
 
 CREATE TABLE IF NOT EXISTS user_recovery_sessions (
-    user_recovery_session_id UUID PRIMARY KEY,
+    id UUID PRIMARY KEY,
     email TEXT NOT NULL,
     user_agent TEXT NOT NULL,
     ip_address INET,
@@ -198,9 +198,9 @@ CREATE TABLE IF NOT EXISTS user_recovery_sessions (
 );
 
 CREATE TABLE IF NOT EXISTS user_recovery_tickets (
-    user_recovery_ticket_id UUID PRIMARY KEY,
+    id UUID PRIMARY KEY,
     user_recovery_session_id UUID NOT NULL REFERENCES user_recovery_sessions(user_recovery_session_id) ON DELETE CASCADE,
-    user_email_id UUID NOT NULL REFERENCES user_emails(user_email_id) ON DELETE CASCADE,
+    user_email_id UUID NOT NULL REFERENCES user_emails(id) ON DELETE CASCADE,
     ticket TEXT NOT NULL,
     created_at TIMESTAMPTZ NOT NULL,
     expires_at TIMESTAMPTZ NOT NULL
@@ -209,22 +209,22 @@ CREATE TABLE IF NOT EXISTS user_recovery_tickets (
 -- ── Terms / Phones / Third-party IDs ────────────────────────────
 
 CREATE TABLE IF NOT EXISTS user_terms (
-    user_terms_id UUID PRIMARY KEY,
-    user_id UUID NOT NULL REFERENCES users(user_id) ON DELETE CASCADE,
+    id UUID PRIMARY KEY,
+    user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
     terms_url TEXT NOT NULL,
     created_at TIMESTAMPTZ NOT NULL,
     UNIQUE (user_id, terms_url)
 );
 
 CREATE TABLE IF NOT EXISTS user_phones (
-    user_phone_id UUID PRIMARY KEY,
-    user_id UUID NOT NULL REFERENCES users(user_id) ON DELETE CASCADE,
+    id UUID PRIMARY KEY,
+    user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
     phone TEXT NOT NULL,
     created_at TIMESTAMPTZ NOT NULL
 );
 
 CREATE TABLE IF NOT EXISTS user_unsupported_third_party_ids (
-    user_id UUID NOT NULL REFERENCES users(user_id) ON DELETE CASCADE,
+    user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
     medium TEXT NOT NULL,
     address TEXT NOT NULL,
     created_at TIMESTAMPTZ NOT NULL,
@@ -234,7 +234,7 @@ CREATE TABLE IF NOT EXISTS user_unsupported_third_party_ids (
 -- ── OAuth2 ──────────────────────────────────────────────────────
 
 CREATE TABLE IF NOT EXISTS oauth2_clients (
-    oauth2_client_id UUID PRIMARY KEY,
+    id UUID PRIMARY KEY,
     encrypted_client_secret TEXT,
     grant_type_authorization_code BOOLEAN NOT NULL,
     grant_type_refresh_token BOOLEAN NOT NULL,
@@ -261,10 +261,10 @@ CREATE TABLE IF NOT EXISTS oauth2_clients (
 );
 
 CREATE TABLE IF NOT EXISTS oauth2_sessions (
-    oauth2_session_id UUID PRIMARY KEY,
-    user_session_id UUID REFERENCES user_sessions(user_session_id) ON DELETE SET NULL,
+    id UUID PRIMARY KEY,
+    user_session_id UUID REFERENCES user_sessions(id) ON DELETE SET NULL,
     oauth2_client_id UUID NOT NULL REFERENCES oauth2_clients(oauth2_client_id),
-    user_id UUID NOT NULL REFERENCES users(user_id) ON DELETE CASCADE,
+    user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
     scope_list TEXT[] NOT NULL,
     created_at TIMESTAMPTZ NOT NULL,
     finished_at TIMESTAMPTZ,
@@ -275,7 +275,7 @@ CREATE TABLE IF NOT EXISTS oauth2_sessions (
 );
 
 CREATE TABLE IF NOT EXISTS oauth2_access_tokens (
-    oauth2_access_token_id UUID PRIMARY KEY,
+    id UUID PRIMARY KEY,
     oauth2_session_id UUID NOT NULL REFERENCES oauth2_sessions(oauth2_session_id),
     access_token TEXT NOT NULL UNIQUE,
     created_at TIMESTAMPTZ NOT NULL,
@@ -285,7 +285,7 @@ CREATE TABLE IF NOT EXISTS oauth2_access_tokens (
 );
 
 CREATE TABLE IF NOT EXISTS oauth2_refresh_tokens (
-    oauth2_refresh_token_id UUID PRIMARY KEY,
+    id UUID PRIMARY KEY,
     oauth2_session_id UUID NOT NULL REFERENCES oauth2_sessions(oauth2_session_id),
     oauth2_access_token_id UUID REFERENCES oauth2_access_tokens(oauth2_access_token_id) ON DELETE SET NULL,
     refresh_token TEXT NOT NULL UNIQUE,
@@ -296,7 +296,7 @@ CREATE TABLE IF NOT EXISTS oauth2_refresh_tokens (
 );
 
 CREATE TABLE IF NOT EXISTS oauth2_authorization_grants (
-    oauth2_authorization_grant_id UUID PRIMARY KEY,
+    id UUID PRIMARY KEY,
     oauth2_client_id UUID NOT NULL REFERENCES oauth2_clients(oauth2_client_id),
     oauth2_session_id UUID REFERENCES oauth2_sessions(oauth2_session_id),
     authorization_code TEXT UNIQUE,
@@ -319,7 +319,7 @@ CREATE TABLE IF NOT EXISTS oauth2_authorization_grants (
 );
 
 CREATE TABLE IF NOT EXISTS oauth2_device_code_grant (
-    oauth2_device_code_grant_id UUID PRIMARY KEY,
+    id UUID PRIMARY KEY,
     oauth2_client_id UUID NOT NULL REFERENCES oauth2_clients(oauth2_client_id) ON DELETE CASCADE,
     scope TEXT NOT NULL,
     user_code TEXT NOT NULL UNIQUE,
@@ -330,7 +330,7 @@ CREATE TABLE IF NOT EXISTS oauth2_device_code_grant (
     rejected_at TIMESTAMPTZ,
     exchanged_at TIMESTAMPTZ,
     oauth2_session_id UUID REFERENCES oauth2_sessions(oauth2_session_id) ON DELETE CASCADE,
-    user_session_id UUID REFERENCES user_sessions(user_session_id),
+    user_session_id UUID REFERENCES user_sessions(id),
     ip_address INET,
     user_agent TEXT
 );
@@ -338,7 +338,7 @@ CREATE TABLE IF NOT EXISTS oauth2_device_code_grant (
 -- ── Queue system ────────────────────────────────────────────────
 
 CREATE TABLE IF NOT EXISTS queue_workers (
-    queue_worker_id UUID PRIMARY KEY,
+    id UUID PRIMARY KEY,
     registered_at TIMESTAMPTZ NOT NULL,
     last_seen_at TIMESTAMPTZ NOT NULL,
     shutdown_at TIMESTAMPTZ
@@ -351,7 +351,7 @@ CREATE TABLE IF NOT EXISTS queue_schedules (
 );
 
 CREATE TABLE IF NOT EXISTS queue_jobs (
-    queue_job_id UUID PRIMARY KEY,
+    id UUID PRIMARY KEY,
     status TEXT NOT NULL DEFAULT 'available',
     created_at TIMESTAMPTZ NOT NULL,
     started_at TIMESTAMPTZ,
@@ -383,10 +383,10 @@ CREATE UNLOGGED TABLE IF NOT EXISTS queue_leader (
 -- ── Personal sessions ───────────────────────────────────────────
 
 CREATE TABLE IF NOT EXISTS personal_sessions (
-    personal_session_id UUID PRIMARY KEY,
-    owner_user_id UUID REFERENCES users(user_id),
+    id UUID PRIMARY KEY,
+    owner_user_id UUID REFERENCES users(id),
     owner_oauth2_client_id UUID REFERENCES oauth2_clients(oauth2_client_id),
-    actor_user_id UUID NOT NULL REFERENCES users(user_id),
+    actor_user_id UUID NOT NULL REFERENCES users(id),
     human_name TEXT NOT NULL,
     scope_list TEXT[] NOT NULL,
     created_at TIMESTAMPTZ NOT NULL,
@@ -396,7 +396,7 @@ CREATE TABLE IF NOT EXISTS personal_sessions (
 );
 
 CREATE TABLE IF NOT EXISTS personal_access_tokens (
-    personal_access_token_id UUID PRIMARY KEY,
+    id UUID PRIMARY KEY,
     personal_session_id UUID NOT NULL REFERENCES personal_sessions(personal_session_id),
     access_token_sha256 BYTEA NOT NULL UNIQUE CHECK (length(access_token_sha256) = 32),
     created_at TIMESTAMPTZ NOT NULL,
@@ -407,7 +407,7 @@ CREATE TABLE IF NOT EXISTS personal_access_tokens (
 -- ── Policy data ─────────────────────────────────────────────────
 
 CREATE TABLE IF NOT EXISTS policy_data (
-    policy_data_id UUID PRIMARY KEY,
+    id UUID PRIMARY KEY,
     created_at TIMESTAMPTZ NOT NULL,
     data JSONB NOT NULL
 );
@@ -415,7 +415,7 @@ CREATE TABLE IF NOT EXISTS policy_data (
 -- ── Notification persistence ───────────────────────────────────
 
 CREATE TABLE IF NOT EXISTS notification_requests (
-    notification_request_id UUID PRIMARY KEY,
+    id UUID PRIMARY KEY,
     template_key TEXT NOT NULL,
     locale TEXT NOT NULL,
     source JSONB NOT NULL,
@@ -438,7 +438,7 @@ CREATE UNIQUE INDEX notification_requests_dedupe_key_idx
     WHERE dedupe_key IS NOT NULL;
 
 CREATE TABLE IF NOT EXISTS notification_deliveries (
-    notification_delivery_id UUID PRIMARY KEY,
+    id UUID PRIMARY KEY,
     notification_request_id UUID NOT NULL REFERENCES notification_requests (notification_request_id) ON DELETE CASCADE,
     channel TEXT NOT NULL,
     destination JSONB NOT NULL,
@@ -466,7 +466,7 @@ CREATE INDEX notification_deliveries_provider_binding_idx
     WHERE provider_binding_key IS NOT NULL;
 
 CREATE TABLE IF NOT EXISTS notification_event_logs (
-    notification_event_log_id UUID PRIMARY KEY,
+    id UUID PRIMARY KEY,
     notification_request_id UUID NOT NULL REFERENCES notification_requests (notification_request_id) ON DELETE CASCADE,
     notification_delivery_id UUID NULL REFERENCES notification_deliveries (notification_delivery_id) ON DELETE CASCADE,
     kind TEXT NOT NULL,
@@ -486,7 +486,7 @@ CREATE INDEX notification_event_logs_delivery_idx
 -- ── Workflow engine ────────────────────────────────────────────
 
 CREATE TABLE IF NOT EXISTS workflow_instances (
-    workflow_instance_id UUID PRIMARY KEY,
+    id UUID PRIMARY KEY,
     workflow_key TEXT NOT NULL,
     subject JSONB NOT NULL,
     trigger JSONB NOT NULL,
@@ -516,7 +516,7 @@ CREATE INDEX workflow_instances_status_expires_idx
     WHERE expires_at IS NOT NULL;
 
 CREATE TABLE IF NOT EXISTS workflow_steps (
-    workflow_step_id UUID PRIMARY KEY,
+    id UUID PRIMARY KEY,
     workflow_instance_id UUID NOT NULL REFERENCES workflow_instances (workflow_instance_id) ON DELETE CASCADE,
     step_key TEXT NOT NULL,
     sequence INTEGER NOT NULL,
@@ -539,7 +539,7 @@ CREATE INDEX workflow_steps_instance_sequence_idx
     ON workflow_steps (workflow_instance_id, sequence);
 
 CREATE TABLE IF NOT EXISTS workflow_events (
-    workflow_event_id UUID PRIMARY KEY,
+    id UUID PRIMARY KEY,
     workflow_instance_id UUID NOT NULL REFERENCES workflow_instances (workflow_instance_id) ON DELETE CASCADE,
     workflow_step_id UUID NULL REFERENCES workflow_steps (workflow_step_id) ON DELETE CASCADE,
     kind TEXT NOT NULL,
@@ -552,7 +552,7 @@ CREATE INDEX workflow_events_instance_idx
     ON workflow_events (workflow_instance_id, workflow_event_id);
 
 CREATE TABLE IF NOT EXISTS workflow_deadlines (
-    workflow_deadline_id UUID PRIMARY KEY,
+    id UUID PRIMARY KEY,
     workflow_instance_id UUID NOT NULL REFERENCES workflow_instances (workflow_instance_id) ON DELETE CASCADE,
     workflow_step_id UUID NULL REFERENCES workflow_steps (workflow_step_id) ON DELETE CASCADE,
     deadline_key TEXT NOT NULL,
@@ -568,7 +568,7 @@ CREATE INDEX workflow_deadlines_status_due_idx
     ON workflow_deadlines (status, due_at);
 
 CREATE TABLE IF NOT EXISTS workflow_audit_logs (
-    workflow_audit_log_id UUID PRIMARY KEY,
+    id UUID PRIMARY KEY,
     workflow_instance_id UUID NOT NULL REFERENCES workflow_instances (workflow_instance_id) ON DELETE CASCADE,
     workflow_step_id UUID NULL REFERENCES workflow_steps (workflow_step_id) ON DELETE CASCADE,
     action TEXT NOT NULL,
@@ -584,7 +584,7 @@ CREATE INDEX workflow_audit_logs_instance_idx
 -- ── Audit ──────────────────────────────────────────────────────
 
 CREATE TABLE IF NOT EXISTS admin_operation_logs (
-    admin_operation_log_id UUID PRIMARY KEY,
+    id UUID PRIMARY KEY,
     admin_user_id UUID NOT NULL,
     operation TEXT NOT NULL,
     resource_type TEXT NOT NULL,
@@ -606,7 +606,7 @@ CREATE INDEX admin_operation_logs_created_idx
     ON admin_operation_logs (created_at);
 
 CREATE TABLE IF NOT EXISTS account_security_events (
-    account_security_event_id UUID PRIMARY KEY,
+    id UUID PRIMARY KEY,
     user_id UUID NOT NULL,
     event_type TEXT NOT NULL,
     metadata JSONB NOT NULL DEFAULT '{}',

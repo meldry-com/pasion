@@ -36,7 +36,7 @@ impl<'c> PgUserEmailRepository<'c> {
 #[derive(Debug, Clone, Queryable, Selectable)]
 #[diesel(table_name = user_emails)]
 struct UserEmailLookup {
-    user_email_id: Uuid,
+    id: Uuid,
     user_id: Uuid,
     email: String,
     created_at: DateTime<Utc>,
@@ -44,14 +44,14 @@ struct UserEmailLookup {
 
 impl Node<Ulid> for UserEmailLookup {
     fn cursor(&self) -> Ulid {
-        self.user_email_id.into()
+        self.id.into()
     }
 }
 
 impl From<UserEmailLookup> for UserEmail {
     fn from(e: UserEmailLookup) -> UserEmail {
         UserEmail {
-            id: e.user_email_id.into(),
+            id: e.id.into(),
             user_id: e.user_id.into(),
             email: e.email,
             created_at: e.created_at,
@@ -62,7 +62,7 @@ impl From<UserEmailLookup> for UserEmail {
 #[derive(Debug, Clone, Queryable, Selectable)]
 #[diesel(table_name = user_email_authentications)]
 struct UserEmailAuthenticationLookup {
-    user_email_authentication_id: Uuid,
+    id: Uuid,
     user_session_id: Option<Uuid>,
     user_registration_id: Option<Uuid>,
     email: String,
@@ -73,7 +73,7 @@ struct UserEmailAuthenticationLookup {
 impl From<UserEmailAuthenticationLookup> for UserEmailAuthentication {
     fn from(value: UserEmailAuthenticationLookup) -> Self {
         UserEmailAuthentication {
-            id: value.user_email_authentication_id.into(),
+            id: value.id.into(),
             user_session_id: value.user_session_id.map(Ulid::from),
             user_registration_id: value.user_registration_id.map(Ulid::from),
             email: value.email,
@@ -86,7 +86,7 @@ impl From<UserEmailAuthenticationLookup> for UserEmailAuthentication {
 #[derive(Debug, Clone, Queryable, Selectable)]
 #[diesel(table_name = user_email_authentication_codes)]
 struct UserEmailAuthenticationCodeLookup {
-    user_email_authentication_code_id: Uuid,
+    id: Uuid,
     user_email_authentication_id: Uuid,
     code: String,
     created_at: DateTime<Utc>,
@@ -96,7 +96,7 @@ struct UserEmailAuthenticationCodeLookup {
 impl From<UserEmailAuthenticationCodeLookup> for UserEmailAuthenticationCode {
     fn from(value: UserEmailAuthenticationCodeLookup) -> Self {
         UserEmailAuthenticationCode {
-            id: value.user_email_authentication_code_id.into(),
+            id: value.id.into(),
             user_email_authentication_id: value.user_email_authentication_id.into(),
             code: value.code,
             created_at: value.created_at,
@@ -109,7 +109,7 @@ impl From<UserEmailAuthenticationCodeLookup> for UserEmailAuthenticationCode {
 #[derive(Insertable)]
 #[diesel(table_name = user_emails)]
 struct NewUserEmail {
-    user_email_id: Uuid,
+    id: Uuid,
     user_id: Uuid,
     email: String,
     created_at: DateTime<Utc>,
@@ -119,7 +119,7 @@ struct NewUserEmail {
 #[derive(Insertable)]
 #[diesel(table_name = user_email_authentications)]
 struct NewUserEmailAuthentication {
-    user_email_authentication_id: Uuid,
+    id: Uuid,
     user_session_id: Option<Uuid>,
     user_registration_id: Option<Uuid>,
     email: String,
@@ -130,7 +130,7 @@ struct NewUserEmailAuthentication {
 #[derive(Insertable)]
 #[diesel(table_name = user_email_authentication_codes)]
 struct NewUserEmailAuthenticationCode {
-    user_email_authentication_code_id: Uuid,
+    id: Uuid,
     user_email_authentication_id: Uuid,
     code: String,
     created_at: DateTime<Utc>,
@@ -253,21 +253,21 @@ impl UserEmailRepository for PgUserEmailRepository<'_> {
 
         // Apply pagination
         if let Some(after) = pagination.after {
-            query = query.filter(user_emails::user_email_id.gt(Uuid::from(after)));
+            query = query.filter(user_emails::id.gt(Uuid::from(after)));
         }
         if let Some(before) = pagination.before {
-            query = query.filter(user_emails::user_email_id.lt(Uuid::from(before)));
+            query = query.filter(user_emails::id.lt(Uuid::from(before)));
         }
 
         match pagination.direction {
             PaginationDirection::Forward => {
                 query = query
-                    .order(user_emails::user_email_id.asc())
+                    .order(user_emails::id.asc())
                     .limit((pagination.count + 1) as i64);
             }
             PaginationDirection::Backward => {
                 query = query
-                    .order(user_emails::user_email_id.desc())
+                    .order(user_emails::id.desc())
                     .limit((pagination.count + 1) as i64);
             }
         }
@@ -321,7 +321,7 @@ impl UserEmailRepository for PgUserEmailRepository<'_> {
         tracing::Span::current().record("user_email.id", tracing::field::display(id));
 
         let new_row = NewUserEmail {
-            user_email_id: Uuid::from(id),
+            id: Uuid::from(id),
             user_id: Uuid::from(user.id),
             email: email.clone(),
             created_at,
@@ -377,7 +377,7 @@ impl UserEmailRepository for PgUserEmailRepository<'_> {
         }
 
         let matching_ids: Vec<Uuid> = target
-            .select(user_emails::user_email_id)
+            .select(user_emails::id)
             .load(self.conn)
             .await?;
 
@@ -386,7 +386,7 @@ impl UserEmailRepository for PgUserEmailRepository<'_> {
         }
 
         let rows_affected = diesel::delete(
-            user_emails::table.filter(user_emails::user_email_id.eq_any(matching_ids)),
+            user_emails::table.filter(user_emails::id.eq_any(matching_ids)),
         )
         .execute(self.conn)
         .await?;
@@ -417,7 +417,7 @@ impl UserEmailRepository for PgUserEmailRepository<'_> {
             .record("user_email_authentication.id", tracing::field::display(id));
 
         let new_row = NewUserEmailAuthentication {
-            user_email_authentication_id: Uuid::from(id),
+            id: Uuid::from(id),
             user_session_id: Some(Uuid::from(session.id)),
             user_registration_id: None,
             email: email.clone(),
@@ -462,7 +462,7 @@ impl UserEmailRepository for PgUserEmailRepository<'_> {
             .record("user_email_authentication.id", tracing::field::display(id));
 
         let new_row = NewUserEmailAuthentication {
-            user_email_authentication_id: Uuid::from(id),
+            id: Uuid::from(id),
             user_session_id: None,
             user_registration_id: Some(Uuid::from(user_registration.id)),
             email: email.clone(),
@@ -512,7 +512,7 @@ impl UserEmailRepository for PgUserEmailRepository<'_> {
         );
 
         let new_row = NewUserEmailAuthenticationCode {
-            user_email_authentication_code_id: Uuid::from(id),
+            id: Uuid::from(id),
             user_email_authentication_id: Uuid::from(user_email_authentication.id),
             code: code.clone(),
             created_at,
@@ -685,23 +685,23 @@ impl UserEmailRepository for PgUserEmailRepository<'_> {
             r#"
                 WITH
                   to_delete AS (
-                    SELECT user_email_authentication_id
+                    SELECT id
                     FROM user_email_authentications
-                    WHERE ($1::uuid IS NULL OR user_email_authentication_id > $1)
-                      AND user_email_authentication_id <= $2
-                    ORDER BY user_email_authentication_id
+                    WHERE ($1::uuid IS NULL OR id > $1)
+                      AND id <= $2
+                    ORDER BY id
                     LIMIT $3
                   ),
                   deleted_codes AS (
                     DELETE FROM user_email_authentication_codes
                     USING to_delete
-                    WHERE user_email_authentication_codes.user_email_authentication_id = to_delete.user_email_authentication_id
-                    RETURNING user_email_authentication_codes.user_email_authentication_code_id
+                    WHERE user_email_authentication_codes.user_email_authentication_id = to_delete.id
+                    RETURNING user_email_authentication_codes.id
                   )
                 DELETE FROM user_email_authentications
                 USING to_delete
-                WHERE user_email_authentications.user_email_authentication_id = to_delete.user_email_authentication_id
-                RETURNING user_email_authentications.user_email_authentication_id
+                WHERE user_email_authentications.id = to_delete.id
+                RETURNING user_email_authentications.id
             "#,
         )
         .bind::<diesel::sql_types::Nullable<diesel::sql_types::Uuid>, _>(since.map(Uuid::from))
@@ -710,7 +710,7 @@ impl UserEmailRepository for PgUserEmailRepository<'_> {
         .load::<UuidRow>(self.conn)
         .await?
         .into_iter()
-        .map(|r| r.user_email_authentication_id)
+        .map(|r| r.id)
         .collect();
 
         let count = res.len();
@@ -724,5 +724,5 @@ impl UserEmailRepository for PgUserEmailRepository<'_> {
 #[derive(QueryableByName)]
 struct UuidRow {
     #[diesel(sql_type = diesel::sql_types::Uuid)]
-    user_email_authentication_id: Uuid,
+    id: Uuid,
 }

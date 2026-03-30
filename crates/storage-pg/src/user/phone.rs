@@ -32,7 +32,7 @@ impl<'c> PgUserPhoneRepository<'c> {
 #[derive(Debug, Clone, Queryable, Selectable)]
 #[diesel(table_name = user_phones)]
 struct UserPhoneRow {
-    user_phone_id: Uuid,
+    id: Uuid,
     user_id: Uuid,
     phone: String,
     created_at: DateTime<Utc>,
@@ -41,7 +41,7 @@ struct UserPhoneRow {
 impl From<UserPhoneRow> for UserPhone {
     fn from(row: UserPhoneRow) -> UserPhone {
         UserPhone {
-            id: row.user_phone_id.into(),
+            id: row.id.into(),
             user_id: row.user_id.into(),
             phone: row.phone,
             created_at: row.created_at,
@@ -53,7 +53,7 @@ impl From<UserPhoneRow> for UserPhone {
 #[derive(Insertable)]
 #[diesel(table_name = user_phones)]
 struct NewUserPhone {
-    user_phone_id: Uuid,
+    id: Uuid,
     user_id: Uuid,
     phone: String,
     created_at: DateTime<Utc>,
@@ -63,7 +63,7 @@ struct NewUserPhone {
 #[derive(Debug, Clone, Queryable, Selectable)]
 #[diesel(table_name = user_phone_authentications)]
 struct UserPhoneAuthenticationRow {
-    user_phone_authentication_id: Uuid,
+    id: Uuid,
     user_registration_id: Option<Uuid>,
     phone: String,
     created_at: DateTime<Utc>,

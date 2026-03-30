@@ -26,7 +26,7 @@ impl<'c> PgUserPasswordRepository<'c> {
 #[derive(Debug, Queryable, Selectable)]
 #[diesel(table_name = user_passwords)]
 struct UserPasswordLookup {
-    user_password_id: Uuid,
+    id: Uuid,
     hashed_password: String,
     version: i32,
     upgraded_from_id: Option<Uuid>,
@@ -36,7 +36,7 @@ struct UserPasswordLookup {
 #[derive(Insertable)]
 #[diesel(table_name = user_passwords)]
 struct NewUserPassword {
-    user_password_id: Uuid,
+    id: Uuid,
     user_id: Uuid,
     hashed_password: String,
     version: i32,
@@ -68,7 +68,7 @@ impl UserPasswordRepository for PgUserPasswordRepository<'_> {
 
         let Some(res) = res else { return Ok(None) };
 
-        let id = Ulid::from(res.user_password_id);
+        let id = Ulid::from(res.id);
 
         let version = res.version.try_into().map_err(|e| {
             DatabaseInconsistencyError::on("user_passwords")
@@ -117,7 +117,7 @@ impl UserPasswordRepository for PgUserPasswordRepository<'_> {
         let upgraded_from_id = upgraded_from.map(|p| p.id);
 
         let new_password = NewUserPassword {
-            user_password_id: Uuid::from(id),
+            id: Uuid::from(id),
             user_id: Uuid::from(user.id),
             hashed_password: hashed_password.clone(),
             version: i32::from(version),
