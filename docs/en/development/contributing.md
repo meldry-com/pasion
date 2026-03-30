@@ -66,18 +66,16 @@ If you need help getting started with git, this is beyond the scope of the docum
 ## 6. Update generated files and format your code
 
 The project includes a few files that are automatically generated.
-Most of them can be updated by running `sh misc/update.sh` at the root of the project.
+Most of them can be updated from the repository root by running:
+
+- `sh ./misc/update.sh` on macOS/Linux
+- `pwsh -File ./misc/update.ps1` on Windows
 
 Make sure your code adheres to our Rust and TypeScript code style by running:
 
  - `cargo +nightly fmt` (with the nightly toolchain installed)
  - `npm run format` in the `frontend` directory
  - `make fmt` in the `policies` directory (if changed)
-
-When updating SQL queries in the `crates/storage-pg/` crate, you may need to update the `sqlx` introspection data. To do this, make sure to install `cargo-sqlx` (`cargo install sqlx-cli`) and:
-
- - Apply the latest migrations: `cargo sqlx migrate run` from the `crates/storage-pg/` directory.
- - Update the `sqlx` introspection data: `cargo sqlx prepare` from the `crates/storage-pg/` directory.
 
 ## 7. Test, test, test!
 

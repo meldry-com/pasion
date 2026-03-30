@@ -162,7 +162,7 @@ struct AdvisoryLockResult {
     acquired: bool,
 }
 
-/// Compute a stable advisory lock key from a string (same algorithm as sqlx)
+/// Compute a stable advisory lock key from a string.
 fn advisory_lock_key(name: &str) -> i64 {
     const CRC_IEEE: crc::Crc<u32> = crc::Crc::<u32>::new(&crc::CRC_32_ISO_HDLC);
     i64::from(CRC_IEEE.checksum(name.as_bytes()))

@@ -69,9 +69,6 @@ pub const MIGRATIONS: EmbeddedMigrations = embed_migrations!("diesel_migrations"
 /// This function acquires a PostgreSQL advisory lock to ensure that only one
 /// migrator is running at a time.
 ///
-/// For databases previously managed by sqlx, this will detect the
-/// `_sqlx_migrations` table and stamp the diesel migration table accordingly.
-///
 /// # Errors
 ///
 /// Returns an error if the migration fails.
@@ -115,9 +112,6 @@ pub async fn migrate(
         tokio::time::sleep(backoff).await;
         backoff = std::cmp::min(backoff * 2, std::time::Duration::from_secs(5));
     }
-
-    // Bridge: if coming from sqlx-managed database, stamp diesel migrations
-    bridge_from_sqlx(&mut *conn).await?;
 
     // Run pending migrations using diesel_migrations.
     // MigrationHarness requires a synchronous connection, so we establish
@@ -174,70 +168,7 @@ pub async fn has_pending_migrations(database_url: &str) -> Result<bool, anyhow::
     .map_err(|e| anyhow::anyhow!("migration check task panicked: {e}"))?
 }
 
-/// Bridge from sqlx-managed migrations to diesel-managed migrations.
-///
-/// If `_sqlx_migrations` exists but `__diesel_schema_migrations` does not,
-/// creates the diesel table and stamps the initial migration as applied.
-async fn bridge_from_sqlx(conn: &mut AsyncPgConnection) -> Result<(), anyhow::Error> {
-    // Check if _sqlx_migrations table exists
-    let has_sqlx: HasTable = diesel::sql_query(
-        "SELECT EXISTS (
-            SELECT 1 FROM information_schema.tables
-            WHERE table_name = '_sqlx_migrations'
-        ) AS exists",
-    )
-    .get_result(conn)
-    .await
-    .map_err(|e| anyhow::anyhow!("could not check for _sqlx_migrations table: {e}"))?;
-
-    if !has_sqlx.exists {
-        return Ok(());
-    }
-
-    // Check if __diesel_schema_migrations already exists
-    let has_diesel: HasTable = diesel::sql_query(
-        "SELECT EXISTS (
-            SELECT 1 FROM information_schema.tables
-            WHERE table_name = '__diesel_schema_migrations'
-        ) AS exists",
-    )
-    .get_result(conn)
-    .await
-    .map_err(|e| anyhow::anyhow!("could not check for __diesel_schema_migrations table: {e}"))?;
-
-    if has_diesel.exists {
-        // Already bridged or fresh diesel install
-        return Ok(());
-    }
-
-    info!("Detected sqlx-managed database, bridging to diesel migrations");
-
-    // Create the diesel schema migrations table and stamp initial migration
-    diesel::sql_query(
-        "CREATE TABLE __diesel_schema_migrations (
-            version VARCHAR(50) NOT NULL PRIMARY KEY,
-            run_on TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
-        )",
-    )
-    .execute(conn)
-    .await
-    .map_err(|e| anyhow::anyhow!("could not create __diesel_schema_migrations table: {e}"))?;
-
-    // Stamp the initial consolidated migration as already applied
-    diesel::sql_query(
-        "INSERT INTO __diesel_schema_migrations (version, run_on) VALUES ('00000000000000', NOW())",
-    )
-    .execute(conn)
-    .await
-    .map_err(|e| anyhow::anyhow!("could not stamp initial migration: {e}"))?;
-
-    info!("Successfully bridged from sqlx to diesel migrations");
-
-    Ok(())
-}
-
-// Copied from the sqlx source code, so that we generate the same lock ID
-// for backward compatibility with existing advisory locks.
+/// Generate a stable advisory lock ID from the database name.
 fn generate_lock_id(database_name: &str) -> i64 {
     const CRC_IEEE: crc::Crc<u32> = crc::Crc::<u32>::new(&crc::CRC_32_ISO_HDLC);
     0x3d32_ad9e * i64::from(CRC_IEEE.checksum(database_name.as_bytes()))
@@ -255,11 +186,4 @@ struct AdvisoryLockResult {
 struct DbName {
     #[diesel(sql_type = diesel::sql_types::Text)]
     name: String,
-}
-
-/// Helper struct for table existence check
-#[derive(diesel::QueryableByName)]
-struct HasTable {
-    #[diesel(sql_type = Bool)]
-    exists: bool,
 }

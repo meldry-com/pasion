@@ -40,6 +40,18 @@ cargo test --workspace
 
 ## 代码规范
 
+### 更新生成文件
+
+仓库根目录下可以使用以下脚本更新自动生成的文件：
+
+```bash
+# macOS / Linux
+sh ./misc/update.sh
+
+# Windows
+pwsh -File ./misc/update.ps1
+```
+
 ### 格式化
 
 ```bash
@@ -55,9 +67,6 @@ cd frontend && npm run lint
 ```bash
 # Rust lint
 cargo clippy --workspace --all-targets
-
-# 检查数据库查询（需要 sqlx-cli）
-cargo sqlx prepare --check
 ```
 
 ## 提交 Pull Request

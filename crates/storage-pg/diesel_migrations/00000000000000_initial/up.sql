@@ -1,6 +1,5 @@
 -- Initial consolidated schema for Pasion
 -- This migration creates all tables from scratch for a fresh installation.
--- Existing databases migrated from sqlx should use the `diesel_initial_setup` migration instead.
 
 -- ── Users ───────────────────────────────────────────────────────
 

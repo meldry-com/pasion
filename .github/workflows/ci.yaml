@@ -185,7 +185,7 @@ jobs:
       - name: Check that the workspace is clean
         run: |
           if ! [[ -z $(git status -s) ]]; then
-            echo "::error title=Workspace is not clean::Please run 'sh ./misc/update.sh' and commit the changes"
+            echo "::error title=Workspace is not clean::Please run 'sh ./misc/update.sh' (or 'pwsh -File ./misc/update.ps1' on Windows) and commit the changes"
 
             (
               echo '## Diff after running `sh ./misc/update.sh`:'
@@ -248,8 +248,6 @@ jobs:
 
       - name: Build and archive tests
         run: cargo nextest archive --workspace --archive-file nextest-archive.tar.zst
-        env:
-          SQLX_OFFLINE: "1"
 
       - name: Upload archive to workflow
         uses: actions/upload-artifact@v6.0.0

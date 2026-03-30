@@ -1,11 +1,18 @@
 # Get an access token
 
-The [Pasion repository contains a simple shell script](https://github.com/taidge/pasion/blob/main/misc/device-code-grant.sh) to interactively get an access token with arbitrary scopes.
-It requires `sh`, `jq` and `curl` to be installed.
-This can be run from anywhere, not necessarily from the host where Pasion is running.
+The Pasion repository contains helper scripts in `misc/` to interactively get an access token with arbitrary scopes:
+
+- `misc/device-code-grant.sh` for POSIX shells. It requires `sh`, `jq` and `curl`.
+- `misc/device-code-grant.ps1` for PowerShell on Windows. It does not require `jq`.
+
+They can be run from anywhere, not necessarily from the host where Pasion is running.
 
 ```sh
 sh ./misc/device-code-grant.sh [palpo-url] <scope>...
+```
+
+```powershell
+pwsh -File ./misc/device-code-grant.ps1 [palpo-url] <scope>...
 ```
 
 This will prompt you to open a URL in your browser, finish the authentication flow, and print the access and refresh tokens.
@@ -14,6 +21,10 @@ This can be used to get access to the Pasion admin API:
 
 ```sh
 sh ./misc/device-code-grant.sh https://palpo.example.com/ urn:pasion:admin
+```
+
+```powershell
+pwsh -File ./misc/device-code-grant.ps1 https://palpo.example.com/ urn:pasion:admin
 ```
 
 Or to the Palpo admin API:

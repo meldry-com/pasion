@@ -34,6 +34,13 @@
             "string",
             "null"
           ]
+        },
+        "country_code": {
+          "description": "Country code (ISO 3166-1 alpha-2) derived from the requester's IP address",
+          "type": [
+            "string",
+            "null"
+          ]
         }
       }
     }

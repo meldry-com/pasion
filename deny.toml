@@ -59,7 +59,7 @@ skip = [
     # a few dependencies depend on the 1.x version of thiserror
     { name = "thiserror", version = "1.0.69" },
     { name = "thiserror-impl", version = "1.0.69" },
-    # axum-macros, sqlx-macros and sea-query-attr use an old version
+    # a few proc-macro dependencies still use an old version
     { name = "heck", version = "0.4.1" },
     # pad depends on an old version
     { name = "unicode-width", version = "0.1.14" },
