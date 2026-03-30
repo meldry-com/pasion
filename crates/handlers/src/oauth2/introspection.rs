@@ -1,36 +1,23 @@
-use std::{
-    collections::BTreeSet,
-    sync::{Arc, LazyLock},
-};
+use std::sync::{Arc, LazyLock};
 
 use oauth2_types::{
     errors::{ClientError, ClientErrorCode},
     requests::{IntrospectionRequest, IntrospectionResponse},
-    scope::{Scope, ScopeToken},
 };
 use opentelemetry::{Key, KeyValue, metrics::Counter};
-use pasion_data_model::{
-    BoxClock, Clock, SystemClock, TokenFormatError, TokenType,
-    personal::session::PersonalSessionOwner,
-};
+use pasion_data_model::{BoxClock, SystemClock};
 use pasion_iana::oauth::{OAuthClientAuthenticationMethod, OAuthTokenTypeHint};
 use pasion_keystore::Encrypter;
 use pasion_matrix::HomeserverConnection;
-use pasion_salvo_utils::{
-    client_authorization::{ClientAuthorization, CredentialsVerificationError},
-    record_error,
-    sentry::SentryEventID,
+use pasion_salvo_utils::client_authorization::{
+    ClientAuthorization, CredentialsVerificationError,
 };
-use pasion_storage::{
-    BoxRepository, BoxRepositoryFactory,
-    oauth2::{OAuth2AccessTokenRepository, OAuth2RefreshTokenRepository, OAuth2SessionRepository},
-    user::UserRepository,
-};
+use pasion_storage::{BoxRepository, BoxRepositoryFactory};
 use salvo::prelude::*;
 use thiserror::Error;
 use ulid::Ulid;
 
-use crate::{ActivityTracker, METER, impl_from_error_for_route};
+use crate::{ActivityTracker, METER, impl_from_error_for_route, oauth2_introspection};
 
 static INTROSPECTION_COUNTER: LazyLock<Counter<u64>> = LazyLock::new(|| {
     METER
@@ -57,46 +44,10 @@ pub enum RouteError {
     #[error("client {0} is not allowed to introspect")]
     NotAllowed(Ulid),
 
-    /// The token type is not the one expected.
-    #[error("unexpected token type")]
-    UnexpectedTokenType,
-
-    /// The overall token format is invalid.
-    #[error("invalid token format")]
-    InvalidTokenFormat(#[from] TokenFormatError),
-
-    /// The token could not be found in the database.
-    #[error("unknown {0}")]
-    UnknownToken(TokenType),
-
-    /// The token is not valid.
-    #[error("{0} is not valid")]
-    InvalidToken(TokenType),
-
-    /// The OAuth session is not valid.
-    #[error("invalid oauth session {0}")]
-    InvalidOAuthSession(Ulid),
-
-    /// The OAuth session could not be found in the database.
-    #[error("unknown oauth session {0}")]
-    CantLoadOAuthSession(Ulid),
-
-    /// The personal access token session is not valid.
-    #[error("invalid personal access token session {0}")]
-    InvalidPersonalSession(Ulid),
-
-    /// The personal access token session could not be found in the database.
-    #[error("unknown personal access token session {0}")]
-    CantLoadPersonalSession(Ulid),
-
-    #[error("invalid user {0}")]
-    InvalidUser(Ulid),
-
-    #[error("unknown user {0}")]
-    CantLoadUser(Ulid),
-
-    #[error("unknown OAuth2 client {0}")]
-    CantLoadOAuth2Client(Ulid),
+    /// An error from the introspection service indicating the token is
+    /// inactive (unknown, invalid, expired, etc.).
+    #[error(transparent)]
+    Inactive(#[from] oauth2_introspection::IntrospectionError),
 
     #[error("bad request")]
     BadRequest,
@@ -111,17 +62,29 @@ pub enum RouteError {
     InvalidBearerToken,
 }
 
+const INACTIVE: IntrospectionResponse = IntrospectionResponse {
+    active: false,
+    scope: None,
+    client_id: None,
+    username: None,
+    token_type: None,
+    exp: None,
+    expires_in: None,
+    iat: None,
+    nbf: None,
+    sub: None,
+    aud: None,
+    iss: None,
+    jti: None,
+    device_id: None,
+};
+
 impl Scribe for RouteError {
     fn render(self, res: &mut Response) {
         let event_id = sentry::capture_error(&self);
 
         match self {
-            e @ (Self::Internal(_)
-            | Self::CantLoadOAuthSession(_)
-            | Self::CantLoadPersonalSession(_)
-            | Self::CantLoadUser(_)
-            | Self::CantLoadOAuth2Client(_)
-            | Self::FailedToVerifyToken(_)) => {
+            e @ (Self::Internal(_) | Self::FailedToVerifyToken(_)) => {
                 res.status_code(StatusCode::INTERNAL_SERVER_ERROR);
                 res.render(Json(
                     ClientError::from(ClientErrorCode::ServerError).with_description(e.to_string()),
@@ -146,15 +109,27 @@ impl Scribe for RouteError {
                 ));
             }
 
-            Self::UnknownToken(_)
-            | Self::UnexpectedTokenType
-            | Self::InvalidToken(_)
-            | Self::InvalidUser(_)
-            | Self::InvalidOAuthSession(_)
-            | Self::InvalidPersonalSession(_)
-            | Self::InvalidTokenFormat(_) => {
-                INTROSPECTION_COUNTER.add(1, &[KeyValue::new(ACTIVE.clone(), false)]);
-                res.render(Json(INACTIVE));
+            Self::Inactive(ref inner) => {
+                // Map service-level errors that indicate repo/load failures to
+                // 500; everything else means the token is simply inactive.
+                use oauth2_introspection::IntrospectionError;
+                match inner {
+                    IntrospectionError::Repository(_)
+                    | IntrospectionError::CantLoadOAuthSession(_)
+                    | IntrospectionError::CantLoadPersonalSession(_)
+                    | IntrospectionError::CantLoadUser(_)
+                    | IntrospectionError::CantLoadOAuth2Client(_) => {
+                        res.status_code(StatusCode::INTERNAL_SERVER_ERROR);
+                        res.render(Json(
+                            ClientError::from(ClientErrorCode::ServerError)
+                                .with_description(self.to_string()),
+                        ));
+                    }
+                    _ => {
+                        INTROSPECTION_COUNTER.add(1, &[KeyValue::new(ACTIVE.clone(), false)]);
+                        res.render(Json(INACTIVE));
+                    }
+                }
             }
 
             Self::NotAllowed(_) => {
@@ -175,60 +150,6 @@ impl Scribe for RouteError {
 
 impl_from_error_for_route!(pasion_storage::RepositoryError);
 impl_from_error_for_route!(pasion_salvo_utils::client_authorization::ClientAuthorizationError);
-
-const INACTIVE: IntrospectionResponse = IntrospectionResponse {
-    active: false,
-    scope: None,
-    client_id: None,
-    username: None,
-    token_type: None,
-    exp: None,
-    expires_in: None,
-    iat: None,
-    nbf: None,
-    sub: None,
-    aud: None,
-    iss: None,
-    jti: None,
-    device_id: None,
-};
-
-const UNSTABLE_API_SCOPE: ScopeToken =
-    ScopeToken::from_static("urn:matrix:org.matrix.msc2967.client:api:*");
-const STABLE_API_SCOPE: ScopeToken = ScopeToken::from_static("urn:matrix:client:api:*");
-const PALPO_ADMIN_SCOPE: ScopeToken = ScopeToken::from_static("urn:palpo:admin:*");
-
-/// Normalize a scope by adding the stable and unstable API scopes equivalents
-/// if missing
-fn normalize_scope(mut scope: Scope) -> Scope {
-    // Here we abuse the fact that the scope is a BTreeSet to not care about
-    // duplicates
-    let mut to_add = BTreeSet::new();
-    for token in &*scope {
-        if token == &STABLE_API_SCOPE {
-            to_add.insert(UNSTABLE_API_SCOPE);
-        } else if token == &UNSTABLE_API_SCOPE {
-            to_add.insert(STABLE_API_SCOPE);
-        } else {
-            let s = token.as_str();
-            let device_id = s
-                .strip_prefix("urn:matrix:client:device:")
-                .or_else(|| s.strip_prefix("urn:matrix:org.matrix.msc2967.client:device:"));
-            if let Some(device_id) = device_id {
-                if let (Ok(stable), Ok(unstable)) = (
-                    format!("urn:matrix:client:device:{device_id}").parse::<ScopeToken>(),
-                    format!("urn:matrix:org.matrix.msc2967.client:device:{device_id}")
-                        .parse::<ScopeToken>(),
-                ) {
-                    to_add.insert(stable);
-                    to_add.insert(unstable);
-                }
-            }
-        }
-    }
-    scope.append(&mut to_add);
-    scope
-}
 
 #[handler]
 #[tracing::instrument(name = "handlers.oauth2.introspection.post", skip_all)]
@@ -302,261 +223,39 @@ async fn handle_post(
         return Err(RouteError::BadRequest);
     };
 
-    let token = &form.token;
-    let token_type = TokenType::check(token)?;
-    if let Some(hint) = form.token_type_hint
-        && token_type != hint
-    {
-        return Err(RouteError::UnexpectedTokenType);
-    }
+    // Delegate the actual token lookup and validation to the service layer.
+    let reply = oauth2_introspection::introspect_token(
+        &mut repo,
+        &*clock,
+        activity_tracker,
+        &form.token,
+        form.token_type_hint,
+    )
+    .await?;
 
-    // XXX: we should get the IP from the client introspecting the token
-    let ip = None;
-
-    let reply = match token_type {
-        TokenType::AccessToken => {
-            let mut access_token = repo
-                .oauth2_access_token()
-                .find_by_token(token)
-                .await?
-                .ok_or(RouteError::UnknownToken(TokenType::AccessToken))?;
-
-            if !access_token.is_valid(clock.now()) {
-                return Err(RouteError::InvalidToken(TokenType::AccessToken));
-            }
-
-            let session = repo
-                .oauth2_session()
-                .lookup(access_token.session_id)
-                .await?
-                .ok_or(RouteError::CantLoadOAuthSession(access_token.session_id))?;
-
-            if !session.is_valid() {
-                return Err(RouteError::InvalidOAuthSession(session.id));
-            }
-
-            // If this is the first time we're using this token, mark it as used
-            if !access_token.is_used() {
-                access_token = repo
-                    .oauth2_access_token()
-                    .mark_used(&clock, access_token)
-                    .await?;
-            }
-
-            // The session might not have a user on it (for Client Credentials grants for
-            // example), so we're optionally fetching the user
-            let (sub, username) = if let Some(user_id) = session.user_id {
-                let user = repo
-                    .user()
-                    .lookup(user_id)
-                    .await?
-                    .ok_or(RouteError::CantLoadUser(user_id))?;
-
-                if !user.is_valid() {
-                    return Err(RouteError::InvalidUser(user.id));
-                }
-
-                (Some(user.sub), Some(user.username))
-            } else {
-                (None, None)
-            };
-
-            activity_tracker
-                .record_oauth2_session(&clock, &session, ip)
-                .await;
-
-            INTROSPECTION_COUNTER.add(
-                1,
-                &[
-                    KeyValue::new(KIND, "oauth2_access_token"),
-                    KeyValue::new(ACTIVE, true),
-                ],
-            );
-
-            let scope = normalize_scope(session.scope);
-
-            IntrospectionResponse {
-                active: true,
-                scope: Some(scope),
-                client_id: Some(session.client_id.to_string()),
-                username,
-                token_type: Some(OAuthTokenTypeHint::AccessToken),
-                exp: access_token.expires_at,
-                expires_in: access_token
-                    .expires_at
-                    .map(|expires_at| expires_at.signed_duration_since(clock.now())),
-                iat: Some(access_token.created_at),
-                nbf: Some(access_token.created_at),
-                sub,
-                aud: None,
-                iss: None,
-                jti: Some(access_token.jti()),
-                device_id: None,
-            }
-        }
-
-        TokenType::RefreshToken => {
-            let refresh_token = repo
-                .oauth2_refresh_token()
-                .find_by_token(token)
-                .await?
-                .ok_or(RouteError::UnknownToken(TokenType::RefreshToken))?;
-
-            if !refresh_token.is_valid() {
-                return Err(RouteError::InvalidToken(TokenType::RefreshToken));
-            }
-
-            let session = repo
-                .oauth2_session()
-                .lookup(refresh_token.session_id)
-                .await?
-                .ok_or(RouteError::CantLoadOAuthSession(refresh_token.session_id))?;
-
-            if !session.is_valid() {
-                return Err(RouteError::InvalidOAuthSession(session.id));
-            }
-
-            // The session might not have a user on it (for Client Credentials grants for
-            // example), so we're optionally fetching the user
-            let (sub, username) = if let Some(user_id) = session.user_id {
-                let user = repo
-                    .user()
-                    .lookup(user_id)
-                    .await?
-                    .ok_or(RouteError::CantLoadUser(user_id))?;
-
-                if !user.is_valid() {
-                    return Err(RouteError::InvalidUser(user.id));
-                }
-
-                (Some(user.sub), Some(user.username))
-            } else {
-                (None, None)
-            };
-
-            activity_tracker
-                .record_oauth2_session(&clock, &session, ip)
-                .await;
-
-            INTROSPECTION_COUNTER.add(
-                1,
-                &[
-                    KeyValue::new(KIND, "oauth2_refresh_token"),
-                    KeyValue::new(ACTIVE, true),
-                ],
-            );
-
-            let scope = normalize_scope(session.scope);
-
-            IntrospectionResponse {
-                active: true,
-                scope: Some(scope),
-                client_id: Some(session.client_id.to_string()),
-                username,
-                token_type: Some(OAuthTokenTypeHint::RefreshToken),
-                exp: None,
-                expires_in: None,
-                iat: Some(refresh_token.created_at),
-                nbf: Some(refresh_token.created_at),
-                sub,
-                aud: None,
-                iss: None,
-                jti: Some(refresh_token.jti()),
-                device_id: None,
-            }
-        }
-
-        TokenType::PersonalAccessToken => {
-            let access_token = repo
-                .personal_access_token()
-                .find_by_token(token)
-                .await?
-                .ok_or(RouteError::UnknownToken(TokenType::AccessToken))?;
-
-            if !access_token.is_valid(clock.now()) {
-                return Err(RouteError::InvalidToken(TokenType::AccessToken));
-            }
-
-            let session = repo
-                .personal_session()
-                .lookup(access_token.session_id)
-                .await?
-                .ok_or(RouteError::CantLoadPersonalSession(access_token.session_id))?;
-
-            if !session.is_valid() {
-                return Err(RouteError::InvalidPersonalSession(session.id));
-            }
-
-            let actor_user = repo
-                .user()
-                .lookup(session.actor_user_id)
-                .await?
-                .ok_or(RouteError::CantLoadUser(session.actor_user_id))?;
-
-            if !actor_user.is_valid() {
-                return Err(RouteError::InvalidUser(actor_user.id));
-            }
-
-            let client_id = match session.owner {
-                PersonalSessionOwner::User(owner_user_id) => {
-                    let owner_user = repo
-                        .user()
-                        .lookup(owner_user_id)
-                        .await?
-                        .ok_or(RouteError::CantLoadUser(owner_user_id))?;
-
-                    if !owner_user.is_valid() {
-                        return Err(RouteError::InvalidUser(owner_user.id));
-                    }
-
-                    None
-                }
-                PersonalSessionOwner::OAuth2Client(owner_client_id) => {
-                    let owner_client = repo
-                        .oauth2_client()
-                        .lookup(owner_client_id)
-                        .await?
-                        .ok_or(RouteError::CantLoadOAuth2Client(owner_client_id))?;
-
-                    // OAuth2 clients are always valid if they're in the database
-                    Some(owner_client.client_id.clone())
-                }
-            };
-
-            activity_tracker
-                .record_personal_session(&clock, &session, ip)
-                .await;
-
-            INTROSPECTION_COUNTER.add(
-                1,
-                &[
-                    KeyValue::new(KIND, "personal_access_token"),
-                    KeyValue::new(ACTIVE, true),
-                ],
-            );
-
-            let scope = normalize_scope(session.scope);
-
-            IntrospectionResponse {
-                active: true,
-                scope: Some(scope),
-                client_id,
-                username: Some(actor_user.username),
-                token_type: Some(OAuthTokenTypeHint::AccessToken),
-                exp: access_token.expires_at,
-                expires_in: access_token
-                    .expires_at
-                    .map(|expires_at| expires_at.signed_duration_since(clock.now())),
-                iat: Some(access_token.created_at),
-                nbf: Some(access_token.created_at),
-                sub: Some(actor_user.sub),
-                aud: None,
-                iss: None,
-                jti: None,
-                device_id: None,
-            }
-        }
+    // Record the counter for the active introspection result.
+    let kind_value = match reply.token_type {
+        Some(OAuthTokenTypeHint::RefreshToken) => "oauth2_refresh_token",
+        Some(OAuthTokenTypeHint::AccessToken) => "oauth2_access_token",
+        _ => "unknown",
     };
+    // Distinguish personal access tokens by checking if there is no jti
+    // (personal tokens don't have one in the current implementation).
+    // This matches the original handler's counter labelling.
+    let kind_value = if reply.jti.is_none()
+        && matches!(reply.token_type, Some(OAuthTokenTypeHint::AccessToken))
+    {
+        "personal_access_token"
+    } else {
+        kind_value
+    };
+    INTROSPECTION_COUNTER.add(
+        1,
+        &[
+            KeyValue::new(KIND, kind_value),
+            KeyValue::new(ACTIVE, true),
+        ],
+    );
 
     repo.save().await?;
 

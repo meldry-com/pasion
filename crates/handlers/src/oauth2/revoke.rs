@@ -2,25 +2,19 @@ use oauth2_types::{
     errors::{ClientError, ClientErrorCode},
     requests::RevocationRequest,
 };
-use pasion_data_model::{BoxClock, BoxRng, SystemClock, TokenType};
-use pasion_iana::oauth::OAuthTokenTypeHint;
+use pasion_data_model::{BoxClock, BoxRng, SystemClock};
 use pasion_keystore::Encrypter;
-use pasion_salvo_utils::{
-    client_authorization::{ClientAuthorization, CredentialsVerificationError},
-    record_error,
-    sentry::SentryEventID,
+use pasion_salvo_utils::client_authorization::{
+    ClientAuthorization, CredentialsVerificationError,
 };
-use pasion_storage::{
-    BoxRepository, BoxRepositoryFactory, RepositoryAccess,
-    queue::{QueueJobRepositoryExt as _, SyncDevicesJob},
-};
+use pasion_storage::{BoxRepository, BoxRepositoryFactory};
 use rand::{SeedableRng, thread_rng};
 use rand_chacha::ChaChaRng;
 use salvo::prelude::*;
 use thiserror::Error;
 use ulid::Ulid;
 
-use crate::impl_from_error_for_route;
+use crate::{impl_from_error_for_route, oauth2_revocation};
 
 #[derive(Debug, Error)]
 pub(crate) enum RouteError {
@@ -50,14 +44,9 @@ pub(crate) enum RouteError {
         source: CredentialsVerificationError,
     },
 
-    #[error("client is unauthorized")]
-    UnauthorizedClient,
-
-    #[error("unsupported token type")]
-    UnsupportedTokenType,
-
-    #[error("unknown token")]
-    UnknownToken,
+    /// An error from the revocation service layer.
+    #[error(transparent)]
+    Revocation(#[from] oauth2_revocation::RevocationError),
 }
 
 impl Scribe for RouteError {
@@ -80,21 +69,35 @@ impl Scribe for RouteError {
                 res.render(Json(ClientError::from(ClientErrorCode::InvalidClient)));
             }
 
-            Self::ClientNotAllowed | Self::UnauthorizedClient => {
+            Self::ClientNotAllowed => {
                 res.status_code(StatusCode::UNAUTHORIZED);
                 res.render(Json(ClientError::from(ClientErrorCode::UnauthorizedClient)));
             }
 
-            Self::UnsupportedTokenType => {
-                res.status_code(StatusCode::BAD_REQUEST);
-                res.render(Json(ClientError::from(
-                    ClientErrorCode::UnsupportedTokenType,
-                )));
-            }
-
-            // If the token is unknown, we still return a 200 OK response.
-            Self::UnknownToken => {
-                res.status_code(StatusCode::OK);
+            Self::Revocation(ref inner) => {
+                use oauth2_revocation::RevocationError;
+                match inner {
+                    RevocationError::Repository(_) => {
+                        res.status_code(StatusCode::INTERNAL_SERVER_ERROR);
+                        res.render(Json(ClientError::from(ClientErrorCode::ServerError)));
+                    }
+                    RevocationError::UnsupportedTokenType => {
+                        res.status_code(StatusCode::BAD_REQUEST);
+                        res.render(Json(ClientError::from(
+                            ClientErrorCode::UnsupportedTokenType,
+                        )));
+                    }
+                    RevocationError::UnknownToken => {
+                        // If the token is unknown, we still return a 200 OK response.
+                        res.status_code(StatusCode::OK);
+                    }
+                    RevocationError::UnauthorizedClient => {
+                        res.status_code(StatusCode::UNAUTHORIZED);
+                        res.render(Json(ClientError::from(
+                            ClientErrorCode::UnauthorizedClient,
+                        )));
+                    }
+                }
             }
         }
 
@@ -105,12 +108,6 @@ impl Scribe for RouteError {
 
 impl_from_error_for_route!(pasion_storage::RepositoryError);
 impl_from_error_for_route!(pasion_salvo_utils::client_authorization::ClientAuthorizationError);
-
-impl From<pasion_data_model::TokenFormatError> for RouteError {
-    fn from(_e: pasion_data_model::TokenFormatError) -> Self {
-        Self::UnknownToken
-    }
-}
 
 #[handler]
 #[tracing::instrument(name = "handlers.oauth2.revoke.post", skip_all)]
@@ -177,85 +174,18 @@ async fn handle_post(req: &mut Request, depot: &Depot) -> Result<(), RouteError>
         return Err(RouteError::BadRequest);
     };
 
-    let token_type = TokenType::check(&form.token)?;
-
-    // Find the ID of the session to end.
-    let session_id = match (form.token_type_hint, token_type) {
-        (Some(OAuthTokenTypeHint::AccessToken) | None, TokenType::AccessToken) => {
-            let access_token = repo
-                .oauth2_access_token()
-                .find_by_token(&form.token)
-                .await?
-                .ok_or(RouteError::UnknownToken)?;
-
-            if !access_token.is_valid(clock.now()) {
-                return Err(RouteError::UnknownToken);
-            }
-            access_token.session_id
-        }
-
-        (Some(OAuthTokenTypeHint::RefreshToken) | None, TokenType::RefreshToken) => {
-            let refresh_token = repo
-                .oauth2_refresh_token()
-                .find_by_token(&form.token)
-                .await?
-                .ok_or(RouteError::UnknownToken)?;
-
-            if !refresh_token.is_valid() {
-                return Err(RouteError::UnknownToken);
-            }
-
-            refresh_token.session_id
-        }
-
-        // This case can happen if there is a mismatch between the token type hint and the guessed
-        // token type. In those cases, we return an unknown token error.
-        (Some(OAuthTokenTypeHint::AccessToken | OAuthTokenTypeHint::RefreshToken) | None, _) => {
-            return Err(RouteError::UnknownToken);
-        }
-
-        (Some(_), _) => return Err(RouteError::UnsupportedTokenType),
-    };
-
-    let session = repo
-        .oauth2_session()
-        .lookup(session_id)
-        .await?
-        .ok_or(RouteError::UnknownToken)?;
-
-    // Check that the session is still valid.
-    if !session.is_valid() {
-        return Err(RouteError::UnknownToken);
-    }
-
-    // Check that the client ending the session is the same as the client that
-    // created it.
-    if client.id != session.client_id {
-        return Err(RouteError::UnauthorizedClient);
-    }
-
-    activity_tracker
-        .record_oauth2_session(&clock, &session)
-        .await;
-
-    // If the session is associated with a user, make sure we schedule a device
-    // deletion job for all the devices associated with the session.
-    if let Some(user_id) = session.user_id {
-        // Fetch the user
-        let user = repo
-            .user()
-            .lookup(user_id)
-            .await?
-            .ok_or(RouteError::UnknownToken)?;
-
-        // Schedule a job to sync the devices of the user with the homeserver
-        repo.queue_job()
-            .schedule_job(&mut rng, &clock, SyncDevicesJob::new(&user))
-            .await?;
-    }
-
-    // Now that we checked everything, we can end the session.
-    repo.oauth2_session().finish(&clock, session).await?;
+    // Delegate the actual token lookup, validation, and session termination
+    // to the service layer.
+    oauth2_revocation::revoke_token(
+        &mut repo,
+        &mut rng,
+        &*clock,
+        &activity_tracker,
+        &form.token,
+        form.token_type_hint,
+        client.id,
+    )
+    .await?;
 
     repo.save().await?;
 

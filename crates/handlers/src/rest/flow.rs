@@ -41,7 +41,7 @@ static SESSION_STORE: LazyLock<RwLock<HashMap<Ulid, (FlowPlan, FlowSession)>>> =
 // ---------------------------------------------------------------------------
 
 /// Envelope returned for every flow endpoint.
-#[derive(Serialize, ToSchema)]
+#[derive(Serialize)]
 #[serde(rename_all = "snake_case")]
 pub struct FlowResponse {
     /// The session identifier (ULID).
@@ -60,7 +60,7 @@ pub struct FlowResponse {
 }
 
 /// Request body for `POST /api/v1/flow/session/:id/respond`.
-#[derive(Deserialize, ToSchema)]
+#[derive(Deserialize)]
 pub struct RespondInput {
     /// The stage response submitted by the client.
     pub response: StageResponse,
@@ -75,7 +75,7 @@ pub struct RespondInput {
 /// flow.
 fn resolve_flow_by_slug(
     slug: &str,
-    rng: &mut impl rand::RngCore,
+    rng: &mut (dyn rand::RngCore + Send),
 ) -> Option<(
     pasion_data_model::flow::FlowDefinition,
     Vec<pasion_data_model::flow::FlowStageBinding>,
@@ -122,7 +122,7 @@ fn build_response(
 ///
 /// Creates a `FlowSession`, plans the flow, and returns the first stage
 /// challenge.
-#[endpoint]
+#[handler]
 pub async fn start_flow(req: &mut Request) -> Result<Json<FlowResponse>, RouteError> {
     let slug: String = req
         .param::<String>("slug")
@@ -171,7 +171,7 @@ pub async fn start_flow(req: &mut Request) -> Result<Json<FlowResponse>, RouteEr
 // ---------------------------------------------------------------------------
 
 /// Get the current challenge for an existing flow session.
-#[endpoint]
+#[handler]
 pub async fn get_flow_session(req: &mut Request) -> Result<Json<FlowResponse>, RouteError> {
     let id: Ulid = req
         .param::<String>("id")
@@ -208,7 +208,7 @@ pub async fn get_flow_session(req: &mut Request) -> Result<Json<FlowResponse>, R
 /// On success, advances to the next stage (or completes the flow) and
 /// returns the new challenge.  On validation failure, returns the current
 /// challenge again with error details.
-#[endpoint]
+#[handler]
 pub async fn respond_flow(req: &mut Request) -> Result<Json<FlowResponse>, RouteError> {
     let id: Ulid = req
         .param::<String>("id")

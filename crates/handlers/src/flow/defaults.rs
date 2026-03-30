@@ -14,7 +14,7 @@ use pasion_data_model::new_id;
 /// 1. `UserWrite` — collect username / display name
 /// 2. `EmailVerification` — verify the user's email address
 pub fn default_registration_flow(
-    rng: &mut impl rand::RngCore,
+    rng: &mut (dyn rand::RngCore + Send),
 ) -> (FlowDefinition, Vec<FlowStageBinding>) {
     let now = Utc::now();
     let flow_id = new_id(now, rng);
@@ -65,7 +65,7 @@ pub fn default_registration_flow(
 /// 2. `EmailVerification` — verify ownership of the email address
 /// 3. `PasswordWrite` — set a new password
 pub fn default_recovery_flow(
-    rng: &mut impl rand::RngCore,
+    rng: &mut (dyn rand::RngCore + Send),
 ) -> (FlowDefinition, Vec<FlowStageBinding>) {
     let now = Utc::now();
     let flow_id = new_id(now, rng);
@@ -126,7 +126,7 @@ pub fn default_recovery_flow(
 /// Create the default password change flow:
 /// 1. `PasswordWrite` — require current password and set a new one
 pub fn default_password_change_flow(
-    rng: &mut impl rand::RngCore,
+    rng: &mut (dyn rand::RngCore + Send),
 ) -> (FlowDefinition, Vec<FlowStageBinding>) {
     let now = Utc::now();
     let flow_id = new_id(now, rng);
@@ -159,7 +159,7 @@ pub fn default_password_change_flow(
 /// Create the default authentication flow:
 /// 1. `Identification` — accept username or email with an inline password field
 pub fn default_authentication_flow(
-    rng: &mut impl rand::RngCore,
+    rng: &mut (dyn rand::RngCore + Send),
 ) -> (FlowDefinition, Vec<FlowStageBinding>) {
     let now = Utc::now();
     let flow_id = new_id(now, rng);

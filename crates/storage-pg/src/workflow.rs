@@ -5,8 +5,8 @@ use chrono::{DateTime, Utc};
 use diesel::prelude::*;
 use diesel_async::RunQueryDsl;
 use pasion_data_model::{
-    Clock, WorkflowActor, WorkflowAssignee, WorkflowEvent, WorkflowEventKind, WorkflowInstance,
-    WorkflowInstanceStatus, WorkflowStep, WorkflowStepStatus, WorkflowSubject, new_id,
+    Clock, WorkflowEvent, WorkflowEventKind, WorkflowInstance, WorkflowInstanceStatus,
+    WorkflowStep, WorkflowStepStatus, new_id,
 };
 use pasion_storage::workflow::{
     NewWorkflowEvent, NewWorkflowInstance, NewWorkflowStep, WorkflowRepository,
