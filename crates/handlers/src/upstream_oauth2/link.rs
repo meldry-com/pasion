@@ -45,14 +45,14 @@ use crate::{
 
 static LOGIN_COUNTER: LazyLock<Counter<u64>> = LazyLock::new(|| {
     METER
-        .u64_counter("mas.upstream_oauth2.login")
+        .u64_counter("pasion.upstream_oauth2.login")
         .with_description("Successful upstream OAuth 2.0 login to existing accounts")
         .with_unit("{login}")
         .build()
 });
 static REGISTRATION_COUNTER: LazyLock<Counter<u64>> = LazyLock::new(|| {
     METER
-        .u64_counter("mas.upstream_oauth2.registration")
+        .u64_counter("pasion.upstream_oauth2.registration")
         .with_description("Successful upstream OAuth 2.0 registration")
         .with_unit("{registration}")
         .build()

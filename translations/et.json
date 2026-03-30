@@ -37,7 +37,7 @@
   "error": {
     "unexpected": "Ootamatu viga"
   },
-  "mas": {
+  "pasion": {
     "account": {
       "deactivated": {
         "description": "See kasutajakonto (<em>%(mxid)s</em>) on kustutatud. Kui see nii ei peaks olema, siis palun võta ühendust oma serveri haldajaga.",
@@ -234,7 +234,7 @@
     "scope": {
       "edit_profile": "Muuta sinu kasutajaprofiili ning kontaktandmeid",
       "manage_sessions": "Hallata sinu seadmeid ja sessioone",
-      "mas_admin": "Hallata kasutajaid (urn:mas:admin)",
+      "pasion_admin": "Hallata kasutajaid (urn:mas:admin)",
       "send_messages": "Saata sõnumeid sinu nimel",
       "palpo_admin": "Hallata seda Palpo koduserverit (urn:palpo:admin:*)",
       "view_messages": "Vaadata sinu sõnumeid ja andmeid",

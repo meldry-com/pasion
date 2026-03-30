@@ -20,7 +20,7 @@ use writeable::Writeable;
 use crate::{sprintf::Message, translations::TranslationTree};
 
 /// Fake data key for errors
-const DATA_KEY: DataKey = data_key!("mas/translations@1");
+const DATA_KEY: DataKey = data_key!("pasion/translations@1");
 
 const FALLBACKER: LocaleFallbackerWithConfig<'static> = LocaleFallbacker::new().for_config({
     let mut config = LocaleFallbackConfig::const_default();

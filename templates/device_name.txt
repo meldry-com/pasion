@@ -8,13 +8,13 @@
     {{- user_agent.model -}}
   {%- elif user_agent.name -%}
     {%- if user_agent.os -%}
-      {{- _("mas.device_display_name.name_for_platform", name=user_agent.name, platform=user_agent.os) -}}
+      {{- _("pasion.device_display_name.name_for_platform", name=user_agent.name, platform=user_agent.os) -}}
     {%- else -%}
       {{- user_agent.name -}}
     {%- endif -%}
   {%- else -%}
-    {{- _("mas.device_display_name.unknown_device") -}}
+    {{- _("pasion.device_display_name.unknown_device") -}}
   {%- endif -%}
 {%- endset -%}
 
-{{- _("mas.device_display_name.client_on_device", client_name=client_name, device_name=device_name) -}}
+{{- _("pasion.device_display_name.client_on_device", client_name=client_name, device_name=device_name) -}}

@@ -34,7 +34,7 @@ use crate::{ActivityTracker, METER, impl_from_error_for_route};
 
 static INTROSPECTION_COUNTER: LazyLock<Counter<u64>> = LazyLock::new(|| {
     METER
-        .u64_counter("mas.oauth2.introspection_request")
+        .u64_counter("pasion.oauth2.introspection_request")
         .with_description("Number of OAuth 2.0 introspection requests")
         .with_unit("{request}")
         .build()

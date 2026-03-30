@@ -37,7 +37,7 @@
   "error": {
     "unexpected": "意外错误"
   },
-  "mas": {
+  "pasion": {
     "account": {
       "deactivated": {
         "description": "此账户（<em>%(mxid)s</em>）已被删除。如果这并非预期，请联系服务器管理员。",
@@ -226,7 +226,7 @@
     "scope": {
       "edit_profile": "编辑个人资料和联系方式",
       "manage_sessions": "管理设备和会话",
-      "mas_admin": "管理 pasion 上的用户",
+      "pasion_admin": "管理 pasion 上的用户",
       "send_messages": "以你的名义发送新消息",
       "palpo_admin": "管理 Palpo 服务器",
       "view_messages": "查看现有信息和数据",

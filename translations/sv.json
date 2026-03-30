@@ -37,7 +37,7 @@
   "error": {
     "unexpected": "Oväntat fel"
   },
-  "mas": {
+  "pasion": {
     "add_email": {
       "description": "Ange en e-postadress för att återställa ditt konto om du förlorar åtkomsten till det.",
       "heading": "Lägg till en e-postadress"
@@ -198,7 +198,7 @@
     "scope": {
       "edit_profile": "Ändra din profil och kontaktuppgifter",
       "manage_sessions": "Hantera dina enheter och sessioner",
-      "mas_admin": "Administrera valfri användare på pasion",
+      "pasion_admin": "Administrera valfri användare på pasion",
       "send_messages": "Skicka nya meddelanden för din räkning",
       "palpo_admin": "Administrera Palpo-hemservern",
       "view_messages": "Visa dina befintliga meddelanden och data",

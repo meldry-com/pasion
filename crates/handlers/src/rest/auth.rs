@@ -27,7 +27,7 @@ use crate::{
 
 static PASSWORD_LOGIN_COUNTER: LazyLock<Counter<u64>> = LazyLock::new(|| {
     METER
-        .u64_counter("mas.rest.password_login_attempt")
+        .u64_counter("pasion.rest.password_login_attempt")
         .with_description("Number of REST API password login attempts")
         .with_unit("{attempt}")
         .build()

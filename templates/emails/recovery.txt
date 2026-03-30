@@ -1,8 +1,8 @@
 {%- set _ = translator(lang) -%}
-{{ _("mas.emails.recovery.headline", server_name=branding.server_name) }}
+{{ _("pasion.emails.recovery.headline", server_name=branding.server_name) }}
 
-{{ _("mas.emails.recovery.copy_link") }}
+{{ _("pasion.emails.recovery.copy_link") }}
 
     {{ recovery_link }}
 
-{{ _("mas.emails.recovery.you_can_ignore") }}
+{{ _("pasion.emails.recovery.you_can_ignore") }}

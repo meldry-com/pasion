@@ -320,7 +320,7 @@ impl UserRegistrationTokenRepository for PgUserRegistrationTokenRepository<'_> {
             .map_err(DatabaseError::to_invalid_operation)?;
 
         let new_token = NewUserRegistrationToken {
-            user_registration_token_id: Uuid::from(id),
+            id: Uuid::from(id),
             token: token.clone(),
             usage_limit: usage_limit_i32,
             created_at,

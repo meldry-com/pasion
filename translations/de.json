@@ -37,7 +37,7 @@
   "error": {
     "unexpected": "Unerwarteter Fehler"
   },
-  "mas": {
+  "pasion": {
     "account": {
       "deactivated": {
         "description": "Dieses Konto (<em>%(mxid)s</em>) wurde entfernt. Wenn du dies nicht erwartet hast, wende dich an den Server Admin",
@@ -226,7 +226,7 @@
     "scope": {
       "edit_profile": "Bearbeite dein Profil und deine Kontaktdaten",
       "manage_sessions": "Verwalte deine Geräte und Sitzungen",
-      "mas_admin": "Beliebige Benutzer verwalten",
+      "pasion_admin": "Beliebige Benutzer verwalten",
       "send_messages": "Neue Nachrichten in deinem Namen senden",
       "palpo_admin": "Den Palpo-Homeserver verwalten",
       "view_messages": "Zeig deine vorhandenen Nachrichten und Daten an",

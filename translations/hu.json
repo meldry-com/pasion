@@ -37,7 +37,7 @@
   "error": {
     "unexpected": "Váratlan hiba"
   },
-  "mas": {
+  "pasion": {
     "account": {
       "deactivated": {
         "description": "Ez a fiók (<em>%(mxid)s</em>) törölve lett. Ha erre nem számított, vegye fel a kapcsolatot a kiszolgáló rendszergazdájával.",
@@ -226,7 +226,7 @@
     "scope": {
       "edit_profile": "Profil és elérhetőségek szerkesztése",
       "manage_sessions": "Eszközök és munkamenetek kezelése",
-      "mas_admin": "Bármely felhasználó kezelése a pasion szolgáltatásban",
+      "pasion_admin": "Bármely felhasználó kezelése a pasion szolgáltatásban",
       "send_messages": "Új üzenetek küldése az Ön nevében",
       "palpo_admin": "A Palpo Matrix-kiszolgáló kezelése",
       "view_messages": "Meglévő üzenetek és adatok megtekintése",

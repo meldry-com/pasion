@@ -37,7 +37,7 @@
   "error": {
     "unexpected": "Nieoczekiwany błąd"
   },
-  "mas": {
+  "pasion": {
     "account": {
       "deactivated": {
         "description": "To konto (<em>%(mxid)s</em>) zostało usunięte. Jeśli jest to nieoczekiwane, skontaktuj się z administratorem serwera.",
@@ -226,7 +226,7 @@
     "scope": {
       "edit_profile": "Edytuj swój profil i dane kontaktowe",
       "manage_sessions": "Zarządzaj swoimi urządzeniami i sesjami",
-      "mas_admin": "Zarządzaj dowolnym użytkownikiem w pasion",
+      "pasion_admin": "Zarządzaj dowolnym użytkownikiem w pasion",
       "send_messages": "Wysyłaj nowe wiadomości w Twoim imieniu",
       "palpo_admin": "Administrowanie serwerem domowym Palpo",
       "view_messages": "Przegląd istniejących wiadomości i danych",

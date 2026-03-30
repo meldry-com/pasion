@@ -48,7 +48,7 @@ pub struct Worker {
 impl Worker {
     pub(crate) fn new(repository_factory: BoxRepositoryFactory) -> Self {
         let message_counter = METER
-            .u64_counter("mas.activity_tracker.messages")
+            .u64_counter("pasion.activity_tracker.messages")
             .with_description("The number of messages received by the activity tracker")
             .with_unit("{messages}")
             .build();
@@ -67,13 +67,13 @@ impl Worker {
         message_counter.add(0, &[KeyValue::new(TYPE, "shutdown")]);
 
         let flush_time_histogram = METER
-            .u64_histogram("mas.activity_tracker.flush_time")
+            .u64_histogram("pasion.activity_tracker.flush_time")
             .with_description("The time it took to flush the activity tracker")
             .with_unit("ms")
             .build();
 
         let pending_records_gauge = METER
-            .u64_gauge("mas.activity_tracker.pending_records")
+            .u64_gauge("pasion.activity_tracker.pending_records")
             .with_description("The number of pending activity records")
             .with_unit("{records}")
             .build();

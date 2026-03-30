@@ -31,14 +31,14 @@
   <ul>
     {% for scope in scopes %}
       {% if scope == "openid" %}
-        <li>{{ icon.user_profile() }}<p>{{ _("mas.scope.view_profile") }}</p></li>
+        <li>{{ icon.user_profile() }}<p>{{ _("pasion.scope.view_profile") }}</p></li>
       {% elif scope == "urn:matrix:client:api:*" or scope == "urn:matrix:org.matrix.msc2967.client:api:*" %}
-        <li>{{ icon.chat() }}<p>{{ _("mas.scope.view_messages") }}</p></li>
-        <li>{{ icon.send() }}<p>{{ _("mas.scope.send_messages") }}</p></li>
+        <li>{{ icon.chat() }}<p>{{ _("pasion.scope.view_messages") }}</p></li>
+        <li>{{ icon.send() }}<p>{{ _("pasion.scope.send_messages") }}</p></li>
       {% elif scope == "urn:palpo:admin:*" %}
-        <li class="dangerous">{{ icon.room() }}<p>{{ _("mas.scope.palpo_admin", scope=scope) }}</p></li>
+        <li class="dangerous">{{ icon.room() }}<p>{{ _("pasion.scope.palpo_admin", scope=scope) }}</p></li>
       {% elif scope == "urn:mas:admin" %}
-        <li class="dangerous">{{ icon.admin() }}<p>{{ _("mas.scope.mas_admin", scope=scope) }}</p></li>
+        <li class="dangerous">{{ icon.admin() }}<p>{{ _("pasion.scope.pasion_admin", scope=scope) }}</p></li>
       {% elif scope is startingwith("urn:matrix:client:device:") or scope is startingwith("urn:matrix:org.matrix.msc2967.client:device:") %}
         {# We hide this scope #}
       {% else %}

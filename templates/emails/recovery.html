@@ -15,9 +15,9 @@
     background-color: white;
     font-family: Inter, system-ui, ui-sans-serif, sans-serif;
 ">
-    {{ _("mas.emails.recovery.headline", server_name=branding.server_name) }}<br />
+    {{ _("pasion.emails.recovery.headline", server_name=branding.server_name) }}<br />
     <br />
-    {{ _("mas.emails.recovery.click_button") }}<br />
+    {{ _("pasion.emails.recovery.click_button") }}<br />
     <br />
     <a id="button" href="{{ recovery_link }}" target="_blank" style="
         display: inline-block;
@@ -32,13 +32,13 @@
         border-radius: 32px;
         border-radius: 2rem;
         text-decoration: none;
-    ">{{ _("mas.emails.recovery.create_new_password") }}</a><br />
+    ">{{ _("pasion.emails.recovery.create_new_password") }}</a><br />
     <p style="font-size: 14px; font-size: 0.875rem;">
-      {{ _("mas.emails.recovery.fallback") }} {{ _("mas.emails.recovery.copy_link") }}
+      {{ _("pasion.emails.recovery.fallback") }} {{ _("pasion.emails.recovery.copy_link") }}
     </p>
     <p style="font-size: 14px; font-size: 0.875rem;">
       <a href="{{ recovery_link }}" target="_blank">{{ recovery_link }}</a>
     </p>
-    {{ _("mas.emails.recovery.you_can_ignore") }}
+    {{ _("pasion.emails.recovery.you_can_ignore") }}
 </body>
 </html>

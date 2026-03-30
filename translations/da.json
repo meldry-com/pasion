@@ -37,7 +37,7 @@
   "error": {
     "unexpected": "Uventet fejl"
   },
-  "mas": {
+  "pasion": {
     "account": {
       "deactivated": {
         "description": "Denne konto (<em>%(mxid)s</em>) er blevet slettet. Hvis dette ikke er forventet, skal du kontakte din serveradministrator.",
@@ -226,7 +226,7 @@
     "scope": {
       "edit_profile": "Rediger din profil og dine kontaktoplysninger",
       "manage_sessions": "Administrer dine enheder og sessioner",
-      "mas_admin": "Administrer enhver bruger på pasion",
+      "pasion_admin": "Administrer enhver bruger på pasion",
       "send_messages": "Send nye beskeder på dine vegne",
       "palpo_admin": "Administrer Palpo hjemmeserveren",
       "view_messages": "Se dine eksisterende beskeder og data",

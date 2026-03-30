@@ -37,7 +37,7 @@
   "error": {
     "unexpected": "Neočekávaná chyba"
   },
-  "mas": {
+  "pasion": {
     "account": {
       "deactivated": {
         "description": "Tento účet (<em>%(mxid)s</em>) byl smazán. Pokud to není očekávané, obraťte se na správce serveru.",
@@ -226,7 +226,7 @@
     "scope": {
       "edit_profile": "Upravte svůj profil a kontaktní údaje",
       "manage_sessions": "Spravujte svá zařízení a relace",
-      "mas_admin": "Spravujte libovolného uživatele ve službě pasion",
+      "pasion_admin": "Spravujte libovolného uživatele ve službě pasion",
       "send_messages": "Odesílání nových zpráv vaším jménem",
       "palpo_admin": "Spravujte domovský server Palpo",
       "view_messages": "Zobrazte své stávající zprávy a data",

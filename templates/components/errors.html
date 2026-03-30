@@ -1,14 +1,14 @@
 {% macro form_error_message(error) -%}
   {% if error.kind == "invalid_credentials" %}
-    {{ _("mas.errors.invalid_credentials") }}
+    {{ _("pasion.errors.invalid_credentials") }}
   {% elif error.kind == "password_mismatch" %}
-    {{ _("mas.errors.password_mismatch") }}
+    {{ _("pasion.errors.password_mismatch") }}
   {% elif error.kind == "rate_limit_exceeded" %}
-    {{ _("mas.errors.rate_limit_exceeded") }}
+    {{ _("pasion.errors.rate_limit_exceeded") }}
   {% elif error.kind == "policy" %}
-    {{ _("mas.errors.denied_policy", policy=error.message) }}
+    {{ _("pasion.errors.denied_policy", policy=error.message) }}
   {% elif error.kind == "captcha" %}
-    {{ _("mas.errors.captcha") }}
+    {{ _("pasion.errors.captcha") }}
   {% else %}
     {{ error.kind }}
   {% endif %}

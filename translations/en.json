@@ -109,7 +109,7 @@
       "description": "Error message displayed when an unexpected error occurs"
     }
   },
-  "mas": {
+  "pasion": {
     "account": {
       "deactivated": {
         "description": "This account (<em>%(mxid)s</em>) has been deleted. If this is not expected, contact your server administrator.",
@@ -653,7 +653,7 @@
       }
     },
     "scope": {
-      "mas_admin": "Manage users (urn:mas:admin)",
+      "pasion_admin": "Manage users (urn:mas:admin)",
       "@mas_admin": {
         "context": "components/scope.html:52:54-91",
         "description": "Displayed when the 'urn:mas:admin' scope is requested"

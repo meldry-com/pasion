@@ -25,6 +25,7 @@ use pasion_storage::{
         UserRecoveryRepository, UserRegistrationRepository, UserRegistrationTokenRepository,
         UserRepository, UserTermsRepository,
     },
+    workflow::WorkflowRepository,
 };
 use tracing::Instrument;
 
@@ -54,6 +55,7 @@ use crate::{
         PgUserPhoneRepository, PgUserRecoveryRepository, PgUserRegistrationRepository,
         PgUserRegistrationTokenRepository, PgUserRepository, PgUserTermsRepository,
     },
+    workflow::PgWorkflowRepository,
 };
 
 /// An implementation of the [`RepositoryFactory`] trait backed by a
@@ -318,5 +320,9 @@ impl RepositoryAccess for PgRepository {
 
     fn policy_data<'c>(&'c mut self) -> Box<dyn PolicyDataRepository<Error = Self::Error> + 'c> {
         Box::new(PgPolicyDataRepository::new(&mut *self.conn))
+    }
+
+    fn workflow<'c>(&'c mut self) -> Box<dyn WorkflowRepository<Error = Self::Error> + 'c> {
+        Box::new(PgWorkflowRepository::new(&mut *self.conn))
     }
 }

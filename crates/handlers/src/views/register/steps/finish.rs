@@ -22,7 +22,7 @@ use crate::{
 
 static PASSWORD_REGISTER_COUNTER: LazyLock<Counter<u64>> = LazyLock::new(|| {
     METER
-        .u64_counter("mas.user.password_registration")
+        .u64_counter("pasion.user.password_registration")
         .with_description("Number of password registrations")
         .with_unit("{registration}")
         .build()

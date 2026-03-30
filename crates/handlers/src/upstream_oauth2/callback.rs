@@ -29,7 +29,7 @@ use crate::{METER, impl_from_error_for_route};
 
 static CALLBACK_COUNTER: LazyLock<Counter<u64>> = LazyLock::new(|| {
     METER
-        .u64_counter("mas.upstream_oauth2.callback")
+        .u64_counter("pasion.upstream_oauth2.callback")
         .with_description("Number of requests to the upstream OAuth2 callback endpoint")
         .build()
 });

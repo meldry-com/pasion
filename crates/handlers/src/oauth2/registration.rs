@@ -32,7 +32,7 @@ use crate::{METER, impl_from_error_for_route};
 
 static REGISTRATION_COUNTER: LazyLock<Counter<u64>> = LazyLock::new(|| {
     METER
-        .u64_counter("mas.oauth2.registration_request")
+        .u64_counter("pasion.oauth2.registration_request")
         .with_description("Number of OAuth2 registration requests")
         .with_unit("{request}")
         .build()

@@ -37,7 +37,7 @@
   "error": {
     "unexpected": "Odottamaton virhe"
   },
-  "mas": {
+  "pasion": {
     "account": {
       "deactivated": {
         "description": "Tämä tili (<em>%(mxid)s</em>) on poistettu. Jos tämä on virhe, ota yhteyttä palvelimen ylläpitäjään.",
@@ -226,7 +226,7 @@
     "scope": {
       "edit_profile": "Muokata profiiliasi ja yhteystietojasi",
       "manage_sessions": "Hallinnoida laitteitasi ja istuntojasi",
-      "mas_admin": "Hallinnoida mitä tahansa käyttäjää pasionssä",
+      "pasion_admin": "Hallinnoida mitä tahansa käyttäjää pasionssä",
       "send_messages": "Lähettää uusia viestejä puolestasi",
       "palpo_admin": "Hallinnoida Palpo-kotipalvelinta",
       "view_messages": "Tarkastella olemassa olevia viestejäsi ja tietojasi",
