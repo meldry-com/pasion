@@ -144,10 +144,6 @@ pub enum AuthorizationVerificationError<E> {
 enum BearerError {
     InvalidRequest,
     InvalidToken,
-    #[allow(dead_code)]
-    InsufficientScope {
-        scope: Option<HeaderValue>,
-    },
 }
 
 impl BearerError {
@@ -155,25 +151,11 @@ impl BearerError {
         match self {
             BearerError::InvalidRequest => HeaderValue::from_static("invalid_request"),
             BearerError::InvalidToken => HeaderValue::from_static("invalid_token"),
-            BearerError::InsufficientScope { .. } => HeaderValue::from_static("insufficient_scope"),
-        }
-    }
-
-    fn params(&self) -> HashMap<&'static str, HeaderValue> {
-        match self {
-            BearerError::InsufficientScope { scope: Some(scope) } => {
-                let mut m = HashMap::new();
-                m.insert("scope", scope.clone());
-                m
-            }
-            _ => HashMap::new(),
         }
     }
 }
 
 enum WwwAuthenticate {
-    #[allow(dead_code)]
-    Basic { realm: HeaderValue },
     Bearer {
         realm: Option<HeaderValue>,
         error: BearerError,
@@ -196,17 +178,12 @@ impl Header for WwwAuthenticate {
 
     fn encode<E: Extend<http::HeaderValue>>(&self, values: &mut E) {
         let (scheme, params) = match self {
-            WwwAuthenticate::Basic { realm } => {
-                let mut params = HashMap::new();
-                params.insert("realm", realm.clone());
-                ("Basic", params)
-            }
             WwwAuthenticate::Bearer {
                 realm,
                 error,
                 error_description,
             } => {
-                let mut params = error.params();
+                let mut params = HashMap::new();
                 params.insert("error", error.error());
 
                 if let Some(realm) = realm {

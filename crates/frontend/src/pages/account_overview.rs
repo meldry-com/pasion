@@ -2,10 +2,7 @@ use dioxus::prelude::*;
 
 use crate::{
     api::types::{SecuritySummaryResponse, WorkflowInboxResponse},
-    components::{
-        loading::LoadingScreen,
-        separator::{Separator, SeparatorKind},
-    },
+    components::loading::LoadingScreen,
     pages::Route,
 };
 
@@ -53,81 +50,113 @@ pub fn AccountOverview() -> Element {
     } else {
         "No password set"
     };
-    let password_class = if summary.has_password {
+    let password_badge_class = if summary.has_password {
         "badge badge-success"
     } else {
         "badge badge-warning"
     };
+    let password_tone_class = if summary.has_password {
+        "tone-success"
+    } else {
+        "tone-warning"
+    };
+    let workflow_badge_class = match pending_count {
+        Some(0) => "badge badge-success",
+        Some(_) => "badge badge-warning",
+        None => "badge badge-neutral",
+    };
+    let workflow_badge_label = match pending_count {
+        Some(0) => "No pending workflows".to_string(),
+        Some(count) => format!("{count} workflow(s) pending"),
+        None => "Workflow status unavailable".to_string(),
+    };
+    let workflow_title = match pending_count {
+        Some(0) => "No workflows waiting",
+        Some(_) => "Pending workflow actions",
+        None => "Workflow visibility degraded",
+    };
+    let workflow_message = match pending_count {
+        Some(0) => "Everything looks clear right now. You can stay focused on profile and security hygiene.".to_string(),
+        Some(count) => format!("{count} workflow(s) still need attention. Review them before they expire or block follow-up actions."),
+        None => "The workflow inbox could not be loaded. You can still open it directly and retry from there.".to_string(),
+    };
+    let verified_contacts_total = summary.verified_emails_count + summary.verified_phones_count;
 
     rsx! {
-        div { class: "flex flex-col gap-6",
-            h3 { class: "heading-xs", "Account Overview" }
-
-            // ── Security status ──────────────────────────────
-            div { class: "flex flex-col gap-2",
-                h4 { class: "text-md font-semibold", "Security status" }
-                div { class: "flex items-center gap-2",
-                    span { class: "{password_class}", "{password_label}" }
+        div { class: "overview-shell",
+            div { class: "overview-hero",
+                div { class: "overview-hero-copy",
+                    span { class: "overview-eyebrow", "Control center" }
+                    h3 { class: "heading-xs", "Account overview" }
+                    p { class: "text-md text-secondary",
+                        "Scan account posture, pending work, and the fastest routes to your common account tasks."
+                    }
+                    div { class: "flex flex-wrap items-center gap-2",
+                        span { class: "{password_badge_class}", "{password_label}" }
+                        span { class: "{workflow_badge_class}", "{workflow_badge_label}" }
+                    }
                 }
-                p { class: "text-md text-secondary",
-                    "{summary.active_sessions_count} active session(s)"
-                }
-                Link {
-                    class: "btn btn-secondary btn-sm",
-                    to: Route::SecurityCenter {},
-                    "Go to Security Center"
-                }
-            }
-
-            Separator { kind: SeparatorKind::Section }
-
-            // ── Contact points ───────────────────────────────
-            div { class: "flex flex-col gap-2",
-                h4 { class: "text-md font-semibold", "Contact points" }
-                p { class: "text-md",
-                    "{summary.verified_emails_count} verified email(s)"
-                }
-                p { class: "text-md",
-                    "{summary.verified_phones_count} verified phone(s)"
-                }
-                Link {
-                    class: "btn btn-secondary btn-sm",
-                    to: Route::ContactManagement {},
-                    "Manage contacts"
+                div { class: "overview-hero-actions",
+                    Link {
+                        class: "btn btn-primary btn-sm",
+                        to: Route::SecurityCenter {},
+                        "Review security"
+                    }
+                    Link {
+                        class: "btn btn-secondary btn-sm",
+                        to: Route::Sessions {},
+                        "Open devices"
+                    }
                 }
             }
 
-            Separator { kind: SeparatorKind::Section }
-
-            // ── Identity bindings ────────────────────────────
-            div { class: "flex flex-col gap-2",
-                h4 { class: "text-md font-semibold", "Identity bindings" }
-                p { class: "text-md",
-                    "{summary.linked_providers_count} linked provider(s)"
-                }
-                Link {
-                    class: "btn btn-secondary btn-sm",
-                    to: Route::IdentityBindings {},
-                    "Manage identities"
-                }
-            }
-
-            Separator { kind: SeparatorKind::Section }
-
-            // ── Pending workflows ────────────────────────────
-            div { class: "flex flex-col gap-2",
-                h4 { class: "text-md font-semibold", "Pending workflows" }
-                match pending_count {
-                    Some(count) => rsx! {
-                        p { class: "text-md",
-                            "{count} pending workflow(s)"
-                        }
+            div { class: "overview-stat-grid",
+                OverviewStatCard {
+                    title: "Password",
+                    value: password_label.to_string(),
+                    note: if summary.has_password {
+                        "Password login is available for this account.".to_string()
+                    } else {
+                        "Add a password to reduce recovery friction and speed up sign-in.".to_string()
                     },
-                    None => rsx! {
-                        p { class: "text-md text-secondary", style: "font-style: italic;",
-                            "Workflow status unavailable."
-                        }
-                    },
+                    action_label: "Open security",
+                    action_to: Route::SecurityCenter {},
+                    tone_class: password_tone_class,
+                }
+                OverviewStatCard {
+                    title: "Active sessions",
+                    value: summary.active_sessions_count.to_string(),
+                    note: "Browser and app sessions currently recognized as active.".to_string(),
+                    action_label: "Manage sessions",
+                    action_to: Route::Sessions {},
+                    tone_class: "tone-neutral",
+                }
+                OverviewStatCard {
+                    title: "Verified contacts",
+                    value: verified_contacts_total.to_string(),
+                    note: format!(
+                        "{} email(s), {} phone(s) confirmed.",
+                        summary.verified_emails_count,
+                        summary.verified_phones_count
+                    ),
+                    action_label: "Manage contacts",
+                    action_to: Route::ContactManagement {},
+                    tone_class: "tone-neutral",
+                }
+                OverviewStatCard {
+                    title: "Linked identities",
+                    value: summary.linked_providers_count.to_string(),
+                    note: "Connected upstream identity providers available for sign-in.".to_string(),
+                    action_label: "Review identities",
+                    action_to: Route::IdentityBindings {},
+                    tone_class: "tone-neutral",
+                }
+            }
+
+            div { class: "overview-workflow-banner",
+                div { class: "flex flex-col gap-2",
+                    p { class: "overview-section-title", "{workflow_title}" }
+                    p { class: "text-md text-secondary", "{workflow_message}" }
                 }
                 Link {
                     class: "btn btn-secondary btn-sm",
@@ -136,46 +165,83 @@ pub fn AccountOverview() -> Element {
                 }
             }
 
-            Separator { kind: SeparatorKind::Section }
-
-            // ── Quick links ──────────────────────────────────
             div { class: "flex flex-col gap-2",
-                h4 { class: "text-md font-semibold", "Quick links" }
-                div { class: "flex flex-wrap gap-2",
-                    Link {
-                        class: "btn btn-secondary btn-sm",
-                        to: Route::SecurityCenter {},
-                        "Security"
-                    }
-                    Link {
-                        class: "btn btn-secondary btn-sm",
-                        to: Route::ContactManagement {},
-                        "Contacts"
-                    }
-                    Link {
-                        class: "btn btn-secondary btn-sm",
-                        to: Route::IdentityBindings {},
-                        "Identities"
-                    }
-                    Link {
-                        class: "btn btn-secondary btn-sm",
-                        to: Route::NotificationPreferences {},
-                        "Notifications"
-                    }
-                    Link {
-                        class: "btn btn-secondary btn-sm",
-                        to: Route::Sessions {},
-                        "Sessions"
-                    }
-                    Link {
-                        class: "btn btn-secondary btn-sm",
-                        to: Route::WorkflowInbox {},
-                        "Workflows"
-                    }
+                p { class: "overview-section-title", "Quick actions" }
+                p { class: "text-sm text-secondary",
+                    "Jump directly into the areas users typically revisit after sign-in."
                 }
             }
 
-            Separator {}
+            div { class: "overview-action-grid",
+                OverviewActionCard {
+                    title: "Security",
+                    description: "Password health, session posture, and verified signals.",
+                    to: Route::SecurityCenter {},
+                }
+                OverviewActionCard {
+                    title: "Contacts",
+                    description: "Manage verified emails, phones, and recovery channels.",
+                    to: Route::ContactManagement {},
+                }
+                OverviewActionCard {
+                    title: "Identities",
+                    description: "Inspect or detach linked upstream sign-in providers.",
+                    to: Route::IdentityBindings {},
+                }
+                OverviewActionCard {
+                    title: "Notifications",
+                    description: "Review delivery channels and update messaging preferences.",
+                    to: Route::NotificationPreferences {},
+                }
+                OverviewActionCard {
+                    title: "Devices",
+                    description: "Rename or revoke browser and OAuth sessions.",
+                    to: Route::Sessions {},
+                }
+                OverviewActionCard {
+                    title: "Workflows",
+                    description: "Resume pending approvals, recovery, or enrollment steps.",
+                    to: Route::WorkflowInbox {},
+                }
+            }
+        }
+    }
+}
+
+#[component]
+fn OverviewStatCard(
+    title: &'static str,
+    value: String,
+    note: String,
+    action_label: &'static str,
+    action_to: Route,
+    tone_class: &'static str,
+) -> Element {
+    rsx! {
+        div { class: "overview-stat-card {tone_class}",
+            div { class: "flex flex-col gap-2",
+                p { class: "overview-stat-label", "{title}" }
+                p { class: "overview-stat-value", "{value}" }
+                p { class: "overview-stat-note", "{note}" }
+            }
+            Link {
+                class: "btn btn-secondary btn-sm",
+                to: action_to,
+                "{action_label}"
+            }
+        }
+    }
+}
+
+#[component]
+fn OverviewActionCard(title: &'static str, description: &'static str, to: Route) -> Element {
+    rsx! {
+        Link { class: "overview-action-card", to: to,
+            div { class: "flex flex-col gap-2",
+                p { class: "overview-action-title", "{title}" }
+                p { class: "text-sm text-secondary", "{description}" }
+            }
+            span { class: "overview-action-arrow", "Open" }
         }
     }
 }

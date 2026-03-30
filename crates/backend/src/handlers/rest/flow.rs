@@ -8,11 +8,14 @@
 
 use chrono::Utc;
 use pasion_data::flow::{
-    FlowSession, FlowSessionStatus, StageChallenge, StageOutcome, StageResponse,
-    StageValidationError,
+    AuthenticatorType as DomainAuthenticatorType, FlowSession, FlowSessionStatus,
+    IdentificationField as DomainIdentificationField, PromptField as DomainPromptField,
+    PromptFieldType as DomainPromptFieldType, StageChallenge as DomainStageChallenge,
+    StageOutcome, StageResponse as DomainStageResponse,
+    StageValidationError as DomainStageValidationError,
 };
 use pasion_data::new_id;
-use salvo::prelude::*;
+use salvo::{oapi::ToSchema, prelude::*};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use ulid::Ulid;
@@ -26,12 +29,194 @@ use crate::handlers::flow::{FlowExecutor, FlowPlan, flow_session_store_write};
 
 /// Envelope returned for every flow endpoint.
 ///
-/// This is intentionally separate from the data-model flow types
-/// (`FlowSession`, `StageChallenge`, etc.). Those are domain types used by
-/// the flow engine, while this struct is an HTTP-layer envelope that
-/// combines session metadata with the current challenge for JSON
-/// serialization.
-#[derive(Serialize)]
+/// This is intentionally separate from the data-model flow types. The flow
+/// engine continues using domain enums from `pasion_data`, while the REST
+/// API exposes a stable schema DTO that can be documented via OpenAPI.
+#[derive(Debug, Clone, Copy, Serialize, ToSchema)]
+#[serde(rename_all = "snake_case")]
+pub enum IdentificationField {
+    Username,
+    Email,
+    Phone,
+}
+
+impl From<DomainIdentificationField> for IdentificationField {
+    fn from(value: DomainIdentificationField) -> Self {
+        match value {
+            DomainIdentificationField::Username => Self::Username,
+            DomainIdentificationField::Email => Self::Email,
+            DomainIdentificationField::Phone => Self::Phone,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, Deserialize, Serialize, ToSchema)]
+#[serde(rename_all = "snake_case")]
+pub enum AuthenticatorType {
+    Totp,
+    WebAuthn,
+}
+
+impl From<DomainAuthenticatorType> for AuthenticatorType {
+    fn from(value: DomainAuthenticatorType) -> Self {
+        match value {
+            DomainAuthenticatorType::Totp => Self::Totp,
+            DomainAuthenticatorType::WebAuthn => Self::WebAuthn,
+        }
+    }
+}
+
+impl From<AuthenticatorType> for DomainAuthenticatorType {
+    fn from(value: AuthenticatorType) -> Self {
+        match value {
+            AuthenticatorType::Totp => Self::Totp,
+            AuthenticatorType::WebAuthn => Self::WebAuthn,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, Serialize, ToSchema)]
+#[serde(rename_all = "snake_case")]
+pub enum PromptFieldType {
+    Text,
+    Email,
+    Password,
+    Checkbox,
+    Hidden,
+    Select,
+}
+
+impl From<DomainPromptFieldType> for PromptFieldType {
+    fn from(value: DomainPromptFieldType) -> Self {
+        match value {
+            DomainPromptFieldType::Text => Self::Text,
+            DomainPromptFieldType::Email => Self::Email,
+            DomainPromptFieldType::Password => Self::Password,
+            DomainPromptFieldType::Checkbox => Self::Checkbox,
+            DomainPromptFieldType::Hidden => Self::Hidden,
+            DomainPromptFieldType::Select => Self::Select,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Serialize, ToSchema)]
+pub struct PromptField {
+    pub field_key: String,
+    pub label: String,
+    pub field_type: PromptFieldType,
+    pub required: bool,
+    pub placeholder: Option<String>,
+    pub order: i32,
+}
+
+impl From<DomainPromptField> for PromptField {
+    fn from(value: DomainPromptField) -> Self {
+        Self {
+            field_key: value.field_key,
+            label: value.label,
+            field_type: value.field_type.into(),
+            required: value.required,
+            placeholder: value.placeholder,
+            order: value.order,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Serialize, ToSchema)]
+#[serde(tag = "type", rename_all = "snake_case")]
+pub enum FlowChallenge {
+    Identification {
+        user_fields: Vec<IdentificationField>,
+        password_stage: bool,
+    },
+    EmailVerification {
+        email: String,
+        purpose: String,
+    },
+    PasswordWrite {
+        require_current: bool,
+    },
+    UserWrite {
+        suggested_username: Option<String>,
+    },
+    Captcha {
+        site_key: String,
+    },
+    Consent {
+        scope: String,
+        client_name: Option<String>,
+    },
+    Prompt {
+        fields: Vec<PromptField>,
+    },
+    AuthenticatorValidate {
+        allowed_types: Vec<AuthenticatorType>,
+    },
+    EnrollmentToken {
+        required: bool,
+    },
+    FlowDone {
+        redirect_to: Option<String>,
+    },
+}
+
+impl From<DomainStageChallenge> for FlowChallenge {
+    fn from(value: DomainStageChallenge) -> Self {
+        match value {
+            DomainStageChallenge::Identification {
+                user_fields,
+                password_stage,
+            } => Self::Identification {
+                user_fields: user_fields.into_iter().map(Into::into).collect(),
+                password_stage,
+            },
+            DomainStageChallenge::EmailVerification { email, purpose } => {
+                Self::EmailVerification { email, purpose }
+            }
+            DomainStageChallenge::PasswordWrite { require_current } => {
+                Self::PasswordWrite { require_current }
+            }
+            DomainStageChallenge::UserWrite { suggested_username } => Self::UserWrite {
+                suggested_username,
+            },
+            DomainStageChallenge::Captcha { site_key } => Self::Captcha { site_key },
+            DomainStageChallenge::Consent { scope, client_name } => {
+                Self::Consent { scope, client_name }
+            }
+            DomainStageChallenge::Prompt { fields } => Self::Prompt {
+                fields: fields.into_iter().map(Into::into).collect(),
+            },
+            DomainStageChallenge::AuthenticatorValidate { allowed_types } => {
+                Self::AuthenticatorValidate {
+                    allowed_types: allowed_types.into_iter().map(Into::into).collect(),
+                }
+            }
+            DomainStageChallenge::EnrollmentToken { required } => {
+                Self::EnrollmentToken { required }
+            }
+            DomainStageChallenge::FlowDone { redirect_to } => Self::FlowDone { redirect_to },
+        }
+    }
+}
+
+#[derive(Debug, Clone, Serialize, ToSchema)]
+pub struct FlowValidationError {
+    pub field: Option<String>,
+    pub message: String,
+    pub code: String,
+}
+
+impl From<DomainStageValidationError> for FlowValidationError {
+    fn from(value: DomainStageValidationError) -> Self {
+        Self {
+            field: value.field,
+            message: value.message,
+            code: value.code,
+        }
+    }
+}
+
+#[derive(Debug, Serialize, ToSchema)]
 #[serde(rename_all = "snake_case")]
 pub struct FlowResponse {
     /// The session identifier (ULID).
@@ -39,21 +224,98 @@ pub struct FlowResponse {
     /// The slug of the flow being executed.
     pub flow_slug: String,
     /// The current stage challenge to present to the user.
-    pub challenge: StageChallenge,
+    pub challenge: FlowChallenge,
     /// Zero-based index of the current stage.
     pub stage_index: usize,
     /// Total number of stages in the flow.
     pub total_stages: usize,
     /// Validation errors, if the last response was rejected.
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub errors: Option<Vec<StageValidationError>>,
+    pub errors: Option<Vec<FlowValidationError>>,
 }
 
 /// Request body for `POST /api/v1/flow/session/:id/respond`.
-#[derive(Deserialize)]
+#[derive(Debug, Clone, Deserialize, ToSchema)]
+#[serde(tag = "type", rename_all = "snake_case")]
+pub enum FlowStageResponse {
+    Identification {
+        uid_field: String,
+        password: Option<String>,
+    },
+    EmailVerification {
+        code: String,
+    },
+    PasswordWrite {
+        current_password: Option<String>,
+        new_password: String,
+    },
+    UserWrite {
+        username: String,
+        display_name: Option<String>,
+    },
+    Captcha {
+        token: String,
+    },
+    Consent {
+        granted: bool,
+    },
+    Prompt {
+        #[salvo(schema(value_type = Object))]
+        data: Value,
+    },
+    AuthenticatorValidate {
+        authenticator_type: AuthenticatorType,
+        code: String,
+    },
+    EnrollmentToken {
+        token: String,
+    },
+}
+
+impl From<FlowStageResponse> for DomainStageResponse {
+    fn from(value: FlowStageResponse) -> Self {
+        match value {
+            FlowStageResponse::Identification {
+                uid_field,
+                password,
+            } => Self::Identification {
+                uid_field,
+                password,
+            },
+            FlowStageResponse::EmailVerification { code } => Self::EmailVerification { code },
+            FlowStageResponse::PasswordWrite {
+                current_password,
+                new_password,
+            } => Self::PasswordWrite {
+                current_password,
+                new_password,
+            },
+            FlowStageResponse::UserWrite {
+                username,
+                display_name,
+            } => Self::UserWrite {
+                username,
+                display_name,
+            },
+            FlowStageResponse::Captcha { token } => Self::Captcha { token },
+            FlowStageResponse::Consent { granted } => Self::Consent { granted },
+            FlowStageResponse::Prompt { data } => Self::Prompt { data },
+            FlowStageResponse::AuthenticatorValidate {
+                authenticator_type,
+                code,
+            } => Self::AuthenticatorValidate {
+                authenticator_type: authenticator_type.into(),
+                code,
+            },
+            FlowStageResponse::EnrollmentToken { token } => Self::EnrollmentToken { token },
+        }
+    }
+}
+
+#[derive(Debug, Deserialize, ToSchema)]
 pub struct RespondInput {
     /// The stage response submitted by the client.
-    pub response: StageResponse,
+    pub response: FlowStageResponse,
 }
 
 // ---------------------------------------------------------------------------
@@ -95,17 +357,24 @@ fn resolve_flow_by_slug(
 fn build_response(
     plan: &FlowPlan,
     session: &FlowSession,
-    challenge: StageChallenge,
-    errors: Option<Vec<StageValidationError>>,
+    challenge: DomainStageChallenge,
+    errors: Option<Vec<DomainStageValidationError>>,
 ) -> FlowResponse {
     FlowResponse {
         session_id: session.id.to_string(),
         flow_slug: plan.flow.slug.clone(),
-        challenge,
+        challenge: challenge.into(),
         stage_index: session.current_stage_index,
         total_stages: plan.stages.len(),
-        errors,
+        errors: errors.map(|items| items.into_iter().map(Into::into).collect()),
     }
+}
+
+fn parse_flow_session_id(req: &Request) -> Result<Ulid, RouteError> {
+    req.param::<String>("id")
+        .ok_or_else(|| RouteError::BadRequest("missing session id".into()))?
+        .parse()
+        .map_err(|_| RouteError::BadRequest("invalid session id".into()))
 }
 
 // ---------------------------------------------------------------------------
@@ -116,7 +385,7 @@ fn build_response(
 ///
 /// Creates a `FlowSession`, plans the flow, and returns the first stage
 /// challenge.
-#[handler]
+#[endpoint]
 pub async fn start_flow(req: &mut Request) -> Result<Json<FlowResponse>, RouteError> {
     let slug: String = req
         .param::<String>("slug")
@@ -166,20 +435,16 @@ pub async fn start_flow(req: &mut Request) -> Result<Json<FlowResponse>, RouteEr
 // ---------------------------------------------------------------------------
 
 /// Get the current challenge for an existing flow session.
-#[handler]
+#[endpoint]
 pub async fn get_flow_session(req: &mut Request) -> Result<Json<FlowResponse>, RouteError> {
-    let id: Ulid = req
-        .param::<String>("id")
-        .ok_or_else(|| RouteError::BadRequest("missing session id".into()))?
-        .parse()
-        .map_err(|_| RouteError::BadRequest("invalid session id".into()))?;
+    let id = parse_flow_session_id(req)?;
 
     let mut store = flow_session_store_write().await;
     let (plan, session) = store.get_mut(&id).ok_or(RouteError::NotFound)?;
 
     if session.status.is_terminal() {
         // Return a FlowDone challenge for completed sessions
-        let challenge = StageChallenge::FlowDone {
+        let challenge = DomainStageChallenge::FlowDone {
             redirect_to: Some("/account".into()),
         };
         let response = build_response(plan, session, challenge, None);
@@ -203,13 +468,9 @@ pub async fn get_flow_session(req: &mut Request) -> Result<Json<FlowResponse>, R
 /// On success, advances to the next stage (or completes the flow) and
 /// returns the new challenge.  On validation failure, returns the current
 /// challenge again with error details.
-#[handler]
+#[endpoint]
 pub async fn respond_flow(req: &mut Request) -> Result<Json<FlowResponse>, RouteError> {
-    let id: Ulid = req
-        .param::<String>("id")
-        .ok_or_else(|| RouteError::BadRequest("missing session id".into()))?
-        .parse()
-        .map_err(|_| RouteError::BadRequest("invalid session id".into()))?;
+    let id = parse_flow_session_id(req)?;
 
     let input: RespondInput = req
         .parse_json()
@@ -226,8 +487,9 @@ pub async fn respond_flow(req: &mut Request) -> Result<Json<FlowResponse>, Route
     }
 
     // Process the response through the executor
-    let (outcome, updated_context) = FlowExecutor::process_response(plan, session, input.response)
-        .map_err(|e| RouteError::Internal(Box::new(e)))?;
+    let (outcome, updated_context) =
+        FlowExecutor::process_response(plan, session, input.response.into())
+            .map_err(|e| RouteError::Internal(Box::new(e)))?;
 
     // Update the session context
     session.context = updated_context;
@@ -249,7 +511,7 @@ pub async fn respond_flow(req: &mut Request) -> Result<Json<FlowResponse>, Route
                 session.status = FlowSessionStatus::Completed;
                 session.completed_at = Some(Utc::now());
 
-                let challenge = StageChallenge::FlowDone {
+                let challenge = DomainStageChallenge::FlowDone {
                     redirect_to: Some("/account".into()),
                 };
                 // Stage index points past the last stage to indicate completion
@@ -271,7 +533,7 @@ pub async fn respond_flow(req: &mut Request) -> Result<Json<FlowResponse>, Route
             session.status = FlowSessionStatus::Completed;
             session.completed_at = Some(Utc::now());
 
-            let challenge = StageChallenge::FlowDone { redirect_to };
+            let challenge = DomainStageChallenge::FlowDone { redirect_to };
             session.current_stage_index = plan.stages.len();
             let response = build_response(plan, session, challenge, None);
             Ok(Json(response))

@@ -440,8 +440,7 @@ fn build_oauth_router(router: Router) -> Router {
 fn build_rest_api_router(router: Router) -> Router {
     use crate::handlers::rest::*;
 
-    router.push(
-        Router::with_path("/api/v1")
+    let api_router = Router::with_path("/api/v1")
             // Viewer
             .push(
                 Router::with_path("viewer")
@@ -568,8 +567,10 @@ fn build_rest_api_router(router: Router) -> Router {
                             .get(flow::get_flow_session)
                             .push(Router::with_path("respond").post(flow::respond_flow)),
                     ),
-            ),
-    )
+            );
+    let docs_router = openapi::build_openapi_router(&api_router);
+
+    router.push(api_router).push(docs_router)
 }
 
 fn build_admin_router(router: Router) -> Router {
