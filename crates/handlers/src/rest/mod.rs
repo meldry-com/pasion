@@ -14,6 +14,47 @@
 //! - [`password`] — Password change and recovery
 //! - [`users`] — Display name, cross-signing reset, account deactivation
 //! - [`oauth2_clients`] — OAuth 2.0 client details
+//!
+//! # API classification
+//!
+//! ## User Portal API
+//!
+//! Endpoints consumed by the account-management dashboard. Authenticated via
+//! browser session cookies.
+//!
+//! ```text
+//! GET  /api/v1/viewer                           -> user profile
+//! GET  /api/v1/viewer/overview                   -> dashboard overview
+//! GET  /api/v1/viewer/security                   -> security summary
+//! GET  /api/v1/viewer/workflow-inbox              -> pending workflows
+//! GET  /api/v1/viewer/notification-preferences    -> notification prefs
+//! POST /api/v1/auth/register                     -> registration
+//! POST /api/v1/auth/recovery/start               -> recovery
+//! GET  /api/v1/email-auth/*                      -> email verification
+//! GET  /api/v1/linked-accounts                   -> identity bindings
+//! GET  /api/v1/sessions/*                        -> session management
+//! ```
+//!
+//! ## Workflow API
+//!
+//! Multi-step challenge/response flows (login, registration, consent).
+//!
+//! ```text
+//! POST /api/v1/flow/:slug/start                  -> start flow
+//! GET  /api/v1/flow/session/:id                  -> get challenge
+//! POST /api/v1/flow/session/:id/respond           -> submit response
+//! ```
+//!
+//! ## OAuth2 Protocol API
+//!
+//! Standards-track OAuth 2.0 / OpenID Connect endpoints and supporting
+//! resources.
+//!
+//! ```text
+//! GET  /api/v1/oauth2/consent/*                  -> consent
+//! GET  /api/v1/device-link                       -> device code
+//! GET  /api/v1/site-config                       -> public config
+//! ```
 
 #![allow(clippy::module_name_repetitions)]
 

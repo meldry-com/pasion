@@ -61,7 +61,7 @@ pub fn AccountOverview() -> Element {
 
     rsx! {
         div { class: "flex flex-col gap-6",
-            h3 { class: "heading-xs", "Account overview" }
+            h3 { class: "heading-xs", "Account Overview" }
 
             // ── Security status ──────────────────────────────
             div { class: "flex flex-col gap-2",

@@ -476,6 +476,7 @@ fn build_rest_api_router(router: Router) -> Router {
             .push(
                 Router::with_path("viewer")
                     .get(viewer::get_viewer)
+                    .push(Router::with_path("overview").get(viewer::get_viewer_overview))
                     .push(Router::with_path("security").get(viewer::get_security_summary))
                     .push(Router::with_path("password").post(password::set_password))
                     .push(Router::with_path("display-name").post(users::set_display_name))
@@ -617,6 +618,15 @@ fn build_admin_router(router: Router) -> Router {
             // Operational health
             .push(Router::with_path("connector-health").get(connector_health::handler))
             .push(Router::with_path("notification-channels").get(notification_channels::handler))
+            // Notification templates
+            .push(
+                Router::with_path("notification-templates")
+                    .get(notification_templates::list_handler)
+                    .push(
+                        Router::with_path("publish")
+                            .post(notification_templates::publish_handler),
+                    ),
+            )
             // Audit feed
             .push(Router::with_path("audit-feed").get(audit_feed::handler))
             // Users

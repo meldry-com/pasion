@@ -44,7 +44,7 @@ pub fn ContactManagement() -> Element {
 
             rsx! {
                 div { class: "flex flex-col gap-6",
-                    h3 { class: "heading-xs", "Contact management" }
+                    h3 { class: "heading-xs", "Contact Information" }
 
                     // Email addresses
                     div { class: "flex flex-col gap-2",

@@ -33,7 +33,7 @@ pub fn SecurityCenter() -> Element {
 
             rsx! {
                 div { class: "flex flex-col gap-6",
-                    h3 { class: "heading-xs", "Security center" }
+                    h3 { class: "heading-xs", "Security Center" }
 
                     // Password status
                     div { class: "flex flex-col gap-2",

@@ -61,6 +61,7 @@ pub mod user_registration_cookie;
 pub(crate) mod views;
 
 pub(crate) mod admin_audit_helper;
+pub(crate) mod admin_operations;
 mod account_access;
 mod account_connections;
 mod account_contacts;

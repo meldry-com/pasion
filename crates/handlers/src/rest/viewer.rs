@@ -1,5 +1,6 @@
 use pasion_data_model::SiteConfig;
 use pasion_storage::RepositoryAccess;
+use pasion_storage::account::AccountSecuritySummary;
 use salvo::oapi::ToSchema;
 use salvo::prelude::*;
 use serde::Serialize;
@@ -368,4 +369,130 @@ pub async fn get_workflow_inbox(
     let total = pending.len();
 
     Ok(Json(WorkflowInboxResponse { pending, total }))
+}
+
+// ── Response types for viewer overview ─────────────────────
+
+/// Summary of the user for the overview dashboard.
+#[derive(Serialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct ViewerUserSummary {
+    pub id: String,
+    pub has_password: bool,
+}
+
+/// Security summary data exposed in the overview.
+#[derive(Serialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct SecuritySummaryData {
+    pub has_password: bool,
+    pub active_sessions_count: usize,
+    pub linked_providers_count: usize,
+    pub verified_emails_count: usize,
+    pub verified_phones_count: usize,
+}
+
+/// Summary of contact points for the overview.
+#[derive(Serialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct ContactsSummary {
+    pub total: usize,
+    pub verified: usize,
+}
+
+/// Summary of identity bindings for the overview.
+#[derive(Serialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct IdentitiesSummary {
+    pub total: usize,
+}
+
+/// Summary of pending workflows for the overview.
+#[derive(Serialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct WorkflowsSummary {
+    pub pending_count: usize,
+}
+
+/// Unified overview response combining security, contacts, identities, and
+/// workflow summaries into a single payload for the account dashboard.
+#[derive(Serialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct ViewerOverviewResponse {
+    pub user: ViewerUserSummary,
+    pub security: SecuritySummaryData,
+    pub contacts: ContactsSummary,
+    pub identities: IdentitiesSummary,
+    pub workflows: WorkflowsSummary,
+}
+
+impl From<&AccountSecuritySummary> for SecuritySummaryData {
+    fn from(s: &AccountSecuritySummary) -> Self {
+        Self {
+            has_password: s.has_password,
+            active_sessions_count: s.active_sessions_count,
+            linked_providers_count: s.linked_providers_count,
+            verified_emails_count: s.verified_emails_count,
+            verified_phones_count: s.verified_phones_count,
+        }
+    }
+}
+
+// ── GET /api/v1/viewer/overview ────────────────────────────
+
+/// Returns a unified account overview for the dashboard, combining the
+/// security summary, contact-point counts, identity-binding counts, and
+/// pending workflow counts into a single response.
+#[endpoint]
+pub async fn get_viewer_overview(
+    req: &mut Request,
+    depot: &Depot,
+) -> Result<Json<ViewerOverviewResponse>, RouteError> {
+    let repo_factory = depot.repo_factory()?;
+    let clock = make_clock();
+
+    let activity_tracker = extract_bound_activity_tracker(req, depot);
+    let session_info = extract_session_info(req, depot);
+
+    let repo = repo_factory.create().await?;
+    let (requester, mut repo) =
+        get_requester(&clock, &activity_tracker, repo, &session_info).await?;
+
+    let user = match &requester.entity {
+        super::RequestingEntity::BrowserSession(session) => &session.user,
+        _ => return Err(RouteError::Unauthorized),
+    };
+
+    let user_id = user.id;
+
+    // Fetch all three aggregates from the account repository.
+    let security = repo.account().security_summary(user_id).await?;
+    let contacts = repo.account().list_contact_points(user_id).await?;
+    let identities = repo.account().list_identity_bindings(user_id).await?;
+
+    repo.cancel().await?;
+
+    let verified_contacts = contacts.iter().filter(|c| c.verified).count();
+
+    // Workflow sessions are in-memory and not user-associated yet, so
+    // pending count is always zero for now.
+    let pending_workflow_count: usize = 0;
+
+    Ok(Json(ViewerOverviewResponse {
+        user: ViewerUserSummary {
+            id: NodeType::User.serialize(user_id),
+            has_password: security.has_password,
+        },
+        security: SecuritySummaryData::from(&security),
+        contacts: ContactsSummary {
+            total: contacts.len(),
+            verified: verified_contacts,
+        },
+        identities: IdentitiesSummary {
+            total: identities.len(),
+        },
+        workflows: WorkflowsSummary {
+            pending_count: pending_workflow_count,
+        },
+    }))
 }

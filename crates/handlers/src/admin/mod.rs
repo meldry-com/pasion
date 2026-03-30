@@ -13,6 +13,7 @@ use pasion_router::UrlBuilder;
 use pasion_salvo_utils::InternalError;
 use pasion_templates::{ApiDocContext, Templates};
 use salvo::prelude::*;
+use serde::Serialize;
 
 mod call_context;
 mod model;
@@ -23,6 +24,21 @@ mod schema;
 pub mod v1;
 
 pub use self::call_context::CallContext;
+
+/// Common error response shape for admin API endpoints.
+///
+/// Individual handlers keep their own `RouteError` enums but can convert
+/// to this shared shape for consistent JSON error bodies.
+#[derive(Serialize)]
+pub struct AdminErrorResponse {
+    /// A short machine-readable error code or label.
+    pub error: String,
+    /// A human-readable description of the error.
+    pub error_description: Option<String>,
+    /// An optional request identifier for correlation.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub request_id: Option<String>,
+}
 
 /// The canonical admin scope for the Pasion Admin API.
 pub const ADMIN_SCOPE: &str = "urn:pasion:admin";

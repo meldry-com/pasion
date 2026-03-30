@@ -26,7 +26,7 @@ pub fn IdentityBindings() -> Element {
 
             rsx! {
                 div { class: "flex flex-col gap-6",
-                    h3 { class: "heading-xs", "Identity bindings" }
+                    h3 { class: "heading-xs", "Connected Accounts" }
 
                     // Linked accounts
                     div { class: "flex flex-col gap-2",

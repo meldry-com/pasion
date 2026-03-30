@@ -734,3 +734,32 @@ pub struct LinkedAccountsResponse {
 pub struct WorkflowInboxResponse {
     pub pending_count: usize,
 }
+
+// ── Notification preferences (GET/PUT /api/v1/viewer/notification-preferences)
+
+#[derive(Debug, Clone, PartialEq, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ChannelAvailability {
+    pub channel: String,
+    pub enabled: bool,
+}
+
+#[derive(Debug, Clone, PartialEq, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ChannelPreference {
+    pub channel: String,
+    pub enabled: bool,
+}
+
+#[derive(Debug, Clone, PartialEq, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct NotificationPreferencesResponse {
+    pub available_channels: Vec<ChannelAvailability>,
+    pub preferences: Vec<ChannelPreference>,
+}
+
+#[derive(Debug, Clone, PartialEq, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct UpdateNotificationPreferencesResponse {
+    pub preferences: Vec<ChannelPreference>,
+}
