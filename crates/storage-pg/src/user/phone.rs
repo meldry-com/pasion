@@ -73,7 +73,7 @@ struct UserPhoneAuthenticationRow {
 impl From<UserPhoneAuthenticationRow> for UserPhoneAuthentication {
     fn from(row: UserPhoneAuthenticationRow) -> Self {
         UserPhoneAuthentication {
-            id: row.user_phone_authentication_id.into(),
+            id: row.id.into(),
             user_registration_id: row.user_registration_id.map(Ulid::from),
             phone: row.phone,
             created_at: row.created_at,
@@ -86,7 +86,7 @@ impl From<UserPhoneAuthenticationRow> for UserPhoneAuthentication {
 #[derive(Insertable)]
 #[diesel(table_name = user_phone_authentications)]
 struct NewUserPhoneAuthentication {
-    user_phone_authentication_id: Uuid,
+    id: Uuid,
     user_registration_id: Option<Uuid>,
     phone: String,
     created_at: DateTime<Utc>,
@@ -96,7 +96,7 @@ struct NewUserPhoneAuthentication {
 #[derive(Debug, Clone, Queryable, Selectable)]
 #[diesel(table_name = user_phone_authentication_codes)]
 struct UserPhoneAuthenticationCodeRow {
-    user_phone_authentication_code_id: Uuid,
+    id: Uuid,
     user_phone_authentication_id: Uuid,
     code: String,
     created_at: DateTime<Utc>,
@@ -106,7 +106,7 @@ struct UserPhoneAuthenticationCodeRow {
 impl From<UserPhoneAuthenticationCodeRow> for UserPhoneAuthenticationCode {
     fn from(row: UserPhoneAuthenticationCodeRow) -> Self {
         UserPhoneAuthenticationCode {
-            id: row.user_phone_authentication_code_id.into(),
+            id: row.id.into(),
             user_phone_authentication_id: row.user_phone_authentication_id.into(),
             code: row.code,
             created_at: row.created_at,
@@ -119,7 +119,7 @@ impl From<UserPhoneAuthenticationCodeRow> for UserPhoneAuthenticationCode {
 #[derive(Insertable)]
 #[diesel(table_name = user_phone_authentication_codes)]
 struct NewUserPhoneAuthenticationCode {
-    user_phone_authentication_code_id: Uuid,
+    id: Uuid,
     user_phone_authentication_id: Uuid,
     code: String,
     created_at: DateTime<Utc>,

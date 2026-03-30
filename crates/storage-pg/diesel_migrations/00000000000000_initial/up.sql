@@ -139,7 +139,7 @@ CREATE TABLE IF NOT EXISTS user_phone_authentications (
 
 CREATE TABLE IF NOT EXISTS user_phone_authentication_codes (
     id UUID PRIMARY KEY,
-    user_phone_authentication_id UUID NOT NULL REFERENCES user_phone_authentications(user_phone_authentication_id) ON DELETE CASCADE,
+    user_phone_authentication_id UUID NOT NULL REFERENCES user_phone_authentications(id) ON DELETE CASCADE,
     code TEXT NOT NULL,
     created_at TIMESTAMPTZ NOT NULL,
     expires_at TIMESTAMPTZ NOT NULL
@@ -160,7 +160,7 @@ CREATE TABLE IF NOT EXISTS user_registrations (
     hashed_password_version INTEGER,
     user_registration_token_id UUID REFERENCES user_registration_tokens(id) ON DELETE SET NULL,
     upstream_oauth_authorization_session_id UUID REFERENCES upstream_oauth_authorization_sessions(id) ON DELETE SET NULL,
-    phone_authentication_id UUID REFERENCES user_phone_authentications(user_phone_authentication_id) ON DELETE SET NULL,
+    phone_authentication_id UUID REFERENCES user_phone_authentications(id) ON DELETE SET NULL,
     created_at TIMESTAMPTZ NOT NULL,
     completed_at TIMESTAMPTZ
 );
