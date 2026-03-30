@@ -491,6 +491,89 @@ diesel::table! {
 }
 
 diesel::table! {
+    workflow_instances (id) {
+        id -> Uuid,
+        workflow_key -> Text,
+        subject -> Jsonb,
+        trigger -> Jsonb,
+        status -> Text,
+        current_step_key -> Nullable<Text>,
+        input -> Jsonb,
+        context -> Jsonb,
+        correlation_key -> Nullable<Text>,
+        started_at -> Nullable<Timestamptz>,
+        completed_at -> Nullable<Timestamptz>,
+        failed_at -> Nullable<Timestamptz>,
+        cancelled_at -> Nullable<Timestamptz>,
+        expires_at -> Nullable<Timestamptz>,
+        created_at -> Timestamptz,
+        updated_at -> Timestamptz,
+    }
+}
+
+diesel::table! {
+    workflow_steps (id) {
+        id -> Uuid,
+        workflow_instance_id -> Uuid,
+        step_key -> Text,
+        sequence -> Int4,
+        status -> Text,
+        assignee -> Nullable<Jsonb>,
+        input -> Jsonb,
+        output -> Nullable<Jsonb>,
+        attempt_count -> Int4,
+        last_error_code -> Nullable<Text>,
+        last_error_message -> Nullable<Text>,
+        scheduled_at -> Nullable<Timestamptz>,
+        started_at -> Nullable<Timestamptz>,
+        completed_at -> Nullable<Timestamptz>,
+        failed_at -> Nullable<Timestamptz>,
+        created_at -> Timestamptz,
+        updated_at -> Timestamptz,
+    }
+}
+
+diesel::table! {
+    workflow_events (id) {
+        id -> Uuid,
+        workflow_instance_id -> Uuid,
+        workflow_step_id -> Nullable<Uuid>,
+        kind -> Text,
+        actor -> Jsonb,
+        payload -> Jsonb,
+        occurred_at -> Timestamptz,
+    }
+}
+
+diesel::table! {
+    workflow_deadlines (id) {
+        id -> Uuid,
+        workflow_instance_id -> Uuid,
+        workflow_step_id -> Nullable<Uuid>,
+        deadline_key -> Text,
+        status -> Text,
+        payload -> Jsonb,
+        due_at -> Timestamptz,
+        satisfied_at -> Nullable<Timestamptz>,
+        cancelled_at -> Nullable<Timestamptz>,
+        created_at -> Timestamptz,
+    }
+}
+
+diesel::table! {
+    workflow_audit_logs (id) {
+        id -> Uuid,
+        workflow_instance_id -> Uuid,
+        workflow_step_id -> Nullable<Uuid>,
+        action -> Text,
+        actor -> Jsonb,
+        summary -> Nullable<Text>,
+        metadata -> Jsonb,
+        occurred_at -> Timestamptz,
+    }
+}
+
+diesel::table! {
     admin_operation_logs (id) {
         id -> Uuid,
         admin_user_id -> Uuid,
@@ -537,6 +620,13 @@ diesel::joinable!(queue_leader -> queue_workers (queue_worker_id));
 diesel::joinable!(notification_deliveries -> notification_requests (notification_request_id));
 diesel::joinable!(notification_event_logs -> notification_requests (notification_request_id));
 diesel::joinable!(notification_event_logs -> notification_deliveries (notification_delivery_id));
+diesel::joinable!(workflow_steps -> workflow_instances (workflow_instance_id));
+diesel::joinable!(workflow_events -> workflow_instances (workflow_instance_id));
+diesel::joinable!(workflow_events -> workflow_steps (workflow_step_id));
+diesel::joinable!(workflow_deadlines -> workflow_instances (workflow_instance_id));
+diesel::joinable!(workflow_deadlines -> workflow_steps (workflow_step_id));
+diesel::joinable!(workflow_audit_logs -> workflow_instances (workflow_instance_id));
+diesel::joinable!(workflow_audit_logs -> workflow_steps (workflow_step_id));
 
 diesel::allow_tables_to_appear_in_same_query!(
     users,
@@ -576,4 +666,9 @@ diesel::allow_tables_to_appear_in_same_query!(
     notification_event_logs,
     admin_operation_logs,
     account_security_events,
+    workflow_instances,
+    workflow_steps,
+    workflow_events,
+    workflow_deadlines,
+    workflow_audit_logs,
 );

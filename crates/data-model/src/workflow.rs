@@ -329,6 +329,7 @@ pub enum WorkflowAuditAction {
 #[cfg(test)]
 mod tests {
     use chrono::{Duration, Utc};
+    use serde_json::Value;
 
     use super::{WorkflowDeadline, WorkflowDeadlineStatus, WorkflowInstanceStatus, WorkflowStepStatus};
 

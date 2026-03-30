@@ -41,6 +41,7 @@ use ulid::Ulid;
 pub mod auth;
 pub mod consent;
 pub mod emails;
+pub mod flow;
 pub mod linked_accounts;
 pub mod oauth2_clients;
 pub mod openapi;

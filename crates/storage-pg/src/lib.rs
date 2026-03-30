@@ -28,7 +28,8 @@ pub mod schema;
 pub mod upstream_oauth2;
 /// PostgreSQL user repositories.
 pub mod user;
-mod workflow;
+/// PostgreSQL workflow engine repositories.
+pub mod workflow;
 
 // Define `lower()` as a SQL function for Diesel (Diesel doesn't ship one).
 diesel::define_sql_function! {

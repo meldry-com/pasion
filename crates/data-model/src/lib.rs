@@ -9,6 +9,8 @@
 //! - **Accounts** — [`AccountContactPoint`], [`AccountIdentityBinding`]
 //! - **Users** — [`User`], [`BrowserSession`], [`Password`], [`UserEmail`],
 //!   [`UserRegistration`], [`UserRecoveryTicket`]
+//! - **Flows** — [`FlowDefinition`], [`FlowStageBinding`], [`StageKind`],
+//!   [`FlowSession`], [`StageChallenge`], [`StageResponse`], [`StageOutcome`]
 //! - **OAuth 2.0** — [`Client`], [`Session`], [`AuthorizationGrant`],
 //!   [`AccessToken`], [`RefreshToken`], [`DeviceCodeGrant`]
 //! - **Upstream SSO** — [`UpstreamOAuthProvider`], [`UpstreamOAuthLink`],
@@ -29,6 +31,9 @@ pub mod audit;
 /// Clock abstraction for testability (`SystemClock` in production, mock clock
 /// in tests).
 pub mod clock;
+/// Flow engine data model — multi-step user interaction definitions, stage
+/// bindings, and runtime session tracking.
+pub mod flow;
 /// Persisted notification request, delivery, and audit event models.
 pub mod notification;
 /// OAuth 2.0 client and session models.
@@ -85,6 +90,11 @@ pub fn new_id(
 pub use self::{
     account::{
         AccountContactPoint, AccountIdentityBinding, ContactChannel, IdentityProviderType,
+    },
+    flow::{
+        FlowDefinition, FlowDesignation, FlowSession, FlowSessionStatus, FlowStageBinding,
+        IdentificationField, PromptField, PromptFieldType, StageChallenge, StageKind,
+        StageOutcome, StageResponse, StageValidationError,
     },
     audit::{
         AccountSecurityEvent, AdminOperation, AdminOperationLog, SecurityEventType,

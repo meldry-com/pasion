@@ -581,6 +581,16 @@ fn build_rest_api_router(router: Router) -> Router {
                 Router::with_path("upstream-oauth2/link/{id}")
                     .get(upstream_oauth2::get_link)
                     .post(upstream_oauth2::post_link),
+            )
+            // Flow engine
+            .push(
+                Router::with_path("flow")
+                    .push(Router::with_path("{slug}/start").post(flow::start_flow))
+                    .push(
+                        Router::with_path("session/{id}")
+                            .get(flow::get_flow_session)
+                            .push(Router::with_path("respond").post(flow::respond_flow)),
+                    ),
             ),
     )
 }

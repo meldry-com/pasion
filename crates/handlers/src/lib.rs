@@ -32,6 +32,8 @@ use opentelemetry::metrics::Meter;
 
 /// Admin API handlers (JSON API, cursor-paginated).
 pub mod admin;
+/// Flow execution engine for multi-step user interaction flows.
+pub mod flow;
 /// Health-check endpoint (`/health`).
 pub mod health;
 /// OAuth 2.0 and OpenID Connect protocol endpoints.

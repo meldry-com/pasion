@@ -1,0 +1,119 @@
+//! Concrete stage side-effect implementations.
+//!
+//! Each stage module provides an `execute` function that performs the
+//! actual work (DB writes, email sending, etc.) after the executor
+//! validates the response shape.
+
+pub mod email_verification;
+pub mod identification;
+pub mod password_write;
+pub mod user_write;
+
+use pasion_data_model::flow::{StageKind, StageOutcome, StageResponse};
+use pasion_data_model::Clock;
+use pasion_storage::BoxRepository;
+use rand::RngCore;
+use thiserror::Error;
+
+/// Errors that can occur during stage side-effect execution.
+#[derive(Debug, Error)]
+pub enum StageExecutionError {
+    /// The referenced user was not found in the database.
+    #[error("user not found")]
+    UserNotFound,
+
+    /// The provided credentials were invalid.
+    #[error("invalid credentials")]
+    InvalidCredentials,
+
+    /// Email verification failed (e.g., missing authentication record).
+    #[error("email verification failed")]
+    VerificationFailed,
+
+    /// The user has been rate-limited.
+    #[error("rate limited")]
+    RateLimited,
+
+    /// A repository error occurred.
+    #[error(transparent)]
+    Repository(#[from] pasion_storage::RepositoryError),
+
+    /// An internal/unexpected error occurred.
+    #[error(transparent)]
+    Internal(#[from] anyhow::Error),
+}
+
+/// Execute the side effects for a stage after validation passes.
+///
+/// This is the main dispatch function — it routes to the appropriate
+/// stage module based on the stage kind.
+pub async fn execute_stage(
+    repo: &mut BoxRepository,
+    rng: &mut (dyn RngCore + Send),
+    clock: &dyn Clock,
+    stage: &StageKind,
+    response: &StageResponse,
+    context: &mut serde_json::Value,
+) -> Result<StageOutcome, StageExecutionError> {
+    match (stage, response) {
+        (
+            StageKind::Identification { .. },
+            StageResponse::Identification {
+                uid_field,
+                password,
+            },
+        ) => {
+            identification::execute(repo, clock, uid_field, password.as_deref(), context).await
+        }
+
+        (
+            StageKind::EmailVerification {
+                max_attempts, ..
+            },
+            StageResponse::EmailVerification { code },
+        ) => email_verification::execute(repo, clock, code, *max_attempts, context).await,
+
+        (
+            StageKind::PasswordWrite { require_current },
+            StageResponse::PasswordWrite {
+                current_password,
+                new_password,
+            },
+        ) => {
+            password_write::execute(
+                repo,
+                rng,
+                clock,
+                *require_current,
+                current_password.as_deref(),
+                new_password,
+                context,
+            )
+            .await
+        }
+
+        (
+            StageKind::UserWrite {
+                create_users_as_inactive,
+            },
+            StageResponse::UserWrite {
+                username,
+                display_name,
+            },
+        ) => {
+            user_write::execute(
+                repo,
+                rng,
+                clock,
+                *create_users_as_inactive,
+                username,
+                display_name.as_deref(),
+                context,
+            )
+            .await
+        }
+
+        // Captcha, Consent, Prompt — no side effects in MVP
+        _ => Ok(StageOutcome::Continue),
+    }
+}
