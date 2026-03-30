@@ -1,4 +1,3 @@
-use pasion_data_model::SiteConfig;
 use pasion_storage::RepositoryAccess;
 use pasion_storage::account::AccountSecuritySummary;
 use salvo::oapi::ToSchema;
@@ -9,6 +8,8 @@ use super::{
     DepotExt, NodeType, RouteError, UserAgentInfo, extract_bound_activity_tracker,
     extract_session_info, get_requester, make_clock, parse_user_agent,
 };
+use super::linked_accounts::LinkedAccount;
+use super::site_config::{SiteConfigResponse, from_site_config};
 use crate::account_connections::load_linked_accounts;
 use crate::account_profile::{AccountProfileError, load_viewer_profile};
 
@@ -19,7 +20,7 @@ use crate::account_profile::{AccountProfileError, load_viewer_profile};
 struct ViewerResponse {
     viewer: ViewerData,
     viewer_session: ViewerSessionData,
-    site_config: SiteConfigData,
+    site_config: SiteConfigResponse,
 }
 
 #[derive(Serialize, ToSchema)]
@@ -36,19 +37,7 @@ struct ViewerUser {
     has_password: bool,
     matrix: Option<MatrixUserData>,
     emails: Option<EmailListData>,
-    linked_accounts: Option<Vec<LinkedAccountData>>,
-}
-
-#[derive(Serialize, ToSchema)]
-#[serde(rename_all = "camelCase")]
-struct LinkedAccountData {
-    id: String,
-    provider_id: String,
-    provider_name: Option<String>,
-    provider_brand: Option<String>,
-    subject: String,
-    human_account_name: Option<String>,
-    created_at: String,
+    linked_accounts: Option<Vec<LinkedAccount>>,
 }
 
 #[derive(Serialize, ToSchema)]
@@ -83,22 +72,6 @@ struct MatrixUserData {
 
 #[derive(Serialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
-struct SiteConfigData {
-    id: Option<String>,
-    email_change_allowed: bool,
-    password_login_enabled: bool,
-    account_deactivation_allowed: bool,
-    display_name_change_allowed: bool,
-    password_registration_enabled: bool,
-    minimum_password_complexity: u8,
-    imprint: Option<String>,
-    tos_uri: Option<String>,
-    policy_uri: Option<String>,
-    plan_management_iframe_uri: Option<String>,
-}
-
-#[derive(Serialize, ToSchema)]
-#[serde(rename_all = "camelCase")]
 struct EmailListData {
     total_count: i64,
     edges: Vec<EmailEdgeData>,
@@ -117,22 +90,6 @@ struct EmailData {
     id: String,
     email: String,
     confirmed_at: Option<String>,
-}
-
-fn site_config_data(config: &SiteConfig) -> SiteConfigData {
-    SiteConfigData {
-        id: Some("site_config".to_owned()),
-        email_change_allowed: config.email_change_allowed,
-        password_login_enabled: config.password_login_enabled,
-        account_deactivation_allowed: config.account_deactivation_allowed,
-        display_name_change_allowed: config.displayname_change_allowed,
-        password_registration_enabled: config.password_registration_enabled,
-        minimum_password_complexity: config.minimum_password_complexity,
-        imprint: config.imprint.clone(),
-        tos_uri: config.tos_uri.as_ref().map(|u| u.to_string()),
-        policy_uri: config.policy_uri.as_ref().map(|u| u.to_string()),
-        plan_management_iframe_uri: config.plan_management_iframe_uri.clone(),
-    }
 }
 
 // ── GET /api/v1/viewer ─────────────────────────────────────────
@@ -187,11 +144,11 @@ pub async fn get_viewer(
             let has_password = profile.has_password;
 
             // Fetch linked upstream OAuth accounts
-            let linked_accounts: Vec<LinkedAccountData> =
+            let linked_accounts: Vec<LinkedAccount> =
                 load_linked_accounts(&mut repo, user, 100)
                     .await?
                     .into_iter()
-                    .map(|link| LinkedAccountData {
+                    .map(|link| LinkedAccount {
                         id: link.id.to_string(),
                         provider_id: link.provider_id.to_string(),
                         provider_name: link.provider_name,
@@ -242,7 +199,7 @@ pub async fn get_viewer(
     Ok(Json(ViewerResponse {
         viewer,
         viewer_session,
-        site_config: site_config_data(&config),
+        site_config: from_site_config(&config),
     }))
 }
 
@@ -262,28 +219,18 @@ fn map_account_profile_error(error: AccountProfileError) -> RouteError {
     }
 }
 
-// ── Response type for security summary ────────────────────────
-
-#[derive(Serialize, ToSchema)]
-#[serde(rename_all = "camelCase")]
-struct SecuritySummaryResponse {
-    has_password: bool,
-    active_sessions_count: usize,
-    linked_providers_count: usize,
-    verified_emails_count: usize,
-    verified_phones_count: usize,
-}
-
 // ── GET /api/v1/viewer/security ───────────────────────────────
 
 /// Returns a lightweight security summary for the current user, including
 /// password status, active session count, linked provider count, and
 /// verified email/phone counts.
+///
+/// Reuses [`SecuritySummaryData`] (also embedded in the overview response).
 #[endpoint]
 pub async fn get_security_summary(
     req: &mut Request,
     depot: &Depot,
-) -> Result<Json<SecuritySummaryResponse>, RouteError> {
+) -> Result<Json<SecuritySummaryData>, RouteError> {
     let repo_factory = depot.repo_factory()?;
     let clock = make_clock();
 
@@ -303,13 +250,7 @@ pub async fn get_security_summary(
 
     repo.cancel().await?;
 
-    Ok(Json(SecuritySummaryResponse {
-        has_password: summary.has_password,
-        active_sessions_count: summary.active_sessions_count,
-        linked_providers_count: summary.linked_providers_count,
-        verified_emails_count: summary.verified_emails_count,
-        verified_phones_count: summary.verified_phones_count,
-    }))
+    Ok(Json(SecuritySummaryData::from(&summary)))
 }
 
 // ── Response types for workflow inbox ────────────────────────

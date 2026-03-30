@@ -110,8 +110,7 @@ macro_rules! impl_from_error_for_route {
     };
 }
 
-pub use pasion_data_model::SiteConfig;
-pub use pasion_salvo_utils::{ErrorWrapper, cookies::CookieManager};
+pub use pasion_salvo_utils::cookies::CookieManager;
 
 pub use self::{
     activity_tracker::{ActivityTracker, Bound as BoundActivityTracker},

@@ -1,3 +1,10 @@
+//! # Migration path
+//!
+//! The recovery workflow currently uses `UserRecoveryRepository` for state
+//! tracking. It will be progressively migrated to use `WorkflowRepository`
+//! for unified workflow state management. The flow engine (`crate::flow`) can
+//! already orchestrate recovery as a `default-recovery` flow.
+
 use std::{net::IpAddr, str::FromStr};
 
 use anyhow::{Context as _, Error as AnyhowError};

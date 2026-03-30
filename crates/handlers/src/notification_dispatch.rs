@@ -1,3 +1,9 @@
+//! # Migration path
+//!
+//! Notification scheduling currently uses `DispatchNotificationJob` directly.
+//! It will be progressively migrated to use `NotificationRepository` for
+//! unified request/delivery tracking.
+
 use pasion_data_model::{
     Clock, UserEmailAuthentication, UserPhoneAuthentication, UserRecoverySession,
 };

@@ -1,3 +1,4 @@
+use pasion_data_model::SiteConfig;
 use salvo::oapi::ToSchema;
 use salvo::prelude::*;
 use serde::Serialize;
@@ -20,12 +21,9 @@ pub struct SiteConfigResponse {
     pub plan_management_iframe_uri: Option<String>,
 }
 
-/// GET /api/v1/site-config
-#[endpoint]
-pub async fn get(depot: &Depot) -> Result<Json<SiteConfigResponse>, RouteError> {
-    let config = depot.site_config()?;
-
-    Ok(Json(SiteConfigResponse {
+/// Build a [`SiteConfigResponse`] from the domain [`SiteConfig`].
+pub fn from_site_config(config: &SiteConfig) -> SiteConfigResponse {
+    SiteConfigResponse {
         id: Some("site_config".to_owned()),
         email_change_allowed: config.email_change_allowed,
         password_login_enabled: config.password_login_enabled,
@@ -33,9 +31,17 @@ pub async fn get(depot: &Depot) -> Result<Json<SiteConfigResponse>, RouteError> 
         display_name_change_allowed: config.displayname_change_allowed,
         password_registration_enabled: config.password_registration_enabled,
         minimum_password_complexity: config.minimum_password_complexity,
-        imprint: config.imprint,
+        imprint: config.imprint.clone(),
         tos_uri: config.tos_uri.as_ref().map(|u| u.to_string()),
         policy_uri: config.policy_uri.as_ref().map(|u| u.to_string()),
-        plan_management_iframe_uri: config.plan_management_iframe_uri,
-    }))
+        plan_management_iframe_uri: config.plan_management_iframe_uri.clone(),
+    }
+}
+
+/// GET /api/v1/site-config
+#[endpoint]
+pub async fn get(depot: &Depot) -> Result<Json<SiteConfigResponse>, RouteError> {
+    let config = depot.site_config()?;
+
+    Ok(Json(from_site_config(&config)))
 }

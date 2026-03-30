@@ -25,6 +25,12 @@ use crate::flow::{FlowExecutor, FlowPlan, flow_session_store_write};
 // ---------------------------------------------------------------------------
 
 /// Envelope returned for every flow endpoint.
+///
+/// This is intentionally separate from the data-model flow types
+/// (`FlowSession`, `StageChallenge`, etc.). Those are domain types used by
+/// the flow engine, while this struct is an HTTP-layer envelope that
+/// combines session metadata with the current challenge for JSON
+/// serialization.
 #[derive(Serialize)]
 #[serde(rename_all = "snake_case")]
 pub struct FlowResponse {

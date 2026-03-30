@@ -296,6 +296,68 @@ pub enum NotificationEventActor {
     },
 }
 
+/// A versioned notification template.
+///
+/// Templates are keyed by `template_key` and versioned independently per
+/// channel.  Only published versions (`published_at.is_some()`) should be
+/// resolved at send time.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct NotificationTemplateVersion {
+    /// Stable unique identifier for this template version.
+    pub id: Ulid,
+    /// Application-defined template key, for example `verification_email`.
+    pub template_key: String,
+    /// Monotonically increasing version number within the template key.
+    pub version: u32,
+    /// Delivery channel this version targets.
+    pub channel: NotificationChannel,
+    /// Optional subject line template (relevant for email).
+    pub subject_template: Option<String>,
+    /// Body template content.
+    pub body_template: String,
+    /// When this version was created.
+    pub created_at: DateTime<Utc>,
+    /// When this version was published for delivery use.
+    pub published_at: Option<DateTime<Utc>>,
+}
+
+/// A user's notification channel preference.
+///
+/// Preferences express per-user opt-in / opt-out for each delivery channel.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct NotificationPreference {
+    /// Stable unique identifier for the preference record.
+    pub id: Ulid,
+    /// The user this preference belongs to.
+    pub user_id: Ulid,
+    /// Delivery channel this preference controls.
+    pub channel: NotificationChannel,
+    /// Whether the channel is enabled for the user.
+    pub enabled: bool,
+    /// When this preference was last updated.
+    pub updated_at: DateTime<Utc>,
+}
+
+/// Binding between a notification channel and a provider.
+///
+/// Provider bindings map a logical channel to a concrete transport adapter
+/// (e.g., SES for email, Twilio for SMS).
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct NotificationProviderBinding {
+    /// Stable unique identifier for the binding.
+    pub id: Ulid,
+    /// Delivery channel this binding serves.
+    pub channel: NotificationChannel,
+    /// Stable provider key used to resolve the transport adapter at runtime.
+    pub provider_key: String,
+    /// Provider-specific configuration stored as structured JSON.
+    pub config: Value,
+    /// Whether this binding is currently active.
+    pub enabled: bool,
+    /// When this binding was created.
+    pub created_at: DateTime<Utc>,
+}
+
 #[cfg(test)]
 mod tests {
     use super::{

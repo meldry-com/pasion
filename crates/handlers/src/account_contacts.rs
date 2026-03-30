@@ -3,6 +3,13 @@
 //! These functions encapsulate the business logic for adding, verifying, and
 //! removing contact information on an existing user account. They are consumed
 //! by the REST handlers in [`crate::rest::emails`].
+//!
+//! # Migration path
+//!
+//! The contact verification workflow currently uses direct repository calls for
+//! state tracking. It will be progressively migrated to use `WorkflowRepository`
+//! for unified workflow state management. The flow engine (`crate::flow`) can
+//! already orchestrate contact verification as a workflow.
 
 use anyhow::Error as AnyhowError;
 use pasion_data_model::{BrowserSession, Clock, UserEmailAuthentication};
