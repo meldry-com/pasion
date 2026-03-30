@@ -10,6 +10,8 @@ use diesel::sql_types::{BigInt, Bool};
 use diesel_async::{AsyncPgConnection, RunQueryDsl, pooled_connection::deadpool::Pool};
 use diesel_migrations::{EmbeddedMigrations, MigrationHarness, embed_migrations};
 
+/// PostgreSQL account aggregate repositories.
+pub mod account;
 /// PostgreSQL app session repositories.
 pub mod app_session;
 /// PostgreSQL audit log repositories.

@@ -3,6 +3,7 @@ use futures_util::future::BoxFuture;
 use thiserror::Error;
 
 use crate::{
+    account::AccountRepository,
     app_session::AppSessionRepository,
     audit::AuditRepository,
     notification::NotificationRepository,
@@ -108,6 +109,9 @@ pub trait RepositoryTransaction {
 pub trait RepositoryAccess: Send {
     /// The backend-specific error type used by each repository.
     type Error: std::error::Error + Send + Sync + 'static;
+
+    /// Get an [`AccountRepository`]
+    fn account<'c>(&'c mut self) -> Box<dyn AccountRepository<Error = Self::Error> + 'c>;
 
     /// Get an [`UpstreamOAuthLinkRepository`]
     fn upstream_oauth_link<'c>(
@@ -233,6 +237,7 @@ mod impls {
     use super::RepositoryAccess;
     use crate::{
         MapErr, Repository, RepositoryTransaction,
+        account::AccountRepository,
         app_session::AppSessionRepository,
         audit::AuditRepository,
         notification::NotificationRepository,
@@ -294,6 +299,10 @@ mod impls {
         E: std::error::Error + Send + Sync + 'static,
     {
         type Error = E;
+
+        fn account<'c>(&'c mut self) -> Box<dyn AccountRepository<Error = Self::Error> + 'c> {
+            Box::new(MapErr::new(self.inner.account(), &mut self.mapper))
+        }
 
         fn upstream_oauth_link<'c>(
             &'c mut self,
@@ -486,6 +495,10 @@ mod impls {
 
     impl<R: RepositoryAccess + ?Sized> RepositoryAccess for Box<R> {
         type Error = R::Error;
+
+        fn account<'c>(&'c mut self) -> Box<dyn AccountRepository<Error = Self::Error> + 'c> {
+            (**self).account()
+        }
 
         fn upstream_oauth_link<'c>(
             &'c mut self,

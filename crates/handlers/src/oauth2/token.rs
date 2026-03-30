@@ -2,7 +2,7 @@ use std::sync::{Arc, LazyLock};
 
 use oauth2_types::{
     errors::{ClientError, ClientErrorCode},
-    requests::{AccessTokenRequest, AccessTokenResponse, GrantType},
+    requests::{AccessTokenRequest, AccessTokenResponse},
 };
 use opentelemetry::{Key, KeyValue, metrics::Counter};
 use pasion_data_model::{BoxClock, BoxRng, SiteConfig, SystemClock};
@@ -10,11 +10,8 @@ use pasion_keystore::Keystore;
 use pasion_matrix::HomeserverConnection;
 use pasion_policy::Policy;
 use pasion_router::UrlBuilder;
-use pasion_salvo_utils::{
-    client_authorization::{ClientAuthorization, CredentialsVerificationError},
-    sentry::SentryEventID,
-};
-use pasion_storage::{BoxRepository, BoxRepositoryFactory, RepositoryAccess};
+use pasion_salvo_utils::client_authorization::{ClientAuthorization, CredentialsVerificationError};
+use pasion_storage::{BoxRepository, BoxRepositoryFactory};
 use pasion_templates::Templates;
 use rand::{SeedableRng, thread_rng};
 use rand_chacha::ChaChaRng;
@@ -23,7 +20,7 @@ use thiserror::Error;
 use ulid::Ulid;
 
 use crate::{
-    BoundActivityTracker, METER, impl_from_error_for_route,
+    METER, impl_from_error_for_route,
     oauth2_token_service::{
         self, AuthorizationCodeExchangeError, ClientCredentialsGrantError,
         DeviceCodeExchangeError, RefreshTokenExchangeError,

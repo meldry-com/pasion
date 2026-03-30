@@ -6,6 +6,7 @@ use futures_util::{FutureExt, future::BoxFuture};
 use pasion_storage::{
     BoxRepository, BoxRepositoryFactory, MapErr, Repository, RepositoryAccess, RepositoryError,
     RepositoryFactory, RepositoryTransaction,
+    account::AccountRepository,
     app_session::AppSessionRepository,
     audit::AuditRepository,
     notification::NotificationRepository,
@@ -31,6 +32,7 @@ use tracing::Instrument;
 
 use crate::{
     DatabaseError,
+    account::PgAccountRepository,
     app_session::PgAppSessionRepository,
     audit::PgAuditRepository,
     notification::PgNotificationRepository,
@@ -178,6 +180,10 @@ impl RepositoryTransaction for PgRepository {
 
 impl RepositoryAccess for PgRepository {
     type Error = DatabaseError;
+
+    fn account<'c>(&'c mut self) -> Box<dyn AccountRepository<Error = Self::Error> + 'c> {
+        Box::new(PgAccountRepository::new(&mut *self.conn))
+    }
 
     fn upstream_oauth_link<'c>(
         &'c mut self,

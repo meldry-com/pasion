@@ -179,7 +179,7 @@ pub async fn oauth2_consent_get(
         return Ok(());
     };
 
-    let screen = load_authorization_consent(
+    let info = load_authorization_consent(
         repo,
         policy_factory.as_ref(),
         homeserver.as_ref(),
@@ -192,7 +192,7 @@ pub async fn oauth2_consent_get(
     .await
     .map_err(map_oauth2_access_error)?;
 
-    res.render(Json(consent_get_response(screen)));
+    res.render(Json(consent_get_response(info.into())));
     Ok(())
 }
 
@@ -255,9 +255,13 @@ pub async fn oauth2_consent_post(
         .record_oauth2_session(&clock, &decision.session)
         .await;
 
+    let redirect_url = decision
+        .redirect_url()
+        .map_err(map_oauth2_access_error)?;
+
     res.render(Json(ConsentPostResponse {
         status: "success",
-        redirect_url: decision.redirect_url,
+        redirect_url,
     }));
     Ok(())
 }

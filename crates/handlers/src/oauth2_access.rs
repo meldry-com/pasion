@@ -2,7 +2,8 @@ use std::{net::IpAddr, time::Duration};
 
 use oauth2_types::requests::AuthorizationResponse;
 use pasion_data_model::{
-    AuthorizationGrantStage, BoxClock, BoxRng, BrowserSession, Client, Clock, Session,
+    AuthorizationGrant, AuthorizationGrantStage, BoxClock, BoxRng, BrowserSession, Client, Clock,
+    MatrixUser, Session,
 };
 use pasion_keystore::Keystore;
 use pasion_matrix::HomeserverConnection;
@@ -24,6 +25,19 @@ use crate::{
     session::count_user_sessions_for_limiting,
 };
 
+/// Rich consent information carrying the full domain objects.
+///
+/// This is returned by [`load_authorization_consent`] and contains everything
+/// both the HTML (server-rendered) and REST (JSON) handlers need to present the
+/// consent screen.
+pub struct AuthorizationConsentInfo {
+    pub grant: AuthorizationGrant,
+    pub client: Client,
+    pub matrix_user: MatrixUser,
+    pub policy_violation: bool,
+}
+
+/// Simplified projection used by the REST API consent endpoints.
 pub struct ConsentScreen {
     pub grant_id: Ulid,
     pub client: Client,
@@ -33,9 +47,37 @@ pub struct ConsentScreen {
     pub policy_violation: bool,
 }
 
+impl From<AuthorizationConsentInfo> for ConsentScreen {
+    fn from(info: AuthorizationConsentInfo) -> Self {
+        Self {
+            grant_id: info.grant.id,
+            scope: info.grant.scope.to_string(),
+            client: info.client,
+            user_mxid: info.matrix_user.mxid,
+            user_display_name: info.matrix_user.display_name,
+            policy_violation: info.policy_violation,
+        }
+    }
+}
+
+/// Result of accepting an authorization consent.
+///
+/// Carries the fulfilled session along with the data needed by the caller to
+/// build a callback response (HTML redirect / form-post or JSON URL).
 pub struct AuthorizationConsentDecision {
     pub session: Session,
-    pub redirect_url: String,
+    pub callback_destination: CallbackDestination,
+    pub params: AuthorizationResponse,
+}
+
+impl AuthorizationConsentDecision {
+    /// Build the redirect URL string for JSON API responses.
+    pub fn redirect_url(&self) -> Result<String, OAuth2AccessError> {
+        self.callback_destination
+            .redirect_url(&self.params)
+            .map(|info| info.url)
+            .map_err(|error| OAuth2AccessError::Internal(Box::new(error)))
+    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -80,7 +122,7 @@ pub async fn load_authorization_consent(
     grant_id: Ulid,
     requester_ip: Option<IpAddr>,
     user_agent: Option<String>,
-) -> Result<ConsentScreen, OAuth2AccessError> {
+) -> Result<AuthorizationConsentInfo, OAuth2AccessError> {
     let grant = repo
         .oauth2_authorization_grant()
         .lookup(grant_id)
@@ -114,12 +156,13 @@ pub async fn load_authorization_consent(
     let localpart = &browser_session.user.username;
     let user_display_name = fetch_display_name(homeserver, localpart).await;
 
-    Ok(ConsentScreen {
-        grant_id: grant.id,
+    Ok(AuthorizationConsentInfo {
+        grant,
         client,
-        scope: grant.scope.to_string(),
-        user_mxid: homeserver.mxid(localpart),
-        user_display_name,
+        matrix_user: MatrixUser {
+            mxid: homeserver.mxid(localpart),
+            display_name: user_display_name,
+        },
         policy_violation,
     })
 }
@@ -210,14 +253,10 @@ pub async fn accept_authorization_consent(
 
     repo.save().await?;
 
-    let redirect_url = callback_destination
-        .redirect_url(&params)
-        .map_err(|error| OAuth2AccessError::Internal(Box::new(error)))?
-        .url;
-
     Ok(AuthorizationConsentDecision {
         session,
-        redirect_url,
+        callback_destination,
+        params,
     })
 }
 

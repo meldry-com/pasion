@@ -1,5 +1,6 @@
 //! Admin endpoint for checking connector provider health.
 
+use pasion_matrix::ConnectorRegistry;
 use pasion_salvo_utils::record_error;
 use salvo::{http::StatusCode, prelude::*};
 use schemars::JsonSchema;
@@ -14,7 +15,7 @@ use crate::{
 
 #[derive(Serialize, JsonSchema)]
 #[serde(rename_all = "camelCase")]
-pub struct ConnectorHealthResponse {
+pub struct ProviderHealth {
     /// The connector provider name.
     provider: String,
 
@@ -27,6 +28,13 @@ pub struct ConnectorHealthResponse {
     /// If unhealthy, the error message from the health probe.
     #[serde(skip_serializing_if = "Option::is_none")]
     error: Option<String>,
+}
+
+#[derive(Serialize, JsonSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct ConnectorHealthResponse {
+    /// Health results for each registered provider.
+    providers: Vec<ProviderHealth>,
 }
 
 #[derive(Debug, thiserror::Error)]
@@ -56,6 +64,14 @@ impl Scribe for RouteError {
     }
 }
 
+/// Try to obtain a [`ConnectorRegistry`] from the depot.
+fn get_registry(depot: &Depot) -> Option<ConnectorRegistry> {
+    depot
+        .get::<ConnectorRegistry>("connector_registry")
+        .cloned()
+        .ok()
+}
+
 #[handler]
 #[tracing::instrument(name = "handler.admin.v1.connector_health", skip_all)]
 pub async fn handler(
@@ -63,20 +79,45 @@ pub async fn handler(
     depot: &Depot,
 ) -> Result<Json<ConnectorHealthResponse>, RouteError> {
     let call_context = extract_call_context(req, depot).await?;
-    let homeserver = depot.homeserver()?;
 
-    // Try a lightweight operation to check health
-    let (status, error) = match homeserver.is_localpart_available("__health_check__").await {
-        Ok(_) => ("healthy", None),
-        Err(e) => ("unhealthy", Some(e.to_string())),
+    let providers = if let Some(registry) = get_registry(depot) {
+        // Use the registry: check health for every registered provider.
+        let health_results = registry.check_all_health().await;
+        health_results
+            .into_iter()
+            .map(|(name, result)| {
+                let provider_ref = registry.get(name);
+                let homeserver = provider_ref
+                    .map(|p| p.homeserver().to_owned())
+                    .unwrap_or_default();
+                let (status, error) = match result {
+                    Ok(()) => ("healthy", None),
+                    Err(e) => ("unhealthy", Some(e)),
+                };
+                ProviderHealth {
+                    provider: name.to_owned(),
+                    homeserver,
+                    status,
+                    error,
+                }
+            })
+            .collect()
+    } else {
+        // Fallback: use the single homeserver connection directly.
+        let homeserver = depot.homeserver()?;
+        let (status, error) = match homeserver.is_localpart_available("__health_check__").await {
+            Ok(_) => ("healthy", None),
+            Err(e) => ("unhealthy", Some(e.to_string())),
+        };
+        vec![ProviderHealth {
+            provider: "palpo".to_string(),
+            homeserver: homeserver.homeserver().to_string(),
+            status,
+            error,
+        }]
     };
 
     call_context.repo.cancel().await?; // read-only, no save needed
 
-    Ok(Json(ConnectorHealthResponse {
-        provider: "palpo".to_string(),
-        homeserver: homeserver.homeserver().to_string(),
-        status,
-        error,
-    }))
+    Ok(Json(ConnectorHealthResponse { providers }))
 }

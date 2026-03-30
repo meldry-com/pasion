@@ -102,6 +102,9 @@ pub mod pagination;
 pub(crate) mod repository;
 mod utils;
 
+/// Account aggregate repositories (unified contact points, identity bindings,
+/// and security summary).
+pub mod account;
 /// App session repositories.
 pub mod app_session;
 /// Audit log repositories.
