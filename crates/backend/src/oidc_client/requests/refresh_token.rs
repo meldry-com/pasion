@@ -11,12 +11,12 @@ use pasion_jose::claims::{self, TokenHash};
 use rand::Rng;
 use url::Url;
 
-use super::jose::JwtVerificationData;
 use super::super::{
     error::{IdTokenError, TokenRefreshError},
     requests::{jose::verify_id_token, token::request_access_token},
     types::{IdToken, client_credentials::ClientCredentials},
 };
+use super::jose::JwtVerificationData;
 
 /// Exchange an authorization code for an access token.
 ///

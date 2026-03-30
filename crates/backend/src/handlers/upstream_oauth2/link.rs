@@ -6,7 +6,7 @@ use crate::salvo_utils::{
     csrf::{CsrfExt, ProtectedForm},
     record_error,
 };
-use pasion_storage::{
+use pasion_data::{
     RepositoryAccess,
     upstream_oauth2::{UpstreamOAuthLinkRepository, UpstreamOAuthProviderRepository},
     user::UserRepository,
@@ -66,7 +66,7 @@ pub enum RouteError {
 impl_from_error_for_route!(pasion_templates::TemplateError);
 impl_from_error_for_route!(crate::salvo_utils::csrf::CsrfError);
 impl_from_error_for_route!(super::cookie::UpstreamSessionNotFound);
-impl_from_error_for_route!(pasion_storage::RepositoryError);
+impl_from_error_for_route!(pasion_data::RepositoryError);
 impl_from_error_for_route!(crate::handlers::rest::RouteError);
 impl_from_error_for_route!(pasion_policy::InstantiateError);
 impl_from_error_for_route!(salvo::http::ParseError);
@@ -582,7 +582,7 @@ pub async fn post(
 mod tests {
     use hyper::{Request, StatusCode, header::CONTENT_TYPE};
     use oauth2_types::scope::{OPENID, Scope};
-    use pasion_data_model::{
+    use pasion_data::{
         UpstreamOAuthAuthorizationSession, UpstreamOAuthLink, UpstreamOAuthProviderClaimsImports,
         UpstreamOAuthProviderImportPreference, UpstreamOAuthProviderLocalpartPreference,
         UpstreamOAuthProviderTokenAuthMethod, UserEmailAuthentication, UserRegistration,
@@ -590,7 +590,7 @@ mod tests {
     use pasion_iana::jose::JsonWebSignatureAlg;
     use pasion_jose::jwt::{JsonWebSignatureHeader, Jwt};
     use pasion_keystore::Keystore;
-    use pasion_storage::{
+    use pasion_data::{
         Repository, RepositoryError, upstream_oauth2::UpstreamOAuthProviderParams,
     };
     use rand_chacha::ChaChaRng;
@@ -605,19 +605,19 @@ mod tests {
     #[tokio::test]
     async fn test_register() {
         setup();
-        let pool = pasion_storage_pg::test_utils::setup_test_pool().await;
+        let pool = pasion_data::test_utils::setup_test_pool().await;
         let state = TestState::from_pool(pool.clone()).await.unwrap();
         let mut rng = state.rng();
         let cookies = CookieHelper::new();
 
         let claims_imports = UpstreamOAuthProviderClaimsImports {
             localpart: UpstreamOAuthProviderLocalpartPreference {
-                action: pasion_data_model::UpstreamOAuthProviderImportAction::Force,
+                action: pasion_data::UpstreamOAuthProviderImportAction::Force,
                 template: None,
-                on_conflict: pasion_data_model::UpstreamOAuthProviderOnConflict::default(),
+                on_conflict: pasion_data::UpstreamOAuthProviderOnConflict::default(),
             },
             email: UpstreamOAuthProviderImportPreference {
-                action: pasion_data_model::UpstreamOAuthProviderImportAction::Force,
+                action: pasion_data::UpstreamOAuthProviderImportAction::Force,
                 template: None,
             },
             ..UpstreamOAuthProviderClaimsImports::default()
@@ -669,14 +669,14 @@ mod tests {
                     fetch_userinfo: false,
                     userinfo_signed_response_alg: None,
                     jwks_uri_override: None,
-                    discovery_mode: pasion_data_model::UpstreamOAuthProviderDiscoveryMode::Oidc,
-                    pkce_mode: pasion_data_model::UpstreamOAuthProviderPkceMode::Auto,
+                    discovery_mode: pasion_data::UpstreamOAuthProviderDiscoveryMode::Oidc,
+                    pkce_mode: pasion_data::UpstreamOAuthProviderPkceMode::Auto,
                     response_mode: None,
                     additional_authorization_parameters: Vec::new(),
                     forward_login_hint: false,
                     ui_order: 0,
                     on_backchannel_logout:
-                        pasion_data_model::UpstreamOAuthProviderOnBackchannelLogout::DoNothing,
+                        pasion_data::UpstreamOAuthProviderOnBackchannelLogout::DoNothing,
                 },
             )
             .await
@@ -803,7 +803,7 @@ mod tests {
         // Same test as test_register, but checks that we get straight to the
         // registration flow skipping the confirmation
         setup();
-        let pool = pasion_storage_pg::test_utils::setup_test_pool().await;
+        let pool = pasion_data::test_utils::setup_test_pool().await;
         let state = TestState::from_pool(pool.clone()).await.unwrap();
         let mut rng = state.rng();
         let cookies = CookieHelper::new();
@@ -811,12 +811,12 @@ mod tests {
         let claims_imports = UpstreamOAuthProviderClaimsImports {
             skip_confirmation: true,
             localpart: UpstreamOAuthProviderLocalpartPreference {
-                action: pasion_data_model::UpstreamOAuthProviderImportAction::Require,
+                action: pasion_data::UpstreamOAuthProviderImportAction::Require,
                 template: None,
-                on_conflict: pasion_data_model::UpstreamOAuthProviderOnConflict::default(),
+                on_conflict: pasion_data::UpstreamOAuthProviderOnConflict::default(),
             },
             email: UpstreamOAuthProviderImportPreference {
-                action: pasion_data_model::UpstreamOAuthProviderImportAction::Force,
+                action: pasion_data::UpstreamOAuthProviderImportAction::Force,
                 template: None,
             },
             ..UpstreamOAuthProviderClaimsImports::default()
@@ -868,14 +868,14 @@ mod tests {
                     fetch_userinfo: false,
                     userinfo_signed_response_alg: None,
                     jwks_uri_override: None,
-                    discovery_mode: pasion_data_model::UpstreamOAuthProviderDiscoveryMode::Oidc,
-                    pkce_mode: pasion_data_model::UpstreamOAuthProviderPkceMode::Auto,
+                    discovery_mode: pasion_data::UpstreamOAuthProviderDiscoveryMode::Oidc,
+                    pkce_mode: pasion_data::UpstreamOAuthProviderPkceMode::Auto,
                     response_mode: None,
                     additional_authorization_parameters: Vec::new(),
                     forward_login_hint: false,
                     ui_order: 0,
                     on_backchannel_logout:
-                        pasion_data_model::UpstreamOAuthProviderOnBackchannelLogout::DoNothing,
+                        pasion_data::UpstreamOAuthProviderOnBackchannelLogout::DoNothing,
                 },
             )
             .await
@@ -978,21 +978,21 @@ mod tests {
         let subject = "subject";
 
         setup();
-        let pool = pasion_storage_pg::test_utils::setup_test_pool().await;
+        let pool = pasion_data::test_utils::setup_test_pool().await;
         let state = TestState::from_pool(pool.clone()).await.unwrap();
         let mut rng = state.rng();
         let cookies = CookieHelper::new();
 
         let claims_imports = UpstreamOAuthProviderClaimsImports {
             localpart: UpstreamOAuthProviderLocalpartPreference {
-                action: pasion_data_model::UpstreamOAuthProviderImportAction::Require,
+                action: pasion_data::UpstreamOAuthProviderImportAction::Require,
                 template: None,
                 // This is the important bit: this will automatically link
                 // existing accounts if the localpart matches
-                on_conflict: pasion_data_model::UpstreamOAuthProviderOnConflict::Add,
+                on_conflict: pasion_data::UpstreamOAuthProviderOnConflict::Add,
             },
             email: UpstreamOAuthProviderImportPreference {
-                action: pasion_data_model::UpstreamOAuthProviderImportAction::Require,
+                action: pasion_data::UpstreamOAuthProviderImportAction::Require,
                 template: None,
             },
             ..UpstreamOAuthProviderClaimsImports::default()
@@ -1031,13 +1031,13 @@ mod tests {
                     fetch_userinfo: false,
                     userinfo_signed_response_alg: None,
                     jwks_uri_override: None,
-                    discovery_mode: pasion_data_model::UpstreamOAuthProviderDiscoveryMode::Oidc,
-                    pkce_mode: pasion_data_model::UpstreamOAuthProviderPkceMode::Auto,
+                    discovery_mode: pasion_data::UpstreamOAuthProviderDiscoveryMode::Oidc,
+                    pkce_mode: pasion_data::UpstreamOAuthProviderPkceMode::Auto,
                     response_mode: None,
                     additional_authorization_parameters: Vec::new(),
                     forward_login_hint: false,
                     on_backchannel_logout:
-                        pasion_data_model::UpstreamOAuthProviderOnBackchannelLogout::DoNothing,
+                        pasion_data::UpstreamOAuthProviderOnBackchannelLogout::DoNothing,
                     ui_order: 0,
                 },
             )
@@ -1098,19 +1098,19 @@ mod tests {
         let existing_username = "john";
 
         setup();
-        let pool = pasion_storage_pg::test_utils::setup_test_pool().await;
+        let pool = pasion_data::test_utils::setup_test_pool().await;
         let state = TestState::from_pool(pool.clone()).await.unwrap();
         let mut rng = state.rng();
         let cookies = CookieHelper::new();
 
         let claims_imports = UpstreamOAuthProviderClaimsImports {
             localpart: UpstreamOAuthProviderLocalpartPreference {
-                action: pasion_data_model::UpstreamOAuthProviderImportAction::Require,
+                action: pasion_data::UpstreamOAuthProviderImportAction::Require,
                 template: None,
-                on_conflict: pasion_data_model::UpstreamOAuthProviderOnConflict::default(),
+                on_conflict: pasion_data::UpstreamOAuthProviderOnConflict::default(),
             },
             email: UpstreamOAuthProviderImportPreference {
-                action: pasion_data_model::UpstreamOAuthProviderImportAction::Require,
+                action: pasion_data::UpstreamOAuthProviderImportAction::Require,
                 template: None,
             },
             ..UpstreamOAuthProviderClaimsImports::default()
@@ -1149,13 +1149,13 @@ mod tests {
                     fetch_userinfo: false,
                     userinfo_signed_response_alg: None,
                     jwks_uri_override: None,
-                    discovery_mode: pasion_data_model::UpstreamOAuthProviderDiscoveryMode::Oidc,
-                    pkce_mode: pasion_data_model::UpstreamOAuthProviderPkceMode::Auto,
+                    discovery_mode: pasion_data::UpstreamOAuthProviderDiscoveryMode::Oidc,
+                    pkce_mode: pasion_data::UpstreamOAuthProviderPkceMode::Auto,
                     response_mode: None,
                     additional_authorization_parameters: Vec::new(),
                     forward_login_hint: false,
                     on_backchannel_logout:
-                        pasion_data_model::UpstreamOAuthProviderOnBackchannelLogout::DoNothing,
+                        pasion_data::UpstreamOAuthProviderOnBackchannelLogout::DoNothing,
                     ui_order: 0,
                 },
             )
@@ -1222,9 +1222,9 @@ mod tests {
 
     async fn add_linked_upstream_session(
         rng: &mut ChaChaRng,
-        clock: &impl pasion_data_model::Clock,
+        clock: &impl pasion_data::Clock,
         repo: &mut Box<dyn Repository<RepositoryError> + Send + Sync + 'static>,
-        provider: &pasion_data_model::UpstreamOAuthProvider,
+        provider: &pasion_data::UpstreamOAuthProvider,
         subject: &str,
         id_token: &str,
         id_token_claims: Value,
@@ -1269,20 +1269,20 @@ mod tests {
         let old_subject = "old_subject";
 
         setup();
-        let pool = pasion_storage_pg::test_utils::setup_test_pool().await;
+        let pool = pasion_data::test_utils::setup_test_pool().await;
         let state = TestState::from_pool(pool.clone()).await.unwrap();
         let mut rng = state.rng();
         let cookies = CookieHelper::new();
 
         let claims_imports = UpstreamOAuthProviderClaimsImports {
             localpart: UpstreamOAuthProviderLocalpartPreference {
-                action: pasion_data_model::UpstreamOAuthProviderImportAction::Require,
+                action: pasion_data::UpstreamOAuthProviderImportAction::Require,
                 template: None,
                 // This will replace any existing links for this provider and user
-                on_conflict: pasion_data_model::UpstreamOAuthProviderOnConflict::Replace,
+                on_conflict: pasion_data::UpstreamOAuthProviderOnConflict::Replace,
             },
             email: UpstreamOAuthProviderImportPreference {
-                action: pasion_data_model::UpstreamOAuthProviderImportAction::Require,
+                action: pasion_data::UpstreamOAuthProviderImportAction::Require,
                 template: None,
             },
             ..UpstreamOAuthProviderClaimsImports::default()
@@ -1320,13 +1320,13 @@ mod tests {
                     fetch_userinfo: false,
                     userinfo_signed_response_alg: None,
                     jwks_uri_override: None,
-                    discovery_mode: pasion_data_model::UpstreamOAuthProviderDiscoveryMode::Oidc,
-                    pkce_mode: pasion_data_model::UpstreamOAuthProviderPkceMode::Auto,
+                    discovery_mode: pasion_data::UpstreamOAuthProviderDiscoveryMode::Oidc,
+                    pkce_mode: pasion_data::UpstreamOAuthProviderPkceMode::Auto,
                     response_mode: None,
                     additional_authorization_parameters: Vec::new(),
                     forward_login_hint: false,
                     on_backchannel_logout:
-                        pasion_data_model::UpstreamOAuthProviderOnBackchannelLogout::DoNothing,
+                        pasion_data::UpstreamOAuthProviderOnBackchannelLogout::DoNothing,
                     ui_order: 0,
                 },
             )
@@ -1419,20 +1419,20 @@ mod tests {
         let subject = "subject";
 
         setup();
-        let pool = pasion_storage_pg::test_utils::setup_test_pool().await;
+        let pool = pasion_data::test_utils::setup_test_pool().await;
         let state = TestState::from_pool(pool.clone()).await.unwrap();
         let mut rng = state.rng();
         let cookies = CookieHelper::new();
 
         let claims_imports = UpstreamOAuthProviderClaimsImports {
             localpart: UpstreamOAuthProviderLocalpartPreference {
-                action: pasion_data_model::UpstreamOAuthProviderImportAction::Require,
+                action: pasion_data::UpstreamOAuthProviderImportAction::Require,
                 template: None,
                 // This will only link if there are no existing links for this provider and user
-                on_conflict: pasion_data_model::UpstreamOAuthProviderOnConflict::Set,
+                on_conflict: pasion_data::UpstreamOAuthProviderOnConflict::Set,
             },
             email: UpstreamOAuthProviderImportPreference {
-                action: pasion_data_model::UpstreamOAuthProviderImportAction::Require,
+                action: pasion_data::UpstreamOAuthProviderImportAction::Require,
                 template: None,
             },
             ..UpstreamOAuthProviderClaimsImports::default()
@@ -1470,13 +1470,13 @@ mod tests {
                     fetch_userinfo: false,
                     userinfo_signed_response_alg: None,
                     jwks_uri_override: None,
-                    discovery_mode: pasion_data_model::UpstreamOAuthProviderDiscoveryMode::Oidc,
-                    pkce_mode: pasion_data_model::UpstreamOAuthProviderPkceMode::Auto,
+                    discovery_mode: pasion_data::UpstreamOAuthProviderDiscoveryMode::Oidc,
+                    pkce_mode: pasion_data::UpstreamOAuthProviderPkceMode::Auto,
                     response_mode: None,
                     additional_authorization_parameters: Vec::new(),
                     forward_login_hint: false,
                     on_backchannel_logout:
-                        pasion_data_model::UpstreamOAuthProviderOnBackchannelLogout::DoNothing,
+                        pasion_data::UpstreamOAuthProviderOnBackchannelLogout::DoNothing,
                     ui_order: 0,
                 },
             )
@@ -1540,20 +1540,20 @@ mod tests {
         let old_subject = "old_subject";
 
         setup();
-        let pool = pasion_storage_pg::test_utils::setup_test_pool().await;
+        let pool = pasion_data::test_utils::setup_test_pool().await;
         let state = TestState::from_pool(pool.clone()).await.unwrap();
         let mut rng = state.rng();
         let cookies = CookieHelper::new();
 
         let claims_imports = UpstreamOAuthProviderClaimsImports {
             localpart: UpstreamOAuthProviderLocalpartPreference {
-                action: pasion_data_model::UpstreamOAuthProviderImportAction::Require,
+                action: pasion_data::UpstreamOAuthProviderImportAction::Require,
                 template: None,
                 // This will only link if there are no existing links for this provider and user
-                on_conflict: pasion_data_model::UpstreamOAuthProviderOnConflict::Set,
+                on_conflict: pasion_data::UpstreamOAuthProviderOnConflict::Set,
             },
             email: UpstreamOAuthProviderImportPreference {
-                action: pasion_data_model::UpstreamOAuthProviderImportAction::Require,
+                action: pasion_data::UpstreamOAuthProviderImportAction::Require,
                 template: None,
             },
             ..UpstreamOAuthProviderClaimsImports::default()
@@ -1591,13 +1591,13 @@ mod tests {
                     fetch_userinfo: false,
                     userinfo_signed_response_alg: None,
                     jwks_uri_override: None,
-                    discovery_mode: pasion_data_model::UpstreamOAuthProviderDiscoveryMode::Oidc,
-                    pkce_mode: pasion_data_model::UpstreamOAuthProviderPkceMode::Auto,
+                    discovery_mode: pasion_data::UpstreamOAuthProviderDiscoveryMode::Oidc,
+                    pkce_mode: pasion_data::UpstreamOAuthProviderPkceMode::Auto,
                     response_mode: None,
                     additional_authorization_parameters: Vec::new(),
                     forward_login_hint: false,
                     on_backchannel_logout:
-                        pasion_data_model::UpstreamOAuthProviderOnBackchannelLogout::DoNothing,
+                        pasion_data::UpstreamOAuthProviderOnBackchannelLogout::DoNothing,
                     ui_order: 0,
                 },
             )

@@ -1,13 +1,13 @@
 //! Utilities for showing proposer HTML fallbacks when the user is logged out,
 //! locked or deactivated
 
-use pasion_data_model::{BrowserSession, Clock, User};
-use pasion_i18n::DataLocale;
-use pasion_policy::model::SessionCounts;
 use crate::salvo_utils::{SessionInfoExt, cookies::CookieJar, csrf::CsrfExt};
-use pasion_storage::{
+use pasion_data::{
     BoxRepository, RepositoryError, oauth2::OAuth2SessionFilter, personal::PersonalSessionFilter,
 };
+use pasion_data::{BrowserSession, Clock, User};
+use pasion_i18n::DataLocale;
+use pasion_policy::model::SessionCounts;
 use pasion_templates::{AccountInactiveContext, TemplateContext, Templates};
 use rand::RngCore;
 use salvo::{prelude::*, writing::Text};

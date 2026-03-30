@@ -4,13 +4,11 @@
 //! It will be progressively migrated to use `NotificationRepository` for
 //! unified request/delivery tracking.
 
-use pasion_data_model::{
-    Clock, UserEmailAuthentication, UserPhoneAuthentication, UserRecoverySession,
-};
-use pasion_storage::{
+use pasion_data::{
     BoxRepository, RepositoryError,
     queue::{ContactVerificationTarget, DispatchNotificationJob, QueueJobRepositoryExt as _},
 };
+use pasion_data::{Clock, UserEmailAuthentication, UserPhoneAuthentication, UserRecoverySession};
 use rand::RngCore;
 
 /// User-facing notification intent expressed by the business layer.

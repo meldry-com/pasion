@@ -49,13 +49,22 @@ fn NotificationPreferencesForm(
     let mut feedback = use_signal(|| None::<Result<String, String>>);
 
     // Helper: look up whether a channel is enabled in the user's preferences.
-    let is_channel_enabled = |prefs: &[crate::api::types::ChannelPreference], channel: &str| -> bool {
-        prefs.iter().find(|p| p.channel == channel).map(|p| p.enabled).unwrap_or(false)
-    };
+    let is_channel_enabled =
+        |prefs: &[crate::api::types::ChannelPreference], channel: &str| -> bool {
+            prefs
+                .iter()
+                .find(|p| p.channel == channel)
+                .map(|p| p.enabled)
+                .unwrap_or(false)
+        };
 
     // Build channel display data.
-    let email_available = available_channels.iter().any(|c| c.channel == "email" && c.enabled);
-    let sms_available = available_channels.iter().any(|c| c.channel == "sms" && c.enabled);
+    let email_available = available_channels
+        .iter()
+        .any(|c| c.channel == "email" && c.enabled);
+    let sms_available = available_channels
+        .iter()
+        .any(|c| c.channel == "sms" && c.enabled);
     let email_enabled = is_channel_enabled(&preferences.read(), "email");
     let sms_enabled = is_channel_enabled(&preferences.read(), "sms");
 

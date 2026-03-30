@@ -114,7 +114,8 @@ pub async fn start_email_auth(
     let limiter = depot.limiter()?;
     let clock = make_clock();
     let mut rng = make_rng();
-    let notification_language = crate::handlers::notification_language(req, depot, input.language.as_deref());
+    let notification_language =
+        crate::handlers::notification_language(req, depot, input.language.as_deref());
 
     let activity_tracker = extract_bound_activity_tracker(req, depot);
     let session_info = extract_session_info(req, depot);
@@ -271,7 +272,8 @@ pub async fn resend_email_auth_code(
     let limiter = depot.limiter()?;
     let clock = make_clock();
     let mut rng = make_rng();
-    let notification_language = crate::handlers::notification_language(req, depot, input.language.as_deref());
+    let notification_language =
+        crate::handlers::notification_language(req, depot, input.language.as_deref());
 
     let activity_tracker = extract_bound_activity_tracker(req, depot);
     let session_info = extract_session_info(req, depot);

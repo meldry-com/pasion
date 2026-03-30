@@ -1,6 +1,6 @@
 use anyhow::Context;
-use pasion_data_model::{PostAuthAction, UrlBuilder};
-use pasion_storage::{
+use pasion_data::{PostAuthAction, UrlBuilder};
+use pasion_data::{
     RepositoryAccess,
     oauth2::OAuth2AuthorizationGrantRepository,
     upstream_oauth2::{UpstreamOAuthLinkRepository, UpstreamOAuthProviderRepository},
@@ -129,10 +129,7 @@ impl OptionalPostAuthAction {
 }
 
 /// Compute the relative URL for a `PostAuthAction`.
-pub fn post_auth_action_relative_url(
-    action: &PostAuthAction,
-    url_builder: &UrlBuilder,
-) -> String {
+pub fn post_auth_action_relative_url(action: &PostAuthAction, url_builder: &UrlBuilder) -> String {
     match action {
         PostAuthAction::ContinueAuthorizationGrant { id } => {
             url_builder.relative_url(&format!("/consent/{id}"))
@@ -140,9 +137,7 @@ pub fn post_auth_action_relative_url(
         PostAuthAction::ContinueDeviceCodeGrant { id } => {
             url_builder.relative_url(&format!("/device/{id}"))
         }
-        PostAuthAction::ChangePassword => {
-            url_builder.relative_url("/account/password/change")
-        }
+        PostAuthAction::ChangePassword => url_builder.relative_url("/account/password/change"),
         PostAuthAction::LinkUpstream { id } => {
             url_builder.relative_url(&format!("/upstream/link/{id}"))
         }

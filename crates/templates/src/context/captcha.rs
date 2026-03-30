@@ -11,17 +11,15 @@ use serde::Serialize;
 use crate::{TemplateContext, context::SampleIdentifier};
 
 #[derive(Debug)]
-struct CaptchaConfig(pasion_data_model::CaptchaConfig);
+struct CaptchaConfig(pasion_data::CaptchaConfig);
 
 impl Object for CaptchaConfig {
     fn get_value(self: &Arc<Self>, key: &Value) -> Option<Value> {
         match key.as_str() {
             Some("service") => Some(match &self.0.service {
-                pasion_data_model::CaptchaService::RecaptchaV2 => "recaptcha_v2".into(),
-                pasion_data_model::CaptchaService::CloudflareTurnstile => {
-                    "cloudflare_turnstile".into()
-                }
-                pasion_data_model::CaptchaService::HCaptcha => "hcaptcha".into(),
+                pasion_data::CaptchaService::RecaptchaV2 => "recaptcha_v2".into(),
+                pasion_data::CaptchaService::CloudflareTurnstile => "cloudflare_turnstile".into(),
+                pasion_data::CaptchaService::HCaptcha => "hcaptcha".into(),
             }),
             Some("site_key") => Some(self.0.site_key.clone().into()),
             _ => None,
@@ -44,7 +42,7 @@ pub struct WithCaptcha<T> {
 
 impl<T> WithCaptcha<T> {
     #[must_use]
-    pub(crate) fn new(captcha: Option<pasion_data_model::CaptchaConfig>, inner: T) -> Self {
+    pub(crate) fn new(captcha: Option<pasion_data::CaptchaConfig>, inner: T) -> Self {
         Self {
             captcha: captcha.map(|captcha| Value::from_object(CaptchaConfig(captcha))),
             inner,

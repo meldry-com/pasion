@@ -202,7 +202,7 @@ fn map_user_profile_error(error: UserProfileServiceError) -> RouteError {
 mod tests {
     use chrono::Duration;
     use hyper::{Request, StatusCode};
-    use pasion_storage::{
+    use pasion_data::{
         RepositoryAccess,
         user::{BrowserSessionRepository, UserRepository},
     };
@@ -220,7 +220,7 @@ mod tests {
     #[tokio::test]
     async fn test_patch_notification_preferences_persists_changes() {
         setup();
-        let pool = pasion_storage_pg::test_utils::setup_test_pool().await;
+        let pool = pasion_data::test_utils::setup_test_pool().await;
         let state = TestState::from_pool(pool.clone()).await.unwrap();
         let unique = unique_test_nonce();
         state.clock.advance(Duration::seconds(unique as i64));
@@ -260,8 +260,7 @@ mod tests {
         assert_eq!(patch_body["preferences"][1]["channel"], "sms");
         assert_eq!(patch_body["preferences"][1]["enabled"], true);
 
-        let get_request =
-            cookies.with_cookies(Request::get("/api/v1/viewer/preferences").empty());
+        let get_request = cookies.with_cookies(Request::get("/api/v1/viewer/preferences").empty());
         let get_response = state.request(get_request).await;
         get_response.assert_status(StatusCode::OK);
         let get_body: serde_json::Value = get_response.json();

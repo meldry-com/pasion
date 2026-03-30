@@ -1,18 +1,16 @@
-use pasion_data_model::audit::AdminOperation;
 use crate::record_error;
-use pasion_storage::audit::NewAdminOperationLog;
+use pasion_data::audit::AdminOperation;
+use pasion_data::audit::NewAdminOperationLog;
 use salvo::{http::StatusCode, prelude::*};
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use ulid::Ulid;
 
-use crate::handlers::{
-    admin::{
-        call_context::extract_call_context,
-        model::{Resource, User},
-        params::extract_ulid_param,
-        response::{ErrorResponse, SingleResponse},
-    },
+use crate::handlers::admin::{
+    call_context::extract_call_context,
+    model::{Resource, User},
+    params::extract_ulid_param,
+    response::{ErrorResponse, SingleResponse},
 };
 
 #[derive(Debug, thiserror::Error)]
@@ -27,7 +25,7 @@ pub enum RouteError {
     UnknownAction(String),
 }
 
-impl_from_error_for_route!(pasion_storage::RepositoryError);
+impl_from_error_for_route!(pasion_data::RepositoryError);
 impl_from_error_for_route!(crate::handlers::admin::params::UlidPathParamRejection);
 impl_from_error_for_route!(crate::handlers::admin::call_context::Rejection);
 
@@ -117,7 +115,7 @@ pub async fn handler(
         }
 
         "terminate_sessions" => {
-            use pasion_storage::user::BrowserSessionFilter;
+            use pasion_data::user::BrowserSessionFilter;
 
             let filter = BrowserSessionFilter::new().for_user(&user).active_only();
             let count = repo.browser_session().finish_bulk(&clock, filter).await?;
@@ -132,9 +130,7 @@ pub async fn handler(
     if let Some(admin_user) = &admin_user {
         let operation = match params.action.as_str() {
             "lock" | "force_password_reset" => AdminOperation::UserLocked,
-            "terminate_sessions" => {
-                AdminOperation::Other("terminate_sessions".into())
-            }
+            "terminate_sessions" => AdminOperation::Other("terminate_sessions".into()),
             _ => AdminOperation::Other(params.action.clone()),
         };
         repo.audit()

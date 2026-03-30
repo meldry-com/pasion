@@ -7,6 +7,7 @@ use std::{
     time::{SystemTime, UNIX_EPOCH},
 };
 
+use crate::salvo_utils::cookies::{CookieJar, CookieManager};
 use chrono::Duration;
 use cookie_store::{CookieStore, RawCookie};
 use diesel_async::AsyncPgConnection;
@@ -18,28 +19,27 @@ use hyper::{
 };
 use oauth2_types::scope::Scope;
 use pasion_config::RateLimitingConfig;
-use pasion_data_model::{
+use pasion_data::PgRepositoryFactory;
+use pasion_data::UrlBuilder;
+use pasion_data::{
     AppVersion, BoxClock, BoxRng, SiteConfig, SystemClock, TokenType, clock::MockClock,
     personal::session::PersonalSessionOwner,
+};
+use pasion_data::{
+    BoxRepository, BoxRepositoryFactory, RepositoryAccess, RepositoryError, RepositoryFactory,
+    personal::{PersonalAccessTokenRepository, PersonalSessionRepository},
+    user::UserRepository,
 };
 use pasion_i18n::Translator;
 use pasion_keystore::{Encrypter, JsonWebKey, JsonWebKeySet, Keystore, PrivateKey};
 use pasion_matrix::{HomeserverConnection, MockHomeserverConnection};
 use pasion_messaging::{MailTransport, Mailer, NotificationCenter};
 use pasion_policy::{InstantiateError, Policy, PolicyFactory};
-use pasion_data_model::UrlBuilder;
-use crate::salvo_utils::cookies::{CookieJar, CookieManager};
-use pasion_storage::{
-    BoxRepository, BoxRepositoryFactory, RepositoryAccess, RepositoryError, RepositoryFactory,
-    personal::{PersonalAccessTokenRepository, PersonalSessionRepository},
-    user::UserRepository,
-};
-use pasion_storage_pg::PgRepositoryFactory;
 use pasion_tasks::QueueWorker;
 use pasion_templates::{SiteConfigExt, Templates};
 use rand::SeedableRng;
 use rand_chacha::ChaChaRng;
-use salvo::{prelude::*, test::TestClient, test::ResponseExt as SalvoResponseExt};
+use salvo::{prelude::*, test::ResponseExt as SalvoResponseExt, test::TestClient};
 use serde::{Serialize, de::DeserializeOwned};
 use tokio_util::{
     sync::{CancellationToken, DropGuard},
@@ -236,10 +236,8 @@ impl TestState {
         let http_client = pasion_http::reqwest_client();
 
         // TODO: add more test keys to the store
-        let rsa = PrivateKey::load_pem(include_str!(
-            "../../../keystore/tests/keys/rsa.pkcs1.pem"
-        ))
-        .unwrap();
+        let rsa = PrivateKey::load_pem(include_str!("../../../keystore/tests/keys/rsa.pkcs1.pem"))
+            .unwrap();
         let rsa = JsonWebKey::new(rsa).with_kid("test-rsa");
 
         let jwks = JsonWebKeySet::new(vec![rsa]);
@@ -728,9 +726,7 @@ impl TestState {
     ///
     /// Panics if the response status code is not 200 or 401.
     pub async fn is_access_token_valid(&self, token: &str) -> bool {
-        let request = Request::get("/oauth2/userinfo")
-            .bearer(token)
-            .empty();
+        let request = Request::get("/oauth2/userinfo").bearer(token).empty();
 
         let response = self.request(request).await;
 

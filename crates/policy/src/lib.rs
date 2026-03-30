@@ -32,7 +32,7 @@ pub mod cedar;
 #[cfg(feature = "remote")]
 pub mod remote;
 
-use pasion_data_model::SessionLimitConfig;
+use pasion_data::SessionLimitConfig;
 use serde::Serialize;
 use thiserror::Error;
 use tokio::io::AsyncRead;
@@ -345,7 +345,7 @@ impl PolicyFactory {
     /// instantiated with the new data.
     pub async fn set_dynamic_data(
         &self,
-        dynamic_data: pasion_data_model::PolicyData,
+        dynamic_data: pasion_data::PolicyData,
     ) -> Result<bool, LoadError> {
         self.inner.set_dynamic_data(dynamic_data).await
     }
@@ -457,7 +457,7 @@ impl Policy {
 mod tests {
     use std::time::SystemTime;
 
-    use pasion_data_model::Ulid;
+    use pasion_data::Ulid;
 
     use super::*;
 
@@ -574,7 +574,7 @@ mod tests {
 
         // Update the policy data
         factory
-            .set_dynamic_data(pasion_data_model::PolicyData {
+            .set_dynamic_data(pasion_data::PolicyData {
                 id: Ulid::nil(),
                 created_at: SystemTime::now().into(),
                 data: serde_json::json!({
@@ -628,7 +628,7 @@ mod tests {
             .collect();
         let json = serde_json::json!({ "emails": { "banned_addresses": { "substrings": data } } });
         factory
-            .set_dynamic_data(pasion_data_model::PolicyData {
+            .set_dynamic_data(pasion_data::PolicyData {
                 id: Ulid::nil(),
                 created_at: SystemTime::now().into(),
                 data: json,

@@ -3,7 +3,7 @@
 use std::time::Duration;
 
 use async_trait::async_trait;
-use pasion_storage::queue::{CleanupQueueJobsJob, PruneStalePolicyDataJob};
+use pasion_data::queue::{CleanupQueueJobsJob, PruneStalePolicyDataJob};
 use tracing::{debug, info};
 use ulid::Ulid;
 

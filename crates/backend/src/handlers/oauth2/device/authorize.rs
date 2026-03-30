@@ -1,21 +1,21 @@
+use crate::record_error;
+use crate::salvo_utils::{
+    client_authorization::{ClientAuthorization, CredentialsVerificationError},
+    sentry::SentryEventID,
+};
 use chrono::Duration;
 use oauth2_types::{
     errors::{ClientError, ClientErrorCode},
     requests::{DeviceAuthorizationRequest, DeviceAuthorizationResponse, GrantType},
     scope::ScopeToken,
 };
-use crate::record_error;
-use crate::salvo_utils::{
-    client_authorization::{ClientAuthorization, CredentialsVerificationError},
-    sentry::SentryEventID,
-};
-use pasion_storage::oauth2::OAuth2DeviceCodeGrantParams;
+use pasion_data::oauth2::OAuth2DeviceCodeGrantParams;
 use rand::distributions::{Alphanumeric, DistString};
 use salvo::prelude::*;
 use thiserror::Error;
 use ulid::Ulid;
 
-use crate::handlers::{rest::DepotExt};
+use crate::handlers::rest::DepotExt;
 
 #[derive(Debug, Error)]
 pub enum RouteError {
@@ -43,7 +43,7 @@ pub enum RouteError {
     },
 }
 
-impl_from_error_for_route!(pasion_storage::RepositoryError);
+impl_from_error_for_route!(pasion_data::RepositoryError);
 impl_from_error_for_route!(crate::handlers::rest::RouteError);
 impl_from_error_for_route!(crate::salvo_utils::client_authorization::ClientAuthorizationError);
 
@@ -202,18 +202,16 @@ mod tests {
     #[tokio::test]
     async fn test_device_code_request() {
         setup();
-        let pool = pasion_storage_pg::test_utils::setup_test_pool().await;
+        let pool = pasion_data::test_utils::setup_test_pool().await;
         let state = TestState::from_pool(pool.clone()).await.unwrap();
 
         // Provision a client
-        let request = Request::post("/oauth2/registration").json(
-            serde_json::json!({
-                "client_uri": "https://example.com/",
-                "token_endpoint_auth_method": "none",
-                "grant_types": ["urn:ietf:params:oauth:grant-type:device_code"],
-                "response_types": [],
-            }),
-        );
+        let request = Request::post("/oauth2/registration").json(serde_json::json!({
+            "client_uri": "https://example.com/",
+            "token_endpoint_auth_method": "none",
+            "grant_types": ["urn:ietf:params:oauth:grant-type:device_code"],
+            "response_types": [],
+        }));
 
         let response = state.request(request).await;
         response.assert_status(StatusCode::CREATED);
@@ -222,12 +220,10 @@ mod tests {
         let client_id = response.client_id;
 
         // Test the happy path: the client is allowed to use the device code grant type
-        let request = Request::post("/oauth2/device").form(
-            serde_json::json!({
-                "client_id": client_id,
-                "scope": "openid",
-            }),
-        );
+        let request = Request::post("/oauth2/device").form(serde_json::json!({
+            "client_id": client_id,
+            "scope": "openid",
+        }));
         let response = state.request(request).await;
         response.assert_status(StatusCode::OK);
 

@@ -2,18 +2,17 @@ use std::str::FromStr as _;
 
 use anyhow::Error as AnyhowError;
 use lettre::address::AddressError;
-use pasion_data_model::{
+use pasion_data::{
     AdminUserPatch, Clock, UpstreamOAuthLink, UpstreamOAuthLinkPatch, User, UserEmail,
-    UserEmailPatch,
-    audit::AdminOperation,
+    UserEmailPatch, audit::AdminOperation,
 };
-use pasion_matrix::HomeserverConnection;
-use pasion_storage::{
+use pasion_data::{
     BoxRepository, RepositoryAccess, RepositoryError,
     queue::{DeactivateUserJob, QueueJobRepositoryExt as _},
     upstream_oauth2::{UpstreamOAuthLinkRepository, UpstreamOAuthProviderRepository},
     user::{UserEmailRepository, UserRepository},
 };
+use pasion_matrix::HomeserverConnection;
 use rand::RngCore;
 use thiserror::Error;
 use ulid::Ulid;
@@ -90,7 +89,10 @@ pub async fn patch_user(
     let should_schedule_deactivation =
         user.deactivated_at.is_none() && patch.deactivated == Some(true);
 
-    let updated = repo.user().patch(clock, user.clone(), patch.clone().into()).await?;
+    let updated = repo
+        .user()
+        .patch(clock, user.clone(), patch.clone().into())
+        .await?;
 
     if should_reactivate {
         homeserver
@@ -184,7 +186,10 @@ pub async fn patch_user_email(
         }
     }
 
-    let updated = repo.user_email().patch(clock, user_email, patch.clone()).await?;
+    let updated = repo
+        .user_email()
+        .patch(clock, user_email, patch.clone())
+        .await?;
 
     record_admin_operation(
         repo,
@@ -235,7 +240,10 @@ pub async fn patch_upstream_oauth_link(
             .await?
             .ok_or(UserAdminServiceError::ProviderNotFound(link.provider_id))?;
 
-        if let Some(existing) = repo.upstream_oauth_link().find_by_subject(&provider, subject).await?
+        if let Some(existing) = repo
+            .upstream_oauth_link()
+            .find_by_subject(&provider, subject)
+            .await?
             && existing.id != link.id
         {
             return Err(UserAdminServiceError::UpstreamSubjectAlreadyLinked {
@@ -268,7 +276,7 @@ pub async fn patch_upstream_oauth_link(
 }
 
 fn validate_admin_patch(patch: &AdminUserPatch) -> Result<(), UserAdminServiceError> {
-    validate_display_name_patch(&pasion_data_model::UserProfilePatch {
+    validate_display_name_patch(&pasion_data::UserProfilePatch {
         display_name: patch.display_name.clone(),
         avatar_url: patch.avatar_url.clone(),
         preferred_locale: patch.preferred_locale.clone(),

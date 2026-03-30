@@ -3,12 +3,10 @@ use salvo::{http::StatusCode, prelude::*};
 use schemars::JsonSchema;
 use serde::Deserialize;
 
-use crate::handlers::{
-    admin::{
-        call_context::extract_call_context,
-        model::User,
-        response::{ErrorResponse, SingleResponse},
-    },
+use crate::handlers::admin::{
+    call_context::extract_call_context,
+    model::User,
+    response::{ErrorResponse, SingleResponse},
 };
 
 #[derive(Debug, thiserror::Error)]
@@ -20,7 +18,7 @@ pub enum RouteError {
     NotFound(String),
 }
 
-impl_from_error_for_route!(pasion_storage::RepositoryError);
+impl_from_error_for_route!(pasion_data::RepositoryError);
 impl_from_error_for_route!(crate::handlers::admin::call_context::Rejection);
 
 impl Scribe for RouteError {

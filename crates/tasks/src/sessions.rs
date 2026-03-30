@@ -2,7 +2,7 @@ use std::collections::HashSet;
 
 use async_trait::async_trait;
 use chrono::Duration;
-use pasion_storage::{
+use pasion_data::{
     oauth2::OAuth2SessionFilter,
     queue::{
         ExpireInactiveOAuthSessionsJob, ExpireInactiveSessionsJob, ExpireInactiveUserSessionsJob,

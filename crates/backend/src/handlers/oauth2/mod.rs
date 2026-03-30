@@ -18,7 +18,9 @@
 use std::collections::HashMap;
 
 use chrono::Duration;
-use pasion_data_model::{
+use pasion_data::RepositoryAccess;
+use pasion_data::UrlBuilder;
+use pasion_data::{
     AccessToken, Authentication, AuthorizationGrant, BrowserSession, Client, Clock, RefreshToken,
     Session, TokenType,
 };
@@ -29,8 +31,6 @@ use pasion_jose::{
     jwt::{JsonWebSignatureHeader, Jwt},
 };
 use pasion_keystore::Keystore;
-use pasion_data_model::UrlBuilder;
-use pasion_storage::RepositoryAccess;
 use thiserror::Error;
 
 /// Authorization endpoint (user consent and code issuance).
@@ -151,10 +151,7 @@ mod tests {
     use std::collections::HashMap;
 
     use chrono::Duration;
-    use pasion_data_model::{
-        AccessTokenState, AuthenticationMethod,
-        clock::MockClock,
-    };
+    use pasion_data::{AccessTokenState, AuthenticationMethod, clock::MockClock};
     use pasion_jose::{claims::hash_token, jwt::Jwt};
     use pasion_keystore::{JsonWebKey, JsonWebKeySet, PrivateKey};
     use rand::SeedableRng;
@@ -167,12 +164,8 @@ mod tests {
     fn keystore_for_alg(alg: &JsonWebSignatureAlg) -> (Keystore, &'static str) {
         let mut rng = ChaChaRng::seed_from_u64(42);
         let (private_key, kid) = match alg {
-            JsonWebSignatureAlg::Es512 => {
-                (PrivateKey::generate_ec_p521(&mut rng), "test-es512")
-            }
-            JsonWebSignatureAlg::EdDsa => {
-                (PrivateKey::generate_ed25519(&mut rng), "test-eddsa")
-            }
+            JsonWebSignatureAlg::Es512 => (PrivateKey::generate_ec_p521(&mut rng), "test-es512"),
+            JsonWebSignatureAlg::EdDsa => (PrivateKey::generate_ed25519(&mut rng), "test-eddsa"),
             other => panic!("unsupported test algorithm: {other:?}"),
         };
 

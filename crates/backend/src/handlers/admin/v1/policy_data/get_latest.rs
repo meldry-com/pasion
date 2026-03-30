@@ -1,12 +1,10 @@
 use crate::record_error;
 use salvo::{http::StatusCode, prelude::*};
 
-use crate::handlers::{
-    admin::{
-        call_context::extract_call_context,
-        model::PolicyData,
-        response::{ErrorResponse, SingleResponse},
-    },
+use crate::handlers::admin::{
+    call_context::extract_call_context,
+    model::PolicyData,
+    response::{ErrorResponse, SingleResponse},
 };
 
 #[derive(Debug, thiserror::Error)]
@@ -18,7 +16,7 @@ pub enum RouteError {
     NotFound,
 }
 
-impl_from_error_for_route!(pasion_storage::RepositoryError);
+impl_from_error_for_route!(pasion_data::RepositoryError);
 impl_from_error_for_route!(crate::handlers::admin::call_context::Rejection);
 
 impl Scribe for RouteError {
@@ -67,7 +65,7 @@ mod tests {
     #[tokio::test]
     async fn test_get_latest() {
         setup();
-        let pool = pasion_storage_pg::test_utils::setup_test_pool().await;
+        let pool = pasion_data::test_utils::setup_test_pool().await;
         let mut state = TestState::from_pool(pool.clone()).await.unwrap();
         let token = state.token_with_scope("urn:pasion:admin").await;
 
@@ -116,7 +114,7 @@ mod tests {
     #[tokio::test]
     async fn test_get_no_latest() {
         setup();
-        let pool = pasion_storage_pg::test_utils::setup_test_pool().await;
+        let pool = pasion_data::test_utils::setup_test_pool().await;
         let mut state = TestState::from_pool(pool.clone()).await.unwrap();
         let token = state.token_with_scope("urn:pasion:admin").await;
 

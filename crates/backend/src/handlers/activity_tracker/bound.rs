@@ -1,6 +1,6 @@
 use std::net::IpAddr;
 
-use pasion_data_model::{BrowserSession, Clock, Session, personal::session::PersonalSession};
+use pasion_data::{BrowserSession, Clock, Session, personal::session::PersonalSession};
 
 use crate::handlers::activity_tracker::ActivityTracker;
 

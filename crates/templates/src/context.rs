@@ -14,17 +14,17 @@ use std::{
 use chrono::{DateTime, Duration, Utc};
 use http::{Method, Uri, Version};
 use oauth2_types::scope::{OPENID, Scope};
-use pasion_data_model::{
+use pasion_data::{
     AuthorizationGrant, BrowserSession, Client, DeviceCodeGrant, MatrixUser, UpstreamOAuthLink,
     UpstreamOAuthProvider, UpstreamOAuthProviderClaimsImports, UpstreamOAuthProviderDiscoveryMode,
     UpstreamOAuthProviderOnBackchannelLogout, UpstreamOAuthProviderPkceMode,
     UpstreamOAuthProviderTokenAuthMethod, User, UserEmailAuthentication,
     UserEmailAuthenticationCode, UserRecoverySession, UserRegistration,
 };
+use pasion_data::{PostAuthAction, UrlBuilder};
 use pasion_i18n::DataLocale;
 use pasion_iana::jose::JsonWebSignatureAlg;
 use pasion_policy::{Violation, ViolationCode};
-use pasion_data_model::{PostAuthAction, UrlBuilder};
 use rand::{
     Rng, SeedableRng,
     distributions::{Alphanumeric, DistString},
@@ -91,7 +91,7 @@ pub trait TemplateContext: Serialize {
     }
 
     /// Attach a CAPTCHA configuration to the template context
-    fn with_captcha(self, captcha: Option<pasion_data_model::CaptchaConfig>) -> WithCaptcha<Self>
+    fn with_captcha(self, captcha: Option<pasion_data::CaptchaConfig>) -> WithCaptcha<Self>
     where
         Self: Sized,
     {
@@ -811,8 +811,8 @@ impl TemplateContext for PolicyViolationContext {
                         PolicyViolationContext::for_authorization_grant(grant, client.clone());
                     let device_code_grant = PolicyViolationContext::for_device_code_grant(
                         DeviceCodeGrant {
-                            id: pasion_data_model::new_id(now, rng),
-                            state: pasion_data_model::DeviceCodeGrantState::Pending,
+                            id: pasion_data::new_id(now, rng),
+                            state: pasion_data::DeviceCodeGrantState::Pending,
                             client_id: client.id,
                             scope: [OPENID].into_iter().collect(),
                             user_code: Alphanumeric.sample_string(rng, 6).to_uppercase(),
@@ -901,7 +901,7 @@ impl TemplateContext for EmailRecoveryContext {
     {
         sample_list(User::samples(now, rng).into_iter().map(|user| {
             let session = UserRecoverySession {
-                id: pasion_data_model::new_id(now, rng),
+                id: pasion_data::new_id(now, rng),
                 email: "hello@example.com".to_owned(),
                 user_agent: "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_8_4) AppleWebKit/536.30.1 (KHTML, like Gecko) Version/6.0.5 Safari/536.30.1".to_owned(),
                 ip_address: Some(IpAddr::from([192_u8, 0, 2, 1])),
@@ -969,8 +969,8 @@ impl TemplateContext for EmailVerificationContext {
                 .into_iter()
                 .map(|browser_session| {
                     let authentication_code = UserEmailAuthenticationCode {
-                        id: pasion_data_model::new_id(now, rng),
-                        user_email_authentication_id: pasion_data_model::new_id(now, rng),
+                        id: pasion_data::new_id(now, rng),
+                        user_email_authentication_id: pasion_data::new_id(now, rng),
                         code: "123456".to_owned(),
                         created_at: now - Duration::try_minutes(5).unwrap(),
                         expires_at: now + Duration::try_minutes(25).unwrap(),
@@ -1037,7 +1037,7 @@ impl TemplateContext for RegisterStepsVerifyEmailContext {
         Self: Sized,
     {
         let authentication = UserEmailAuthentication {
-            id: pasion_data_model::new_id(now, rng),
+            id: pasion_data::new_id(now, rng),
             user_session_id: None,
             user_registration_id: None,
             email: "foobar@example.com".to_owned(),
@@ -1280,7 +1280,7 @@ impl TemplateContext for RecoveryProgressContext {
         Self: Sized,
     {
         let session = UserRecoverySession {
-            id: pasion_data_model::new_id(now, rng),
+            id: pasion_data::new_id(now, rng),
             email: "name@mail.com".to_owned(),
             user_agent: "Mozilla/5.0".to_owned(),
             ip_address: None,
@@ -1326,7 +1326,7 @@ impl TemplateContext for RecoveryExpiredContext {
         Self: Sized,
     {
         let session = UserRecoverySession {
-            id: pasion_data_model::new_id(now, rng),
+            id: pasion_data::new_id(now, rng),
             email: "name@mail.com".to_owned(),
             user_agent: "Mozilla/5.0".to_owned(),
             ip_address: None,
@@ -1476,7 +1476,7 @@ impl TemplateContext for UpstreamSuggestLink {
     where
         Self: Sized,
     {
-        let id = pasion_data_model::new_id(now, rng);
+        let id = pasion_data::new_id(now, rng);
         sample_list(vec![Self::for_link_id(id)])
     }
 }
@@ -1735,8 +1735,8 @@ impl TemplateContext for DeviceConsentContext {
             .into_iter()
             .map(|client|  {
                 let grant = DeviceCodeGrant {
-                    id: pasion_data_model::new_id(now, rng),
-                    state: pasion_data_model::DeviceCodeGrantState::Pending,
+                    id: pasion_data::new_id(now, rng),
+                    state: pasion_data::DeviceCodeGrantState::Pending,
                     client_id: client.id,
                     scope: [OPENID].into_iter().collect(),
                     user_code: Alphanumeric.sample_string(rng, 6).to_uppercase(),

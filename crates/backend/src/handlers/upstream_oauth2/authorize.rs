@@ -1,8 +1,8 @@
-use pasion_data_model::UpstreamOAuthProvider;
 use crate::oidc_client::requests::authorization_code::AuthorizationRequestData;
-use pasion_data_model::PostAuthAction;
 use crate::salvo_utils::{GenericError, InternalError, cookies::CookieJar};
-use pasion_storage::upstream_oauth2::{
+use pasion_data::PostAuthAction;
+use pasion_data::UpstreamOAuthProvider;
+use pasion_data::upstream_oauth2::{
     UpstreamOAuthProviderRepository, UpstreamOAuthSessionRepository,
 };
 use salvo::prelude::*;
@@ -10,8 +10,8 @@ use thiserror::Error;
 use ulid::Ulid;
 
 use super::{UpstreamSessionsCookie, cache::LazyProviderInfos};
+use crate::handlers::post_auth::OptionalPostAuthAction;
 use crate::handlers::rest::DepotExt;
-use crate::handlers::{post_auth::OptionalPostAuthAction};
 
 #[derive(Debug, Error)]
 pub enum RouteError {
@@ -24,7 +24,7 @@ pub enum RouteError {
 
 impl_from_error_for_route!(crate::oidc_client::error::DiscoveryError);
 impl_from_error_for_route!(crate::oidc_client::error::AuthorizationError);
-impl_from_error_for_route!(pasion_storage::RepositoryError);
+impl_from_error_for_route!(pasion_data::RepositoryError);
 impl_from_error_for_route!(crate::handlers::rest::RouteError);
 
 impl Scribe for RouteError {

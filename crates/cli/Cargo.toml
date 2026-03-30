@@ -67,8 +67,7 @@ sentry-tracing.workspace = true
 
 pasion-backend.workspace = true
 pasion-config.workspace = true
-pasion-context.workspace = true
-pasion-data-model.workspace = true
+pasion-data.workspace = true
 pasion-messaging.workspace = true
 pasion-http.workspace = true
 pasion-i18n.workspace = true
@@ -76,8 +75,6 @@ pasion-keystore.workspace = true
 pasion-matrix.workspace = true
 pasion-matrix-palpo.workspace = true
 pasion-policy.workspace = true
-pasion-storage.workspace = true
-pasion-storage-pg.workspace = true
 pasion-tasks.workspace = true
 pasion-templates.workspace = true
 

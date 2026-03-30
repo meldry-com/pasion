@@ -61,18 +61,17 @@
 use std::{net::IpAddr, ops::Deref, sync::Arc};
 
 use crate::handlers::{
-    BoundActivityTracker, Limiter, RequesterFingerprint,
-    passwords::PasswordManager,
+    BoundActivityTracker, Limiter, RequesterFingerprint, passwords::PasswordManager,
 };
+use crate::salvo_utils::{SessionInfo, SessionInfoExt, cookies::CookieJar};
 use chrono::{DateTime, Utc};
-use pasion_data_model::{
+use pasion_data::UrlBuilder;
+use pasion_data::{
     BoxClock, BoxRng, BrowserSession, Clock, Session, SiteConfig, SystemClock, User,
 };
+use pasion_data::{BoxRepository, BoxRepositoryFactory, RepositoryError};
 use pasion_matrix::HomeserverConnection;
 use pasion_policy::PolicyFactory;
-use pasion_data_model::UrlBuilder;
-use crate::salvo_utils::{SessionInfo, SessionInfoExt, cookies::CookieJar};
-use pasion_storage::{BoxRepository, BoxRepositoryFactory, RepositoryError};
 use rand::{SeedableRng, thread_rng};
 use rand_chacha::ChaChaRng;
 use salvo::prelude::*;
@@ -303,7 +302,7 @@ pub trait DepotExt {
     fn http_client(&self) -> Result<reqwest::Client, RouteError>;
     fn encrypter(&self) -> Result<pasion_keystore::Encrypter, RouteError>;
     fn key_store(&self) -> Result<pasion_keystore::Keystore, RouteError>;
-    fn app_version(&self) -> Result<pasion_data_model::AppVersion, RouteError>;
+    fn app_version(&self) -> Result<pasion_data::AppVersion, RouteError>;
     fn cookie_jar(&self, req: &Request) -> Result<CookieJar, RouteError>;
 }
 
@@ -383,7 +382,7 @@ impl DepotExt for Depot {
         depot_get(self, "keystore")
     }
 
-    fn app_version(&self) -> Result<pasion_data_model::AppVersion, RouteError> {
+    fn app_version(&self) -> Result<pasion_data::AppVersion, RouteError> {
         depot_get(self, "app_version")
     }
 

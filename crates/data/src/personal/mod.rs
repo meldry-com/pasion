@@ -1,0 +1,30 @@
+pub mod session;
+
+use chrono::{DateTime, Utc};
+use ulid::Ulid;
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct PersonalAccessToken {
+    pub id: Ulid,
+    pub session_id: Ulid,
+    pub created_at: DateTime<Utc>,
+    pub expires_at: Option<DateTime<Utc>>,
+    pub revoked_at: Option<DateTime<Utc>>,
+}
+
+impl PersonalAccessToken {
+    #[must_use]
+    pub fn is_valid(&self, now: DateTime<Utc>) -> bool {
+        if self.revoked_at.is_some() {
+            return false;
+        }
+        if let Some(expires_at) = self.expires_at {
+            expires_at > now
+        } else {
+            true
+        }
+    }
+}
+
+pub use crate::pg::personal::{PgPersonalAccessTokenRepository, PgPersonalSessionRepository};
+pub use crate::storage::personal::*;

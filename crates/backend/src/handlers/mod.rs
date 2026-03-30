@@ -55,7 +55,6 @@ pub mod upstream_oauth2;
 /// Cookie management for user registration sessions.
 pub mod user_registration_cookie;
 
-pub(crate) mod admin_audit_helper;
 mod account_access;
 mod account_connections;
 mod account_contacts;
@@ -65,6 +64,7 @@ mod account_recovery;
 mod account_registration;
 mod account_sessions;
 mod activity_tracker;
+pub(crate) mod admin_audit_helper;
 mod captcha;
 mod notification_dispatch;
 mod notification_language;

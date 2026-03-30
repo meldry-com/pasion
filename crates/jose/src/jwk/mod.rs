@@ -687,8 +687,7 @@ mod tests {
     }
 
     fn p521_public_key(jwks: &PublicJsonWebKeySet) -> PublicJsonWebKey {
-        jwks
-            .iter()
+        jwks.iter()
             .find(|key| {
                 matches!(
                     key.params(),
@@ -701,8 +700,7 @@ mod tests {
     }
 
     fn ed25519_public_key(jwks: &PublicJsonWebKeySet) -> PublicJsonWebKey {
-        jwks
-            .iter()
+        jwks.iter()
             .find(|key| {
                 matches!(
                     key.params(),
@@ -759,7 +757,6 @@ mod tests {
         assert_eq!(candidates.len(), 1);
     }
 
-
     #[test]
     fn p521_and_ed25519_thumbprints_match_fixture_kids() {
         let public_jwks = load_public_keys();
@@ -799,7 +796,10 @@ mod tests {
             .unwrap();
         valid.validate().unwrap();
 
-        let err = p521.clone().try_with_alg(JsonWebSignatureAlg::EdDsa).unwrap_err();
+        let err = p521
+            .clone()
+            .try_with_alg(JsonWebSignatureAlg::EdDsa)
+            .unwrap_err();
         assert!(matches!(
             err,
             JsonWebKeyValidationError::IncompatibleAlgorithm {
@@ -843,7 +843,10 @@ mod tests {
                 JsonWebKeyOperation::Encrypt,
             ])
             .unwrap_err();
-        assert!(matches!(err, JsonWebKeyValidationError::MixedKeyOperations { .. }));
+        assert!(matches!(
+            err,
+            JsonWebKeyValidationError::MixedKeyOperations { .. }
+        ));
 
         let err = p521
             .clone()
@@ -916,7 +919,10 @@ mod tests {
             .unwrap();
         let jwks = PublicJsonWebKeySet::new(vec![enc_only, sig_only]);
 
-        assert_eq!(jwks.available_signing_algorithms(), vec![JsonWebSignatureAlg::EdDsa]);
+        assert_eq!(
+            jwks.available_signing_algorithms(),
+            vec![JsonWebSignatureAlg::EdDsa]
+        );
     }
 
     #[test]

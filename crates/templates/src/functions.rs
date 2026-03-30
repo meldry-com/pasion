@@ -8,8 +8,8 @@ use minijinja::{
     machinery::make_string_output,
     value::{Kwargs, Object, ViaDeserialize, from_args},
 };
+use pasion_data::UrlBuilder;
 use pasion_i18n::{Argument, ArgumentList, DataLocale, Translator, sprintf::FormattedMessagePart};
-use pasion_data_model::UrlBuilder;
 use std::{
     collections::{BTreeMap, HashMap},
     fmt::Formatter,
@@ -127,7 +127,7 @@ fn filter_id_color_hash(input: &str) -> u32 {
 
 /// Filter which parses a user-agent string
 fn filter_parse_user_agent(user_agent: String) -> Value {
-    let user_agent = pasion_data_model::UserAgent::parse(user_agent);
+    let user_agent = pasion_data::UserAgent::parse(user_agent);
     Value::from_serialize(user_agent)
 }
 

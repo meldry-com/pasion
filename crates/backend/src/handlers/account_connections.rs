@@ -1,11 +1,11 @@
-use pasion_data_model::{Client, Clock, User};
-use pasion_storage::{
+use pasion_data::{
     BoxRepository, Pagination, RepositoryAccess, RepositoryError,
     oauth2::OAuth2ClientRepository,
     upstream_oauth2::{
         UpstreamOAuthLinkFilter, UpstreamOAuthLinkRepository, UpstreamOAuthProviderRepository,
     },
 };
+use pasion_data::{Client, Clock, User};
 use thiserror::Error;
 use ulid::Ulid;
 

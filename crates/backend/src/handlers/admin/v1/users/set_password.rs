@@ -1,5 +1,5 @@
-use pasion_data_model::{BoxRng, audit::AdminOperation};
 use crate::record_error;
+use pasion_data::{BoxRng, audit::AdminOperation};
 use salvo::{http::StatusCode, prelude::*};
 use schemars::JsonSchema;
 use serde::Deserialize;
@@ -32,7 +32,7 @@ pub enum RouteError {
     NotFound(Ulid),
 }
 
-impl_from_error_for_route!(pasion_storage::RepositoryError);
+impl_from_error_for_route!(pasion_data::RepositoryError);
 impl_from_error_for_route!(crate::handlers::rest::RouteError);
 impl_from_error_for_route!(crate::handlers::admin::params::UlidPathParamRejection);
 impl_from_error_for_route!(crate::handlers::admin::call_context::Rejection);
@@ -137,7 +137,7 @@ pub async fn handler(req: &mut Request, depot: &Depot) -> Result<StatusCode, Rou
 #[cfg(test)]
 mod tests {
     use hyper::{Request, StatusCode};
-    use pasion_storage::{RepositoryAccess, user::UserPasswordRepository};
+    use pasion_data::{RepositoryAccess, user::UserPasswordRepository};
     use zeroize::Zeroizing;
 
     use crate::handlers::{
@@ -148,7 +148,7 @@ mod tests {
     #[tokio::test]
     async fn test_set_password() {
         setup();
-        let pool = pasion_storage_pg::test_utils::setup_test_pool().await;
+        let pool = pasion_data::test_utils::setup_test_pool().await;
         let mut state = TestState::from_pool(pool.clone()).await.unwrap();
         let token = state.token_with_scope("urn:pasion:admin").await;
 
@@ -197,7 +197,7 @@ mod tests {
     #[tokio::test]
     async fn test_weak_password() {
         setup();
-        let pool = pasion_storage_pg::test_utils::setup_test_pool().await;
+        let pool = pasion_data::test_utils::setup_test_pool().await;
         let mut state = TestState::from_pool(pool.clone()).await.unwrap();
         let token = state.token_with_scope("urn:pasion:admin").await;
 
@@ -258,7 +258,7 @@ mod tests {
     #[tokio::test]
     async fn test_unknown_user() {
         setup();
-        let pool = pasion_storage_pg::test_utils::setup_test_pool().await;
+        let pool = pasion_data::test_utils::setup_test_pool().await;
         let mut state = TestState::from_pool(pool.clone()).await.unwrap();
         let token = state.token_with_scope("urn:pasion:admin").await;
 
@@ -282,7 +282,7 @@ mod tests {
     #[tokio::test]
     async fn test_disabled() {
         setup();
-        let pool = pasion_storage_pg::test_utils::setup_test_pool().await;
+        let pool = pasion_data::test_utils::setup_test_pool().await;
         let mut state = TestState::from_pool(pool.clone()).await.unwrap();
         state.password_manager = PasswordManager::disabled();
         let token = state.token_with_scope("urn:pasion:admin").await;

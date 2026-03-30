@@ -1,17 +1,17 @@
 use std::sync::{Arc, LazyLock};
 
+use crate::salvo_utils::client_authorization::{ClientAuthorization, CredentialsVerificationError};
 use oauth2_types::{
     errors::{ClientError, ClientErrorCode},
     requests::{AccessTokenRequest, AccessTokenResponse},
 };
 use opentelemetry::{Key, KeyValue, metrics::Counter};
-use pasion_data_model::{BoxClock, BoxRng, SiteConfig, SystemClock};
+use pasion_data::UrlBuilder;
+use pasion_data::{BoxClock, BoxRng, SiteConfig, SystemClock};
+use pasion_data::{BoxRepository, BoxRepositoryFactory};
 use pasion_keystore::Keystore;
 use pasion_matrix::HomeserverConnection;
 use pasion_policy::Policy;
-use pasion_data_model::UrlBuilder;
-use crate::salvo_utils::client_authorization::{ClientAuthorization, CredentialsVerificationError};
-use pasion_storage::{BoxRepository, BoxRepositoryFactory};
 use pasion_templates::Templates;
 use rand::{SeedableRng, thread_rng};
 use rand_chacha::ChaChaRng;
@@ -22,8 +22,8 @@ use ulid::Ulid;
 use crate::handlers::{
     METER,
     oauth2_token_service::{
-        self, AuthorizationCodeExchangeError, ClientCredentialsGrantError,
-        DeviceCodeExchangeError, RefreshTokenExchangeError,
+        self, AuthorizationCodeExchangeError, ClientCredentialsGrantError, DeviceCodeExchangeError,
+        RefreshTokenExchangeError,
     },
 };
 
@@ -235,7 +235,7 @@ impl Scribe for RouteError {
     }
 }
 
-impl_from_error_for_route!(pasion_storage::RepositoryError);
+impl_from_error_for_route!(pasion_data::RepositoryError);
 impl_from_error_for_route!(crate::salvo_utils::client_authorization::ClientAuthorizationError);
 
 // ---------------------------------------------------------------------------
@@ -245,9 +245,7 @@ impl_from_error_for_route!(crate::salvo_utils::client_authorization::ClientAutho
 impl From<AuthorizationCodeExchangeError> for RouteError {
     fn from(e: AuthorizationCodeExchangeError) -> Self {
         match e {
-            AuthorizationCodeExchangeError::UnauthorizedClient(id) => {
-                Self::UnauthorizedClient(id)
-            }
+            AuthorizationCodeExchangeError::UnauthorizedClient(id) => Self::UnauthorizedClient(id),
             AuthorizationCodeExchangeError::GrantNotFound => Self::GrantNotFound,
             AuthorizationCodeExchangeError::InvalidGrant(id) => Self::InvalidGrant(id),
             AuthorizationCodeExchangeError::PkceVerification(err) => Self::PkceVerification(err),
@@ -258,9 +256,7 @@ impl From<AuthorizationCodeExchangeError> for RouteError {
             AuthorizationCodeExchangeError::NoSuchBrowserSession(id) => {
                 Self::NoSuchBrowserSession(id)
             }
-            AuthorizationCodeExchangeError::NoSuchOAuthSession(id) => {
-                Self::NoSuchOAuthSession(id)
-            }
+            AuthorizationCodeExchangeError::NoSuchOAuthSession(id) => Self::NoSuchOAuthSession(id),
             AuthorizationCodeExchangeError::ProvisionDeviceFailed(err) => {
                 Self::ProvisionDeviceFailed(err)
             }
@@ -323,9 +319,7 @@ impl From<DeviceCodeExchangeError> for RouteError {
             DeviceCodeExchangeError::DeviceCodeRejected => Self::DeviceCodeRejected,
             DeviceCodeExchangeError::DeviceCodeExchanged => Self::DeviceCodeExchanged,
             DeviceCodeExchangeError::NoSuchBrowserSession(id) => Self::NoSuchBrowserSession(id),
-            DeviceCodeExchangeError::ProvisionDeviceFailed(err) => {
-                Self::ProvisionDeviceFailed(err)
-            }
+            DeviceCodeExchangeError::ProvisionDeviceFailed(err) => Self::ProvisionDeviceFailed(err),
             DeviceCodeExchangeError::Repository(err) => Self::Internal(Box::new(err)),
             DeviceCodeExchangeError::Internal(err) => Self::Internal(err),
         }

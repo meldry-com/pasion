@@ -4,7 +4,7 @@
 //! code format only; actual TOTP secret lookup and HMAC verification is
 //! deferred until TOTP secret storage is implemented.
 
-use pasion_data_model::flow::{StageOutcome, StageValidationError};
+use pasion_data::flow::{StageOutcome, StageValidationError};
 
 use super::StageExecutionError;
 

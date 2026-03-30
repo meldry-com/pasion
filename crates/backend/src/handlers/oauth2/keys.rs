@@ -47,8 +47,7 @@ mod tests {
             key["kty"].as_str() == Some("EC") && key["crv"].as_str() == Some("P-521")
         }));
         assert!(keys.iter().any(|key| {
-            key["kty"].as_str() == Some("OKP")
-                && key["crv"].as_str() == Some("Ed25519")
+            key["kty"].as_str() == Some("OKP") && key["crv"].as_str() == Some("Ed25519")
         }));
     }
 }

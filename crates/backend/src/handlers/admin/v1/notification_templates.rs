@@ -9,10 +9,7 @@ use salvo::{http::StatusCode, prelude::*};
 use schemars::JsonSchema;
 use serde::Serialize;
 
-use crate::handlers::{
-    admin::call_context::extract_call_context,
-    admin::response::ErrorResponse,
-};
+use crate::handlers::{admin::call_context::extract_call_context, admin::response::ErrorResponse};
 
 /// Describes a single notification template key.
 #[derive(Serialize, JsonSchema)]
@@ -40,7 +37,7 @@ pub enum RouteError {
     NotImplemented,
 }
 
-impl_from_error_for_route!(pasion_storage::RepositoryError);
+impl_from_error_for_route!(pasion_data::RepositoryError);
 impl_from_error_for_route!(crate::handlers::admin::call_context::Rejection);
 
 impl Scribe for RouteError {

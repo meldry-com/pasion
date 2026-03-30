@@ -3,7 +3,7 @@
 //! Validates that all required fields are present in the submitted data
 //! and stores the collected values in the flow context under `prompt_data`.
 
-use pasion_data_model::flow::{PromptField, StageOutcome, StageValidationError};
+use pasion_data::flow::{PromptField, StageOutcome, StageValidationError};
 use serde_json::Value;
 
 use super::StageExecutionError;

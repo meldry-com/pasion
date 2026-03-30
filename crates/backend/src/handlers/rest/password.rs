@@ -1,6 +1,6 @@
 use chrono::Utc;
-use pasion_data_model::flow::{FlowSession, FlowSessionStatus};
-use pasion_data_model::new_id;
+use pasion_data::flow::{FlowSession, FlowSessionStatus};
+use pasion_data::new_id;
 use salvo::oapi::ToSchema;
 use salvo::prelude::*;
 use serde::{Deserialize, Serialize};

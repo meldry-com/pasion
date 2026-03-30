@@ -1,6 +1,6 @@
 use anyhow::Context;
 use async_trait::async_trait;
-use pasion_storage::{
+use pasion_data::{
     RepositoryAccess,
     oauth2::OAuth2SessionFilter,
     personal::PersonalSessionFilter,

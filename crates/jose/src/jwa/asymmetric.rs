@@ -8,9 +8,7 @@ use signature::{Signer as _, rand_core::CryptoRngCore};
 use thiserror::Error;
 
 use super::signature::Signature;
-use crate::jwk::{
-    InvalidOkpParameters, JsonWebKeyPrivateParameters, JsonWebKeyPublicParameters,
-};
+use crate::jwk::{InvalidOkpParameters, JsonWebKeyPrivateParameters, JsonWebKeyPublicParameters};
 
 #[derive(Debug, Error)]
 pub enum AsymmetricKeyFromJwkError {
@@ -637,10 +635,8 @@ mod tests {
             })
             .unwrap();
 
-        let result = AsymmetricSigningKey::from_jwk_and_alg(
-            p256.params(),
-            &JsonWebSignatureAlg::Es512,
-        );
+        let result =
+            AsymmetricSigningKey::from_jwk_and_alg(p256.params(), &JsonWebSignatureAlg::Es512);
 
         match result {
             Err(AsymmetricKeyFromJwkError::KeyNotSuitable {
@@ -665,10 +661,8 @@ mod tests {
             })
             .unwrap();
 
-        let result = AsymmetricVerifyingKey::from_jwk_and_alg(
-            ed448.params(),
-            &JsonWebSignatureAlg::EdDsa,
-        );
+        let result =
+            AsymmetricVerifyingKey::from_jwk_and_alg(ed448.params(), &JsonWebSignatureAlg::EdDsa);
 
         match result {
             Err(AsymmetricKeyFromJwkError::KeyNotSuitable {

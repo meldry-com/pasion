@@ -1,13 +1,11 @@
-use pasion_data_model::BoxRng;
 use crate::record_error;
-use pasion_storage::queue::{ProvisionUserJob, QueueJobRepositoryExt as _};
+use pasion_data::BoxRng;
+use pasion_data::queue::{ProvisionUserJob, QueueJobRepositoryExt as _};
 use salvo::{http::StatusCode, prelude::*};
 use ulid::Ulid;
 
-use crate::handlers::{
-    admin::{
-        call_context::extract_call_context, params::extract_ulid_param, response::ErrorResponse,
-    },
+use crate::handlers::admin::{
+    call_context::extract_call_context, params::extract_ulid_param, response::ErrorResponse,
 };
 
 #[derive(Debug, thiserror::Error)]
@@ -19,7 +17,7 @@ pub enum RouteError {
     NotFound(Ulid),
 }
 
-impl_from_error_for_route!(pasion_storage::RepositoryError);
+impl_from_error_for_route!(pasion_data::RepositoryError);
 impl_from_error_for_route!(crate::handlers::admin::params::UlidPathParamRejection);
 impl_from_error_for_route!(crate::handlers::admin::call_context::Rejection);
 
@@ -77,7 +75,7 @@ mod tests {
     #[tokio::test]
     async fn test_delete() {
         setup();
-        let pool = pasion_storage_pg::test_utils::setup_test_pool().await;
+        let pool = pasion_data::test_utils::setup_test_pool().await;
         let mut state = TestState::from_pool(pool.clone()).await.unwrap();
         let token = state.token_with_scope("urn:pasion:admin").await;
         let mut rng = state.rng();
@@ -89,7 +87,7 @@ mod tests {
             .add(&mut rng, &state.clock, "alice".to_owned())
             .await
             .unwrap();
-        let pasion_data_model::UserEmail { id, .. } = repo
+        let pasion_data::UserEmail { id, .. } = repo
             .user_email()
             .add(
                 &mut rng,
@@ -119,7 +117,7 @@ mod tests {
     #[tokio::test]
     async fn test_not_found() {
         setup();
-        let pool = pasion_storage_pg::test_utils::setup_test_pool().await;
+        let pool = pasion_data::test_utils::setup_test_pool().await;
         let mut state = TestState::from_pool(pool.clone()).await.unwrap();
         let token = state.token_with_scope("urn:pasion:admin").await;
 

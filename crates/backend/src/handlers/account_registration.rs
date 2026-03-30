@@ -10,13 +10,7 @@ use std::{net::IpAddr, str::FromStr};
 use anyhow::Error as AnyhowError;
 use chrono::{DateTime, Duration, Utc};
 use lettre::Address;
-use pasion_data_model::{
-    BrowserSession, Clock, UpstreamOAuthAuthorizationSession, UpstreamOAuthLink, User,
-    UserEmailAuthentication, UserPhoneAuthentication, UserRegistration, UserRegistrationToken,
-};
-use pasion_matrix::HomeserverConnection;
-use pasion_policy::PolicyFactory;
-use pasion_storage::{
+use pasion_data::{
     BoxRepository, RepositoryAccess, RepositoryError,
     queue::{ProvisionUserJob, QueueJobRepositoryExt as _},
     upstream_oauth2::{UpstreamOAuthLinkRepository, UpstreamOAuthSessionRepository},
@@ -26,6 +20,12 @@ use pasion_storage::{
         UserRepository, UserTermsRepository,
     },
 };
+use pasion_data::{
+    BrowserSession, Clock, UpstreamOAuthAuthorizationSession, UpstreamOAuthLink, User,
+    UserEmailAuthentication, UserPhoneAuthentication, UserRegistration, UserRegistrationToken,
+};
+use pasion_matrix::HomeserverConnection;
+use pasion_policy::PolicyFactory;
 use rand_chacha::rand_core::CryptoRngCore;
 use serde_json::Value;
 use thiserror::Error;

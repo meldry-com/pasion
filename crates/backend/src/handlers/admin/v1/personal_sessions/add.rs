@@ -1,11 +1,11 @@
 use std::sync::Arc;
 
+use crate::record_error;
 use anyhow::Context;
 use chrono::Duration;
 use oauth2_types::scope::Scope;
-use pasion_data_model::{BoxRng, TokenType};
+use pasion_data::{BoxRng, TokenType};
 use pasion_matrix::HomeserverConnection;
-use crate::record_error;
 use salvo::{http::StatusCode, prelude::*};
 use schemars::JsonSchema;
 use serde::Deserialize;
@@ -36,7 +36,7 @@ pub enum RouteError {
     InvalidScope,
 }
 
-impl_from_error_for_route!(pasion_storage::RepositoryError);
+impl_from_error_for_route!(pasion_data::RepositoryError);
 impl_from_error_for_route!(crate::handlers::rest::RouteError);
 impl_from_error_for_route!(crate::handlers::admin::call_context::Rejection);
 impl_from_error_for_route!(InconsistentPersonalSession);
@@ -189,7 +189,7 @@ mod tests {
     #[tokio::test]
     async fn test_create_personal_session_with_token() {
         setup();
-        let pool = pasion_storage_pg::test_utils::setup_test_pool().await;
+        let pool = pasion_data::test_utils::setup_test_pool().await;
         let mut state = TestState::from_pool(pool.clone()).await.unwrap();
         let token = state.token_with_scope("urn:pasion:admin").await;
 
@@ -252,7 +252,7 @@ mod tests {
     #[tokio::test]
     async fn test_create_personal_session_invalid_user() {
         setup();
-        let pool = pasion_storage_pg::test_utils::setup_test_pool().await;
+        let pool = pasion_data::test_utils::setup_test_pool().await;
         let mut state = TestState::from_pool(pool.clone()).await.unwrap();
         let token = state.token_with_scope("urn:pasion:admin").await;
 
@@ -274,7 +274,7 @@ mod tests {
     #[tokio::test]
     async fn test_create_personal_session_invalid_scope() {
         setup();
-        let pool = pasion_storage_pg::test_utils::setup_test_pool().await;
+        let pool = pasion_data::test_utils::setup_test_pool().await;
         let mut state = TestState::from_pool(pool.clone()).await.unwrap();
         let token = state.token_with_scope("urn:pasion:admin").await;
 

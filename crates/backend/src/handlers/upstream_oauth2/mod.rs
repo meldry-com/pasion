@@ -17,10 +17,10 @@
 
 use std::string::FromUtf8Error;
 
-use pasion_data_model::{UpstreamOAuthProvider, UpstreamOAuthProviderTokenAuthMethod};
+use crate::oidc_client::types::client_credentials::ClientCredentials;
+use pasion_data::{UpstreamOAuthProvider, UpstreamOAuthProviderTokenAuthMethod};
 use pasion_iana::jose::JsonWebSignatureAlg;
 use pasion_keystore::{DecryptError, Encrypter, Keystore};
-use crate::oidc_client::types::client_credentials::ClientCredentials;
 use pkcs8::DecodePrivateKey;
 use serde::Deserialize;
 use thiserror::Error;

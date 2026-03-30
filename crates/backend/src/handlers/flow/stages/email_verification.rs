@@ -4,9 +4,9 @@
 //! record.  On success the authentication is marked as completed and
 //! `email_verified` is set in the flow context.
 
-use pasion_data_model::flow::{StageOutcome, StageValidationError};
-use pasion_data_model::Clock;
-use pasion_storage::{BoxRepository, RepositoryAccess};
+use pasion_data::Clock;
+use pasion_data::flow::{StageOutcome, StageValidationError};
+use pasion_data::{BoxRepository, RepositoryAccess};
 
 use super::StageExecutionError;
 
@@ -31,9 +31,9 @@ pub async fn execute(
             ))
         })?;
 
-    let auth_id: ulid::Ulid = auth_id_str.parse().map_err(|e| {
-        StageExecutionError::Internal(anyhow::anyhow!("invalid auth id: {e}"))
-    })?;
+    let auth_id: ulid::Ulid = auth_id_str
+        .parse()
+        .map_err(|e| StageExecutionError::Internal(anyhow::anyhow!("invalid auth id: {e}")))?;
 
     let auth = repo
         .user_email()

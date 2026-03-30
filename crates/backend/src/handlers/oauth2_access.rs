@@ -1,15 +1,12 @@
 use std::{net::IpAddr, time::Duration};
 
 use oauth2_types::requests::AuthorizationResponse;
-use pasion_data_model::{
+use pasion_data::UrlBuilder;
+use pasion_data::{
     AuthorizationGrant, AuthorizationGrantStage, BoxClock, BoxRng, BrowserSession, Client, Clock,
     MatrixUser, Session,
 };
-use pasion_keystore::Keystore;
-use pasion_matrix::HomeserverConnection;
-use pasion_policy::{Policy, PolicyFactory};
-use pasion_data_model::UrlBuilder;
-use pasion_storage::{
+use pasion_data::{
     BoxRepository, RepositoryAccess, RepositoryError,
     oauth2::{
         OAuth2AuthorizationGrantRepository, OAuth2ClientRepository,
@@ -17,6 +14,9 @@ use pasion_storage::{
     },
     user::BrowserSessionRepository,
 };
+use pasion_keystore::Keystore;
+use pasion_matrix::HomeserverConnection;
+use pasion_policy::{Policy, PolicyFactory};
 use thiserror::Error;
 use ulid::Ulid;
 

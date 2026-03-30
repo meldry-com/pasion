@@ -1,17 +1,15 @@
-use chrono::{DateTime, Utc};
 use crate::record_error;
+use chrono::{DateTime, Utc};
 use salvo::{http::StatusCode, prelude::*};
 use schemars::JsonSchema;
 use serde::{Deserialize, Deserializer};
 use ulid::Ulid;
 
-use crate::handlers::{
-    admin::{
-        call_context::extract_call_context,
-        model::{Resource, UserRegistrationToken},
-        params::extract_ulid_param,
-        response::{ErrorResponse, SingleResponse},
-    },
+use crate::handlers::admin::{
+    call_context::extract_call_context,
+    model::{Resource, UserRegistrationToken},
+    params::extract_ulid_param,
+    response::{ErrorResponse, SingleResponse},
 };
 
 // Any value that is present is considered Some value, including null.
@@ -55,7 +53,7 @@ pub enum RouteError {
     NotFound(Ulid),
 }
 
-impl_from_error_for_route!(pasion_storage::RepositoryError);
+impl_from_error_for_route!(pasion_data::RepositoryError);
 impl_from_error_for_route!(crate::handlers::admin::params::UlidPathParamRejection);
 impl_from_error_for_route!(crate::handlers::admin::call_context::Rejection);
 
@@ -130,7 +128,7 @@ pub async fn handler(
 mod tests {
     use chrono::Duration;
     use hyper::{Request, StatusCode};
-    use pasion_data_model::Clock as _;
+    use pasion_data::Clock as _;
     use serde_json::json;
 
     use crate::handlers::test_utils::{RequestBuilderExt, ResponseExt, TestState, setup};
@@ -138,7 +136,7 @@ mod tests {
     #[tokio::test]
     async fn test_update_expiry() {
         setup();
-        let pool = pasion_storage_pg::test_utils::setup_test_pool().await;
+        let pool = pasion_data::test_utils::setup_test_pool().await;
         let mut state = TestState::from_pool(pool.clone()).await.unwrap();
         let token = state.token_with_scope("urn:pasion:admin").await;
 
@@ -244,7 +242,7 @@ mod tests {
     #[tokio::test]
     async fn test_update_usage_limit() {
         setup();
-        let pool = pasion_storage_pg::test_utils::setup_test_pool().await;
+        let pool = pasion_data::test_utils::setup_test_pool().await;
         let mut state = TestState::from_pool(pool.clone()).await.unwrap();
         let token = state.token_with_scope("urn:pasion:admin").await;
 
@@ -349,7 +347,7 @@ mod tests {
     #[tokio::test]
     async fn test_update_multiple_fields() {
         setup();
-        let pool = pasion_storage_pg::test_utils::setup_test_pool().await;
+        let pool = pasion_data::test_utils::setup_test_pool().await;
         let mut state = TestState::from_pool(pool.clone()).await.unwrap();
         let token = state.token_with_scope("urn:pasion:admin").await;
 
@@ -416,7 +414,7 @@ mod tests {
     #[tokio::test]
     async fn test_update_no_fields() {
         setup();
-        let pool = pasion_storage_pg::test_utils::setup_test_pool().await;
+        let pool = pasion_data::test_utils::setup_test_pool().await;
         let mut state = TestState::from_pool(pool.clone()).await.unwrap();
         let token = state.token_with_scope("urn:pasion:admin").await;
 
@@ -479,7 +477,7 @@ mod tests {
     #[tokio::test]
     async fn test_update_unknown_token() {
         setup();
-        let pool = pasion_storage_pg::test_utils::setup_test_pool().await;
+        let pool = pasion_data::test_utils::setup_test_pool().await;
         let mut state = TestState::from_pool(pool.clone()).await.unwrap();
         let token = state.token_with_scope("urn:pasion:admin").await;
 

@@ -1,11 +1,11 @@
 use anyhow::{Context as _, Error as AnyhowError};
-use pasion_data_model::{Clock, SiteConfig, User};
-use pasion_matrix::HomeserverConnection;
-use pasion_storage::{
+use pasion_data::{
     BoxRepository, RepositoryAccess, RepositoryError,
     queue::{DeactivateUserJob, QueueJobRepositoryExt as _},
     user::UserRepository,
 };
+use pasion_data::{Clock, SiteConfig, User};
+use pasion_matrix::HomeserverConnection;
 use rand_chacha::rand_core::CryptoRngCore;
 use thiserror::Error;
 use ulid::Ulid;

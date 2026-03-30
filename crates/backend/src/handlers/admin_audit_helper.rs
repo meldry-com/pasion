@@ -4,8 +4,8 @@
 //! encapsulates the repeated pattern of conditionally writing an admin
 //! operation audit log when the caller is an authenticated admin user.
 
-use pasion_data_model::audit::AdminOperation;
-use pasion_storage::{BoxRepository, RepositoryAccess, RepositoryError, audit::NewAdminOperationLog};
+use pasion_data::audit::AdminOperation;
+use pasion_data::{BoxRepository, RepositoryAccess, RepositoryError, audit::NewAdminOperationLog};
 use rand::RngCore;
 use ulid::Ulid;
 
@@ -18,16 +18,15 @@ use ulid::Ulid;
 pub async fn record_admin_operation(
     repo: &mut BoxRepository,
     rng: &mut (dyn RngCore + Send),
-    clock: &dyn pasion_data_model::Clock,
-    admin_user: Option<&pasion_data_model::User>,
+    clock: &dyn pasion_data::Clock,
+    admin_user: Option<&pasion_data::User>,
     operation: AdminOperation,
     resource_type: &str,
     resource_id: Option<Ulid>,
     details: serde_json::Value,
 ) -> Result<(), RepositoryError> {
     if let Some(admin) = admin_user {
-        let mut params =
-            NewAdminOperationLog::new(admin.id, operation, resource_type, details);
+        let mut params = NewAdminOperationLog::new(admin.id, operation, resource_type, details);
         if let Some(id) = resource_id {
             params = params.with_resource_id(id);
         }

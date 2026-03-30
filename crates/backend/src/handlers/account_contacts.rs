@@ -12,12 +12,12 @@
 //! already orchestrate contact verification as a workflow.
 
 use anyhow::Error as AnyhowError;
-use pasion_data_model::{BrowserSession, Clock, UserEmailAuthentication};
-use pasion_storage::{
+use pasion_data::{
     BoxRepository, RepositoryAccess, RepositoryError,
     queue::{ProvisionUserJob, QueueJobRepositoryExt as _},
     user::{UserEmailRepository, UserRepository},
 };
+use pasion_data::{BrowserSession, Clock, UserEmailAuthentication};
 use rand::RngCore;
 use thiserror::Error;
 use ulid::Ulid;

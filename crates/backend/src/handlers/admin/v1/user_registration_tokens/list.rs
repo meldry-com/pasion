@@ -1,16 +1,14 @@
 use crate::record_error;
-use pasion_storage::{Page, user::UserRegistrationTokenFilter};
+use pasion_data::{Page, user::UserRegistrationTokenFilter};
 use salvo::{http::StatusCode, prelude::*};
 use schemars::JsonSchema;
 use serde::Deserialize;
 
-use crate::handlers::{
-    admin::{
-        call_context::extract_call_context,
-        model::{Resource, UserRegistrationToken},
-        params::{IncludeCount, extract_pagination},
-        response::{ErrorResponse, PaginatedResponse},
-    },
+use crate::handlers::admin::{
+    call_context::extract_call_context,
+    model::{Resource, UserRegistrationToken},
+    params::{IncludeCount, extract_pagination},
+    response::{ErrorResponse, PaginatedResponse},
 };
 
 #[derive(Deserialize, JsonSchema, Default)]
@@ -68,7 +66,7 @@ pub enum RouteError {
     Internal(Box<dyn std::error::Error + Send + Sync + 'static>),
 }
 
-impl_from_error_for_route!(pasion_storage::RepositoryError);
+impl_from_error_for_route!(pasion_data::RepositoryError);
 impl_from_error_for_route!(crate::handlers::admin::params::PaginationRejection);
 impl_from_error_for_route!(crate::handlers::admin::call_context::Rejection);
 
@@ -155,7 +153,7 @@ pub async fn handler(
 mod tests {
     use chrono::Duration;
     use hyper::{Request, StatusCode};
-    use pasion_data_model::Clock as _;
+    use pasion_data::Clock as _;
 
     use crate::handlers::test_utils::{RequestBuilderExt, ResponseExt, TestState, setup};
 
@@ -249,7 +247,7 @@ mod tests {
     #[tokio::test]
     async fn test_list_all_tokens() {
         setup();
-        let pool = pasion_storage_pg::test_utils::setup_test_pool().await;
+        let pool = pasion_data::test_utils::setup_test_pool().await;
         let mut state = TestState::from_pool(pool.clone()).await.unwrap();
         let admin_token = state.token_with_scope("urn:pasion:admin").await;
         create_test_tokens(&mut state).await;
@@ -390,7 +388,7 @@ mod tests {
     #[tokio::test]
     async fn test_filter_by_used() {
         setup();
-        let pool = pasion_storage_pg::test_utils::setup_test_pool().await;
+        let pool = pasion_data::test_utils::setup_test_pool().await;
         let mut state = TestState::from_pool(pool.clone()).await.unwrap();
         let admin_token = state.token_with_scope("urn:pasion:admin").await;
         create_test_tokens(&mut state).await;
@@ -555,7 +553,7 @@ mod tests {
     #[tokio::test]
     async fn test_filter_by_revoked() {
         setup();
-        let pool = pasion_storage_pg::test_utils::setup_test_pool().await;
+        let pool = pasion_data::test_utils::setup_test_pool().await;
         let mut state = TestState::from_pool(pool.clone()).await.unwrap();
         let admin_token = state.token_with_scope("urn:pasion:admin").await;
         create_test_tokens(&mut state).await;
@@ -720,7 +718,7 @@ mod tests {
     #[tokio::test]
     async fn test_filter_by_expired() {
         setup();
-        let pool = pasion_storage_pg::test_utils::setup_test_pool().await;
+        let pool = pasion_data::test_utils::setup_test_pool().await;
         let mut state = TestState::from_pool(pool.clone()).await.unwrap();
         let admin_token = state.token_with_scope("urn:pasion:admin").await;
         create_test_tokens(&mut state).await;
@@ -885,7 +883,7 @@ mod tests {
     #[tokio::test]
     async fn test_filter_by_valid() {
         setup();
-        let pool = pasion_storage_pg::test_utils::setup_test_pool().await;
+        let pool = pasion_data::test_utils::setup_test_pool().await;
         let mut state = TestState::from_pool(pool.clone()).await.unwrap();
         let admin_token = state.token_with_scope("urn:pasion:admin").await;
         create_test_tokens(&mut state).await;
@@ -1050,7 +1048,7 @@ mod tests {
     #[tokio::test]
     async fn test_combined_filters() {
         setup();
-        let pool = pasion_storage_pg::test_utils::setup_test_pool().await;
+        let pool = pasion_data::test_utils::setup_test_pool().await;
         let mut state = TestState::from_pool(pool.clone()).await.unwrap();
         let admin_token = state.token_with_scope("urn:pasion:admin").await;
         create_test_tokens(&mut state).await;
@@ -1106,7 +1104,7 @@ mod tests {
     #[tokio::test]
     async fn test_pagination() {
         setup();
-        let pool = pasion_storage_pg::test_utils::setup_test_pool().await;
+        let pool = pasion_data::test_utils::setup_test_pool().await;
         let mut state = TestState::from_pool(pool.clone()).await.unwrap();
         let admin_token = state.token_with_scope("urn:pasion:admin").await;
         create_test_tokens(&mut state).await;
@@ -1297,7 +1295,7 @@ mod tests {
     #[tokio::test]
     async fn test_invalid_filter() {
         setup();
-        let pool = pasion_storage_pg::test_utils::setup_test_pool().await;
+        let pool = pasion_data::test_utils::setup_test_pool().await;
         let mut state = TestState::from_pool(pool.clone()).await.unwrap();
         let admin_token = state.token_with_scope("urn:pasion:admin").await;
 
@@ -1320,7 +1318,7 @@ mod tests {
     #[tokio::test]
     async fn test_count_parameter() {
         setup();
-        let pool = pasion_storage_pg::test_utils::setup_test_pool().await;
+        let pool = pasion_data::test_utils::setup_test_pool().await;
         let mut state = TestState::from_pool(pool.clone()).await.unwrap();
         let admin_token = state.token_with_scope("urn:pasion:admin").await;
         create_test_tokens(&mut state).await;

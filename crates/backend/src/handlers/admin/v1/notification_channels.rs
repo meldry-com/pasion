@@ -10,9 +10,7 @@ use schemars::JsonSchema;
 use serde::Serialize;
 
 use crate::handlers::{
-    admin::call_context::extract_call_context,
-    admin::response::ErrorResponse,
-    rest::DepotExt,
+    admin::call_context::extract_call_context, admin::response::ErrorResponse, rest::DepotExt,
 };
 
 /// Status of an individual notification channel.
@@ -38,7 +36,7 @@ pub enum RouteError {
     Internal(Box<dyn std::error::Error + Send + Sync + 'static>),
 }
 
-impl_from_error_for_route!(pasion_storage::RepositoryError);
+impl_from_error_for_route!(pasion_data::RepositoryError);
 impl_from_error_for_route!(crate::handlers::admin::call_context::Rejection);
 impl_from_error_for_route!(crate::handlers::rest::RouteError);
 
@@ -70,8 +68,7 @@ pub async fn handler(
 
     // Email is considered configured when account recovery (which requires
     // sending emails) is enabled or when email changes are allowed.
-    let email_configured =
-        site_config.account_recovery_allowed || site_config.email_change_allowed;
+    let email_configured = site_config.account_recovery_allowed || site_config.email_change_allowed;
 
     // SMS availability cannot be directly determined from the site config;
     // contact-required registration is the closest signal (it implies at

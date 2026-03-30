@@ -2,13 +2,11 @@ use crate::record_error;
 use salvo::{http::StatusCode, prelude::*};
 use ulid::Ulid;
 
-use crate::handlers::{
-    admin::{
-        call_context::extract_call_context,
-        model::OAuth2Session,
-        params::extract_ulid_param,
-        response::{ErrorResponse, SingleResponse},
-    },
+use crate::handlers::admin::{
+    call_context::extract_call_context,
+    model::OAuth2Session,
+    params::extract_ulid_param,
+    response::{ErrorResponse, SingleResponse},
 };
 
 #[derive(Debug, thiserror::Error)]
@@ -20,7 +18,7 @@ pub enum RouteError {
     NotFound(Ulid),
 }
 
-impl_from_error_for_route!(pasion_storage::RepositoryError);
+impl_from_error_for_route!(pasion_data::RepositoryError);
 impl_from_error_for_route!(crate::handlers::admin::params::UlidPathParamRejection);
 impl_from_error_for_route!(crate::handlers::admin::call_context::Rejection);
 
@@ -66,7 +64,7 @@ pub async fn handler(
 #[cfg(test)]
 mod tests {
     use hyper::{Request, StatusCode};
-    use pasion_data_model::AccessToken;
+    use pasion_data::AccessToken;
     use ulid::Ulid;
 
     use crate::handlers::test_utils::{RequestBuilderExt, ResponseExt, TestState, setup};
@@ -74,7 +72,7 @@ mod tests {
     #[tokio::test]
     async fn test_get() {
         setup();
-        let pool = pasion_storage_pg::test_utils::setup_test_pool().await;
+        let pool = pasion_data::test_utils::setup_test_pool().await;
         let mut state = TestState::from_pool(pool.clone()).await.unwrap();
         let token = state.token_with_scope("urn:pasion:admin").await;
 
@@ -126,7 +124,7 @@ mod tests {
     #[tokio::test]
     async fn test_not_found() {
         setup();
-        let pool = pasion_storage_pg::test_utils::setup_test_pool().await;
+        let pool = pasion_data::test_utils::setup_test_pool().await;
         let mut state = TestState::from_pool(pool.clone()).await.unwrap();
         let token = state.token_with_scope("urn:pasion:admin").await;
 

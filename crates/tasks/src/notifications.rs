@@ -1,15 +1,7 @@
 use anyhow::Context;
 use async_trait::async_trait;
 use chrono::{Duration, Utc};
-use pasion_data_model::{
-    NotificationChannel, NotificationDelivery, NotificationDeliveryFailure,
-    NotificationDestination, NotificationEventActor, NotificationEventKind,
-    NotificationRequest as PersistedNotificationRequest, NotificationRequestSource,
-    NotificationRequestStatus,
-};
-use pasion_i18n::DataLocale;
-use pasion_messaging::{Address, Mailbox, NotificationError, NotificationRequest};
-use pasion_storage::{
+use pasion_data::{
     BoxRepository, Pagination, RepositoryAccess,
     notification::{NewNotificationDelivery, NewNotificationEventLog, NewNotificationRequest},
     queue::{
@@ -18,6 +10,14 @@ use pasion_storage::{
     },
     user::UserEmailFilter,
 };
+use pasion_data::{
+    NotificationChannel, NotificationDelivery, NotificationDeliveryFailure,
+    NotificationDestination, NotificationEventActor, NotificationEventKind,
+    NotificationRequest as PersistedNotificationRequest, NotificationRequestSource,
+    NotificationRequestStatus,
+};
+use pasion_i18n::DataLocale;
+use pasion_messaging::{Address, Mailbox, NotificationError, NotificationRequest};
 use pasion_templates::{EmailRecoveryContext, EmailVerificationContext, TemplateContext as _};
 use rand::{
     Rng,
@@ -66,7 +66,7 @@ enum PreparedDelivery {
 async fn append_event(
     repo: &mut BoxRepository,
     rng: &mut (dyn rand::RngCore + Send),
-    clock: &dyn pasion_data_model::Clock,
+    clock: &dyn pasion_data::Clock,
     notification_request: &PersistedNotificationRequest,
     notification_delivery: Option<&NotificationDelivery>,
     kind: NotificationEventKind,
@@ -98,7 +98,7 @@ async fn append_event(
 async fn enqueue_notification_request(
     repo: &mut BoxRepository,
     rng: &mut (dyn rand::RngCore + Send),
-    clock: &dyn pasion_data_model::Clock,
+    clock: &dyn pasion_data::Clock,
     template_key: &str,
     locale: &str,
     source: NotificationRequestSource,
@@ -166,7 +166,7 @@ async fn enqueue_notification_request(
 async fn schedule_processing_job(
     repo: &mut BoxRepository,
     rng: &mut (dyn rand::RngCore + Send),
-    clock: &dyn pasion_data_model::Clock,
+    clock: &dyn pasion_data::Clock,
 ) -> Result<(), JobError> {
     repo.queue_job()
         .schedule_job(rng, clock, ProcessNotificationDeliveriesJob::default())
@@ -492,7 +492,7 @@ fn parse_payload<T: for<'de> Deserialize<'de>>(
 
 async fn prepare_delivery(
     repo: &mut BoxRepository,
-    url_builder: &pasion_data_model::UrlBuilder,
+    url_builder: &pasion_data::UrlBuilder,
     request: &PersistedNotificationRequest,
     delivery: &NotificationDelivery,
 ) -> Result<PreparedDelivery, anyhow::Error> {
@@ -670,7 +670,7 @@ async fn prepare_delivery(
 async fn complete_delivery_with_failure(
     repo: &mut BoxRepository,
     rng: &mut (dyn rand::RngCore + Send),
-    clock: &dyn pasion_data_model::Clock,
+    clock: &dyn pasion_data::Clock,
     mut request: PersistedNotificationRequest,
     delivery: NotificationDelivery,
     failure: NotificationDeliveryFailure,

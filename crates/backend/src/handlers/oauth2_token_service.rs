@@ -7,23 +7,21 @@
 
 use std::sync::Arc;
 
+use crate::oidc_client::types::scope::ScopeToken;
 use chrono::Duration;
 use oauth2_types::{
     pkce::CodeChallengeError,
-    requests::{AccessTokenResponse, AuthorizationCodeGrant, ClientCredentialsGrant,
-        DeviceCodeGrant, GrantType, RefreshTokenGrant},
+    requests::{
+        AccessTokenResponse, AuthorizationCodeGrant, ClientCredentialsGrant, DeviceCodeGrant,
+        GrantType, RefreshTokenGrant,
+    },
     scope,
 };
-use pasion_data_model::{
+use pasion_data::UrlBuilder;
+use pasion_data::{
     AuthorizationGrantStage, Client, Clock, DeviceCodeGrantState, SiteConfig, TokenType,
 };
-use pasion_i18n::DataLocale;
-use pasion_keystore::Keystore;
-use pasion_matrix::HomeserverConnection;
-use crate::oidc_client::types::scope::ScopeToken;
-use pasion_policy::Policy;
-use pasion_data_model::UrlBuilder;
-use pasion_storage::{
+use pasion_data::{
     BoxRepository, RepositoryAccess, RepositoryError,
     oauth2::{
         OAuth2AccessTokenRepository, OAuth2AuthorizationGrantRepository,
@@ -31,12 +29,19 @@ use pasion_storage::{
     },
     user::BrowserSessionRepository,
 };
+use pasion_i18n::DataLocale;
+use pasion_keystore::Keystore;
+use pasion_matrix::HomeserverConnection;
+use pasion_policy::Policy;
 use pasion_templates::{DeviceNameContext, TemplateContext, Templates};
 use thiserror::Error;
 use tracing::{debug, info, warn};
 use ulid::Ulid;
 
-use crate::handlers::{BoundActivityTracker, oauth2::{generate_id_token, generate_token_pair, IdTokenSignatureError}};
+use crate::handlers::{
+    BoundActivityTracker,
+    oauth2::{IdTokenSignatureError, generate_id_token, generate_token_pair},
+};
 
 // ---------------------------------------------------------------------------
 // Error types
@@ -118,10 +123,14 @@ pub enum RefreshTokenExchangeError {
     #[error("failed to load oauth session {0}")]
     NoSuchOAuthSession(Ulid),
 
-    #[error("failed to load the next refresh token ({next:?}) from the previous one ({previous:?})")]
+    #[error(
+        "failed to load the next refresh token ({next:?}) from the previous one ({previous:?})"
+    )]
     NoSuchNextRefreshToken { next: Ulid, previous: Ulid },
 
-    #[error("failed to load the access token ({access_token:?}) associated with the next refresh token ({refresh_token:?})")]
+    #[error(
+        "failed to load the access token ({access_token:?}) associated with the next refresh token ({refresh_token:?})"
+    )]
     NoSuchNextAccessToken {
         access_token: Ulid,
         refresh_token: Ulid,
@@ -228,7 +237,9 @@ pub async fn exchange_authorization_code(
 ) -> Result<(AccessTokenResponse, BoxRepository), AuthorizationCodeExchangeError> {
     // Check that the client is allowed to use this grant type
     if !client.grant_types.contains(&GrantType::AuthorizationCode) {
-        return Err(AuthorizationCodeExchangeError::UnauthorizedClient(client.id));
+        return Err(AuthorizationCodeExchangeError::UnauthorizedClient(
+            client.id,
+        ));
     }
 
     let authz_grant = repo
@@ -254,11 +265,9 @@ pub async fn exchange_authorization_code(
             // Ending the session if the token was already exchanged more than 20s ago
             if now - exchanged_at > Duration::microseconds(20 * 1000 * 1000) {
                 warn!(oauth_session.id = %session_id, "Ending potentially compromised session");
-                let session = repo
-                    .oauth2_session()
-                    .lookup(session_id)
-                    .await?
-                    .ok_or(AuthorizationCodeExchangeError::NoSuchOAuthSession(session_id))?;
+                let session = repo.oauth2_session().lookup(session_id).await?.ok_or(
+                    AuthorizationCodeExchangeError::NoSuchOAuthSession(session_id),
+                )?;
 
                 repo.oauth2_session().finish(clock, session).await?;
                 repo.save().await?;
@@ -283,11 +292,9 @@ pub async fn exchange_authorization_code(
         }
     };
 
-    let mut session = repo
-        .oauth2_session()
-        .lookup(session_id)
-        .await?
-        .ok_or(AuthorizationCodeExchangeError::NoSuchOAuthSession(session_id))?;
+    let mut session = repo.oauth2_session().lookup(session_id).await?.ok_or(
+        AuthorizationCodeExchangeError::NoSuchOAuthSession(session_id),
+    )?;
 
     // Generate a device name
     let lang: DataLocale = authz_grant.locale.as_deref().unwrap_or("en").parse()?;
@@ -335,7 +342,9 @@ pub async fn exchange_authorization_code(
         .browser_session()
         .lookup(user_session_id)
         .await?
-        .ok_or(AuthorizationCodeExchangeError::NoSuchBrowserSession(user_session_id))?;
+        .ok_or(AuthorizationCodeExchangeError::NoSuchBrowserSession(
+            user_session_id,
+        ))?;
 
     let last_authentication = repo
         .browser_session()
@@ -439,7 +448,9 @@ pub async fn handle_refresh_token(
         .oauth2_session()
         .lookup(refresh_token.session_id)
         .await?
-        .ok_or(RefreshTokenExchangeError::NoSuchOAuthSession(refresh_token.session_id))?;
+        .ok_or(RefreshTokenExchangeError::NoSuchOAuthSession(
+            refresh_token.session_id,
+        ))?;
 
     // Let's for now record the user agent on each refresh, that should be
     // responsive enough and not too much of a burden on the database.
@@ -470,7 +481,9 @@ pub async fn handle_refresh_token(
         let Some(next_refresh_token_id) = refresh_token.next_refresh_token_id() else {
             // If we don't have a 'next' refresh token, it may just be because this was
             // before we were recording those. Let's just treat it as a replay.
-            return Err(RefreshTokenExchangeError::RefreshTokenInvalid(refresh_token.id));
+            return Err(RefreshTokenExchangeError::RefreshTokenInvalid(
+                refresh_token.id,
+            ));
         };
 
         let Some(next_refresh_token) = repo
@@ -487,7 +500,9 @@ pub async fn handle_refresh_token(
         // Check if the next refresh token was already consumed or not
         if !next_refresh_token.is_valid() {
             // XXX: This is a replay, we *may* want to invalidate the session
-            return Err(RefreshTokenExchangeError::RefreshTokenInvalid(next_refresh_token.id));
+            return Err(RefreshTokenExchangeError::RefreshTokenInvalid(
+                next_refresh_token.id,
+            ));
         }
 
         // Check if the associated access token was already used
@@ -511,7 +526,9 @@ pub async fn handle_refresh_token(
 
         if next_access_token.is_used() {
             // XXX: This is a replay, we *may* want to invalidate the session
-            return Err(RefreshTokenExchangeError::RefreshTokenInvalid(next_refresh_token.id));
+            return Err(RefreshTokenExchangeError::RefreshTokenInvalid(
+                next_refresh_token.id,
+            ));
         }
 
         // Looks like it's a double-refresh, client lost their refresh token on
@@ -712,7 +729,9 @@ pub async fn exchange_device_code(
         .browser_session()
         .lookup(browser_session_id)
         .await?
-        .ok_or(DeviceCodeExchangeError::NoSuchBrowserSession(browser_session_id))?;
+        .ok_or(DeviceCodeExchangeError::NoSuchBrowserSession(
+            browser_session_id,
+        ))?;
 
     // Start the session
     let mut session = repo

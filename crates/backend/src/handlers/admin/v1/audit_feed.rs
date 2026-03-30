@@ -4,16 +4,13 @@
 //! resource type. Since we don't yet have a dedicated `AuditRepository`, this
 //! endpoint returns an empty feed as a placeholder.
 
-use chrono::{DateTime, Utc};
 use crate::record_error;
+use chrono::{DateTime, Utc};
 use salvo::{http::StatusCode, prelude::*};
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 
-use crate::handlers::{
-    admin::call_context::extract_call_context,
-    admin::response::ErrorResponse,
-};
+use crate::handlers::{admin::call_context::extract_call_context, admin::response::ErrorResponse};
 
 /// A single entry in the admin audit feed.
 #[derive(Serialize, JsonSchema)]
@@ -70,7 +67,7 @@ pub enum RouteError {
     Internal(Box<dyn std::error::Error + Send + Sync + 'static>),
 }
 
-impl_from_error_for_route!(pasion_storage::RepositoryError);
+impl_from_error_for_route!(pasion_data::RepositoryError);
 impl_from_error_for_route!(crate::handlers::admin::call_context::Rejection);
 impl_from_error_for_route!(crate::handlers::rest::RouteError);
 

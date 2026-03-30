@@ -4,16 +4,15 @@ use anyhow::Context;
 use clap::Parser;
 use figment::Figment;
 use itertools::Itertools;
+use pasion_backend::handlers::{ActivityTracker, CookieManager, Limiter, MetadataCache};
+use pasion_backend::listener::server::Server;
 use pasion_config::{
     AppConfig, ClientsConfig, ConfigurationSection, ConfigurationSectionExt, HttpResource,
     UpstreamOAuth2Config,
 };
-use pasion_context::LogContext;
-use pasion_data_model::SystemClock;
-use pasion_backend::handlers::{ActivityTracker, CookieManager, Limiter, MetadataCache};
-use pasion_backend::listener::server::Server;
-use pasion_data_model::UrlBuilder;
-use pasion_storage_pg::PgRepositoryFactory;
+use pasion_data::PgRepositoryFactory;
+use pasion_data::SystemClock;
+use pasion_data::UrlBuilder;
 use tracing::{info, info_span, warn};
 
 use pasion_backend::{
@@ -68,7 +67,7 @@ impl Options {
         let pool = diesel_pool_from_config(&config.database).await?;
 
         if self.no_migrate {
-            if pasion_storage_pg::has_pending_migrations(&db_url).await? {
+            if pasion_data::has_pending_migrations(&db_url).await? {
                 // Refuse to start if there are pending migrations
                 return Err(anyhow::anyhow!(
                     "The server is running with `--no-migrate` but there are pending migrations. Please run them first with `pasion database migrate`, or omit the `--no-migrate` flag to apply them automatically on startup."
@@ -76,7 +75,7 @@ impl Options {
             }
         } else {
             info!("Running pending database migrations");
-            pasion_storage_pg::migrate(&pool, &db_url)
+            pasion_data::migrate(&pool, &db_url)
                 .await
                 .context("could not run migrations")?;
         }
@@ -356,13 +355,11 @@ impl Options {
 
         shutdown
             .task_tracker()
-            .spawn(LogContext::new("run-servers").run(|| {
-                pasion_backend::listener::server::run_servers(
-                    servers,
-                    shutdown.soft_shutdown_token(),
-                    shutdown.hard_shutdown_token(),
-                )
-            }));
+            .spawn(pasion_backend::listener::server::run_servers(
+                servers,
+                shutdown.soft_shutdown_token(),
+                shutdown.hard_shutdown_token(),
+            ));
 
         let exit_code = shutdown.run().await;
 

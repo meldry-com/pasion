@@ -3,7 +3,6 @@ use std::{pin::Pin, sync::Arc, task::Poll, time::Duration};
 use futures_util::{StreamExt, stream::SelectAll};
 use hyper::{Request, Response};
 use hyper_util::rt::{TokioExecutor, TokioIo};
-use pasion_context::LogContext;
 use thiserror::Error;
 use tokio_rustls::rustls::ServerConfig;
 use tokio_util::sync::CancellationToken;
@@ -288,10 +287,10 @@ pub async fn run_servers<F, Fut, B, E>(
             res = accept_tasks.join_next(), if !accept_tasks.is_empty() => {
                 match res {
                     Some(Ok(Some(serve_future))) => {
-                        connection_tasks.spawn(LogContext::new("http-serve").run(async move || {
+                        connection_tasks.spawn(async move {
                             tracing::debug!("Accepted connection");
                             serve_future.await;
-                        }));
+                        });
                     },
                     Some(Ok(None)) => { /* Connection did not finish handshake, error should be logged in `accept` */ },
                     Some(Err(e)) => tracing::error!(error = &e as &dyn std::error::Error, "Join error"),
@@ -317,7 +316,7 @@ pub async fn run_servers<F, Fut, B, E>(
                 // Spawn the connection in the set, so we don't have to wait for the handshake to
                 // accept the next connection. This allows us to keep track of active connections
                 // and waiting on them for a graceful shutdown
-                accept_tasks.spawn(LogContext::new("http-accept").run(async move || {
+                accept_tasks.spawn(async move {
                     let (maybe_proxy_acceptor, maybe_tls_acceptor, handler, peer_addr, stream) = match res {
                         Ok(res) => res,
                         Err(e) => {
@@ -333,7 +332,7 @@ pub async fn run_servers<F, Fut, B, E>(
                             None
                         }
                     }
-                }));
+                });
             },
         };
     }
@@ -354,10 +353,10 @@ pub async fn run_servers<F, Fut, B, E>(
                 res = accept_tasks.join_next(), if !accept_tasks.is_empty() => {
                     match res {
                         Some(Ok(Some(serve_future))) => {
-                            connection_tasks.spawn(LogContext::new("http-serve").run(async || {
+                            connection_tasks.spawn(async move {
                                 tracing::debug!("Accepted connection");
                                 serve_future.await;
-                            }));
+                            });
                         }
                         Some(Ok(None)) => { /* Connection did not finish handshake, error should be logged in `accept` */ },
                         Some(Err(e)) => tracing::error!(error = &e as &dyn std::error::Error, "Join error"),

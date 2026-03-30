@@ -3,9 +3,9 @@ use std::{process::ExitCode, time::Duration};
 use clap::Parser;
 use figment::Figment;
 use pasion_config::{AppConfig, ConfigurationSection};
-use pasion_data_model::SystemClock;
-use pasion_data_model::UrlBuilder;
-use pasion_storage_pg::PgRepositoryFactory;
+use pasion_data::PgRepositoryFactory;
+use pasion_data::SystemClock;
+use pasion_data::UrlBuilder;
 use tracing::{info, info_span};
 
 use pasion_backend::{
@@ -63,7 +63,8 @@ impl Options {
         }
 
         let http_client = pasion_http::reqwest_client();
-        let (conn, _registry) = homeserver_connection_from_config(&config.matrix, http_client).await?;
+        let (conn, _registry) =
+            homeserver_connection_from_config(&config.matrix, http_client).await?;
 
         let database_url = database_url_from_config(&config.database)?;
 

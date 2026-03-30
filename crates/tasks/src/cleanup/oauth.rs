@@ -3,7 +3,7 @@
 use std::time::Duration;
 
 use async_trait::async_trait;
-use pasion_storage::queue::{
+use pasion_data::queue::{
     CleanupOAuthAuthorizationGrantsJob, CleanupOAuthDeviceCodeGrantsJob,
     CleanupUpstreamOAuthLinksJob, CleanupUpstreamOAuthSessionsJob,
 };

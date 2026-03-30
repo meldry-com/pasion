@@ -11,7 +11,7 @@ use opa_wasm::{
     Runtime,
     wasmtime::{Config, Engine, Module, OptLevel, Store},
 };
-use pasion_data_model::{PolicyData, Ulid};
+use pasion_data::{PolicyData, Ulid};
 use tokio::io::{AsyncRead, AsyncReadExt};
 
 use crate::model::{

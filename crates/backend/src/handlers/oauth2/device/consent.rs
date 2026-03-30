@@ -1,7 +1,7 @@
 use std::time::Duration;
 
 use anyhow::Context;
-use pasion_data_model::{Clock, MatrixUser};
+use pasion_data::{Clock, MatrixUser};
 use pasion_policy::Policy;
 use crate::salvo_utils::{
     InternalError,
@@ -82,7 +82,7 @@ async fn handle_get(
     let (csrf_token, cookie_jar) = cookie_jar.csrf_token(&clock, &mut rng);
 
     let Some(session) = maybe_session else {
-        let action = pasion_data_model::PostAuthAction::continue_device_code_grant(grant_id);
+        let action = pasion_data::PostAuthAction::continue_device_code_grant(grant_id);
         let query_str = serde_urlencoded::to_string(&action).unwrap_or_default();
         let path = format!("/login?{query_str}");
         let redirect = salvo::writing::Redirect::other(&url_builder.relative_url(&path));
@@ -256,7 +256,7 @@ async fn handle_post(
     let (csrf_token, cookie_jar) = cookie_jar.csrf_token(&clock, &mut rng);
 
     let Some(session) = maybe_session else {
-        let action = pasion_data_model::PostAuthAction::continue_device_code_grant(grant_id);
+        let action = pasion_data::PostAuthAction::continue_device_code_grant(grant_id);
         let query_str = serde_urlencoded::to_string(&action).unwrap_or_default();
         let path = format!("/login?{query_str}");
         let redirect = salvo::writing::Redirect::other(&url_builder.relative_url(&path));

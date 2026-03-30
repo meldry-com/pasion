@@ -14,9 +14,9 @@ pub mod password_write;
 pub mod prompt;
 pub mod user_write;
 
-use pasion_data_model::flow::{StageKind, StageOutcome, StageResponse};
-use pasion_data_model::Clock;
-use pasion_storage::BoxRepository;
+use pasion_data::BoxRepository;
+use pasion_data::Clock;
+use pasion_data::flow::{StageKind, StageOutcome, StageResponse};
 use rand::RngCore;
 use thiserror::Error;
 
@@ -41,7 +41,7 @@ pub enum StageExecutionError {
 
     /// A repository error occurred.
     #[error(transparent)]
-    Repository(#[from] pasion_storage::RepositoryError),
+    Repository(#[from] pasion_data::RepositoryError),
 
     /// An internal/unexpected error occurred.
     #[error(transparent)]
@@ -67,14 +67,10 @@ pub async fn execute_stage(
                 uid_field,
                 password,
             },
-        ) => {
-            identification::execute(repo, clock, uid_field, password.as_deref(), context).await
-        }
+        ) => identification::execute(repo, clock, uid_field, password.as_deref(), context).await,
 
         (
-            StageKind::EmailVerification {
-                max_attempts, ..
-            },
+            StageKind::EmailVerification { max_attempts, .. },
             StageResponse::EmailVerification { code },
         ) => email_verification::execute(repo, clock, code, *max_attempts, context).await,
 
@@ -122,10 +118,9 @@ pub async fn execute_stage(
             captcha::execute(token, context).await
         }
 
-        (
-            StageKind::Prompt { fields },
-            StageResponse::Prompt { data },
-        ) => prompt::execute(data, fields, context).await,
+        (StageKind::Prompt { fields }, StageResponse::Prompt { data }) => {
+            prompt::execute(data, fields, context).await
+        }
 
         (
             StageKind::AuthenticatorValidate { .. },
@@ -136,10 +131,9 @@ pub async fn execute_stage(
             consent::execute(*granted, context).await
         }
 
-        (
-            StageKind::EnrollmentToken { required },
-            StageResponse::EnrollmentToken { token },
-        ) => enrollment_token::execute(repo, *required, token, context).await,
+        (StageKind::EnrollmentToken { required }, StageResponse::EnrollmentToken { token }) => {
+            enrollment_token::execute(repo, *required, token, context).await
+        }
 
         // Fallback for mismatched stage/response pairs
         _ => Ok(StageOutcome::Continue),

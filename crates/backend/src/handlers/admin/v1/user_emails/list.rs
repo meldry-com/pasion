@@ -1,17 +1,15 @@
 use crate::record_error;
-use pasion_storage::{Page, user::UserEmailFilter};
+use pasion_data::{Page, user::UserEmailFilter};
 use salvo::{http::StatusCode, prelude::*};
 use schemars::JsonSchema;
 use serde::Deserialize;
 use ulid::Ulid;
 
-use crate::handlers::{
-    admin::{
-        call_context::extract_call_context,
-        model::{Resource, UserEmail},
-        params::{IncludeCount, extract_pagination},
-        response::{ErrorResponse, PaginatedResponse},
-    },
+use crate::handlers::admin::{
+    call_context::extract_call_context,
+    model::{Resource, UserEmail},
+    params::{IncludeCount, extract_pagination},
+    response::{ErrorResponse, PaginatedResponse},
 };
 
 #[derive(Deserialize, JsonSchema, Default)]
@@ -55,7 +53,7 @@ pub enum RouteError {
     UserNotFound(Ulid),
 }
 
-impl_from_error_for_route!(pasion_storage::RepositoryError);
+impl_from_error_for_route!(pasion_data::RepositoryError);
 impl_from_error_for_route!(crate::handlers::admin::params::PaginationRejection);
 impl_from_error_for_route!(crate::handlers::admin::call_context::Rejection);
 
@@ -151,7 +149,7 @@ mod tests {
     #[tokio::test]
     async fn test_list() {
         setup();
-        let pool = pasion_storage_pg::test_utils::setup_test_pool().await;
+        let pool = pasion_data::test_utils::setup_test_pool().await;
         let mut state = TestState::from_pool(pool.clone()).await.unwrap();
         let token = state.token_with_scope("urn:pasion:admin").await;
         let mut rng = state.rng();

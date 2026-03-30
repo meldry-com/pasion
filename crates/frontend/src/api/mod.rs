@@ -89,10 +89,7 @@ pub async fn api_put<T: for<'de> Deserialize<'de>>(path: &str, body: Value) -> R
 }
 
 /// Execute a PATCH request to the REST API.
-pub async fn api_patch<T: for<'de> Deserialize<'de>>(
-    path: &str,
-    body: Value,
-) -> Result<T, String> {
+pub async fn api_patch<T: for<'de> Deserialize<'de>>(path: &str, body: Value) -> Result<T, String> {
     let url = format!("{}{}", api_base_url(), path);
     let client = Client::new();
 

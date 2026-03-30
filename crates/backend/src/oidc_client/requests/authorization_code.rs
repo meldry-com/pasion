@@ -25,12 +25,12 @@ use rand::{
 use serde::Serialize;
 use url::Url;
 
-use super::jose::JwtVerificationData;
 use super::super::{
     error::{AuthorizationError, IdTokenError, TokenAuthorizationCodeError},
     requests::{jose::verify_id_token, token::request_access_token},
     types::{IdToken, client_credentials::ClientCredentials},
 };
+use super::jose::JwtVerificationData;
 
 /// The data necessary to build an authorization request.
 #[derive(Debug, Clone)]

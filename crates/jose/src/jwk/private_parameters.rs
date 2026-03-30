@@ -5,9 +5,7 @@ use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
-use super::{
-    ParametersInfo, public_parameters::JsonWebKeyPublicParameters,
-};
+use super::{ParametersInfo, public_parameters::JsonWebKeyPublicParameters};
 use crate::base64::Base64UrlNoPad;
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
@@ -418,7 +416,10 @@ mod tests {
     use ed25519_dalek::SigningKey;
 
     use super::*;
-    use crate::jwk::{PrivateJsonWebKeySet, public_parameters::{EcPublicParameters, OkpPublicParameters}};
+    use crate::jwk::{
+        PrivateJsonWebKeySet,
+        public_parameters::{EcPublicParameters, OkpPublicParameters},
+    };
 
     fn load_private_keys() -> PrivateJsonWebKeySet {
         serde_json::from_str(include_str!("../../tests/keys/jwks.priv.json")).unwrap()
@@ -442,7 +443,10 @@ mod tests {
         let key: elliptic_curve::SecretKey<p521::NistP521> = (&params).try_into().unwrap();
 
         assert_eq!(EcPrivateParameters::from(&key), params);
-        assert_eq!(EcPublicParameters::from(&key.public_key()), params.clone().into());
+        assert_eq!(
+            EcPublicParameters::from(&key.public_key()),
+            params.clone().into()
+        );
     }
 
     #[test]

@@ -1,15 +1,15 @@
 use std::collections::{BTreeMap, BTreeSet};
 
 use anyhow::Error as AnyhowError;
-use pasion_data_model::{
-    Clock, NotificationChannel, SiteConfig, User, UserEmail, UserProfile, UserProfilePatch,
-};
-use pasion_matrix::HomeserverConnection;
-use pasion_storage::{
+use pasion_data::{
     BoxRepository, RepositoryAccess, RepositoryError,
     notification::NotificationRepository,
     user::{UserEmailRepository, UserPasswordRepository, UserRepository},
 };
+use pasion_data::{
+    Clock, NotificationChannel, SiteConfig, User, UserEmail, UserProfile, UserProfilePatch,
+};
+use pasion_matrix::HomeserverConnection;
 use rand::RngCore;
 use thiserror::Error;
 
@@ -73,7 +73,9 @@ pub async fn patch_viewer_profile(
     homeserver: &dyn HomeserverConnection,
     patch: UserProfilePatch,
 ) -> Result<User, UserProfileServiceError> {
-    let requester_user = requester.user().ok_or(UserProfileServiceError::Unauthorized)?;
+    let requester_user = requester
+        .user()
+        .ok_or(UserProfileServiceError::Unauthorized)?;
     validate_display_name_patch(&patch)?;
 
     let user = repo

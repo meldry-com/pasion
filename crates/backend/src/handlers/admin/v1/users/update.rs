@@ -28,7 +28,7 @@ pub enum RouteError {
     Conflict(String),
 }
 
-impl_from_error_for_route!(pasion_storage::RepositoryError);
+impl_from_error_for_route!(pasion_data::RepositoryError);
 impl_from_error_for_route!(crate::handlers::admin::params::UlidPathParamRejection);
 impl_from_error_for_route!(crate::handlers::admin::call_context::Rejection);
 
@@ -87,7 +87,7 @@ pub async fn handler(
         .await
         .map_err(|e| RouteError::BadRequest(e.to_string()))?;
 
-    let patch = pasion_data_model::AdminUserPatch {
+    let patch = pasion_data::AdminUserPatch {
         display_name: body.display_name,
         avatar_url: body.avatar_url,
         preferred_locale: body.preferred_locale,
@@ -161,8 +161,8 @@ fn map_service_error(error: crate::services::user_admin::UserAdminServiceError) 
 mod tests {
     use chrono::Duration;
     use hyper::{Request, StatusCode};
+    use pasion_data::{RepositoryAccess, user::UserRepository};
     use pasion_matrix::{HomeserverConnection, ProvisionRequest};
-    use pasion_storage::{RepositoryAccess, user::UserRepository};
     use rand::SeedableRng;
     use rand_chacha::ChaChaRng;
     use ulid::Ulid;
@@ -174,7 +174,7 @@ mod tests {
     #[tokio::test]
     async fn test_patch_user_profile_and_state() {
         setup();
-        let pool = pasion_storage_pg::test_utils::setup_test_pool().await;
+        let pool = pasion_data::test_utils::setup_test_pool().await;
         let mut state = TestState::from_pool(pool.clone()).await.unwrap();
         let unique = unique_test_nonce();
         state.clock.advance(Duration::seconds(unique as i64));
@@ -224,7 +224,7 @@ mod tests {
     #[tokio::test]
     async fn test_patch_user_reactivate() {
         setup();
-        let pool = pasion_storage_pg::test_utils::setup_test_pool().await;
+        let pool = pasion_data::test_utils::setup_test_pool().await;
         let mut state = TestState::from_pool(pool.clone()).await.unwrap();
         let unique = unique_test_nonce();
         state.clock.advance(Duration::seconds(unique as i64));
@@ -261,7 +261,10 @@ mod tests {
         let response = state.request(request).await;
         response.assert_status(StatusCode::OK);
         let body: serde_json::Value = response.json();
-        assert_eq!(body["data"]["attributes"]["deactivated_at"], serde_json::Value::Null);
+        assert_eq!(
+            body["data"]["attributes"]["deactivated_at"],
+            serde_json::Value::Null
+        );
 
         let matrix_user = state
             .homeserver_connection

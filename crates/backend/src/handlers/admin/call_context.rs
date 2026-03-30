@@ -1,10 +1,10 @@
+use crate::record_error;
 use oauth2_types::scope::Scope;
-use pasion_data_model::{
+use pasion_data::{
     BoxClock, Session, TokenFormatError, TokenType, User,
     personal::session::{PersonalSession, PersonalSessionOwner},
 };
-use crate::record_error;
-use pasion_storage::{BoxRepository, RepositoryError};
+use pasion_data::{BoxRepository, RepositoryError};
 use salvo::{http::StatusCode, prelude::*};
 use ulid::Ulid;
 

@@ -1,19 +1,17 @@
-use chrono::Duration;
-use pasion_data_model::{BoxRng, TokenType};
 use crate::record_error;
+use chrono::Duration;
+use pasion_data::{BoxRng, TokenType};
 use salvo::{http::StatusCode, prelude::*};
 use schemars::JsonSchema;
 use serde::Deserialize;
 use tracing::error;
 
-use crate::handlers::{
-    admin::{
-        call_context::extract_call_context,
-        model::{InconsistentPersonalSession, PersonalSession},
-        params::extract_ulid_param,
-        response::{ErrorResponse, SingleResponse},
-        v1::personal_sessions::personal_session_owner_from_caller,
-    },
+use crate::handlers::admin::{
+    call_context::extract_call_context,
+    model::{InconsistentPersonalSession, PersonalSession},
+    params::extract_ulid_param,
+    response::{ErrorResponse, SingleResponse},
+    v1::personal_sessions::personal_session_owner_from_caller,
 };
 
 #[derive(Debug, thiserror::Error)]
@@ -34,7 +32,7 @@ pub enum RouteError {
     SessionNotYours,
 }
 
-impl_from_error_for_route!(pasion_storage::RepositoryError);
+impl_from_error_for_route!(pasion_data::RepositoryError);
 impl_from_error_for_route!(crate::handlers::admin::params::UlidPathParamRejection);
 impl_from_error_for_route!(crate::handlers::admin::call_context::Rejection);
 impl_from_error_for_route!(InconsistentPersonalSession);
@@ -161,7 +159,7 @@ mod tests {
     #[tokio::test]
     async fn test_regenerate_personal_session() {
         setup();
-        let pool = pasion_storage_pg::test_utils::setup_test_pool().await;
+        let pool = pasion_data::test_utils::setup_test_pool().await;
         let mut state = TestState::from_pool(pool.clone()).await.unwrap();
         let token = state.token_with_scope("urn:pasion:admin").await;
 

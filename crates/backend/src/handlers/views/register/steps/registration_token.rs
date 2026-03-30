@@ -1,5 +1,5 @@
 use anyhow::Context as _;
-use pasion_data_model::PostAuthAction;
+use pasion_data::PostAuthAction;
 use crate::salvo_utils::{
     InternalError,
     cookies::CookieJar,

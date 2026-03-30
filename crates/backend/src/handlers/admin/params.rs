@@ -3,7 +3,7 @@
 
 use std::{borrow::Cow, num::NonZeroUsize};
 
-use pasion_storage::pagination::PaginationDirection;
+use pasion_data::pagination::PaginationDirection;
 use salvo::{http::StatusCode, prelude::*};
 use schemars::JsonSchema;
 use serde::Deserialize;
@@ -105,7 +105,7 @@ impl Scribe for PaginationRejection {
 
 pub fn extract_pagination(
     req: &mut Request,
-) -> Result<(pasion_storage::Pagination, IncludeCount), PaginationRejection> {
+) -> Result<(pasion_data::Pagination, IncludeCount), PaginationRejection> {
     let params: PaginationParams = req.parse_queries().unwrap_or(PaginationParams {
         before: None,
         after: None,
@@ -127,7 +127,7 @@ pub fn extract_pagination(
     };
 
     Ok((
-        pasion_storage::Pagination {
+        pasion_data::Pagination {
             before: params.before,
             after: params.after,
             direction,

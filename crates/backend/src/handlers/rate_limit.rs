@@ -2,7 +2,7 @@ use std::{net::IpAddr, sync::Arc, time::Duration};
 
 use governor::{RateLimiter, clock::QuantaClock, state::keyed::DashMapStateStore};
 use pasion_config::RateLimitingConfig;
-use pasion_data_model::{User, UserEmailAuthentication, UserPhoneAuthentication};
+use pasion_data::{User, UserEmailAuthentication, UserPhoneAuthentication};
 use ulid::Ulid;
 
 #[derive(Debug, Clone, thiserror::Error)]
@@ -390,7 +390,7 @@ impl Limiter {
 
 #[cfg(test)]
 mod tests {
-    use pasion_data_model::{Clock, User, UserPhoneAuthentication, clock::MockClock};
+    use pasion_data::{Clock, User, UserPhoneAuthentication, clock::MockClock};
     use rand::SeedableRng;
 
     use super::*;
@@ -410,7 +410,7 @@ mod tests {
             .unwrap();
 
         let alice = User {
-            id: pasion_data_model::new_id(now, &mut rng),
+            id: pasion_data::new_id(now, &mut rng),
             username: "alice".to_owned(),
             sub: "123-456".to_owned(),
             created_at: now,
@@ -425,7 +425,7 @@ mod tests {
         };
 
         let bob = User {
-            id: pasion_data_model::new_id(now, &mut rng),
+            id: pasion_data::new_id(now, &mut rng),
             username: "bob".to_owned(),
             sub: "123-456".to_owned(),
             created_at: now,
@@ -479,7 +479,7 @@ mod tests {
         let limiter = Limiter::new(&RateLimitingConfig::default()).unwrap();
         let requester = RequesterFingerprint::new([127, 0, 0, 1].into());
         let auth = UserPhoneAuthentication {
-            id: pasion_data_model::new_id(now, &mut rng),
+            id: pasion_data::new_id(now, &mut rng),
             user_registration_id: None,
             phone: "+8613800138000".to_owned(),
             created_at: now,

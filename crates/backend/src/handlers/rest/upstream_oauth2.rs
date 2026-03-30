@@ -5,8 +5,8 @@
 
 use std::sync::LazyLock;
 
-use opentelemetry::{Key, KeyValue, metrics::Counter};
 use crate::salvo_utils::{SessionInfoExt, cookies::CookieJar};
+use opentelemetry::{Key, KeyValue, metrics::Counter};
 use salvo::oapi::ToSchema;
 use salvo::prelude::*;
 use serde::{Deserialize, Serialize};
@@ -279,7 +279,7 @@ fn render_get_link_outcome(
     res: &mut Response,
     cookie_jar: CookieJar,
     sessions_cookie: UpstreamSessionsCookie,
-    clock: &pasion_data_model::BoxClock,
+    clock: &pasion_data::BoxClock,
     link_id: Ulid,
     outcome: LoadUpstreamLinkOutcome,
 ) -> Result<(), RouteError> {
@@ -385,7 +385,7 @@ fn render_post_link_outcome(
     res: &mut Response,
     cookie_jar: CookieJar,
     sessions_cookie: UpstreamSessionsCookie,
-    clock: &pasion_data_model::BoxClock,
+    clock: &pasion_data::BoxClock,
     link_id: Ulid,
     outcome: SubmitUpstreamLinkOutcome,
 ) -> Result<(), RouteError> {

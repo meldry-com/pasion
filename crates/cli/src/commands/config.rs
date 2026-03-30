@@ -5,7 +5,7 @@ use camino::Utf8PathBuf;
 use clap::Parser;
 use figment::Figment;
 use pasion_config::{ConfigurationSection, RootConfig, SyncConfig};
-use pasion_data_model::{Clock as _, SystemClock};
+use pasion_data::{Clock as _, SystemClock};
 use rand::SeedableRng;
 use tokio::io::AsyncWriteExt;
 use tracing::{info, info_span};
@@ -107,7 +107,7 @@ impl Options {
                 let db_url = database_url_from_config(&config.database)?;
                 let pool = diesel_pool_from_config(&config.database).await?;
 
-                pasion_storage_pg::migrate(&pool, &db_url)
+                pasion_data::migrate(&pool, &db_url)
                     .await
                     .context("could not run migrations")?;
 

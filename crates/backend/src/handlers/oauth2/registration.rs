@@ -1,5 +1,7 @@
 use std::sync::{Arc, LazyLock};
 
+use crate::record_error;
+use crate::salvo_utils::sentry::SentryEventID;
 use oauth2_types::{
     errors::{ClientError, ClientErrorCode},
     registration::{
@@ -8,13 +10,11 @@ use oauth2_types::{
     },
 };
 use opentelemetry::{Key, KeyValue, metrics::Counter};
-use pasion_data_model::{BoxClock, BoxRng, SystemClock};
+use pasion_data::{BoxClock, BoxRng, SystemClock};
+use pasion_data::{BoxRepository, BoxRepositoryFactory, oauth2::OAuth2ClientRepository};
 use pasion_iana::oauth::OAuthClientAuthenticationMethod;
 use pasion_keystore::Encrypter;
 use pasion_policy::{EvaluationResult, Policy, PolicyFactory};
-use crate::record_error;
-use crate::salvo_utils::sentry::SentryEventID;
-use pasion_storage::{BoxRepository, BoxRepositoryFactory, oauth2::OAuth2ClientRepository};
 use psl::Psl;
 use rand::{
     SeedableRng,
@@ -29,7 +29,7 @@ use thiserror::Error;
 use tracing::info;
 use url::Url;
 
-use crate::handlers::{METER};
+use crate::handlers::METER;
 
 static REGISTRATION_COUNTER: LazyLock<Counter<u64>> = LazyLock::new(|| {
     METER
@@ -58,7 +58,7 @@ pub(crate) enum RouteError {
     PolicyDenied(EvaluationResult),
 }
 
-impl_from_error_for_route!(pasion_storage::RepositoryError);
+impl_from_error_for_route!(pasion_data::RepositoryError);
 impl_from_error_for_route!(pasion_policy::LoadError);
 impl_from_error_for_route!(pasion_policy::EvaluationError);
 impl_from_error_for_route!(pasion_keystore::aead::Error);

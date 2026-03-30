@@ -9,7 +9,7 @@ use pasion_config::{
     AccountConfig, BrandingConfig, CaptchaConfig, ConfigurationSection, ConfigurationSectionExt,
     ExperimentalConfig, MatrixConfig, PasswordsConfig, TemplatesConfig,
 };
-use pasion_data_model::{Clock, SystemClock};
+use pasion_data::{Clock, SystemClock};
 use rand::SeedableRng;
 use tracing::info_span;
 
@@ -72,7 +72,7 @@ impl Options {
                     rand_chacha::ChaChaRng::from_entropy()
                 };
                 let url_builder =
-                    pasion_data_model::UrlBuilder::new("https://example.com/".parse()?, None, None);
+                    pasion_data::UrlBuilder::new("https://example.com/".parse()?, None, None);
                 let site_config = site_config_from_config(
                     &branding_config,
                     &matrix_config,

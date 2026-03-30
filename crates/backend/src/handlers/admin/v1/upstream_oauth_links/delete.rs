@@ -2,10 +2,8 @@ use crate::record_error;
 use salvo::{http::StatusCode, prelude::*};
 use ulid::Ulid;
 
-use crate::handlers::{
-    admin::{
-        call_context::extract_call_context, params::extract_ulid_param, response::ErrorResponse,
-    },
+use crate::handlers::admin::{
+    call_context::extract_call_context, params::extract_ulid_param, response::ErrorResponse,
 };
 
 #[derive(Debug, thiserror::Error)]
@@ -17,7 +15,7 @@ pub enum RouteError {
     NotFound(Ulid),
 }
 
-impl_from_error_for_route!(pasion_storage::RepositoryError);
+impl_from_error_for_route!(pasion_data::RepositoryError);
 impl_from_error_for_route!(crate::handlers::admin::params::UlidPathParamRejection);
 impl_from_error_for_route!(crate::handlers::admin::call_context::Rejection);
 
@@ -64,7 +62,7 @@ pub async fn handler(req: &mut Request, depot: &Depot) -> Result<StatusCode, Rou
 #[cfg(test)]
 mod tests {
     use hyper::{Request, StatusCode};
-    use pasion_data_model::UpstreamOAuthAuthorizationSessionState;
+    use pasion_data::UpstreamOAuthAuthorizationSessionState;
     use ulid::Ulid;
 
     use super::super::test_utils;
@@ -73,7 +71,7 @@ mod tests {
     #[tokio::test]
     async fn test_delete() {
         setup();
-        let pool = pasion_storage_pg::test_utils::setup_test_pool().await;
+        let pool = pasion_data::test_utils::setup_test_pool().await;
         let mut state = TestState::from_pool(pool.clone()).await.unwrap();
         let token = state.token_with_scope("urn:pasion:admin").await;
         let mut rng = state.rng();
@@ -157,7 +155,7 @@ mod tests {
     #[tokio::test]
     async fn test_not_found() {
         setup();
-        let pool = pasion_storage_pg::test_utils::setup_test_pool().await;
+        let pool = pasion_data::test_utils::setup_test_pool().await;
         let mut state = TestState::from_pool(pool.clone()).await.unwrap();
         let token = state.token_with_scope("urn:pasion:admin").await;
 

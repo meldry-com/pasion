@@ -15,9 +15,7 @@ use crate::{
 /// "Add Email" and "Remove" actions.
 #[component]
 pub fn ContactManagement() -> Element {
-    let data = use_resource(|| async {
-        crate::api::api_get::<ViewerResponse>("/viewer").await
-    });
+    let data = use_resource(|| async { crate::api::api_get::<ViewerResponse>("/viewer").await });
     let binding = data.read();
 
     match &*binding {

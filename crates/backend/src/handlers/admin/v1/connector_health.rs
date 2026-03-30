@@ -1,15 +1,13 @@
 //! Admin endpoint for checking connector provider health.
 
-use pasion_matrix::ConnectorRegistry;
 use crate::record_error;
+use pasion_matrix::ConnectorRegistry;
 use salvo::{http::StatusCode, prelude::*};
 use schemars::JsonSchema;
 use serde::Serialize;
 
 use crate::handlers::{
-    admin::call_context::extract_call_context,
-    admin::response::ErrorResponse,
-    rest::DepotExt,
+    admin::call_context::extract_call_context, admin::response::ErrorResponse, rest::DepotExt,
 };
 
 #[derive(Serialize, JsonSchema)]
@@ -42,7 +40,7 @@ pub enum RouteError {
     Internal(Box<dyn std::error::Error + Send + Sync + 'static>),
 }
 
-impl_from_error_for_route!(pasion_storage::RepositoryError);
+impl_from_error_for_route!(pasion_data::RepositoryError);
 impl_from_error_for_route!(crate::handlers::admin::call_context::Rejection);
 impl_from_error_for_route!(crate::handlers::rest::RouteError);
 

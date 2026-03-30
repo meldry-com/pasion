@@ -1,20 +1,18 @@
+use crate::salvo_utils::client_authorization::{ClientAuthorization, CredentialsVerificationError};
 use oauth2_types::{
     errors::{ClientError, ClientErrorCode},
     requests::RevocationRequest,
 };
-use pasion_data_model::{BoxClock, BoxRng, SystemClock};
+use pasion_data::{BoxClock, BoxRng, SystemClock};
+use pasion_data::{BoxRepository, BoxRepositoryFactory};
 use pasion_keystore::Encrypter;
-use crate::salvo_utils::client_authorization::{
-    ClientAuthorization, CredentialsVerificationError,
-};
-use pasion_storage::{BoxRepository, BoxRepositoryFactory};
 use rand::{SeedableRng, thread_rng};
 use rand_chacha::ChaChaRng;
 use salvo::prelude::*;
 use thiserror::Error;
 use ulid::Ulid;
 
-use crate::handlers::{oauth2_revocation};
+use crate::handlers::oauth2_revocation;
 
 #[derive(Debug, Error)]
 pub(crate) enum RouteError {
@@ -93,9 +91,7 @@ impl Scribe for RouteError {
                     }
                     RevocationError::UnauthorizedClient => {
                         res.status_code(StatusCode::UNAUTHORIZED);
-                        res.render(Json(ClientError::from(
-                            ClientErrorCode::UnauthorizedClient,
-                        )));
+                        res.render(Json(ClientError::from(ClientErrorCode::UnauthorizedClient)));
                     }
                 }
             }
@@ -106,7 +102,7 @@ impl Scribe for RouteError {
     }
 }
 
-impl_from_error_for_route!(pasion_storage::RepositoryError);
+impl_from_error_for_route!(pasion_data::RepositoryError);
 impl_from_error_for_route!(crate::salvo_utils::client_authorization::ClientAuthorizationError);
 
 #[handler]

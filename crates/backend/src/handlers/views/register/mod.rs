@@ -1,4 +1,4 @@
-use pasion_data_model::PostAuthAction;
+use pasion_data::PostAuthAction;
 use crate::salvo_utils::{InternalError, SessionInfoExt, cookies::CookieJar, csrf::CsrfExt as _};
 use pasion_templates::{RegisterContext, TemplateContext, Templates};
 use salvo::{prelude::*, writing::Text};

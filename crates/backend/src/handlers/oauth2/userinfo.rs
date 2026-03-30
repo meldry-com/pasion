@@ -1,16 +1,16 @@
-use pasion_data_model::{BoxClock, BoxRng, SystemClock};
-use pasion_jose::{
-    constraints::Constrainable,
-    jwt::{JsonWebSignatureHeader, Jwt},
-};
-use pasion_keystore::Keystore;
-use pasion_data_model::UrlBuilder;
 use crate::record_error;
 use crate::salvo_utils::{
     sentry::SentryEventID,
     user_authorization::{AuthorizationVerificationError, UserAuthorization},
 };
-use pasion_storage::{BoxRepository, BoxRepositoryFactory, oauth2::OAuth2ClientRepository};
+use pasion_data::UrlBuilder;
+use pasion_data::{BoxClock, BoxRng, SystemClock};
+use pasion_data::{BoxRepository, BoxRepositoryFactory, oauth2::OAuth2ClientRepository};
+use pasion_jose::{
+    constraints::Constrainable,
+    jwt::{JsonWebSignatureHeader, Jwt},
+};
+use pasion_keystore::Keystore;
 use rand::{SeedableRng, thread_rng};
 use rand_chacha::ChaChaRng;
 use salvo::prelude::*;
@@ -18,7 +18,6 @@ use serde::Serialize;
 use serde_with::skip_serializing_none;
 use thiserror::Error;
 use ulid::Ulid;
-
 
 #[skip_serializing_none]
 #[derive(Serialize)]
@@ -42,7 +41,7 @@ pub enum RouteError {
 
     #[error("failed to authenticate")]
     AuthorizationVerificationError(
-        #[from] AuthorizationVerificationError<pasion_storage::RepositoryError>,
+        #[from] AuthorizationVerificationError<pasion_data::RepositoryError>,
     ),
 
     #[error("session is not allowed to access the userinfo endpoint")]
@@ -58,7 +57,7 @@ pub enum RouteError {
     NoSuchUser(Ulid),
 }
 
-impl_from_error_for_route!(pasion_storage::RepositoryError);
+impl_from_error_for_route!(pasion_data::RepositoryError);
 impl_from_error_for_route!(pasion_keystore::WrongAlgorithmError);
 impl_from_error_for_route!(pasion_jose::jwt::JwtSignatureError);
 

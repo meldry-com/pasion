@@ -1,5 +1,5 @@
-use pasion_data_model::AppVersion;
 use crate::salvo_utils::InternalError;
+use pasion_data::AppVersion;
 use salvo::prelude::*;
 use schemars::JsonSchema;
 use serde::Serialize;
@@ -16,7 +16,7 @@ pub struct Version {
 #[tracing::instrument(name = "handler.admin.v1.version", skip_all)]
 pub async fn handler(req: &mut Request, depot: &Depot) -> Result<Json<Version>, InternalError> {
     let _call_context = extract_call_context(req, depot).await?;
-    let pasion_data_model::AppVersion(version) = depot.app_version()?;
+    let pasion_data::AppVersion(version) = depot.app_version()?;
 
     Ok(Json(Version { version }))
 }
@@ -31,7 +31,7 @@ mod tests {
     #[tokio::test]
     async fn test_add_user() {
         setup();
-        let pool = pasion_storage_pg::test_utils::setup_test_pool().await;
+        let pool = pasion_data::test_utils::setup_test_pool().await;
         let mut state = TestState::from_pool(pool.clone()).await.unwrap();
         let token = state.token_with_scope("urn:pasion:admin").await;
 

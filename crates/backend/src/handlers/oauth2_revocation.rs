@@ -1,11 +1,11 @@
-use pasion_data_model::{BoxRng, Clock, TokenType};
-use pasion_iana::oauth::OAuthTokenTypeHint;
-use pasion_storage::{
+use pasion_data::{
     BoxRepository, RepositoryAccess, RepositoryError,
     oauth2::{OAuth2AccessTokenRepository, OAuth2RefreshTokenRepository, OAuth2SessionRepository},
     queue::{QueueJobRepositoryExt as _, SyncDevicesJob},
     user::UserRepository,
 };
+use pasion_data::{BoxRng, Clock, TokenType};
+use pasion_iana::oauth::OAuthTokenTypeHint;
 use thiserror::Error;
 use ulid::Ulid;
 
@@ -41,8 +41,7 @@ pub async fn revoke_token(
     token_type_hint: Option<OAuthTokenTypeHint>,
     client_id: Ulid,
 ) -> Result<(), RevocationError> {
-    let token_type = TokenType::check(token_str)
-        .map_err(|_| RevocationError::UnknownToken)?;
+    let token_type = TokenType::check(token_str).map_err(|_| RevocationError::UnknownToken)?;
 
     // Find the ID of the session to end.
     let session_id = match (token_type_hint, token_type) {

@@ -24,12 +24,12 @@ use diesel_async::AsyncPgConnection;
 use diesel_async::pooled_connection::deadpool::Pool as DieselPool;
 use new_queue::QueueRunnerError;
 use opentelemetry::metrics::Meter;
-use pasion_data_model::{Clock, SiteConfig};
+use pasion_data::PgRepositoryFactory;
+use pasion_data::UrlBuilder;
+use pasion_data::{BoxRepository, RepositoryError, RepositoryFactory};
+use pasion_data::{Clock, SiteConfig};
 use pasion_matrix::HomeserverConnection;
 use pasion_messaging::NotificationCenter;
-use pasion_data_model::UrlBuilder;
-use pasion_storage::{BoxRepository, RepositoryError, RepositoryFactory};
-use pasion_storage_pg::PgRepositoryFactory;
 use rand::SeedableRng;
 use tokio_util::{sync::CancellationToken, task::TaskTracker};
 
@@ -155,38 +155,38 @@ pub async fn init(
     let mut worker = QueueWorker::new(state, cancellation_token).await?;
 
     worker
-        .register_handler::<pasion_storage::queue::CleanupRevokedOAuthAccessTokensJob>()
-        .register_handler::<pasion_storage::queue::CleanupExpiredOAuthAccessTokensJob>()
-        .register_handler::<pasion_storage::queue::CleanupRevokedOAuthRefreshTokensJob>()
-        .register_handler::<pasion_storage::queue::CleanupConsumedOAuthRefreshTokensJob>()
-        .register_handler::<pasion_storage::queue::CleanupUserRegistrationsJob>()
-        .register_handler::<pasion_storage::queue::CleanupFinishedOAuth2SessionsJob>()
-        .register_handler::<pasion_storage::queue::CleanupFinishedUserSessionsJob>()
-        .register_handler::<pasion_storage::queue::CleanupOAuthAuthorizationGrantsJob>()
-        .register_handler::<pasion_storage::queue::CleanupOAuthDeviceCodeGrantsJob>()
-        .register_handler::<pasion_storage::queue::CleanupUserRecoverySessionsJob>()
-        .register_handler::<pasion_storage::queue::CleanupUserEmailAuthenticationsJob>()
-        .register_handler::<pasion_storage::queue::CleanupUpstreamOAuthSessionsJob>()
-        .register_handler::<pasion_storage::queue::CleanupUpstreamOAuthLinksJob>()
-        .register_handler::<pasion_storage::queue::CleanupQueueJobsJob>()
-        .register_handler::<pasion_storage::queue::DeactivateUserJob>()
-        .register_handler::<pasion_storage::queue::DeleteDeviceJob>()
-        .register_handler::<pasion_storage::queue::ProcessNotificationDeliveriesJob>()
-        .register_handler::<pasion_storage::queue::ProvisionDeviceJob>()
-        .register_handler::<pasion_storage::queue::ProvisionUserJob>()
-        .register_handler::<pasion_storage::queue::ReactivateUserJob>()
-        .register_handler::<pasion_storage::queue::DispatchNotificationJob>()
-        .register_handler::<pasion_storage::queue::SendAccountRecoveryEmailsJob>()
-        .register_handler::<pasion_storage::queue::SendEmailAuthenticationCodeJob>()
-        .register_handler::<pasion_storage::queue::SendSmsAuthenticationCodeJob>()
-        .register_handler::<pasion_storage::queue::SyncDevicesJob>()
-        .register_handler::<pasion_storage::queue::VerifyEmailJob>()
-        .register_handler::<pasion_storage::queue::ExpireInactiveSessionsJob>()
-        .register_handler::<pasion_storage::queue::ExpireInactiveOAuthSessionsJob>()
-        .register_handler::<pasion_storage::queue::ExpireInactiveUserSessionsJob>()
-        .register_handler::<pasion_storage::queue::PruneStalePolicyDataJob>()
-        .register_handler::<pasion_storage::queue::CleanupInactiveOAuth2SessionIpsJob>()
-        .register_handler::<pasion_storage::queue::CleanupInactiveUserSessionIpsJob>()
+        .register_handler::<pasion_data::queue::CleanupRevokedOAuthAccessTokensJob>()
+        .register_handler::<pasion_data::queue::CleanupExpiredOAuthAccessTokensJob>()
+        .register_handler::<pasion_data::queue::CleanupRevokedOAuthRefreshTokensJob>()
+        .register_handler::<pasion_data::queue::CleanupConsumedOAuthRefreshTokensJob>()
+        .register_handler::<pasion_data::queue::CleanupUserRegistrationsJob>()
+        .register_handler::<pasion_data::queue::CleanupFinishedOAuth2SessionsJob>()
+        .register_handler::<pasion_data::queue::CleanupFinishedUserSessionsJob>()
+        .register_handler::<pasion_data::queue::CleanupOAuthAuthorizationGrantsJob>()
+        .register_handler::<pasion_data::queue::CleanupOAuthDeviceCodeGrantsJob>()
+        .register_handler::<pasion_data::queue::CleanupUserRecoverySessionsJob>()
+        .register_handler::<pasion_data::queue::CleanupUserEmailAuthenticationsJob>()
+        .register_handler::<pasion_data::queue::CleanupUpstreamOAuthSessionsJob>()
+        .register_handler::<pasion_data::queue::CleanupUpstreamOAuthLinksJob>()
+        .register_handler::<pasion_data::queue::CleanupQueueJobsJob>()
+        .register_handler::<pasion_data::queue::DeactivateUserJob>()
+        .register_handler::<pasion_data::queue::DeleteDeviceJob>()
+        .register_handler::<pasion_data::queue::ProcessNotificationDeliveriesJob>()
+        .register_handler::<pasion_data::queue::ProvisionDeviceJob>()
+        .register_handler::<pasion_data::queue::ProvisionUserJob>()
+        .register_handler::<pasion_data::queue::ReactivateUserJob>()
+        .register_handler::<pasion_data::queue::DispatchNotificationJob>()
+        .register_handler::<pasion_data::queue::SendAccountRecoveryEmailsJob>()
+        .register_handler::<pasion_data::queue::SendEmailAuthenticationCodeJob>()
+        .register_handler::<pasion_data::queue::SendSmsAuthenticationCodeJob>()
+        .register_handler::<pasion_data::queue::SyncDevicesJob>()
+        .register_handler::<pasion_data::queue::VerifyEmailJob>()
+        .register_handler::<pasion_data::queue::ExpireInactiveSessionsJob>()
+        .register_handler::<pasion_data::queue::ExpireInactiveOAuthSessionsJob>()
+        .register_handler::<pasion_data::queue::ExpireInactiveUserSessionsJob>()
+        .register_handler::<pasion_data::queue::PruneStalePolicyDataJob>()
+        .register_handler::<pasion_data::queue::CleanupInactiveOAuth2SessionIpsJob>()
+        .register_handler::<pasion_data::queue::CleanupInactiveUserSessionIpsJob>()
         .register_deprecated_queue("cleanup-expired-tokens")
         .register_deprecated_queue("cleanup-finished-compat-sessions")
         .register_deprecated_queue("expire-inactive-compat-sessions")
@@ -197,116 +197,116 @@ pub async fn init(
             "process-notification-deliveries",
             // Run once a minute as a safety net for delayed retries.
             "15 * * * * *".parse()?,
-            pasion_storage::queue::ProcessNotificationDeliveriesJob::default(),
+            pasion_data::queue::ProcessNotificationDeliveriesJob::default(),
         )
         .add_schedule(
             "cleanup-revoked-oauth-access-tokens",
             // Run this job every hour at minute 0
             "0 0 * * * *".parse()?,
-            pasion_storage::queue::CleanupRevokedOAuthAccessTokensJob,
+            pasion_data::queue::CleanupRevokedOAuthAccessTokensJob,
         )
         .add_schedule(
             "cleanup-revoked-oauth-refresh-tokens",
             // Run this job every hour at minute 5
             "0 5 * * * *".parse()?,
-            pasion_storage::queue::CleanupRevokedOAuthRefreshTokensJob,
+            pasion_data::queue::CleanupRevokedOAuthRefreshTokensJob,
         )
         .add_schedule(
             "cleanup-consumed-oauth-refresh-tokens",
             // Run this job every hour at minute 5 (safe to parallelize with revoked)
             "0 5 * * * *".parse()?,
-            pasion_storage::queue::CleanupConsumedOAuthRefreshTokensJob,
+            pasion_data::queue::CleanupConsumedOAuthRefreshTokensJob,
         )
         .add_schedule(
             "cleanup-finished-oauth2-sessions",
             // Run this job every hour at minute 15
             "0 15 * * * *".parse()?,
-            pasion_storage::queue::CleanupFinishedOAuth2SessionsJob,
+            pasion_data::queue::CleanupFinishedOAuth2SessionsJob,
         )
         .add_schedule(
             "cleanup-finished-user-sessions",
             // Run this job every hour at minute 20
             "0 20 * * * *".parse()?,
-            pasion_storage::queue::CleanupFinishedUserSessionsJob,
+            pasion_data::queue::CleanupFinishedUserSessionsJob,
         )
         .add_schedule(
             "cleanup-inactive-oauth2-session-ips",
             // Run this job every hour at minute 25
             "0 25 * * * *".parse()?,
-            pasion_storage::queue::CleanupInactiveOAuth2SessionIpsJob,
+            pasion_data::queue::CleanupInactiveOAuth2SessionIpsJob,
         )
         .add_schedule(
             "cleanup-inactive-user-session-ips",
             // Run this job every hour at minute 25
             "0 25 * * * *".parse()?,
-            pasion_storage::queue::CleanupInactiveUserSessionIpsJob,
+            pasion_data::queue::CleanupInactiveUserSessionIpsJob,
         )
         .add_schedule(
             "cleanup-oauth-authorization-grants",
             // Run this job every hour at minute 30
             "0 30 * * * *".parse()?,
-            pasion_storage::queue::CleanupOAuthAuthorizationGrantsJob,
+            pasion_data::queue::CleanupOAuthAuthorizationGrantsJob,
         )
         .add_schedule(
             "cleanup-oauth-device-code-grants",
             // Run this job every hour at minute 35
             "0 35 * * * *".parse()?,
-            pasion_storage::queue::CleanupOAuthDeviceCodeGrantsJob,
+            pasion_data::queue::CleanupOAuthDeviceCodeGrantsJob,
         )
         .add_schedule(
             "cleanup-upstream-oauth-sessions",
             // Run this job every hour at minute 40 (independent, safe to parallelize)
             "0 40 * * * *".parse()?,
-            pasion_storage::queue::CleanupUpstreamOAuthSessionsJob,
+            pasion_data::queue::CleanupUpstreamOAuthSessionsJob,
         )
         .add_schedule(
             "cleanup-upstream-oauth-links",
             // Run this job every hour at minute 40
             "0 40 * * * *".parse()?,
-            pasion_storage::queue::CleanupUpstreamOAuthLinksJob,
+            pasion_data::queue::CleanupUpstreamOAuthLinksJob,
         )
         // User cleanup jobs (minutes 45, 50)
         .add_schedule(
             "cleanup-user-registrations",
             // Run this job every hour at minute 45
             "0 45 * * * *".parse()?,
-            pasion_storage::queue::CleanupUserRegistrationsJob,
+            pasion_data::queue::CleanupUserRegistrationsJob,
         )
         .add_schedule(
             "cleanup-user-recovery-sessions",
             // Run this job every hour at minute 50
             "0 50 * * * *".parse()?,
-            pasion_storage::queue::CleanupUserRecoverySessionsJob,
+            pasion_data::queue::CleanupUserRecoverySessionsJob,
         )
         .add_schedule(
             "cleanup-user-email-authentications",
             // Run this job every hour at minute 50
             "0 50 * * * *".parse()?,
-            pasion_storage::queue::CleanupUserEmailAuthenticationsJob,
+            pasion_data::queue::CleanupUserEmailAuthenticationsJob,
         )
         .add_schedule(
             "cleanup-queue-jobs",
             // Run this job every hour at minute 55
             "0 55 * * * *".parse()?,
-            pasion_storage::queue::CleanupQueueJobsJob,
+            pasion_data::queue::CleanupQueueJobsJob,
         )
         .add_schedule(
             "cleanup-expired-oauth-access-tokens",
             // Run this job every 4 hours at minute 5
             "0 5 */4 * * *".parse()?,
-            pasion_storage::queue::CleanupExpiredOAuthAccessTokensJob,
+            pasion_data::queue::CleanupExpiredOAuthAccessTokensJob,
         )
         .add_schedule(
             "expire-inactive-sessions",
             // Run this job every 15 minutes at second 30
             "30 */15 * * * *".parse()?,
-            pasion_storage::queue::ExpireInactiveSessionsJob,
+            pasion_data::queue::ExpireInactiveSessionsJob,
         )
         .add_schedule(
             "prune-stale-policy-data",
             // Run once a day at 2:00 AM
             "0 0 2 * * *".parse()?,
-            pasion_storage::queue::PruneStalePolicyDataJob,
+            pasion_data::queue::PruneStalePolicyDataJob,
         );
 
     Ok(worker)

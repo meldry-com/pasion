@@ -1,7 +1,7 @@
+use crate::salvo_utils::InternalError;
 use diesel_async::AsyncPgConnection;
 use diesel_async::RunQueryDsl;
 use diesel_async::pooled_connection::deadpool::Pool as DieselPool;
-use crate::salvo_utils::InternalError;
 use salvo::prelude::*;
 use tracing::{Instrument, info_span};
 

@@ -1,14 +1,13 @@
 mod mock;
-pub mod registry;
 mod readonly;
+pub mod registry;
 
 use std::{collections::HashSet, sync::Arc};
 
 use ruma_common::UserId;
 
 pub use self::{
-    mock::HomeserverConnection as MockHomeserverConnection,
-    readonly::ReadOnlyHomeserverConnection,
+    mock::HomeserverConnection as MockHomeserverConnection, readonly::ReadOnlyHomeserverConnection,
     registry::ConnectorRegistry,
 };
 

@@ -2,13 +2,11 @@ use crate::record_error;
 use salvo::{http::StatusCode, prelude::*};
 use ulid::Ulid;
 
-use crate::handlers::{
-    admin::{
-        call_context::extract_call_context,
-        model::User,
-        params::extract_ulid_param,
-        response::{ErrorResponse, SingleResponse},
-    },
+use crate::handlers::admin::{
+    call_context::extract_call_context,
+    model::User,
+    params::extract_ulid_param,
+    response::{ErrorResponse, SingleResponse},
 };
 
 #[derive(Debug, thiserror::Error)]
@@ -20,7 +18,7 @@ pub enum RouteError {
     NotFound(Ulid),
 }
 
-impl_from_error_for_route!(pasion_storage::RepositoryError);
+impl_from_error_for_route!(pasion_data::RepositoryError);
 impl_from_error_for_route!(crate::handlers::admin::params::UlidPathParamRejection);
 impl_from_error_for_route!(crate::handlers::admin::call_context::Rejection);
 

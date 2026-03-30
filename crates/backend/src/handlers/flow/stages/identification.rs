@@ -3,9 +3,9 @@
 //! Looks up a user by username or email address and stores the resolved
 //! `user_id` in the flow context for subsequent stages.
 
-use pasion_data_model::flow::{StageOutcome, StageValidationError};
-use pasion_data_model::Clock;
-use pasion_storage::{BoxRepository, RepositoryAccess};
+use pasion_data::Clock;
+use pasion_data::flow::{StageOutcome, StageValidationError};
+use pasion_data::{BoxRepository, RepositoryAccess};
 
 use super::StageExecutionError;
 
@@ -77,10 +77,7 @@ pub async fn execute(
 
     // Store user_id in context for subsequent stages
     if let Some(ctx) = context.as_object_mut() {
-        ctx.insert(
-            "user_id".into(),
-            serde_json::json!(user.id.to_string()),
-        );
+        ctx.insert("user_id".into(), serde_json::json!(user.id.to_string()));
         ctx.insert("username".into(), serde_json::json!(user.username));
     }
 

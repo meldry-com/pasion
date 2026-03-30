@@ -1,8 +1,8 @@
 use std::sync::Arc;
 
-use pasion_data_model::BoxRng;
-use pasion_policy::PolicyFactory;
 use crate::record_error;
+use pasion_data::BoxRng;
+use pasion_policy::PolicyFactory;
 use salvo::{http::StatusCode, prelude::*};
 use schemars::JsonSchema;
 use serde::Deserialize;
@@ -25,7 +25,7 @@ pub enum RouteError {
     Internal(Box<dyn std::error::Error + Send + Sync + 'static>),
 }
 
-impl_from_error_for_route!(pasion_storage::RepositoryError);
+impl_from_error_for_route!(pasion_data::RepositoryError);
 impl_from_error_for_route!(crate::handlers::rest::RouteError);
 impl_from_error_for_route!(crate::handlers::admin::call_context::Rejection);
 
@@ -106,7 +106,7 @@ mod tests {
     #[tokio::test]
     async fn test_create() {
         setup();
-        let pool = pasion_storage_pg::test_utils::setup_test_pool().await;
+        let pool = pasion_data::test_utils::setup_test_pool().await;
         let mut state = TestState::from_pool(pool.clone()).await.unwrap();
         let token = state.token_with_scope("urn:pasion:admin").await;
 

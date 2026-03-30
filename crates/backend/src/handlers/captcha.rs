@@ -1,6 +1,6 @@
 use std::net::IpAddr;
 
-use pasion_data_model::{CaptchaConfig, CaptchaService};
+use pasion_data::{CaptchaConfig, CaptchaService};
 use pasion_http::RequestBuilderExt as _;
 use serde::{Deserialize, Serialize};
 use thiserror::Error;

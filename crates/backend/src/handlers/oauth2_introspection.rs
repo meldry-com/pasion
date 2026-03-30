@@ -4,16 +4,14 @@ use oauth2_types::{
     requests::IntrospectionResponse,
     scope::{Scope, ScopeToken},
 };
-use pasion_data_model::{
-    Clock, TokenFormatError, TokenType, personal::session::PersonalSessionOwner,
-};
-use pasion_iana::oauth::OAuthTokenTypeHint;
-use pasion_storage::{
+use pasion_data::{
     BoxRepository, RepositoryAccess, RepositoryError,
     oauth2::{OAuth2AccessTokenRepository, OAuth2RefreshTokenRepository, OAuth2SessionRepository},
     personal::{PersonalAccessTokenRepository, PersonalSessionRepository},
     user::UserRepository,
 };
+use pasion_data::{Clock, TokenFormatError, TokenType, personal::session::PersonalSessionOwner};
+use pasion_iana::oauth::OAuthTokenTypeHint;
 use thiserror::Error;
 use ulid::Ulid;
 

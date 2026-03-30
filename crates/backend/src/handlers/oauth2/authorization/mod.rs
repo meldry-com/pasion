@@ -1,18 +1,18 @@
+use crate::salvo_utils::{
+    GenericError, InternalError, SessionInfoExt, cookies::CookieJar, sentry::SentryEventID,
+};
 use oauth2_types::{
     errors::{ClientError, ClientErrorCode},
     pkce,
     requests::{AuthorizationRequest, GrantType, Prompt, ResponseMode},
     response_type::ResponseType,
 };
-use pasion_data_model::{AuthorizationCode, BoxClock, BoxRng, Pkce, SystemClock};
-use pasion_data_model::{PostAuthAction, UrlBuilder};
-use crate::salvo_utils::{
-    GenericError, InternalError, SessionInfoExt, cookies::CookieJar, sentry::SentryEventID,
-};
-use pasion_storage::{
+use pasion_data::{AuthorizationCode, BoxClock, BoxRng, Pkce, SystemClock};
+use pasion_data::{
     BoxRepository, BoxRepositoryFactory,
     oauth2::{OAuth2AuthorizationGrantRepository, OAuth2ClientRepository},
 };
+use pasion_data::{PostAuthAction, UrlBuilder};
 use pasion_templates::Templates;
 use rand::{Rng, SeedableRng, distributions::Alphanumeric, thread_rng};
 use rand_chacha::ChaChaRng;
@@ -39,7 +39,7 @@ pub enum RouteError {
     IntoCallbackDestination(#[from] self::callback::IntoCallbackDestinationError),
 
     #[error("invalid redirect uri")]
-    UnknownRedirectUri(#[from] pasion_data_model::InvalidRedirectUriError),
+    UnknownRedirectUri(#[from] pasion_data::InvalidRedirectUriError),
 }
 
 impl Scribe for RouteError {
@@ -65,7 +65,7 @@ impl Scribe for RouteError {
     }
 }
 
-impl_from_error_for_route!(pasion_storage::RepositoryError);
+impl_from_error_for_route!(pasion_data::RepositoryError);
 impl_from_error_for_route!(pasion_templates::TemplateError);
 impl_from_error_for_route!(self::callback::CallbackDestinationError);
 impl_from_error_for_route!(pasion_policy::LoadError);
@@ -299,7 +299,8 @@ async fn handle_get(req: &mut Request, depot: &Depot) -> Result<(Response, Cooki
                     repo.save().await?;
 
                     {
-                        let query_str = serde_urlencoded::to_string(&continue_grant).unwrap_or_default();
+                        let query_str =
+                            serde_urlencoded::to_string(&continue_grant).unwrap_or_default();
                         let path = if query_str.is_empty() {
                             "/register".to_owned()
                         } else {
@@ -314,7 +315,8 @@ async fn handle_get(req: &mut Request, depot: &Depot) -> Result<(Response, Cooki
                     repo.save().await?;
 
                     {
-                        let query_str = serde_urlencoded::to_string(&continue_grant).unwrap_or_default();
+                        let query_str =
+                            serde_urlencoded::to_string(&continue_grant).unwrap_or_default();
                         let path = if query_str.is_empty() {
                             "/login".to_owned()
                         } else {
@@ -331,9 +333,9 @@ async fn handle_get(req: &mut Request, depot: &Depot) -> Result<(Response, Cooki
                     activity_tracker
                         .record_browser_session(&clock, &user_session)
                         .await;
-                    salvo::writing::Redirect::other(&url_builder.relative_url(
-                        &format!("/consent/{}", grant.id),
-                    ))
+                    salvo::writing::Redirect::other(
+                        &url_builder.relative_url(&format!("/consent/{}", grant.id)),
+                    )
                 }
             };
 

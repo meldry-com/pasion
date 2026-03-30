@@ -5,7 +5,7 @@
 //! (e.g. token issuance) can observe it.  When rejected the flow is
 //! terminated immediately.
 
-use pasion_data_model::flow::StageOutcome;
+use pasion_data::flow::StageOutcome;
 
 use super::StageExecutionError;
 
@@ -27,8 +27,6 @@ pub async fn execute(
         }
         Ok(StageOutcome::Continue)
     } else {
-        Ok(StageOutcome::Done {
-            redirect_to: None,
-        })
+        Ok(StageOutcome::Done { redirect_to: None })
     }
 }

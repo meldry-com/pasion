@@ -1,16 +1,16 @@
 use std::sync::{Arc, LazyLock};
 
 use opentelemetry::{Key, KeyValue, metrics::Counter};
-use pasion_data_model::{Clock, oauth2::LoginHint};
+use pasion_data::{Clock, oauth2::LoginHint};
 use pasion_i18n::DataLocale;
 use pasion_matrix::HomeserverConnection;
-use pasion_data_model::PostAuthAction;
+use pasion_data::PostAuthAction;
 use crate::salvo_utils::{
     InternalError, SessionInfoExt,
     cookies::CookieJar,
     csrf::{CsrfExt, ProtectedForm},
 };
-use pasion_storage::RepositoryAccess;
+use pasion_data::RepositoryAccess;
 use pasion_templates::{
     AccountInactiveContext, FieldError, FormError, FormState, LoginContext, LoginFormField,
     PostAuthContext, PostAuthContextInner, TemplateContext, Templates, ToFormState,
@@ -21,7 +21,7 @@ use serde::{Deserialize, Serialize};
 use zeroize::Zeroizing;
 
 use super::shared::OptionalPostAuthAction;
-use pasion_data_model::SiteConfig;
+use pasion_data::SiteConfig;
 
 use crate::handlers::{
     METER, RequesterFingerprint,
@@ -379,19 +379,19 @@ mod test {
         header::{CONTENT_TYPE, LOCATION},
     };
     use oauth2_types::scope::OPENID;
-    use pasion_data_model::{
+    use pasion_data::{
         UpstreamOAuthProviderClaimsImports, UpstreamOAuthProviderOnBackchannelLogout,
         UpstreamOAuthProviderTokenAuthMethod,
     };
     use pasion_iana::jose::JsonWebSignatureAlg;
-    use pasion_storage::{
+    use pasion_data::{
         RepositoryAccess,
         upstream_oauth2::{UpstreamOAuthProviderParams, UpstreamOAuthProviderRepository},
     };
     use pasion_templates::escape_html;
     use zeroize::Zeroizing;
 
-    use pasion_data_model::SiteConfig;
+    use pasion_data::SiteConfig;
 
     use crate::handlers::rest::DepotExt;
     use crate::handlers::test_utils::{
@@ -401,7 +401,7 @@ mod test {
     #[tokio::test]
     async fn test_password_disabled() {
         setup();
-        let pool = pasion_storage_pg::test_utils::setup_test_pool().await;
+        let pool = pasion_data::test_utils::setup_test_pool().await;
         let state = TestState::from_pool_with_site_config(
             pool.clone(),
             SiteConfig {
@@ -449,8 +449,8 @@ mod test {
                     token_endpoint_override: None,
                     userinfo_endpoint_override: None,
                     jwks_uri_override: None,
-                    discovery_mode: pasion_data_model::UpstreamOAuthProviderDiscoveryMode::Oidc,
-                    pkce_mode: pasion_data_model::UpstreamOAuthProviderPkceMode::Auto,
+                    discovery_mode: pasion_data::UpstreamOAuthProviderDiscoveryMode::Oidc,
+                    pkce_mode: pasion_data::UpstreamOAuthProviderPkceMode::Auto,
                     response_mode: None,
                     additional_authorization_parameters: Vec::new(),
                     forward_login_hint: false,
@@ -492,8 +492,8 @@ mod test {
                     token_endpoint_override: None,
                     userinfo_endpoint_override: None,
                     jwks_uri_override: None,
-                    discovery_mode: pasion_data_model::UpstreamOAuthProviderDiscoveryMode::Oidc,
-                    pkce_mode: pasion_data_model::UpstreamOAuthProviderPkceMode::Auto,
+                    discovery_mode: pasion_data::UpstreamOAuthProviderDiscoveryMode::Oidc,
+                    pkce_mode: pasion_data::UpstreamOAuthProviderPkceMode::Auto,
                     response_mode: None,
                     additional_authorization_parameters: Vec::new(),
                     forward_login_hint: false,
@@ -528,7 +528,7 @@ mod test {
         state: &TestState,
         username: &str,
         password: &str,
-    ) -> pasion_data_model::User {
+    ) -> pasion_data::User {
         let mut rng = state.rng();
         let mut repo = state.repository().await.unwrap();
         let user = repo
@@ -552,7 +552,7 @@ mod test {
     #[tokio::test]
     async fn test_password_login() {
         setup();
-        let pool = pasion_storage_pg::test_utils::setup_test_pool().await;
+        let pool = pasion_data::test_utils::setup_test_pool().await;
         let state = TestState::from_pool(pool.clone()).await.unwrap();
         let cookies = CookieHelper::new();
 
@@ -600,7 +600,7 @@ mod test {
     #[tokio::test]
     async fn test_password_login_with_mxid() {
         setup();
-        let pool = pasion_storage_pg::test_utils::setup_test_pool().await;
+        let pool = pasion_data::test_utils::setup_test_pool().await;
         let state = TestState::from_pool(pool.clone()).await.unwrap();
         let cookies = CookieHelper::new();
 
@@ -648,7 +648,7 @@ mod test {
     #[tokio::test]
     async fn test_password_login_with_mxid_wrong_server() {
         setup();
-        let pool = pasion_storage_pg::test_utils::setup_test_pool().await;
+        let pool = pasion_data::test_utils::setup_test_pool().await;
         let state = TestState::from_pool(pool.clone()).await.unwrap();
         let cookies = CookieHelper::new();
 
@@ -689,7 +689,7 @@ mod test {
     #[tokio::test]
     async fn test_password_login_rate_limit() {
         setup();
-        let pool = pasion_storage_pg::test_utils::setup_test_pool().await;
+        let pool = pasion_data::test_utils::setup_test_pool().await;
         let state = TestState::from_pool(pool.clone()).await.unwrap();
         let mut rng = state.rng();
         let cookies = CookieHelper::new();
@@ -759,7 +759,7 @@ mod test {
     #[tokio::test]
     async fn test_password_login_locked_account() {
         setup();
-        let pool = pasion_storage_pg::test_utils::setup_test_pool().await;
+        let pool = pasion_data::test_utils::setup_test_pool().await;
         let state = TestState::from_pool(pool.clone()).await.unwrap();
         let cookies = CookieHelper::new();
 
@@ -819,7 +819,7 @@ mod test {
     #[tokio::test]
     async fn test_password_login_deactivated_account() {
         setup();
-        let pool = pasion_storage_pg::test_utils::setup_test_pool().await;
+        let pool = pasion_data::test_utils::setup_test_pool().await;
         let state = TestState::from_pool(pool.clone()).await.unwrap();
         let cookies = CookieHelper::new();
 

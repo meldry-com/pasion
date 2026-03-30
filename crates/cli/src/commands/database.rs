@@ -29,7 +29,7 @@ impl Options {
         let pool = diesel_pool_from_config(&config).await?;
 
         // Run pending migrations
-        pasion_storage_pg::migrate(&pool, &db_url)
+        pasion_data::migrate(&pool, &db_url)
             .await
             .context("could not run migrations")?;
 

@@ -1,13 +1,12 @@
 use std::{collections::HashMap, sync::Arc};
 
+use crate::oidc_client::error::DiscoveryError;
 use oauth2_types::oidc::VerifiedProviderMetadata;
-use pasion_context::LogContext;
-use pasion_data_model::{
+use pasion_data::{RepositoryAccess, upstream_oauth2::UpstreamOAuthProviderRepository};
+use pasion_data::{
     UpstreamOAuthProvider, UpstreamOAuthProviderDiscoveryMode, UpstreamOAuthProviderPkceMode,
 };
 use pasion_iana::oauth::PkceCodeChallengeMethod;
-use crate::oidc_client::error::DiscoveryError;
-use pasion_storage::{RepositoryAccess, upstream_oauth2::UpstreamOAuthProviderRepository};
 use tokio::sync::RwLock;
 use url::Url;
 
@@ -196,9 +195,7 @@ impl MetadataCache {
             loop {
                 // Re-fetch the known metadata at the given interval
                 tokio::time::sleep(interval).await;
-                LogContext::new("metadata-cache-refresh")
-                    .run(|| cache.refresh_all(&client))
-                    .await;
+                cache.refresh_all(&client).await;
             }
         }))
     }
@@ -297,7 +294,7 @@ mod tests {
     // 'insecure' discovery
 
     use oauth2_types::scope::{OPENID, Scope};
-    use pasion_data_model::{
+    use pasion_data::{
         Clock, UpstreamOAuthProviderClaimsImports, UpstreamOAuthProviderOnBackchannelLogout,
         UpstreamOAuthProviderTokenAuthMethod, clock::MockClock,
     };

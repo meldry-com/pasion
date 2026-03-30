@@ -623,9 +623,7 @@ impl ParametersInfo for PrivateKey {
             PrivateKey::EcP256(_)
             | PrivateKey::EcP384(_)
             | PrivateKey::EcP521(_)
-            | PrivateKey::EcK256(_) => {
-                JsonWebKeyType::Ec
-            }
+            | PrivateKey::EcK256(_) => JsonWebKeyType::Ec,
             PrivateKey::OkpEd25519(_) => JsonWebKeyType::Okp,
         }
     }

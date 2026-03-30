@@ -1,6 +1,8 @@
 use std::collections::HashSet;
 
-use crate::{ConnectorCapabilities, ConnectorProvider, HomeserverConnection, MatrixUser, ProvisionRequest};
+use crate::{
+    ConnectorCapabilities, ConnectorProvider, HomeserverConnection, MatrixUser, ProvisionRequest,
+};
 
 /// A wrapper around a [`HomeserverConnection`] that only allows read
 /// operations.

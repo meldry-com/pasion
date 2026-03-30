@@ -3,7 +3,9 @@ use std::collections::HashSet;
 use anyhow::Context as _;
 use http::{Method, StatusCode};
 use pasion_http::RequestBuilderExt;
-use pasion_matrix::{ConnectorCapabilities, ConnectorProvider, HomeserverConnection, MatrixUser, ProvisionRequest};
+use pasion_matrix::{
+    ConnectorCapabilities, ConnectorProvider, HomeserverConnection, MatrixUser, ProvisionRequest,
+};
 use serde::{Deserialize, Serialize};
 use tracing::debug;
 use url::Url;

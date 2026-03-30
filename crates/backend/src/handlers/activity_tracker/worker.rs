@@ -5,7 +5,7 @@ use opentelemetry::{
     Key, KeyValue,
     metrics::{Counter, Gauge, Histogram},
 };
-use pasion_storage::{
+use pasion_data::{
     BoxRepositoryFactory, RepositoryAccess, RepositoryError, user::BrowserSessionRepository,
 };
 use tokio_util::sync::CancellationToken;

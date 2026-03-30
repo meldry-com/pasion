@@ -3,13 +3,11 @@ use salvo::{http::StatusCode, prelude::*};
 use serde::Deserialize;
 use ulid::Ulid;
 
-use crate::handlers::{
-    admin::{
-        call_context::extract_call_context,
-        model::UpstreamOAuthLink,
-        params::extract_ulid_param,
-        response::{ErrorResponse, SingleResponse},
-    },
+use crate::handlers::admin::{
+    call_context::extract_call_context,
+    model::UpstreamOAuthLink,
+    params::extract_ulid_param,
+    response::{ErrorResponse, SingleResponse},
 };
 
 #[derive(Debug, thiserror::Error)]
@@ -27,7 +25,7 @@ pub enum RouteError {
     Conflict(String),
 }
 
-impl_from_error_for_route!(pasion_storage::RepositoryError);
+impl_from_error_for_route!(pasion_data::RepositoryError);
 impl_from_error_for_route!(crate::handlers::admin::params::UlidPathParamRejection);
 impl_from_error_for_route!(crate::handlers::admin::call_context::Rejection);
 
@@ -85,7 +83,7 @@ pub async fn handler(
         &*clock,
         admin_user.as_ref(),
         id,
-        pasion_data_model::UpstreamOAuthLinkPatch {
+        pasion_data::UpstreamOAuthLinkPatch {
             user_id: body.user_id,
             subject: body.subject,
             human_account_name: body.human_account_name,
@@ -146,7 +144,7 @@ fn map_service_error(error: crate::services::user_admin::UserAdminServiceError) 
 mod tests {
     use chrono::Duration;
     use hyper::{Request, StatusCode};
-    use pasion_storage::{
+    use pasion_data::{
         RepositoryAccess,
         upstream_oauth2::{UpstreamOAuthLinkRepository, UpstreamOAuthProviderRepository},
         user::UserRepository,
@@ -163,7 +161,7 @@ mod tests {
     #[tokio::test]
     async fn test_patch_upstream_oauth_link_updates_subject_user_and_name() {
         setup();
-        let pool = pasion_storage_pg::test_utils::setup_test_pool().await;
+        let pool = pasion_data::test_utils::setup_test_pool().await;
         let mut state = TestState::from_pool(pool.clone()).await.unwrap();
         let unique = unique_test_nonce();
         state.clock.advance(Duration::seconds(unique as i64));
@@ -216,7 +214,10 @@ mod tests {
         response.assert_status(StatusCode::OK);
         let body: serde_json::Value = response.json();
 
-        assert_eq!(body["data"]["attributes"]["subject"], format!("subject-{suffix}-2"));
+        assert_eq!(
+            body["data"]["attributes"]["subject"],
+            format!("subject-{suffix}-2")
+        );
         assert_eq!(body["data"]["attributes"]["user_id"], bob.id.to_string());
         assert_eq!(
             body["data"]["attributes"]["human_account_name"],
@@ -224,7 +225,12 @@ mod tests {
         );
 
         let mut repo = state.repository().await.unwrap();
-        let updated = repo.upstream_oauth_link().lookup(link.id).await.unwrap().unwrap();
+        let updated = repo
+            .upstream_oauth_link()
+            .lookup(link.id)
+            .await
+            .unwrap()
+            .unwrap();
 
         assert_eq!(updated.user_id, Some(bob.id));
         assert_eq!(updated.subject, format!("subject-{suffix}-2"));
@@ -236,7 +242,7 @@ mod tests {
     #[tokio::test]
     async fn test_patch_upstream_oauth_link_rejects_duplicate_subject() {
         setup();
-        let pool = pasion_storage_pg::test_utils::setup_test_pool().await;
+        let pool = pasion_data::test_utils::setup_test_pool().await;
         let mut state = TestState::from_pool(pool.clone()).await.unwrap();
         let unique = unique_test_nonce();
         state.clock.advance(Duration::seconds(unique as i64));

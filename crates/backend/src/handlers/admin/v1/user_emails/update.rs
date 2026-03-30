@@ -3,13 +3,11 @@ use salvo::{http::StatusCode, prelude::*};
 use serde::Deserialize;
 use ulid::Ulid;
 
-use crate::handlers::{
-    admin::{
-        call_context::extract_call_context,
-        model::UserEmail,
-        params::extract_ulid_param,
-        response::{ErrorResponse, SingleResponse},
-    },
+use crate::handlers::admin::{
+    call_context::extract_call_context,
+    model::UserEmail,
+    params::extract_ulid_param,
+    response::{ErrorResponse, SingleResponse},
 };
 
 #[derive(Debug, thiserror::Error)]
@@ -27,7 +25,7 @@ pub enum RouteError {
     Conflict(String),
 }
 
-impl_from_error_for_route!(pasion_storage::RepositoryError);
+impl_from_error_for_route!(pasion_data::RepositoryError);
 impl_from_error_for_route!(crate::handlers::admin::params::UlidPathParamRejection);
 impl_from_error_for_route!(crate::handlers::admin::call_context::Rejection);
 
@@ -85,7 +83,7 @@ pub async fn handler(
         &*clock,
         admin_user.as_ref(),
         id,
-        pasion_data_model::UserEmailPatch {
+        pasion_data::UserEmailPatch {
             email: body.email,
             confirmed: body.confirmed,
             is_primary: body.is_primary,
@@ -96,7 +94,9 @@ pub async fn handler(
 
     repo.save().await?;
 
-    Ok(Json(SingleResponse::new_canonical(UserEmail::from(user_email))))
+    Ok(Json(SingleResponse::new_canonical(UserEmail::from(
+        user_email,
+    ))))
 }
 
 fn map_service_error(error: crate::services::user_admin::UserAdminServiceError) -> RouteError {
@@ -146,7 +146,7 @@ fn map_service_error(error: crate::services::user_admin::UserAdminServiceError) 
 mod tests {
     use chrono::Duration;
     use hyper::{Request, StatusCode};
-    use pasion_storage::{
+    use pasion_data::{
         RepositoryAccess,
         user::{UserEmailRepository, UserRepository},
     };
@@ -161,7 +161,7 @@ mod tests {
     #[tokio::test]
     async fn test_patch_user_email_updates_address_confirmation_and_primary() {
         setup();
-        let pool = pasion_storage_pg::test_utils::setup_test_pool().await;
+        let pool = pasion_data::test_utils::setup_test_pool().await;
         let mut state = TestState::from_pool(pool.clone()).await.unwrap();
         let unique = unique_test_nonce();
         state.clock.advance(Duration::seconds(unique as i64));
@@ -203,15 +203,20 @@ mod tests {
         response.assert_status(StatusCode::OK);
         let body: serde_json::Value = response.json();
 
-        assert_eq!(
-            body["data"]["attributes"]["email"],
-            updated_email
-        );
+        assert_eq!(body["data"]["attributes"]["email"], updated_email);
         assert_eq!(body["data"]["attributes"]["is_primary"], true);
-        assert_eq!(body["data"]["attributes"]["confirmed_at"], serde_json::Value::Null);
+        assert_eq!(
+            body["data"]["attributes"]["confirmed_at"],
+            serde_json::Value::Null
+        );
 
         let mut repo = state.repository().await.unwrap();
-        let updated = repo.user_email().lookup(secondary.id).await.unwrap().unwrap();
+        let updated = repo
+            .user_email()
+            .lookup(secondary.id)
+            .await
+            .unwrap()
+            .unwrap();
         let old_primary = repo.user_email().lookup(primary.id).await.unwrap().unwrap();
 
         assert_eq!(updated.email, updated_email);

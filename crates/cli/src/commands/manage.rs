@@ -9,10 +9,9 @@ use figment::Figment;
 use pasion_config::{
     ConfigurationSection, ConfigurationSectionExt, DatabaseConfig, MatrixConfig, PasswordsConfig,
 };
-use pasion_data_model::{Clock, SystemClock, Ulid, UpstreamOAuthProvider, User};
-use pasion_matrix::HomeserverConnection;
-use pasion_messaging::Address;
-use pasion_storage::{
+use pasion_data::{Clock, SystemClock, Ulid, UpstreamOAuthProvider, User};
+use pasion_data::{DatabaseError, PgRepository};
+use pasion_data::{
     Pagination, RepositoryAccess,
     oauth2::OAuth2SessionFilter,
     queue::{
@@ -24,7 +23,8 @@ use pasion_storage::{
         UserRepository,
     },
 };
-use pasion_storage_pg::{DatabaseError, PgRepository};
+use pasion_matrix::HomeserverConnection;
+use pasion_messaging::Address;
 use rand::{
     RngCore, SeedableRng,
     distributions::{Alphanumeric, DistString as _},

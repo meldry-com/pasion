@@ -7,11 +7,11 @@
 //! will replace this once `FlowSession` has a database repository.
 
 use chrono::Utc;
-use pasion_data_model::flow::{
+use pasion_data::flow::{
     FlowSession, FlowSessionStatus, StageChallenge, StageOutcome, StageResponse,
     StageValidationError,
 };
-use pasion_data_model::new_id;
+use pasion_data::new_id;
 use salvo::prelude::*;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
@@ -67,28 +67,26 @@ fn resolve_flow_by_slug(
     slug: &str,
     rng: &mut (dyn rand::RngCore + Send),
 ) -> Option<(
-    pasion_data_model::flow::FlowDefinition,
-    Vec<pasion_data_model::flow::FlowStageBinding>,
+    pasion_data::flow::FlowDefinition,
+    Vec<pasion_data::flow::FlowStageBinding>,
 )> {
     match slug {
-        "default-registration" => {
-            Some(crate::handlers::flow::defaults::default_registration_flow(rng))
-        }
-        "default-recovery" => {
-            Some(crate::handlers::flow::defaults::default_recovery_flow(rng))
-        }
+        "default-registration" => Some(crate::handlers::flow::defaults::default_registration_flow(
+            rng,
+        )),
+        "default-recovery" => Some(crate::handlers::flow::defaults::default_recovery_flow(rng)),
         "default-password-change" => {
             Some(crate::handlers::flow::defaults::default_password_change_flow(rng))
         }
         "default-authentication" => {
             Some(crate::handlers::flow::defaults::default_authentication_flow(rng))
         }
-        "default-authorization" => {
-            Some(crate::handlers::flow::defaults::default_authorization_flow(rng))
-        }
-        "default-enrollment" => {
-            Some(crate::handlers::flow::defaults::default_enrollment_flow(rng))
-        }
+        "default-authorization" => Some(
+            crate::handlers::flow::defaults::default_authorization_flow(rng),
+        ),
+        "default-enrollment" => Some(crate::handlers::flow::defaults::default_enrollment_flow(
+            rng,
+        )),
         _ => None,
     }
 }
@@ -126,8 +124,8 @@ pub async fn start_flow(req: &mut Request) -> Result<Json<FlowResponse>, RouteEr
 
     let mut rng = make_rng();
 
-    let (flow_def, bindings) = resolve_flow_by_slug(&slug, &mut *rng)
-        .ok_or_else(|| RouteError::NotFound)?;
+    let (flow_def, bindings) =
+        resolve_flow_by_slug(&slug, &mut *rng).ok_or_else(|| RouteError::NotFound)?;
 
     let plan = FlowExecutor::plan(flow_def, bindings);
 
@@ -222,7 +220,9 @@ pub async fn respond_flow(req: &mut Request) -> Result<Json<FlowResponse>, Route
     let (plan, session) = store.get_mut(&id).ok_or(RouteError::NotFound)?;
 
     if session.status.is_terminal() {
-        return Err(RouteError::BadRequest("flow session is no longer active".into()));
+        return Err(RouteError::BadRequest(
+            "flow session is no longer active".into(),
+        ));
     }
 
     // Process the response through the executor

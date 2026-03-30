@@ -4,8 +4,8 @@
 //! [`crate::handlers::account_recovery`]. They parse requests, delegate to service
 //! functions, and map results to JSON responses.
 use chrono::Utc;
-use pasion_data_model::flow::{FlowSession, FlowSessionStatus};
-use pasion_data_model::new_id;
+use pasion_data::flow::{FlowSession, FlowSessionStatus};
+use pasion_data::new_id;
 use salvo::oapi::ToSchema;
 use salvo::prelude::*;
 use serde::{Deserialize, Serialize};
@@ -13,7 +13,9 @@ use serde_json::Value;
 use ulid::Ulid;
 
 use super::{DepotExt, RouteError, extract_bound_activity_tracker, make_clock, make_rng};
-use crate::handlers::flow::{FlowExecutor, defaults::default_recovery_flow, flow_session_store_write};
+use crate::handlers::flow::{
+    FlowExecutor, defaults::default_recovery_flow, flow_session_store_write,
+};
 use crate::handlers::{
     RequesterFingerprint,
     account_recovery::{

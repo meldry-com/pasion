@@ -4,8 +4,8 @@ mod worker;
 use std::net::IpAddr;
 
 use chrono::{DateTime, Utc};
-use pasion_data_model::{BrowserSession, Clock, Session, personal::session::PersonalSession};
-use pasion_storage::BoxRepositoryFactory;
+use pasion_data::BoxRepositoryFactory;
+use pasion_data::{BrowserSession, Clock, Session, personal::session::PersonalSession};
 use tokio_util::{sync::CancellationToken, task::TaskTracker};
 use ulid::Ulid;
 

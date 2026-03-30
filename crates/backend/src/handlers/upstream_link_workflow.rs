@@ -1,17 +1,9 @@
 use std::net::IpAddr;
 
+use crate::salvo_utils::SessionInfo;
 use anyhow::Error as AnyhowError;
 use minijinja::Environment;
-use pasion_data_model::{
-    BrowserSession, Clock, SiteConfig, UpstreamOAuthAuthorizationSession, UpstreamOAuthLink,
-    UpstreamOAuthProvider, UpstreamOAuthProviderOnConflict, User, UserRegistration,
-};
-use pasion_jose::jwt::Jwt;
-use pasion_matrix::HomeserverConnection;
-use pasion_policy::{Policy, RegisterInput, RegistrationMethod, Requester as PolicyRequester};
-use pasion_data_model::{PostAuthAction, UrlBuilder};
-use crate::salvo_utils::SessionInfo;
-use pasion_storage::{
+use pasion_data::{
     BoxRepository, Pagination, RepositoryAccess, RepositoryError,
     upstream_oauth2::{
         UpstreamOAuthLinkFilter, UpstreamOAuthLinkRepository, UpstreamOAuthProviderRepository,
@@ -21,6 +13,14 @@ use pasion_storage::{
         BrowserSessionRepository, UserEmailRepository, UserRegistrationRepository, UserRepository,
     },
 };
+use pasion_data::{
+    BrowserSession, Clock, SiteConfig, UpstreamOAuthAuthorizationSession, UpstreamOAuthLink,
+    UpstreamOAuthProvider, UpstreamOAuthProviderOnConflict, User, UserRegistration,
+};
+use pasion_data::{PostAuthAction, UrlBuilder};
+use pasion_jose::jwt::Jwt;
+use pasion_matrix::HomeserverConnection;
+use pasion_policy::{Policy, RegisterInput, RegistrationMethod, Requester as PolicyRequester};
 use rand::RngCore;
 use serde_json::{Map as JsonMap, Value as JsonValue};
 use thiserror::Error;
@@ -69,25 +69,18 @@ pub enum UpstreamLinkWorkflowError {
     },
 
     #[error("localpart conflict: existing user cannot be linked (on_conflict=fail)")]
-    ConflictFail {
-        localpart: String,
-    },
+    ConflictFail { localpart: String },
 
-    #[error("localpart conflict: existing user already has a link to this provider (on_conflict=set)")]
-    ConflictSetBlocked {
-        localpart: String,
-    },
+    #[error(
+        "localpart conflict: existing user already has a link to this provider (on_conflict=set)"
+    )]
+    ConflictSetBlocked { localpart: String },
 
     #[error("policy denied the suggested localpart")]
-    PolicyDeniedLocalpart {
-        localpart: String,
-        detail: String,
-    },
+    PolicyDeniedLocalpart { localpart: String, detail: String },
 
     #[error("localpart not available on homeserver")]
-    LocalpartUnavailable {
-        localpart: String,
-    },
+    LocalpartUnavailable { localpart: String },
 
     #[error("homeserver connection failed")]
     HomeserverConnection(#[source] AnyhowError),
@@ -463,7 +456,8 @@ pub async fn submit_upstream_link_action(
             }
 
             Ok(SubmitUpstreamLinkOutcome::Registered {
-                redirect_url: url_builder.relative_url(&format!("/register/steps/{}/finish", registration.id)),
+                redirect_url: url_builder
+                    .relative_url(&format!("/register/steps/{}/finish", registration.id)),
                 registration,
                 provider_id: provider.id,
             })
@@ -576,7 +570,8 @@ async fn load_upstream_registration_screen(
         .await?;
 
         return Ok(LoadUpstreamLinkOutcome::Registered {
-            redirect_url: url_builder.relative_url(&format!("/register/steps/{}/finish", registration.id)),
+            redirect_url: url_builder
+                .relative_url(&format!("/register/steps/{}/finish", registration.id)),
             registration,
             provider_id: provider.id,
         });
@@ -608,10 +603,7 @@ enum LocalpartPreCheckResult {
     Available(Option<String>),
     /// The localpart matched an existing user whose conflict was resolved by
     /// linking. The caller should log this user in.
-    ConflictResolved {
-        user: User,
-        provider_id: Ulid,
-    },
+    ConflictResolved { user: User, provider_id: Ulid },
 }
 
 /// Pre-check a suggested localpart from the upstream provider.

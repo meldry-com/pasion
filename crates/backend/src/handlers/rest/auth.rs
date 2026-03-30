@@ -5,8 +5,8 @@
 
 use std::sync::LazyLock;
 
-use opentelemetry::{Key, KeyValue, metrics::Counter};
 use crate::salvo_utils::SessionInfoExt;
+use opentelemetry::{Key, KeyValue, metrics::Counter};
 use salvo::oapi::ToSchema;
 use salvo::prelude::*;
 use serde::{Deserialize, Serialize};
@@ -141,7 +141,9 @@ pub async fn login(req: &mut Request, depot: &Depot, res: &mut Response) -> Resu
     )
     .await
     .map_err(|error| match error {
-        crate::handlers::account_access::PasswordLoginError::Repository(error) => RouteError::from(error),
+        crate::handlers::account_access::PasswordLoginError::Repository(error) => {
+            RouteError::from(error)
+        }
         crate::handlers::account_access::PasswordLoginError::Password(error) => {
             RouteError::Internal(error.into())
         }

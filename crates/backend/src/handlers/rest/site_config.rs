@@ -1,4 +1,4 @@
-use pasion_data_model::SiteConfig;
+use pasion_data::SiteConfig;
 use salvo::oapi::ToSchema;
 use salvo::prelude::*;
 use serde::Serialize;

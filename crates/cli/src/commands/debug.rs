@@ -6,7 +6,7 @@ use pasion_config::{
     ConfigurationSection, ConfigurationSectionExt, DatabaseConfig, ExperimentalConfig,
     MatrixConfig, PolicyConfig,
 };
-use pasion_storage_pg::PgRepositoryFactory;
+use pasion_data::PgRepositoryFactory;
 use tracing::{info, info_span};
 
 use pasion_backend::util::{

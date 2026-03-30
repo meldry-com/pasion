@@ -3,7 +3,7 @@
 use std::collections::HashMap;
 
 use oauth2_types::requests::ResponseMode;
-use pasion_data_model::AuthorizationGrant;
+use pasion_data::AuthorizationGrant;
 use pasion_i18n::DataLocale;
 use pasion_templates::{FormPostContext, Templates};
 use salvo::{

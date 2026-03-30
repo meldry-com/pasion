@@ -5,6 +5,7 @@ use std::{
     time::Duration,
 };
 
+use crate::listener::{ConnectionInfo, unix_or_tcp::UnixOrTcpListener};
 use anyhow::Context;
 use headers::{CacheControl, HeaderMapExt as _, UserAgent};
 use http::{
@@ -18,8 +19,6 @@ use opentelemetry_semantic_conventions::trace::{
     NETWORK_PROTOCOL_VERSION, URL_PATH, URL_QUERY, URL_SCHEME, USER_AGENT_ORIGINAL,
 };
 use pasion_config::{HttpBindConfig, HttpResource, HttpTlsConfig, UnixOrTcp};
-use pasion_context::LogContext;
-use crate::listener::{ConnectionInfo, unix_or_tcp::UnixOrTcpListener};
 use pasion_templates::Templates;
 use rustls::ServerConfig;
 use salvo::{
@@ -107,24 +106,19 @@ pub async fn log_response_middleware(
 
     ctrl.call_next(req, depot, res).await;
 
-    let Some(stats) = LogContext::maybe_with(LogContext::stats) else {
-        tracing::error!("Missing log context for request, this is a bug!");
-        return;
-    };
-
     let status_code = res.status_code.unwrap_or(StatusCode::OK);
     match status_code.as_u16() {
         100..=399 => tracing::info!(
             name: "http.server.response",
-            "\"{method} {path} HTTP/{version}\" {status_code} {user_agent_str:?} [{stats}]",
+            "\"{method} {path} HTTP/{version}\" {status_code} {user_agent_str:?}",
         ),
         400..=499 => tracing::warn!(
             name: "http.server.response",
-            "\"{method} {path} HTTP/{version}\" {status_code} {user_agent_str:?} [{stats}]",
+            "\"{method} {path} HTTP/{version}\" {status_code} {user_agent_str:?}",
         ),
         500..=599 => tracing::error!(
             name: "http.server.response",
-            "\"{method} {path} HTTP/{version}\" {status_code} {user_agent_str:?} [{stats}]",
+            "\"{method} {path} HTTP/{version}\" {status_code} {user_agent_str:?}",
         ),
         _ => { /* This shouldn't happen */ }
     }
@@ -217,21 +211,6 @@ pub async fn sentry_middleware(
     ctrl.call_next(req, depot, res).await;
 }
 
-/// Middleware for LogContext
-#[handler]
-pub async fn log_context_middleware(
-    req: &mut Request,
-    depot: &mut Depot,
-    res: &mut Response,
-    ctrl: &mut FlowCtrl,
-) {
-    let method = otel_http_method(req.method());
-    let ctx = LogContext::new(method);
-    pasion_context::CURRENT_LOG_CONTEXT
-        .scope(ctx, ctrl.call_next(req, depot, res))
-        .await;
-}
-
 /// Cache control middleware for static files
 #[handler]
 pub async fn cache_control_middleware(
@@ -315,8 +294,16 @@ pub fn build_router(
                 router.push(Router::with_path("/metrics").get(crate::telemetry::prometheus_handler))
             }
             pasion_config::HttpResource::Discovery => router
-                .push(Router::with_path("/.well-known/openid-configuration").hoop(public_oidc_browser_cors()).get(discovery::get))
-                .push(Router::with_path("/.well-known/webfinger").hoop(public_oidc_browser_cors()).get(webfinger::get)),
+                .push(
+                    Router::with_path("/.well-known/openid-configuration")
+                        .hoop(public_oidc_browser_cors())
+                        .get(discovery::get),
+                )
+                .push(
+                    Router::with_path("/.well-known/webfinger")
+                        .hoop(public_oidc_browser_cors())
+                        .get(webfinger::get),
+                ),
             pasion_config::HttpResource::Human => build_human_router(router, templates.clone()),
             pasion_config::HttpResource::RestApi {
                 playground: _,
@@ -324,12 +311,12 @@ pub fn build_router(
             } => build_rest_api_router(router),
             pasion_config::HttpResource::Assets { path } => router.push(
                 Router::with_path("/assets/{**path}")
-                .hoop(cache_control_middleware)
-                .get(
-                    StaticDir::new([path.join("assets")])
-                        .include_dot_files(false)
-                        .auto_list(false),
-                ),
+                    .hoop(cache_control_middleware)
+                    .get(
+                        StaticDir::new([path.join("assets")])
+                            .include_dot_files(false)
+                            .auto_list(false),
+                    ),
             ),
             pasion_config::HttpResource::OAuth => build_oauth_router(router),
             pasion_config::HttpResource::Compat => {
@@ -355,7 +342,6 @@ pub fn build_router(
         .hoop(inject_app_state)
         .hoop(log_response_middleware)
         .hoop(tracing_middleware)
-        .hoop(log_context_middleware)
         .hoop(sentry_middleware)
 }
 
@@ -366,12 +352,24 @@ fn build_human_router(router: Router, _templates: Templates) -> Router {
         // ── OAuth2 protocol endpoints (server-side redirects) ──
         .push(Router::with_path("/authorize").get(authorization::get))
         // ── Upstream OAuth2 (server-side redirect & callback) ──
-        .push(Router::with_path("/upstream/authorize/{provider_id}").get(upstream_oauth2::authorize::get))
-        .push(Router::with_path("/upstream/callback/{provider_id}").get(upstream_oauth2::callback::handler).post(upstream_oauth2::callback::handler))
+        .push(
+            Router::with_path("/upstream/authorize/{provider_id}")
+                .get(upstream_oauth2::authorize::get),
+        )
+        .push(
+            Router::with_path("/upstream/callback/{provider_id}")
+                .get(upstream_oauth2::callback::handler)
+                .post(upstream_oauth2::callback::handler),
+        )
         .push(Router::with_path("/upstream/link/{link_id}").get(spa::get))
-        .push(Router::with_path("/upstream/backchannel-logout/{provider_id}").post(upstream_oauth2::backchannel_logout::post))
+        .push(
+            Router::with_path("/upstream/backchannel-logout/{provider_id}")
+                .post(upstream_oauth2::backchannel_logout::post),
+        )
         // ── Well-known redirect ──
-        .push(Router::with_path("/.well-known/change-password").get(change_password_redirect_handler))
+        .push(
+            Router::with_path("/.well-known/change-password").get(change_password_redirect_handler),
+        )
         // ── SPA shell ──
         .push(Router::with_path("/").get(spa::get))
         .push(Router::with_path("/login").get(spa::get))
@@ -395,13 +393,48 @@ fn build_oauth_router(router: Router) -> Router {
     let cors = || public_oidc_browser_cors();
 
     router
-        .push(Router::with_path("/oauth2/keys.json").hoop(cors()).get(keys::get))
-        .push(Router::with_path("/oauth2/userinfo").hoop(cors()).options(oidc_preflight_handler).get(userinfo::get).post(userinfo::get))
-        .push(Router::with_path("/oauth2/introspect").hoop(cors()).options(oidc_preflight_handler).post(introspection::post))
-        .push(Router::with_path("/oauth2/revoke").hoop(cors()).options(oidc_preflight_handler).post(revoke::post))
-        .push(Router::with_path("/oauth2/token").hoop(cors()).options(oidc_preflight_handler).post(token::post))
-        .push(Router::with_path("/oauth2/registration").hoop(cors()).options(oidc_preflight_handler).post(registration::post))
-        .push(Router::with_path("/oauth2/device").hoop(cors()).options(oidc_preflight_handler).post(device::authorize::post))
+        .push(
+            Router::with_path("/oauth2/keys.json")
+                .hoop(cors())
+                .get(keys::get),
+        )
+        .push(
+            Router::with_path("/oauth2/userinfo")
+                .hoop(cors())
+                .options(oidc_preflight_handler)
+                .get(userinfo::get)
+                .post(userinfo::get),
+        )
+        .push(
+            Router::with_path("/oauth2/introspect")
+                .hoop(cors())
+                .options(oidc_preflight_handler)
+                .post(introspection::post),
+        )
+        .push(
+            Router::with_path("/oauth2/revoke")
+                .hoop(cors())
+                .options(oidc_preflight_handler)
+                .post(revoke::post),
+        )
+        .push(
+            Router::with_path("/oauth2/token")
+                .hoop(cors())
+                .options(oidc_preflight_handler)
+                .post(token::post),
+        )
+        .push(
+            Router::with_path("/oauth2/registration")
+                .hoop(cors())
+                .options(oidc_preflight_handler)
+                .post(registration::post),
+        )
+        .push(
+            Router::with_path("/oauth2/device")
+                .hoop(cors())
+                .options(oidc_preflight_handler)
+                .post(device::authorize::post),
+        )
 }
 
 fn build_rest_api_router(router: Router) -> Router {
@@ -560,8 +593,7 @@ fn build_admin_router(router: Router) -> Router {
                 Router::with_path("notification-templates")
                     .get(notification_templates::list_handler)
                     .push(
-                        Router::with_path("publish")
-                            .post(notification_templates::publish_handler),
+                        Router::with_path("publish").post(notification_templates::publish_handler),
                     ),
             )
             // Audit feed
@@ -575,10 +607,7 @@ fn build_admin_router(router: Router) -> Router {
                         Router::with_path("by-username/{username}")
                             .get(users::by_username::handler),
                     )
-                    .push(
-                        Router::with_path("batch-invite")
-                            .post(users::batch_invite::handler),
-                    )
+                    .push(Router::with_path("batch-invite").post(users::batch_invite::handler))
                     .push(
                         Router::with_path("{id}")
                             .get(users::get::handler)
@@ -587,7 +616,9 @@ fn build_admin_router(router: Router) -> Router {
                                 Router::with_path("set-password")
                                     .post(users::set_password::handler),
                             )
-                            .push(Router::with_path("risk-action").post(users::risk_action::handler)),
+                            .push(
+                                Router::with_path("risk-action").post(users::risk_action::handler),
+                            ),
                     ),
             )
             // User emails

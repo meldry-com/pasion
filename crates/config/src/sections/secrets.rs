@@ -281,8 +281,8 @@ impl SecretsConfig {
     pub async fn key_store(&self) -> anyhow::Result<Keystore> {
         let key_configs = self.key_configs().await?;
         let web_keys = try_join_all(key_configs.iter().map(KeyConfig::json_web_key)).await?;
-        let web_keys = JsonWebKeySet::try_new(web_keys)
-            .context("invalid JWK metadata in secrets config")?;
+        let web_keys =
+            JsonWebKeySet::try_new(web_keys).context("invalid JWK metadata in secrets config")?;
 
         Ok(Keystore::new(web_keys))
     }

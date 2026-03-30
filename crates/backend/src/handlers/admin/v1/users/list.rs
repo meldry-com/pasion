@@ -1,16 +1,14 @@
 use crate::record_error;
-use pasion_storage::{Page, user::UserFilter};
+use pasion_data::{Page, user::UserFilter};
 use salvo::{http::StatusCode, prelude::*};
 use schemars::JsonSchema;
 use serde::Deserialize;
 
-use crate::handlers::{
-    admin::{
-        call_context::extract_call_context,
-        model::{Resource, User},
-        params::{IncludeCount, extract_pagination},
-        response::{ErrorResponse, PaginatedResponse},
-    },
+use crate::handlers::admin::{
+    call_context::extract_call_context,
+    model::{Resource, User},
+    params::{IncludeCount, extract_pagination},
+    response::{ErrorResponse, PaginatedResponse},
 };
 
 #[derive(Deserialize, JsonSchema, Clone, Copy)]
@@ -94,7 +92,7 @@ pub enum RouteError {
     Internal(Box<dyn std::error::Error + Send + Sync + 'static>),
 }
 
-impl_from_error_for_route!(pasion_storage::RepositoryError);
+impl_from_error_for_route!(pasion_data::RepositoryError);
 impl_from_error_for_route!(crate::handlers::admin::params::PaginationRejection);
 impl_from_error_for_route!(crate::handlers::admin::call_context::Rejection);
 
@@ -182,7 +180,7 @@ mod tests {
     #[tokio::test]
     async fn test_list_users() {
         setup();
-        let pool = pasion_storage_pg::test_utils::setup_test_pool().await;
+        let pool = pasion_data::test_utils::setup_test_pool().await;
         let mut state = TestState::from_pool(pool.clone()).await.unwrap();
         let token = state.token_with_scope("urn:pasion:admin").await;
         let mut rng = state.rng();

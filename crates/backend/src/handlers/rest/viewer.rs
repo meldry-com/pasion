@@ -1,15 +1,15 @@
-use pasion_storage::RepositoryAccess;
-use pasion_storage::account::AccountSecuritySummary;
+use pasion_data::RepositoryAccess;
+use pasion_data::account::AccountSecuritySummary;
 use salvo::oapi::ToSchema;
 use salvo::prelude::*;
 use serde::Serialize;
 
+use super::linked_accounts::LinkedAccount;
+use super::site_config::{SiteConfigResponse, from_site_config};
 use super::{
     DepotExt, NodeType, RouteError, UserAgentInfo, extract_bound_activity_tracker,
     extract_session_info, get_requester, make_clock, parse_user_agent,
 };
-use super::linked_accounts::LinkedAccount;
-use super::site_config::{SiteConfigResponse, from_site_config};
 use crate::handlers::account_connections::load_linked_accounts;
 use crate::services::user_profile::{UserProfileServiceError, load_viewer_profile};
 
@@ -157,20 +157,19 @@ pub async fn get_viewer(
             let has_password = profile.has_password;
 
             // Fetch linked upstream OAuth accounts
-            let linked_accounts: Vec<LinkedAccount> =
-                load_linked_accounts(&mut repo, user, 100)
-                    .await?
-                    .into_iter()
-                    .map(|link| LinkedAccount {
-                        id: link.id.to_string(),
-                        provider_id: link.provider_id.to_string(),
-                        provider_name: link.provider_name,
-                        provider_brand: link.provider_brand,
-                        subject: link.subject,
-                        human_account_name: link.human_account_name,
-                        created_at: link.created_at.to_rfc3339(),
-                    })
-                    .collect();
+            let linked_accounts: Vec<LinkedAccount> = load_linked_accounts(&mut repo, user, 100)
+                .await?
+                .into_iter()
+                .map(|link| LinkedAccount {
+                    id: link.id.to_string(),
+                    provider_id: link.provider_id.to_string(),
+                    provider_name: link.provider_name,
+                    provider_brand: link.provider_brand,
+                    subject: link.subject,
+                    human_account_name: link.human_account_name,
+                    created_at: link.created_at.to_rfc3339(),
+                })
+                .collect();
 
             let viewer_user = ViewerUser {
                 id: NodeType::User.serialize(user.id),
@@ -316,8 +315,7 @@ pub async fn get_workflow_inbox(
     let session_info = extract_session_info(req, depot);
 
     let repo = repo_factory.create().await?;
-    let (requester, repo) =
-        get_requester(&clock, &activity_tracker, repo, &session_info).await?;
+    let (requester, repo) = get_requester(&clock, &activity_tracker, repo, &session_info).await?;
 
     // Require an authenticated user.
     match &requester.entity {

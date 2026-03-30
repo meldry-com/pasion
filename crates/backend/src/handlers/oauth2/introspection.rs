@@ -1,18 +1,16 @@
 use std::sync::{Arc, LazyLock};
 
+use crate::salvo_utils::client_authorization::{ClientAuthorization, CredentialsVerificationError};
 use oauth2_types::{
     errors::{ClientError, ClientErrorCode},
     requests::{IntrospectionRequest, IntrospectionResponse},
 };
 use opentelemetry::{Key, KeyValue, metrics::Counter};
-use pasion_data_model::{BoxClock, SystemClock};
+use pasion_data::{BoxClock, SystemClock};
+use pasion_data::{BoxRepository, BoxRepositoryFactory};
 use pasion_iana::oauth::{OAuthClientAuthenticationMethod, OAuthTokenTypeHint};
 use pasion_keystore::Encrypter;
 use pasion_matrix::HomeserverConnection;
-use crate::salvo_utils::client_authorization::{
-    ClientAuthorization, CredentialsVerificationError,
-};
-use pasion_storage::{BoxRepository, BoxRepositoryFactory};
 use salvo::prelude::*;
 use thiserror::Error;
 use ulid::Ulid;
@@ -148,7 +146,7 @@ impl Scribe for RouteError {
     }
 }
 
-impl_from_error_for_route!(pasion_storage::RepositoryError);
+impl_from_error_for_route!(pasion_data::RepositoryError);
 impl_from_error_for_route!(crate::salvo_utils::client_authorization::ClientAuthorizationError);
 
 #[handler]
@@ -251,10 +249,7 @@ async fn handle_post(
     };
     INTROSPECTION_COUNTER.add(
         1,
-        &[
-            KeyValue::new(KIND, kind_value),
-            KeyValue::new(ACTIVE, true),
-        ],
+        &[KeyValue::new(KIND, kind_value), KeyValue::new(ACTIVE, true)],
     );
 
     repo.save().await?;

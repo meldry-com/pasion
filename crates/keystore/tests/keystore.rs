@@ -277,7 +277,8 @@ fn generated_private_key_thumbprints_match_public_jwks() {
         PrivateKey::generate_ed25519(&mut rng),
     ] {
         let expected_thumbprint = private_key.thumbprint_sha256_base64();
-        let jwks = Keystore::new(JsonWebKeySet::new(vec![JsonWebKey::new(private_key)])).public_jwks();
+        let jwks =
+            Keystore::new(JsonWebKeySet::new(vec![JsonWebKey::new(private_key)])).public_jwks();
 
         assert_eq!(jwks.len(), 1);
         assert_eq!(jwks[0].thumbprint_sha256_base64(), expected_thumbprint);

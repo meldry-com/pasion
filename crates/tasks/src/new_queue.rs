@@ -10,13 +10,12 @@ use opentelemetry::{
     KeyValue,
     metrics::{Counter, Histogram, UpDownCounter},
 };
-use pasion_context::LogContext;
-use pasion_data_model::Clock;
-use pasion_storage::{
+use pasion_data::Clock;
+use pasion_data::{DatabaseError, PgRepository};
+use pasion_data::{
     RepositoryAccess, RepositoryError,
     queue::{InsertableJob, Job, JobMetadata, Worker},
 };
-use pasion_storage_pg::{DatabaseError, PgRepository};
 use rand::{Rng, RngCore, distributions::Uniform};
 use serde::de::DeserializeOwned;
 use thiserror::Error;
@@ -394,9 +393,7 @@ impl QueueWorker {
         self.setup_schedules().await?;
 
         while !self.cancellation_token.is_cancelled() {
-            LogContext::new("worker-run-loop")
-                .run(|| self.run_loop())
-                .await?;
+            self.run_loop().await?;
         }
 
         self.shutdown().await?;
@@ -872,86 +869,75 @@ impl JobTracker {
     fn spawn_job(&mut self, state: State, context: JobContext, payload: JobPayload) {
         let factory = self.factories.get(context.queue_name.as_str()).cloned();
         let task = {
-            let log_context = LogContext::new(format!("job-{}", context.queue_name));
             let context = context.clone();
             let span = context.span();
-            log_context
-                .run(async move || {
-                    // We should never crash, but in case we do, we do that in the task and
-                    // don't crash the worker
-                    let job = factory.expect("unknown job factory")(payload);
-                    tracing::info!(
-                        job.id = %context.id,
-                        job.queue.name = %context.queue_name,
-                        job.attempt = %context.attempt,
-                        "Running job"
-                    );
-                    let result = job.run(&state, context.clone()).await;
+            async move {
+                // We should never crash, but in case we do, we do that in the task and
+                // don't crash the worker
+                let job = factory.expect("unknown job factory")(payload);
+                tracing::info!(
+                    job.id = %context.id,
+                    job.queue.name = %context.queue_name,
+                    job.attempt = %context.attempt,
+                    "Running job"
+                );
+                let result = job.run(&state, context.clone()).await;
 
-                    let Some(context_stats) =
-                        LogContext::maybe_with(pasion_context::LogContext::stats)
-                    else {
-                        // This should never happen, but if it does it's fine: we're recovering fine
-                        // from panics in those tasks
-                        panic!("Missing log context, this should never happen");
-                    };
-
-                    // We log the result here so that it's attached to the right span & log context
-                    match &result {
-                        Ok(()) => {
-                            tracing::info!(
-                                job.id = %context.id,
-                                job.queue.name = %context.queue_name,
-                                job.attempt = %context.attempt,
-                                "Job completed [{context_stats}]"
-                            );
-                        }
-
-                        Err(JobError {
-                            decision: JobErrorDecision::Fail,
-                            error,
-                        }) => {
-                            tracing::error!(
-                                error = &**error as &dyn std::error::Error,
-                                job.id = %context.id,
-                                job.queue.name = %context.queue_name,
-                                job.attempt = %context.attempt,
-                                "Job failed, not retrying [{context_stats}]"
-                            );
-                        }
-
-                        Err(JobError {
-                            decision: JobErrorDecision::Retry,
-                            error,
-                        }) if context.attempt < MAX_ATTEMPTS => {
-                            let delay = retry_delay(context.attempt);
-                            tracing::warn!(
-                                error = &**error as &dyn std::error::Error,
-                                job.id = %context.id,
-                                job.queue.name = %context.queue_name,
-                                job.attempt = %context.attempt,
-                                "Job failed, will retry in {}s [{context_stats}]",
-                                delay.num_seconds()
-                            );
-                        }
-
-                        Err(JobError {
-                            decision: JobErrorDecision::Retry,
-                            error,
-                        }) => {
-                            tracing::error!(
-                                error = &**error as &dyn std::error::Error,
-                                job.id = %context.id,
-                                job.queue.name = %context.queue_name,
-                                job.attempt = %context.attempt,
-                                "Job failed too many times, abandonning [{context_stats}]"
-                            );
-                        }
+                match &result {
+                    Ok(()) => {
+                        tracing::info!(
+                            job.id = %context.id,
+                            job.queue.name = %context.queue_name,
+                            job.attempt = %context.attempt,
+                            "Job completed"
+                        );
                     }
 
-                    (context_stats.elapsed, result)
-                })
-                .instrument(span)
+                    Err(JobError {
+                        decision: JobErrorDecision::Fail,
+                        error,
+                    }) => {
+                        tracing::error!(
+                            error = &**error as &dyn std::error::Error,
+                            job.id = %context.id,
+                            job.queue.name = %context.queue_name,
+                            job.attempt = %context.attempt,
+                            "Job failed, not retrying"
+                        );
+                    }
+
+                    Err(JobError {
+                        decision: JobErrorDecision::Retry,
+                        error,
+                    }) if context.attempt < MAX_ATTEMPTS => {
+                        let delay = retry_delay(context.attempt);
+                        tracing::warn!(
+                            error = &**error as &dyn std::error::Error,
+                            job.id = %context.id,
+                            job.queue.name = %context.queue_name,
+                            job.attempt = %context.attempt,
+                            "Job failed, will retry in {}s",
+                            delay.num_seconds()
+                        );
+                    }
+
+                    Err(JobError {
+                        decision: JobErrorDecision::Retry,
+                        error,
+                    }) => {
+                        tracing::error!(
+                            error = &**error as &dyn std::error::Error,
+                            job.id = %context.id,
+                            job.queue.name = %context.queue_name,
+                            job.attempt = %context.attempt,
+                            "Job failed too many times, abandonning"
+                        );
+                    }
+                }
+
+                (context.start.elapsed(), result)
+            }
+            .instrument(span)
         };
 
         self.in_flight_jobs.add(

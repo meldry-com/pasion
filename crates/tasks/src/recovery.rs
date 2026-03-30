@@ -1,5 +1,5 @@
 use async_trait::async_trait;
-use pasion_storage::queue::SendAccountRecoveryEmailsJob;
+use pasion_data::queue::SendAccountRecoveryEmailsJob;
 use tracing::instrument;
 
 use crate::{

@@ -11,11 +11,11 @@ use pasion_http::RequestBuilderExt;
 use serde_json::Value;
 use url::Url;
 
-use super::jose::JwtVerificationData;
 use super::super::{
     error::{IdTokenError, ResponseExt, UserInfoError},
     requests::jose::verify_signed_jwt,
 };
+use super::jose::JwtVerificationData;
 
 /// Obtain information about an authenticated end-user.
 ///

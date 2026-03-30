@@ -3,14 +3,14 @@ use oauth2_types::{
     requests::{Display, GrantType, Prompt, ResponseMode},
     scope,
 };
-use pasion_data_model::SiteConfig;
+use pasion_data::SiteConfig;
+use pasion_data::UrlBuilder;
 use pasion_iana::oauth::{
     OAuthAuthorizationEndpointResponseType, OAuthClientAuthenticationMethod,
     PkceCodeChallengeMethod,
 };
 use pasion_jose::jwa::SUPPORTED_SIGNING_ALGORITHMS;
 use pasion_keystore::Keystore;
-use pasion_data_model::UrlBuilder;
 use salvo::prelude::*;
 use serde::Serialize;
 
@@ -197,8 +197,8 @@ fn get_inner(depot: &Depot) -> Json<DiscoveryResponse> {
 
 #[cfg(test)]
 mod tests {
+    use pasion_data::UrlBuilder;
     use pasion_keystore::{JsonWebKey, JsonWebKeySet, PrivateKey};
-    use pasion_data_model::UrlBuilder;
     use rand::SeedableRng;
     use rand_chacha::ChaChaRng;
 
@@ -218,7 +218,10 @@ mod tests {
             "url_builder",
             UrlBuilder::new("https://example.com/".parse().unwrap(), None, None),
         );
-        depot.insert("site_config", crate::handlers::test_utils::test_site_config());
+        depot.insert(
+            "site_config",
+            crate::handlers::test_utils::test_site_config(),
+        );
         depot
     }
 

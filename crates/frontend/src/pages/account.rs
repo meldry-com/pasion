@@ -37,12 +37,15 @@ pub fn AccountPage() -> Element {
                     };
                 }
             };
-            let profile = user.profile.clone().unwrap_or(crate::api::types::UserProfile {
-                display_name: matrix.display_name.clone(),
-                avatar_url: None,
-                preferred_locale: None,
-                updated_at: String::new(),
-            });
+            let profile = user
+                .profile
+                .clone()
+                .unwrap_or(crate::api::types::UserProfile {
+                    display_name: matrix.display_name.clone(),
+                    avatar_url: None,
+                    preferred_locale: None,
+                    updated_at: String::new(),
+                });
 
             let has_plan = result.site_config.plan_management_iframe_uri.is_some();
             let display_name_change_allowed = result.site_config.display_name_change_allowed;

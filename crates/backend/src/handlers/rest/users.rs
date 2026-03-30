@@ -6,8 +6,8 @@ use super::{
     get_requester, make_clock, make_rng,
 };
 use crate::handlers::account_profile::{
-    AccountProfileError, DeactivateAccountOutcome, allow_cross_signing_reset as allow_cross_signing_reset_service,
-    deactivate_current_account,
+    AccountProfileError, DeactivateAccountOutcome,
+    allow_cross_signing_reset as allow_cross_signing_reset_service, deactivate_current_account,
 };
 use crate::services::user_profile::{self, UserProfileServiceError};
 
@@ -65,7 +65,7 @@ pub async fn patch_profile(
     let (requester, mut repo) =
         get_requester(&clock, &activity_tracker, repo, &session_info).await?;
 
-    let patch = pasion_data_model::UserProfilePatch {
+    let patch = pasion_data::UserProfilePatch {
         display_name: input.display_name,
         avatar_url: input.avatar_url,
         preferred_locale: input.preferred_locale,
@@ -242,11 +242,11 @@ fn map_user_profile_error(error: UserProfileServiceError) -> RouteError {
 mod tests {
     use chrono::Duration;
     use hyper::{Request, StatusCode};
-    use pasion_matrix::{HomeserverConnection, ProvisionRequest};
-    use pasion_storage::{
+    use pasion_data::{
         RepositoryAccess,
         user::{BrowserSessionRepository, UserRepository},
     };
+    use pasion_matrix::{HomeserverConnection, ProvisionRequest};
     use rand::SeedableRng;
     use rand_chacha::ChaChaRng;
     use ulid::Ulid;
@@ -261,7 +261,7 @@ mod tests {
     #[tokio::test]
     async fn test_patch_profile_updates_user_and_matrix_profile() {
         setup();
-        let pool = pasion_storage_pg::test_utils::setup_test_pool().await;
+        let pool = pasion_data::test_utils::setup_test_pool().await;
         let state = TestState::from_pool(pool.clone()).await.unwrap();
         let unique = unique_test_nonce();
         state.clock.advance(Duration::seconds(unique as i64));
@@ -290,13 +290,13 @@ mod tests {
         let cookies = CookieHelper::new();
         cookies.import(state.cookie_jar().set_session(&session));
 
-        let request = cookies.with_cookies(
-            Request::patch("/api/v1/viewer/profile").json(serde_json::json!({
+        let request = cookies.with_cookies(Request::patch("/api/v1/viewer/profile").json(
+            serde_json::json!({
                 "displayName": "Alice Example",
                 "avatarUrl": "mxc://example.com/alice",
                 "preferredLocale": "zh-CN"
-            })),
-        );
+            }),
+        ));
 
         let response = state.request(request).await;
         response.assert_status(StatusCode::OK);
@@ -310,7 +310,10 @@ mod tests {
         let mut repo = state.repository().await.unwrap();
         let stored = repo.user().lookup(user.id).await.unwrap().unwrap();
         assert_eq!(stored.display_name.as_deref(), Some("Alice Example"));
-        assert_eq!(stored.avatar_url.as_deref(), Some("mxc://example.com/alice"));
+        assert_eq!(
+            stored.avatar_url.as_deref(),
+            Some("mxc://example.com/alice")
+        );
         assert_eq!(stored.preferred_locale.as_deref(), Some("zh-CN"));
 
         let matrix_user = state

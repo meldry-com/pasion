@@ -7,13 +7,13 @@ pub mod update;
 #[cfg(test)]
 mod test_utils {
     use oauth2_types::scope::{OPENID, Scope};
-    use pasion_data_model::{
+    use pasion_data::upstream_oauth2::UpstreamOAuthProviderParams;
+    use pasion_data::{
         UpstreamOAuthProviderClaimsImports, UpstreamOAuthProviderDiscoveryMode,
         UpstreamOAuthProviderOnBackchannelLogout, UpstreamOAuthProviderPkceMode,
         UpstreamOAuthProviderTokenAuthMethod,
     };
     use pasion_iana::jose::JsonWebSignatureAlg;
-    use pasion_storage::upstream_oauth2::UpstreamOAuthProviderParams;
 
     pub(crate) fn oidc_provider_params(name: &str) -> UpstreamOAuthProviderParams {
         UpstreamOAuthProviderParams {

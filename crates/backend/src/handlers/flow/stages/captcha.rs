@@ -4,7 +4,7 @@
 //! token is non-empty; full server-side verification against hCaptcha or
 //! reCAPTCHA is deferred to a later integration.
 
-use pasion_data_model::flow::{StageOutcome, StageValidationError};
+use pasion_data::flow::{StageOutcome, StageValidationError};
 
 use super::StageExecutionError;
 

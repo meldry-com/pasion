@@ -5,11 +5,11 @@
 //! in [`crate::handlers::account_recovery`].
 
 use anyhow::Error as AnyhowError;
-use pasion_data_model::{Clock, User};
-use pasion_storage::{
+use pasion_data::{
     BoxRepository, RepositoryAccess, RepositoryError,
     user::{UserPasswordRepository, UserRepository},
 };
+use pasion_data::{Clock, User};
 use rand_chacha::rand_core::CryptoRngCore;
 use thiserror::Error;
 use zeroize::Zeroizing;

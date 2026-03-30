@@ -7,8 +7,8 @@
 //! invitation).
 
 use chrono::Utc;
-use pasion_data_model::flow::{StageOutcome, StageValidationError};
-use pasion_storage::{BoxRepository, RepositoryAccess};
+use pasion_data::flow::{StageOutcome, StageValidationError};
+use pasion_data::{BoxRepository, RepositoryAccess};
 
 use super::StageExecutionError;
 
@@ -44,10 +44,7 @@ pub async fn execute(
     }
 
     // Look up the token in the repository.
-    let registration_token = repo
-        .user_registration_token()
-        .find_by_token(token)
-        .await?;
+    let registration_token = repo.user_registration_token().find_by_token(token).await?;
 
     let registration_token = match registration_token {
         Some(t) => t,

@@ -5,10 +5,10 @@
 //! database.
 
 use chrono::Utc;
-use pasion_data_model::flow::{
+use pasion_data::flow::{
     FlowDefinition, FlowDesignation, FlowStageBinding, IdentificationField, StageKind,
 };
-use pasion_data_model::new_id;
+use pasion_data::new_id;
 
 /// Create the default registration flow:
 /// 1. `UserWrite` — collect username / display name
@@ -440,7 +440,14 @@ mod tests {
         let (f6, b6) = default_enrollment_flow(&mut rng);
 
         let mut ids = vec![f1.id, f2.id, f3.id, f4.id, f5.id, f6.id];
-        for b in b1.iter().chain(&b2).chain(&b3).chain(&b4).chain(&b5).chain(&b6) {
+        for b in b1
+            .iter()
+            .chain(&b2)
+            .chain(&b3)
+            .chain(&b4)
+            .chain(&b5)
+            .chain(&b6)
+        {
             ids.push(b.id);
         }
 

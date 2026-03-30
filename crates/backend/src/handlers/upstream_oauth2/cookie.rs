@@ -1,9 +1,9 @@
 // TODO: move that to a standalone cookie manager
 
-use chrono::{DateTime, Duration, Utc};
-use pasion_data_model::Clock;
-use pasion_data_model::PostAuthAction;
 use crate::salvo_utils::cookies::CookieJar;
+use chrono::{DateTime, Duration, Utc};
+use pasion_data::Clock;
+use pasion_data::PostAuthAction;
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 use ulid::Ulid;
@@ -166,16 +166,16 @@ mod tests {
 
         let sessions = UpstreamSessions::default();
 
-        let provider_a = pasion_data_model::new_id(now, &mut rng);
-        let provider_b = pasion_data_model::new_id(now, &mut rng);
+        let provider_a = pasion_data::new_id(now, &mut rng);
+        let provider_b = pasion_data::new_id(now, &mut rng);
 
-        let first_session = pasion_data_model::new_id(now, &mut rng);
+        let first_session = pasion_data::new_id(now, &mut rng);
         let first_state = "first-state";
         let sessions = sessions.add(first_session, provider_a, first_state.into(), None);
 
         let now = now + Duration::microseconds(5 * 60 * 1000 * 1000);
 
-        let second_session = pasion_data_model::new_id(now, &mut rng);
+        let second_session = pasion_data::new_id(now, &mut rng);
         let second_state = "second-state";
         let sessions = sessions.add(second_session, provider_b, second_state.into(), None);
 
@@ -201,7 +201,7 @@ mod tests {
         );
 
         // Associate a link with the second
-        let second_link = pasion_data_model::new_id(now, &mut rng);
+        let second_link = pasion_data::new_id(now, &mut rng);
         let sessions = sessions
             .add_link_to_session(second_session, second_link)
             .unwrap();

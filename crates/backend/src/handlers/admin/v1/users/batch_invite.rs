@@ -1,18 +1,16 @@
-use chrono::Duration;
-use pasion_data_model::audit::AdminOperation;
 use crate::record_error;
-use pasion_storage::audit::NewAdminOperationLog;
+use chrono::Duration;
+use pasion_data::audit::AdminOperation;
+use pasion_data::audit::NewAdminOperationLog;
 use rand::distributions::{Alphanumeric, DistString};
 use salvo::{http::StatusCode, prelude::*};
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 
-use crate::handlers::{
-    admin::{
-        call_context::extract_call_context,
-        model::{Resource, UserRegistrationToken},
-        response::{ErrorResponse, SingleResponse},
-    },
+use crate::handlers::admin::{
+    call_context::extract_call_context,
+    model::{Resource, UserRegistrationToken},
+    response::{ErrorResponse, SingleResponse},
 };
 
 #[derive(Debug, thiserror::Error)]
@@ -24,7 +22,7 @@ pub enum RouteError {
     InvalidCount,
 }
 
-impl_from_error_for_route!(pasion_storage::RepositoryError);
+impl_from_error_for_route!(pasion_data::RepositoryError);
 impl_from_error_for_route!(crate::handlers::admin::call_context::Rejection);
 
 impl Scribe for RouteError {
@@ -134,5 +132,8 @@ pub async fn handler(
 
     repo.save().await?;
 
-    Ok((StatusCode::CREATED, Json(BatchInviteResponse { data: tokens })))
+    Ok((
+        StatusCode::CREATED,
+        Json(BatchInviteResponse { data: tokens }),
+    ))
 }

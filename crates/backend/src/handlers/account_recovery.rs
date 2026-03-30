@@ -9,11 +9,11 @@ use std::{net::IpAddr, str::FromStr};
 
 use anyhow::{Context as _, Error as AnyhowError};
 use lettre::Address;
-use pasion_data_model::{Clock, UserRecoverySession, UserRecoveryTicket};
-use pasion_storage::{
+use pasion_data::{
     BoxRepository, RepositoryAccess, RepositoryError,
     user::{UserEmailRepository, UserPasswordRepository, UserRecoveryRepository, UserRepository},
 };
+use pasion_data::{Clock, UserRecoverySession, UserRecoveryTicket};
 use rand::RngCore;
 use rand_chacha::rand_core::CryptoRngCore;
 use thiserror::Error;

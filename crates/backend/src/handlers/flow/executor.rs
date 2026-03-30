@@ -1,4 +1,4 @@
-use pasion_data_model::flow::*;
+use pasion_data::flow::*;
 use serde_json::Value;
 use thiserror::Error;
 
@@ -17,7 +17,7 @@ pub enum FlowPlannerError {
     NoMoreStages,
 
     #[error(transparent)]
-    Repository(#[from] pasion_storage::RepositoryError),
+    Repository(#[from] pasion_data::RepositoryError),
 }
 
 /// A planned flow — the ordered list of stage bindings to execute.
@@ -186,10 +186,7 @@ fn validate_response(
             }
             StageOutcome::Continue
         }
-        (
-            StageKind::EmailVerification { .. },
-            StageResponse::EmailVerification { code },
-        ) => {
+        (StageKind::EmailVerification { .. }, StageResponse::EmailVerification { code }) => {
             // Actual verification happens in the stage implementation (side effect).
             // The executor just validates the response shape.
             if code.is_empty() {
@@ -251,9 +248,7 @@ fn validate_response(
             if *granted {
                 StageOutcome::Continue
             } else {
-                StageOutcome::Done {
-                    redirect_to: None,
-                }
+                StageOutcome::Done { redirect_to: None }
             }
         }
         (StageKind::Captcha, StageResponse::Captcha { token }) => {
@@ -269,10 +264,7 @@ fn validate_response(
                 StageOutcome::Continue
             }
         }
-        (
-            StageKind::Prompt { fields },
-            StageResponse::Prompt { data },
-        ) => {
+        (StageKind::Prompt { fields }, StageResponse::Prompt { data }) => {
             let mut errors = vec![];
             for field in fields {
                 if field.required {
@@ -319,10 +311,7 @@ fn validate_response(
                 StageOutcome::Continue
             }
         }
-        (
-            StageKind::EnrollmentToken { required },
-            StageResponse::EnrollmentToken { token },
-        ) => {
+        (StageKind::EnrollmentToken { required }, StageResponse::EnrollmentToken { token }) => {
             if token.is_empty() && *required {
                 StageOutcome::Retry {
                     errors: vec![StageValidationError {
@@ -357,19 +346,13 @@ fn is_stage_satisfied(stage: &StageKind, context: &Value) -> bool {
         StageKind::EmailVerification { .. } => {
             context.get("email_verified") == Some(&Value::Bool(true))
         }
-        StageKind::PasswordWrite { .. } => {
-            context.get("password_set") == Some(&Value::Bool(true))
-        }
-        StageKind::UserWrite { .. } => {
-            context.get("user_created") == Some(&Value::Bool(true))
-        }
+        StageKind::PasswordWrite { .. } => context.get("password_set") == Some(&Value::Bool(true)),
+        StageKind::UserWrite { .. } => context.get("user_created") == Some(&Value::Bool(true)),
         StageKind::AuthenticatorValidate { .. } => {
             context.get("mfa_validated") == Some(&Value::Bool(true))
         }
         StageKind::Captcha => context.get("captcha_verified") == Some(&Value::Bool(true)),
-        StageKind::EnrollmentToken { .. } => {
-            context.get("enrollment_token_id").is_some()
-        }
+        StageKind::EnrollmentToken { .. } => context.get("enrollment_token_id").is_some(),
         _ => false,
     }
 }

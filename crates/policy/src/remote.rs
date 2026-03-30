@@ -40,7 +40,7 @@
 //! An empty `violations` array means the request is allowed.
 
 use async_trait::async_trait;
-use pasion_data_model::PolicyData;
+use pasion_data::PolicyData;
 use serde::Deserialize;
 
 use crate::model::{

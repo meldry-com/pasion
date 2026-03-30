@@ -1,21 +1,20 @@
 use std::{net::IpAddr, sync::Arc};
 
+use crate::handlers::{
+    ActivityTracker, CookieManager, Limiter, MetadataCache, passwords::PasswordManager,
+};
 use diesel_async::AsyncPgConnection;
 use diesel_async::pooled_connection::deadpool::Pool as DieselPool;
 use ipnetwork::IpNetwork;
 use opentelemetry::KeyValue;
-use pasion_context::LogContext;
-use pasion_data_model::{AppVersion, BoxClock, BoxRng, SiteConfig, SystemClock};
-use crate::handlers::{
-    ActivityTracker, CookieManager, Limiter, MetadataCache, passwords::PasswordManager,
-};
+use pasion_data::PgRepositoryFactory;
+use pasion_data::UrlBuilder;
+use pasion_data::{AppVersion, BoxClock, BoxRng, SiteConfig, SystemClock};
+use pasion_data::{BoxRepository, BoxRepositoryFactory, RepositoryFactory};
 use pasion_i18n::Translator;
 use pasion_keystore::{Encrypter, Keystore};
 use pasion_matrix::{ConnectorRegistry, HomeserverConnection};
 use pasion_policy::{Policy, PolicyFactory};
-use pasion_data_model::UrlBuilder;
-use pasion_storage::{BoxRepository, BoxRepositoryFactory, RepositoryFactory};
-use pasion_storage_pg::PgRepositoryFactory;
 use pasion_templates::Templates;
 use rand::SeedableRng;
 use salvo::prelude::*;
@@ -83,34 +82,33 @@ impl AppState {
         let http_client = self.http_client.clone();
 
         tokio::spawn(
-            LogContext::new("metadata-cache-warmup")
-                .run(async move || {
-                    let mut repo = match factory.create().await {
-                        Ok(conn) => conn,
-                        Err(e) => {
-                            tracing::error!(
-                                error = &e as &dyn std::error::Error,
-                                "Failed to acquire a database connection"
-                            );
-                            return;
-                        }
-                    };
-
-                    if let Err(e) = metadata_cache
-                        .warm_up_and_run(
-                            &http_client,
-                            std::time::Duration::from_secs(60 * 15),
-                            &mut repo,
-                        )
-                        .await
-                    {
+            async move {
+                let mut repo = match factory.create().await {
+                    Ok(conn) => conn,
+                    Err(e) => {
                         tracing::error!(
                             error = &e as &dyn std::error::Error,
-                            "Failed to warm up the metadata cache"
+                            "Failed to acquire a database connection"
                         );
+                        return;
                     }
-                })
-                .instrument(tracing::info_span!("metadata_cache.background_warmup")),
+                };
+
+                if let Err(e) = metadata_cache
+                    .warm_up_and_run(
+                        &http_client,
+                        std::time::Duration::from_secs(60 * 15),
+                        &mut repo,
+                    )
+                    .await
+                {
+                    tracing::error!(
+                        error = &e as &dyn std::error::Error,
+                        "Failed to warm up the metadata cache"
+                    );
+                }
+            }
+            .instrument(tracing::info_span!("metadata_cache.background_warmup")),
         );
     }
 }
@@ -158,10 +156,7 @@ pub async fn inject_app_state(
         "homeserver_connection",
         Arc::clone(&state.homeserver_connection),
     );
-    depot.insert(
-        "connector_registry",
-        state.connector_registry.clone(),
-    );
+    depot.insert("connector_registry", state.connector_registry.clone());
     depot.insert("app_version", AppVersion(crate::version()));
     depot.insert("activity_tracker", state.activity_tracker.clone());
     depot.insert("trusted_proxies", state.trusted_proxies.clone());
@@ -304,9 +299,9 @@ pub async fn extract_policy(depot: &Depot) -> Result<Policy, pasion_policy::Inst
 /// Extract BoxRepository from depot
 pub async fn extract_repository(
     depot: &Depot,
-) -> Result<BoxRepository, pasion_storage::RepositoryError> {
+) -> Result<BoxRepository, pasion_data::RepositoryError> {
     let app_state = depot.get::<AppState>("app_state").ok().ok_or_else(|| {
-        pasion_storage::RepositoryError::from_error(std::io::Error::new(
+        pasion_data::RepositoryError::from_error(std::io::Error::new(
             std::io::ErrorKind::NotFound,
             "AppState not found in depot",
         ))

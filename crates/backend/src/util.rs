@@ -1,5 +1,6 @@
 use std::{sync::Arc, time::Duration};
 
+use crate::handlers::passwords::PasswordManager;
 use anyhow::Context;
 use diesel_async::AsyncPgConnection;
 use diesel_async::pooled_connection::AsyncDieselConnectionManager;
@@ -9,15 +10,13 @@ use pasion_config::{
     EmailTransportKind, ExperimentalConfig, HomeserverKind, MatrixConfig, PasswordsConfig,
     PolicyConfig, PolicyEngine, SmsConfig, SmsTransportKind, TemplatesConfig,
 };
-use pasion_context::LogContext;
-use pasion_data_model::{SessionExpirationConfig, SessionLimitConfig, SiteConfig};
-use crate::handlers::passwords::PasswordManager;
+use pasion_data::UrlBuilder;
+use pasion_data::{BoxRepositoryFactory, RepositoryAccess, RepositoryFactory};
+use pasion_data::{SessionExpirationConfig, SessionLimitConfig, SiteConfig};
 use pasion_matrix::{ConnectorRegistry, HomeserverConnection, ReadOnlyHomeserverConnection};
 use pasion_matrix_palpo::PalpoConnection;
 use pasion_messaging::{MailTransport, Mailer, NotificationCenter, SmsSender, SmsTransport};
 use pasion_policy::PolicyFactory;
-use pasion_data_model::UrlBuilder;
-use pasion_storage::{BoxRepositoryFactory, RepositoryAccess, RepositoryFactory};
 use pasion_templates::{SiteConfigExt, Templates};
 use tokio_util::{sync::CancellationToken, task::TaskTracker};
 use tracing::Instrument;
@@ -191,23 +190,21 @@ pub fn test_mailer_in_background(mailer: &Mailer, timeout: Duration) {
     let mailer = mailer.clone();
 
     let span = tracing::info_span!("cli.test_mailer");
-    tokio::spawn(
-        LogContext::new("mailer-test").run(async move || {
-            match tokio::time::timeout(timeout, mailer.test_connection()).await {
-                Ok(Ok(())) => {}
-                Ok(Err(err)) => {
-                    tracing::warn!(
-                        error = &err as &dyn std::error::Error,
-                        "Could not connect to the mail backend, tasks sending mails may fail!"
-                    );
-                }
-                Err(_) => {
-                    tracing::warn!("Timed out while testing the mail backend connection, tasks sending mails may fail!");
-                }
+    tokio::spawn(async move {
+        match tokio::time::timeout(timeout, mailer.test_connection()).await {
+            Ok(Ok(())) => {}
+            Ok(Err(err)) => {
+                tracing::warn!(
+                    error = &err as &dyn std::error::Error,
+                    "Could not connect to the mail backend, tasks sending mails may fail!"
+                );
             }
-        })
-        .instrument(span)
-    );
+            Err(_) => {
+                tracing::warn!("Timed out while testing the mail backend connection, tasks sending mails may fail!");
+            }
+        }
+    }
+    .instrument(span));
 }
 
 pub async fn policy_factory_from_config(
@@ -288,22 +285,20 @@ pub async fn policy_factory_from_config(
 
 pub fn captcha_config_from_config(
     captcha_config: &CaptchaConfig,
-) -> Result<Option<pasion_data_model::CaptchaConfig>, anyhow::Error> {
+) -> Result<Option<pasion_data::CaptchaConfig>, anyhow::Error> {
     let Some(service) = captcha_config.service else {
         return Ok(None);
     };
 
     let service = match service {
-        pasion_config::CaptchaServiceKind::RecaptchaV2 => {
-            pasion_data_model::CaptchaService::RecaptchaV2
-        }
+        pasion_config::CaptchaServiceKind::RecaptchaV2 => pasion_data::CaptchaService::RecaptchaV2,
         pasion_config::CaptchaServiceKind::CloudflareTurnstile => {
-            pasion_data_model::CaptchaService::CloudflareTurnstile
+            pasion_data::CaptchaService::CloudflareTurnstile
         }
-        pasion_config::CaptchaServiceKind::HCaptcha => pasion_data_model::CaptchaService::HCaptcha,
+        pasion_config::CaptchaServiceKind::HCaptcha => pasion_data::CaptchaService::HCaptcha,
     };
 
-    Ok(Some(pasion_data_model::CaptchaConfig {
+    Ok(Some(pasion_data::CaptchaConfig {
         service,
         site_key: captcha_config
             .site_key

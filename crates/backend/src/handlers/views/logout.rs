@@ -1,4 +1,4 @@
-use pasion_data_model::PostAuthAction;
+use pasion_data::PostAuthAction;
 use crate::handlers::post_auth::post_auth_action_redirect;
 use crate::salvo_utils::{
     InternalError, SessionInfoExt,

@@ -5535,8 +5535,7 @@ dependencies = [
  "opentelemetry_sdk",
  "pasion-backend",
  "pasion-config",
- "pasion-context",
- "pasion-data-model",
+ "pasion-data",
  "pasion-http",
  "pasion-i18n",
  "pasion-keystore",
@@ -5544,8 +5543,6 @@ dependencies = [
  "pasion-matrix-palpo",
  "pasion-messaging",
  "pasion-policy",
- "pasion-storage",
- "pasion-storage-pg",
  "pasion-tasks",
  "pasion-templates",
  "rand 0.8.5",
@@ -5626,8 +5623,7 @@ dependencies = [
  "opentelemetry_sdk",
  "p256",
  "pasion-config",
- "pasion-context",
- "pasion-data-model",
+ "pasion-data",
  "pasion-http",
  "pasion-i18n",
  "pasion-iana",
@@ -5637,8 +5633,6 @@ dependencies = [
  "pasion-matrix-palpo",
  "pasion-messaging",
  "pasion-policy",
- "pasion-storage",
- "pasion-storage-pg",
  "pasion-tasks",
  "pasion-templates",
  "pbkdf2",
@@ -5712,38 +5706,38 @@ dependencies = [
 ]
 
 [[package]]
-name = "pasion-context"
+name = "pasion-data"
 version = "1.8.0"
 dependencies = [
- "console 0.16.3",
- "opentelemetry",
- "pin-project-lite",
- "quanta",
- "tokio",
- "tracing",
- "tracing-opentelemetry",
- "tracing-subscriber",
-]
-
-[[package]]
-name = "pasion-data-model"
-version = "1.8.0"
-dependencies = [
+ "anyhow",
+ "async-trait",
  "base64ct",
  "chrono",
  "crc",
+ "diesel",
+ "diesel-async",
+ "diesel_migrations",
+ "futures-util",
+ "ipnetwork",
  "lettre",
  "oauth2-types",
+ "opentelemetry",
+ "opentelemetry-semantic-conventions",
  "pasion-iana",
  "pasion-jose",
  "rand 0.8.5",
  "rand_chacha 0.3.1",
+ "rand_core 0.6.4",
  "regex",
  "ruma-common",
  "serde",
  "serde_json",
  "serde_urlencoded",
+ "sha2",
  "thiserror 2.0.18",
+ "tokio",
+ "tracing",
+ "tracing-opentelemetry",
  "ulid",
  "url",
  "uuid",
@@ -5949,7 +5943,7 @@ dependencies = [
  "chrono",
  "oauth2-types",
  "opa-wasm",
- "pasion-data-model",
+ "pasion-data",
  "reqwest 0.13.2",
  "schemars 1.2.1",
  "serde",
@@ -5957,61 +5951,6 @@ dependencies = [
  "thiserror 2.0.18",
  "tokio",
  "tracing",
-]
-
-[[package]]
-name = "pasion-storage"
-version = "1.8.0"
-dependencies = [
- "async-trait",
- "chrono",
- "futures-util",
- "oauth2-types",
- "opentelemetry",
- "pasion-data-model",
- "pasion-iana",
- "pasion-jose",
- "rand_core 0.6.4",
- "serde",
- "serde_json",
- "thiserror 2.0.18",
- "tracing",
- "tracing-opentelemetry",
- "ulid",
- "url",
-]
-
-[[package]]
-name = "pasion-storage-pg"
-version = "1.8.0"
-dependencies = [
- "anyhow",
- "async-trait",
- "chrono",
- "crc",
- "diesel",
- "diesel-async",
- "diesel_migrations",
- "futures-util",
- "ipnetwork",
- "oauth2-types",
- "opentelemetry",
- "opentelemetry-semantic-conventions",
- "pasion-data-model",
- "pasion-iana",
- "pasion-jose",
- "pasion-storage",
- "rand 0.8.5",
- "rand_chacha 0.3.1",
- "serde",
- "serde_json",
- "sha2",
- "thiserror 2.0.18",
- "tokio",
- "tracing",
- "ulid",
- "url",
- "uuid",
 ]
 
 [[package]]
@@ -6028,13 +5967,10 @@ dependencies = [
  "oauth2-types",
  "opentelemetry",
  "opentelemetry-semantic-conventions",
- "pasion-context",
- "pasion-data-model",
+ "pasion-data",
  "pasion-i18n",
  "pasion-matrix",
  "pasion-messaging",
- "pasion-storage",
- "pasion-storage-pg",
  "pasion-templates",
  "rand 0.8.5",
  "rand_chacha 0.3.1",
@@ -6061,7 +5997,7 @@ dependencies = [
  "minijinja",
  "minijinja-contrib",
  "oauth2-types",
- "pasion-data-model",
+ "pasion-data",
  "pasion-i18n",
  "pasion-iana",
  "pasion-policy",

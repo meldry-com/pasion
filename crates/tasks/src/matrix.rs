@@ -2,8 +2,7 @@ use std::collections::HashSet;
 
 use anyhow::Context;
 use async_trait::async_trait;
-use pasion_matrix::ProvisionRequest;
-use pasion_storage::{
+use pasion_data::{
     Pagination, RepositoryAccess,
     oauth2::OAuth2SessionFilter,
     personal::PersonalSessionFilter,
@@ -13,6 +12,7 @@ use pasion_storage::{
     },
     user::{UserEmailRepository, UserRepository},
 };
+use pasion_matrix::ProvisionRequest;
 use tracing::info;
 
 use crate::{

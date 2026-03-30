@@ -4,7 +4,7 @@ pub mod list;
 pub mod regenerate;
 pub mod revoke;
 
-use pasion_data_model::personal::session::PersonalSessionOwner;
+use pasion_data::personal::session::PersonalSessionOwner;
 
 use crate::handlers::admin::call_context::CallerSession;
 

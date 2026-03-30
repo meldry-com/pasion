@@ -1,16 +1,16 @@
 use std::{collections::HashMap, sync::LazyLock};
 
-use oauth2_types::{errors::ClientErrorCode, requests::AccessTokenRequest};
-use opentelemetry::{Key, KeyValue, metrics::Counter};
-use pasion_data_model::{Clock, UpstreamOAuthProvider, UpstreamOAuthProviderResponseMode};
-use pasion_jose::claims::TokenHash;
 use crate::oidc_client::{
     requests::jose::JwtVerificationData, types::client_credentials::ClientCredentials,
 };
 use crate::salvo_utils::{GenericError, InternalError, cookies::CookieJar};
-use pasion_storage::upstream_oauth2::{
+use oauth2_types::{errors::ClientErrorCode, requests::AccessTokenRequest};
+use opentelemetry::{Key, KeyValue, metrics::Counter};
+use pasion_data::upstream_oauth2::{
     UpstreamOAuthLinkRepository, UpstreamOAuthProviderRepository, UpstreamOAuthSessionRepository,
 };
+use pasion_data::{Clock, UpstreamOAuthProvider, UpstreamOAuthProviderResponseMode};
+use pasion_jose::claims::TokenHash;
 use pasion_templates::FormPostContext;
 use salvo::prelude::*;
 use serde::{Deserialize, Serialize};
@@ -24,8 +24,8 @@ use super::{
     client_credentials_for_provider,
     template::{AttributeMappingContext, environment},
 };
+use crate::handlers::METER;
 use crate::handlers::rest::DepotExt;
-use crate::handlers::{METER};
 
 static CALLBACK_COUNTER: LazyLock<Counter<u64>> = LazyLock::new(|| {
     METER
@@ -125,7 +125,7 @@ pub enum RouteError {
 }
 
 impl_from_error_for_route!(pasion_templates::TemplateError);
-impl_from_error_for_route!(pasion_storage::RepositoryError);
+impl_from_error_for_route!(pasion_data::RepositoryError);
 impl_from_error_for_route!(crate::handlers::rest::RouteError);
 impl_from_error_for_route!(crate::oidc_client::error::DiscoveryError);
 impl_from_error_for_route!(crate::oidc_client::error::JwksError);
@@ -792,8 +792,8 @@ pub async fn handler(
     repo.save().await?;
 
     cookie_jar.write_to_response(res);
-    res.render(salvo::writing::Redirect::other(&url_builder.relative_url(
-        &format!("/upstream/link/{}", link.id),
-    )));
+    res.render(salvo::writing::Redirect::other(
+        &url_builder.relative_url(&format!("/upstream/link/{}", link.id)),
+    ));
     Ok(())
 }

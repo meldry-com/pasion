@@ -5,9 +5,9 @@
 //! `PasswordManager`) is deferred to a later integration step — this
 //! module validates the inputs and records that a password was set.
 
-use pasion_data_model::flow::{StageOutcome, StageValidationError};
-use pasion_data_model::Clock;
-use pasion_storage::{BoxRepository, RepositoryAccess};
+use pasion_data::Clock;
+use pasion_data::flow::{StageOutcome, StageValidationError};
+use pasion_data::{BoxRepository, RepositoryAccess};
 use rand::RngCore;
 
 use super::StageExecutionError;
@@ -32,14 +32,12 @@ pub async fn execute(
         .get("user_id")
         .and_then(|v| v.as_str())
         .ok_or_else(|| {
-            StageExecutionError::Internal(anyhow::anyhow!(
-                "missing user_id in flow context"
-            ))
+            StageExecutionError::Internal(anyhow::anyhow!("missing user_id in flow context"))
         })?;
 
-    let user_id: ulid::Ulid = user_id_str.parse().map_err(|e| {
-        StageExecutionError::Internal(anyhow::anyhow!("invalid user id: {e}"))
-    })?;
+    let user_id: ulid::Ulid = user_id_str
+        .parse()
+        .map_err(|e| StageExecutionError::Internal(anyhow::anyhow!("invalid user id: {e}")))?;
 
     // Verify the user exists
     let _user = repo

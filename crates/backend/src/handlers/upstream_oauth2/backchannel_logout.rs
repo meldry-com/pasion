@@ -1,22 +1,22 @@
 use std::collections::{HashMap, HashSet};
 
-use oauth2_types::errors::{ClientError, ClientErrorCode};
-use pasion_data_model::{UpstreamOAuthProvider, UpstreamOAuthProviderOnBackchannelLogout};
-use pasion_jose::{
-    claims::{self, Claim, TimeOptions},
-    jwt::JwtDecodeError,
-};
 use crate::oidc_client::{
     error::JwtVerificationError,
     requests::jose::{JwtVerificationData, verify_signed_jwt},
 };
 use crate::record_error;
-use pasion_storage::{
+use oauth2_types::errors::{ClientError, ClientErrorCode};
+use pasion_data::{
     Pagination,
     oauth2::OAuth2SessionFilter,
     queue::{QueueJobRepositoryExt as _, SyncDevicesJob},
     upstream_oauth2::UpstreamOAuthSessionFilter,
     user::BrowserSessionFilter,
+};
+use pasion_data::{UpstreamOAuthProvider, UpstreamOAuthProviderOnBackchannelLogout};
+use pasion_jose::{
+    claims::{self, Claim, TimeOptions},
+    jwt::JwtDecodeError,
 };
 use salvo::prelude::*;
 use serde::Deserialize;
@@ -25,7 +25,7 @@ use thiserror::Error;
 use ulid::Ulid;
 
 use crate::handlers::rest::DepotExt;
-use crate::handlers::{upstream_oauth2::cache::LazyProviderInfos};
+use crate::handlers::upstream_oauth2::cache::LazyProviderInfos;
 
 #[derive(Debug, Error)]
 pub enum RouteError {
@@ -99,7 +99,7 @@ impl Scribe for RouteError {
     }
 }
 
-impl_from_error_for_route!(pasion_storage::RepositoryError);
+impl_from_error_for_route!(pasion_data::RepositoryError);
 impl_from_error_for_route!(crate::handlers::rest::RouteError);
 impl_from_error_for_route!(crate::oidc_client::error::DiscoveryError);
 impl_from_error_for_route!(crate::oidc_client::error::JwksError);

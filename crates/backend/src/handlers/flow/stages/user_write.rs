@@ -4,16 +4,16 @@
 //! available.  Stores the new user's `id` and `username` in the flow
 //! context so subsequent stages can reference them.
 
-use pasion_data_model::flow::{StageOutcome, StageValidationError};
-use pasion_data_model::Clock;
-use pasion_storage::{BoxRepository, RepositoryAccess};
+use pasion_data::Clock;
+use pasion_data::flow::{StageOutcome, StageValidationError};
+use pasion_data::{BoxRepository, RepositoryAccess};
 use rand::RngCore;
 
 use super::StageExecutionError;
 
 /// Execute the user write stage.
 ///
-/// Creates a new [`User`](pasion_data_model::User) record with the
+/// Creates a new [`User`](pasion_data::User) record with the
 /// given username.  If `create_users_as_inactive` is `true` the
 /// caller/admin is expected to activate the user later (the `User`
 /// model doesn't have a dedicated "inactive" flag — the admin would
@@ -49,16 +49,10 @@ pub async fn execute(
     }
 
     // Create the user
-    let user = repo
-        .user()
-        .add(rng, clock, username.to_owned())
-        .await?;
+    let user = repo.user().add(rng, clock, username.to_owned()).await?;
 
     if let Some(ctx) = context.as_object_mut() {
-        ctx.insert(
-            "user_id".into(),
-            serde_json::json!(user.id.to_string()),
-        );
+        ctx.insert("user_id".into(), serde_json::json!(user.id.to_string()));
         ctx.insert("username".into(), serde_json::json!(user.username));
         ctx.insert("user_created".into(), serde_json::json!(true));
     }

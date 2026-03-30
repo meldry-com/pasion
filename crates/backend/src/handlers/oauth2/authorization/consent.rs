@@ -1,4 +1,4 @@
-use pasion_data_model::PostAuthAction;
+use pasion_data::PostAuthAction;
 use crate::salvo_utils::{
     GenericError, InternalError,
     csrf::{CsrfExt, ProtectedForm},
@@ -48,7 +48,7 @@ impl From<OAuth2AccessError> for RouteError {
 }
 
 impl_from_error_for_route!(pasion_templates::TemplateError);
-impl_from_error_for_route!(pasion_storage::RepositoryError);
+impl_from_error_for_route!(pasion_data::RepositoryError);
 impl_from_error_for_route!(crate::handlers::session::SessionLoadError);
 impl_from_error_for_route!(crate::handlers::rest::RouteError);
 impl_from_error_for_route!(super::callback::CallbackDestinationError);

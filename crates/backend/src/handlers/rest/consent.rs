@@ -88,7 +88,7 @@ pub struct DeviceConsentPostResponse {
     pub status: &'static str,
 }
 
-fn client_info(client: &pasion_data_model::Client) -> ClientInfo {
+fn client_info(client: &pasion_data::Client) -> ClientInfo {
     ClientInfo {
         id: client.id.to_string(),
         client_id: client.client_id.clone(),
@@ -127,11 +127,11 @@ fn map_oauth2_access_error(error: OAuth2AccessError) -> RouteError {
 /// unauthenticated response has already been written to `res`.
 async fn require_authenticated_session(
     session_info: &crate::salvo_utils::SessionInfo,
-    repo: &mut pasion_storage::BoxRepository,
+    repo: &mut pasion_data::BoxRepository,
     activity_tracker: &crate::handlers::BoundActivityTracker,
-    clock: &dyn pasion_data_model::Clock,
+    clock: &dyn pasion_data::Clock,
     res: &mut Response,
-) -> Result<Option<pasion_data_model::BrowserSession>, RouteError> {
+) -> Result<Option<pasion_data::BrowserSession>, RouteError> {
     let maybe_session = session_info.load_active_session(repo).await?;
 
     let Some(session) = maybe_session else {
@@ -255,9 +255,7 @@ pub async fn oauth2_consent_post(
         .record_oauth2_session(&clock, &decision.session)
         .await;
 
-    let redirect_url = decision
-        .redirect_url()
-        .map_err(map_oauth2_access_error)?;
+    let redirect_url = decision.redirect_url().map_err(map_oauth2_access_error)?;
 
     res.render(Json(ConsentPostResponse {
         status: "success",

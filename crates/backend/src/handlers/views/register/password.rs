@@ -1,13 +1,13 @@
 use std::sync::Arc;
 
-use pasion_data_model::CaptchaConfig;
+use pasion_data::CaptchaConfig;
 use pasion_i18n::DataLocale;
 use crate::salvo_utils::{
     InternalError, SessionInfoExt,
     cookies::CookieJar,
     csrf::{CsrfExt, CsrfToken, ProtectedForm},
 };
-use pasion_storage::RepositoryAccess;
+use pasion_data::RepositoryAccess;
 use pasion_templates::{
     FieldError, FormError, FormState, PasswordRegisterContext, RegisterFormField, TemplateContext,
     Templates, ToFormState,
@@ -16,7 +16,7 @@ use salvo::{prelude::*, writing::Text};
 use serde::{Deserialize, Serialize};
 
 use super::cookie::UserRegistrationSessions;
-use pasion_data_model::SiteConfig;
+use pasion_data::SiteConfig;
 
 use crate::handlers::{
     RequesterFingerprint,
@@ -407,7 +407,7 @@ mod tests {
         header::{CONTENT_TYPE, LOCATION},
     };
 
-    use pasion_data_model::SiteConfig;
+    use pasion_data::SiteConfig;
 
     use crate::handlers::rest::DepotExt;
     use crate::handlers::test_utils::{
@@ -417,7 +417,7 @@ mod tests {
     #[tokio::test]
     async fn test_password_disabled() {
         setup();
-        let pool = pasion_storage_pg::test_utils::setup_test_pool().await;
+        let pool = pasion_data::test_utils::setup_test_pool().await;
         let state = TestState::from_pool_with_site_config(
             pool.clone(),
             SiteConfig {
@@ -451,7 +451,7 @@ mod tests {
     #[tokio::test]
     async fn test_register() {
         setup();
-        let pool = pasion_storage_pg::test_utils::setup_test_pool().await;
+        let pool = pasion_data::test_utils::setup_test_pool().await;
         let state = TestState::from_pool(pool.clone()).await.unwrap();
         let cookies = CookieHelper::new();
 
@@ -518,7 +518,7 @@ mod tests {
     #[tokio::test]
     async fn test_register_password_mismatch() {
         setup();
-        let pool = pasion_storage_pg::test_utils::setup_test_pool().await;
+        let pool = pasion_data::test_utils::setup_test_pool().await;
         let state = TestState::from_pool(pool.clone()).await.unwrap();
         let cookies = CookieHelper::new();
 
@@ -560,7 +560,7 @@ mod tests {
     #[tokio::test]
     async fn test_register_username_too_long() {
         setup();
-        let pool = pasion_storage_pg::test_utils::setup_test_pool().await;
+        let pool = pasion_data::test_utils::setup_test_pool().await;
         let state = TestState::from_pool(pool.clone()).await.unwrap();
         let cookies = CookieHelper::new();
 
@@ -607,7 +607,7 @@ mod tests {
     #[tokio::test]
     async fn test_register_user_exists() {
         setup();
-        let pool = pasion_storage_pg::test_utils::setup_test_pool().await;
+        let pool = pasion_data::test_utils::setup_test_pool().await;
         let state = TestState::from_pool(pool.clone()).await.unwrap();
         let mut rng = state.rng();
         let cookies = CookieHelper::new();
@@ -660,7 +660,7 @@ mod tests {
     #[tokio::test]
     async fn test_register_user_reserved() {
         setup();
-        let pool = pasion_storage_pg::test_utils::setup_test_pool().await;
+        let pool = pasion_data::test_utils::setup_test_pool().await;
         let state = TestState::from_pool(pool.clone()).await.unwrap();
         let cookies = CookieHelper::new();
 
@@ -706,7 +706,7 @@ mod tests {
     #[tokio::test]
     async fn test_register_without_email_when_not_required() {
         setup();
-        let pool = pasion_storage_pg::test_utils::setup_test_pool().await;
+        let pool = pasion_data::test_utils::setup_test_pool().await;
         let state = TestState::from_pool_with_site_config(
             pool.clone(),
             SiteConfig {
@@ -776,7 +776,7 @@ mod tests {
     #[tokio::test]
     async fn test_register_with_email_when_not_required() {
         setup();
-        let pool = pasion_storage_pg::test_utils::setup_test_pool().await;
+        let pool = pasion_data::test_utils::setup_test_pool().await;
         let state = TestState::from_pool_with_site_config(
             pool.clone(),
             SiteConfig {
@@ -847,7 +847,7 @@ mod tests {
     #[tokio::test]
     async fn test_register_fails_without_email_when_required() {
         setup();
-        let pool = pasion_storage_pg::test_utils::setup_test_pool().await;
+        let pool = pasion_data::test_utils::setup_test_pool().await;
         let state = TestState::from_pool_with_site_config(
             pool.clone(),
             SiteConfig {
@@ -906,7 +906,7 @@ mod tests {
     #[tokio::test]
     async fn test_register_fails_with_empty_email_when_required() {
         setup();
-        let pool = pasion_storage_pg::test_utils::setup_test_pool().await;
+        let pool = pasion_data::test_utils::setup_test_pool().await;
         let state = TestState::from_pool_with_site_config(
             pool.clone(),
             SiteConfig {
@@ -966,7 +966,7 @@ mod tests {
     #[tokio::test]
     async fn test_register_fails_with_invalid_email_when_required() {
         setup();
-        let pool = pasion_storage_pg::test_utils::setup_test_pool().await;
+        let pool = pasion_data::test_utils::setup_test_pool().await;
         let state = TestState::from_pool_with_site_config(
             pool.clone(),
             SiteConfig {

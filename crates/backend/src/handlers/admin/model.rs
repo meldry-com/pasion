@@ -1,7 +1,7 @@
 use std::net::IpAddr;
 
 use chrono::{DateTime, Utc};
-use pasion_data_model::personal::{
+use pasion_data::personal::{
     PersonalAccessToken as DataModelPersonalAccessToken,
     session::{PersonalSession as DataModelPersonalSession, PersonalSessionOwner},
 };
@@ -114,8 +114,8 @@ impl User {
     }
 }
 
-impl From<pasion_data_model::User> for User {
-    fn from(user: pasion_data_model::User) -> Self {
+impl From<pasion_data::User> for User {
+    fn from(user: pasion_data::User) -> Self {
         Self {
             id: user.id,
             username: user.username,
@@ -176,8 +176,8 @@ impl Resource for UserEmail {
     }
 }
 
-impl From<pasion_data_model::UserEmail> for UserEmail {
-    fn from(value: pasion_data_model::UserEmail) -> Self {
+impl From<pasion_data::UserEmail> for UserEmail {
+    fn from(value: pasion_data::UserEmail) -> Self {
         Self {
             id: value.id,
             created_at: value.created_at,
@@ -244,8 +244,8 @@ pub struct OAuth2Session {
     human_name: Option<String>,
 }
 
-impl From<pasion_data_model::Session> for OAuth2Session {
-    fn from(session: pasion_data_model::Session) -> Self {
+impl From<pasion_data::Session> for OAuth2Session {
+    fn from(session: pasion_data::Session) -> Self {
         Self {
             id: session.id,
             created_at: session.created_at,
@@ -344,8 +344,8 @@ pub struct UserSession {
     last_active_ip: Option<IpAddr>,
 }
 
-impl From<pasion_data_model::BrowserSession> for UserSession {
-    fn from(value: pasion_data_model::BrowserSession) -> Self {
+impl From<pasion_data::BrowserSession> for UserSession {
+    fn from(value: pasion_data::BrowserSession) -> Self {
         Self {
             id: value.id,
             created_at: value.created_at,
@@ -438,8 +438,8 @@ impl Resource for UpstreamOAuthLink {
     }
 }
 
-impl From<pasion_data_model::UpstreamOAuthLink> for UpstreamOAuthLink {
-    fn from(value: pasion_data_model::UpstreamOAuthLink) -> Self {
+impl From<pasion_data::UpstreamOAuthLink> for UpstreamOAuthLink {
+    fn from(value: pasion_data::UpstreamOAuthLink) -> Self {
         Self {
             id: value.id,
             created_at: value.created_at,
@@ -500,8 +500,8 @@ pub struct PolicyData {
     data: serde_json::Value,
 }
 
-impl From<pasion_data_model::PolicyData> for PolicyData {
-    fn from(policy_data: pasion_data_model::PolicyData) -> Self {
+impl From<pasion_data::PolicyData> for PolicyData {
+    fn from(policy_data: pasion_data::PolicyData) -> Self {
         Self {
             id: policy_data.id,
             created_at: policy_data.created_at,
@@ -566,7 +566,7 @@ pub struct UserRegistrationToken {
 }
 
 impl UserRegistrationToken {
-    pub fn new(token: pasion_data_model::UserRegistrationToken, now: DateTime<Utc>) -> Self {
+    pub fn new(token: pasion_data::UserRegistrationToken, now: DateTime<Utc>) -> Self {
         Self {
             id: token.id,
             valid: token.is_valid(now),
@@ -642,8 +642,8 @@ pub struct UpstreamOAuthProvider {
     disabled_at: Option<DateTime<Utc>>,
 }
 
-impl From<pasion_data_model::UpstreamOAuthProvider> for UpstreamOAuthProvider {
-    fn from(provider: pasion_data_model::UpstreamOAuthProvider) -> Self {
+impl From<pasion_data::UpstreamOAuthProvider> for UpstreamOAuthProvider {
+    fn from(provider: pasion_data::UpstreamOAuthProvider) -> Self {
         Self {
             id: provider.id,
             issuer: provider.issuer,

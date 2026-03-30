@@ -24,11 +24,11 @@
 //! ```
 
 use chrono::Utc;
-use pasion_data_model::flow::{
+use pasion_data::flow::{
     AuthenticatorType, FlowDefinition, FlowDesignation, FlowStageBinding, IdentificationField,
     PromptField, StageKind,
 };
-use pasion_data_model::new_id;
+use pasion_data::new_id;
 use serde::Deserialize;
 
 /// A declarative flow definition file that can be parsed from YAML (or JSON).
@@ -234,10 +234,7 @@ impl StageDefinition {
             Self::AuthenticatorValidate {
                 order,
                 allowed_types,
-            } => (
-                StageKind::AuthenticatorValidate { allowed_types },
-                order,
-            ),
+            } => (StageKind::AuthenticatorValidate { allowed_types }, order),
         }
     }
 }
@@ -245,7 +242,7 @@ impl StageDefinition {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use pasion_data_model::flow::FlowDesignation;
+    use pasion_data::flow::FlowDesignation;
     use rand::SeedableRng;
 
     fn test_rng() -> rand_chacha::ChaCha8Rng {

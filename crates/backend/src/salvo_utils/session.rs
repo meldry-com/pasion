@@ -1,5 +1,5 @@
-use pasion_data_model::BrowserSession;
-use pasion_storage::RepositoryAccess;
+use pasion_data::BrowserSession;
+use pasion_data::RepositoryAccess;
 use serde::{Deserialize, Serialize};
 use ulid::Ulid;
 
