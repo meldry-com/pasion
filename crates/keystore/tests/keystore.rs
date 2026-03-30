@@ -1,7 +1,7 @@
 use der::pem::LineEnding;
 use pasion_iana::jose::JsonWebSignatureAlg;
 use pasion_jose::{
-    jwk::ParametersInfo,
+    jwk::{ParametersInfo, Thumbprint},
     jwt::{JsonWebSignatureHeader, Jwt},
 };
 use pasion_keystore::{JsonWebKey, JsonWebKeySet, Keystore, PrivateKey};
@@ -123,6 +123,62 @@ der_test!(serialize_ec_p384_sec1_der, "ec-p384.sec1");
 pem_test!(serialize_ec_k256_sec1_pem, "ec-k256.sec1");
 der_test!(serialize_ec_k256_sec1_der, "ec-k256.sec1");
 
+fn exercise_generated_key(key: &PrivateKey) {
+    let algs = key.possible_algs();
+    assert_ne!(algs.len(), 0);
+
+    for alg in algs {
+        let header = JsonWebSignatureHeader::new(alg.clone());
+        let payload = "hello";
+        let signer = key.signing_key_for_alg(alg).unwrap();
+        let jwt = Jwt::sign(header, payload, &signer).unwrap();
+        let verifier = key.verifying_key_for_alg(alg).unwrap();
+        jwt.verify(&verifier).unwrap();
+    }
+}
+
+#[test]
+fn generated_ec_p521_roundtrip_sign_and_verify() {
+    let mut rng = rand_chacha::ChaCha8Rng::seed_from_u64(7);
+    let key = PrivateKey::generate_ec_p521(&mut rng);
+
+    let pem = key.to_pem(pem_rfc7468::LineEnding::LF).unwrap();
+    let loaded_pem = PrivateKey::load_pem(&pem).unwrap();
+    assert!(matches!(loaded_pem, PrivateKey::EcP521(_)));
+    exercise_generated_key(&loaded_pem);
+
+    let der = key.to_der().unwrap();
+    let loaded_der = PrivateKey::load_der(&der).unwrap();
+    assert!(matches!(loaded_der, PrivateKey::EcP521(_)));
+    exercise_generated_key(&loaded_der);
+
+    let pkcs8 = key.to_pkcs8_der().unwrap();
+    let loaded_pkcs8 = PrivateKey::load_der(&pkcs8).unwrap();
+    assert!(matches!(loaded_pkcs8, PrivateKey::EcP521(_)));
+    exercise_generated_key(&loaded_pkcs8);
+}
+
+#[test]
+fn generated_ed25519_roundtrip_sign_and_verify() {
+    let mut rng = rand_chacha::ChaCha8Rng::seed_from_u64(8);
+    let key = PrivateKey::generate_ed25519(&mut rng);
+
+    let pem = key.to_pem(pem_rfc7468::LineEnding::LF).unwrap();
+    let loaded_pem = PrivateKey::load_pem(&pem).unwrap();
+    assert!(matches!(loaded_pem, PrivateKey::OkpEd25519(_)));
+    exercise_generated_key(&loaded_pem);
+
+    let der = key.to_der().unwrap();
+    let loaded_der = PrivateKey::load_der(&der).unwrap();
+    assert!(matches!(loaded_der, PrivateKey::OkpEd25519(_)));
+    exercise_generated_key(&loaded_der);
+
+    let pkcs8 = key.to_pkcs8_der().unwrap();
+    let loaded_pkcs8 = PrivateKey::load_der(&pkcs8).unwrap();
+    assert!(matches!(loaded_pkcs8, PrivateKey::OkpEd25519(_)));
+    exercise_generated_key(&loaded_pkcs8);
+}
+
 #[test]
 fn load_encrypted_as_unencrypted_error() {
     let pem = include_str!("./keys/rsa.pkcs8.encrypted.pem");
@@ -167,12 +223,19 @@ fn generate_sign_and_verify() {
     let ec_k256 = PrivateKey::generate_ec_k256(&mut rng);
     insta::assert_snapshot!(&*ec_k256.to_pem(LineEnding::LF).unwrap());
 
+    // Keep the existing RNG sequence stable for legacy snapshots.
+    let mut extra_rng = rand_chacha::ChaCha8Rng::seed_from_u64(1337);
+    let ec_p521 = PrivateKey::generate_ec_p521(&mut extra_rng);
+    let ed25519 = PrivateKey::generate_ed25519(&mut extra_rng);
+
     // Create a keystore out of the keys
     let keyset = Keystore::new(JsonWebKeySet::new(vec![
         JsonWebKey::new(rsa),
         JsonWebKey::new(ec_p256),
         JsonWebKey::new(ec_p384),
+        JsonWebKey::new(ec_p521),
         JsonWebKey::new(ec_k256),
+        JsonWebKey::new(ed25519),
     ]));
 
     // And extract the public JWKS
@@ -190,6 +253,8 @@ fn generate_sign_and_verify() {
         JsonWebSignatureAlg::Es256,
         JsonWebSignatureAlg::Es384,
         JsonWebSignatureAlg::Es256K,
+        JsonWebSignatureAlg::Es512,
+        JsonWebSignatureAlg::EdDsa,
     ] {
         // Find a matching key and sign with it
         let key = keyset.signing_key_for_algorithm(&alg).unwrap();
@@ -200,5 +265,21 @@ fn generate_sign_and_verify() {
 
         // Then try to verify from the public JWKS
         token.verify_with_jwks(&jwks).unwrap();
+    }
+}
+
+#[test]
+fn generated_private_key_thumbprints_match_public_jwks() {
+    let mut rng = rand_chacha::ChaCha8Rng::seed_from_u64(2026);
+
+    for private_key in [
+        PrivateKey::generate_ec_p521(&mut rng),
+        PrivateKey::generate_ed25519(&mut rng),
+    ] {
+        let expected_thumbprint = private_key.thumbprint_sha256_base64();
+        let jwks = Keystore::new(JsonWebKeySet::new(vec![JsonWebKey::new(private_key)])).public_jwks();
+
+        assert_eq!(jwks.len(), 1);
+        assert_eq!(jwks[0].thumbprint_sha256_base64(), expected_thumbprint);
     }
 }

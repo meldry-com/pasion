@@ -5,7 +5,9 @@ use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
-use super::{ParametersInfo, public_parameters::JsonWebKeyPublicParameters};
+use super::{
+    ParametersInfo, public_parameters::JsonWebKeyPublicParameters,
+};
 use crate::base64::Base64UrlNoPad;
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
@@ -330,10 +332,13 @@ mod ec_impls {
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 pub struct OkpPrivateParameters {
-    crv: JsonWebKeyOkpEllipticCurve,
+    pub(crate) crv: JsonWebKeyOkpEllipticCurve,
 
     #[schemars(with = "String")]
     x: Base64UrlNoPad,
+
+    #[schemars(with = "String")]
+    d: Base64UrlNoPad,
 }
 
 impl ParametersInfo for OkpPrivateParameters {
@@ -349,5 +354,146 @@ impl ParametersInfo for OkpPrivateParameters {
 impl From<OkpPrivateParameters> for super::public_parameters::OkpPublicParameters {
     fn from(params: OkpPrivateParameters) -> Self {
         Self::new(params.crv, params.x)
+    }
+}
+
+mod okp_impls {
+    use ed25519_dalek::SigningKey;
+    use pasion_iana::jose::JsonWebKeyOkpEllipticCurve;
+
+    use super::OkpPrivateParameters;
+    use crate::{base64::Base64UrlNoPad, jwk::InvalidOkpParameters};
+
+    impl TryFrom<OkpPrivateParameters> for SigningKey {
+        type Error = InvalidOkpParameters;
+
+        fn try_from(value: OkpPrivateParameters) -> Result<Self, Self::Error> {
+            Self::try_from(&value)
+        }
+    }
+
+    impl TryFrom<&OkpPrivateParameters> for SigningKey {
+        type Error = InvalidOkpParameters;
+
+        fn try_from(value: &OkpPrivateParameters) -> Result<Self, Self::Error> {
+            if value.crv != JsonWebKeyOkpEllipticCurve::Ed25519 {
+                return Err(InvalidOkpParameters);
+            }
+
+            let bytes = value
+                .d
+                .as_bytes()
+                .try_into()
+                .map_err(|_| InvalidOkpParameters)?;
+
+            let key = SigningKey::from_bytes(&bytes);
+
+            if key.verifying_key().to_bytes().as_slice() != value.x.as_bytes() {
+                return Err(InvalidOkpParameters);
+            }
+
+            Ok(key)
+        }
+    }
+
+    impl From<SigningKey> for OkpPrivateParameters {
+        fn from(key: SigningKey) -> Self {
+            Self::from(&key)
+        }
+    }
+
+    impl From<&SigningKey> for OkpPrivateParameters {
+        fn from(key: &SigningKey) -> Self {
+            Self {
+                crv: JsonWebKeyOkpEllipticCurve::Ed25519,
+                x: Base64UrlNoPad::new(key.verifying_key().to_bytes().to_vec()),
+                d: Base64UrlNoPad::new(key.to_bytes().to_vec()),
+            }
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use ed25519_dalek::SigningKey;
+
+    use super::*;
+    use crate::jwk::{PrivateJsonWebKeySet, public_parameters::{EcPublicParameters, OkpPublicParameters}};
+
+    fn load_private_keys() -> PrivateJsonWebKeySet {
+        serde_json::from_str(include_str!("../../tests/keys/jwks.priv.json")).unwrap()
+    }
+
+    #[test]
+    fn p521_private_jwk_roundtrip() {
+        let jwks = load_private_keys();
+        let params = jwks
+            .iter()
+            .find_map(|key| match key.params() {
+                JsonWebKeyPrivateParameters::Ec(params)
+                    if params.crv == JsonWebKeyEcEllipticCurve::P521 =>
+                {
+                    Some(params.clone())
+                }
+                _ => None,
+            })
+            .unwrap();
+
+        let key: elliptic_curve::SecretKey<p521::NistP521> = (&params).try_into().unwrap();
+
+        assert_eq!(EcPrivateParameters::from(&key), params);
+        assert_eq!(EcPublicParameters::from(&key.public_key()), params.clone().into());
+    }
+
+    #[test]
+    fn okp_private_and_public_jwk_roundtrip() {
+        let jwks = load_private_keys();
+        let params = jwks
+            .iter()
+            .find_map(|key| match key.params() {
+                JsonWebKeyPrivateParameters::Okp(params)
+                    if params.crv == JsonWebKeyOkpEllipticCurve::Ed25519 =>
+                {
+                    Some(params.clone())
+                }
+                _ => None,
+            })
+            .unwrap();
+
+        let key: SigningKey = (&params).try_into().unwrap();
+
+        assert_eq!(OkpPrivateParameters::from(&key), params);
+        assert_eq!(
+            OkpPublicParameters::from(&key.verifying_key()),
+            params.clone().into()
+        );
+    }
+
+    #[test]
+    fn okp_private_jwk_rejects_mismatched_public_component() {
+        let jwks = load_private_keys();
+        let params = jwks
+            .iter()
+            .find_map(|key| match key.params() {
+                JsonWebKeyPrivateParameters::Okp(params)
+                    if params.crv == JsonWebKeyOkpEllipticCurve::Ed25519 =>
+                {
+                    Some(params.clone())
+                }
+                _ => None,
+            })
+            .unwrap();
+
+        let mut value = serde_json::to_value(&params).unwrap();
+        let mut x = value["x"].as_str().unwrap().to_owned();
+        let replacement = if x.starts_with('A') { "B" } else { "A" };
+        x.replace_range(..1, replacement);
+        value["x"] = serde_json::Value::String(x);
+        let broken: OkpPrivateParameters = serde_json::from_value(value).unwrap();
+
+        assert!(matches!(
+            SigningKey::try_from(&broken),
+            Err(crate::jwk::InvalidOkpParameters)
+        ));
     }
 }

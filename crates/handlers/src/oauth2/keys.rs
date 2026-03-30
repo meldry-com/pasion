@@ -11,3 +11,40 @@ pub async fn get(depot: &Depot) -> Json<PublicJsonWebKeySet> {
     let jwks = key_store.public_jwks();
     Json(jwks)
 }
+
+#[cfg(test)]
+mod tests {
+    use pasion_keystore::{JsonWebKey, JsonWebKeySet, PrivateKey};
+    use rand::SeedableRng;
+    use rand_chacha::ChaChaRng;
+
+    use super::*;
+
+    fn test_depot() -> Depot {
+        let mut rng = ChaChaRng::seed_from_u64(42);
+        let es512 = JsonWebKey::new(PrivateKey::generate_ec_p521(&mut rng)).with_kid("test-es512");
+        let eddsa = JsonWebKey::new(PrivateKey::generate_ed25519(&mut rng)).with_kid("test-eddsa");
+        let keystore = Keystore::new(JsonWebKeySet::new(vec![es512, eddsa]));
+
+        let mut depot = Depot::new();
+        depot.insert("keystore", keystore);
+        depot
+    }
+
+    #[tokio::test]
+    async fn jwks_exposes_p521_and_ed25519_public_keys() {
+        crate::test_utils::setup();
+
+        let Json(jwks) = get(&test_depot()).await;
+        let body = serde_json::to_value(jwks).unwrap();
+        let keys = body["keys"].as_array().unwrap();
+
+        assert!(keys.iter().any(|key| {
+            key["kty"].as_str() == Some("EC") && key["crv"].as_str() == Some("P-521")
+        }));
+        assert!(keys.iter().any(|key| {
+            key["kty"].as_str() == Some("OKP")
+                && key["crv"].as_str() == Some("Ed25519")
+        }));
+    }
+}

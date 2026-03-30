@@ -147,7 +147,7 @@ impl ParametersInfo for EcPublicParameters {
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 pub struct OkpPublicParameters {
-    crv: JsonWebKeyOkpEllipticCurve,
+    pub(crate) crv: JsonWebKeyOkpEllipticCurve,
 
     #[schemars(with = "String")]
     x: Base64UrlNoPad,
@@ -306,6 +306,67 @@ mod ec_impls {
                 crv: C::CRV,
                 x: Base64UrlNoPad::new(x.to_vec()),
                 y: Base64UrlNoPad::new(y.to_vec()),
+            }
+        }
+    }
+}
+
+mod okp_impls {
+    use ed25519_dalek::VerifyingKey;
+    use pasion_iana::jose::JsonWebKeyOkpEllipticCurve;
+
+    use super::{JsonWebKeyPublicParameters, OkpPublicParameters};
+    use crate::{base64::Base64UrlNoPad, jwk::InvalidOkpParameters};
+
+    impl TryFrom<OkpPublicParameters> for VerifyingKey {
+        type Error = InvalidOkpParameters;
+
+        fn try_from(value: OkpPublicParameters) -> Result<Self, Self::Error> {
+            Self::try_from(&value)
+        }
+    }
+
+    impl TryFrom<&OkpPublicParameters> for VerifyingKey {
+        type Error = InvalidOkpParameters;
+
+        fn try_from(value: &OkpPublicParameters) -> Result<Self, Self::Error> {
+            if value.crv != JsonWebKeyOkpEllipticCurve::Ed25519 {
+                return Err(InvalidOkpParameters);
+            }
+
+            let bytes = value
+                .x
+                .as_bytes()
+                .try_into()
+                .map_err(|_| InvalidOkpParameters)?;
+
+            VerifyingKey::from_bytes(&bytes).map_err(|_| InvalidOkpParameters)
+        }
+    }
+
+    impl From<VerifyingKey> for JsonWebKeyPublicParameters {
+        fn from(key: VerifyingKey) -> Self {
+            Self::from(&key)
+        }
+    }
+
+    impl From<&VerifyingKey> for JsonWebKeyPublicParameters {
+        fn from(key: &VerifyingKey) -> Self {
+            Self::Okp(key.into())
+        }
+    }
+
+    impl From<VerifyingKey> for OkpPublicParameters {
+        fn from(key: VerifyingKey) -> Self {
+            Self::from(&key)
+        }
+    }
+
+    impl From<&VerifyingKey> for OkpPublicParameters {
+        fn from(key: &VerifyingKey) -> Self {
+            Self {
+                crv: JsonWebKeyOkpEllipticCurve::Ed25519,
+                x: Base64UrlNoPad::new(key.to_bytes().to_vec()),
             }
         }
     }

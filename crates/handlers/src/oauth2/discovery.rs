@@ -193,5 +193,56 @@ pub async fn get(depot: &Depot) -> Json<DiscoveryResponse> {
 
 #[cfg(test)]
 mod tests {
-    // Tests would need to be updated for Salvo's test utilities
+    use pasion_keystore::{JsonWebKey, JsonWebKeySet, PrivateKey};
+    use pasion_router::UrlBuilder;
+    use rand::SeedableRng;
+    use rand_chacha::ChaChaRng;
+
+    use super::*;
+
+    fn test_keystore() -> Keystore {
+        let mut rng = ChaChaRng::seed_from_u64(42);
+        let es512 = JsonWebKey::new(PrivateKey::generate_ec_p521(&mut rng)).with_kid("test-es512");
+        let eddsa = JsonWebKey::new(PrivateKey::generate_ed25519(&mut rng)).with_kid("test-eddsa");
+        Keystore::new(JsonWebKeySet::new(vec![es512, eddsa]))
+    }
+
+    fn test_depot() -> Depot {
+        let mut depot = Depot::new();
+        depot.insert("keystore", test_keystore());
+        depot.insert(
+            "url_builder",
+            UrlBuilder::new("https://example.com/".parse().unwrap(), None, None),
+        );
+        depot.insert("site_config", crate::test_utils::test_site_config());
+        depot
+    }
+
+    #[tokio::test]
+    async fn discovery_reports_extended_signing_algorithms() {
+        crate::test_utils::setup();
+
+        let Json(response) = get(&test_depot()).await;
+        let body = serde_json::to_value(response).unwrap();
+
+        let id_token_algs: Vec<_> = body["id_token_signing_alg_values_supported"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .filter_map(serde_json::Value::as_str)
+            .collect();
+        assert_eq!(id_token_algs.len(), 2);
+        assert!(id_token_algs.contains(&"ES512"));
+        assert!(id_token_algs.contains(&"EdDSA"));
+
+        let userinfo_algs: Vec<_> = body["userinfo_signing_alg_values_supported"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .filter_map(serde_json::Value::as_str)
+            .collect();
+        assert_eq!(userinfo_algs.len(), 2);
+        assert!(userinfo_algs.contains(&"ES512"));
+        assert!(userinfo_algs.contains(&"EdDSA"));
+    }
 }

@@ -308,7 +308,10 @@ pub fn hash_token(alg: &JsonWebSignatureAlg, token: &str) -> Result<String, Toke
         JsonWebSignatureAlg::Hs512
         | JsonWebSignatureAlg::Rs512
         | JsonWebSignatureAlg::Es512
-        | JsonWebSignatureAlg::Ps512 => {
+        | JsonWebSignatureAlg::Ps512
+        // The workspace currently only emits EdDSA with Ed25519 keys.
+        | JsonWebSignatureAlg::EdDsa
+        | JsonWebSignatureAlg::Ed25519 => {
             let mut hasher = Sha512::new();
             hasher.update(token);
             let hash: [u8; 64] = hasher.finalize().into();
@@ -547,7 +550,9 @@ pub use self::{oidc_core::*, oidc_frontchannel::*, rfc7519::*};
 
 #[cfg(test)]
 mod tests {
+    use base64ct::{Base64UrlUnpadded, Encoding};
     use chrono::TimeZone;
+    use sha2::{Digest, Sha512};
 
     use super::*;
 
@@ -588,6 +593,26 @@ mod tests {
         assert_eq!(
             serde_json::to_value(&many).unwrap(),
             serde_json::json!(["one", "two"])
+        );
+    }
+
+    #[test]
+    fn token_hash_supports_ed25519_variants() {
+        let token = "access-token-value";
+        let expected = {
+            let mut hasher = Sha512::new();
+            hasher.update(token);
+            let hash: [u8; 64] = hasher.finalize().into();
+            Base64UrlUnpadded::encode_string(&hash[..32])
+        };
+
+        assert_eq!(
+            hash_token(&JsonWebSignatureAlg::EdDsa, token).unwrap(),
+            expected
+        );
+        assert_eq!(
+            hash_token(&JsonWebSignatureAlg::Ed25519, token).unwrap(),
+            expected
         );
     }
 

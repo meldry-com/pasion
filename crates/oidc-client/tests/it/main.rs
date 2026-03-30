@@ -59,6 +59,8 @@ fn keystore(alg: &JsonWebSignatureAlg) -> Keystore {
         | JsonWebSignatureAlg::Ps512 => PrivateKey::generate_rsa(&mut rng).unwrap(),
         JsonWebSignatureAlg::Es256 => PrivateKey::generate_ec_p256(&mut rng),
         JsonWebSignatureAlg::Es384 => PrivateKey::generate_ec_p384(&mut rng),
+        JsonWebSignatureAlg::Es512 => PrivateKey::generate_ec_p521(&mut rng),
+        JsonWebSignatureAlg::EdDsa => PrivateKey::generate_ed25519(&mut rng),
         _ => unimplemented!(),
     };
 

@@ -12,7 +12,7 @@ use pasion_jose::{
 };
 use pem_rfc7468::PemLabel;
 use pkcs1::EncodeRsaPrivateKey;
-use pkcs8::{AssociatedOid, PrivateKeyInfo};
+use pkcs8::{AssociatedOid, DecodePrivateKey, PrivateKeyInfo};
 use rand::{CryptoRng, RngCore};
 use rsa::BigUint;
 use thiserror::Error;
@@ -118,13 +118,18 @@ pub enum PrivateKey {
     Rsa(Box<rsa::RsaPrivateKey>),
     EcP256(Box<elliptic_curve::SecretKey<p256::NistP256>>),
     EcP384(Box<elliptic_curve::SecretKey<p384::NistP384>>),
+    EcP521(Box<elliptic_curve::SecretKey<p521::NistP521>>),
     EcK256(Box<elliptic_curve::SecretKey<k256::Secp256k1>>),
+    OkpEd25519(Box<ed25519_dalek::SigningKey>),
 }
 
 /// Error returned when the key can't be used for the requested algorithm
 #[derive(Debug, Error)]
 #[error("Wrong algorithm for key")]
 pub struct WrongAlgorithmError;
+
+const ED25519_OID: const_oid::ObjectIdentifier =
+    const_oid::ObjectIdentifier::new_unwrap("1.3.101.112");
 
 impl PrivateKey {
     fn from_pkcs1_private_key(pkcs1_key: &pkcs1::RsaPrivateKey) -> Result<Self, LoadError> {
@@ -151,9 +156,15 @@ impl PrivateKey {
             elliptic_curve::ALGORITHM_OID => match info.algorithm.parameters_oid()? {
                 p256::NistP256::OID => Ok(Self::EcP256(Box::new(info.try_into()?))),
                 p384::NistP384::OID => Ok(Self::EcP384(Box::new(info.try_into()?))),
+                p521::NistP521::OID => Ok(Self::EcP521(Box::new(info.try_into()?))),
                 k256::Secp256k1::OID => Ok(Self::EcK256(Box::new(info.try_into()?))),
                 oid => Err(LoadError::UnknownEllipticCurveOid { oid }),
             },
+            ED25519_OID => {
+                let der = info.to_der()?;
+                let key = ed25519_dalek::SigningKey::from_pkcs8_der(der.as_slice())?;
+                Ok(Self::OkpEd25519(Box::new(key)))
+            }
             oid => Err(LoadError::UnknownAlgorithmOid { oid }),
         }
     }
@@ -168,6 +179,7 @@ impl PrivateKey {
         match curve {
             p256::NistP256::OID => Ok(Self::EcP256(Box::new(key.try_into()?))),
             p384::NistP384::OID => Ok(Self::EcP384(Box::new(key.try_into()?))),
+            p521::NistP521::OID => Ok(Self::EcP521(Box::new(key.try_into()?))),
             k256::Secp256k1::OID => Ok(Self::EcK256(Box::new(key.try_into()?))),
             oid => Err(LoadError::UnknownEllipticCurveOid { oid }),
         }
@@ -176,7 +188,8 @@ impl PrivateKey {
     /// Serialize the key as a DER document
     ///
     /// It will use the most common format depending on the key type: PKCS1 for
-    /// RSA keys and SEC1 for elliptic curve keys
+    /// RSA keys, SEC1 for NIST/secp256k1 elliptic curve keys and PKCS8 for
+    /// OKP keys.
     ///
     /// # Errors
     ///
@@ -186,7 +199,9 @@ impl PrivateKey {
             PrivateKey::Rsa(key) => key.to_pkcs1_der()?.to_bytes(),
             PrivateKey::EcP256(key) => to_sec1_der(key)?,
             PrivateKey::EcP384(key) => to_sec1_der(key)?,
+            PrivateKey::EcP521(key) => to_sec1_der(key)?,
             PrivateKey::EcK256(key) => to_sec1_der(key)?,
+            PrivateKey::OkpEd25519(key) => key.to_pkcs8_der()?.to_bytes(),
         };
 
         Ok(der)
@@ -202,7 +217,9 @@ impl PrivateKey {
             PrivateKey::Rsa(key) => key.to_pkcs8_der()?,
             PrivateKey::EcP256(key) => key.to_pkcs8_der()?,
             PrivateKey::EcP384(key) => key.to_pkcs8_der()?,
+            PrivateKey::EcP521(key) => key.to_pkcs8_der()?,
             PrivateKey::EcK256(key) => key.to_pkcs8_der()?,
+            PrivateKey::OkpEd25519(key) => key.to_pkcs8_der()?,
         };
 
         Ok(der.to_bytes())
@@ -211,7 +228,8 @@ impl PrivateKey {
     /// Serialize the key as a PEM document
     ///
     /// It will use the most common format depending on the key type: PKCS1 for
-    /// RSA keys and SEC1 for elliptic curve keys
+    /// RSA keys, SEC1 for NIST/secp256k1 elliptic curve keys and PKCS8 for
+    /// OKP keys.
     ///
     /// # Errors
     ///
@@ -224,7 +242,9 @@ impl PrivateKey {
             PrivateKey::Rsa(key) => key.to_pkcs1_pem(line_ending)?,
             PrivateKey::EcP256(key) => to_sec1_pem(key, line_ending)?,
             PrivateKey::EcP384(key) => to_sec1_pem(key, line_ending)?,
+            PrivateKey::EcP521(key) => to_sec1_pem(key, line_ending)?,
             PrivateKey::EcK256(key) => to_sec1_pem(key, line_ending)?,
+            PrivateKey::OkpEd25519(key) => key.to_pkcs8_pem(line_ending)?,
         };
 
         Ok(pem)
@@ -432,8 +452,16 @@ impl PrivateKey {
                 AsymmetricVerifyingKey::es384(key.public_key())
             }
 
+            (Self::EcP521(key), JsonWebSignatureAlg::Es512) => {
+                AsymmetricVerifyingKey::es512(key.public_key())
+            }
+
             (Self::EcK256(key), JsonWebSignatureAlg::Es256K) => {
                 AsymmetricVerifyingKey::es256k(key.public_key())
+            }
+
+            (Self::OkpEd25519(key), JsonWebSignatureAlg::EdDsa) => {
+                AsymmetricVerifyingKey::eddsa(key.verifying_key())
             }
 
             _ => return Err(WrongAlgorithmError),
@@ -474,8 +502,16 @@ impl PrivateKey {
                 AsymmetricSigningKey::es384(*key.clone())
             }
 
+            (Self::EcP521(key), JsonWebSignatureAlg::Es512) => {
+                AsymmetricSigningKey::es512(*key.clone())
+            }
+
             (Self::EcK256(key), JsonWebSignatureAlg::Es256K) => {
                 AsymmetricSigningKey::es256k(*key.clone())
+            }
+
+            (Self::OkpEd25519(key), JsonWebSignatureAlg::EdDsa) => {
+                AsymmetricSigningKey::eddsa(key.as_ref().clone())
             }
 
             _ => return Err(WrongAlgorithmError),
@@ -506,10 +542,22 @@ impl PrivateKey {
         Self::EcP384(Box::new(key))
     }
 
+    /// Generate an Elliptic Curve key for the P-521 curve
+    pub fn generate_ec_p521<R: RngCore + CryptoRng>(mut rng: R) -> Self {
+        let key = elliptic_curve::SecretKey::random(&mut rng);
+        Self::EcP521(Box::new(key))
+    }
+
     /// Generate an Elliptic Curve key for the secp256k1 curve
     pub fn generate_ec_k256<R: RngCore + CryptoRng>(mut rng: R) -> Self {
         let key = elliptic_curve::SecretKey::random(&mut rng);
         Self::EcK256(Box::new(key))
+    }
+
+    /// Generate an Ed25519 key.
+    pub fn generate_ed25519<R: RngCore + CryptoRng>(mut rng: R) -> Self {
+        let key = ed25519_dalek::SigningKey::generate(&mut rng);
+        Self::OkpEd25519(Box::new(key))
     }
 }
 
@@ -561,7 +609,9 @@ impl From<&PrivateKey> for JsonWebKeyPublicParameters {
             PrivateKey::Rsa(key) => key.to_public_key().into(),
             PrivateKey::EcP256(key) => key.public_key().into(),
             PrivateKey::EcP384(key) => key.public_key().into(),
+            PrivateKey::EcP521(key) => key.public_key().into(),
             PrivateKey::EcK256(key) => key.public_key().into(),
+            PrivateKey::OkpEd25519(key) => key.verifying_key().into(),
         }
     }
 }
@@ -570,9 +620,13 @@ impl ParametersInfo for PrivateKey {
     fn kty(&self) -> JsonWebKeyType {
         match self {
             PrivateKey::Rsa(_) => JsonWebKeyType::Rsa,
-            PrivateKey::EcP256(_) | PrivateKey::EcP384(_) | PrivateKey::EcK256(_) => {
+            PrivateKey::EcP256(_)
+            | PrivateKey::EcP384(_)
+            | PrivateKey::EcP521(_)
+            | PrivateKey::EcK256(_) => {
                 JsonWebKeyType::Ec
             }
+            PrivateKey::OkpEd25519(_) => JsonWebKeyType::Okp,
         }
     }
 
@@ -588,7 +642,9 @@ impl ParametersInfo for PrivateKey {
             ],
             PrivateKey::EcP256(_) => &[JsonWebSignatureAlg::Es256],
             PrivateKey::EcP384(_) => &[JsonWebSignatureAlg::Es384],
+            PrivateKey::EcP521(_) => &[JsonWebSignatureAlg::Es512],
             PrivateKey::EcK256(_) => &[JsonWebSignatureAlg::Es256K],
+            PrivateKey::OkpEd25519(_) => &[JsonWebSignatureAlg::EdDsa],
         }
     }
 }

@@ -198,6 +198,11 @@ version = "0.15.7"
 version = "0.16.9"
 features = ["signing", "verifying"]
 
+# Ed25519 signature implementation
+[workspace.dependencies.ed25519-dalek]
+version = "2.1.1"
+features = ["rand_core", "pkcs8"]
+
 # Elliptic curve cryptography
 [workspace.dependencies.elliptic-curve]
 version = "0.13.8"
@@ -429,6 +434,11 @@ features = ["std"]
 version = "0.13.1"
 features = ["std"]
 
+# P521 elliptic curve
+[workspace.dependencies.p521]
+version = "0.13.3"
+features = ["std", "ecdsa"]
+
 # Text padding utilities
 [workspace.dependencies.pad]
 version = "0.1.6"
@@ -463,7 +473,7 @@ features = ["std"]
 # PKCS#8 encoding
 [workspace.dependencies.pkcs8]
 version = "0.10.2"
-features = ["std", "pkcs5", "encryption"]
+features = ["std", "pkcs5", "encryption", "pem"]
 
 # Public Suffix List
 [workspace.dependencies.psl]

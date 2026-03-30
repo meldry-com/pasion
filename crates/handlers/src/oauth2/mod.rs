@@ -145,3 +145,137 @@ pub(crate) async fn generate_token_pair<R: RepositoryAccess>(
 
     Ok((access_token, refresh_token))
 }
+
+#[cfg(test)]
+mod tests {
+    use std::collections::HashMap;
+
+    use chrono::Duration;
+    use pasion_data_model::{
+        AccessTokenState, AuthenticationMethod,
+        clock::MockClock,
+    };
+    use pasion_jose::{claims::hash_token, jwt::Jwt};
+    use pasion_keystore::{JsonWebKey, JsonWebKeySet, PrivateKey};
+    use rand::SeedableRng;
+    use rand_chacha::ChaChaRng;
+    use serde_json::Value;
+    use ulid::Ulid;
+
+    use super::*;
+
+    fn keystore_for_alg(alg: &JsonWebSignatureAlg) -> (Keystore, &'static str) {
+        let mut rng = ChaChaRng::seed_from_u64(42);
+        let (private_key, kid) = match alg {
+            JsonWebSignatureAlg::Es512 => {
+                (PrivateKey::generate_ec_p521(&mut rng), "test-es512")
+            }
+            JsonWebSignatureAlg::EdDsa => {
+                (PrivateKey::generate_ed25519(&mut rng), "test-eddsa")
+            }
+            other => panic!("unsupported test algorithm: {other:?}"),
+        };
+
+        let key = JsonWebKey::new(private_key).with_kid(kid);
+        (Keystore::new(JsonWebKeySet::new(vec![key])), kid)
+    }
+
+    fn assert_generated_id_token_works(alg: JsonWebSignatureAlg) {
+        let clock = MockClock::default();
+        let now = clock.now();
+        let url_builder = UrlBuilder::new("https://example.com/".parse().unwrap(), None, None);
+        let mut fixture_rng = ChaChaRng::seed_from_u64(7);
+
+        let mut client = Client::samples(now, &mut fixture_rng)
+            .into_iter()
+            .next()
+            .unwrap();
+        client.id_token_signed_response_alg = Some(alg.clone());
+
+        let grant = AuthorizationGrant::sample(now, &mut fixture_rng);
+        let browser_session = BrowserSession::samples(now, &mut fixture_rng)
+            .into_iter()
+            .next()
+            .unwrap();
+        let access_token = AccessToken {
+            id: Ulid::new(),
+            state: AccessTokenState::Valid,
+            session_id: Ulid::new(),
+            access_token: "access-token-value".to_owned(),
+            created_at: now,
+            expires_at: Some(now + Duration::try_minutes(5).unwrap()),
+            first_used_at: None,
+        };
+        let authentication = Authentication {
+            id: Ulid::new(),
+            created_at: now - Duration::try_minutes(2).unwrap(),
+            authentication_method: AuthenticationMethod::Unknown,
+        };
+        let (key_store, kid) = keystore_for_alg(&alg);
+        let mut signing_rng = ChaChaRng::seed_from_u64(9);
+
+        let encoded = generate_id_token(
+            &mut signing_rng,
+            &clock,
+            &url_builder,
+            &key_store,
+            &client,
+            Some(&grant),
+            &browser_session,
+            Some(&access_token),
+            Some(&authentication),
+        )
+        .unwrap();
+
+        let jwt = Jwt::<HashMap<String, Value>>::try_from(encoded.as_str()).unwrap();
+
+        assert_eq!(jwt.header().alg(), &alg);
+        assert_eq!(jwt.header().kid(), Some(kid));
+        jwt.verify_with_jwks(&key_store.public_jwks()).unwrap();
+
+        let payload = jwt.payload();
+        assert_eq!(
+            payload.get("iss").and_then(Value::as_str),
+            Some(url_builder.oidc_issuer().as_str())
+        );
+        assert_eq!(
+            payload.get("sub").and_then(Value::as_str),
+            Some(browser_session.user.sub.as_str())
+        );
+        assert_eq!(
+            payload.get("aud").and_then(Value::as_str),
+            Some(client.client_id.as_str())
+        );
+        assert_eq!(
+            payload.get("nonce").and_then(Value::as_str),
+            grant.nonce.as_deref()
+        );
+        assert_eq!(
+            payload.get("auth_time").and_then(Value::as_i64),
+            Some(authentication.created_at.timestamp())
+        );
+
+        let expected_at_hash = hash_token(&alg, &access_token.access_token).unwrap();
+        assert_eq!(
+            payload.get("at_hash").and_then(Value::as_str),
+            Some(expected_at_hash.as_str())
+        );
+
+        let code = &grant.code.as_ref().unwrap().code;
+        let expected_c_hash = hash_token(&alg, code).unwrap();
+        assert_eq!(
+            payload.get("c_hash").and_then(Value::as_str),
+            Some(expected_c_hash.as_str())
+        );
+    }
+
+    #[test]
+    fn generate_id_token_supports_es512() {
+        assert_generated_id_token_works(JsonWebSignatureAlg::Es512);
+    }
+
+    #[test]
+    fn generate_id_token_supports_eddsa() {
+        assert_generated_id_token_works(JsonWebSignatureAlg::EdDsa);
+    }
+}

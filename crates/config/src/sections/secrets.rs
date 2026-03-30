@@ -281,8 +281,10 @@ impl SecretsConfig {
     pub async fn key_store(&self) -> anyhow::Result<Keystore> {
         let key_configs = self.key_configs().await?;
         let web_keys = try_join_all(key_configs.iter().map(KeyConfig::json_web_key)).await?;
+        let web_keys = JsonWebKeySet::try_new(web_keys)
+            .context("invalid JWK metadata in secrets config")?;
 
-        Ok(Keystore::new(JsonWebKeySet::new(web_keys)))
+        Ok(Keystore::new(web_keys))
     }
 
     /// Derive an [`Encrypter`] out of the config
@@ -392,6 +394,22 @@ impl SecretsConfig {
             key: Key::Value(ec_p384_key.to_pem(pem_rfc7468::LineEnding::LF)?.to_string()),
         };
 
+        let span = tracing::info_span!("ec_p521");
+        let key_rng = rand_chacha::ChaChaRng::from_rng(&mut rng)?;
+        let ec_p521_key = task::spawn_blocking(move || {
+            let _entered = span.enter();
+            let ret = PrivateKey::generate_ec_p521(key_rng);
+            info!("Done generating EC P-521 key");
+            ret
+        })
+        .await
+        .context("could not join blocking task")?;
+        let ec_p521_key = KeyConfig {
+            kid: None,
+            password: None,
+            key: Key::Value(ec_p521_key.to_pem(pem_rfc7468::LineEnding::LF)?.to_string()),
+        };
+
         let span = tracing::info_span!("ec_k256");
         let key_rng = rand_chacha::ChaChaRng::from_rng(&mut rng)?;
         let ec_k256_key = task::spawn_blocking(move || {
@@ -408,9 +426,32 @@ impl SecretsConfig {
             key: Key::Value(ec_k256_key.to_pem(pem_rfc7468::LineEnding::LF)?.to_string()),
         };
 
+        let span = tracing::info_span!("ed25519");
+        let key_rng = rand_chacha::ChaChaRng::from_rng(&mut rng)?;
+        let ed25519_key = task::spawn_blocking(move || {
+            let _entered = span.enter();
+            let ret = PrivateKey::generate_ed25519(key_rng);
+            info!("Done generating Ed25519 key");
+            ret
+        })
+        .await
+        .context("could not join blocking task")?;
+        let ed25519_key = KeyConfig {
+            kid: None,
+            password: None,
+            key: Key::Value(ed25519_key.to_pem(pem_rfc7468::LineEnding::LF)?.to_string()),
+        };
+
         Ok(Self {
             encryption: Encryption::Value(Standard.sample(&mut rng)),
-            keys: Some(vec![rsa_key, ec_p256_key, ec_p384_key, ec_k256_key]),
+            keys: Some(vec![
+                rsa_key,
+                ec_p256_key,
+                ec_p384_key,
+                ec_p521_key,
+                ec_k256_key,
+                ed25519_key,
+            ]),
             keys_dir: None,
         })
     }
@@ -464,7 +505,9 @@ mod tests {
         Figment, Jail,
         providers::{Format, Yaml},
     };
+    use pasion_iana::jose::JsonWebSignatureAlg;
     use pasion_jose::constraints::Constrainable;
+    use rand::SeedableRng;
     use tokio::{runtime::Handle, task};
 
     use super::*;
@@ -699,5 +742,16 @@ mod tests {
         })
         .await
         .unwrap();
+    }
+
+    #[tokio::test]
+    async fn generate_config_includes_extended_signing_keys() {
+        let mut rng = rand_chacha::ChaCha8Rng::seed_from_u64(42);
+        let config = SecretsConfig::generate(&mut rng).await.unwrap();
+        let key_store = config.key_store().await.unwrap();
+        let algs = key_store.available_signing_algorithms();
+
+        assert!(algs.contains(&JsonWebSignatureAlg::Es512));
+        assert!(algs.contains(&JsonWebSignatureAlg::EdDsa));
     }
 }

@@ -29,7 +29,15 @@ fn id_token(
     flag: Option<IdTokenFlag>,
     auth_time: Option<DateTime<Utc>>,
 ) -> (IdToken<'_>, PublicJsonWebKeySet) {
-    let signing_alg = ID_TOKEN_SIGNING_ALG;
+    id_token_with_alg(issuer, ID_TOKEN_SIGNING_ALG, flag, auth_time)
+}
+
+fn id_token_with_alg(
+    issuer: &str,
+    signing_alg: JsonWebSignatureAlg,
+    flag: Option<IdTokenFlag>,
+    auth_time: Option<DateTime<Utc>>,
+) -> (IdToken<'_>, PublicJsonWebKeySet) {
 
     let keystore = keystore(&signing_alg);
     let mut claims = HashMap::new();
@@ -72,6 +80,54 @@ fn id_token(
     let id_token = Jwt::sign(header, claims, &signer).unwrap();
 
     (id_token, keystore.public_jwks())
+}
+
+#[tokio::test]
+async fn pass_verify_id_token_es512() {
+    let issuer = "http://localhost/";
+    let now = now();
+    let signing_algorithm = JsonWebSignatureAlg::Es512;
+    let (auth_id_token, _) = id_token_with_alg(issuer, signing_algorithm.clone(), None, Some(now));
+    let (id_token, jwks) = id_token_with_alg(issuer, signing_algorithm.clone(), None, Some(now));
+
+    let verification_data = JwtVerificationData {
+        issuer: Some(issuer),
+        jwks: &jwks,
+        client_id: &CLIENT_ID.to_owned(),
+        signing_algorithm: &signing_algorithm,
+    };
+
+    verify_id_token(
+        id_token.as_str(),
+        verification_data,
+        Some(&auth_id_token),
+        now,
+    )
+    .unwrap();
+}
+
+#[tokio::test]
+async fn pass_verify_id_token_eddsa() {
+    let issuer = "http://localhost/";
+    let now = now();
+    let signing_algorithm = JsonWebSignatureAlg::EdDsa;
+    let (auth_id_token, _) = id_token_with_alg(issuer, signing_algorithm.clone(), None, Some(now));
+    let (id_token, jwks) = id_token_with_alg(issuer, signing_algorithm.clone(), None, Some(now));
+
+    let verification_data = JwtVerificationData {
+        issuer: Some(issuer),
+        jwks: &jwks,
+        client_id: &CLIENT_ID.to_owned(),
+        signing_algorithm: &signing_algorithm,
+    };
+
+    verify_id_token(
+        id_token.as_str(),
+        verification_data,
+        Some(&auth_id_token),
+        now,
+    )
+    .unwrap();
 }
 
 #[tokio::test]
