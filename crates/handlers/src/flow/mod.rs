@@ -12,6 +12,7 @@ use tokio::sync::RwLock;
 use ulid::Ulid;
 
 pub mod defaults;
+pub mod definition;
 mod executor;
 pub mod stages;
 

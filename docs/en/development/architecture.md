@@ -110,3 +110,17 @@ The `minijinja-contrib` crate provides additional filters for Python compatibili
 
 The [RustCrypto team](https://github.com/RustCrypto) offer high quality, independent crates for dealing with cryptography.
 The whole project is highly modular and APIs are coherent between crates.
+
+## API Layering
+
+### User Portal API (/api/v1/viewer/*, /api/v1/auth/*, /api/v1/email-auth/*, etc.)
+User self-service endpoints, consumed by the Dioxus frontend.
+
+### Workflow API (/api/v1/flow/*)
+Flow engine endpoints, supporting multi-step interactive flows (registration, recovery, MFA, etc.).
+
+### Admin Operations API (/api/admin/v1/*)
+Administrative operation endpoints, consumed by the Padmin management interface.
+
+### OAuth2 Protocol API (/oauth2/*, /.well-known/*)
+Standard OAuth 2.0 / OIDC protocol endpoints.

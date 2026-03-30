@@ -1,18 +1,17 @@
-use std::sync::Arc;
-
-use pasion_data_model::audit::AdminOperation;
 use pasion_matrix::HomeserverConnection;
 use pasion_salvo_utils::record_error;
+use pasion_storage::RepositoryAccess;
 use salvo::{http::StatusCode, prelude::*};
 use ulid::Ulid;
 
 use crate::{
     admin::{
         call_context::extract_call_context,
-        model::{Resource, User},
+        model::User,
         params::extract_ulid_param,
         response::{ErrorResponse, SingleResponse},
     },
+    admin_operations::AdminOperationError,
     impl_from_error_for_route,
     rest::DepotExt,
 };
@@ -69,7 +68,7 @@ pub async fn handler(
     let mut rng = crate::rest::make_rng();
     let homeserver = depot.homeserver()?;
 
-    // id already extracted above
+    // Look up the user to get the username for the homeserver call
     let user = repo
         .user()
         .lookup(id)
@@ -82,20 +81,19 @@ pub async fn handler(
         .await
         .map_err(RouteError::Homeserver)?;
 
-    // Now reactivate the user in our database
-    let user = repo.user().reactivate(user).await?;
-
-    crate::admin_audit_helper::record_admin_operation(
+    // Now reactivate the user in our database and record audit log
+    let user = crate::admin_operations::reactivate_user(
         &mut repo,
         &mut rng,
         &*clock,
         admin_user.as_ref(),
-        AdminOperation::UserReactivated,
-        "user",
-        Some(user.id),
-        serde_json::json!({}),
+        id,
     )
-    .await?;
+    .await
+    .map_err(|e| match e {
+        AdminOperationError::UserNotFound => RouteError::NotFound(id),
+        AdminOperationError::Repository(e) => RouteError::Internal(Box::new(e)),
+    })?;
 
     repo.save().await?;
 

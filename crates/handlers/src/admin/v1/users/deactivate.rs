@@ -1,4 +1,3 @@
-use pasion_data_model::{BoxRng, audit::AdminOperation};
 use pasion_salvo_utils::record_error;
 use pasion_storage::queue::{DeactivateUserJob, QueueJobRepositoryExt as _};
 use salvo::{http::StatusCode, prelude::*};
@@ -10,10 +9,11 @@ use ulid::Ulid;
 use crate::{
     admin::{
         call_context::extract_call_context,
-        model::{Resource, User},
+        model::User,
         params::extract_ulid_param,
         response::{ErrorResponse, SingleResponse},
     },
+    admin_operations::AdminOperationError,
     impl_from_error_for_route,
 };
 
@@ -76,14 +76,19 @@ pub async fn handler(
     let body: Option<RequestBody> = req.parse_json().await.ok();
 
     let params = body.unwrap_or_default();
-    // id already extracted above
-    let user = repo
-        .user()
-        .lookup(id)
-        .await?
-        .ok_or(RouteError::NotFound(id))?;
 
-    let user = repo.user().deactivate(&clock, user).await?;
+    let user = crate::admin_operations::deactivate_user(
+        &mut repo,
+        &mut rng,
+        &*clock,
+        admin_user.as_ref(),
+        id,
+    )
+    .await
+    .map_err(|e| match e {
+        AdminOperationError::UserNotFound => RouteError::NotFound(id),
+        AdminOperationError::Repository(e) => RouteError::Internal(Box::new(e)),
+    })?;
 
     info!(%user.id, "Scheduling deactivation of user");
     repo.queue_job()
@@ -93,18 +98,6 @@ pub async fn handler(
             DeactivateUserJob::new(&user, !params.skip_erase),
         )
         .await?;
-
-    crate::admin_audit_helper::record_admin_operation(
-        &mut repo,
-        &mut rng,
-        &*clock,
-        admin_user.as_ref(),
-        AdminOperation::UserDeactivated,
-        "user",
-        Some(user.id),
-        serde_json::json!({}),
-    )
-    .await?;
 
     repo.save().await?;
 

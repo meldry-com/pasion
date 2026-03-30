@@ -1,4 +1,3 @@
-use pasion_data_model::audit::AdminOperation;
 use pasion_salvo_utils::record_error;
 use salvo::{http::StatusCode, prelude::*};
 use ulid::Ulid;
@@ -6,10 +5,11 @@ use ulid::Ulid;
 use crate::{
     admin::{
         call_context::extract_call_context,
-        model::{Resource, User},
+        model::User,
         params::extract_ulid_param,
         response::{ErrorResponse, SingleResponse},
     },
+    admin_operations::AdminOperationError,
     impl_from_error_for_route,
 };
 
@@ -60,26 +60,18 @@ pub async fn handler(
     let id = extract_ulid_param(req)?;
     let mut rng = crate::rest::make_rng();
 
-    // id already extracted above
-    let user = repo
-        .user()
-        .lookup(id)
-        .await?
-        .ok_or(RouteError::NotFound(id))?;
-
-    let user = repo.user().unlock(user).await?;
-
-    crate::admin_audit_helper::record_admin_operation(
+    let user = crate::admin_operations::unlock_user(
         &mut repo,
         &mut rng,
         &*clock,
         admin_user.as_ref(),
-        AdminOperation::UserUnlocked,
-        "user",
-        Some(user.id),
-        serde_json::json!({}),
+        id,
     )
-    .await?;
+    .await
+    .map_err(|e| match e {
+        AdminOperationError::UserNotFound => RouteError::NotFound(id),
+        AdminOperationError::Repository(e) => RouteError::Internal(Box::new(e)),
+    })?;
 
     repo.save().await?;
 

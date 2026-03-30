@@ -7406,6 +7406,22 @@
   ],
   "tags": [
     {
+      "name": "User Portal",
+      "description": "User self-service endpoints — profile, security, contacts, notifications, workflows"
+    },
+    {
+      "name": "Admin Operations",
+      "description": "Administrative operations — user management, audit, connectors, templates"
+    },
+    {
+      "name": "Workflow Engine",
+      "description": "Flow engine endpoints — start flows, submit stage responses"
+    },
+    {
+      "name": "OAuth2 Protocol",
+      "description": "OAuth 2.0 / OIDC protocol endpoints"
+    },
+    {
       "name": "server",
       "description": "Information about the server"
     },
