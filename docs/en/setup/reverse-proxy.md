@@ -25,7 +25,7 @@ http:
           port: 8080
 
         # OR bind on a Unix domain socket
-        #- socket: /var/run/mas.sock
+        #- socket: /var/run/pasion.sock
 
         # OR bind on a systemd socket
         #- fd: 0
@@ -52,7 +52,7 @@ server {
         proxy_http_version 1.1;
         proxy_pass http://localhost:8080;
         # OR via the Unix domain socket
-        #proxy_pass http://unix:/var/run/mas.sock;
+        #proxy_pass http://unix:/var/run/pasion.sock;
 
         # Forward the client IP address
         proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
@@ -84,7 +84,7 @@ server {
         proxy_http_version 1.1;
         proxy_pass http://localhost:8080;
         # OR via the Unix domain socket
-        #proxy_pass http://unix:/var/run/mas.sock;
+        #proxy_pass http://unix:/var/run/pasion.sock;
 
         # Forward the client IP address
         proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;

@@ -298,7 +298,7 @@ mod tests {
         setup();
         let pool = pasion_storage_pg::test_utils::setup_test_pool().await;
         let mut state = TestState::from_pool(pool.clone()).await.unwrap();
-        let token = state.token_with_scope("urn:mas:admin").await;
+        let token = state.token_with_scope("urn:pasion:admin").await;
 
         // We already have a session because of the token above
         let request = Request::get("/api/admin/v1/oauth2-sessions")
@@ -322,7 +322,7 @@ mod tests {
                 "user_id": null,
                 "user_session_id": null,
                 "client_id": "01FSHN9AG0FAQ50MT1E9FFRPZR",
-                "scope": "urn:mas:admin",
+                "scope": "urn:pasion:admin",
                 "user_agent": null,
                 "last_active_at": null,
                 "last_active_ip": null,
@@ -365,7 +365,7 @@ mod tests {
                 "user_id": null,
                 "user_session_id": null,
                 "client_id": "01FSHN9AG0FAQ50MT1E9FFRPZR",
-                "scope": "urn:mas:admin",
+                "scope": "urn:pasion:admin",
                 "user_agent": null,
                 "last_active_at": null,
                 "last_active_ip": null,

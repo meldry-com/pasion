@@ -735,7 +735,7 @@
                         "user_id": null,
                         "user_session_id": null,
                         "client_id": "050M2GA1850M2GA1850M2GA185",
-                        "scope": "urn:mas:admin",
+                        "scope": "urn:pasion:admin",
                         "user_agent": null,
                         "last_active_at": null,
                         "last_active_ip": null,
@@ -1273,7 +1273,7 @@
                         "owner_client_id": "01FSHN9AG0DJ6AC5HQ9X6H4RP7",
                         "actor_user_id": "01FSHN9AG0MZAA6S4AF7CTV32E",
                         "human_name": "CI/CD Pipeline Token",
-                        "scope": "openid urn:mas:admin",
+                        "scope": "openid urn:pasion:admin",
                         "last_active_at": "2022-01-16T15:46:40Z",
                         "last_active_ip": "203.0.113.10",
                         "expires_at": "2022-01-24T04:36:40Z"
@@ -4820,7 +4820,7 @@
             "refreshUrl": "./oauth2/token",
             "tokenUrl": "./oauth2/token",
             "scopes": {
-              "urn:mas:admin": "Grant access to the admin API"
+              "urn:pasion:admin": "Grant access to the admin API"
             }
           },
           "authorizationCode": {
@@ -4828,7 +4828,7 @@
             "tokenUrl": "./oauth2/token",
             "refreshUrl": "./oauth2/token",
             "scopes": {
-              "urn:mas:admin": "Grant access to the admin API"
+              "urn:pasion:admin": "Grant access to the admin API"
             }
           }
         }
@@ -7395,12 +7395,12 @@
   "security": [
     {
       "oauth2": [
-        "urn:mas:admin"
+        "urn:pasion:admin"
       ]
     },
     {
       "bearer": [
-        "urn:mas:admin"
+        "urn:pasion:admin"
       ]
     }
   ],

@@ -105,7 +105,7 @@ mod tests {
         setup();
         let pool = pasion_storage_pg::test_utils::setup_test_pool().await;
         let mut state = TestState::from_pool(pool.clone()).await.unwrap();
-        let token = state.token_with_scope("urn:mas:admin").await;
+        let token = state.token_with_scope("urn:pasion:admin").await;
 
         // Get the session ID from the token we just created
         let mut repo = state.repository().await.unwrap();
@@ -138,10 +138,10 @@ mod tests {
         let mut state = TestState::from_pool(pool.clone()).await.unwrap();
 
         // Create first admin token for the API call
-        let admin_token = state.token_with_scope("urn:mas:admin").await;
+        let admin_token = state.token_with_scope("urn:pasion:admin").await;
 
         // Create a second admin session that we'll finish
-        let second_admin_token = state.token_with_scope("urn:mas:admin").await;
+        let second_admin_token = state.token_with_scope("urn:pasion:admin").await;
 
         // Get the second session and finish it first
         let mut repo = state.repository().await.unwrap();
@@ -194,7 +194,7 @@ mod tests {
         setup();
         let pool = pasion_storage_pg::test_utils::setup_test_pool().await;
         let mut state = TestState::from_pool(pool.clone()).await.unwrap();
-        let token = state.token_with_scope("urn:mas:admin").await;
+        let token = state.token_with_scope("urn:pasion:admin").await;
 
         let request =
             Request::post("/api/admin/v1/oauth2-sessions/01040G2081040G2081040G2081/finish")

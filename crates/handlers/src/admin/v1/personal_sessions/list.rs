@@ -381,7 +381,7 @@ mod tests {
                 PersonalSessionOwner::from(&user),
                 &user,
                 "Another test session".to_owned(),
-                Scope::from_iter([OPENID, "urn:mas:admin".parse().unwrap()]),
+                Scope::from_iter([OPENID, "urn:pasion:admin".parse().unwrap()]),
             )
             .await
             .unwrap();
@@ -398,7 +398,7 @@ mod tests {
 
         repo.save().await.unwrap();
 
-        let token = state.token_with_scope("urn:mas:admin").await;
+        let token = state.token_with_scope("urn:pasion:admin").await;
         let request = Request::get("/api/admin/v1/personal-sessions")
             .bearer(&token)
             .empty();
@@ -469,7 +469,7 @@ mod tests {
                 "owner_client_id": null,
                 "actor_user_id": "01FSHN9AG09FE39KETP6F390F8",
                 "human_name": "Another test session",
-                "scope": "openid urn:mas:admin",
+                "scope": "openid urn:pasion:admin",
                 "last_active_at": null,
                 "last_active_ip": null,
                 "expires_at": "2022-02-01T14:40:00Z"
@@ -513,7 +513,7 @@ mod tests {
             ),
             ("filter[expires]=false", &["01FSM7P1G0VBGAMK9D9QMGQ5MY"]),
             (
-                "filter[scope]=urn:mas:admin",
+                "filter[scope]=urn:pasion:admin",
                 &["01FSPT2RG08Y11Y5BM4VZ4CN8K"],
             ),
         ];

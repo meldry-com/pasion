@@ -156,7 +156,7 @@ mod tests {
         setup();
         let pool = pasion_storage_pg::test_utils::setup_test_pool().await;
         let mut state = TestState::from_pool(pool.clone()).await.unwrap();
-        let token = state.token_with_scope("urn:mas:admin").await;
+        let token = state.token_with_scope("urn:pasion:admin").await;
 
         // Create a user
         let mut repo = state.repository().await.unwrap();
@@ -205,7 +205,7 @@ mod tests {
         setup();
         let pool = pasion_storage_pg::test_utils::setup_test_pool().await;
         let mut state = TestState::from_pool(pool.clone()).await.unwrap();
-        let token = state.token_with_scope("urn:mas:admin").await;
+        let token = state.token_with_scope("urn:pasion:admin").await;
 
         // Create a user
         let mut repo = state.repository().await.unwrap();
@@ -266,7 +266,7 @@ mod tests {
         setup();
         let pool = pasion_storage_pg::test_utils::setup_test_pool().await;
         let mut state = TestState::from_pool(pool.clone()).await.unwrap();
-        let token = state.token_with_scope("urn:mas:admin").await;
+        let token = state.token_with_scope("urn:pasion:admin").await;
 
         // Set the password through the API
         let request = Request::post("/api/admin/v1/users/01040G2081040G2081040G2081/set-password")
@@ -291,7 +291,7 @@ mod tests {
         let pool = pasion_storage_pg::test_utils::setup_test_pool().await;
         let mut state = TestState::from_pool(pool.clone()).await.unwrap();
         state.password_manager = PasswordManager::disabled();
-        let token = state.token_with_scope("urn:mas:admin").await;
+        let token = state.token_with_scope("urn:pasion:admin").await;
 
         let request = Request::post("/api/admin/v1/users/01040G2081040G2081040G2081/set-password")
             .bearer(&token)

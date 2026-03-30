@@ -79,7 +79,7 @@ mod tests {
         setup();
         let pool = pasion_storage_pg::test_utils::setup_test_pool().await;
         let mut state = TestState::from_pool(pool.clone()).await.unwrap();
-        let token = state.token_with_scope("urn:mas:admin").await;
+        let token = state.token_with_scope("urn:pasion:admin").await;
 
         let mut repo = state.repository().await.unwrap();
         let registration_token = repo
@@ -136,7 +136,7 @@ mod tests {
         setup();
         let pool = pasion_storage_pg::test_utils::setup_test_pool().await;
         let mut state = TestState::from_pool(pool.clone()).await.unwrap();
-        let token = state.token_with_scope("urn:mas:admin").await;
+        let token = state.token_with_scope("urn:pasion:admin").await;
 
         // Use a fixed ID for the test to ensure consistent snapshots
         let nonexistent_id = Ulid::from_string("00000000000000000000000000").unwrap();

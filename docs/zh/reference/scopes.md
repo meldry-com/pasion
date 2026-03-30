@@ -27,14 +27,14 @@ Pasion 支持以下 OAuth 2.0 作用域（scope）。客户端在请求授权时
 
 | 作用域 | 说明 |
 |--------|------|
-| `urn:mas:admin` | Pasion 管理 API 完全访问权限 |
+| `urn:pasion:admin` | Pasion 管理 API 完全访问权限（旧版 `urn:mas:admin` 仍兼容支持） |
 | `urn:mas:admin:read` | Pasion 管理 API 只读权限 |
 
 ## 作用域与策略
 
 默认策略对作用域的处理规则：
 
-- `urn:mas:admin` — 仅授予配置文件中 `policy.data.admin_clients` 列表中的客户端
+- `urn:pasion:admin`（或旧版 `urn:mas:admin`） — 仅授予配置文件中 `policy.data.admin_clients` 列表中的客户端
 - `urn:palpo:admin:api` — 同上
 - 其他作用域 — 默认允许所有客户端请求
 

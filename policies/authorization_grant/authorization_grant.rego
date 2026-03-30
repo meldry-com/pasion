@@ -46,12 +46,24 @@ allowed_scope("urn:palpo:admin:*") if {
 }
 
 # This makes it possible to query and do anything in the admin API
-allowed_scope("urn:mas:admin") if {
+allowed_scope("urn:pasion:admin") if {
 	interactive_grant_type(input.grant_type)
 	can_request_admin(input.user)
 }
 
 # This makes it possible to get the admin scope for clients that are allowed
+allowed_scope("urn:pasion:admin") if {
+	input.grant_type == "client_credentials"
+	some client in data.admin_clients
+	input.client.id == client
+}
+
+# Backward compatibility: also accept the legacy urn:mas:admin scope
+allowed_scope("urn:mas:admin") if {
+	interactive_grant_type(input.grant_type)
+	can_request_admin(input.user)
+}
+
 allowed_scope("urn:mas:admin") if {
 	input.grant_type == "client_credentials"
 	some client in data.admin_clients

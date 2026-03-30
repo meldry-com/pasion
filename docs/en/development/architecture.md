@@ -30,7 +30,7 @@ This includes:
  - [`pasion-iana`][pasion-iana]: Auto-generated enums from IANA registries
  - [`pasion-iana-codegen`][pasion-iana-codegen]: Code generator for the `pasion-iana` crate
  - [`pasion-jose`][pasion-jose]: JWT/JWS/JWE/JWK abstraction
- - [`mas-static-files`][mas-static-files]: Frontend static files (CSS/JS). Includes some frontend tooling
+ - [`pasion-frontend`][pasion-frontend]: Frontend application (Dioxus-based Rust SPA)
  - [`pasion-storage`][pasion-storage]: Abstraction of the storage backends
  - [`pasion-storage-pg`][pasion-storage-pg]: Storage backend implementation for a PostgreSQL database
  - [`pasion-tasks`][pasion-tasks]: Asynchronous task runner and scheduler
@@ -44,7 +44,7 @@ This includes:
 [pasion-iana]: ../rustdoc/pasion_iana/index.html
 [pasion-iana-codegen]: ../rustdoc/pasion_iana_codegen/index.html
 [pasion-jose]: ../rustdoc/pasion_jose/index.html
-[mas-static-files]: ../rustdoc/mas_static_files/index.html
+[pasion-frontend]: ../rustdoc/pasion_frontend/index.html
 [pasion-storage]: ../rustdoc/pasion_storage/index.html
 [pasion-storage-pg]: ../rustdoc/pasion_storage/index.html
 [pasion-tasks]: ../rustdoc/pasion_tasks/index.html

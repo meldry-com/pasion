@@ -252,7 +252,7 @@ mod tests {
         setup();
         let pool = pasion_storage_pg::test_utils::setup_test_pool().await;
         let mut state = TestState::from_pool(pool.clone()).await.unwrap();
-        let admin_token = state.token_with_scope("urn:mas:admin").await;
+        let admin_token = state.token_with_scope("urn:pasion:admin").await;
         create_test_tokens(&mut state).await;
 
         let request = Request::get("/api/admin/v1/user-registration-tokens")
@@ -393,7 +393,7 @@ mod tests {
         setup();
         let pool = pasion_storage_pg::test_utils::setup_test_pool().await;
         let mut state = TestState::from_pool(pool.clone()).await.unwrap();
-        let admin_token = state.token_with_scope("urn:mas:admin").await;
+        let admin_token = state.token_with_scope("urn:pasion:admin").await;
         create_test_tokens(&mut state).await;
 
         // Filter for used tokens
@@ -558,7 +558,7 @@ mod tests {
         setup();
         let pool = pasion_storage_pg::test_utils::setup_test_pool().await;
         let mut state = TestState::from_pool(pool.clone()).await.unwrap();
-        let admin_token = state.token_with_scope("urn:mas:admin").await;
+        let admin_token = state.token_with_scope("urn:pasion:admin").await;
         create_test_tokens(&mut state).await;
 
         // Filter for revoked tokens
@@ -723,7 +723,7 @@ mod tests {
         setup();
         let pool = pasion_storage_pg::test_utils::setup_test_pool().await;
         let mut state = TestState::from_pool(pool.clone()).await.unwrap();
-        let admin_token = state.token_with_scope("urn:mas:admin").await;
+        let admin_token = state.token_with_scope("urn:pasion:admin").await;
         create_test_tokens(&mut state).await;
 
         // Filter for expired tokens
@@ -888,7 +888,7 @@ mod tests {
         setup();
         let pool = pasion_storage_pg::test_utils::setup_test_pool().await;
         let mut state = TestState::from_pool(pool.clone()).await.unwrap();
-        let admin_token = state.token_with_scope("urn:mas:admin").await;
+        let admin_token = state.token_with_scope("urn:pasion:admin").await;
         create_test_tokens(&mut state).await;
 
         // Filter for valid tokens
@@ -1053,7 +1053,7 @@ mod tests {
         setup();
         let pool = pasion_storage_pg::test_utils::setup_test_pool().await;
         let mut state = TestState::from_pool(pool.clone()).await.unwrap();
-        let admin_token = state.token_with_scope("urn:mas:admin").await;
+        let admin_token = state.token_with_scope("urn:pasion:admin").await;
         create_test_tokens(&mut state).await;
 
         // Filter for used AND revoked tokens
@@ -1109,7 +1109,7 @@ mod tests {
         setup();
         let pool = pasion_storage_pg::test_utils::setup_test_pool().await;
         let mut state = TestState::from_pool(pool.clone()).await.unwrap();
-        let admin_token = state.token_with_scope("urn:mas:admin").await;
+        let admin_token = state.token_with_scope("urn:pasion:admin").await;
         create_test_tokens(&mut state).await;
 
         // Request with pagination (2 per page)
@@ -1300,7 +1300,7 @@ mod tests {
         setup();
         let pool = pasion_storage_pg::test_utils::setup_test_pool().await;
         let mut state = TestState::from_pool(pool.clone()).await.unwrap();
-        let admin_token = state.token_with_scope("urn:mas:admin").await;
+        let admin_token = state.token_with_scope("urn:pasion:admin").await;
 
         // Try with invalid filter value
         let request = Request::get("/api/admin/v1/user-registration-tokens?filter[used]=invalid")
@@ -1323,7 +1323,7 @@ mod tests {
         setup();
         let pool = pasion_storage_pg::test_utils::setup_test_pool().await;
         let mut state = TestState::from_pool(pool.clone()).await.unwrap();
-        let admin_token = state.token_with_scope("urn:mas:admin").await;
+        let admin_token = state.token_with_scope("urn:pasion:admin").await;
         create_test_tokens(&mut state).await;
 
         // Test count=false

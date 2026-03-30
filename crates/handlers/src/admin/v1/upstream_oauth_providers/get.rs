@@ -128,7 +128,7 @@ mod tests {
         setup();
         let pool = pasion_storage_pg::test_utils::setup_test_pool().await;
         let mut state = TestState::from_pool(pool.clone()).await.unwrap();
-        let admin_token = state.token_with_scope("urn:mas:admin").await;
+        let admin_token = state.token_with_scope("urn:pasion:admin").await;
         let provider = create_test_provider(&mut state).await;
 
         let request = Request::get(format!(
@@ -174,7 +174,7 @@ mod tests {
         setup();
         let pool = pasion_storage_pg::test_utils::setup_test_pool().await;
         let mut state = TestState::from_pool(pool.clone()).await.unwrap();
-        let admin_token = state.token_with_scope("urn:mas:admin").await;
+        let admin_token = state.token_with_scope("urn:pasion:admin").await;
 
         let provider_id = Ulid::nil();
         let request = Request::get(format!(

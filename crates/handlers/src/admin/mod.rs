@@ -2,7 +2,8 @@
 //!
 //! Provides a JSON:API-style REST interface for managing users, sessions,
 //! OAuth 2.0 clients, upstream providers, and policy data. All endpoints
-//! require the `urn:mas:admin` scope.
+//! require the `urn:pasion:admin` scope (the legacy `urn:mas:admin` scope
+//! is also accepted for backward compatibility).
 //!
 //! The API specification is available as an OpenAPI document served by the
 //! [`swagger`] handler.
@@ -22,6 +23,18 @@ mod schema;
 pub mod v1;
 
 pub use self::call_context::CallContext;
+
+/// The canonical admin scope for the Pasion Admin API.
+pub const ADMIN_SCOPE: &str = "urn:pasion:admin";
+
+/// Legacy admin scope, kept for backward compatibility with existing tokens.
+pub const ADMIN_SCOPE_LEGACY: &str = "urn:mas:admin";
+
+/// Returns `true` if the given scope string contains either the current or
+/// legacy admin scope.
+pub fn has_admin_scope(scope: &oauth2_types::scope::Scope) -> bool {
+    scope.contains(ADMIN_SCOPE) || scope.contains(ADMIN_SCOPE_LEGACY)
+}
 
 /// Render the Swagger UI page for the Admin API documentation.
 

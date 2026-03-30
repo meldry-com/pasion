@@ -13,7 +13,7 @@ This will prompt you to open a URL in your browser, finish the authentication fl
 This can be used to get access to the Pasion admin API:
 
 ```sh
-sh ./misc/device-code-grant.sh https://palpo.example.com/ urn:mas:admin
+sh ./misc/device-code-grant.sh https://palpo.example.com/ urn:pasion:admin
 ```
 
 Or to the Palpo admin API:
@@ -25,7 +25,7 @@ sh ./misc/device-code-grant.sh https://palpo.example.com/ urn:matrix:org.matrix.
 Or even both at the same time:
 
 ```sh
-sh ./misc/device-code-grant.sh https://palpo.example.com/ urn:matrix:org.matrix.msc2967.client:api:* urn:mas:admin urn:palpo:admin:*
+sh ./misc/device-code-grant.sh https://palpo.example.com/ urn:matrix:org.matrix.msc2967.client:api:* urn:pasion:admin urn:palpo:admin:*
 ```
 
 Note that the token will only be valid for a short time (5 minutes by default) and needs to be revoked manually from the Pasion user interface.

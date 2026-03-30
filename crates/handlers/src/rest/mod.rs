@@ -135,7 +135,7 @@ impl RequestingEntity {
 
     pub fn is_admin(&self) -> bool {
         match self {
-            Self::OAuth2Session(tuple) => tuple.0.scope.contains("urn:mas:admin"),
+            Self::OAuth2Session(tuple) => crate::admin::has_admin_scope(&tuple.0.scope),
             _ => false,
         }
     }

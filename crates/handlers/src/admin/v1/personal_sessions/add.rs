@@ -192,7 +192,7 @@ mod tests {
         setup();
         let pool = pasion_storage_pg::test_utils::setup_test_pool().await;
         let mut state = TestState::from_pool(pool.clone()).await.unwrap();
-        let token = state.token_with_scope("urn:mas:admin").await;
+        let token = state.token_with_scope("urn:pasion:admin").await;
 
         // Create a user for testing
         let mut repo = state.repository().await.unwrap();
@@ -208,7 +208,7 @@ mod tests {
         let request_body = serde_json::json!({
             "actor_user_id": user.id,
             "human_name": "Test Session",
-            "scope": "openid urn:mas:admin",
+            "scope": "openid urn:pasion:admin",
             "expires_in": 3600
         });
 
@@ -233,7 +233,7 @@ mod tests {
               "owner_client_id": "01FSHN9AG0FAQ50MT1E9FFRPZR",
               "actor_user_id": "01FSHN9AG0MZAA6S4AF7CTV32E",
               "human_name": "Test Session",
-              "scope": "openid urn:mas:admin",
+              "scope": "openid urn:pasion:admin",
               "last_active_at": null,
               "last_active_ip": null,
               "expires_at": "2022-01-16T15:40:00Z",
@@ -255,7 +255,7 @@ mod tests {
         setup();
         let pool = pasion_storage_pg::test_utils::setup_test_pool().await;
         let mut state = TestState::from_pool(pool.clone()).await.unwrap();
-        let token = state.token_with_scope("urn:mas:admin").await;
+        let token = state.token_with_scope("urn:pasion:admin").await;
 
         let request_body = serde_json::json!({
             "actor_user_id": "01FSHN9AG0MZAA6S4AF7CTV32E",
@@ -277,7 +277,7 @@ mod tests {
         setup();
         let pool = pasion_storage_pg::test_utils::setup_test_pool().await;
         let mut state = TestState::from_pool(pool.clone()).await.unwrap();
-        let token = state.token_with_scope("urn:mas:admin").await;
+        let token = state.token_with_scope("urn:pasion:admin").await;
 
         // Create a user for testing
         let mut repo = state.repository().await.unwrap();

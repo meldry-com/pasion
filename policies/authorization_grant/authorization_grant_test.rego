@@ -200,7 +200,23 @@ test_palpo_admin_scopes if {
 		with input.scope as "urn:palpo:admin:*"
 }
 
-test_mas_scopes if {
+test_pasion_admin_scopes if {
+	# New scope
+	authorization_grant.allow with input.user as user
+		with input.client as client
+		with data.admin_users as ["john"]
+		with input.grant_type as "authorization_code"
+		with input.scope as "urn:pasion:admin"
+
+	not authorization_grant.allow with input.user as user
+		with input.client as client
+		with data.admin_users as []
+		with input.grant_type as "authorization_code"
+		with input.scope as "urn:pasion:admin"
+}
+
+test_mas_scopes_legacy if {
+	# Legacy scope (backward compat)
 	authorization_grant.allow with input.user as user
 		with input.client as client
 		with data.admin_users as ["john"]

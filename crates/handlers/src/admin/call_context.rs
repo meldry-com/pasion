@@ -58,8 +58,8 @@ pub enum Rejection {
     #[error("Failed to load user {0}")]
     LoadUser(Ulid),
 
-    /// The session does not have the `urn:mas:admin` scope
-    #[error("Missing urn:mas:admin scope")]
+    /// The session does not have the required admin scope
+    #[error("Missing admin scope (expected urn:pasion:admin or urn:mas:admin)")]
     MissingScope,
 }
 
@@ -261,7 +261,7 @@ pub async fn extract_call_context(req: &Request, depot: &Depot) -> Result<CallCo
 
     // For now, we only check that the session has the admin scope
     // Later we might want to check other route-specific scopes
-    if !session.scope().contains("urn:mas:admin") {
+    if !super::has_admin_scope(session.scope()) {
         return Err(Rejection::MissingScope);
     }
 

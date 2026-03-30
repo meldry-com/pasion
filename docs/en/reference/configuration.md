@@ -55,7 +55,7 @@ http:
           port: 8081
 
         # Third option: listen on the given UNIX socket
-        - socket: /tmp/mas.sock
+        - socket: /tmp/pasion.sock
 
         # Fourth option: grab an already open file descriptor given by the parent process
         # This is useful when using systemd socket activation

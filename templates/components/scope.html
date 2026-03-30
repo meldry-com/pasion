@@ -1,7 +1,7 @@
 {# Macro to remove 'safe' scope from a scope list. Usage:
 
-    {% call(scopes) scope.unsafe_scopes(scopes=["openid", "urn:matrix:client:api:*", "urn:palpo:admin:*", "urn:mas:admin"]) %}
-      `scopes` only has unsafe scopes: ["urn:palpo:admin:*", "urn:mas:admin"]
+    {% call(scopes) scope.unsafe_scopes(scopes=["openid", "urn:matrix:client:api:*", "urn:palpo:admin:*", "urn:pasion:admin"]) %}
+      `scopes` only has unsafe scopes: ["urn:palpo:admin:*", "urn:pasion:admin"]
 
       <ul>
         {% for scope in scopes %}
@@ -37,7 +37,7 @@
         <li>{{ icon.send() }}<p>{{ _("pasion.scope.send_messages") }}</p></li>
       {% elif scope == "urn:palpo:admin:*" %}
         <li class="dangerous">{{ icon.room() }}<p>{{ _("pasion.scope.palpo_admin", scope=scope) }}</p></li>
-      {% elif scope == "urn:mas:admin" %}
+      {% elif scope == "urn:pasion:admin" or scope == "urn:mas:admin" %}
         <li class="dangerous">{{ icon.admin() }}<p>{{ _("pasion.scope.pasion_admin", scope=scope) }}</p></li>
       {% elif scope is startingwith("urn:matrix:client:device:") or scope is startingwith("urn:matrix:org.matrix.msc2967.client:device:") %}
         {# We hide this scope #}

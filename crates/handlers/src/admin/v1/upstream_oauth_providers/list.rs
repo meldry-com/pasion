@@ -243,7 +243,7 @@ mod tests {
         setup();
         let pool = pasion_storage_pg::test_utils::setup_test_pool().await;
         let mut state = TestState::from_pool(pool.clone()).await.unwrap();
-        let admin_token = state.token_with_scope("urn:mas:admin").await;
+        let admin_token = state.token_with_scope("urn:pasion:admin").await;
         create_test_providers(&mut state).await;
 
         let request = Request::get("/api/admin/v1/upstream-oauth-providers")
@@ -335,7 +335,7 @@ mod tests {
         setup();
         let pool = pasion_storage_pg::test_utils::setup_test_pool().await;
         let mut state = TestState::from_pool(pool.clone()).await.unwrap();
-        let admin_token = state.token_with_scope("urn:mas:admin").await;
+        let admin_token = state.token_with_scope("urn:pasion:admin").await;
         create_test_providers(&mut state).await;
 
         let request = Request::get("/api/admin/v1/upstream-oauth-providers?filter[enabled]=true")
@@ -405,7 +405,7 @@ mod tests {
         setup();
         let pool = pasion_storage_pg::test_utils::setup_test_pool().await;
         let mut state = TestState::from_pool(pool.clone()).await.unwrap();
-        let admin_token = state.token_with_scope("urn:mas:admin").await;
+        let admin_token = state.token_with_scope("urn:pasion:admin").await;
         create_test_providers(&mut state).await;
 
         let request = Request::get("/api/admin/v1/upstream-oauth-providers?filter[enabled]=false")
@@ -456,7 +456,7 @@ mod tests {
         setup();
         let pool = pasion_storage_pg::test_utils::setup_test_pool().await;
         let mut state = TestState::from_pool(pool.clone()).await.unwrap();
-        let admin_token = state.token_with_scope("urn:mas:admin").await;
+        let admin_token = state.token_with_scope("urn:pasion:admin").await;
         create_test_providers(&mut state).await;
 
         // Test first page with limit of 2
@@ -574,7 +574,7 @@ mod tests {
         setup();
         let pool = pasion_storage_pg::test_utils::setup_test_pool().await;
         let mut state = TestState::from_pool(pool.clone()).await.unwrap();
-        let admin_token = state.token_with_scope("urn:mas:admin").await;
+        let admin_token = state.token_with_scope("urn:pasion:admin").await;
 
         let request =
             Request::get("/api/admin/v1/upstream-oauth-providers?filter[enabled]=invalid")
@@ -590,7 +590,7 @@ mod tests {
         setup();
         let pool = pasion_storage_pg::test_utils::setup_test_pool().await;
         let mut state = TestState::from_pool(pool.clone()).await.unwrap();
-        let admin_token = state.token_with_scope("urn:mas:admin").await;
+        let admin_token = state.token_with_scope("urn:pasion:admin").await;
         create_test_providers(&mut state).await;
 
         // Test count=false

@@ -243,7 +243,7 @@ impl OAuth2Session {
                 user_id: None,
                 user_session_id: None,
                 client_id: Ulid::from_bytes([0x05; 16]),
-                scope: "urn:mas:admin".to_owned(),
+                scope: "urn:pasion:admin".to_owned(),
                 user_agent: None,
                 last_active_at: None,
                 last_active_ip: None,
@@ -806,7 +806,7 @@ impl PersonalSession {
                 owner_client_id: Some(Ulid::from_string("01FSHN9AG0DJ6AC5HQ9X6H4RP7").unwrap()),
                 actor_user_id: Ulid::from_string("01FSHN9AG0MZAA6S4AF7CTV32E").unwrap(),
                 human_name: "CI/CD Pipeline Token".to_owned(),
-                scope: "openid urn:mas:admin".to_owned(),
+                scope: "openid urn:pasion:admin".to_owned(),
                 last_active_at: Some(DateTime::from_timestamp(1_642_348_000, 0).unwrap()), /* 2022-01-16T17:26:40Z */
                 last_active_ip: Some("203.0.113.10".parse().unwrap()),
                 expires_at: Some(DateTime::from_timestamp(1_642_999_000, 0).unwrap()),

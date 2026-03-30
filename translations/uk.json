@@ -234,7 +234,7 @@
     "scope": {
       "edit_profile": "Редагування профілю та контактних даних",
       "manage_sessions": "Керування пристроями та сеансами",
-      "pasion_admin": "Керування користувачами (urn:mas:admin)",
+      "pasion_admin": "Керування користувачами (urn:pasion:admin)",
       "send_messages": "Надсилати нові повідомлення від вашого імені",
       "palpo_admin": "Адмініструвати сервер (urn:palpo:admin:*)",
       "view_messages": "Перегляд наявних повідомлень і даних",

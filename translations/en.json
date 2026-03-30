@@ -653,10 +653,10 @@
       }
     },
     "scope": {
-      "pasion_admin": "Manage users (urn:mas:admin)",
+      "pasion_admin": "Manage users (urn:pasion:admin)",
       "@mas_admin": {
         "context": "components/scope.html:52:54-91",
-        "description": "Displayed when the 'urn:mas:admin' scope is requested"
+        "description": "Displayed when the 'urn:pasion:admin' scope is requested"
       },
       "send_messages": "Send new messages on your behalf",
       "@send_messages": {
