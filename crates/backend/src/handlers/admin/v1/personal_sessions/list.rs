@@ -160,7 +160,7 @@ impl Scribe for RouteError {
     }
 }
 
-#[handler]
+#[endpoint]
 #[tracing::instrument(name = "handler.admin.v1.personal_sessions.list", skip_all)]
 pub async fn handler(
     req: &mut Request,

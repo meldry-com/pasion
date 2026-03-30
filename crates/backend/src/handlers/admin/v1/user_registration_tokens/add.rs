@@ -57,7 +57,7 @@ pub struct RequestBody {
     expires_at: Option<DateTime<Utc>>,
 }
 
-#[handler]
+#[endpoint]
 #[tracing::instrument(name = "handler.admin.v1.user_registration_tokens.post", skip_all)]
 pub async fn handler(
     req: &mut Request,

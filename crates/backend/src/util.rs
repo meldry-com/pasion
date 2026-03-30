@@ -21,6 +21,41 @@ use pasion_templates::{SiteConfigExt, Templates};
 use tokio_util::{sync::CancellationToken, task::TaskTracker};
 use tracing::Instrument;
 
+/// Check whether `c` is a valid character for a username.
+fn valid_username_character(c: char) -> bool {
+    c.is_ascii_lowercase()
+        || c.is_ascii_digit()
+        || c == '='
+        || c == '_'
+        || c == '-'
+        || c == '.'
+        || c == '/'
+        || c == '+'
+}
+
+/// Check whether `username` is a valid username.
+///
+/// Usernames must be non-empty, at most 255 characters, must not start with
+/// an underscore, and may only contain lowercase ASCII letters, digits, and
+/// the characters `= _ - . / +`.
+pub fn username_valid(username: &str) -> bool {
+    if username.is_empty() || username.len() > 255 {
+        return false;
+    }
+
+    // Should not start with an underscore
+    if username.starts_with('_') {
+        return false;
+    }
+
+    // Should only contain valid characters
+    if !username.chars().all(valid_username_character) {
+        return false;
+    }
+
+    true
+}
+
 pub async fn password_manager_from_config(
     config: &PasswordsConfig,
 ) -> Result<PasswordManager, anyhow::Error> {

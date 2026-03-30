@@ -1,6 +1,7 @@
 #![allow(clippy::module_name_repetitions)]
 
 use pasion_data::{Pagination, pagination::Edge};
+use salvo::oapi::ToSchema;
 use schemars::JsonSchema;
 use serde::Serialize;
 use ulid::Ulid;
@@ -286,5 +287,50 @@ impl ErrorResponse {
             head = error.source();
         }
         Self { errors }
+    }
+}
+
+// ---------------------------------------------------------------------------
+// ToSchema implementations for response wrappers.
+//
+// These provide a reasonable JSON:API-shaped OpenAPI schema for the generic
+// response envelopes used by admin handlers, without requiring every inner
+// resource type `T` to also implement `ToSchema`.
+// ---------------------------------------------------------------------------
+
+impl<T: 'static> ToSchema for PaginatedResponse<T> {
+    fn to_schema(_components: &mut salvo::oapi::Components) -> salvo::oapi::RefOr<salvo::oapi::Schema> {
+        use salvo::oapi::*;
+        Object::new()
+            .property("meta", Object::new()
+                .property("count", Object::new().schema_type(BasicType::Integer)))
+            .property("data", Array::new(Object::new()
+                .property("type", Object::new().schema_type(BasicType::String))
+                .property("id", Object::new().schema_type(BasicType::String))
+                .property("attributes", Object::new())))
+            .property("links", Object::new()
+                .property("self", Object::new().schema_type(BasicType::String))
+                .property("first", Object::new().schema_type(BasicType::String))
+                .property("last", Object::new().schema_type(BasicType::String))
+                .property("next", Object::new().schema_type(BasicType::String))
+                .property("prev", Object::new().schema_type(BasicType::String)))
+            .required("links")
+            .into()
+    }
+}
+
+impl<T: 'static> ToSchema for SingleResponse<T> {
+    fn to_schema(_components: &mut salvo::oapi::Components) -> salvo::oapi::RefOr<salvo::oapi::Schema> {
+        use salvo::oapi::*;
+        Object::new()
+            .property("data", Object::new()
+                .property("type", Object::new().schema_type(BasicType::String))
+                .property("id", Object::new().schema_type(BasicType::String))
+                .property("attributes", Object::new()))
+            .property("links", Object::new()
+                .property("self", Object::new().schema_type(BasicType::String)))
+            .required("data")
+            .required("links")
+            .into()
     }
 }

@@ -39,7 +39,7 @@ impl Scribe for RouteError {
     }
 }
 
-#[handler]
+#[endpoint]
 #[tracing::instrument(name = "handler.admin.v1.user_emails.delete", skip_all)]
 pub async fn handler(req: &mut Request, depot: &Depot) -> Result<StatusCode, RouteError> {
     let call_context = extract_call_context(req, depot).await?;

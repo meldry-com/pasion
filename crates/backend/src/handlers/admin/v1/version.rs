@@ -1,18 +1,19 @@
 use crate::salvo_utils::InternalError;
 use pasion_data::AppVersion;
+use salvo::oapi::ToSchema;
 use salvo::prelude::*;
 use schemars::JsonSchema;
 use serde::Serialize;
 
 use crate::handlers::{admin::call_context::extract_call_context, rest::DepotExt};
 
-#[derive(Serialize, JsonSchema)]
+#[derive(Serialize, JsonSchema, ToSchema)]
 pub struct Version {
     /// The semver version of the app
     pub version: &'static str,
 }
 
-#[handler]
+#[endpoint]
 #[tracing::instrument(name = "handler.admin.v1.version", skip_all)]
 pub async fn handler(req: &mut Request, depot: &Depot) -> Result<Json<Version>, InternalError> {
     let _call_context = extract_call_context(req, depot).await?;

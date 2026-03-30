@@ -59,7 +59,7 @@ impl Scribe for RouteError {
 }
 
 /// List all known notification template keys.
-#[handler]
+#[endpoint]
 #[tracing::instrument(name = "handler.admin.v1.notification_templates.list", skip_all)]
 pub async fn list_handler(
     req: &mut Request,
@@ -86,7 +86,7 @@ pub async fn list_handler(
 ///
 /// Returns `501 Not Implemented` until the template publishing workflow
 /// is fully designed.
-#[handler]
+#[endpoint]
 #[tracing::instrument(name = "handler.admin.v1.notification_templates.publish", skip_all)]
 pub async fn publish_handler(
     req: &mut Request,

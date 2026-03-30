@@ -29,9 +29,6 @@ const RESULT: Key = Key::from_static_str("result");
 
 #[derive(Clone, Copy, Debug)]
 struct ActivityRecord {
-    // XXX: We don't actually use the start time for now
-    #[allow(dead_code)]
-    start_time: DateTime<Utc>,
     end_time: DateTime<Utc>,
     ip: Option<IpAddr>,
 }
@@ -150,7 +147,6 @@ impl Worker {
                         self.pending_records
                             .entry((kind, id))
                             .or_insert_with(|| ActivityRecord {
-                                start_time: date_time,
                                 end_time: date_time,
                                 ip,
                             });

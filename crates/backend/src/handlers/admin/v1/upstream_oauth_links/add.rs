@@ -67,7 +67,7 @@ pub struct RequestBody {
     human_account_name: Option<String>,
 }
 
-#[handler]
+#[endpoint]
 #[tracing::instrument(name = "handler.admin.v1.upstream_oauth_links.post", skip_all)]
 pub async fn handler(
     req: &mut Request,

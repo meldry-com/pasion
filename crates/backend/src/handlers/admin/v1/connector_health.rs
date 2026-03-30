@@ -2,6 +2,7 @@
 
 use crate::record_error;
 use pasion_matrix::ConnectorRegistry;
+use salvo::oapi::ToSchema;
 use salvo::{http::StatusCode, prelude::*};
 use schemars::JsonSchema;
 use serde::Serialize;
@@ -10,7 +11,7 @@ use crate::handlers::{
     admin::call_context::extract_call_context, admin::response::ErrorResponse, rest::DepotExt,
 };
 
-#[derive(Serialize, JsonSchema)]
+#[derive(Serialize, JsonSchema, ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct ProviderHealth {
     /// The connector provider name.
@@ -27,7 +28,7 @@ pub struct ProviderHealth {
     error: Option<String>,
 }
 
-#[derive(Serialize, JsonSchema)]
+#[derive(Serialize, JsonSchema, ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct ConnectorHealthResponse {
     /// Health results for each registered provider.
@@ -69,7 +70,7 @@ fn get_registry(depot: &Depot) -> Option<ConnectorRegistry> {
         .ok()
 }
 
-#[handler]
+#[endpoint]
 #[tracing::instrument(name = "handler.admin.v1.connector_health", skip_all)]
 pub async fn handler(
     req: &mut Request,

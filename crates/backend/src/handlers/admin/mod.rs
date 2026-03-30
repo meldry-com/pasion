@@ -24,6 +24,50 @@ pub mod v1;
 
 pub use self::call_context::CallContext;
 
+/// Implement [`salvo::oapi::EndpointOutRegister`] for an admin `RouteError`.
+///
+/// Accepts a list of `(status_code, description)` tuples.  The generated
+/// implementation adds each pair as an error response with a JSON error
+/// body to the OpenAPI operation.
+///
+/// # Example
+///
+/// ```ignore
+/// impl_endpoint_out_register!(RouteError, [
+///     ("404", "Not found"),
+///     ("500", "Internal server error"),
+/// ]);
+/// ```
+macro_rules! impl_endpoint_out_register {
+    ($ty:ty, [ $(($status:expr, $desc:expr)),* $(,)? ]) => {
+        impl salvo::oapi::EndpointOutRegister for $ty {
+            fn register(
+                _components: &mut salvo::oapi::Components,
+                _operation: &mut salvo::oapi::Operation,
+            ) {
+                use salvo::oapi::*;
+
+                let error_schema = Object::new()
+                    .property("errors", Array::new(
+                        Object::new()
+                            .property("title", Object::new().schema_type(BasicType::String))
+                            .required("title")
+                    ));
+
+                $(
+                    {
+                        let response = Response::new($desc)
+                            .add_content("application/json", Content::new(error_schema.clone()));
+                        _operation.responses.insert($status, RefOr::Type(response));
+                    }
+                )*
+            }
+        }
+    };
+}
+
+pub(crate) use impl_endpoint_out_register;
+
 /// Common error response shape for admin API endpoints.
 ///
 /// Individual handlers keep their own `RouteError` enums but can convert
@@ -53,7 +97,7 @@ pub fn has_admin_scope(scope: &oauth2_types::scope::Scope) -> bool {
 
 /// Render the Swagger UI page for the Admin API documentation.
 
-#[handler]
+#[endpoint]
 pub async fn swagger(depot: &Depot, res: &mut Response) -> Result<(), InternalError> {
     let url_builder = depot.url_builder()?;
     let templates = depot.templates()?;
@@ -63,7 +107,7 @@ pub async fn swagger(depot: &Depot, res: &mut Response) -> Result<(), InternalEr
     Ok(())
 }
 
-#[handler]
+#[endpoint]
 pub async fn swagger_callback(depot: &Depot, res: &mut Response) -> Result<(), InternalError> {
     let url_builder = depot.url_builder()?;
     let templates = depot.templates()?;

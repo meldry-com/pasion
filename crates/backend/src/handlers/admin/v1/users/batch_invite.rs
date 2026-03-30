@@ -66,7 +66,7 @@ pub struct BatchInviteResponse {
     data: Vec<SingleResponse<UserRegistrationToken>>,
 }
 
-#[handler]
+#[endpoint]
 #[tracing::instrument(name = "handler.admin.v1.users.batch_invite", skip_all)]
 pub async fn handler(
     req: &mut Request,

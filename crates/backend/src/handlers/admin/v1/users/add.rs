@@ -16,36 +16,7 @@ use crate::handlers::{
     },
     rest::DepotExt,
 };
-
-fn valid_username_character(c: char) -> bool {
-    c.is_ascii_lowercase()
-        || c.is_ascii_digit()
-        || c == '='
-        || c == '_'
-        || c == '-'
-        || c == '.'
-        || c == '/'
-        || c == '+'
-}
-
-// XXX: this should be shared with the rest handler
-fn username_valid(username: &str) -> bool {
-    if username.is_empty() || username.len() > 255 {
-        return false;
-    }
-
-    // Should not start with an underscore
-    if username.starts_with('_') {
-        return false;
-    }
-
-    // Should only contain valid characters
-    if !username.chars().all(valid_username_character) {
-        return false;
-    }
-
-    true
-}
+use crate::util::username_valid;
 
 #[derive(Debug, thiserror::Error)]
 pub enum RouteError {
@@ -104,7 +75,7 @@ pub struct RequestBody {
     skip_homeserver_check: bool,
 }
 
-#[handler]
+#[endpoint]
 #[tracing::instrument(name = "handler.admin.v1.users.add", skip_all)]
 pub async fn handler(
     req: &mut Request,

@@ -64,7 +64,7 @@ pub struct RequestBody {
     hs_erase: Option<bool>,
 }
 
-#[handler]
+#[endpoint]
 #[tracing::instrument(name = "handler.admin.v1.users.update", skip_all)]
 pub async fn handler(
     req: &mut Request,

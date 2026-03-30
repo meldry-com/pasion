@@ -37,7 +37,7 @@ impl Scribe for RouteError {
     }
 }
 
-#[handler]
+#[endpoint]
 #[tracing::instrument(name = "handler.admin.v1.upstream_oauth_links.delete", skip_all)]
 pub async fn handler(req: &mut Request, depot: &Depot) -> Result<StatusCode, RouteError> {
     let call_context = extract_call_context(req, depot).await?;

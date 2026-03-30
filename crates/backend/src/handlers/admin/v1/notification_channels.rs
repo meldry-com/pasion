@@ -57,7 +57,7 @@ impl Scribe for RouteError {
     }
 }
 
-#[handler]
+#[endpoint]
 #[tracing::instrument(name = "handler.admin.v1.notification_channels", skip_all)]
 pub async fn handler(
     req: &mut Request,

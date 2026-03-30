@@ -69,7 +69,7 @@ pub struct RequestBody {
     skip_password_check: Option<bool>,
 }
 
-#[handler]
+#[endpoint]
 #[tracing::instrument(name = "handler.admin.v1.users.set_password", skip_all)]
 pub async fn handler(req: &mut Request, depot: &Depot) -> Result<StatusCode, RouteError> {
     let call_context = extract_call_context(req, depot).await?;

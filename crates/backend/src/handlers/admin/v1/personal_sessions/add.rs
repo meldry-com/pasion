@@ -80,7 +80,7 @@ pub struct RequestBody {
     expires_in: Option<u32>,
 }
 
-#[handler]
+#[endpoint]
 #[tracing::instrument(name = "handler.admin.v1.personal_sessions.add", skip_all)]
 pub async fn handler(
     req: &mut Request,

@@ -37,7 +37,7 @@ impl Scribe for RouteError {
     }
 }
 
-#[handler]
+#[endpoint]
 #[tracing::instrument(name = "handler.admin.v1.policy_data.get_latest", skip_all)]
 pub async fn handler(
     req: &mut Request,

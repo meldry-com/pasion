@@ -57,7 +57,7 @@ pub struct RequestBody {
     is_primary: Option<bool>,
 }
 
-#[handler]
+#[endpoint]
 #[tracing::instrument(name = "handler.admin.v1.user_emails.update", skip_all)]
 pub async fn handler(
     req: &mut Request,

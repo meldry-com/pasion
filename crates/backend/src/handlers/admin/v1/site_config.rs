@@ -1,4 +1,5 @@
 use crate::salvo_utils::InternalError;
+use salvo::oapi::ToSchema;
 use salvo::prelude::*;
 use schemars::JsonSchema;
 use serde::Serialize;
@@ -7,7 +8,7 @@ use crate::handlers::admin::call_context::extract_call_context;
 use crate::handlers::rest::DepotExt;
 
 #[allow(clippy::struct_excessive_bools)]
-#[derive(Serialize, JsonSchema)]
+#[derive(Serialize, JsonSchema, ToSchema)]
 pub struct SiteConfig {
     /// The Matrix server name for which this instance is configured
     server_name: String,
@@ -49,7 +50,7 @@ pub struct SiteConfig {
     pub minimum_password_complexity: u8,
 }
 
-#[handler]
+#[endpoint]
 #[tracing::instrument(name = "handler.admin.v1.site_config", skip_all)]
 pub async fn handler(req: &mut Request, depot: &Depot) -> Result<Json<SiteConfig>, InternalError> {
     let _call_context = extract_call_context(req, depot).await?;

@@ -577,8 +577,7 @@ fn build_admin_router(router: Router) -> Router {
     use crate::handlers::admin;
     use crate::handlers::admin::v1::*;
 
-    router.push(
-        Router::with_path("/api/admin/v1")
+    let admin_router = Router::with_path("/api/admin/v1")
             // Documentation
             .push(Router::with_path("doc").get(admin::swagger))
             .push(Router::with_path("doc/callback").get(admin::swagger_callback))
@@ -717,8 +716,19 @@ fn build_admin_router(router: Router) -> Router {
                     .push(Router::with_path("latest").get(policy_data::get_latest::handler))
                     .push(Router::with_path("{id}").get(policy_data::get::handler))
                     .put(policy_data::set::handler),
-            ),
-    )
+            );
+
+    // Generate OpenAPI spec and Swagger UI for the admin API
+    let admin_doc = salvo::oapi::OpenApi::new("Pasion Admin API", env!("CARGO_PKG_VERSION"))
+        .merge_router(&admin_router);
+
+    router
+        .push(admin_router)
+        .push(admin_doc.into_router("/api-doc/admin/openapi.json"))
+        .push(
+            salvo::oapi::swagger_ui::SwaggerUi::new("/api-doc/admin/openapi.json")
+                .into_router("admin-swagger-ui"),
+        )
 }
 
 #[handler]

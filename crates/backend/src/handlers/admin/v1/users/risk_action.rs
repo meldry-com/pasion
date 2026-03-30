@@ -77,7 +77,7 @@ pub struct RiskActionResponse {
     sessions_terminated: Option<usize>,
 }
 
-#[handler]
+#[endpoint]
 #[tracing::instrument(name = "handler.admin.v1.users.risk_action", skip_all)]
 pub async fn handler(
     req: &mut Request,

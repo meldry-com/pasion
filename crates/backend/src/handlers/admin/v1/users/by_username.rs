@@ -45,7 +45,7 @@ pub struct UsernamePathParam {
     username: String,
 }
 
-#[handler]
+#[endpoint]
 #[tracing::instrument(name = "handler.admin.v1.users.by_username", skip_all)]
 pub async fn handler(
     req: &mut Request,

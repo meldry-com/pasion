@@ -5,6 +5,7 @@ use pasion_data::personal::{
     PersonalAccessToken as DataModelPersonalAccessToken,
     session::{PersonalSession as DataModelPersonalSession, PersonalSessionOwner},
 };
+use salvo::oapi::ToSchema;
 use schemars::JsonSchema;
 use serde::Serialize;
 use thiserror::Error;
@@ -31,7 +32,7 @@ pub trait Resource {
 }
 
 /// A user
-#[derive(Serialize, JsonSchema)]
+#[derive(Serialize, JsonSchema, ToSchema)]
 pub struct User {
     #[serde(skip)]
     id: Ulid,
@@ -142,7 +143,7 @@ impl Resource for User {
 }
 
 /// An email address for a user
-#[derive(Serialize, JsonSchema)]
+#[derive(Serialize, JsonSchema, ToSchema)]
 pub struct UserEmail {
     #[serde(skip)]
     id: Ulid,
@@ -205,7 +206,7 @@ impl UserEmail {
 }
 
 /// A OAuth 2.0 session
-#[derive(Serialize, JsonSchema)]
+#[derive(Serialize, JsonSchema, ToSchema)]
 pub struct OAuth2Session {
     #[serde(skip)]
     id: Ulid,
@@ -319,7 +320,7 @@ impl Resource for OAuth2Session {
 }
 
 /// The browser (cookie) session for a user
-#[derive(Serialize, JsonSchema)]
+#[derive(Serialize, JsonSchema, ToSchema)]
 pub struct UserSession {
     #[serde(skip)]
     id: Ulid,
@@ -403,7 +404,7 @@ impl Resource for UserSession {
 }
 
 /// An upstream OAuth 2.0 link
-#[derive(Serialize, JsonSchema)]
+#[derive(Serialize, JsonSchema, ToSchema)]
 pub struct UpstreamOAuthLink {
     #[serde(skip)]
     id: Ulid,
@@ -488,7 +489,7 @@ impl UpstreamOAuthLink {
 }
 
 /// The policy data
-#[derive(Serialize, JsonSchema)]
+#[derive(Serialize, JsonSchema, ToSchema)]
 pub struct PolicyData {
     #[serde(skip)]
     id: Ulid,
@@ -535,7 +536,7 @@ impl PolicyData {
 }
 
 /// A registration token
-#[derive(Serialize, JsonSchema)]
+#[derive(Serialize, JsonSchema, ToSchema)]
 pub struct UserRegistrationToken {
     #[serde(skip)]
     id: Ulid,
@@ -621,7 +622,7 @@ impl UserRegistrationToken {
 }
 
 /// An upstream OAuth 2.0 provider
-#[derive(Serialize, JsonSchema)]
+#[derive(Serialize, JsonSchema, ToSchema)]
 pub struct UpstreamOAuthProvider {
     #[serde(skip)]
     id: Ulid,
@@ -709,7 +710,7 @@ pub struct InconsistentPersonalSession {
 // Note: we don't expose a separate concept of personal access tokens to the
 // admin API; we merge the relevant attributes into the personal session.
 /// A personal session (session using personal access tokens)
-#[derive(Serialize, JsonSchema)]
+#[derive(Serialize, JsonSchema, ToSchema)]
 pub struct PersonalSession {
     #[serde(skip)]
     id: Ulid,

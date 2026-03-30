@@ -40,7 +40,7 @@ impl Scribe for RouteError {
     }
 }
 
-#[handler]
+#[endpoint]
 #[tracing::instrument(name = "handler.admin.v1.oauth2_session.get", skip_all)]
 pub async fn handler(
     req: &mut Request,

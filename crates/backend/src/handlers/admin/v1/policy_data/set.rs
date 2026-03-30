@@ -63,7 +63,7 @@ pub struct SetPolicyDataRequest {
     pub data: serde_json::Value,
 }
 
-#[handler]
+#[endpoint]
 #[tracing::instrument(name = "handler.admin.v1.policy_data.set", skip_all)]
 pub async fn handler(
     req: &mut Request,
