@@ -476,6 +476,7 @@ fn build_rest_api_router(router: Router) -> Router {
             .push(
                 Router::with_path("viewer")
                     .get(viewer::get_viewer)
+                    .push(Router::with_path("security").get(viewer::get_security_summary))
                     .push(Router::with_path("password").post(password::set_password))
                     .push(Router::with_path("display-name").post(users::set_display_name))
                     .push(
@@ -610,6 +611,10 @@ fn build_admin_router(router: Router) -> Router {
                             .get(users::by_username::handler),
                     )
                     .push(
+                        Router::with_path("batch-invite")
+                            .post(users::batch_invite::handler),
+                    )
+                    .push(
                         Router::with_path("<id>")
                             .get(users::get::handler)
                             .push(
@@ -620,7 +625,8 @@ fn build_admin_router(router: Router) -> Router {
                             .push(Router::with_path("deactivate").post(users::deactivate::handler))
                             .push(Router::with_path("reactivate").post(users::reactivate::handler))
                             .push(Router::with_path("lock").post(users::lock::handler))
-                            .push(Router::with_path("unlock").post(users::unlock::handler)),
+                            .push(Router::with_path("unlock").post(users::unlock::handler))
+                            .push(Router::with_path("risk-action").post(users::risk_action::handler)),
                     ),
             )
             // User emails

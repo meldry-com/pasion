@@ -1,4 +1,9 @@
 use pasion_data_model::SiteConfig;
+use pasion_storage::{
+    RepositoryAccess,
+    upstream_oauth2::UpstreamOAuthLinkFilter,
+    user::BrowserSessionFilter,
+};
 use salvo::oapi::ToSchema;
 use salvo::prelude::*;
 use serde::Serialize;
@@ -258,4 +263,71 @@ fn map_account_profile_error(error: AccountProfileError) -> RouteError {
         }
         AccountProfileError::Repository(error) => RouteError::from(error),
     }
+}
+
+// ── Response type for security summary ────────────────────────
+
+#[derive(Serialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
+struct SecuritySummaryResponse {
+    has_password: bool,
+    active_sessions_count: usize,
+    linked_providers_count: usize,
+    verified_emails_count: usize,
+    verified_phones_count: usize,
+}
+
+// ── GET /api/v1/viewer/security ───────────────────────────────
+
+/// Returns a lightweight security summary for the current user, including
+/// password status, active session count, linked provider count, and
+/// verified email/phone counts.
+#[endpoint]
+pub async fn get_security_summary(
+    req: &mut Request,
+    depot: &Depot,
+) -> Result<Json<SecuritySummaryResponse>, RouteError> {
+    let repo_factory = depot.repo_factory()?;
+    let clock = make_clock();
+
+    let activity_tracker = extract_bound_activity_tracker(req, depot);
+    let session_info = extract_session_info(req, depot);
+
+    let repo = repo_factory.create().await?;
+    let (requester, mut repo) =
+        get_requester(&clock, &activity_tracker, repo, &session_info).await?;
+
+    let user = match &requester.entity {
+        super::RequestingEntity::BrowserSession(session) => &session.user,
+        _ => return Err(RouteError::Unauthorized),
+    };
+
+    // Check password existence
+    let has_password = repo.user_password().active(user).await?.is_some();
+
+    // Count active browser sessions
+    let session_filter = BrowserSessionFilter::new().for_user(user).active_only();
+    let active_sessions_count = repo.browser_session().count(session_filter).await?;
+
+    // Count linked upstream OAuth providers
+    let link_filter = UpstreamOAuthLinkFilter::new().for_user(user);
+    let linked_providers_count = repo.upstream_oauth_link().count(link_filter).await?;
+
+    // Count verified emails (all emails in the repository are verified)
+    let emails = repo.user_email().all(user).await?;
+    let verified_emails_count = emails.len();
+
+    // Count verified phones
+    let phones = repo.user_phone().all(user).await?;
+    let verified_phones_count = phones.len();
+
+    repo.cancel().await?;
+
+    Ok(Json(SecuritySummaryResponse {
+        has_password,
+        active_sessions_count,
+        linked_providers_count,
+        verified_emails_count,
+        verified_phones_count,
+    }))
 }

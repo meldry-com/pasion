@@ -490,6 +490,32 @@ diesel::table! {
     }
 }
 
+diesel::table! {
+    admin_operation_logs (admin_operation_log_id) {
+        admin_operation_log_id -> Uuid,
+        admin_user_id -> Uuid,
+        operation -> Text,
+        resource_type -> Text,
+        resource_id -> Nullable<Uuid>,
+        details -> Jsonb,
+        ip_address -> Nullable<Inet>,
+        user_agent -> Nullable<Text>,
+        created_at -> Timestamptz,
+    }
+}
+
+diesel::table! {
+    account_security_events (account_security_event_id) {
+        account_security_event_id -> Uuid,
+        user_id -> Uuid,
+        event_type -> Text,
+        metadata -> Jsonb,
+        ip_address -> Nullable<Inet>,
+        user_agent -> Nullable<Text>,
+        created_at -> Timestamptz,
+    }
+}
+
 // Foreign key relationships
 diesel::joinable!(user_passwords -> users (user_id));
 diesel::joinable!(user_emails -> users (user_id));
@@ -548,4 +574,6 @@ diesel::allow_tables_to_appear_in_same_query!(
     notification_requests,
     notification_deliveries,
     notification_event_logs,
+    admin_operation_logs,
+    account_security_events,
 );

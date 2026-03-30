@@ -1,7 +1,9 @@
 use std::sync::Arc;
 
+use pasion_data_model::audit::AdminOperation;
 use pasion_matrix::HomeserverConnection;
 use pasion_salvo_utils::record_error;
+use pasion_storage::audit::NewAdminOperationLog;
 use salvo::{http::StatusCode, prelude::*};
 use ulid::Ulid;
 
@@ -58,8 +60,14 @@ pub async fn handler(
     depot: &Depot,
 ) -> Result<Json<SingleResponse<User>>, RouteError> {
     let call_context = extract_call_context(req, depot).await?;
-    let crate::admin::call_context::CallContext { mut repo, .. } = call_context;
+    let crate::admin::call_context::CallContext {
+        mut repo,
+        clock,
+        user: admin_user,
+        ..
+    } = call_context;
     let id = extract_ulid_param(req)?;
+    let mut rng = crate::rest::make_rng();
     let homeserver = depot.homeserver()?;
 
     // id already extracted above
@@ -77,6 +85,22 @@ pub async fn handler(
 
     // Now reactivate the user in our database
     let user = repo.user().reactivate(user).await?;
+
+    if let Some(admin_user) = &admin_user {
+        repo.audit()
+            .add_admin_operation(
+                &mut rng,
+                &clock,
+                NewAdminOperationLog::new(
+                    admin_user.id,
+                    AdminOperation::UserReactivated,
+                    "user",
+                    serde_json::json!({}),
+                )
+                .with_resource_id(user.id),
+            )
+            .await?;
+    }
 
     repo.save().await?;
 

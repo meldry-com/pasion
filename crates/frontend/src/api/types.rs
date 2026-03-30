@@ -702,3 +702,23 @@ pub struct DeviceLinkResponse {
 pub struct DeviceConsentResponse {
     pub status: String,
 }
+
+// ── Security summary (GET /api/v1/viewer/security) ───────────
+
+#[derive(Debug, Clone, PartialEq, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SecuritySummaryResponse {
+    pub has_password: bool,
+    pub active_sessions_count: usize,
+    pub linked_providers_count: usize,
+    pub verified_emails_count: usize,
+    pub verified_phones_count: usize,
+}
+
+// ── Linked accounts list (GET /api/v1/linked-accounts) ───────
+
+#[derive(Debug, Clone, PartialEq, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct LinkedAccountsResponse {
+    pub accounts: Vec<LinkedAccount>,
+}

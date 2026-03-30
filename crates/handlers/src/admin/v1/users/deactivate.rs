@@ -1,6 +1,9 @@
-use pasion_data_model::BoxRng;
+use pasion_data_model::{BoxRng, audit::AdminOperation};
 use pasion_salvo_utils::record_error;
-use pasion_storage::queue::{DeactivateUserJob, QueueJobRepositoryExt as _};
+use pasion_storage::{
+    audit::NewAdminOperationLog,
+    queue::{DeactivateUserJob, QueueJobRepositoryExt as _},
+};
 use salvo::{http::StatusCode, prelude::*};
 use schemars::JsonSchema;
 use serde::Deserialize;
@@ -66,7 +69,10 @@ pub async fn handler(
 ) -> Result<Json<SingleResponse<User>>, RouteError> {
     let call_context = extract_call_context(req, depot).await?;
     let crate::admin::call_context::CallContext {
-        mut repo, clock, ..
+        mut repo,
+        clock,
+        user: admin_user,
+        ..
     } = call_context;
     let id = extract_ulid_param(req)?;
     let mut rng = crate::rest::make_rng();
@@ -90,6 +96,22 @@ pub async fn handler(
             DeactivateUserJob::new(&user, !params.skip_erase),
         )
         .await?;
+
+    if let Some(admin_user) = &admin_user {
+        repo.audit()
+            .add_admin_operation(
+                &mut rng,
+                &clock,
+                NewAdminOperationLog::new(
+                    admin_user.id,
+                    AdminOperation::UserDeactivated,
+                    "user",
+                    serde_json::json!({}),
+                )
+                .with_resource_id(user.id),
+            )
+            .await?;
+    }
 
     repo.save().await?;
 

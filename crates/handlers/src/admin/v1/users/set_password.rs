@@ -1,5 +1,6 @@
-use pasion_data_model::BoxRng;
+use pasion_data_model::{BoxRng, audit::AdminOperation};
 use pasion_salvo_utils::record_error;
+use pasion_storage::audit::NewAdminOperationLog;
 use salvo::{http::StatusCode, prelude::*};
 use schemars::JsonSchema;
 use serde::Deserialize;
@@ -75,7 +76,10 @@ pub struct RequestBody {
 pub async fn handler(req: &mut Request, depot: &Depot) -> Result<StatusCode, RouteError> {
     let call_context = extract_call_context(req, depot).await?;
     let crate::admin::call_context::CallContext {
-        mut repo, clock, ..
+        mut repo,
+        clock,
+        user: admin_user,
+        ..
     } = call_context;
     let id = extract_ulid_param(req)?;
     let mut rng = crate::rest::make_rng();
@@ -114,6 +118,22 @@ pub async fn handler(req: &mut Request, depot: &Depot) -> Result<StatusCode, Rou
     repo.user_password()
         .add(&mut rng, &clock, &user, version, hashed_password, None)
         .await?;
+
+    if let Some(admin_user) = &admin_user {
+        repo.audit()
+            .add_admin_operation(
+                &mut rng,
+                &clock,
+                NewAdminOperationLog::new(
+                    admin_user.id,
+                    AdminOperation::UserPasswordSet,
+                    "user",
+                    serde_json::json!({}),
+                )
+                .with_resource_id(user.id),
+            )
+            .await?;
+    }
 
     repo.save().await?;
 

@@ -1,4 +1,6 @@
+use pasion_data_model::audit::AdminOperation;
 use pasion_salvo_utils::record_error;
+use pasion_storage::audit::NewAdminOperationLog;
 use salvo::{http::StatusCode, prelude::*};
 use schemars::JsonSchema;
 use serde::Deserialize;
@@ -60,8 +62,14 @@ pub async fn handler(
     depot: &Depot,
 ) -> Result<Json<SingleResponse<User>>, RouteError> {
     let call_context = extract_call_context(req, depot).await?;
-    let crate::admin::call_context::CallContext { mut repo, .. } = call_context;
+    let crate::admin::call_context::CallContext {
+        mut repo,
+        clock,
+        user: admin_user,
+        ..
+    } = call_context;
     let id = extract_ulid_param(req)?;
+    let mut rng = crate::rest::make_rng();
     let params: RequestBody = req
         .parse_json()
         .await
@@ -78,6 +86,22 @@ pub async fn handler(
         .user()
         .set_can_request_admin(user, params.admin)
         .await?;
+
+    if let Some(admin_user) = &admin_user {
+        repo.audit()
+            .add_admin_operation(
+                &mut rng,
+                &clock,
+                NewAdminOperationLog::new(
+                    admin_user.id,
+                    AdminOperation::UserAdminSet,
+                    "user",
+                    serde_json::json!({}),
+                )
+                .with_resource_id(user.id),
+            )
+            .await?;
+    }
 
     repo.save().await?;
 
