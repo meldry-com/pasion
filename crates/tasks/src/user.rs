@@ -2,7 +2,10 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
-//! Background jobs for user lifecycle management (deactivation / reactivation).
+//! Jobs that drive the user lifecycle -- deactivation and reactivation.
+//!
+//! Both jobs follow a two-phase pattern: mutate the local database first,
+//! then propagate changes to the Matrix homeserver.
 
 use anyhow::Context;
 use async_trait::async_trait;
@@ -11,7 +14,8 @@ use pasion_data::{
     oauth2::OAuth2SessionFilter,
     personal::PersonalSessionFilter,
     queue::{DeactivateUserJob, ReactivateUserJob},
-    user::{BrowserSessionFilter, UserEmailFilter, UserRepository},
+    user::{BrowserSessionFilter, User, UserEmailFilter, UserRepository},
+    BoxRepository, Clock,
 };
 use tracing::info;
 
@@ -20,7 +24,69 @@ use crate::{
     new_queue::{JobContext, JobError, RunnableJob},
 };
 
-// ── Deactivate ───────────────────────────────────────────────────────
+/// Terminate every active session that belongs to `target` and log the counts.
+///
+/// The function finishes browser sessions, OAuth 2.0 sessions, and both
+/// the "actor" and "owner" flavours of personal sessions.
+async fn terminate_all_sessions_for(
+    repo: &mut BoxRepository,
+    wall_clock: &dyn Clock,
+    target: &User,
+) -> Result<(), JobError> {
+    // Browser sessions
+    let browser_count = repo
+        .browser_session()
+        .finish_bulk(
+            wall_clock,
+            BrowserSessionFilter::new().for_user(target).active_only(),
+        )
+        .await
+        .map_err(JobError::retry)?;
+    info!(sessions = browser_count, kind = "browser", "sessions terminated");
+
+    // OAuth 2.0 sessions
+    let oauth_count = repo
+        .oauth2_session()
+        .finish_bulk(
+            wall_clock,
+            OAuth2SessionFilter::new().for_user(target).active_only(),
+        )
+        .await
+        .map_err(JobError::retry)?;
+    info!(sessions = oauth_count, kind = "oauth2", "sessions terminated");
+
+    // Personal sessions where the user is the *actor*
+    let actor_count = repo
+        .personal_session()
+        .revoke_bulk(
+            wall_clock,
+            PersonalSessionFilter::new()
+                .for_actor_user(target)
+                .active_only(),
+        )
+        .await
+        .map_err(JobError::retry)?;
+    info!(sessions = actor_count, kind = "personal/actor", "sessions revoked");
+
+    // Personal sessions where the user is the *owner*
+    let owner_count = repo
+        .personal_session()
+        .revoke_bulk(
+            wall_clock,
+            PersonalSessionFilter::new()
+                .for_owner_user(target)
+                .active_only(),
+        )
+        .await
+        .map_err(JobError::retry)?;
+    info!(sessions = owner_count, kind = "personal/owner", "sessions revoked");
+
+    Ok(())
+}
+
+// ---------------------------------------------------------------------------
+// DeactivateUserJob
+// ---------------------------------------------------------------------------
 
 #[async_trait]
 impl RunnableJob for DeactivateUserJob {
@@ -30,89 +96,45 @@ impl RunnableJob for DeactivateUserJob {
         skip_all,
     )]
     async fn run(&self, state: &State, _ctx: JobContext) -> Result<(), JobError> {
-        let clock = state.clock();
-        let matrix = state.matrix_connection();
+        let wall_clock = state.clock();
+        let hs = state.matrix_connection();
         let mut repo = state.repository().await.map_err(JobError::retry)?;
 
-        // ── 1. Look up the user ──────────────────────────────────────
-        let user = repo
+        // Fetch the target user record.
+        let target = repo
             .user()
             .lookup(self.user_id())
             .await
             .map_err(JobError::retry)?
-            .context("user not found")
+            .context("target user does not exist")
             .map_err(JobError::fail)?;
 
-        // ── 2. Mark as deactivated in our database ───────────────────
-        let user = repo
+        // Flip the deactivated flag in our local store.
+        let target = repo
             .user()
-            .deactivate(clock, user)
+            .deactivate(wall_clock, target)
             .await
-            .context("failed to deactivate user")
+            .context("could not mark user as deactivated")
             .map_err(JobError::retry)?;
 
-        // ── 3. Terminate every session type ──────────────────────────
+        // Revoke / finish every kind of session the user may hold.
+        terminate_all_sessions_for(&mut repo, wall_clock, &target).await?;
 
-        let killed_browser = repo
-            .browser_session()
-            .finish_bulk(
-                clock,
-                BrowserSessionFilter::new().for_user(&user).active_only(),
-            )
-            .await
-            .map_err(JobError::retry)?;
-        info!(count = killed_browser, "terminated browser sessions");
-
-        let killed_oauth = repo
-            .oauth2_session()
-            .finish_bulk(
-                clock,
-                OAuth2SessionFilter::new().for_user(&user).active_only(),
-            )
-            .await
-            .map_err(JobError::retry)?;
-        info!(count = killed_oauth, "terminated OAuth 2.0 sessions");
-
-        let killed_personal_actor = repo
-            .personal_session()
-            .revoke_bulk(
-                clock,
-                PersonalSessionFilter::new()
-                    .for_actor_user(&user)
-                    .active_only(),
-            )
-            .await
-            .map_err(JobError::retry)?;
-        info!(count = killed_personal_actor, "revoked personal sessions (actor)");
-
-        let killed_personal_owner = repo
-            .personal_session()
-            .revoke_bulk(
-                clock,
-                PersonalSessionFilter::new()
-                    .for_owner_user(&user)
-                    .active_only(),
-            )
-            .await
-            .map_err(JobError::retry)?;
-        info!(count = killed_personal_owner, "revoked personal sessions (owner)");
-
-        // ── 4. Remove email addresses ────────────────────────────────
-
-        let removed_emails = repo
+        // Strip email addresses so they can be reclaimed.
+        let email_count = repo
             .user_email()
-            .remove_bulk(UserEmailFilter::new().for_user(&user))
+            .remove_bulk(UserEmailFilter::new().for_user(&target))
             .await
             .map_err(JobError::retry)?;
-        info!(count = removed_emails, "removed email addresses");
+        info!(removed = email_count, "email addresses purged");
 
-        // ── 5. Persist before calling out to the homeserver ──────────
+        // Commit before talking to the homeserver -- if the HS call fails
+        // the job will retry, but the local state is already consistent.
         repo.save().await.map_err(JobError::retry)?;
 
-        // ── 6. Notify the homeserver ─────────────────────────────────
-        info!(username = %user.username, "deactivating user on homeserver");
-        matrix
-            .delete_user(&user.username, self.hs_erase())
+        // Finally, tell the homeserver to remove / erase the account.
+        info!(username = %target.username, "requesting homeserver deactivation");
+        hs.delete_user(&target.username, self.hs_erase())
             .await
             .map_err(JobError::retry)?;
 
@@ -120,7 +142,9 @@ impl RunnableJob for DeactivateUserJob {
     }
 }
 
-// ── Reactivate ───────────────────────────────────────────────────────
+// ---------------------------------------------------------------------------
+// ReactivateUserJob
+// ---------------------------------------------------------------------------
 
 #[async_trait]
 impl RunnableJob for ReactivateUserJob {
@@ -130,28 +154,27 @@ impl RunnableJob for ReactivateUserJob {
         skip_all,
     )]
     async fn run(&self, state: &State, _ctx: JobContext) -> Result<(), JobError> {
-        let matrix = state.matrix_connection();
+        let hs = state.matrix_connection();
         let mut repo = state.repository().await.map_err(JobError::retry)?;
 
-        let user = repo
+        let target = repo
             .user()
             .lookup(self.user_id())
             .await
             .map_err(JobError::retry)?
-            .context("user not found")
+            .context("target user does not exist")
             .map_err(JobError::fail)?;
 
-        // Reactivate on the homeserver first — only mark locally once that
-        // succeeds so the user cannot log in before the HS is ready.
-        info!(username = %user.username, "reactivating user on homeserver");
-        matrix
-            .reactivate_user(&user.username)
+        // Re-enable the account on the homeserver *before* flipping the local
+        // flag -- this way the user cannot authenticate until the HS is ready.
+        info!(username = %target.username, "requesting homeserver reactivation");
+        hs.reactivate_user(&target.username)
             .await
             .map_err(JobError::retry)?;
 
-        let _user = repo
+        let _reactivated = repo
             .user()
-            .reactivate(user)
+            .reactivate(target)
             .await
             .map_err(JobError::retry)?;
 

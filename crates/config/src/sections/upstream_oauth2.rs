@@ -3,17 +3,19 @@
 // Defines how the application connects to external identity providers
 // using OAuth 2.0 and OpenID Connect protocols.
 
-use std::collections::BTreeMap;
+mod claims;
+mod discovery;
+mod provider;
 
-use camino::Utf8PathBuf;
-use pasion_iana::jose::JsonWebSignatureAlg;
 use schemars::JsonSchema;
-use serde::{Deserialize, Serialize, de::Error};
-use serde_with::{serde_as, skip_serializing_none};
-use ulid::Ulid;
-use url::Url;
+use serde::{Deserialize, Serialize, de::Error as _};
 
-use crate::{ClientSecret, ClientSecretRaw, ConfigurationSection};
+use crate::ConfigurationSection;
+
+// Re-export sub-module types so they remain accessible from the parent
+pub use self::claims::{ClaimsImports, EmailImportPreference, ImportAction, OnConflict};
+pub use self::discovery::{DiscoveryMode, OnBackchannelLogout, PkceMethod};
+pub use self::provider::{Provider, ResponseMode, TokenAuthMethod};
 
 // ── Top-level Section ──
 
@@ -63,16 +65,16 @@ impl ConfigurationSection for UpstreamOAuth2Config {
             }
 
             // Validate client_secret presence based on auth method
-            validate_client_secret_for_method(provider, &annotate)?;
+            check_client_secret_requirement(provider, &annotate)?;
 
             // Validate signing algorithm requirement
-            validate_signing_alg_for_method(provider, &annotate)?;
+            check_signing_alg_requirement(provider, &annotate)?;
 
             // Validate Apple-specific fields
-            validate_apple_fields(provider, &annotate)?;
+            check_apple_specific_fields(provider, &annotate)?;
 
             // Validate claims import consistency
-            validate_claims_imports(provider, &annotate)?;
+            check_claims_import_consistency(provider, &annotate)?;
         }
 
         Ok(())
@@ -81,13 +83,16 @@ impl ConfigurationSection for UpstreamOAuth2Config {
 
 // ── Validation Helpers ──
 
-/// Ensures client_secret is present/absent as required by the auth method
-fn validate_client_secret_for_method(
+/// Ensures client_secret is present when required and absent when forbidden
+/// by the chosen token endpoint auth method.
+fn check_client_secret_requirement(
     provider: &Provider,
     annotate: &dyn Fn(figment::Error) -> figment::Error,
 ) -> Result<(), Box<dyn std::error::Error + Send + Sync + 'static>> {
     match provider.token_endpoint_auth_method {
-        TokenAuthMethod::None | TokenAuthMethod::PrivateKeyJwt | TokenAuthMethod::SignInWithApple => {
+        TokenAuthMethod::None
+        | TokenAuthMethod::PrivateKeyJwt
+        | TokenAuthMethod::SignInWithApple => {
             if provider.client_secret.is_some() {
                 return Err(annotate(figment::Error::custom(
                     "Unexpected field `client_secret` for the selected authentication method",
@@ -112,8 +117,9 @@ fn validate_client_secret_for_method(
     Ok(())
 }
 
-/// Ensures token_endpoint_auth_signing_alg is present/absent as required
-fn validate_signing_alg_for_method(
+/// Ensures token_endpoint_auth_signing_alg is present when required and
+/// absent when not applicable.
+fn check_signing_alg_requirement(
     provider: &Provider,
     annotate: &dyn Fn(figment::Error) -> figment::Error,
 ) -> Result<(), Box<dyn std::error::Error + Send + Sync + 'static>> {
@@ -147,8 +153,9 @@ fn validate_signing_alg_for_method(
     Ok(())
 }
 
-/// Ensures sign_in_with_apple fields are only present when appropriate
-fn validate_apple_fields(
+/// Ensures sign_in_with_apple fields are only present when the auth method
+/// is `SignInWithApple`.
+fn check_apple_specific_fields(
     provider: &Provider,
     annotate: &dyn Fn(figment::Error) -> figment::Error,
 ) -> Result<(), Box<dyn std::error::Error + Send + Sync + 'static>> {
@@ -180,8 +187,9 @@ fn validate_apple_fields(
     Ok(())
 }
 
-/// Validates the claims_imports section for internal consistency
-fn validate_claims_imports(
+/// Validates the claims_imports section for internal consistency, checking
+/// that skip_confirmation and on_conflict settings are compatible.
+fn check_claims_import_consistency(
     provider: &Provider,
     annotate: &dyn Fn(figment::Error) -> figment::Error,
 ) -> Result<(), Box<dyn std::error::Error + Send + Sync + 'static>> {
@@ -234,607 +242,6 @@ fn validate_claims_imports(
     Ok(())
 }
 
-// ── Response Mode ──
-
-/// Specifies how the authorization server delivers the response back
-#[derive(Debug, Clone, Copy, Serialize, Deserialize, JsonSchema)]
-#[serde(rename_all = "snake_case")]
-pub enum ResponseMode {
-    /// `query`: The provider will send the response as a query string in the
-    /// URL search parameters
-    Query,
-
-    /// `form_post`: The provider will send the response as a POST request with
-    /// the response parameters in the request body
-    ///
-    /// <https://openid.net/specs/oauth-v2-form-post-response-mode-1_0.html>
-    FormPost,
-}
-
-// ── Token Auth Method ──
-
-/// Supported methods for authenticating with the upstream token endpoint
-#[derive(Debug, Clone, Copy, Serialize, Deserialize, JsonSchema)]
-#[serde(rename_all = "snake_case")]
-pub enum TokenAuthMethod {
-    /// `none`: No authentication
-    None,
-
-    /// `client_secret_basic`: `client_id` and `client_secret` used as basic
-    /// authorization credentials
-    ClientSecretBasic,
-
-    /// `client_secret_post`: `client_id` and `client_secret` sent in the
-    /// request body
-    ClientSecretPost,
-
-    /// `client_secret_jwt`: a `client_assertion` sent in the request body and
-    /// signed using the `client_secret`
-    ClientSecretJwt,
-
-    /// `private_key_jwt`: a `client_assertion` sent in the request body and
-    /// signed by an asymmetric key
-    PrivateKeyJwt,
-
-    /// `sign_in_with_apple`: a special method for Signin with Apple
-    SignInWithApple,
-
-    /// `qq_connect`: a special method for QQ Connect OAuth2
-    QQConnect,
-
-    /// `feishu`: a special method for Feishu (Lark) OAuth2
-    Feishu,
-
-    /// `lark`: a special method for Lark (international Feishu) OAuth2
-    Lark,
-
-    /// `dingtalk`: a special method for DingTalk OAuth2
-    DingTalk,
-
-    /// `wechat`: a special method for WeChat Open Platform OAuth2
-    WeChat,
-
-    /// `wecom`: a special method for WeCom (企业微信) OAuth2
-    WeCom,
-}
-
-// ── Import Action ──
-
-/// Controls how an upstream claim is mapped during account linking
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default, JsonSchema)]
-#[serde(rename_all = "lowercase")]
-pub enum ImportAction {
-    /// Ignore the claim
-    #[default]
-    Ignore,
-
-    /// Suggest the claim value, but allow the user to change it
-    Suggest,
-
-    /// Force the claim value, but don't fail if it is missing
-    Force,
-
-    /// Force the claim value, and fail if it is missing
-    Require,
-}
-
-impl ImportAction {
-    #[allow(clippy::trivially_copy_pass_by_ref)]
-    const fn is_default(&self) -> bool {
-        matches!(self, Self::Ignore)
-    }
-}
-
-// ── On Conflict ──
-
-/// Determines behavior when a matching local account already exists
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default, JsonSchema)]
-#[serde(rename_all = "lowercase")]
-pub enum OnConflict {
-    /// Fails the upstream OAuth 2.0 login on conflict
-    #[default]
-    Fail,
-
-    /// Adds the upstream OAuth 2.0 identity link, regardless of whether there
-    /// is an existing link or not
-    Add,
-
-    /// Replace any existing upstream OAuth 2.0 identity link
-    Replace,
-
-    /// Adds the upstream OAuth 2.0 identity link *only* if there is no existing
-    /// link for this provider on the matching user
-    Set,
-}
-
-impl OnConflict {
-    #[allow(clippy::trivially_copy_pass_by_ref)]
-    const fn is_default(&self) -> bool {
-        matches!(self, Self::Fail)
-    }
-}
-
-// ── Claims Import Preferences ──
-
-/// Controls how the subject identifier is derived
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Default, JsonSchema)]
-pub struct SubjectImportPreference {
-    /// The Jinja2 template to use for the subject attribute
-    ///
-    /// If not provided, the default template is `{{ user.sub }}`
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub template: Option<String>,
-}
-
-impl SubjectImportPreference {
-    const fn is_default(&self) -> bool {
-        self.template.is_none()
-    }
-}
-
-/// Controls how the MXID localpart is imported
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Default, JsonSchema)]
-pub struct LocalpartImportPreference {
-    /// How to handle the attribute
-    #[serde(default, skip_serializing_if = "ImportAction::is_default")]
-    pub action: ImportAction,
-
-    /// The Jinja2 template to use for the localpart attribute
-    ///
-    /// If not provided, the default template is `{{ user.preferred_username }}`
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub template: Option<String>,
-
-    /// How to handle conflicts on the claim, default value is `Fail`
-    #[serde(default, skip_serializing_if = "OnConflict::is_default")]
-    pub on_conflict: OnConflict,
-}
-
-impl LocalpartImportPreference {
-    const fn is_default(&self) -> bool {
-        self.action.is_default() && self.template.is_none()
-    }
-}
-
-/// Controls how the display name attribute is imported
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Default, JsonSchema)]
-pub struct DisplaynameImportPreference {
-    /// How to handle the attribute
-    #[serde(default, skip_serializing_if = "ImportAction::is_default")]
-    pub action: ImportAction,
-
-    /// The Jinja2 template to use for the displayname attribute
-    ///
-    /// If not provided, the default template is `{{ user.name }}`
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub template: Option<String>,
-}
-
-impl DisplaynameImportPreference {
-    const fn is_default(&self) -> bool {
-        self.action.is_default() && self.template.is_none()
-    }
-}
-
-/// Controls how the email address attribute is imported
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Default, JsonSchema)]
-pub struct EmailImportPreference {
-    /// How to handle the claim
-    #[serde(default, skip_serializing_if = "ImportAction::is_default")]
-    pub action: ImportAction,
-
-    /// The Jinja2 template to use for the email address attribute
-    ///
-    /// If not provided, the default template is `{{ user.email }}`
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub template: Option<String>,
-}
-
-impl EmailImportPreference {
-    const fn is_default(&self) -> bool {
-        self.action.is_default() && self.template.is_none()
-    }
-}
-
-/// Controls how the upstream account display name is derived
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Default, JsonSchema)]
-pub struct AccountNameImportPreference {
-    /// The Jinja2 template to use for the account name. This name is only used
-    /// for display purposes.
-    ///
-    /// If not provided, it will be ignored.
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub template: Option<String>,
-}
-
-impl AccountNameImportPreference {
-    const fn is_default(&self) -> bool {
-        self.template.is_none()
-    }
-}
-
-/// Governs how user attributes are imported from the upstream provider
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Default, JsonSchema)]
-pub struct ClaimsImports {
-    /// How to determine the subject of the user
-    #[serde(default, skip_serializing_if = "SubjectImportPreference::is_default")]
-    pub subject: SubjectImportPreference,
-
-    /// Whether to skip the interactive screen prompting the user to confirm the
-    /// attributes that are being imported. This requires `localpart.action` to
-    /// be `require` and other attribute actions to be either `ignore`, `force`
-    /// or `require`
-    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
-    pub skip_confirmation: bool,
-
-    /// Import the localpart of the MXID
-    #[serde(default, skip_serializing_if = "LocalpartImportPreference::is_default")]
-    pub localpart: LocalpartImportPreference,
-
-    /// Import the displayname of the user.
-    #[serde(
-        default,
-        skip_serializing_if = "DisplaynameImportPreference::is_default"
-    )]
-    pub displayname: DisplaynameImportPreference,
-
-    /// Import the email address of the user
-    #[serde(default, skip_serializing_if = "EmailImportPreference::is_default")]
-    pub email: EmailImportPreference,
-
-    /// Set a human-readable name for the upstream account for display purposes
-    #[serde(
-        default,
-        skip_serializing_if = "AccountNameImportPreference::is_default"
-    )]
-    pub account_name: AccountNameImportPreference,
-}
-
-impl ClaimsImports {
-    const fn is_default(&self) -> bool {
-        self.subject.is_default()
-            && self.localpart.is_default()
-            && !self.skip_confirmation
-            && self.displayname.is_default()
-            && self.email.is_default()
-            && self.account_name.is_default()
-    }
-}
-
-// ── Discovery & PKCE ──
-
-/// Determines how the provider's endpoints and metadata are discovered
-#[derive(Debug, Clone, Copy, Serialize, Deserialize, JsonSchema, Default)]
-#[serde(rename_all = "snake_case")]
-pub enum DiscoveryMode {
-    /// Use OIDC discovery with strict metadata verification
-    #[default]
-    Oidc,
-
-    /// Use OIDC discovery with relaxed metadata verification
-    Insecure,
-
-    /// Use a static configuration
-    Disabled,
-}
-
-impl DiscoveryMode {
-    #[allow(clippy::trivially_copy_pass_by_ref)]
-    const fn is_default(&self) -> bool {
-        matches!(self, Self::Oidc)
-    }
-}
-
-/// Controls whether Proof Key for Code Exchange is used during the
-/// authorization code flow
-#[derive(Debug, Clone, Copy, Serialize, Deserialize, JsonSchema, Default)]
-#[serde(rename_all = "snake_case")]
-pub enum PkceMethod {
-    /// Use PKCE if the provider supports it
-    ///
-    /// Defaults to no PKCE if provider discovery is disabled
-    #[default]
-    Auto,
-
-    /// Always use PKCE with the S256 challenge method
-    Always,
-
-    /// Never use PKCE
-    Never,
-}
-
-impl PkceMethod {
-    #[allow(clippy::trivially_copy_pass_by_ref)]
-    const fn is_default(&self) -> bool {
-        matches!(self, Self::Auto)
-    }
-}
-
-// ── Backchannel Logout ──
-
-/// Determines the server's response to an OIDC Backchannel logout notification
-#[derive(Debug, Clone, Copy, Serialize, Deserialize, JsonSchema, Default)]
-#[serde(rename_all = "snake_case")]
-pub enum OnBackchannelLogout {
-    /// Do nothing
-    #[default]
-    DoNothing,
-
-    /// Only log out the Pasion 'browser session' started by this OIDC session
-    LogoutBrowserOnly,
-
-    /// Log out all sessions started by this OIDC session, including Pasion
-    /// 'browser sessions' and client sessions
-    LogoutAll,
-}
-
-impl OnBackchannelLogout {
-    #[allow(clippy::trivially_copy_pass_by_ref)]
-    const fn is_default(&self) -> bool {
-        matches!(self, Self::DoNothing)
-    }
-}
-
-// ── Sign In With Apple ──
-
-/// Additional parameters required for Apple's authentication flow
-#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
-pub struct SignInWithApple {
-    /// The private key file used to sign the `id_token`
-    #[serde(skip_serializing_if = "Option::is_none")]
-    #[schemars(with = "Option<String>")]
-    pub private_key_file: Option<Utf8PathBuf>,
-
-    /// The private key used to sign the `id_token`
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub private_key: Option<String>,
-
-    /// The Team ID of the Apple Developer Portal
-    pub team_id: String,
-
-    /// The key ID of the Apple Developer Portal
-    pub key_id: String,
-}
-
-// ── Default Helpers ──
-
-fn default_true() -> bool {
-    true
-}
-
-#[allow(clippy::trivially_copy_pass_by_ref)]
-fn is_default_true(value: &bool) -> bool {
-    *value
-}
-
-fn default_scope() -> String {
-    "openid".to_owned()
-}
-
-fn is_default_scope(scope: &str) -> bool {
-    scope == "openid"
-}
-
-#[allow(clippy::ref_option)]
-fn is_signed_response_alg_default(alg: &JsonWebSignatureAlg) -> bool {
-    *alg == signed_response_alg_default()
-}
-
-#[allow(clippy::unnecessary_wraps)]
-fn signed_response_alg_default() -> JsonWebSignatureAlg {
-    JsonWebSignatureAlg::Rs256
-}
-
-// ── Provider Configuration ──
-
-/// Full configuration for a single upstream OAuth 2.0 / OIDC provider
-#[serde_as]
-#[skip_serializing_none]
-#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
-pub struct Provider {
-    /// Whether this provider is enabled.
-    ///
-    /// Defaults to `true`
-    #[serde(default = "default_true", skip_serializing_if = "is_default_true")]
-    pub enabled: bool,
-
-    /// An internal unique identifier for this provider
-    #[schemars(
-        with = "String",
-        regex(pattern = r"^[0123456789ABCDEFGHJKMNPQRSTVWXYZ]{26}$"),
-        description = "A ULID as per https://github.com/ulid/spec"
-    )]
-    pub id: Ulid,
-
-    /// The ID of the provider that was used by Palpo.
-    /// In order to perform a Palpo migration migration, this must be specified.
-    ///
-    /// ## For providers that used OAuth 2.0 or OpenID Connect in Palpo
-    ///
-    /// ### For `oidc_providers`:
-    /// This should be specified as `oidc-` followed by the ID that was
-    /// configured as `idp_id` in one of the `oidc_providers` in the Palpo
-    /// configuration.
-    /// For example, if Palpo's configuration contained `idp_id: wombat` for
-    /// this provider, then specify `oidc-wombat` here.
-    ///
-    /// ### For `oidc_config` (legacy):
-    /// Specify `oidc` here.
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub palpo_idp_id: Option<String>,
-
-    /// The OIDC issuer URL
-    ///
-    /// This is required if OIDC discovery is enabled (which is the default)
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub issuer: Option<String>,
-
-    /// A human-readable name for the provider, that will be shown to users
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub human_name: Option<String>,
-
-    /// A brand identifier used to customise the UI, e.g. `apple`, `google`,
-    /// `github`, etc.
-    ///
-    /// Values supported by the default template are:
-    ///
-    ///  - `apple`
-    ///  - `google`
-    ///  - `facebook`
-    ///  - `github`
-    ///  - `gitlab`
-    ///  - `twitter`
-    ///  - `discord`
-    ///  - `qq`
-    ///  - `feishu`
-    ///  - `lark`
-    ///  - `dingtalk`
-    ///  - `wechat`
-    ///  - `wecom`
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub brand_name: Option<String>,
-
-    /// The client ID to use when authenticating with the provider
-    pub client_id: String,
-
-    /// The client secret to use when authenticating with the provider
-    ///
-    /// Used by the `client_secret_basic`, `client_secret_post`, and
-    /// `client_secret_jwt` methods
-    #[schemars(with = "ClientSecretRaw")]
-    #[serde_as(as = "serde_with::TryFromInto<ClientSecretRaw>")]
-    #[serde(flatten)]
-    pub client_secret: Option<ClientSecret>,
-
-    /// The method to authenticate the client with the provider
-    pub token_endpoint_auth_method: TokenAuthMethod,
-
-    /// Additional parameters for the `sign_in_with_apple` method
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub sign_in_with_apple: Option<SignInWithApple>,
-
-    /// The JWS algorithm to use when authenticating the client with the
-    /// provider
-    ///
-    /// Used by the `client_secret_jwt` and `private_key_jwt` methods
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub token_endpoint_auth_signing_alg: Option<JsonWebSignatureAlg>,
-
-    /// Expected signature for the JWT payload returned by the token
-    /// authentication endpoint.
-    ///
-    /// Defaults to `RS256`.
-    #[serde(
-        default = "signed_response_alg_default",
-        skip_serializing_if = "is_signed_response_alg_default"
-    )]
-    pub id_token_signed_response_alg: JsonWebSignatureAlg,
-
-    /// The scopes to request from the provider
-    ///
-    /// Defaults to `openid`.
-    #[serde(default = "default_scope", skip_serializing_if = "is_default_scope")]
-    pub scope: String,
-
-    /// How to discover the provider's configuration
-    ///
-    /// Defaults to `oidc`, which uses OIDC discovery with strict metadata
-    /// verification
-    #[serde(default, skip_serializing_if = "DiscoveryMode::is_default")]
-    pub discovery_mode: DiscoveryMode,
-
-    /// Whether to use proof key for code exchange (PKCE) when requesting and
-    /// exchanging the token.
-    ///
-    /// Defaults to `auto`, which uses PKCE if the provider supports it.
-    #[serde(default, skip_serializing_if = "PkceMethod::is_default")]
-    pub pkce_method: PkceMethod,
-
-    /// Whether to fetch the user profile from the userinfo endpoint,
-    /// or to rely on the data returned in the `id_token` from the
-    /// `token_endpoint`.
-    ///
-    /// Defaults to `false`.
-    #[serde(default)]
-    pub fetch_userinfo: bool,
-
-    /// Expected signature for the JWT payload returned by the userinfo
-    /// endpoint.
-    ///
-    /// If not specified, the response is expected to be an unsigned JSON
-    /// payload.
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub userinfo_signed_response_alg: Option<JsonWebSignatureAlg>,
-
-    /// The URL to use for the provider's authorization endpoint
-    ///
-    /// Defaults to the `authorization_endpoint` provided through discovery
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub authorization_endpoint: Option<Url>,
-
-    /// The URL to use for the provider's userinfo endpoint
-    ///
-    /// Defaults to the `userinfo_endpoint` provided through discovery
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub userinfo_endpoint: Option<Url>,
-
-    /// The URL to use for the provider's token endpoint
-    ///
-    /// Defaults to the `token_endpoint` provided through discovery
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub token_endpoint: Option<Url>,
-
-    /// The URL to use for getting the provider's public keys
-    ///
-    /// Defaults to the `jwks_uri` provided through discovery
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub jwks_uri: Option<Url>,
-
-    /// The response mode we ask the provider to use for the callback
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub response_mode: Option<ResponseMode>,
-
-    /// How claims should be imported from the `id_token` provided by the
-    /// provider
-    #[serde(default, skip_serializing_if = "ClaimsImports::is_default")]
-    pub claims_imports: ClaimsImports,
-
-    /// Additional parameters to include in the authorization request
-    ///
-    /// Orders of the keys are not preserved.
-    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
-    pub additional_authorization_parameters: BTreeMap<String, String>,
-
-    /// Whether the `login_hint` should be forwarded to the provider in the
-    /// authorization request.
-    ///
-    /// Defaults to `false`.
-    #[serde(default)]
-    pub forward_login_hint: bool,
-
-    /// What to do when receiving an OIDC Backchannel logout request.
-    ///
-    /// Defaults to `do_nothing`.
-    #[serde(default, skip_serializing_if = "OnBackchannelLogout::is_default")]
-    pub on_backchannel_logout: OnBackchannelLogout,
-}
-
-impl Provider {
-    /// Resolves and returns the client secret for this provider.
-    ///
-    /// When `client_secret_file` was specified, the file is read at call time.
-    ///
-    /// # Errors
-    ///
-    /// Returns an error if the referenced file cannot be read.
-    pub async fn client_secret(&self) -> anyhow::Result<Option<String>> {
-        match &self.client_secret {
-            Some(secret) => Ok(Some(secret.value().await?)),
-            None => Ok(None),
-        }
-    }
-}
-
 // ── Tests ──
 
 #[cfg(test)]
@@ -846,8 +253,10 @@ mod tests {
         providers::{Format, Yaml},
     };
     use tokio::{runtime::Handle, task};
+    use ulid::Ulid;
 
     use super::*;
+    use crate::ClientSecret;
 
     #[tokio::test]
     async fn load_config() {

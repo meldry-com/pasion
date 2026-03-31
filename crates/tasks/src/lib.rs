@@ -1,22 +1,17 @@
-//! Background task queue and worker for the Pasion authentication service.
+//! Asynchronous job queue for the Pasion authentication service.
 //!
-//! This crate implements an asynchronous job queue backed by PostgreSQL. Tasks
-//! are enqueued during HTTP request handling and processed by a background
-//! worker. Task types include:
+//! Jobs are enqueued by HTTP handlers and executed in the background by a
+//! PostgreSQL-backed worker.  The main categories are:
 //!
-//! - **Notification delivery** -- sending verification codes, password-reset
-//!   links, and other outbound messages.
-//! - **Homeserver provisioning** -- creating / deactivating Matrix users via the
-//!   homeserver admin API
-//! - **Session cleanup** -- expiring old sessions and tokens
-//! - **Account recovery** -- processing recovery ticket workflows
+//! * **Notifications** -- verification codes, password-reset links, etc.
+//! * **Homeserver provisioning** -- Matrix user creation / deactivation.
+//! * **Cleanup** -- expiring stale sessions, tokens, and grants.
+//! * **Account recovery** -- recovery-ticket workflows.
 //!
-//! # Entry points
+//! Start here:
 //!
-//! - [`init`] -- Register all task handlers and return a [`QueueWorker`] (does
-//!   **not** start processing).
-//! - [`init_and_run`] -- Same as [`init`], but immediately spawns the worker
-//!   onto the provided [`TaskTracker`].
+//! * [`init`] registers every handler and returns an idle [`QueueWorker`].
+//! * [`init_and_run`] does the same but immediately spawns the worker.
 
 use std::sync::{Arc, LazyLock};
 
@@ -35,6 +30,7 @@ use tokio_util::{sync::CancellationToken, task::TaskTracker};
 
 pub use crate::new_queue::QueueWorker;
 
+// ── Sub-modules ─────────────────────────────────────────────────────────
 mod cleanup;
 mod email;
 mod matrix;
@@ -45,6 +41,8 @@ mod sessions;
 mod sms;
 mod user;
 
+// ── Telemetry ───────────────────────────────────────────────────────────
+
 static METER: LazyLock<Meter> = LazyLock::new(|| {
     let scope = opentelemetry::InstrumentationScope::builder(env!("CARGO_PKG_NAME"))
         .with_version(env!("CARGO_PKG_VERSION"))
@@ -54,85 +52,286 @@ static METER: LazyLock<Meter> = LazyLock::new(|| {
     opentelemetry::global::meter_with_scope(scope)
 });
 
+// ── Shared worker state ─────────────────────────────────────────────────
+
+/// Shared state that every background job receives.
 #[derive(Clone)]
 struct State {
-    repository_factory: PgRepositoryFactory,
-    /// Database URL used for tokio-postgres LISTEN/NOTIFY
-    database_url: String,
-    notifications: NotificationCenter,
-    clock: Arc<dyn Clock>,
-    homeserver: Arc<dyn HomeserverConnection>,
-    url_builder: UrlBuilder,
-    site_config: SiteConfig,
+    repo_factory: PgRepositoryFactory,
+    /// Raw database URL kept around for tokio-postgres `LISTEN`/`NOTIFY`.
+    db_url: String,
+    notifier: NotificationCenter,
+    wall_clock: Arc<dyn Clock>,
+    hs_connection: Arc<dyn HomeserverConnection>,
+    urls: UrlBuilder,
+    site_cfg: SiteConfig,
 }
 
 impl State {
+    /// Build a new `State` from its constituent parts.
     pub fn new(
-        repository_factory: PgRepositoryFactory,
-        database_url: String,
+        repo_factory: PgRepositoryFactory,
+        db_url: String,
         clock: impl Clock + 'static,
-        notifications: NotificationCenter,
+        notifier: NotificationCenter,
         homeserver: impl HomeserverConnection + 'static,
-        url_builder: UrlBuilder,
-        site_config: SiteConfig,
+        urls: UrlBuilder,
+        site_cfg: SiteConfig,
     ) -> Self {
         Self {
-            repository_factory,
-            database_url,
-            notifications,
-            clock: Arc::new(clock),
-            homeserver: Arc::new(homeserver),
-            url_builder,
-            site_config,
+            repo_factory,
+            db_url,
+            notifier,
+            wall_clock: Arc::new(clock),
+            hs_connection: Arc::new(homeserver),
+            urls,
+            site_cfg,
         }
     }
 
+    // -- Accessors --------------------------------------------------------
+
     pub fn pool(&self) -> &DieselPool<AsyncPgConnection> {
-        self.repository_factory.pool()
+        self.repo_factory.pool()
     }
 
     pub fn database_url(&self) -> &str {
-        &self.database_url
+        &self.db_url
     }
 
     pub fn clock(&self) -> &dyn Clock {
-        &self.clock
+        &self.wall_clock
     }
 
     pub fn notifications(&self) -> &NotificationCenter {
-        &self.notifications
+        &self.notifier
     }
 
-    // This is fine for now, we may move that to a trait at some point.
+    /// Seed a fresh CSPRNG from the OS entropy source.
     #[allow(clippy::unused_self, clippy::disallowed_methods)]
     pub fn rng(&self) -> rand_chacha::ChaChaRng {
         rand_chacha::ChaChaRng::from_rng(rand::thread_rng()).expect("failed to seed rng")
     }
 
     pub async fn repository(&self) -> Result<BoxRepository, RepositoryError> {
-        self.repository_factory.create().await
+        self.repo_factory.create().await
     }
 
     pub fn matrix_connection(&self) -> &dyn HomeserverConnection {
-        self.homeserver.as_ref()
+        self.hs_connection.as_ref()
     }
 
     pub fn url_builder(&self) -> &UrlBuilder {
-        &self.url_builder
+        &self.urls
     }
 
     pub fn site_config(&self) -> &SiteConfig {
-        &self.site_config
+        &self.site_cfg
     }
 }
 
-/// Initialise the worker, without running it.
+// ── Handler registration ────────────────────────────────────────────────
+
+/// Wire up every known job type so the worker can dispatch them.
+fn register_all_handlers(w: &mut QueueWorker) {
+    use pasion_data::queue;
+
+    // Token & session cleanup
+    w.register_handler::<queue::CleanupRevokedOAuthAccessTokensJob>();
+    w.register_handler::<queue::CleanupExpiredOAuthAccessTokensJob>();
+    w.register_handler::<queue::CleanupRevokedOAuthRefreshTokensJob>();
+    w.register_handler::<queue::CleanupConsumedOAuthRefreshTokensJob>();
+    w.register_handler::<queue::CleanupFinishedOAuth2SessionsJob>();
+    w.register_handler::<queue::CleanupFinishedUserSessionsJob>();
+
+    // Grant & device-code cleanup
+    w.register_handler::<queue::CleanupOAuthAuthorizationGrantsJob>();
+    w.register_handler::<queue::CleanupOAuthDeviceCodeGrantsJob>();
+
+    // User-related cleanup
+    w.register_handler::<queue::CleanupUserRegistrationsJob>();
+    w.register_handler::<queue::CleanupUserRecoverySessionsJob>();
+    w.register_handler::<queue::CleanupUserEmailAuthenticationsJob>();
+
+    // Upstream OAuth cleanup
+    w.register_handler::<queue::CleanupUpstreamOAuthSessionsJob>();
+    w.register_handler::<queue::CleanupUpstreamOAuthLinksJob>();
+
+    // Queue self-maintenance
+    w.register_handler::<queue::CleanupQueueJobsJob>();
+
+    // IP address cleanup
+    w.register_handler::<queue::CleanupInactiveOAuth2SessionIpsJob>();
+    w.register_handler::<queue::CleanupInactiveUserSessionIpsJob>();
+
+    // User lifecycle
+    w.register_handler::<queue::DeactivateUserJob>();
+    w.register_handler::<queue::ReactivateUserJob>();
+
+    // Homeserver device management
+    w.register_handler::<queue::DeleteDeviceJob>();
+    w.register_handler::<queue::ProvisionDeviceJob>();
+    w.register_handler::<queue::ProvisionUserJob>();
+    w.register_handler::<queue::SyncDevicesJob>();
+
+    // Notifications & messaging
+    w.register_handler::<queue::ProcessNotificationDeliveriesJob>();
+    w.register_handler::<queue::DispatchNotificationJob>();
+    w.register_handler::<queue::SendAccountRecoveryEmailsJob>();
+    w.register_handler::<queue::SendEmailAuthenticationCodeJob>();
+    w.register_handler::<queue::SendSmsAuthenticationCodeJob>();
+    w.register_handler::<queue::VerifyEmailJob>();
+
+    // Session expiry
+    w.register_handler::<queue::ExpireInactiveSessionsJob>();
+    w.register_handler::<queue::ExpireInactiveOAuthSessionsJob>();
+    w.register_handler::<queue::ExpireInactiveUserSessionsJob>();
+
+    // Policy data pruning
+    w.register_handler::<queue::PruneStalePolicyDataJob>();
+
+    // Queues that existed in earlier versions but have been superseded.
+    w.register_deprecated_queue("cleanup-expired-tokens");
+    w.register_deprecated_queue("cleanup-finished-compat-sessions");
+    w.register_deprecated_queue("expire-inactive-compat-sessions");
+    w.register_deprecated_queue("cleanup-inactive-compat-session-ips");
+}
+
+// ── Recurring schedules ─────────────────────────────────────────────────
+
+/// Set up every cron-driven recurring job.
 ///
-/// This is mostly useful for tests.
+/// Schedules are deliberately spread across the hour in ~5-minute increments
+/// to keep database load even.
+fn attach_recurring_schedules(
+    w: &mut QueueWorker,
+) -> Result<(), QueueRunnerError> {
+    use pasion_data::queue;
+
+    // -- High-frequency: notification delivery (every minute) -------------
+    w.add_schedule(
+        "process-notification-deliveries",
+        "15 * * * * *".parse()?,
+        queue::ProcessNotificationDeliveriesJob::default(),
+    );
+
+    // -- Hourly token cleanup (minutes 0, 5) ------------------------------
+    w.add_schedule(
+        "cleanup-revoked-oauth-access-tokens",
+        "0 0 * * * *".parse()?,
+        queue::CleanupRevokedOAuthAccessTokensJob,
+    );
+    w.add_schedule(
+        "cleanup-revoked-oauth-refresh-tokens",
+        "0 5 * * * *".parse()?,
+        queue::CleanupRevokedOAuthRefreshTokensJob,
+    );
+    w.add_schedule(
+        "cleanup-consumed-oauth-refresh-tokens",
+        "0 5 * * * *".parse()?,
+        queue::CleanupConsumedOAuthRefreshTokensJob,
+    );
+
+    // -- Hourly session cleanup (minutes 15-25) ---------------------------
+    w.add_schedule(
+        "cleanup-finished-oauth2-sessions",
+        "0 15 * * * *".parse()?,
+        queue::CleanupFinishedOAuth2SessionsJob,
+    );
+    w.add_schedule(
+        "cleanup-finished-user-sessions",
+        "0 20 * * * *".parse()?,
+        queue::CleanupFinishedUserSessionsJob,
+    );
+    w.add_schedule(
+        "cleanup-inactive-oauth2-session-ips",
+        "0 25 * * * *".parse()?,
+        queue::CleanupInactiveOAuth2SessionIpsJob,
+    );
+    w.add_schedule(
+        "cleanup-inactive-user-session-ips",
+        "0 25 * * * *".parse()?,
+        queue::CleanupInactiveUserSessionIpsJob,
+    );
+
+    // -- Hourly grant cleanup (minutes 30-35) -----------------------------
+    w.add_schedule(
+        "cleanup-oauth-authorization-grants",
+        "0 30 * * * *".parse()?,
+        queue::CleanupOAuthAuthorizationGrantsJob,
+    );
+    w.add_schedule(
+        "cleanup-oauth-device-code-grants",
+        "0 35 * * * *".parse()?,
+        queue::CleanupOAuthDeviceCodeGrantsJob,
+    );
+
+    // -- Hourly upstream OAuth cleanup (minute 40) ------------------------
+    w.add_schedule(
+        "cleanup-upstream-oauth-sessions",
+        "0 40 * * * *".parse()?,
+        queue::CleanupUpstreamOAuthSessionsJob,
+    );
+    w.add_schedule(
+        "cleanup-upstream-oauth-links",
+        "0 40 * * * *".parse()?,
+        queue::CleanupUpstreamOAuthLinksJob,
+    );
+
+    // -- Hourly user-related cleanup (minutes 45-55) ----------------------
+    w.add_schedule(
+        "cleanup-user-registrations",
+        "0 45 * * * *".parse()?,
+        queue::CleanupUserRegistrationsJob,
+    );
+    w.add_schedule(
+        "cleanup-user-recovery-sessions",
+        "0 50 * * * *".parse()?,
+        queue::CleanupUserRecoverySessionsJob,
+    );
+    w.add_schedule(
+        "cleanup-user-email-authentications",
+        "0 50 * * * *".parse()?,
+        queue::CleanupUserEmailAuthenticationsJob,
+    );
+    w.add_schedule(
+        "cleanup-queue-jobs",
+        "0 55 * * * *".parse()?,
+        queue::CleanupQueueJobsJob,
+    );
+
+    // -- Less frequent schedules ------------------------------------------
+    w.add_schedule(
+        "cleanup-expired-oauth-access-tokens",
+        // Every 4 hours at minute 5
+        "0 5 */4 * * *".parse()?,
+        queue::CleanupExpiredOAuthAccessTokensJob,
+    );
+    w.add_schedule(
+        "expire-inactive-sessions",
+        // Every 15 minutes at second 30
+        "30 */15 * * * *".parse()?,
+        queue::ExpireInactiveSessionsJob,
+    );
+    w.add_schedule(
+        "prune-stale-policy-data",
+        // Once a day at 02:00
+        "0 0 2 * * *".parse()?,
+        queue::PruneStalePolicyDataJob,
+    );
+
+    Ok(())
+}
+
+// ── Public entry points ─────────────────────────────────────────────────
+
+/// Build the worker with all handlers and schedules but do **not** start it.
+///
+/// Useful in integration tests where you want to drive the worker manually.
 ///
 /// # Errors
 ///
-/// This function can fail if the database connection fails.
+/// Returns an error when the initial database connection fails.
 pub async fn init(
     repository_factory: PgRepositoryFactory,
     database_url: String,
@@ -143,7 +342,7 @@ pub async fn init(
     site_config: &SiteConfig,
     cancellation_token: CancellationToken,
 ) -> Result<QueueWorker, QueueRunnerError> {
-    let state = State::new(
+    let shared = State::new(
         repository_factory,
         database_url,
         clock,
@@ -152,171 +351,20 @@ pub async fn init(
         url_builder,
         site_config.clone(),
     );
-    let mut worker = QueueWorker::new(state, cancellation_token).await?;
 
-    worker
-        .register_handler::<pasion_data::queue::CleanupRevokedOAuthAccessTokensJob>()
-        .register_handler::<pasion_data::queue::CleanupExpiredOAuthAccessTokensJob>()
-        .register_handler::<pasion_data::queue::CleanupRevokedOAuthRefreshTokensJob>()
-        .register_handler::<pasion_data::queue::CleanupConsumedOAuthRefreshTokensJob>()
-        .register_handler::<pasion_data::queue::CleanupUserRegistrationsJob>()
-        .register_handler::<pasion_data::queue::CleanupFinishedOAuth2SessionsJob>()
-        .register_handler::<pasion_data::queue::CleanupFinishedUserSessionsJob>()
-        .register_handler::<pasion_data::queue::CleanupOAuthAuthorizationGrantsJob>()
-        .register_handler::<pasion_data::queue::CleanupOAuthDeviceCodeGrantsJob>()
-        .register_handler::<pasion_data::queue::CleanupUserRecoverySessionsJob>()
-        .register_handler::<pasion_data::queue::CleanupUserEmailAuthenticationsJob>()
-        .register_handler::<pasion_data::queue::CleanupUpstreamOAuthSessionsJob>()
-        .register_handler::<pasion_data::queue::CleanupUpstreamOAuthLinksJob>()
-        .register_handler::<pasion_data::queue::CleanupQueueJobsJob>()
-        .register_handler::<pasion_data::queue::DeactivateUserJob>()
-        .register_handler::<pasion_data::queue::DeleteDeviceJob>()
-        .register_handler::<pasion_data::queue::ProcessNotificationDeliveriesJob>()
-        .register_handler::<pasion_data::queue::ProvisionDeviceJob>()
-        .register_handler::<pasion_data::queue::ProvisionUserJob>()
-        .register_handler::<pasion_data::queue::ReactivateUserJob>()
-        .register_handler::<pasion_data::queue::DispatchNotificationJob>()
-        .register_handler::<pasion_data::queue::SendAccountRecoveryEmailsJob>()
-        .register_handler::<pasion_data::queue::SendEmailAuthenticationCodeJob>()
-        .register_handler::<pasion_data::queue::SendSmsAuthenticationCodeJob>()
-        .register_handler::<pasion_data::queue::SyncDevicesJob>()
-        .register_handler::<pasion_data::queue::VerifyEmailJob>()
-        .register_handler::<pasion_data::queue::ExpireInactiveSessionsJob>()
-        .register_handler::<pasion_data::queue::ExpireInactiveOAuthSessionsJob>()
-        .register_handler::<pasion_data::queue::ExpireInactiveUserSessionsJob>()
-        .register_handler::<pasion_data::queue::PruneStalePolicyDataJob>()
-        .register_handler::<pasion_data::queue::CleanupInactiveOAuth2SessionIpsJob>()
-        .register_handler::<pasion_data::queue::CleanupInactiveUserSessionIpsJob>()
-        .register_deprecated_queue("cleanup-expired-tokens")
-        .register_deprecated_queue("cleanup-finished-compat-sessions")
-        .register_deprecated_queue("expire-inactive-compat-sessions")
-        .register_deprecated_queue("cleanup-inactive-compat-session-ips")
-        // Recurring jobs are spread across the hour at ~5 minute intervals
-        // to avoid clustering and distribute database load evenly.
-        .add_schedule(
-            "process-notification-deliveries",
-            // Run once a minute as a safety net for delayed retries.
-            "15 * * * * *".parse()?,
-            pasion_data::queue::ProcessNotificationDeliveriesJob::default(),
-        )
-        .add_schedule(
-            "cleanup-revoked-oauth-access-tokens",
-            // Run this job every hour at minute 0
-            "0 0 * * * *".parse()?,
-            pasion_data::queue::CleanupRevokedOAuthAccessTokensJob,
-        )
-        .add_schedule(
-            "cleanup-revoked-oauth-refresh-tokens",
-            // Run this job every hour at minute 5
-            "0 5 * * * *".parse()?,
-            pasion_data::queue::CleanupRevokedOAuthRefreshTokensJob,
-        )
-        .add_schedule(
-            "cleanup-consumed-oauth-refresh-tokens",
-            // Run this job every hour at minute 5 (safe to parallelize with revoked)
-            "0 5 * * * *".parse()?,
-            pasion_data::queue::CleanupConsumedOAuthRefreshTokensJob,
-        )
-        .add_schedule(
-            "cleanup-finished-oauth2-sessions",
-            // Run this job every hour at minute 15
-            "0 15 * * * *".parse()?,
-            pasion_data::queue::CleanupFinishedOAuth2SessionsJob,
-        )
-        .add_schedule(
-            "cleanup-finished-user-sessions",
-            // Run this job every hour at minute 20
-            "0 20 * * * *".parse()?,
-            pasion_data::queue::CleanupFinishedUserSessionsJob,
-        )
-        .add_schedule(
-            "cleanup-inactive-oauth2-session-ips",
-            // Run this job every hour at minute 25
-            "0 25 * * * *".parse()?,
-            pasion_data::queue::CleanupInactiveOAuth2SessionIpsJob,
-        )
-        .add_schedule(
-            "cleanup-inactive-user-session-ips",
-            // Run this job every hour at minute 25
-            "0 25 * * * *".parse()?,
-            pasion_data::queue::CleanupInactiveUserSessionIpsJob,
-        )
-        .add_schedule(
-            "cleanup-oauth-authorization-grants",
-            // Run this job every hour at minute 30
-            "0 30 * * * *".parse()?,
-            pasion_data::queue::CleanupOAuthAuthorizationGrantsJob,
-        )
-        .add_schedule(
-            "cleanup-oauth-device-code-grants",
-            // Run this job every hour at minute 35
-            "0 35 * * * *".parse()?,
-            pasion_data::queue::CleanupOAuthDeviceCodeGrantsJob,
-        )
-        .add_schedule(
-            "cleanup-upstream-oauth-sessions",
-            // Run this job every hour at minute 40 (independent, safe to parallelize)
-            "0 40 * * * *".parse()?,
-            pasion_data::queue::CleanupUpstreamOAuthSessionsJob,
-        )
-        .add_schedule(
-            "cleanup-upstream-oauth-links",
-            // Run this job every hour at minute 40
-            "0 40 * * * *".parse()?,
-            pasion_data::queue::CleanupUpstreamOAuthLinksJob,
-        )
-        // User cleanup jobs (minutes 45, 50)
-        .add_schedule(
-            "cleanup-user-registrations",
-            // Run this job every hour at minute 45
-            "0 45 * * * *".parse()?,
-            pasion_data::queue::CleanupUserRegistrationsJob,
-        )
-        .add_schedule(
-            "cleanup-user-recovery-sessions",
-            // Run this job every hour at minute 50
-            "0 50 * * * *".parse()?,
-            pasion_data::queue::CleanupUserRecoverySessionsJob,
-        )
-        .add_schedule(
-            "cleanup-user-email-authentications",
-            // Run this job every hour at minute 50
-            "0 50 * * * *".parse()?,
-            pasion_data::queue::CleanupUserEmailAuthenticationsJob,
-        )
-        .add_schedule(
-            "cleanup-queue-jobs",
-            // Run this job every hour at minute 55
-            "0 55 * * * *".parse()?,
-            pasion_data::queue::CleanupQueueJobsJob,
-        )
-        .add_schedule(
-            "cleanup-expired-oauth-access-tokens",
-            // Run this job every 4 hours at minute 5
-            "0 5 */4 * * *".parse()?,
-            pasion_data::queue::CleanupExpiredOAuthAccessTokensJob,
-        )
-        .add_schedule(
-            "expire-inactive-sessions",
-            // Run this job every 15 minutes at second 30
-            "30 */15 * * * *".parse()?,
-            pasion_data::queue::ExpireInactiveSessionsJob,
-        )
-        .add_schedule(
-            "prune-stale-policy-data",
-            // Run once a day at 2:00 AM
-            "0 0 2 * * *".parse()?,
-            pasion_data::queue::PruneStalePolicyDataJob,
-        );
+    let mut worker = QueueWorker::new(shared, cancellation_token).await?;
+
+    register_all_handlers(&mut worker);
+    attach_recurring_schedules(&mut worker)?;
 
     Ok(worker)
 }
 
-/// Initialise the worker and run it.
+/// Build the worker **and** spawn it onto the given [`TaskTracker`].
 ///
 /// # Errors
 ///
-/// This function can fail if the database connection fails.
+/// Returns an error when the initial database connection fails.
 #[expect(clippy::too_many_arguments, reason = "this is fine")]
 pub async fn init_and_run(
     repository_factory: PgRepositoryFactory,

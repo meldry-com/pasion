@@ -1,68 +1,66 @@
 use figment::Figment;
 use serde::de::DeserializeOwned;
 
-/// Trait implemented by all configuration section to help loading specific part
-/// of the config and generate the sample config.
+type BoxedError = Box<dyn std::error::Error + Send + Sync + 'static>;
+
+/// Trait implemented by all configuration sections to support extraction from
+/// a [`Figment`] instance and optional validation.
 pub trait ConfigurationSection: Sized + DeserializeOwned {
-    /// Specify where this section should live relative to the root.
-    /// Use `""` for root-level configuration sections.
+    /// Path under the root where this section lives.
+    /// An empty string means the section is at the root level.
     const PATH: &'static str;
 
-    /// Validate the configuration section
+    /// Validate the loaded configuration.
+    ///
+    /// The default implementation accepts all values.
     ///
     /// # Errors
     ///
     /// Returns an error if the configuration is invalid
-    fn validate(
-        &self,
-        _figment: &Figment,
-    ) -> Result<(), Box<dyn std::error::Error + Send + Sync + 'static>> {
+    fn validate(&self, _figment: &Figment) -> Result<(), BoxedError> {
         Ok(())
     }
 
-    /// Extract configuration from a Figment instance.
+    /// Extract and validate from a [`Figment`].
     ///
     /// # Errors
     ///
     /// Returns an error if the configuration could not be loaded
-    fn extract(
-        figment: &Figment,
-    ) -> Result<Self, Box<dyn std::error::Error + Send + Sync + 'static>> {
-        let this: Self = if Self::PATH.is_empty() {
-            figment.extract()?
-        } else {
-            figment.extract_inner(Self::PATH)?
-        };
-        this.validate(figment)?;
-        Ok(this)
+    fn extract(figment: &Figment) -> Result<Self, BoxedError> {
+        let section: Self = extract_at_path(figment, Self::PATH)?;
+        section.validate(figment)?;
+        Ok(section)
     }
 }
 
-/// Extension trait for [`ConfigurationSection`] to allow extracting the
-/// configuration section from a [`Figment`] or return the default value if the
-/// section is not present.
+/// Extension that falls back to [`Default`] when the section key is absent.
 pub trait ConfigurationSectionExt: ConfigurationSection + Default {
-    /// Extract the configuration section from the given [`Figment`], or return
-    /// the default value if the section is not present.
+    /// Extract from the given [`Figment`], or return the default value if
+    /// the section key is absent entirely.
     ///
     /// # Errors
     ///
-    /// Returns an error if the configuration section is invalid.
-    fn extract_or_default(
-        figment: &Figment,
-    ) -> Result<Self, Box<dyn std::error::Error + Send + Sync + 'static>> {
-        if !Self::PATH.is_empty() && !figment.contains(Self::PATH) {
+    /// Returns an error if the section is present but invalid.
+    fn extract_or_default(figment: &Figment) -> Result<Self, BoxedError> {
+        let path = Self::PATH;
+        if !path.is_empty() && !figment.contains(path) {
             return Ok(Self::default());
         }
 
-        let this: Self = if Self::PATH.is_empty() {
-            figment.extract()?
-        } else {
-            figment.extract_inner(Self::PATH)?
-        };
-        this.validate(figment)?;
-        Ok(this)
+        let section: Self = extract_at_path(figment, path)?;
+        section.validate(figment)?;
+        Ok(section)
     }
 }
 
 impl<T: ConfigurationSection + Default> ConfigurationSectionExt for T {}
+
+/// Helper: extract a `T` from a [`Figment`] using the given dotted path, or
+/// from the root when the path is empty.
+fn extract_at_path<T: DeserializeOwned>(figment: &Figment, path: &str) -> Result<T, BoxedError> {
+    if path.is_empty() {
+        Ok(figment.extract()?)
+    } else {
+        Ok(figment.extract_inner(path)?)
+    }
+}

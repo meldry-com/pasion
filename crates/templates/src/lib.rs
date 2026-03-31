@@ -1,7 +1,11 @@
 #![deny(missing_docs)]
 #![allow(clippy::module_name_repetitions)]
 
-//! Templates rendering
+//! Template rendering engine for pasion.
+//!
+//! This crate wraps [`minijinja`] to provide strongly-typed template
+//! rendering.  Each page or email is backed by a dedicated context type
+//! (see the [`context`] module) and a corresponding template file on disk.
 
 use std::{
     collections::{BTreeMap, HashSet},
@@ -56,21 +60,7 @@ pub fn escape_html(input: &str) -> String {
     v_htmlescape::escape(input).to_string()
 }
 
-/// Wrapper around [`minijinja::Environment`] helping rendering the various
-/// templates
-#[derive(Debug, Clone)]
-pub struct Templates {
-    environment: Arc<ArcSwap<minijinja::Environment<'static>>>,
-    translator: Arc<ArcSwap<Translator>>,
-    url_builder: UrlBuilder,
-    branding: SiteBranding,
-    features: SiteFeatures,
-    translations_path: Utf8PathBuf,
-    path: Utf8PathBuf,
-    /// Whether template rendering is in strict mode (for testing,
-    /// until this can be rolled out in production.)
-    strict: bool,
-}
+// ── Error types ─────────────────────────────────────────────────────────────
 
 /// There was an issue while loading the templates
 #[derive(Error, Debug)]
@@ -117,6 +107,32 @@ pub enum TemplateLoadingError {
     },
 }
 
+/// Failed to render a template
+#[derive(Error, Debug)]
+pub enum TemplateError {
+    /// Missing template
+    #[error("missing template {template:?}")]
+    Missing {
+        /// The name of the template being rendered
+        template: &'static str,
+        /// The underlying error
+        #[source]
+        source: minijinja::Error,
+    },
+
+    /// Failed to render the template
+    #[error("could not render template {template:?}")]
+    Render {
+        /// The name of the template being rendered
+        template: &'static str,
+        /// The underlying error
+        #[source]
+        source: minijinja::Error,
+    },
+}
+
+// ── Templates engine ────────────────────────────────────────────────────────
+
 fn is_hidden(entry: &DirEntry) -> bool {
     entry
         .file_name()
@@ -124,7 +140,25 @@ fn is_hidden(entry: &DirEntry) -> bool {
         .is_some_and(|s| s.starts_with('.'))
 }
 
+/// Wrapper around [`minijinja::Environment`] helping rendering the various
+/// templates
+#[derive(Debug, Clone)]
+pub struct Templates {
+    environment: Arc<ArcSwap<minijinja::Environment<'static>>>,
+    translator: Arc<ArcSwap<Translator>>,
+    url_builder: UrlBuilder,
+    branding: SiteBranding,
+    features: SiteFeatures,
+    translations_path: Utf8PathBuf,
+    path: Utf8PathBuf,
+    /// Whether template rendering is in strict mode (for testing,
+    /// until this can be rolled out in production.)
+    strict: bool,
+}
+
 impl Templates {
+    // -- Core rendering helpers ---------------------------------------------
+
     fn render_registered<C: Serialize>(
         &self,
         template: &'static str,
@@ -136,12 +170,11 @@ impl Templates {
 
     fn render_value(&self, template: &'static str, context: Value) -> Result<String, TemplateError> {
         let environment = self.environment.load();
-        let template_ref = environment
+        let tpl = environment
             .get_template(template)
             .map_err(|source| TemplateError::Missing { template, source })?;
 
-        template_ref
-            .render(context)
+        tpl.render(context)
             .map_err(|source| TemplateError::Render { template, source })
     }
 
@@ -157,7 +190,7 @@ impl Templates {
     {
         let locales = self.translator().available_locales();
         let samples: BTreeMap<SampleIdentifier, C> = TemplateContext::sample(now, rng, &locales);
-        let mut rendered_samples = BTreeMap::new();
+        let mut output = BTreeMap::new();
 
         for (sample_id, sample_context) in samples {
             let serialized_context = serde_json::to_value(&sample_context)?;
@@ -169,11 +202,13 @@ impl Templates {
                         "Failed to render sample template {template:?}-{sample_id:?} with context {serialized_context}"
                     )
                 })?;
-            rendered_samples.insert(sample_id, html);
+            output.insert(sample_id, html);
         }
 
-        Ok(rendered_samples)
+        Ok(output)
     }
+
+    // -- Loading & reloading ------------------------------------------------
 
     /// Load the templates from the given config
     ///
@@ -202,6 +237,7 @@ impl Templates {
             strict,
         )
         .await?;
+
         Ok(Self {
             environment: Arc::new(ArcSwap::new(environment)),
             translator: Arc::new(ArcSwap::new(translator)),
@@ -225,51 +261,52 @@ impl Templates {
         let path = path.to_owned();
         let span = tracing::Span::current();
 
+        // Load translations on a blocking thread
         let translations_path = translations_path.to_owned();
         let translator =
             tokio::task::spawn_blocking(move || Translator::load_from_path(&translations_path))
                 .await??;
         let translator = Arc::new(translator);
-
         debug!(locales = ?translator.available_locales(), "Loaded translations");
 
+        // Load and compile templates on a blocking thread
         let (loaded, mut env) = tokio::task::spawn_blocking(move || {
             span.in_scope(move || {
                 let mut loaded: HashSet<_> = HashSet::new();
                 let mut env = minijinja::Environment::new();
-                // Don't allow use of undefined variables
                 env.set_undefined_behavior(if strict {
                     UndefinedBehavior::Strict
                 } else {
-                    // For now, allow semi-strict, because we don't have total test coverage of
-                    // tests and some tests rely on if conditions against sometimes-undefined
-                    // variables
                     UndefinedBehavior::SemiStrict
                 });
+
                 let root = path.canonicalize_utf8()?;
                 info!(%root, "Loading templates from filesystem");
+
                 for entry in walkdir::WalkDir::new(&root)
                     .min_depth(1)
                     .into_iter()
                     .filter_entry(|e| !is_hidden(e))
                 {
                     let entry = entry?;
-                    if entry.file_type().is_file() {
-                        let path = Utf8PathBuf::try_from(entry.into_path())?;
-                        let Some(ext) = path.extension() else {
-                            continue;
-                        };
+                    if !entry.file_type().is_file() {
+                        continue;
+                    }
 
-                        if ext == "html" || ext == "txt" || ext == "subject" {
-                            let relative = path.strip_prefix(&root)?;
-                            // Normalize path separators to forward slashes for
-                            // cross-platform compatibility (Windows uses backslashes)
-                            let key = relative.as_str().replace('\\', "/");
-                            debug!(%key, "Registering template");
-                            let template = std::fs::read_to_string(&path)?;
-                            env.add_template_owned(key.clone(), template)?;
-                            loaded.insert(key);
-                        }
+                    let path = Utf8PathBuf::try_from(entry.into_path())?;
+                    let Some(ext) = path.extension() else {
+                        continue;
+                    };
+
+                    if matches!(ext, "html" | "txt" | "subject") {
+                        let relative = path.strip_prefix(&root)?;
+                        // Normalize path separators to forward slashes for
+                        // cross-platform compatibility (Windows uses backslashes)
+                        let key = relative.as_str().replace('\\', "/");
+                        debug!(%key, "Registering template");
+                        let template = std::fs::read_to_string(&path)?;
+                        env.add_template_owned(key.clone(), template)?;
+                        loaded.insert(key);
                     }
                 }
 
@@ -285,6 +322,7 @@ impl Templates {
 
         let env = Arc::new(env);
 
+        // Verify all required templates are present
         let needed: HashSet<_> = TEMPLATES.iter().copied().map(ToOwned::to_owned).collect();
         debug!(?loaded, ?needed, "Templates loaded");
         let missing: HashSet<_> = needed.difference(&loaded).cloned().collect();
@@ -317,7 +355,6 @@ impl Templates {
         )
         .await?;
 
-        // Swap them
         self.environment.store(environment);
         self.translator.store(translator);
 
@@ -331,31 +368,7 @@ impl Templates {
     }
 }
 
-/// Failed to render a template
-#[derive(Error, Debug)]
-pub enum TemplateError {
-    /// Missing template
-    #[error("missing template {template:?}")]
-    Missing {
-        /// The name of the template being rendered
-        template: &'static str,
-
-        /// The underlying error
-        #[source]
-        source: minijinja::Error,
-    },
-
-    /// Failed to render the template
-    #[error("could not render template {template:?}")]
-    Render {
-        /// The name of the template being rendered
-        template: &'static str,
-
-        /// The underlying error
-        #[source]
-        source: minijinja::Error,
-    },
-}
+// ── Template registration ───────────────────────────────────────────────────
 
 register_templates! {
     /// Render the frontend app (Dioxus SPA shell)

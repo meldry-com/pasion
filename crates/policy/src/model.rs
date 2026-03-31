@@ -1,7 +1,8 @@
 //! Input and output types for policy evaluation.
 //!
-//! This is useful to generate JSON schemas for each input type, which can then
-//! be type-checked by Open Policy Agent.
+//! These types define the data structures passed to and returned from
+//! the Open Policy Agent policy engine. JSON schemas can be generated
+//! from the input types for compile-time validation.
 
 use std::net::IpAddr;
 
@@ -10,46 +11,52 @@ use pasion_data::{Client, User};
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 
-/// A well-known policy code.
+// ---------------------------------------------------------------------------
+// Policy violation codes
+// ---------------------------------------------------------------------------
+
+/// Well-known codes that identify specific policy violations.
+/// Each variant maps to a kebab-case string used in policy responses.
 #[derive(Serialize, Deserialize, Debug, Clone, Copy, JsonSchema, PartialEq, Eq)]
 #[serde(rename_all = "kebab-case")]
 pub enum Code {
-    /// The username is too short.
+    /// The chosen username does not meet the minimum length requirement.
     UsernameTooShort,
 
-    /// The username is too long.
+    /// The chosen username exceeds the maximum allowed length.
     UsernameTooLong,
 
-    /// The username contains invalid characters.
+    /// The chosen username contains characters that are not permitted.
     UsernameInvalidChars,
 
-    /// The username contains only numeric characters.
+    /// The chosen username is composed entirely of numeric digits.
     UsernameAllNumeric,
 
-    /// The username is banned.
+    /// The chosen username has been banned by policy.
     UsernameBanned,
 
-    /// The username is not allowed.
+    /// The chosen username is not on the allowlist.
     UsernameNotAllowed,
 
-    /// The email domain is not allowed.
+    /// The domain portion of the email address is not permitted.
     EmailDomainNotAllowed,
 
-    /// The email domain is banned.
+    /// The domain portion of the email address has been banned.
     EmailDomainBanned,
 
-    /// The email address is not allowed.
+    /// The full email address is not permitted by policy.
     EmailNotAllowed,
 
-    /// The email address is banned.
+    /// The full email address has been banned by policy.
     EmailBanned,
 
-    /// The user has reached their session limit.
+    /// The user already has the maximum number of allowed sessions.
     TooManySessions,
 }
 
 impl Code {
-    /// Returns the code as a string
+    /// Returns the kebab-case string representation of this code,
+    /// matching the serde serialization format.
     #[must_use]
     pub fn as_str(&self) -> &'static str {
         match self {
@@ -68,28 +75,50 @@ impl Code {
     }
 }
 
-/// A single violation of a policy.
+// ---------------------------------------------------------------------------
+// Evaluation results
+// ---------------------------------------------------------------------------
+
+/// A single violation reported by the policy engine.
 #[derive(Serialize, Deserialize, Debug, JsonSchema)]
 pub struct Violation {
+    /// Human-readable message describing the violation
     pub msg: String,
+
+    /// Optional URI the client should redirect to
     pub redirect_uri: Option<String>,
+
+    /// Optional name of the input field that caused the violation
     pub field: Option<String>,
+
+    /// Optional well-known code identifying the violation type
     pub code: Option<Code>,
 }
 
-/// The result of a policy evaluation.
+/// Aggregated result of evaluating one or more policy rules.
+/// Contains zero or more violations; an empty list means the
+/// input passed all policy checks.
 #[derive(Deserialize, Debug)]
 pub struct EvaluationResult {
     #[serde(rename = "result")]
     pub violations: Vec<Violation>,
 }
 
+impl EvaluationResult {
+    /// Returns `true` when no violations were produced,
+    /// indicating the policy evaluation passed.
+    #[must_use]
+    pub fn valid(&self) -> bool {
+        self.violations.is_empty()
+    }
+}
+
 impl std::fmt::Display for EvaluationResult {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        let mut first = true;
+        let mut is_first = true;
         for violation in &self.violations {
-            if first {
-                first = false;
+            if is_first {
+                is_first = false;
             } else {
                 write!(f, ", ")?;
             }
@@ -99,105 +128,146 @@ impl std::fmt::Display for EvaluationResult {
     }
 }
 
-impl EvaluationResult {
-    /// Returns true if the policy evaluation was successful.
-    #[must_use]
-    pub fn valid(&self) -> bool {
-        self.violations.is_empty()
-    }
-}
+// ---------------------------------------------------------------------------
+// Request context
+// ---------------------------------------------------------------------------
 
-/// Identity of the requester
+/// Metadata about the entity making a policy-evaluated request.
 #[derive(Serialize, Debug, Default, JsonSchema)]
 #[serde(rename_all = "snake_case")]
 pub struct Requester {
-    /// IP address of the entity making the request
+    /// IP address of the entity making the request, when available
     pub ip_address: Option<IpAddr>,
 
-    /// User agent of the entity making the request
+    /// HTTP User-Agent header value, when available
     pub user_agent: Option<String>,
 
-    /// Country code (ISO 3166-1 alpha-2) derived from the requester's IP address
+    /// ISO 3166-1 alpha-2 country code derived from the IP address
     #[serde(skip_serializing_if = "Option::is_none")]
     pub country_code: Option<String>,
 }
 
+// ---------------------------------------------------------------------------
+// Registration
+// ---------------------------------------------------------------------------
+
+/// How the user account registration was initiated.
 #[derive(Serialize, Debug, JsonSchema)]
 pub enum RegistrationMethod {
+    /// Traditional password-based registration
     #[serde(rename = "password")]
     Password,
 
+    /// Registration via an upstream OAuth 2.0 identity provider
     #[serde(rename = "upstream-oauth2")]
     UpstreamOAuth2,
 }
 
-/// Input for the user registration policy.
+/// Policy input for evaluating a new user registration request.
 #[derive(Serialize, Debug, JsonSchema)]
 #[serde(tag = "registration_method")]
 pub struct RegisterInput<'a> {
+    /// The method used for registration
     pub registration_method: RegistrationMethod,
 
+    /// The requested username
     pub username: &'a str,
 
+    /// Optional email address provided during registration
     #[serde(skip_serializing_if = "Option::is_none")]
     pub email: Option<&'a str>,
 
+    /// Information about the entity making this request
     pub requester: Requester,
 }
 
-/// Input for the client registration policy.
+// ---------------------------------------------------------------------------
+// Client registration
+// ---------------------------------------------------------------------------
+
+/// Policy input for evaluating an OAuth 2.0 dynamic client registration.
 #[derive(Serialize, Debug, JsonSchema)]
 #[serde(rename_all = "snake_case")]
 pub struct ClientRegistrationInput<'a> {
+    /// The validated client metadata from the registration request
     #[schemars(with = "std::collections::HashMap<String, serde_json::Value>")]
     pub client_metadata: &'a VerifiedClientMetadata,
+
+    /// Information about the entity making this request
     pub requester: Requester,
 }
 
+// ---------------------------------------------------------------------------
+// Authorization grants
+// ---------------------------------------------------------------------------
+
+/// The OAuth 2.0 grant type being requested.
 #[derive(Serialize, Debug, JsonSchema)]
 #[serde(rename_all = "snake_case")]
 pub enum GrantType {
+    /// Standard authorization code grant
     AuthorizationCode,
+
+    /// Client credentials grant (no user involvement)
     ClientCredentials,
+
+    /// Device authorization grant
     #[serde(rename = "urn:ietf:params:oauth:grant-type:device_code")]
     DeviceCode,
 }
 
-/// Information about how many sessions the user has.
+/// Summary of how many active sessions a user currently has,
+/// broken down by type.
 #[derive(Serialize, Debug, JsonSchema)]
 pub struct SessionCounts {
+    /// Total number of active sessions across all types
     pub total: u64,
+
+    /// Number of active OAuth 2.0 sessions
     pub oauth2: u64,
+
+    /// Number of active personal/direct sessions
     pub personal: u64,
 }
 
-/// Input for the authorization grant policy.
+/// Policy input for evaluating an authorization grant request.
 #[derive(Serialize, Debug, JsonSchema)]
 #[serde(rename_all = "snake_case")]
 pub struct AuthorizationGrantInput<'a> {
+    /// The user requesting the grant, if applicable
     #[schemars(with = "Option<std::collections::HashMap<String, serde_json::Value>>")]
     pub user: Option<&'a User>,
 
-    /// How many sessions the user has.
-    /// Not populated if it's not a user logging in.
+    /// Current session counts for the user. Only populated
+    /// when an authenticated user is involved in the grant.
     pub session_counts: Option<SessionCounts>,
 
+    /// The OAuth 2.0 client requesting the grant
     #[schemars(with = "std::collections::HashMap<String, serde_json::Value>")]
     pub client: &'a Client,
 
+    /// The requested scope for the grant
     #[schemars(with = "String")]
     pub scope: &'a Scope,
 
+    /// Which grant type is being used
     pub grant_type: GrantType,
 
+    /// Information about the entity making this request
     pub requester: Requester,
 }
 
-/// Input for the email add policy.
+// ---------------------------------------------------------------------------
+// Email policy
+// ---------------------------------------------------------------------------
+
+/// Policy input for evaluating whether an email address may be added.
 #[derive(Serialize, Debug, JsonSchema)]
 #[serde(rename_all = "snake_case")]
 pub struct EmailInput<'a> {
+    /// The email address being evaluated
     pub email: &'a str,
 
+    /// Information about the entity making this request
     pub requester: Requester,
 }

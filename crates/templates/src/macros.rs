@@ -30,6 +30,8 @@ macro_rules! register_templates {
             $( $( $extra_template, )* )?
         ];
 
+        // -- Rendering methods on Templates ---------------------------------
+
         impl Templates {
             $(
                 $(#[$attr])?
@@ -46,6 +48,8 @@ macro_rules! register_templates {
             )*
         }
 
+        // -- Sample-rendering validation ------------------------------------
+
         /// Module that renders every registered template with sample contexts
         /// for validation purposes.
         pub mod check {
@@ -59,12 +63,20 @@ macro_rules! register_templates {
             /// # Errors
             ///
             /// Returns an error if any template fails to render with any sample.
-            pub(crate) fn all<R: Rng + Clone>(templates: &Templates, now: chrono::DateTime<chrono::Utc>, rng: &R) -> anyhow::Result<::std::collections::BTreeMap<(&'static str, SampleIdentifier), String>> {
+            pub(crate) fn all<R: Rng + Clone>(
+                templates: &Templates,
+                now: chrono::DateTime<chrono::Utc>,
+                rng: &R,
+            ) -> anyhow::Result<
+                ::std::collections::BTreeMap<(&'static str, SampleIdentifier), String>,
+            > {
                 let mut rendered_templates = ::std::collections::BTreeMap::new();
                 $(
                     {
                         let mut sample_rng = rng.clone();
-                        let rendered = $name $(::< _ $( , $generic_default ),* >)? (templates, now, &mut sample_rng)?;
+                        let rendered = $name $(::< _ $( , $generic_default ),* >)? (
+                            templates, now, &mut sample_rng,
+                        )?;
                         rendered_templates.extend(
                             rendered
                                 .into_iter()
@@ -86,7 +98,11 @@ macro_rules! register_templates {
                 /// Returns an error if the template fails to render with any of the sample.
                 pub(crate) fn $name
                     < __R: Rng + Clone $( , $( $lt $( : $clt $(+ $dlt )* + TemplateContext )? ),+ )? >
-                    (templates: &Templates, now: chrono::DateTime<chrono::Utc>, rng: &mut __R)
+                    (
+                        templates: &Templates,
+                        now: chrono::DateTime<chrono::Utc>,
+                        rng: &mut __R,
+                    )
                 -> anyhow::Result<BTreeMap<SampleIdentifier, String>> {
                     templates.render_sample_set::<$param, __R>($template, now, rng)
                 }
