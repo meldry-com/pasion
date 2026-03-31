@@ -125,6 +125,56 @@ fn is_hidden(entry: &DirEntry) -> bool {
 }
 
 impl Templates {
+    fn render_registered<C: Serialize>(
+        &self,
+        template: &'static str,
+        context: &C,
+    ) -> Result<String, TemplateError> {
+        let context = Value::from_serialize(context);
+        self.render_value(template, context)
+    }
+
+    fn render_value(&self, template: &'static str, context: Value) -> Result<String, TemplateError> {
+        let environment = self.environment.load();
+        let template_ref = environment
+            .get_template(template)
+            .map_err(|source| TemplateError::Missing { template, source })?;
+
+        template_ref
+            .render(context)
+            .map_err(|source| TemplateError::Render { template, source })
+    }
+
+    fn render_sample_set<C, R>(
+        &self,
+        template: &'static str,
+        now: chrono::DateTime<chrono::Utc>,
+        rng: &mut R,
+    ) -> anyhow::Result<BTreeMap<SampleIdentifier, String>>
+    where
+        C: TemplateContext + Serialize,
+        R: Rng + Clone,
+    {
+        let locales = self.translator().available_locales();
+        let samples: BTreeMap<SampleIdentifier, C> = TemplateContext::sample(now, rng, &locales);
+        let mut rendered_samples = BTreeMap::new();
+
+        for (sample_id, sample_context) in samples {
+            let serialized_context = serde_json::to_value(&sample_context)?;
+            tracing::info!(name = template, %serialized_context, "Rendering template");
+            let html = self
+                .render_registered(template, &sample_context)
+                .with_context(|| {
+                    format!(
+                        "Failed to render sample template {template:?}-{sample_id:?} with context {serialized_context}"
+                    )
+                })?;
+            rendered_samples.insert(sample_id, html);
+        }
+
+        Ok(rendered_samples)
+    }
+
     /// Load the templates from the given config
     ///
     /// # Errors
@@ -235,7 +285,7 @@ impl Templates {
 
         let env = Arc::new(env);
 
-        let needed: HashSet<_> = TEMPLATES.into_iter().map(ToOwned::to_owned).collect();
+        let needed: HashSet<_> = TEMPLATES.iter().copied().map(ToOwned::to_owned).collect();
         debug!(?loaded, ?needed, "Templates loaded");
         let missing: HashSet<_> = needed.difference(&loaded).cloned().collect();
 

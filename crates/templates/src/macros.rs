@@ -1,9 +1,3 @@
-/// Helper macro: counts tokens to determine array length at compile time.
-macro_rules! count {
-    () => (0_usize);
-    ( $x:tt $($xs:tt)* ) => (1_usize + count!($($xs)*));
-}
-
 /// Declares strongly-typed template rendering methods on [`Templates`] and
 /// generates a `check` module that renders each template with sample data.
 ///
@@ -31,7 +25,10 @@ macro_rules! register_templates {
         )*
     } => {
         /// All template paths registered via the `register_templates!` macro.
-        static TEMPLATES: [&'static str; count!( $( $template )* )] = [ $( $template, )* ];
+        static TEMPLATES: &[&str] = &[
+            $( $template, )*
+            $( $( $extra_template, )* )?
+        ];
 
         impl Templates {
             $(
@@ -44,13 +41,7 @@ macro_rules! register_templates {
                     $(< $( $lt $( : $clt $(+ $dlt )* )? ),+ >)?
                     (&self, context: &$param)
                 -> Result<String, TemplateError> {
-                    let ctx = ::minijinja::value::Value::from_serialize(context);
-
-                    let env = self.environment.load();
-                    let tmpl = env.get_template($template)
-                        .map_err(|source| TemplateError::Missing { template: $template, source })?;
-                    tmpl.render(ctx)
-                        .map_err(|source| TemplateError::Render { template: $template, source })
+                    self.render_registered($template, context)
                 }
             )*
         }
@@ -69,19 +60,20 @@ macro_rules! register_templates {
             ///
             /// Returns an error if any template fails to render with any sample.
             pub(crate) fn all<R: Rng + Clone>(templates: &Templates, now: chrono::DateTime<chrono::Utc>, rng: &R) -> anyhow::Result<::std::collections::BTreeMap<(&'static str, SampleIdentifier), String>> {
-                let mut results = ::std::collections::BTreeMap::new();
+                let mut rendered_templates = ::std::collections::BTreeMap::new();
                 $(
                     {
-                        let mut rng = rng.clone();
-                        let rendered = $name $(::< _ $( , $generic_default ),* >)? (templates, now, &mut rng)?;
-                        results.extend(
+                        let mut sample_rng = rng.clone();
+                        let rendered = $name $(::< _ $( , $generic_default ),* >)? (templates, now, &mut sample_rng)?;
+                        rendered_templates.extend(
                             rendered
                                 .into_iter()
                                 .map(|(sample_id, html)| (($template, sample_id), html))
                         );
                     }
                 )*
-                Ok(results)
+
+                Ok(rendered_templates)
             }
 
             $(
@@ -96,20 +88,7 @@ macro_rules! register_templates {
                     < __R: Rng + Clone $( , $( $lt $( : $clt $(+ $dlt )* + TemplateContext )? ),+ )? >
                     (templates: &Templates, now: chrono::DateTime<chrono::Utc>, rng: &mut __R)
                 -> anyhow::Result<BTreeMap<SampleIdentifier, String>> {
-                    let available_locales = templates.translator().available_locales();
-                    let samples: BTreeMap<SampleIdentifier, $param > = TemplateContext::sample(now, rng, &available_locales);
-
-                    let tpl_name = $template;
-                    let mut output = BTreeMap::new();
-                    for (sample_id, sample_ctx) in samples {
-                        let ctx_json = serde_json::to_value(&sample_ctx)?;
-                        ::tracing::info!(name = tpl_name, %ctx_json, "Rendering template");
-                        let html = templates. $name (&sample_ctx)
-                            .with_context(|| format!("Failed to render sample template {tpl_name:?}-{sample_id:?} with context {ctx_json}"))?;
-                        output.insert(sample_id, html);
-                    }
-
-                    Ok(output)
+                    templates.render_sample_set::<$param, __R>($template, now, rng)
                 }
             )*
         }
