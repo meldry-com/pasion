@@ -1,6 +1,5 @@
-use crate::record_error;
 use pasion_data::BoxRng;
-use salvo::{http::StatusCode, prelude::*};
+use salvo::prelude::*;
 use schemars::JsonSchema;
 use serde::Deserialize;
 use ulid::Ulid;
@@ -8,46 +7,9 @@ use ulid::Ulid;
 use crate::handlers::admin::{
     call_context::extract_call_context,
     model::{Resource, UpstreamOAuthLink},
-    response::{ErrorResponse, SingleResponse},
+    response::SingleResponse,
 };
-use crate::handlers::admin::CreatedJson;
-
-#[derive(Debug, thiserror::Error)]
-pub enum RouteError {
-    #[error(transparent)]
-    Internal(Box<dyn std::error::Error + Send + Sync + 'static>),
-
-    #[error("Upstream Oauth 2.0 Provider ID {0} with subject {1} is already linked to a user")]
-    LinkAlreadyExists(Ulid, String),
-
-    #[error("User ID {0} not found")]
-    UserNotFound(Ulid),
-
-    #[error("Upstream OAuth 2.0 Provider ID {0} not found")]
-    ProviderNotFound(Ulid),
-}
-
-impl_from_error_for_route!(pasion_data::RepositoryError);
-impl_from_error_for_route!(crate::handlers::admin::call_context::Rejection);
-
-impl Scribe for RouteError {
-    fn render(self, res: &mut Response) {
-        let error = ErrorResponse::from_error(&self);
-        let sentry_event_id = record_error!(self, Self::Internal(_));
-        let status = match self {
-            Self::Internal(_) => StatusCode::INTERNAL_SERVER_ERROR,
-            Self::LinkAlreadyExists(_, _) => StatusCode::CONFLICT,
-            Self::UserNotFound(_) | Self::ProviderNotFound(_) => StatusCode::NOT_FOUND,
-        };
-        res.status_code(status);
-        if let Some(event_id) = sentry_event_id {
-            if let Ok(value) = http::HeaderValue::from_str(&event_id.to_string()) {
-                res.headers_mut().insert("x-sentry-event-id", value);
-            }
-        }
-        res.render(Json(error));
-    }
-}
+use crate::{AppError, CreatedJsonResult};
 
 /// # JSON payload for the `POST /api/admin/v1/upstream-oauth-links`
 #[derive(Deserialize, JsonSchema)]
@@ -67,22 +29,12 @@ pub struct RequestBody {
     /// A human readable account name.
     human_account_name: Option<String>,
 }
-
-
-impl_endpoint_out_register!(RouteError, [
-    ("400", "Bad request"),
-    ("401", "Unauthorized"),
-    ("404", "Not found"),
-    ("409", "Conflict"),
-    ("500", "Internal server error"),
-]);
-
 #[endpoint]
 #[tracing::instrument(name = "handler.admin.v1.upstream_oauth_links.post", skip_all)]
 pub async fn handler(
     req: &mut Request,
     depot: &Depot,
-) -> Result<CreatedJson<SingleResponse<UpstreamOAuthLink>>, RouteError> {
+) -> CreatedJsonResult<SingleResponse<UpstreamOAuthLink>> {
     let call_context = extract_call_context(req, depot).await?;
     let crate::handlers::admin::call_context::CallContext {
         mut repo, clock, ..
@@ -91,21 +43,26 @@ pub async fn handler(
     let params: RequestBody = req
         .parse_json()
         .await
-        .map_err(|e| RouteError::Internal(Box::new(e)))?;
+        .map_err(AppError::internal)?;
 
     // Find the user
     let user = repo
         .user()
         .lookup(params.user_id)
         .await?
-        .ok_or(RouteError::UserNotFound(params.user_id))?;
+        .ok_or_else(|| AppError::not_found(format!("User ID {} not found", params.user_id)))?;
 
     // Find the provider
     let provider = repo
         .upstream_oauth_provider()
         .lookup(params.provider_id)
         .await?
-        .ok_or(RouteError::ProviderNotFound(params.provider_id))?;
+        .ok_or_else(|| {
+            AppError::not_found(format!(
+                "Upstream OAuth 2.0 Provider ID {} not found",
+                params.provider_id
+            ))
+        })?;
 
     let maybe_link = repo
         .upstream_oauth_link()
@@ -113,10 +70,10 @@ pub async fn handler(
         .await?;
     if let Some(mut link) = maybe_link {
         if link.user_id.is_some() {
-            return Err(RouteError::LinkAlreadyExists(
-                link.provider_id,
-                link.subject,
-            ));
+            return Err(AppError::conflict(format!(
+                "Upstream Oauth 2.0 Provider ID {} with subject {} is already linked to a user",
+                link.provider_id, link.subject
+            )));
         }
 
         repo.upstream_oauth_link()
@@ -126,7 +83,9 @@ pub async fn handler(
 
         repo.save().await?;
 
-        return Ok(CreatedJson(SingleResponse::new_canonical(link.into())));
+        return Ok(crate::handlers::admin::CreatedJson(
+            SingleResponse::new_canonical(link.into()),
+        ));
     }
 
     let mut link = repo
@@ -147,7 +106,9 @@ pub async fn handler(
 
     repo.save().await?;
 
-    Ok(CreatedJson(SingleResponse::new_canonical(link.into())))
+    Ok(crate::handlers::admin::CreatedJson(
+        SingleResponse::new_canonical(link.into()),
+    ))
 }
 
 #[cfg(test)]

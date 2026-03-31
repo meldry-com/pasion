@@ -1,9 +1,8 @@
-use crate::record_error;
 use chrono::Duration;
 use pasion_data::audit::AdminOperation;
 use pasion_data::audit::NewAdminOperationLog;
 use rand::distributions::{Alphanumeric, DistString};
-use salvo::{http::StatusCode, prelude::*};
+use salvo::prelude::*;
 use schemars::JsonSchema;
 use salvo::oapi::ToSchema;
 use serde::{Deserialize, Serialize};
@@ -11,39 +10,9 @@ use serde::{Deserialize, Serialize};
 use crate::handlers::admin::{
     call_context::extract_call_context,
     model::{Resource, UserRegistrationToken},
-    response::{ErrorResponse, SingleResponse},
+    response::SingleResponse,
 };
-use crate::handlers::admin::CreatedJson;
-
-#[derive(Debug, thiserror::Error)]
-pub enum RouteError {
-    #[error(transparent)]
-    Internal(Box<dyn std::error::Error + Send + Sync + 'static>),
-
-    #[error("Count must be between 1 and 100")]
-    InvalidCount,
-}
-
-impl_from_error_for_route!(pasion_data::RepositoryError);
-impl_from_error_for_route!(crate::handlers::admin::call_context::Rejection);
-
-impl Scribe for RouteError {
-    fn render(self, res: &mut Response) {
-        let error = ErrorResponse::from_error(&self);
-        let sentry_event_id = record_error!(self, Self::Internal(_));
-        let status = match self {
-            Self::Internal(_) => StatusCode::INTERNAL_SERVER_ERROR,
-            Self::InvalidCount => StatusCode::BAD_REQUEST,
-        };
-        res.status_code(status);
-        if let Some(event_id) = sentry_event_id {
-            if let Ok(value) = http::HeaderValue::from_str(&event_id.to_string()) {
-                res.headers_mut().insert("x-sentry-event-id", value);
-            }
-        }
-        res.render(Json(error));
-    }
-}
+use crate::{AppError, CreatedJsonResult};
 
 /// # JSON payload for the `POST /api/admin/v1/users/batch-invite` endpoint
 #[derive(Deserialize, JsonSchema)]
@@ -67,22 +36,12 @@ pub struct BatchInviteResponse {
     /// The list of created registration tokens
     data: Vec<SingleResponse<UserRegistrationToken>>,
 }
-
-
-impl_endpoint_out_register!(RouteError, [
-    ("400", "Bad request"),
-    ("401", "Unauthorized"),
-    ("404", "Not found"),
-    ("409", "Conflict"),
-    ("500", "Internal server error"),
-]);
-
 #[endpoint]
 #[tracing::instrument(name = "handler.admin.v1.users.batch_invite", skip_all)]
 pub async fn handler(
     req: &mut Request,
     depot: &Depot,
-) -> Result<CreatedJson<BatchInviteResponse>, RouteError> {
+) -> CreatedJsonResult<BatchInviteResponse> {
     let call_context = extract_call_context(req, depot).await?;
     let crate::handlers::admin::call_context::CallContext {
         mut repo,
@@ -94,10 +53,10 @@ pub async fn handler(
     let params: RequestBody = req
         .parse_json()
         .await
-        .map_err(|e| RouteError::Internal(Box::new(e)))?;
+        .map_err(AppError::internal)?;
 
     if params.count == 0 || params.count > 100 {
-        return Err(RouteError::InvalidCount);
+        return Err(AppError::bad_request("Count must be between 1 and 100"));
     }
 
     let expires_at = params
@@ -143,5 +102,7 @@ pub async fn handler(
 
     repo.save().await?;
 
-    Ok(CreatedJson(BatchInviteResponse { data: tokens }))
+    Ok(crate::handlers::admin::CreatedJson(BatchInviteResponse {
+        data: tokens,
+    }))
 }

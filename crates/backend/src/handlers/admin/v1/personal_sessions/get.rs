@@ -1,60 +1,19 @@
-use crate::record_error;
-use salvo::{http::StatusCode, prelude::*};
+use salvo::prelude::*;
 
 use crate::handlers::admin::{
     call_context::extract_call_context,
     model::{InconsistentPersonalSession, PersonalSession},
     params::extract_ulid_param,
-    response::{ErrorResponse, SingleResponse},
+    response::SingleResponse,
 };
-
-#[derive(Debug, thiserror::Error)]
-pub enum RouteError {
-    #[error(transparent)]
-    Internal(Box<dyn std::error::Error + Send + Sync + 'static>),
-
-    #[error("Personal session not found")]
-    NotFound,
-}
-
-impl_from_error_for_route!(pasion_data::RepositoryError);
-impl_from_error_for_route!(crate::handlers::admin::params::UlidPathParamRejection);
-impl_from_error_for_route!(crate::handlers::admin::call_context::Rejection);
-impl_from_error_for_route!(InconsistentPersonalSession);
-
-impl Scribe for RouteError {
-    fn render(self, res: &mut Response) {
-        let error = ErrorResponse::from_error(&self);
-        let sentry_event_id = record_error!(self, Self::Internal(_));
-        let status = match self {
-            Self::Internal(_) => StatusCode::INTERNAL_SERVER_ERROR,
-            Self::NotFound => StatusCode::NOT_FOUND,
-        };
-        res.status_code(status);
-        if let Some(event_id) = sentry_event_id {
-            if let Ok(value) = http::HeaderValue::from_str(&event_id.to_string()) {
-                res.headers_mut().insert("x-sentry-event-id", value);
-            }
-        }
-        res.render(Json(error));
-    }
-}
-
-
-impl_endpoint_out_register!(RouteError, [
-    ("400", "Bad request"),
-    ("401", "Unauthorized"),
-    ("404", "Not found"),
-    ("409", "Conflict"),
-    ("500", "Internal server error"),
-]);
+use crate::{AppError, JsonResult};
 
 #[endpoint]
 #[tracing::instrument(name = "handler.admin.v1.personal_sessions.get", skip_all)]
 pub async fn handler(
     req: &mut Request,
     depot: &Depot,
-) -> Result<Json<SingleResponse<PersonalSession>>, RouteError> {
+) -> JsonResult<SingleResponse<PersonalSession>> {
     let call_context = extract_call_context(req, depot).await?;
     let crate::handlers::admin::call_context::CallContext { mut repo, .. } = call_context;
     let id = extract_ulid_param(req)?;
@@ -65,7 +24,7 @@ pub async fn handler(
         .personal_session()
         .lookup(session_id)
         .await?
-        .ok_or(RouteError::NotFound)?;
+        .ok_or_else(|| AppError::not_found("Personal session not found"))?;
 
     let token = if session.is_revoked() {
         None

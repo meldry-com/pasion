@@ -1,54 +1,14 @@
-use crate::record_error;
 use salvo::{http::StatusCode, prelude::*};
 use ulid::Ulid;
 
 use crate::handlers::admin::{
-    call_context::extract_call_context, params::extract_ulid_param, response::ErrorResponse,
+    call_context::extract_call_context, params::extract_ulid_param,
 };
-
-#[derive(Debug, thiserror::Error)]
-pub enum RouteError {
-    #[error(transparent)]
-    Internal(Box<dyn std::error::Error + Send + Sync + 'static>),
-
-    #[error("Upstream OAuth 2.0 Link ID {0} not found")]
-    NotFound(Ulid),
-}
-
-impl_from_error_for_route!(pasion_data::RepositoryError);
-impl_from_error_for_route!(crate::handlers::admin::params::UlidPathParamRejection);
-impl_from_error_for_route!(crate::handlers::admin::call_context::Rejection);
-
-impl Scribe for RouteError {
-    fn render(self, res: &mut Response) {
-        let error = ErrorResponse::from_error(&self);
-        let sentry_event_id = record_error!(self, Self::Internal(_));
-        let status = match self {
-            Self::Internal(_) => StatusCode::INTERNAL_SERVER_ERROR,
-            Self::NotFound(_) => StatusCode::NOT_FOUND,
-        };
-        res.status_code(status);
-        if let Some(event_id) = sentry_event_id {
-            if let Ok(value) = http::HeaderValue::from_str(&event_id.to_string()) {
-                res.headers_mut().insert("x-sentry-event-id", value);
-            }
-        }
-        res.render(Json(error));
-    }
-}
-
-
-impl_endpoint_out_register!(RouteError, [
-    ("400", "Bad request"),
-    ("401", "Unauthorized"),
-    ("404", "Not found"),
-    ("409", "Conflict"),
-    ("500", "Internal server error"),
-]);
+use crate::{AppError, AppResult};
 
 #[endpoint]
 #[tracing::instrument(name = "handler.admin.v1.upstream_oauth_links.delete", skip_all)]
-pub async fn handler(req: &mut Request, depot: &Depot) -> Result<StatusCode, RouteError> {
+pub async fn handler(req: &mut Request, depot: &Depot) -> AppResult<StatusCode> {
     let call_context = extract_call_context(req, depot).await?;
     let crate::handlers::admin::call_context::CallContext {
         mut repo, clock, ..
@@ -59,7 +19,7 @@ pub async fn handler(req: &mut Request, depot: &Depot) -> Result<StatusCode, Rou
         .upstream_oauth_link()
         .lookup(id)
         .await?
-        .ok_or(RouteError::NotFound(id))?;
+        .ok_or_else(|| AppError::not_found(format!("Upstream OAuth 2.0 Link ID {id} not found")))?;
 
     repo.upstream_oauth_link().remove(&clock, link).await?;
 

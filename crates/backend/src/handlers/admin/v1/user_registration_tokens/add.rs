@@ -1,47 +1,17 @@
-use crate::record_error;
 use chrono::{DateTime, Utc};
 use pasion_data::BoxRng;
 use rand::distributions::{Alphanumeric, DistString};
-use salvo::{http::StatusCode, prelude::*};
+use salvo::prelude::*;
 use schemars::JsonSchema;
 use serde::Deserialize;
 
 use crate::handlers::admin::{
     call_context::extract_call_context,
     model::UserRegistrationToken,
-    response::{ErrorResponse, SingleResponse},
+    response::SingleResponse,
 };
 use crate::handlers::admin::CreatedJson;
-
-#[derive(Debug, thiserror::Error)]
-pub enum RouteError {
-    #[error("A registration token with the same token already exists")]
-    Conflict(pasion_data::UserRegistrationToken),
-
-    #[error(transparent)]
-    Internal(Box<dyn std::error::Error + Send + Sync + 'static>),
-}
-
-impl_from_error_for_route!(pasion_data::RepositoryError);
-impl_from_error_for_route!(crate::handlers::admin::call_context::Rejection);
-
-impl Scribe for RouteError {
-    fn render(self, res: &mut Response) {
-        let error = ErrorResponse::from_error(&self);
-        let sentry_event_id = record_error!(self, Self::Internal(_));
-        let status = match self {
-            Self::Conflict(_) => StatusCode::CONFLICT,
-            Self::Internal(_) => StatusCode::INTERNAL_SERVER_ERROR,
-        };
-        res.status_code(status);
-        if let Some(event_id) = sentry_event_id {
-            if let Ok(value) = http::HeaderValue::from_str(&event_id.to_string()) {
-                res.headers_mut().insert("x-sentry-event-id", value);
-            }
-        }
-        res.render(Json(error));
-    }
-}
+use crate::{AppError, CreatedJsonResult};
 
 /// # JSON payload for the `POST /api/admin/v1/user-registration-tokens`
 #[derive(Deserialize, JsonSchema)]
@@ -58,21 +28,12 @@ pub struct RequestBody {
     expires_at: Option<DateTime<Utc>>,
 }
 
-
-impl_endpoint_out_register!(RouteError, [
-    ("400", "Bad request"),
-    ("401", "Unauthorized"),
-    ("404", "Not found"),
-    ("409", "Conflict"),
-    ("500", "Internal server error"),
-]);
-
 #[endpoint]
 #[tracing::instrument(name = "handler.admin.v1.user_registration_tokens.post", skip_all)]
 pub async fn handler(
     req: &mut Request,
     depot: &Depot,
-) -> Result<CreatedJson<SingleResponse<UserRegistrationToken>>, RouteError> {
+) -> CreatedJsonResult<SingleResponse<UserRegistrationToken>> {
     let call_context = extract_call_context(req, depot).await?;
     let crate::handlers::admin::call_context::CallContext {
         mut repo, clock, ..
@@ -81,7 +42,7 @@ pub async fn handler(
     let params: RequestBody = req
         .parse_json()
         .await
-        .map_err(|e| RouteError::Internal(Box::new(e)))?;
+        .map_err(AppError::internal)?;
 
     // Generate a random token if none was provided
     let token = params
@@ -91,7 +52,10 @@ pub async fn handler(
     // See if we have an existing token with the same token
     let existing_token = repo.user_registration_token().find_by_token(&token).await?;
     if let Some(existing_token) = existing_token {
-        return Err(RouteError::Conflict(existing_token));
+        let _ = existing_token;
+        return Err(AppError::conflict(
+            "A registration token with the same token already exists",
+        ));
     }
 
     let registration_token = repo

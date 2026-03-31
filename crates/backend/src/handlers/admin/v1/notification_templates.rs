@@ -4,13 +4,13 @@
 //! - `POST /api/admin/v1/notification-templates/publish` — placeholder for
 //!   publishing a template version (returns 501 Not Implemented)
 
-use crate::record_error;
-use salvo::{http::StatusCode, prelude::*};
+use salvo::prelude::*;
 use schemars::JsonSchema;
 use salvo::oapi::ToSchema;
 use serde::Serialize;
 
-use crate::handlers::{admin::call_context::extract_call_context, admin::response::ErrorResponse};
+use crate::handlers::admin::call_context::extract_call_context;
+use crate::{AppError, JsonResult};
 
 /// Describes a single notification template key.
 #[derive(Serialize, JsonSchema, ToSchema)]
@@ -29,52 +29,14 @@ pub struct NotificationTemplatesResponse {
     pub templates: Vec<NotificationTemplate>,
 }
 
-#[derive(Debug, thiserror::Error)]
-pub enum RouteError {
-    #[error(transparent)]
-    Internal(Box<dyn std::error::Error + Send + Sync + 'static>),
-
-    #[error("not implemented")]
-    NotImplemented,
-}
-
-impl_from_error_for_route!(pasion_data::RepositoryError);
-impl_from_error_for_route!(crate::handlers::admin::call_context::Rejection);
-
-impl Scribe for RouteError {
-    fn render(self, res: &mut Response) {
-        let error = ErrorResponse::from_error(&self);
-        let sentry_event_id = record_error!(self, Self::Internal(_));
-        let status = match self {
-            Self::Internal(_) => StatusCode::INTERNAL_SERVER_ERROR,
-            Self::NotImplemented => StatusCode::NOT_IMPLEMENTED,
-        };
-        res.status_code(status);
-        if let Some(event_id) = sentry_event_id {
-            if let Ok(value) = http::HeaderValue::from_str(&event_id.to_string()) {
-                res.headers_mut().insert("x-sentry-event-id", value);
-            }
-        }
-        res.render(Json(error));
-    }
-}
-
 /// List all known notification template keys.
-
-impl_endpoint_out_register!(RouteError, [
-    ("400", "Bad request"),
-    ("401", "Unauthorized"),
-    ("404", "Not found"),
-    ("409", "Conflict"),
-    ("500", "Internal server error"),
-]);
 
 #[endpoint]
 #[tracing::instrument(name = "handler.admin.v1.notification_templates.list", skip_all)]
 pub async fn list_handler(
     req: &mut Request,
     depot: &Depot,
-) -> Result<Json<NotificationTemplatesResponse>, RouteError> {
+) -> JsonResult<NotificationTemplatesResponse> {
     let _call_context = extract_call_context(req, depot).await?;
 
     // For MVP, return a hardcoded list of known template keys.
@@ -102,8 +64,8 @@ pub async fn list_handler(
 pub async fn publish_handler(
     req: &mut Request,
     depot: &Depot,
-) -> Result<Json<serde_json::Value>, RouteError> {
+) -> JsonResult<serde_json::Value> {
     let _call_context = extract_call_context(req, depot).await?;
 
-    Err(RouteError::NotImplemented)
+    Err(AppError::not_implemented("not implemented"))
 }

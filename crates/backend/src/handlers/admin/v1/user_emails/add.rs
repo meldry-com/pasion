@@ -1,6 +1,5 @@
 use std::str::FromStr as _;
 
-use crate::record_error;
 use pasion_data::BoxRng;
 use pasion_data::{
     queue::{ProvisionUserJob, QueueJobRepositoryExt as _},
@@ -14,52 +13,9 @@ use ulid::Ulid;
 use crate::handlers::admin::{
     call_context::extract_call_context,
     model::UserEmail,
-    response::{ErrorResponse, SingleResponse},
+    response::SingleResponse,
 };
-use crate::handlers::admin::CreatedJson;
-
-#[derive(Debug, thiserror::Error)]
-pub enum RouteError {
-    #[error(transparent)]
-    Internal(Box<dyn std::error::Error + Send + Sync + 'static>),
-
-    #[error("User email {0:?} already in use")]
-    EmailAlreadyInUse(String),
-
-    #[error("Email {email:?} is not valid")]
-    EmailNotValid {
-        email: String,
-
-        #[source]
-        source: lettre::address::AddressError,
-    },
-
-    #[error("User ID {0} not found")]
-    UserNotFound(Ulid),
-}
-
-impl_from_error_for_route!(pasion_data::RepositoryError);
-impl_from_error_for_route!(crate::handlers::admin::call_context::Rejection);
-
-impl Scribe for RouteError {
-    fn render(self, res: &mut Response) {
-        let error = ErrorResponse::from_error(&self);
-        let sentry_event_id = record_error!(self, Self::Internal(_));
-        let status = match self {
-            Self::Internal(_) => StatusCode::INTERNAL_SERVER_ERROR,
-            Self::EmailAlreadyInUse(_) => StatusCode::CONFLICT,
-            Self::EmailNotValid { .. } => StatusCode::BAD_REQUEST,
-            Self::UserNotFound(_) => StatusCode::NOT_FOUND,
-        };
-        res.status_code(status);
-        if let Some(event_id) = sentry_event_id {
-            if let Ok(value) = http::HeaderValue::from_str(&event_id.to_string()) {
-                res.headers_mut().insert("x-sentry-event-id", value);
-            }
-        }
-        res.render(Json(error));
-    }
-}
+use crate::{AppError, CreatedJsonResult};
 
 /// # JSON payload for the `POST /api/admin/v1/user-emails`
 #[derive(Deserialize, JsonSchema)]
@@ -73,22 +29,12 @@ pub struct RequestBody {
     #[schemars(email)]
     email: String,
 }
-
-
-impl_endpoint_out_register!(RouteError, [
-    ("400", "Bad request"),
-    ("401", "Unauthorized"),
-    ("404", "Not found"),
-    ("409", "Conflict"),
-    ("500", "Internal server error"),
-]);
-
 #[endpoint]
 #[tracing::instrument(name = "handler.admin.v1.user_emails.add", skip_all)]
 pub async fn handler(
     req: &mut Request,
     depot: &Depot,
-) -> Result<CreatedJson<SingleResponse<UserEmail>>, RouteError> {
+) -> CreatedJsonResult<SingleResponse<UserEmail>> {
     let call_context = extract_call_context(req, depot).await?;
     let crate::handlers::admin::call_context::CallContext {
         mut repo, clock, ..
@@ -97,21 +43,23 @@ pub async fn handler(
     let params: RequestBody = req
         .parse_json()
         .await
-        .map_err(|e| RouteError::Internal(Box::new(e)))?;
+        .map_err(AppError::internal)?;
 
     // Find the user
     let user = repo
         .user()
         .lookup(params.user_id)
         .await?
-        .ok_or(RouteError::UserNotFound(params.user_id))?;
+        .ok_or_else(|| AppError::not_found(format!("User ID {} not found", params.user_id)))?;
 
     // Validate the email
     if let Err(source) = lettre::Address::from_str(&params.email) {
-        return Err(RouteError::EmailNotValid {
-            email: params.email,
-            source,
-        });
+        return Err(AppError::with_source(
+            StatusCode::BAD_REQUEST,
+            format!("Email {:?} is not valid", params.email),
+            Box::new(source),
+            false,
+        ));
     }
 
     // Check if the email already exists
@@ -121,7 +69,10 @@ pub async fn handler(
         .await?;
 
     if count > 0 {
-        return Err(RouteError::EmailAlreadyInUse(params.email));
+        return Err(AppError::conflict(format!(
+            "User email {:?} already in use",
+            params.email
+        )));
     }
 
     // Add the email to the user
@@ -137,7 +88,9 @@ pub async fn handler(
 
     repo.save().await?;
 
-    Ok(CreatedJson(SingleResponse::new_canonical(user_email.into())))
+    Ok(crate::handlers::admin::CreatedJson(SingleResponse::new_canonical(
+        user_email.into(),
+    )))
 }
 
 #[cfg(test)]

@@ -1,9 +1,6 @@
-use std::sync::Arc;
-
-use crate::record_error;
 use pasion_data::BoxRng;
-use pasion_matrix::{HomeserverConnection, ProvisionRequest};
-use salvo::{http::StatusCode, prelude::*};
+use pasion_matrix::ProvisionRequest;
+use salvo::prelude::*;
 use schemars::JsonSchema;
 use serde::Deserialize;
 use tracing::warn;
@@ -12,53 +9,12 @@ use crate::handlers::{
     admin::{
         call_context::extract_call_context,
         model::User,
-        response::{ErrorResponse, SingleResponse},
+        response::SingleResponse,
     },
     rest::DepotExt,
 };
 use crate::util::username_valid;
-use crate::handlers::admin::CreatedJson;
-
-#[derive(Debug, thiserror::Error)]
-pub enum RouteError {
-    #[error(transparent)]
-    Internal(Box<dyn std::error::Error + Send + Sync + 'static>),
-
-    #[error(transparent)]
-    Homeserver(anyhow::Error),
-
-    #[error("Username is not valid")]
-    UsernameNotValid,
-
-    #[error("User already exists")]
-    UserAlreadyExists,
-
-    #[error("Username is reserved by the homeserver")]
-    UsernameReserved,
-}
-
-impl_from_error_for_route!(pasion_data::RepositoryError);
-impl_from_error_for_route!(crate::handlers::rest::RouteError);
-impl_from_error_for_route!(crate::handlers::admin::call_context::Rejection);
-
-impl Scribe for RouteError {
-    fn render(self, res: &mut Response) {
-        let error = ErrorResponse::from_error(&self);
-        let sentry_event_id = record_error!(self, Self::Internal(_) | Self::Homeserver(_));
-        let status = match self {
-            Self::Internal(_) | Self::Homeserver(_) => StatusCode::INTERNAL_SERVER_ERROR,
-            Self::UsernameNotValid => StatusCode::BAD_REQUEST,
-            Self::UserAlreadyExists | Self::UsernameReserved => StatusCode::CONFLICT,
-        };
-        res.status_code(status);
-        if let Some(event_id) = sentry_event_id {
-            if let Ok(value) = http::HeaderValue::from_str(&event_id.to_string()) {
-                res.headers_mut().insert("x-sentry-event-id", value);
-            }
-        }
-        res.render(Json(error));
-    }
-}
+use crate::{AppError, CreatedJsonResult};
 
 /// # JSON payload for the `POST /api/admin/v1/users` endpoint
 #[derive(Deserialize, JsonSchema)]
@@ -75,22 +31,12 @@ pub struct RequestBody {
     #[serde(default)]
     skip_homeserver_check: bool,
 }
-
-
-impl_endpoint_out_register!(RouteError, [
-    ("400", "Bad request"),
-    ("401", "Unauthorized"),
-    ("404", "Not found"),
-    ("409", "Conflict"),
-    ("500", "Internal server error"),
-]);
-
 #[endpoint]
 #[tracing::instrument(name = "handler.admin.v1.users.add", skip_all)]
 pub async fn handler(
     req: &mut Request,
     depot: &Depot,
-) -> Result<CreatedJson<SingleResponse<User>>, RouteError> {
+) -> CreatedJsonResult<SingleResponse<User>> {
     let call_context = extract_call_context(req, depot).await?;
     let crate::handlers::admin::call_context::CallContext {
         mut repo, clock, ..
@@ -100,26 +46,26 @@ pub async fn handler(
     let params: RequestBody = req
         .parse_json()
         .await
-        .map_err(|e| RouteError::Internal(Box::new(e)))?;
+        .map_err(AppError::internal)?;
 
     if repo.user().exists(&params.username).await? {
-        return Err(RouteError::UserAlreadyExists);
+        return Err(AppError::conflict("User already exists"));
     }
 
     // Do some basic check on the username
     if !username_valid(&params.username) {
-        return Err(RouteError::UsernameNotValid);
+        return Err(AppError::bad_request("Username is not valid"));
     }
 
     // Ask the homeserver if the username is available
     let homeserver_available = homeserver
         .is_localpart_available(&params.username)
         .await
-        .map_err(RouteError::Homeserver)?;
+        .map_err(|error| AppError::internal(std::io::Error::other(error.to_string())))?;
 
     if !homeserver_available {
         if !params.skip_homeserver_check {
-            return Err(RouteError::UsernameReserved);
+            return Err(AppError::conflict("Username is reserved by the homeserver"));
         }
 
         // If we skipped the check, we still want to shout about it
@@ -131,11 +77,13 @@ pub async fn handler(
     homeserver
         .provision_user(&ProvisionRequest::new(&user.username, &user.sub))
         .await
-        .map_err(RouteError::Homeserver)?;
+        .map_err(|error| AppError::internal(std::io::Error::other(error.to_string())))?;
 
     repo.save().await?;
 
-    Ok(CreatedJson(SingleResponse::new_canonical(User::from(user))))
+    Ok(crate::handlers::admin::CreatedJson(SingleResponse::new_canonical(
+        User::from(user),
+    )))
 }
 
 #[cfg(test)]

@@ -1,7 +1,6 @@
-use crate::record_error;
 use pasion_data::audit::AdminOperation;
 use pasion_data::audit::NewAdminOperationLog;
-use salvo::{http::StatusCode, prelude::*};
+use salvo::prelude::*;
 use schemars::JsonSchema;
 use salvo::oapi::ToSchema;
 use serde::{Deserialize, Serialize};
@@ -11,43 +10,9 @@ use crate::handlers::admin::{
     call_context::extract_call_context,
     model::{Resource, User},
     params::extract_ulid_param,
-    response::{ErrorResponse, SingleResponse},
+    response::SingleResponse,
 };
-
-#[derive(Debug, thiserror::Error)]
-pub enum RouteError {
-    #[error(transparent)]
-    Internal(Box<dyn std::error::Error + Send + Sync + 'static>),
-
-    #[error("User ID {0} not found")]
-    NotFound(Ulid),
-
-    #[error("Unknown risk action: {0}")]
-    UnknownAction(String),
-}
-
-impl_from_error_for_route!(pasion_data::RepositoryError);
-impl_from_error_for_route!(crate::handlers::admin::params::UlidPathParamRejection);
-impl_from_error_for_route!(crate::handlers::admin::call_context::Rejection);
-
-impl Scribe for RouteError {
-    fn render(self, res: &mut Response) {
-        let error = ErrorResponse::from_error(&self);
-        let sentry_event_id = record_error!(self, Self::Internal(_));
-        let status = match self {
-            Self::Internal(_) => StatusCode::INTERNAL_SERVER_ERROR,
-            Self::NotFound(_) => StatusCode::NOT_FOUND,
-            Self::UnknownAction(_) => StatusCode::BAD_REQUEST,
-        };
-        res.status_code(status);
-        if let Some(event_id) = sentry_event_id {
-            if let Ok(value) = http::HeaderValue::from_str(&event_id.to_string()) {
-                res.headers_mut().insert("x-sentry-event-id", value);
-            }
-        }
-        res.render(Json(error));
-    }
-}
+use crate::{AppError, JsonResult};
 
 /// # JSON payload for the `POST /api/admin/v1/users/:id/risk-action` endpoint
 #[derive(Deserialize, JsonSchema)]
@@ -77,22 +42,12 @@ pub struct RiskActionResponse {
     #[serde(skip_serializing_if = "Option::is_none")]
     sessions_terminated: Option<usize>,
 }
-
-
-impl_endpoint_out_register!(RouteError, [
-    ("400", "Bad request"),
-    ("401", "Unauthorized"),
-    ("404", "Not found"),
-    ("409", "Conflict"),
-    ("500", "Internal server error"),
-]);
-
 #[endpoint]
 #[tracing::instrument(name = "handler.admin.v1.users.risk_action", skip_all)]
 pub async fn handler(
     req: &mut Request,
     depot: &Depot,
-) -> Result<Json<RiskActionResponse>, RouteError> {
+) -> JsonResult<RiskActionResponse> {
     let call_context = extract_call_context(req, depot).await?;
     let crate::handlers::admin::call_context::CallContext {
         mut repo,
@@ -105,13 +60,13 @@ pub async fn handler(
     let params: RequestBody = req
         .parse_json()
         .await
-        .map_err(|e| RouteError::Internal(Box::new(e)))?;
+        .map_err(AppError::internal)?;
 
     let user = repo
         .user()
         .lookup(id)
         .await?
-        .ok_or(RouteError::NotFound(id))?;
+        .ok_or_else(|| AppError::not_found(format!("User ID {id} not found")))?;
 
     let mut sessions_terminated = None;
 
@@ -133,7 +88,7 @@ pub async fn handler(
             user
         }
 
-        other => return Err(RouteError::UnknownAction(other.to_owned())),
+        other => return Err(AppError::bad_request(format!("Unknown risk action: {other}"))),
     };
 
     // Record audit log for the risk action

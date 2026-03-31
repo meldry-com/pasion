@@ -1,6 +1,5 @@
-use crate::record_error;
 use pasion_data::{Page, upstream_oauth2::UpstreamOAuthProviderFilter};
-use salvo::{http::StatusCode, prelude::*};
+use salvo::prelude::*;
 use schemars::JsonSchema;
 use serde::Deserialize;
 
@@ -8,8 +7,9 @@ use crate::handlers::admin::{
     call_context::extract_call_context,
     model::{Resource, UpstreamOAuthProvider},
     params::{IncludeCount, extract_pagination},
-    response::{ErrorResponse, PaginatedResponse},
+    response::PaginatedResponse,
 };
+use crate::JsonResult;
 
 #[derive(Deserialize, JsonSchema, Default)]
 #[serde(rename = "UpstreamOAuthProviderFilter")]
@@ -33,49 +33,12 @@ impl std::fmt::Display for FilterParams {
     }
 }
 
-#[derive(Debug, thiserror::Error)]
-pub enum RouteError {
-    #[error(transparent)]
-    Internal(Box<dyn std::error::Error + Send + Sync + 'static>),
-}
-
-impl_from_error_for_route!(pasion_data::RepositoryError);
-impl_from_error_for_route!(crate::handlers::admin::params::PaginationRejection);
-impl_from_error_for_route!(crate::handlers::admin::call_context::Rejection);
-
-impl Scribe for RouteError {
-    fn render(self, res: &mut Response) {
-        let error = ErrorResponse::from_error(&self);
-        let sentry_event_id = record_error!(self, Self::Internal(_));
-        let status = match self {
-            Self::Internal(_) => StatusCode::INTERNAL_SERVER_ERROR,
-        };
-
-        res.status_code(status);
-        if let Some(event_id) = sentry_event_id {
-            if let Ok(value) = http::HeaderValue::from_str(&event_id.to_string()) {
-                res.headers_mut().insert("x-sentry-event-id", value);
-            }
-        }
-        res.render(Json(error));
-    }
-}
-
-
-impl_endpoint_out_register!(RouteError, [
-    ("400", "Bad request"),
-    ("401", "Unauthorized"),
-    ("404", "Not found"),
-    ("409", "Conflict"),
-    ("500", "Internal server error"),
-]);
-
 #[endpoint]
 #[tracing::instrument(name = "handler.admin.v1.upstream_oauth_providers.list", skip_all)]
 pub async fn handler(
     req: &mut Request,
     depot: &Depot,
-) -> Result<Json<PaginatedResponse<UpstreamOAuthProvider>>, RouteError> {
+) -> JsonResult<PaginatedResponse<UpstreamOAuthProvider>> {
     let call_context = extract_call_context(req, depot).await?;
     let crate::handlers::admin::call_context::CallContext { mut repo, .. } = call_context;
     let (pagination, include_count) = extract_pagination(req)?;

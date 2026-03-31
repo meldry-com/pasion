@@ -1,9 +1,8 @@
 use std::str::FromStr;
 
-use crate::record_error;
 use oauth2_types::scope::{Scope, ScopeToken};
 use pasion_data::{Page, oauth2::OAuth2SessionFilter};
-use salvo::{http::StatusCode, prelude::*};
+use salvo::prelude::*;
 use schemars::JsonSchema;
 use serde::Deserialize;
 use ulid::Ulid;
@@ -12,8 +11,9 @@ use crate::handlers::admin::{
     call_context::extract_call_context,
     model::{OAuth2Session, Resource},
     params::{IncludeCount, extract_pagination},
-    response::{ErrorResponse, PaginatedResponse},
+    response::PaginatedResponse,
 };
+use crate::{AppError, JsonResult};
 
 #[derive(Deserialize, JsonSchema, Clone, Copy)]
 #[serde(rename_all = "snake_case")]
@@ -123,64 +123,12 @@ impl std::fmt::Display for FilterParams {
     }
 }
 
-#[derive(Debug, thiserror::Error)]
-pub enum RouteError {
-    #[error(transparent)]
-    Internal(Box<dyn std::error::Error + Send + Sync + 'static>),
-
-    #[error("User ID {0} not found")]
-    UserNotFound(Ulid),
-
-    #[error("Client ID {0} not found")]
-    ClientNotFound(Ulid),
-
-    #[error("User session ID {0} not found")]
-    UserSessionNotFound(Ulid),
-
-    #[error("Invalid scope {0:?} in filter parameters")]
-    InvalidScope(String),
-}
-
-impl_from_error_for_route!(pasion_data::RepositoryError);
-impl_from_error_for_route!(crate::handlers::admin::params::PaginationRejection);
-impl_from_error_for_route!(crate::handlers::admin::call_context::Rejection);
-
-impl Scribe for RouteError {
-    fn render(self, res: &mut Response) {
-        let error = ErrorResponse::from_error(&self);
-        let sentry_event_id = record_error!(self, RouteError::Internal(_));
-        let status = match self {
-            Self::Internal(_) => StatusCode::INTERNAL_SERVER_ERROR,
-            Self::UserNotFound(_) | Self::ClientNotFound(_) | Self::UserSessionNotFound(_) => {
-                StatusCode::NOT_FOUND
-            }
-            Self::InvalidScope(_) => StatusCode::BAD_REQUEST,
-        };
-        res.status_code(status);
-        if let Some(event_id) = sentry_event_id {
-            if let Ok(value) = http::HeaderValue::from_str(&event_id.to_string()) {
-                res.headers_mut().insert("x-sentry-event-id", value);
-            }
-        }
-        res.render(Json(error));
-    }
-}
-
-
-impl_endpoint_out_register!(RouteError, [
-    ("400", "Bad request"),
-    ("401", "Unauthorized"),
-    ("404", "Not found"),
-    ("409", "Conflict"),
-    ("500", "Internal server error"),
-]);
-
 #[endpoint]
 #[tracing::instrument(name = "handler.admin.v1.oauth2_sessions.list", skip_all)]
 pub async fn handler(
     req: &mut Request,
     depot: &Depot,
-) -> Result<Json<PaginatedResponse<OAuth2Session>>, RouteError> {
+) -> JsonResult<PaginatedResponse<OAuth2Session>> {
     let call_context = extract_call_context(req, depot).await?;
     let crate::handlers::admin::call_context::CallContext { mut repo, .. } = call_context;
     let (pagination, include_count) = extract_pagination(req)?;
@@ -196,7 +144,7 @@ pub async fn handler(
             .user()
             .lookup(user_id)
             .await?
-            .ok_or(RouteError::UserNotFound(user_id))?;
+            .ok_or_else(|| AppError::not_found(format!("User ID {user_id} not found")))?;
 
         Some(user)
     } else {
@@ -213,7 +161,7 @@ pub async fn handler(
             .oauth2_client()
             .lookup(client_id)
             .await?
-            .ok_or(RouteError::ClientNotFound(client_id))?;
+            .ok_or_else(|| AppError::not_found(format!("Client ID {client_id} not found")))?;
 
         Some(client)
     } else {
@@ -236,7 +184,9 @@ pub async fn handler(
             .browser_session()
             .lookup(user_session_id)
             .await?
-            .ok_or(RouteError::UserSessionNotFound(user_session_id))?;
+            .ok_or_else(|| {
+                AppError::not_found(format!("User session ID {user_session_id} not found"))
+            })?;
 
         Some(user_session)
     } else {
@@ -251,7 +201,11 @@ pub async fn handler(
     let scope: Scope = params
         .scope
         .into_iter()
-        .map(|s| ScopeToken::from_str(&s).map_err(|_| RouteError::InvalidScope(s)))
+        .map(|s| {
+            ScopeToken::from_str(&s).map_err(|_| {
+                AppError::bad_request(format!("Invalid scope {s:?} in filter parameters"))
+            })
+        })
         .collect::<Result<_, _>>()?;
 
     let filter = if scope.is_empty() {

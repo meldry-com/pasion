@@ -1,5 +1,4 @@
-use crate::record_error;
-use salvo::{http::StatusCode, prelude::*};
+use salvo::prelude::*;
 use serde::Deserialize;
 use ulid::Ulid;
 
@@ -8,49 +7,11 @@ use crate::handlers::{
         call_context::extract_call_context,
         model::User,
         params::extract_ulid_param,
-        response::{ErrorResponse, SingleResponse},
+        response::SingleResponse,
     },
     rest::DepotExt,
 };
-
-#[derive(Debug, thiserror::Error)]
-pub enum RouteError {
-    #[error(transparent)]
-    Internal(Box<dyn std::error::Error + Send + Sync + 'static>),
-
-    #[error("User ID {0} not found")]
-    NotFound(Ulid),
-
-    #[error("Bad request: {0}")]
-    BadRequest(String),
-
-    #[error("Conflict: {0}")]
-    Conflict(String),
-}
-
-impl_from_error_for_route!(pasion_data::RepositoryError);
-impl_from_error_for_route!(crate::handlers::admin::params::UlidPathParamRejection);
-impl_from_error_for_route!(crate::handlers::admin::call_context::Rejection);
-
-impl Scribe for RouteError {
-    fn render(self, res: &mut Response) {
-        let error = ErrorResponse::from_error(&self);
-        let sentry_event_id = record_error!(self, Self::Internal(_));
-        let status = match self {
-            Self::Internal(_) => StatusCode::INTERNAL_SERVER_ERROR,
-            Self::NotFound(_) => StatusCode::NOT_FOUND,
-            Self::BadRequest(_) => StatusCode::BAD_REQUEST,
-            Self::Conflict(_) => StatusCode::CONFLICT,
-        };
-        res.status_code(status);
-        if let Some(event_id) = sentry_event_id {
-            if let Ok(value) = http::HeaderValue::from_str(&event_id.to_string()) {
-                res.headers_mut().insert("x-sentry-event-id", value);
-            }
-        }
-        res.render(Json(error));
-    }
-}
+use crate::{AppError, JsonResult};
 
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -63,22 +24,12 @@ pub struct RequestBody {
     deactivated: Option<bool>,
     hs_erase: Option<bool>,
 }
-
-
-impl_endpoint_out_register!(RouteError, [
-    ("400", "Bad request"),
-    ("401", "Unauthorized"),
-    ("404", "Not found"),
-    ("409", "Conflict"),
-    ("500", "Internal server error"),
-]);
-
 #[endpoint]
 #[tracing::instrument(name = "handler.admin.v1.users.update", skip_all)]
 pub async fn handler(
     req: &mut Request,
     depot: &Depot,
-) -> Result<Json<SingleResponse<User>>, RouteError> {
+) -> JsonResult<SingleResponse<User>> {
     let call_context = extract_call_context(req, depot).await?;
     let crate::handlers::admin::call_context::CallContext {
         mut repo,
@@ -87,14 +38,12 @@ pub async fn handler(
         ..
     } = call_context;
     let id = extract_ulid_param(req)?;
-    let homeserver = depot.homeserver().map_err(|error| {
-        RouteError::Internal(Box::new(std::io::Error::other(error.to_string())))
-    })?;
+    let homeserver = depot.homeserver()?;
     let mut rng = crate::handlers::rest::make_rng();
     let body: RequestBody = req
         .parse_json()
         .await
-        .map_err(|e| RouteError::BadRequest(e.to_string()))?;
+        .map_err(|error| AppError::bad_request(error.to_string()))?;
 
     let patch = pasion_data::AdminUserPatch {
         display_name: body.display_name,
@@ -123,45 +72,45 @@ pub async fn handler(
     Ok(Json(SingleResponse::new_canonical(User::from(user))))
 }
 
-fn map_service_error(error: crate::services::user_admin::UserAdminServiceError) -> RouteError {
+fn map_service_error(error: crate::services::user_admin::UserAdminServiceError) -> AppError {
     match error {
         crate::services::user_admin::UserAdminServiceError::UserNotFound(id) => {
-            RouteError::NotFound(id)
+            AppError::not_found(format!("User ID {id} not found"))
         }
         crate::services::user_admin::UserAdminServiceError::ReferencedUserNotFound(id) => {
-            RouteError::BadRequest(format!("Referenced user ID {id} not found"))
+            AppError::bad_request(format!("Referenced user ID {id} not found"))
         }
         crate::services::user_admin::UserAdminServiceError::UserEmailNotFound(id) => {
-            RouteError::BadRequest(format!("Unexpected user email lookup failure for {id}"))
+            AppError::bad_request(format!("Unexpected user email lookup failure for {id}"))
         }
         crate::services::user_admin::UserAdminServiceError::UpstreamOAuthLinkNotFound(id) => {
-            RouteError::BadRequest(format!(
+            AppError::bad_request(format!(
                 "Unexpected upstream oauth link lookup failure for {id}"
             ))
         }
         crate::services::user_admin::UserAdminServiceError::ProviderNotFound(id) => {
-            RouteError::BadRequest(format!("Provider ID {id} not found"))
+            AppError::bad_request(format!("Provider ID {id} not found"))
         }
         crate::services::user_admin::UserAdminServiceError::InvalidDisplayName => {
-            RouteError::BadRequest("Invalid display name".to_owned())
+            AppError::bad_request("Invalid display name")
         }
         crate::services::user_admin::UserAdminServiceError::InvalidEmail { email, .. } => {
-            RouteError::BadRequest(format!("Email {email:?} is not valid"))
+            AppError::bad_request(format!("Email {email:?} is not valid"))
         }
         crate::services::user_admin::UserAdminServiceError::EmailAlreadyInUse(email) => {
-            RouteError::Conflict(format!("User email {email:?} already in use"))
+            AppError::conflict(format!("User email {email:?} already in use"))
         }
         crate::services::user_admin::UserAdminServiceError::UpstreamSubjectAlreadyLinked {
             provider_id,
             subject,
-        } => RouteError::Conflict(format!(
+        } => AppError::conflict(format!(
             "Provider ID {provider_id} already has subject {subject}"
         )),
         crate::services::user_admin::UserAdminServiceError::Homeserver(error) => {
-            RouteError::Internal(Box::new(std::io::Error::other(error.to_string())))
+            AppError::internal(std::io::Error::other(error.to_string()))
         }
         crate::services::user_admin::UserAdminServiceError::Repository(error) => {
-            RouteError::Internal(Box::new(error))
+            AppError::internal(error)
         }
     }
 }

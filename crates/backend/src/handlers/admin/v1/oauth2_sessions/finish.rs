@@ -1,66 +1,21 @@
-use crate::record_error;
 use pasion_data::BoxRng;
 use pasion_data::queue::{QueueJobRepositoryExt as _, SyncDevicesJob};
-use salvo::{http::StatusCode, prelude::*};
-use ulid::Ulid;
+use salvo::prelude::*;
 
 use crate::handlers::admin::{
     call_context::extract_call_context,
     model::{OAuth2Session, Resource},
     params::extract_ulid_param,
-    response::{ErrorResponse, SingleResponse},
+    response::SingleResponse,
 };
-
-#[derive(Debug, thiserror::Error)]
-pub enum RouteError {
-    #[error(transparent)]
-    Internal(Box<dyn std::error::Error + Send + Sync + 'static>),
-
-    #[error("OAuth 2.0 session with ID {0} not found")]
-    NotFound(Ulid),
-
-    #[error("OAuth 2.0 session with ID {0} is already finished")]
-    AlreadyFinished(Ulid),
-}
-
-impl_from_error_for_route!(pasion_data::RepositoryError);
-impl_from_error_for_route!(crate::handlers::admin::params::UlidPathParamRejection);
-impl_from_error_for_route!(crate::handlers::admin::call_context::Rejection);
-
-impl Scribe for RouteError {
-    fn render(self, res: &mut Response) {
-        let error = ErrorResponse::from_error(&self);
-        let sentry_event_id = record_error!(self, Self::Internal(_));
-        let status = match self {
-            Self::Internal(_) => StatusCode::INTERNAL_SERVER_ERROR,
-            Self::NotFound(_) => StatusCode::NOT_FOUND,
-            Self::AlreadyFinished(_) => StatusCode::BAD_REQUEST,
-        };
-        res.status_code(status);
-        if let Some(event_id) = sentry_event_id {
-            if let Ok(value) = http::HeaderValue::from_str(&event_id.to_string()) {
-                res.headers_mut().insert("x-sentry-event-id", value);
-            }
-        }
-        res.render(Json(error));
-    }
-}
-
-
-impl_endpoint_out_register!(RouteError, [
-    ("400", "Bad request"),
-    ("401", "Unauthorized"),
-    ("404", "Not found"),
-    ("409", "Conflict"),
-    ("500", "Internal server error"),
-]);
+use crate::{AppError, JsonResult};
 
 #[endpoint]
 #[tracing::instrument(name = "handler.admin.v1.oauth2_sessions.finish", skip_all)]
 pub async fn handler(
     req: &mut Request,
     depot: &Depot,
-) -> Result<Json<SingleResponse<OAuth2Session>>, RouteError> {
+) -> JsonResult<SingleResponse<OAuth2Session>> {
     let call_context = extract_call_context(req, depot).await?;
     let crate::handlers::admin::call_context::CallContext {
         mut repo, clock, ..
@@ -73,11 +28,13 @@ pub async fn handler(
         .oauth2_session()
         .lookup(id)
         .await?
-        .ok_or(RouteError::NotFound(id))?;
+        .ok_or_else(|| AppError::not_found(format!("OAuth 2.0 session with ID {id} not found")))?;
 
     // Check if the session is already finished
     if session.finished_at().is_some() {
-        return Err(RouteError::AlreadyFinished(id));
+        return Err(AppError::bad_request(format!(
+            "OAuth 2.0 session with ID {id} is already finished"
+        )));
     }
 
     // If the session has a user associated with it, schedule a job to sync devices

@@ -1,9 +1,8 @@
 use std::sync::Arc;
 
-use crate::record_error;
 use pasion_data::BoxRng;
 use pasion_policy::PolicyFactory;
-use salvo::{http::StatusCode, prelude::*};
+use salvo::prelude::*;
 use schemars::JsonSchema;
 use serde::Deserialize;
 
@@ -11,42 +10,12 @@ use crate::handlers::{
     admin::{
         call_context::extract_call_context,
         model::PolicyData,
-        response::{ErrorResponse, SingleResponse},
+        response::SingleResponse,
     },
     rest::DepotExt,
 };
 use crate::handlers::admin::CreatedJson;
-
-#[derive(Debug, thiserror::Error)]
-pub enum RouteError {
-    #[error("Failed to instanciate policy with the provided data")]
-    InvalidPolicyData(#[from] pasion_policy::LoadError),
-
-    #[error(transparent)]
-    Internal(Box<dyn std::error::Error + Send + Sync + 'static>),
-}
-
-impl_from_error_for_route!(pasion_data::RepositoryError);
-impl_from_error_for_route!(crate::handlers::rest::RouteError);
-impl_from_error_for_route!(crate::handlers::admin::call_context::Rejection);
-
-impl Scribe for RouteError {
-    fn render(self, res: &mut Response) {
-        let error = ErrorResponse::from_error(&self);
-        let sentry_event_id = record_error!(self, Self::Internal(_));
-        let status = match self {
-            RouteError::InvalidPolicyData(_) => StatusCode::BAD_REQUEST,
-            RouteError::Internal(_) => StatusCode::INTERNAL_SERVER_ERROR,
-        };
-        res.status_code(status);
-        if let Some(event_id) = sentry_event_id {
-            if let Ok(value) = http::HeaderValue::from_str(&event_id.to_string()) {
-                res.headers_mut().insert("x-sentry-event-id", value);
-            }
-        }
-        res.render(Json(error));
-    }
-}
+use crate::{AppError, CreatedJsonResult};
 
 fn data_example() -> serde_json::Value {
     serde_json::json!({
@@ -63,22 +32,12 @@ pub struct SetPolicyDataRequest {
     #[schemars(example = data_example())]
     pub data: serde_json::Value,
 }
-
-
-impl_endpoint_out_register!(RouteError, [
-    ("400", "Bad request"),
-    ("401", "Unauthorized"),
-    ("404", "Not found"),
-    ("409", "Conflict"),
-    ("500", "Internal server error"),
-]);
-
 #[endpoint]
 #[tracing::instrument(name = "handler.admin.v1.policy_data.set", skip_all)]
 pub async fn handler(
     req: &mut Request,
     depot: &Depot,
-) -> Result<CreatedJson<SingleResponse<PolicyData>>, RouteError> {
+) -> CreatedJsonResult<SingleResponse<PolicyData>> {
     let call_context = extract_call_context(req, depot).await?;
     let crate::handlers::admin::call_context::CallContext {
         mut repo, clock, ..
@@ -88,7 +47,7 @@ pub async fn handler(
     let request: SetPolicyDataRequest = req
         .parse_json()
         .await
-        .map_err(|e| RouteError::Internal(Box::new(e)))?;
+        .map_err(AppError::internal)?;
 
     let policy_data = repo
         .policy_data()
@@ -96,7 +55,17 @@ pub async fn handler(
         .await?;
 
     // Swap the policy data. This will fail if the policy data is invalid
-    policy_factory.set_dynamic_data(policy_data.clone()).await?;
+    policy_factory
+        .set_dynamic_data(policy_data.clone())
+        .await
+        .map_err(|error| {
+            AppError::with_source(
+                salvo::http::StatusCode::BAD_REQUEST,
+                "Failed to instanciate policy with the provided data",
+                Box::new(error),
+                false,
+            )
+        })?;
 
     repo.save().await?;
 

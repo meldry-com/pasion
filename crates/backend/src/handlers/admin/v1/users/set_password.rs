@@ -1,4 +1,3 @@
-use crate::record_error;
 use pasion_data::{BoxRng, audit::AdminOperation};
 use salvo::{http::StatusCode, prelude::*};
 use schemars::JsonSchema;
@@ -8,54 +7,12 @@ use zeroize::Zeroizing;
 
 use crate::handlers::{
     admin::{
-        call_context::extract_call_context, params::extract_ulid_param, response::ErrorResponse,
+        call_context::extract_call_context, params::extract_ulid_param,
     },
     passwords::PasswordManager,
     rest::DepotExt,
 };
-
-#[derive(Debug, thiserror::Error)]
-pub enum RouteError {
-    #[error(transparent)]
-    Internal(Box<dyn std::error::Error + Send + Sync + 'static>),
-
-    #[error("Password is too weak")]
-    PasswordTooWeak,
-
-    #[error("Password auth is disabled")]
-    PasswordAuthDisabled,
-
-    #[error("Password hashing failed")]
-    Password(#[source] anyhow::Error),
-
-    #[error("User ID {0} not found")]
-    NotFound(Ulid),
-}
-
-impl_from_error_for_route!(pasion_data::RepositoryError);
-impl_from_error_for_route!(crate::handlers::rest::RouteError);
-impl_from_error_for_route!(crate::handlers::admin::params::UlidPathParamRejection);
-impl_from_error_for_route!(crate::handlers::admin::call_context::Rejection);
-
-impl Scribe for RouteError {
-    fn render(self, res: &mut Response) {
-        let error = ErrorResponse::from_error(&self);
-        let sentry_event_id = record_error!(self, Self::Internal(_) | Self::Password(_));
-        let status = match self {
-            Self::Internal(_) | Self::Password(_) => StatusCode::INTERNAL_SERVER_ERROR,
-            Self::PasswordAuthDisabled => StatusCode::FORBIDDEN,
-            Self::PasswordTooWeak => StatusCode::BAD_REQUEST,
-            Self::NotFound(_) => StatusCode::NOT_FOUND,
-        };
-        res.status_code(status);
-        if let Some(event_id) = sentry_event_id {
-            if let Ok(value) = http::HeaderValue::from_str(&event_id.to_string()) {
-                res.headers_mut().insert("x-sentry-event-id", value);
-            }
-        }
-        res.render(Json(error));
-    }
-}
+use crate::{AppError, AppResult};
 
 /// # JSON payload for the `POST /api/admin/v1/users/:id/set-password` endpoint
 #[derive(Deserialize, JsonSchema)]
@@ -68,19 +25,9 @@ pub struct RequestBody {
     /// Skip the password complexity check
     skip_password_check: Option<bool>,
 }
-
-
-impl_endpoint_out_register!(RouteError, [
-    ("400", "Bad request"),
-    ("401", "Unauthorized"),
-    ("404", "Not found"),
-    ("409", "Conflict"),
-    ("500", "Internal server error"),
-]);
-
 #[endpoint]
 #[tracing::instrument(name = "handler.admin.v1.users.set_password", skip_all)]
-pub async fn handler(req: &mut Request, depot: &Depot) -> Result<StatusCode, RouteError> {
+pub async fn handler(req: &mut Request, depot: &Depot) -> AppResult<StatusCode> {
     let call_context = extract_call_context(req, depot).await?;
     let crate::handlers::admin::call_context::CallContext {
         mut repo,
@@ -94,17 +41,17 @@ pub async fn handler(req: &mut Request, depot: &Depot) -> Result<StatusCode, Rou
     let params: RequestBody = req
         .parse_json()
         .await
-        .map_err(|e| RouteError::Internal(Box::new(e)))?;
+        .map_err(AppError::internal)?;
 
     if !password_manager.is_enabled() {
-        return Err(RouteError::PasswordAuthDisabled);
+        return Err(AppError::forbidden("Password auth is disabled"));
     }
 
     let user = repo
         .user()
         .lookup(id)
         .await?
-        .ok_or(RouteError::NotFound(id))?;
+        .ok_or_else(|| AppError::not_found(format!("User ID {id} not found")))?;
 
     let skip_password_check = params.skip_password_check.unwrap_or(false);
     tracing::info!(skip_password_check, "skip_password_check");
@@ -113,14 +60,21 @@ pub async fn handler(req: &mut Request, depot: &Depot) -> Result<StatusCode, Rou
             .is_password_complex_enough(&params.password)
             .unwrap_or(false)
     {
-        return Err(RouteError::PasswordTooWeak);
+        return Err(AppError::bad_request("Password is too weak"));
     }
 
     let password = Zeroizing::new(params.password);
     let (version, hashed_password) = password_manager
         .hash(&mut rng, password)
         .await
-        .map_err(RouteError::Password)?;
+        .map_err(|error| {
+            AppError::with_source(
+                StatusCode::INTERNAL_SERVER_ERROR,
+                "Password hashing failed",
+                Box::new(std::io::Error::other(error.to_string())),
+                true,
+            )
+        })?;
 
     repo.user_password()
         .add(&mut rng, &clock, &user, version, hashed_password, None)

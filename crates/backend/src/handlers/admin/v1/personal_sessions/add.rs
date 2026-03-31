@@ -1,12 +1,11 @@
 use std::sync::Arc;
 
-use crate::record_error;
 use anyhow::Context;
 use chrono::Duration;
 use oauth2_types::scope::Scope;
 use pasion_data::{BoxRng, TokenType};
 use pasion_matrix::HomeserverConnection;
-use salvo::{http::StatusCode, prelude::*};
+use salvo::prelude::*;
 use schemars::JsonSchema;
 use serde::Deserialize;
 use ulid::Ulid;
@@ -15,52 +14,12 @@ use crate::handlers::{
     admin::{
         call_context::extract_call_context,
         model::{InconsistentPersonalSession, PersonalSession},
-        response::{ErrorResponse, SingleResponse},
+        response::SingleResponse,
         v1::personal_sessions::personal_session_owner_from_caller,
     },
     rest::DepotExt,
 };
-use crate::handlers::admin::CreatedJson;
-
-#[derive(Debug, thiserror::Error)]
-pub enum RouteError {
-    #[error(transparent)]
-    Internal(Box<dyn std::error::Error + Send + Sync + 'static>),
-
-    #[error("User not found")]
-    UserNotFound,
-
-    #[error("User is not active")]
-    UserDeactivated,
-
-    #[error("Invalid scope")]
-    InvalidScope,
-}
-
-impl_from_error_for_route!(pasion_data::RepositoryError);
-impl_from_error_for_route!(crate::handlers::rest::RouteError);
-impl_from_error_for_route!(crate::handlers::admin::call_context::Rejection);
-impl_from_error_for_route!(InconsistentPersonalSession);
-
-impl Scribe for RouteError {
-    fn render(self, res: &mut Response) {
-        let error = ErrorResponse::from_error(&self);
-        let sentry_event_id = record_error!(self, Self::Internal(_));
-        let status = match self {
-            Self::Internal(_) => StatusCode::INTERNAL_SERVER_ERROR,
-            Self::UserNotFound => StatusCode::NOT_FOUND,
-            Self::UserDeactivated => StatusCode::GONE,
-            Self::InvalidScope => StatusCode::BAD_REQUEST,
-        };
-        res.status_code(status);
-        if let Some(event_id) = sentry_event_id {
-            if let Ok(value) = http::HeaderValue::from_str(&event_id.to_string()) {
-                res.headers_mut().insert("x-sentry-event-id", value);
-            }
-        }
-        res.render(Json(error));
-    }
-}
+use crate::{AppError, CreatedJsonResult};
 
 /// # JSON payload for the `POST /api/admin/v1/personal-sessions` endpoint
 #[derive(Deserialize, JsonSchema)]
@@ -80,22 +39,12 @@ pub struct RequestBody {
     /// If not set, the token won't expire.
     expires_in: Option<u32>,
 }
-
-
-impl_endpoint_out_register!(RouteError, [
-    ("400", "Bad request"),
-    ("401", "Unauthorized"),
-    ("404", "Not found"),
-    ("409", "Conflict"),
-    ("500", "Internal server error"),
-]);
-
 #[endpoint]
 #[tracing::instrument(name = "handler.admin.v1.personal_sessions.add", skip_all)]
 pub async fn handler(
     req: &mut Request,
     depot: &Depot,
-) -> Result<CreatedJson<SingleResponse<PersonalSession>>, RouteError> {
+) -> CreatedJsonResult<SingleResponse<PersonalSession>> {
     let call_context = extract_call_context(req, depot).await?;
     let crate::handlers::admin::call_context::CallContext {
         mut repo,
@@ -108,20 +57,23 @@ pub async fn handler(
     let params: RequestBody = req
         .parse_json()
         .await
-        .map_err(|e| RouteError::Internal(Box::new(e)))?;
+        .map_err(AppError::internal)?;
     let owner = personal_session_owner_from_caller(&session);
 
     let actor_user = repo
         .user()
         .lookup(params.actor_user_id)
         .await?
-        .ok_or(RouteError::UserNotFound)?;
+        .ok_or_else(|| AppError::not_found("User not found"))?;
 
     if !actor_user.is_valid_actor() {
-        return Err(RouteError::UserDeactivated);
+        return Err(AppError::gone("User is not active"));
     }
 
-    let scope: Scope = params.scope.parse().map_err(|_| RouteError::InvalidScope)?;
+    let scope: Scope = params
+        .scope
+        .parse()
+        .map_err(|_| AppError::bad_request("Invalid scope"))?;
 
     // Create the personal session
     let session = repo
@@ -172,17 +124,21 @@ pub async fn handler(
                     .upsert_device(&actor_user.username, device_id, None)
                     .await
                     .context("Failed to provision device")
-                    .map_err(|e| RouteError::Internal(e.into()))?;
+                    .map_err(|error| {
+                        AppError::internal(std::io::Error::other(error.to_string()))
+                    })?;
             }
         }
     }
 
     repo.save().await?;
 
-    Ok(CreatedJson(SingleResponse::new_canonical(
+    Ok(crate::handlers::admin::CreatedJson(
+        SingleResponse::new_canonical(
             PersonalSession::try_from((session, Some(access_token)))?
                 .with_token(access_token_string),
-        )))
+        ),
+    ))
 }
 
 #[cfg(test)]

@@ -23,6 +23,12 @@ mod schema;
 pub mod v1;
 
 pub use self::call_context::CallContext;
+pub(crate) use self::{
+    call_context::Rejection as CallContextRejection,
+    model::InconsistentPersonalSession,
+    params::{PaginationRejection, UlidPathParamRejection},
+    response::ErrorResponse,
+};
 
 /// Common error response shape for admin API endpoints.
 ///

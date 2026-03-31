@@ -5,6 +5,7 @@
 //! embed Pasion as a library.
 
 pub mod app_state;
+pub mod error;
 pub mod lifecycle;
 /// Network listener infrastructure: TCP/Unix sockets, TLS, and PROXY protocol.
 pub mod listener;
@@ -31,6 +32,8 @@ pub mod util;
 pub mod handlers;
 
 use std::sync::OnceLock;
+
+pub use crate::error::{AppError, AppResult, CreatedJsonResult, JsonResult};
 
 /// Application version string, set once at startup by the binary crate.
 static VERSION: OnceLock<&'static str> = OnceLock::new();
