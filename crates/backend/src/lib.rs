@@ -18,6 +18,7 @@ pub mod server;
 pub mod services;
 pub mod sync;
 pub mod telemetry;
+pub mod totp;
 pub mod util;
 
 /// HTTP request handlers, service modules, and flow engine.

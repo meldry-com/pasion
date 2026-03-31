@@ -617,7 +617,21 @@ diesel::table! {
     }
 }
 
+diesel::table! {
+    user_totp_configs (id) {
+        id -> Uuid,
+        user_id -> Uuid,
+        secret -> Text,
+        algorithm -> Text,
+        digits -> Int4,
+        period -> Int4,
+        confirmed_at -> Nullable<Timestamptz>,
+        created_at -> Timestamptz,
+    }
+}
+
 // Foreign key relationships
+diesel::joinable!(user_totp_configs -> users (user_id));
 diesel::joinable!(user_passwords -> users (user_id));
 diesel::joinable!(user_emails -> users (user_id));
 diesel::joinable!(user_sessions -> users (user_id));
@@ -650,6 +664,7 @@ diesel::joinable!(workflow_audit_logs -> workflow_steps (workflow_step_id));
 diesel::allow_tables_to_appear_in_same_query!(
     users,
     user_passwords,
+    user_totp_configs,
     user_emails,
     user_email_authentications,
     user_email_authentication_codes,

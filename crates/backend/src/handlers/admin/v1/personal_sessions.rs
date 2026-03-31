@@ -529,7 +529,10 @@ pub async fn revoke_session(
 ) -> JsonResult<SingleResponse<PersonalSession>> {
     let ctx = extract_call_context(req, depot).await?;
     let crate::handlers::admin::call_context::CallContext {
-        mut repo, clock, ..
+        mut repo,
+        clock,
+        user: admin_user,
+        ..
     } = ctx;
     let target_id = extract_ulid_param(req)?;
     let mut rng = crate::handlers::account::make_rng();
@@ -560,6 +563,18 @@ pub async fn revoke_session(
             )
             .await?;
     }
+
+    crate::handlers::admin::audit_helper::record_admin_operation(
+        &mut repo,
+        &mut rng,
+        &*clock,
+        admin_user.as_ref(),
+        pasion_data::audit::AdminOperation::SessionTerminated,
+        "personal_session",
+        Some(target_id),
+        serde_json::json!({}),
+    )
+    .await?;
 
     repo.save().await?;
 

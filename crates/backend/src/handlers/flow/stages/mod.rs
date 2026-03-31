@@ -125,7 +125,7 @@ pub async fn execute_stage(
         (
             StageKind::AuthenticatorValidate { .. },
             StageResponse::AuthenticatorValidate { code, .. },
-        ) => authenticator_validate::execute(code, context).await,
+        ) => authenticator_validate::execute(repo, code, context).await,
 
         (StageKind::Consent, StageResponse::Consent { granted }) => {
             consent::execute(*granted, context).await

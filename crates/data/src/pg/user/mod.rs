@@ -22,6 +22,7 @@ mod registration;
 mod registration_token;
 mod session;
 mod terms;
+mod totp;
 
 #[cfg(test)]
 mod tests;
@@ -30,7 +31,7 @@ pub use self::{
     email::PgUserEmailRepository, password::PgUserPasswordRepository, phone::PgUserPhoneRepository,
     recovery::PgUserRecoveryRepository, registration::PgUserRegistrationRepository,
     registration_token::PgUserRegistrationTokenRepository, session::PgBrowserSessionRepository,
-    terms::PgUserTermsRepository,
+    terms::PgUserTermsRepository, totp::PgUserTotpRepository,
 };
 
 /// An implementation of [`UserRepository`] for a PostgreSQL connection

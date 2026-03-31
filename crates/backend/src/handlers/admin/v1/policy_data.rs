@@ -2,6 +2,8 @@
 //
 // SPDX-License-Identifier: AGPL-3.0-only
 
+use pasion_data::RepositoryAccess;
+use pasion_data::audit::AdminOperation;
 use salvo::prelude::*;
 use schemars::JsonSchema;
 use serde::Deserialize;
@@ -84,7 +86,10 @@ pub async fn set_data(
 ) -> CreatedJsonResult<SingleResponse<PolicyData>> {
     let ctx = extract_call_context(req, depot).await?;
     let crate::handlers::admin::call_context::CallContext {
-        mut repo, clock, ..
+        mut repo,
+        clock,
+        user: admin_user,
+        ..
     } = ctx;
     let mut rng = crate::handlers::account::make_rng();
     let factory = depot.policy_factory()?;
@@ -112,6 +117,18 @@ pub async fn set_data(
                 false,
             )
         })?;
+
+    crate::handlers::admin::audit_helper::record_admin_operation(
+        &mut repo,
+        &mut rng,
+        &*clock,
+        admin_user.as_ref(),
+        AdminOperation::PolicyDataUpdated,
+        "policy_data",
+        Some(record.id),
+        serde_json::json!({}),
+    )
+    .await?;
 
     repo.save().await?;
 

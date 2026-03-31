@@ -120,6 +120,10 @@ version = "1.11.1"
 version = "1.2.2"
 features = ["serde1"]
 
+# Base32/Base64 encoding (used for TOTP secret encoding)
+[workspace.dependencies.data-encoding]
+version = "2.6"
+
 # ChaCha20Poly1305 AEAD
 [workspace.dependencies.chacha20poly1305]
 version = "0.10.1"

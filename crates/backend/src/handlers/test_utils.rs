@@ -84,6 +84,7 @@ pub(crate) fn unique_test_nonce() -> u64 {
     pid_component + time_component + counter
 }
 
+#[cfg(feature = "cedar")]
 pub(crate) async fn policy_factory(
     _server_name: &str,
     _data: serde_json::Value,
@@ -97,6 +98,14 @@ pub(crate) async fn policy_factory(
     let policy_factory = PolicyFactory::load_cedar_from_file(cedar_path.as_str()).await?;
     let policy_factory = Arc::new(policy_factory);
     Ok(policy_factory)
+}
+
+#[cfg(not(feature = "cedar"))]
+pub(crate) async fn policy_factory(
+    _server_name: &str,
+    _data: serde_json::Value,
+) -> Result<Arc<PolicyFactory>, anyhow::Error> {
+    anyhow::bail!("tests require the `cedar` feature to be enabled")
 }
 
 #[derive(Clone)]

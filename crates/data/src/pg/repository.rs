@@ -24,7 +24,7 @@ use pasion_data::{
     user::{
         BrowserSessionRepository, UserEmailRepository, UserPasswordRepository, UserPhoneRepository,
         UserRecoveryRepository, UserRegistrationRepository, UserRegistrationTokenRepository,
-        UserRepository, UserTermsRepository,
+        UserRepository, UserTermsRepository, UserTotpRepository,
     },
     workflow::WorkflowRepository,
 };
@@ -56,6 +56,7 @@ use crate::{
         PgBrowserSessionRepository, PgUserEmailRepository, PgUserPasswordRepository,
         PgUserPhoneRepository, PgUserRecoveryRepository, PgUserRegistrationRepository,
         PgUserRegistrationTokenRepository, PgUserRepository, PgUserTermsRepository,
+        PgUserTotpRepository,
     },
     workflow::PgWorkflowRepository,
 };
@@ -229,6 +230,10 @@ impl RepositoryAccess for PgRepository {
 
     fn user_terms<'c>(&'c mut self) -> Box<dyn UserTermsRepository<Error = Self::Error> + 'c> {
         Box::new(PgUserTermsRepository::new(&mut *self.conn))
+    }
+
+    fn user_totp<'c>(&'c mut self) -> Box<dyn UserTotpRepository<Error = Self::Error> + 'c> {
+        Box::new(PgUserTotpRepository::new(&mut *self.conn))
     }
 
     fn user_registration<'c>(

@@ -1,6 +1,6 @@
 /// A server-injected error state, rendered instead of the normal SPA when
 /// the backend detects an account-level problem during session loading.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct AppError {
     /// One of: `account_deactivated`, `account_locked`, `session_ended`,
     /// `generic`.

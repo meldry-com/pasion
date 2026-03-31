@@ -6,6 +6,8 @@ use std::str::FromStr as _;
 
 use pasion_data::BoxRng;
 use pasion_data::Page;
+use pasion_data::RepositoryAccess;
+use pasion_data::audit::AdminOperation;
 use pasion_data::queue::{ProvisionUserJob, QueueJobRepositoryExt as _};
 use pasion_data::user::UserEmailFilter;
 use salvo::http::StatusCode;
@@ -51,7 +53,10 @@ pub async fn add_email(
 ) -> CreatedJsonResult<SingleResponse<UserEmail>> {
     let ctx = extract_call_context(req, depot).await?;
     let crate::handlers::admin::call_context::CallContext {
-        mut repo, clock, ..
+        mut repo,
+        clock,
+        user: admin_user,
+        ..
     } = ctx;
     let mut rng = crate::handlers::account::make_rng();
     let body: AddRequest = req
@@ -100,6 +105,18 @@ pub async fn add_email(
         .schedule_job(&mut rng, &clock, ProvisionUserJob::new_for_id(owner.id))
         .await?;
 
+    crate::handlers::admin::audit_helper::record_admin_operation(
+        &mut repo,
+        &mut rng,
+        &*clock,
+        admin_user.as_ref(),
+        AdminOperation::UserEmailAdded,
+        "user_email",
+        Some(entry.id),
+        serde_json::json!({ "user_id": owner.id.to_string(), "email": entry.email }),
+    )
+    .await?;
+
     repo.save().await?;
 
     Ok(crate::handlers::admin::CreatedJson(SingleResponse::new_canonical(
@@ -113,7 +130,10 @@ pub async fn add_email(
 pub async fn delete_email(req: &mut Request, depot: &Depot) -> AppResult<StatusCode> {
     let ctx = extract_call_context(req, depot).await?;
     let crate::handlers::admin::call_context::CallContext {
-        mut repo, clock, ..
+        mut repo,
+        clock,
+        user: admin_user,
+        ..
     } = ctx;
     let email_id = extract_ulid_param(req)?;
     let mut rng = crate::handlers::account::make_rng();
@@ -124,11 +144,25 @@ pub async fn delete_email(req: &mut Request, depot: &Depot) -> AppResult<StatusC
         .await?
         .ok_or_else(|| AppError::not_found(format!("User email ID {email_id} not found")))?;
 
-    let provision_job = ProvisionUserJob::new_for_id(entry.user_id);
+    let user_id = entry.user_id;
+    let email = entry.email.clone();
+    let provision_job = ProvisionUserJob::new_for_id(user_id);
     repo.user_email().remove(entry).await?;
 
     // Notify downstream systems about the change
     repo.queue_job().schedule_job(&mut rng, &clock, provision_job).await?;
+
+    crate::handlers::admin::audit_helper::record_admin_operation(
+        &mut repo,
+        &mut rng,
+        &*clock,
+        admin_user.as_ref(),
+        AdminOperation::UserEmailRemoved,
+        "user_email",
+        Some(email_id),
+        serde_json::json!({ "user_id": user_id.to_string(), "email": email }),
+    )
+    .await?;
 
     repo.save().await?;
 

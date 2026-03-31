@@ -1,24 +1,27 @@
 //! Authenticator validation stage side effects.
 //!
-//! Validates a second-factor code (TOTP for now).  The current MVP checks
-//! code format only; actual TOTP secret lookup and HMAC verification is
-//! deferred until TOTP secret storage is implemented.
+//! Validates a TOTP second-factor code by looking up the user's TOTP secret
+//! from the repository and verifying the HMAC (RFC 6238).
 
+use pasion_data::BoxRepository;
 use pasion_data::flow::{StageOutcome, StageValidationError};
+use tracing::warn;
+use ulid::Ulid;
 
 use super::StageExecutionError;
+use crate::totp;
 
 /// Execute the authenticator validation stage.
 ///
-/// For the TOTP MVP this validates the code format (exactly 6 ASCII digits)
-/// and marks `mfa_validated` in the flow context.  Full TOTP secret lookup
-/// and HMAC verification will be added once TOTP secret storage is in place.
+/// Looks up the user's TOTP configuration from the database, then verifies
+/// the submitted code against the stored secret using HMAC-SHA1.
 pub async fn execute(
+    repo: &mut BoxRepository,
     code: &str,
     context: &mut serde_json::Value,
 ) -> Result<StageOutcome, StageExecutionError> {
-    // Validate that a user has been identified in a previous stage.
-    let _user_id = context
+    // The identification stage must have run first and stored the user_id.
+    let user_id_str = context
         .get("user_id")
         .and_then(|v| v.as_str())
         .ok_or_else(|| {
@@ -27,7 +30,11 @@ pub async fn execute(
             ))
         })?;
 
-    // MVP: validate code format (6 ASCII digits).
+    let user_id: Ulid = user_id_str.parse().map_err(|e| {
+        StageExecutionError::Internal(anyhow::anyhow!("invalid user_id in flow context: {e}"))
+    })?;
+
+    // Validate code format: exactly 6 ASCII digits.
     if code.len() != 6 || !code.chars().all(|c| c.is_ascii_digit()) {
         return Ok(StageOutcome::Retry {
             errors: vec![StageValidationError {
@@ -38,8 +45,58 @@ pub async fn execute(
         });
     }
 
-    // TODO: look up the user's TOTP secret and verify the HMAC when
-    // TOTP secret storage is implemented.
+    // Look up the user to pass to the repository.
+    let user = repo
+        .user()
+        .lookup(user_id)
+        .await
+        .map_err(StageExecutionError::Repository)?
+        .ok_or(StageExecutionError::UserNotFound)?;
+
+    // Look up the user's confirmed TOTP configuration.
+    let totp_config = repo
+        .user_totp()
+        .get_for_user(&user)
+        .await
+        .map_err(StageExecutionError::Repository)?;
+
+    let Some(config) = totp_config else {
+        // No TOTP configured for this user — treat as an error.
+        warn!(user.id = %user_id, "TOTP validation requested but user has no TOTP configured");
+        return Ok(StageOutcome::Retry {
+            errors: vec![StageValidationError {
+                field: Some("code".into()),
+                message: "No authenticator configured for this account".into(),
+                code: "totp_not_configured".into(),
+            }],
+        });
+    };
+
+    // Only accept confirmed TOTP configurations.
+    if config.confirmed_at.is_none() {
+        warn!(user.id = %user_id, "TOTP config exists but is not yet confirmed");
+        return Ok(StageOutcome::Retry {
+            errors: vec![StageValidationError {
+                field: Some("code".into()),
+                message: "Authenticator setup is not complete".into(),
+                code: "totp_not_confirmed".into(),
+            }],
+        });
+    }
+
+    // Verify the code against the stored secret.
+    let period = u64::try_from(config.period).unwrap_or(30);
+    let digits = u32::try_from(config.digits).unwrap_or(6);
+
+    if !totp::verify(&config.secret, code, period, digits) {
+        return Ok(StageOutcome::Retry {
+            errors: vec![StageValidationError {
+                field: Some("code".into()),
+                message: "Invalid verification code".into(),
+                code: "totp_invalid".into(),
+            }],
+        });
+    }
 
     // Mark MFA as validated in the flow context.
     if let Some(ctx) = context.as_object_mut() {

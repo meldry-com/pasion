@@ -61,7 +61,10 @@ pub async fn add_user(
 ) -> CreatedJsonResult<SingleResponse<User>> {
     let call_context = extract_call_context(req, depot).await?;
     let crate::handlers::admin::call_context::CallContext {
-        mut repo, clock, ..
+        mut repo,
+        clock,
+        user: admin_user,
+        ..
     } = call_context;
     let mut rng = crate::handlers::account::make_rng();
     let homeserver = depot.homeserver()?;
@@ -100,6 +103,18 @@ pub async fn add_user(
         .provision_user(&ProvisionRequest::new(&user.username, &user.sub))
         .await
         .map_err(|error| AppError::internal(std::io::Error::other(error.to_string())))?;
+
+    crate::handlers::admin::audit_helper::record_admin_operation(
+        &mut repo,
+        &mut rng,
+        &*clock,
+        admin_user.as_ref(),
+        AdminOperation::UserCreated,
+        "user",
+        Some(user.id),
+        serde_json::json!({ "username": user.username }),
+    )
+    .await?;
 
     repo.save().await?;
 

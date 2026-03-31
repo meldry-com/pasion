@@ -15,6 +15,7 @@ mod registration;
 mod registration_token;
 mod session;
 mod terms;
+mod totp;
 
 pub use self::{
     email::{UserEmailFilter, UserEmailRepository},
@@ -25,6 +26,7 @@ pub use self::{
     registration_token::{UserRegistrationTokenFilter, UserRegistrationTokenRepository},
     session::{BrowserSessionFilter, BrowserSessionRepository},
     terms::UserTermsRepository,
+    totp::UserTotpRepository,
 };
 
 /// The state of a user account

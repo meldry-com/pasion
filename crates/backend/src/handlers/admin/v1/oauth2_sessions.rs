@@ -6,6 +6,8 @@ use std::str::FromStr;
 
 use oauth2_types::scope::{Scope, ScopeToken};
 use pasion_data::Page;
+use pasion_data::RepositoryAccess;
+use pasion_data::audit::AdminOperation;
 use pasion_data::oauth2::OAuth2SessionFilter;
 use pasion_data::queue::{QueueJobRepositoryExt as _, SyncDevicesJob};
 use salvo::prelude::*;
@@ -37,7 +39,10 @@ pub async fn finish_session(
 ) -> JsonResult<SingleResponse<OAuth2Session>> {
     let ctx = extract_call_context(req, depot).await?;
     let crate::handlers::admin::call_context::CallContext {
-        mut repo, clock, ..
+        mut repo,
+        clock,
+        user: admin_user,
+        ..
     } = ctx;
     let session_id = extract_ulid_param(req)?;
     let mut rng = crate::handlers::account::make_rng();
@@ -72,6 +77,18 @@ pub async fn finish_session(
         .oauth2_session()
         .finish(&clock, oauth_session)
         .await?;
+
+    crate::handlers::admin::audit_helper::record_admin_operation(
+        &mut repo,
+        &mut rng,
+        &*clock,
+        admin_user.as_ref(),
+        AdminOperation::SessionTerminated,
+        "oauth2_session",
+        Some(session_id),
+        serde_json::json!({}),
+    )
+    .await?;
 
     repo.save().await?;
 

@@ -21,7 +21,10 @@ use serde_json::Value;
 use ulid::Ulid;
 
 use super::{RouteError, make_rng};
-use crate::handlers::flow::{FlowExecutor, FlowPlan, flow_session_store_write};
+use crate::app_state::DepotExt as _;
+use crate::handlers::flow::{
+    CaptchaVerifyContext, FlowExecutor, FlowPlan, flow_session_store_write,
+};
 
 // ---------------------------------------------------------------------------
 // Request / response types
@@ -469,7 +472,7 @@ pub async fn get_flow_session(req: &mut Request) -> Result<Json<FlowResponse>, R
 /// returns the new challenge.  On validation failure, returns the current
 /// challenge again with error details.
 #[endpoint]
-pub async fn respond_flow(req: &mut Request) -> Result<Json<FlowResponse>, RouteError> {
+pub async fn respond_flow(req: &mut Request, depot: &Depot) -> Result<Json<FlowResponse>, RouteError> {
     let id = parse_flow_session_id(req)?;
 
     let input: RespondInput = req
@@ -486,9 +489,23 @@ pub async fn respond_flow(req: &mut Request) -> Result<Json<FlowResponse>, Route
         ));
     }
 
+    // Build CAPTCHA verification context from depot if available
+    let http_client = depot.get::<reqwest::Client>("http_client").ok();
+    let site_config = depot.get_site_config();
+    let captcha_verify = http_client.map(|client| {
+        let captcha_config = site_config.and_then(|sc| sc.captcha.as_ref());
+        CaptchaVerifyContext {
+            http_client: client,
+            captcha_config,
+            site_hostname: "localhost",
+            remote_ip: None,
+        }
+    });
+
     // Process the response through the executor
     let (outcome, updated_context) =
-        FlowExecutor::process_response(plan, session, input.response.into())
+        FlowExecutor::process_response(plan, session, input.response.into(), captcha_verify.as_ref())
+            .await
             .map_err(|e| RouteError::Internal(Box::new(e)))?;
 
     // Update the session context

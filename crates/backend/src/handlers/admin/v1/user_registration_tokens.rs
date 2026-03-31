@@ -6,6 +6,8 @@ use chrono::DateTime;
 use chrono::Utc;
 use pasion_data::BoxRng;
 use pasion_data::Page;
+use pasion_data::RepositoryAccess;
+use pasion_data::audit::AdminOperation;
 use pasion_data::user::UserRegistrationTokenFilter;
 use rand::distributions::{Alphanumeric, DistString};
 use salvo::prelude::*;
@@ -51,7 +53,10 @@ pub async fn add_token(
 ) -> CreatedJsonResult<SingleResponse<UserRegistrationToken>> {
     let ctx = extract_call_context(req, depot).await?;
     let crate::handlers::admin::call_context::CallContext {
-        mut repo, clock, ..
+        mut repo,
+        clock,
+        user: admin_user,
+        ..
     } = ctx;
     let mut rng = crate::handlers::account::make_rng();
     let body: AddRequest = req
@@ -85,6 +90,18 @@ pub async fn add_token(
             body.expires_at,
         )
         .await?;
+
+    crate::handlers::admin::audit_helper::record_admin_operation(
+        &mut repo,
+        &mut rng,
+        &*clock,
+        admin_user.as_ref(),
+        AdminOperation::RegistrationTokenCreated,
+        "registration_token",
+        Some(entry.id),
+        serde_json::json!({}),
+    )
+    .await?;
 
     repo.save().await?;
 
@@ -237,9 +254,13 @@ pub async fn revoke_token(
 ) -> JsonResult<SingleResponse<UserRegistrationToken>> {
     let ctx = extract_call_context(req, depot).await?;
     let crate::handlers::admin::call_context::CallContext {
-        mut repo, clock, ..
+        mut repo,
+        clock,
+        user: admin_user,
+        ..
     } = ctx;
     let target_id = extract_ulid_param(req)?;
+    let mut rng = crate::handlers::account::make_rng();
 
     let entry = repo
         .user_registration_token()
@@ -261,6 +282,18 @@ pub async fn revoke_token(
         .user_registration_token()
         .revoke(&clock, entry)
         .await?;
+
+    crate::handlers::admin::audit_helper::record_admin_operation(
+        &mut repo,
+        &mut rng,
+        &*clock,
+        admin_user.as_ref(),
+        AdminOperation::RegistrationTokenRevoked,
+        "registration_token",
+        Some(target_id),
+        serde_json::json!({}),
+    )
+    .await?;
 
     repo.save().await?;
 

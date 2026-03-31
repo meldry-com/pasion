@@ -160,7 +160,7 @@ pub use self::{
         User, UserEmail, UserEmailAuthentication, UserEmailAuthenticationCode, UserEmailPatch,
         UserPatch, UserPhone, UserPhoneAuthentication, UserPhoneAuthenticationCode, UserProfile,
         UserProfilePatch, UserRecoverySession, UserRecoveryTicket, UserRegistration,
-        UserRegistrationPassword, UserRegistrationToken,
+        UserRegistrationPassword, UserRegistrationToken, UserTotpConfig,
     },
     utils::{BoxClock, BoxRng},
     version::AppVersion,

@@ -841,9 +841,12 @@ pub fn build_listeners(
 
             #[cfg(unix)]
             HttpBindConfig::Unix { socket } => {
-                let listener = UnixListener::bind(socket)
+                let listener = UnixListener::bind(&socket)
                     .with_context(|| format!("could not bind {bind_description}"))?;
-                listener.try_into()?
+                UnixOrTcpListener::Unix {
+                    listener,
+                    path: Some(socket.into()),
+                }
             }
 
             #[cfg(not(unix))]

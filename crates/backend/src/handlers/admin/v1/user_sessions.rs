@@ -2,6 +2,8 @@
 //
 // SPDX-License-Identifier: AGPL-3.0-only
 
+use pasion_data::RepositoryAccess;
+use pasion_data::audit::AdminOperation;
 use pasion_data::pagination::Page;
 use pasion_data::user::BrowserSessionFilter;
 use salvo::prelude::*;
@@ -32,9 +34,13 @@ pub async fn finish_session(
 ) -> JsonResult<SingleResponse<UserSession>> {
     let ctx = extract_call_context(req, depot).await?;
     let crate::handlers::admin::call_context::CallContext {
-        mut repo, clock, ..
+        mut repo,
+        clock,
+        user: admin_user,
+        ..
     } = ctx;
     let session_id = extract_ulid_param(req)?;
+    let mut rng = crate::handlers::account::make_rng();
 
     let browser_session = repo
         .browser_session()
@@ -53,6 +59,18 @@ pub async fn finish_session(
     }
 
     let ended = repo.browser_session().finish(&clock, browser_session).await?;
+
+    crate::handlers::admin::audit_helper::record_admin_operation(
+        &mut repo,
+        &mut rng,
+        &*clock,
+        admin_user.as_ref(),
+        AdminOperation::SessionTerminated,
+        "user_session",
+        Some(session_id),
+        serde_json::json!({}),
+    )
+    .await?;
 
     repo.save().await?;
 

@@ -4,6 +4,8 @@
 
 use pasion_data::BoxRng;
 use pasion_data::Page;
+use pasion_data::RepositoryAccess;
+use pasion_data::audit::AdminOperation;
 use pasion_data::upstream_oauth2::UpstreamOAuthLinkFilter;
 use salvo::http::StatusCode;
 use salvo::prelude::*;
@@ -94,7 +96,10 @@ pub async fn add_link(
 ) -> CreatedJsonResult<SingleResponse<UpstreamOAuthLink>> {
     let ctx = extract_call_context(req, depot).await?;
     let crate::handlers::admin::call_context::CallContext {
-        mut repo, clock, ..
+        mut repo,
+        clock,
+        user: admin_user,
+        ..
     } = ctx;
     let mut rng = crate::handlers::account::make_rng();
     let body: AddRequest = req
@@ -142,6 +147,22 @@ pub async fn add_link(
             .await?;
         entry.user_id = Some(owner.id);
 
+        crate::handlers::admin::audit_helper::record_admin_operation(
+            &mut repo,
+            &mut rng,
+            &*clock,
+            admin_user.as_ref(),
+            AdminOperation::UpstreamLinkCreated,
+            "upstream_oauth_link",
+            Some(entry.id),
+            serde_json::json!({
+                "provider_id": provider.id.to_string(),
+                "subject": entry.subject,
+                "user_id": owner.id.to_string(),
+            }),
+        )
+        .await?;
+
         repo.save().await?;
 
         return Ok(crate::handlers::admin::CreatedJson(
@@ -166,6 +187,22 @@ pub async fn add_link(
         .await?;
     entry.user_id = Some(owner.id);
 
+    crate::handlers::admin::audit_helper::record_admin_operation(
+        &mut repo,
+        &mut rng,
+        &*clock,
+        admin_user.as_ref(),
+        AdminOperation::UpstreamLinkCreated,
+        "upstream_oauth_link",
+        Some(entry.id),
+        serde_json::json!({
+            "provider_id": provider.id.to_string(),
+            "subject": entry.subject,
+            "user_id": owner.id.to_string(),
+        }),
+    )
+    .await?;
+
     repo.save().await?;
 
     Ok(crate::handlers::admin::CreatedJson(
@@ -179,9 +216,13 @@ pub async fn add_link(
 pub async fn delete_link(req: &mut Request, depot: &Depot) -> AppResult<StatusCode> {
     let ctx = extract_call_context(req, depot).await?;
     let crate::handlers::admin::call_context::CallContext {
-        mut repo, clock, ..
+        mut repo,
+        clock,
+        user: admin_user,
+        ..
     } = ctx;
     let link_id = extract_ulid_param(req)?;
+    let mut rng = crate::handlers::account::make_rng();
 
     let entry = repo
         .upstream_oauth_link()
@@ -191,7 +232,25 @@ pub async fn delete_link(req: &mut Request, depot: &Depot) -> AppResult<StatusCo
             AppError::not_found(format!("Upstream OAuth 2.0 Link ID {link_id} not found"))
         })?;
 
+    let provider_id = entry.provider_id;
+    let subject = entry.subject.clone();
+
     repo.upstream_oauth_link().remove(&clock, entry).await?;
+
+    crate::handlers::admin::audit_helper::record_admin_operation(
+        &mut repo,
+        &mut rng,
+        &*clock,
+        admin_user.as_ref(),
+        AdminOperation::UpstreamLinkDeleted,
+        "upstream_oauth_link",
+        Some(link_id),
+        serde_json::json!({
+            "provider_id": provider_id.to_string(),
+            "subject": subject,
+        }),
+    )
+    .await?;
 
     repo.save().await?;
 
