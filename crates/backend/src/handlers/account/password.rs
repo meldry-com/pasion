@@ -12,8 +12,8 @@ use super::{
     get_requester, make_clock, make_rng,
 };
 use crate::handlers::{
-    account_password::{ChangePasswordError, change_password},
-    account_recovery::{
+    account::service::password::{ChangePasswordError, change_password},
+    account::service::recovery::{
         CompleteAccountRecoveryError, ResendAccountRecoveryByTicketError,
         complete_account_recovery, resend_account_recovery_by_ticket,
     },

@@ -15,7 +15,7 @@ use crate::handlers::{
     admin::model::PolicyData,
     admin::params::extract_ulid_param,
     admin::response::SingleResponse,
-    rest::DepotExt,
+    common::DepotExt,
 };
 
 /// Fetch a single policy data record by its ULID.

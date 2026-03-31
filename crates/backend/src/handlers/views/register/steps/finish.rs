@@ -12,7 +12,7 @@ use super::super::cookie::UserRegistrationSessions;
 use crate::handlers::account::DepotExt;
 use crate::handlers::{
     METER,
-    account_registration::{
+    account::service::registration::{
         LoadRegistrationFinishPreparationError, complete_registration,
         load_registration_finish_preparation,
     },
@@ -34,15 +34,15 @@ pub async fn get(
     depot: &Depot,
     res: &mut Response,
 ) -> Result<(), InternalError> {
-    let mut rng = rest::make_rng();
-    let clock = rest::make_clock();
+    let mut rng = common::make_rng();
+    let clock = common::make_clock();
     let lang = crate::handlers::preferred_language(req, depot);
     let url_builder = depot.url_builder()?;
     let homeserver = depot.homeserver()?;
     let templates = depot.templates()?;
     let site_config = depot.site_config()?;
     let mut repo = depot.repo_factory()?.create().await?;
-    let activity_tracker = rest::extract_bound_activity_tracker(req, depot);
+    let activity_tracker = common::extract_bound_activity_tracker(req, depot);
     let user_agent = req
         .headers()
         .get("user-agent")

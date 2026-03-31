@@ -5,7 +5,7 @@ use salvo::{prelude::*, writing::Text};
 
 use super::shared::OptionalPostAuthAction;
 use crate::handlers::account::service::access::load_enabled_upstream_providers;
-use crate::handlers::rest;
+use crate::handlers::account;
 use crate::handlers::account::DepotExt;
 
 mod cookie;
@@ -20,14 +20,14 @@ pub async fn get(
     depot: &Depot,
     res: &mut Response,
 ) -> Result<(), InternalError> {
-    let mut rng = rest::make_rng();
-    let clock = rest::make_clock();
+    let mut rng = common::make_rng();
+    let clock = common::make_clock();
     let locale = crate::handlers::preferred_language(req, depot);
     let templates = depot.templates()?;
     let url_builder = depot.url_builder()?;
     let site_config = depot.site_config()?;
     let mut repo = depot.repo_factory()?.create().await?;
-    let activity_tracker = rest::extract_bound_activity_tracker(req, depot);
+    let activity_tracker = common::extract_bound_activity_tracker(req, depot);
     let query: OptionalPostAuthAction = req.parse_queries().unwrap_or_default();
     let cookie_jar = depot.cookie_jar(req)?;
 

@@ -19,12 +19,10 @@ use salvo::{Extractible, prelude::*};
 use thiserror::Error;
 use ulid::Ulid;
 
-use crate::handlers::{
-    METER,
-    oauth2_token_service::{
-        self, AuthorizationCodeExchangeError, ClientCredentialsGrantError, DeviceCodeExchangeError,
-        RefreshTokenExchangeError,
-    },
+use crate::handlers::METER;
+use super::token_service::{
+    self, AuthorizationCodeExchangeError, ClientCredentialsGrantError, DeviceCodeExchangeError,
+    RefreshTokenExchangeError,
 };
 
 static TOKEN_REQUEST_COUNTER: LazyLock<Counter<u64>> = LazyLock::new(|| {
@@ -434,7 +432,7 @@ async fn handle_post(
 
     let (reply, repo) = match form {
         AccessTokenRequest::AuthorizationCode(grant) => {
-            let (reply, repo) = oauth2_token_service::exchange_authorization_code(
+            let (reply, repo) = token_service::exchange_authorization_code(
                 &mut rng,
                 &clock,
                 &activity_tracker,
@@ -452,7 +450,7 @@ async fn handle_post(
             (reply, repo)
         }
         AccessTokenRequest::RefreshToken(grant) => {
-            let (reply, repo) = oauth2_token_service::handle_refresh_token(
+            let (reply, repo) = token_service::handle_refresh_token(
                 &mut rng,
                 &clock,
                 &activity_tracker,
@@ -466,7 +464,7 @@ async fn handle_post(
             (reply, repo)
         }
         AccessTokenRequest::ClientCredentials(grant) => {
-            let (reply, repo) = oauth2_token_service::handle_client_credentials(
+            let (reply, repo) = token_service::handle_client_credentials(
                 &mut rng,
                 &clock,
                 &activity_tracker,
@@ -481,7 +479,7 @@ async fn handle_post(
             (reply, repo)
         }
         AccessTokenRequest::DeviceCode(grant) => {
-            let (reply, repo) = oauth2_token_service::exchange_device_code(
+            let (reply, repo) = token_service::exchange_device_code(
                 &mut rng,
                 &clock,
                 &activity_tracker,

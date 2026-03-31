@@ -21,7 +21,7 @@ use crate::handlers::flow::{
 };
 use crate::handlers::{
     RequesterFingerprint,
-    account_registration::{
+    account::service::registration::{
         BeginPasswordRegistrationError, BeginPasswordRegistrationRequest,
         BeginPasswordRegistrationResult, EmailAvailabilityCheck, HomeserverCheckMode,
         LoadRegistrationProgressError, RegistrationDisplayNameOutcome,

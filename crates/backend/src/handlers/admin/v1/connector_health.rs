@@ -7,7 +7,7 @@ use schemars::JsonSchema;
 use serde::Serialize;
 
 use crate::handlers::{
-    admin::call_context::extract_call_context, rest::DepotExt,
+    admin::call_context::extract_call_context, common::DepotExt,
 };
 use crate::JsonResult;
 

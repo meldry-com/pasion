@@ -13,7 +13,7 @@ use serde::{Deserialize, Serialize};
 use crate::handlers::account::DepotExt;
 use crate::handlers::{
     RequesterFingerprint,
-    account_recovery::{StartAccountRecoveryError, start_account_recovery},
+    account::service::recovery::{StartAccountRecoveryError, start_account_recovery},
     rest,
 };
 
@@ -28,8 +28,8 @@ pub async fn get(
     depot: &Depot,
     res: &mut Response,
 ) -> Result<(), InternalError> {
-    let mut rng = rest::make_rng();
-    let clock = rest::make_clock();
+    let mut rng = common::make_rng();
+    let clock = common::make_clock();
     let locale = crate::handlers::preferred_language(req, depot);
     let site_config = depot.site_config()?;
     let templates = depot.templates()?;
@@ -73,15 +73,15 @@ pub async fn post(
     depot: &Depot,
     res: &mut Response,
 ) -> Result<(), InternalError> {
-    let mut rng = rest::make_rng();
-    let clock = rest::make_clock();
+    let mut rng = common::make_rng();
+    let clock = common::make_clock();
     let locale = crate::handlers::preferred_language(req, depot);
     let site_config = depot.site_config()?;
     let templates = depot.templates()?;
     let url_builder = depot.url_builder()?;
     let limiter = depot.limiter()?;
     let mut repo = depot.repo_factory()?.create().await?;
-    let activity_tracker = rest::extract_bound_activity_tracker(req, depot);
+    let activity_tracker = common::extract_bound_activity_tracker(req, depot);
     let requester = activity_tracker
         .ip()
         .map(RequesterFingerprint::new)

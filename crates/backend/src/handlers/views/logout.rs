@@ -8,7 +8,7 @@ use crate::salvo_utils::{
 use salvo::prelude::*;
 
 use crate::handlers::account::service::access::logout_browser_session;
-use crate::handlers::rest;
+use crate::handlers::account;
 use crate::handlers::account::DepotExt;
 
 #[handler]
@@ -17,11 +17,11 @@ pub async fn post(
     depot: &Depot,
     res: &mut Response,
 ) -> Result<(), InternalError> {
-    let clock = rest::make_clock();
+    let clock = common::make_clock();
     let repo = depot.repo_factory()?.create().await?;
     let cookie_jar = depot.cookie_jar(req)?;
     let url_builder = depot.url_builder()?;
-    let activity_tracker = rest::extract_bound_activity_tracker(req, depot);
+    let activity_tracker = common::extract_bound_activity_tracker(req, depot);
     let form: ProtectedForm<Option<PostAuthAction>> = req
         .parse_form()
         .await

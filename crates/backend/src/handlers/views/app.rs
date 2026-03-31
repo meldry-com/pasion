@@ -22,14 +22,14 @@ pub async fn get(
     depot: &Depot,
     res: &mut Response,
 ) -> Result<(), InternalError> {
-    let mut rng = rest::make_rng();
-    let clock = rest::make_clock();
+    let mut rng = common::make_rng();
+    let clock = common::make_clock();
     let locale = crate::handlers::preferred_language(req, depot);
     let templates = depot.templates()?;
     let url_builder = depot.url_builder()?;
     let script_src = depot.frontend_script_src()?;
     let mut repo = depot.repo_factory()?.create().await?;
-    let activity_tracker = rest::extract_bound_activity_tracker(req, depot);
+    let activity_tracker = common::extract_bound_activity_tracker(req, depot);
     let cookie_jar = depot.cookie_jar(req)?;
     let Params { action } = req.parse_queries().unwrap_or_default();
 

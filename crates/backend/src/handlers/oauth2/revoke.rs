@@ -44,7 +44,7 @@ pub(crate) enum RouteError {
 
     /// An error from the revocation service layer.
     #[error(transparent)]
-    Revocation(#[from] oauth2_revocation::RevocationError),
+    Revocation(#[from] revocation_service::RevocationError),
 }
 
 impl Scribe for RouteError {
@@ -73,7 +73,7 @@ impl Scribe for RouteError {
             }
 
             Self::Revocation(ref inner) => {
-                use oauth2_revocation::RevocationError;
+                use revocation_service::RevocationError;
                 match inner {
                     RevocationError::Repository(_) => {
                         res.status_code(StatusCode::INTERNAL_SERVER_ERROR);
@@ -172,7 +172,7 @@ async fn handle_post(req: &mut Request, depot: &mut Depot) -> Result<(), RouteEr
 
     // Delegate the actual token lookup, validation, and session termination
     // to the service layer.
-    oauth2_revocation::revoke_token(
+    revocation_service::revoke_token(
         &mut repo,
         &mut rng,
         &*clock,

@@ -18,7 +18,7 @@ use crate::handlers::flow::{
 };
 use crate::handlers::{
     RequesterFingerprint,
-    account_recovery::{
+    account::service::recovery::{
         LoadAccountRecoverySessionError, ResendAccountRecoveryError, StartAccountRecoveryError,
         load_account_recovery_session, recovery_session_status, resend_account_recovery,
         start_account_recovery,

@@ -22,13 +22,13 @@ use ulid::Ulid;
 
 use super::UpstreamSessionsCookie;
 use crate::handlers::{
-    METER, rest::DepotExt,
-    upstream_link_workflow::{
+    METER, common::DepotExt,
+    upstream_oauth2::link_workflow::{
         LoadUpstreamLinkOutcome, SubmitUpstreamLinkError, SubmitUpstreamLinkOutcome,
         UpstreamLinkAction, UpstreamLinkRegistrationAction, UpstreamLinkWorkflowError,
         load_upstream_link_context, load_upstream_link_state, submit_upstream_link_action,
     },
-    user_registration_cookie::UserRegistrationSessions as UserRegistrationSessionsCookie,
+    account::registration_cookie::UserRegistrationSessions as UserRegistrationSessionsCookie,
 };
 
 static LOGIN_COUNTER: LazyLock<Counter<u64>> = LazyLock::new(|| {

@@ -17,7 +17,7 @@ use super::{
 };
 use crate::handlers::{
     METER, RequesterFingerprint,
-    account_access::{
+    account::service::access::{
         PasswordLoginOutcome, PasswordLoginRequest, load_enabled_upstream_providers,
         login_with_password, logout_browser_session,
     },

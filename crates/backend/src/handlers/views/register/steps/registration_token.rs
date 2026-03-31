@@ -15,7 +15,7 @@ use ulid::Ulid;
 
 use crate::handlers::account::DepotExt;
 use crate::handlers::{
-    account_registration::{
+    account::service::registration::{
         AttachRegistrationTokenError, LoadRegistrationTokenStepError, attach_registration_token,
         load_registration_token_step,
     },
@@ -39,8 +39,8 @@ pub async fn get(
     depot: &Depot,
     res: &mut Response,
 ) -> Result<(), InternalError> {
-    let mut rng = rest::make_rng();
-    let clock = rest::make_clock();
+    let mut rng = common::make_rng();
+    let clock = common::make_clock();
     let locale = crate::handlers::preferred_language(req, depot);
     let templates = depot.templates()?;
     let url_builder = depot.url_builder()?;
@@ -96,8 +96,8 @@ pub async fn post(
     depot: &Depot,
     res: &mut Response,
 ) -> Result<(), InternalError> {
-    let mut rng = rest::make_rng();
-    let clock = rest::make_clock();
+    let mut rng = common::make_rng();
+    let clock = common::make_clock();
     let locale = crate::handlers::preferred_language(req, depot);
     let templates = depot.templates()?;
     let url_builder = depot.url_builder()?;

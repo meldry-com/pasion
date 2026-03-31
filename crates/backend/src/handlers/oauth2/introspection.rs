@@ -15,7 +15,8 @@ use salvo::{Extractible, prelude::*};
 use thiserror::Error;
 use ulid::Ulid;
 
-use crate::handlers::{ActivityTracker, METER, oauth2_introspection};
+use crate::handlers::{ActivityTracker, METER};
+use super::introspection_service;
 
 static INTROSPECTION_COUNTER: LazyLock<Counter<u64>> = LazyLock::new(|| {
     METER
@@ -45,7 +46,7 @@ pub enum RouteError {
     /// An error from the introspection service indicating the token is
     /// inactive (unknown, invalid, expired, etc.).
     #[error(transparent)]
-    Inactive(#[from] oauth2_introspection::IntrospectionError),
+    Inactive(#[from] introspection_service::IntrospectionError),
 
     #[error("bad request")]
     BadRequest,
@@ -110,7 +111,7 @@ impl Scribe for RouteError {
             Self::Inactive(ref inner) => {
                 // Map service-level errors that indicate repo/load failures to
                 // 500; everything else means the token is simply inactive.
-                use oauth2_introspection::IntrospectionError;
+                use introspection_service::IntrospectionError;
                 match inner {
                     IntrospectionError::Repository(_)
                     | IntrospectionError::CantLoadOAuthSession(_)
@@ -222,7 +223,7 @@ async fn handle_post(
     };
 
     // Delegate the actual token lookup and validation to the service layer.
-    let reply = oauth2_introspection::introspect_token(
+    let reply = introspection_service::introspect_token(
         &mut repo,
         &*clock,
         activity_tracker,

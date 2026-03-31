@@ -15,13 +15,13 @@ use ulid::Ulid;
 use super::{DepotExt, RouteError, extract_bound_activity_tracker, make_clock, make_rng};
 use crate::handlers::{
     METER,
-    upstream_link_workflow::{
+    upstream_oauth2::link_workflow::{
         LoadUpstreamLinkOutcome, SubmitUpstreamLinkError, SubmitUpstreamLinkOutcome,
         UpstreamLinkAction, UpstreamLinkRegistrationAction, UpstreamLinkWorkflowError,
         load_upstream_link_context, load_upstream_link_state, submit_upstream_link_action,
     },
     upstream_oauth2::UpstreamSessionsCookie,
-    user_registration_cookie::UserRegistrationSessions,
+    account::registration_cookie::UserRegistrationSessions,
 };
 
 static LOGIN_COUNTER: LazyLock<Counter<u64>> = LazyLock::new(|| {

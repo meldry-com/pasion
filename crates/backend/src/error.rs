@@ -13,7 +13,7 @@ use crate::{
             CallContextRejection as AdminCallContextRejection, ErrorResponse,
             InconsistentPersonalSession, PaginationRejection, UlidPathParamRejection,
         },
-        rest::RouteError as RestRouteError,
+        common::RouteError as RestRouteError,
     },
     salvo_utils::sentry::SentryEventID,
 };

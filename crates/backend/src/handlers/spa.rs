@@ -7,7 +7,7 @@ use crate::salvo_utils::InternalError;
 use pasion_templates::{AppContext, TemplateContext, Templates};
 use salvo::{prelude::*, writing::Text};
 
-use crate::handlers::rest;
+use crate::handlers::account;
 use crate::handlers::account::DepotExt;
 
 /// Serve the SPA shell for anonymous (public) pages.

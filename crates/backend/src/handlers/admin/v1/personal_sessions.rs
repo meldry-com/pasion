@@ -34,7 +34,7 @@ use crate::handlers::{
     admin::params::extract_ulid_param,
     admin::response::PaginatedResponse,
     admin::response::SingleResponse,
-    rest::DepotExt,
+    common::DepotExt,
 };
 
 use pasion_data::personal::session::PersonalSessionOwner;

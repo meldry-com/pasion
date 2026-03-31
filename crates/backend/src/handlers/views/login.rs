@@ -25,12 +25,12 @@ use pasion_data::SiteConfig;
 
 use crate::handlers::{
     METER, RequesterFingerprint,
-    account_access::{
+    account::service::access::{
         PasswordLoginOutcome, PasswordLoginRequest, load_enabled_upstream_providers,
         login_with_password,
     },
     passwords::PasswordManager,
-    rest::{self, DepotExt},
+    account::{self, DepotExt},
     session::{SessionOrFallback, load_session_or_fallback},
 };
 
@@ -59,15 +59,15 @@ pub async fn get(
     depot: &Depot,
     res: &mut Response,
 ) -> Result<(), InternalError> {
-    let mut rng = rest::make_rng();
-    let clock = rest::make_clock();
+    let mut rng = common::make_rng();
+    let clock = common::make_clock();
     let locale = crate::handlers::preferred_language(req, depot);
     let templates = depot.templates()?;
     let url_builder = depot.url_builder()?;
     let site_config = depot.site_config()?;
     let homeserver = depot.homeserver()?;
     let mut repo = depot.repo_factory()?.create().await?;
-    let activity_tracker = rest::extract_bound_activity_tracker(req, depot);
+    let activity_tracker = common::extract_bound_activity_tracker(req, depot);
     let query: OptionalPostAuthAction = req.parse_queries().unwrap_or_default();
     let cookie_jar = depot.cookie_jar(req)?;
 
@@ -144,8 +144,8 @@ pub async fn post(
     depot: &Depot,
     res: &mut Response,
 ) -> Result<(), InternalError> {
-    let mut rng = rest::make_rng();
-    let clock = rest::make_clock();
+    let mut rng = common::make_rng();
+    let clock = common::make_clock();
     let locale = crate::handlers::preferred_language(req, depot);
     let password_manager = depot.password_manager()?;
     let site_config = depot.site_config()?;
@@ -154,7 +154,7 @@ pub async fn post(
     let limiter = depot.limiter()?;
     let homeserver = depot.homeserver()?;
     let mut repo = depot.repo_factory()?.create().await?;
-    let activity_tracker = rest::extract_bound_activity_tracker(req, depot);
+    let activity_tracker = common::extract_bound_activity_tracker(req, depot);
     let requester = activity_tracker
         .ip()
         .map(RequesterFingerprint::new)

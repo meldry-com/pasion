@@ -10,7 +10,7 @@ use rand_chacha::rand_core::CryptoRngCore;
 use thiserror::Error;
 use ulid::Ulid;
 
-use crate::handlers::{passwords::PasswordManager, rest::Requester};
+use crate::handlers::{passwords::PasswordManager, common::Requester};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum DeactivateAccountOutcome {

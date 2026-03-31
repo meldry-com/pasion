@@ -20,12 +20,12 @@ use pasion_data::SiteConfig;
 
 use crate::handlers::{
     RequesterFingerprint,
-    account_registration::{
+    account::service::registration::{
         BeginPasswordRegistrationIssue, BeginPasswordRegistrationRequest,
         BeginPasswordRegistrationResult, EmailAvailabilityCheck, begin_password_registration,
     },
     captcha::Form as CaptchaForm,
-    rest::{self, DepotExt},
+    account::{self, DepotExt},
     views::shared::OptionalPostAuthAction,
 };
 
@@ -60,8 +60,8 @@ pub async fn get(
     depot: &Depot,
     res: &mut Response,
 ) -> Result<(), InternalError> {
-    let mut rng = rest::make_rng();
-    let clock = rest::make_clock();
+    let mut rng = common::make_rng();
+    let clock = common::make_clock();
     let locale = crate::handlers::preferred_language(req, depot);
     let templates = depot.templates()?;
     let url_builder = depot.url_builder()?;
@@ -129,8 +129,8 @@ pub async fn post(
     depot: &Depot,
     res: &mut Response,
 ) -> Result<(), InternalError> {
-    let mut rng = rest::make_rng();
-    let clock = rest::make_clock();
+    let mut rng = common::make_rng();
+    let clock = common::make_clock();
     let locale = crate::handlers::preferred_language(req, depot);
     let password_manager = depot.password_manager()?;
     let templates = depot.templates()?;
@@ -141,7 +141,7 @@ pub async fn post(
     let limiter = depot.limiter()?;
     let policy_factory = depot.policy_factory()?;
     let mut repo = depot.repo_factory()?.create().await?;
-    let activity_tracker = rest::extract_bound_activity_tracker(req, depot);
+    let activity_tracker = common::extract_bound_activity_tracker(req, depot);
     let requester = activity_tracker
         .ip()
         .map(RequesterFingerprint::new)

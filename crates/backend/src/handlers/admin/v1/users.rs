@@ -34,7 +34,7 @@ use crate::handlers::{
     admin::response::PaginatedResponse,
     admin::response::SingleResponse,
     passwords::PasswordManager,
-    rest::DepotExt,
+    common::DepotExt,
 };
 use crate::util::username_valid;
 
