@@ -4,7 +4,6 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use minijinja::machinery::Span;
-use pasion_i18n::{Message, translations::TranslationTree};
 
 pub struct Context {
     keys: Vec<Key>,
@@ -33,46 +32,18 @@ impl Context {
         &self.func
     }
 
-    pub fn add_missing(&self, translation_tree: &mut TranslationTree) -> usize {
-        let mut count = 0;
-        for translatable in &self.keys {
-            let message = Message::from_literal(String::new());
-
-            let location = translatable.location.as_ref().map(|location| {
-                if location.span.start_line == location.span.end_line {
-                    format!(
-                        "{}:{}:{}-{}",
-                        location.file,
-                        location.span.start_line,
-                        location.span.start_col,
-                        location.span.end_col
-                    )
-                } else {
-                    format!(
-                        "{}:{}:{}-{}:{}",
-                        location.file,
-                        location.span.start_line,
-                        location.span.start_col,
-                        location.span.end_line,
-                        location.span.end_col
-                    )
-                }
-            });
-
-            let key = translatable
-                .name
-                .split('.')
-                .chain(if translatable.kind == Kind::Plural {
-                    Some("other")
-                } else {
-                    None
-                });
-
-            if translation_tree.set_if_not_defined(key, message, location) {
-                count += 1;
-            }
-        }
-        count
+    /// Return the collected keys as a deduplicated, sorted list of FTL message
+    /// identifiers (dot-separated template keys are converted to
+    /// hyphen-separated FTL IDs).
+    pub fn ftl_keys(&self) -> Vec<String> {
+        let mut ids: Vec<String> = self
+            .keys
+            .iter()
+            .map(|k| k.name.replace('.', "-"))
+            .collect();
+        ids.sort();
+        ids.dedup();
+        ids
     }
 
     pub fn set_key_location(&self, mut key: Key, span: Span) -> Key {
@@ -95,12 +66,15 @@ pub enum Kind {
 
 #[derive(Debug, Clone)]
 pub struct Location {
+    #[allow(dead_code)]
     file: String,
+    #[allow(dead_code)]
     span: Span,
 }
 
 #[derive(Debug, Clone)]
 pub struct Key {
+    #[allow(dead_code)]
     kind: Kind,
     name: String,
     location: Option<Location>,

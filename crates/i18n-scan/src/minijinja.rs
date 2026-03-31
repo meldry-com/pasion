@@ -339,30 +339,21 @@ mod tests {
             find_in_stmt(&mut context, &ast).unwrap();
         }
 
-        let mut tree = serde_json::from_value(serde_json::json!({
-            "hello": "Hello!",
-        }))
-        .unwrap();
-
-        context.add_missing(&mut tree);
-        let tree = serde_json::to_value(&tree).unwrap();
+        let keys = context.ftl_keys();
+        // Keys should be sorted and deduplicated, with dots converted to hyphens
         assert_eq!(
-            tree,
-            serde_json::json!({
-                "hello": "Hello!",
-                "world": "",
-                "plural": {
-                    "other": ""
-                },
-                "nested": {
-                    "1": "",
-                    "2": "",
-                    "3": "",
-                    "4": "",
-                    "5": "",
-                    "6": "",
-                },
-            })
+            keys,
+            vec![
+                "hello",
+                "nested-1",
+                "nested-2",
+                "nested-3",
+                "nested-4",
+                "nested-5",
+                "nested-6",
+                "plural",
+                "world",
+            ]
         );
     }
 

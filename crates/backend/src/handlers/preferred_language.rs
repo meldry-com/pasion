@@ -16,7 +16,7 @@ pub fn preferred_language(req: &Request, depot: &Depot) -> DataLocale {
     let translator = depot
         .get::<Arc<Translator>>("translator")
         .cloned()
-        .unwrap_or_else(|_| Arc::new(Translator::new(Default::default())));
+        .unwrap_or_else(|_| Arc::new(Translator::default()));
 
     let accept_language = req.headers().typed_get::<AcceptLanguage>();
 

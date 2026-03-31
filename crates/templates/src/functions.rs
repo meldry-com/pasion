@@ -5,12 +5,11 @@
 //! and global objects used by the Jinja templates.
 
 use minijinja::{
-    Error, ErrorKind, State, Value, escape_formatter,
-    machinery::make_string_output,
+    Error, ErrorKind, State, Value,
     value::{Kwargs, Object, ViaDeserialize, from_args},
 };
 use pasion_data::UrlBuilder;
-use pasion_i18n::{Argument, ArgumentList, DataLocale, Translator, sprintf::FormattedMessagePart};
+use pasion_i18n::{DataLocale, Translator};
 use std::{
     collections::{BTreeMap, HashMap},
     fmt,
@@ -289,58 +288,44 @@ impl fmt::Display for TranslateHandle {
 }
 
 impl Object for TranslateHandle {
-    fn call(self: &Arc<Self>, state: &State, args: &[Value]) -> Result<Value, Error> {
+    fn call(self: &Arc<Self>, _state: &State, args: &[Value]) -> Result<Value, Error> {
         let (msg_key, kwargs): (&str, Kwargs) = from_args(args)?;
 
-        // Resolve the message, optionally as a plural form
-        let (message, _resolved_locale) = match kwargs.get("count")? {
-            Some(count) => self
-                .translator
-                .plural_with_fallback(self.locale.clone(), msg_key, count)
-                .ok_or_else(|| {
-                    Error::new(ErrorKind::InvalidOperation, "Missing translation")
-                })?,
-            None => self
-                .translator
-                .message_with_fallback(self.locale.clone(), msg_key)
-                .ok_or_else(|| {
-                    Error::new(ErrorKind::InvalidOperation, "Missing translation")
-                })?,
-        };
-
-        // Collect keyword arguments into the formatter's argument list
-        let arg_list: Result<ArgumentList, Error> = kwargs
-            .args()
-            .map(|name| {
-                let val: Value = kwargs.get(name)?;
-                let json_val = serde_json::to_value(val).map_err(|e| {
-                    Error::new(ErrorKind::InvalidOperation, "Could not serialize argument")
-                        .with_source(e)
-                })?;
-                Ok::<_, Error>(Argument::named(name.to_owned(), json_val))
-            })
-            .collect();
-        let arguments = arg_list?;
-
-        // Format the message, escaping placeholder values
-        let formatted = message.format_(&arguments).map_err(|e| {
-            Error::new(ErrorKind::InvalidOperation, "Could not format message").with_source(e)
-        })?;
-
-        let mut buf = String::with_capacity(formatted.len());
-        let mut output = make_string_output(&mut buf);
-        for part in formatted.parts() {
-            match part {
-                FormattedMessagePart::Text(literal) => {
-                    output.write_str(literal)?;
-                }
-                FormattedMessagePart::Placeholder(placeholder) => {
-                    escape_formatter(&mut output, state, &placeholder.as_str().into())?;
-                }
+        // Collect keyword arguments into FluentArgs
+        let mut fluent_args = fluent_bundle::FluentArgs::new();
+        for name in kwargs.args() {
+            let val: Value = kwargs.get(name)?;
+            // Convert minijinja Value to FluentValue
+            if let Some(n) = val.as_i64() {
+                fluent_args.set(name.to_owned(), fluent_bundle::FluentValue::from(n));
+            } else if let Some(s) = val.as_str() {
+                fluent_args.set(
+                    name.to_owned(),
+                    fluent_bundle::FluentValue::from(s.to_owned()),
+                );
+            } else {
+                fluent_args.set(
+                    name.to_owned(),
+                    fluent_bundle::FluentValue::from(val.to_string()),
+                );
             }
         }
+        kwargs.assert_all_used()?;
 
-        Ok(Value::from_safe_string(buf))
+        let args_ref = if fluent_args.iter().count() > 0 {
+            Some(&fluent_args)
+        } else {
+            None
+        };
+
+        let formatted = self
+            .translator
+            .format(&self.locale, msg_key, args_ref)
+            .ok_or_else(|| {
+                Error::new(ErrorKind::InvalidOperation, "Missing translation")
+            })?;
+
+        Ok(Value::from_safe_string(formatted))
     }
 
     fn call_method(
