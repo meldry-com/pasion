@@ -1,14 +1,11 @@
 use pasion_data::{AccountAction, PostAuthAction};
 use crate::salvo_utils::{InternalError, cookies::CookieJar};
-use pasion_templates::{AppContext, TemplateContext, Templates};
+use pasion_templates::{AppContext, AppErrorState, TemplateContext, Templates};
 use salvo::{prelude::*, writing::Text};
 use serde::Deserialize;
 
 use crate::handlers::account::DepotExt;
-use crate::handlers::{
-    rest,
-    session::{SessionOrFallback, load_session_or_fallback},
-};
+use crate::handlers::session::{AccountError, SessionOrFallback, load_session_or_fallback};
 
 #[derive(Deserialize, Default)]
 pub struct Params {
@@ -22,8 +19,6 @@ pub async fn get(
     depot: &Depot,
     res: &mut Response,
 ) -> Result<(), InternalError> {
-    let mut rng = common::make_rng();
-    let clock = common::make_clock();
     let locale = crate::handlers::preferred_language(req, depot);
     let templates = depot.templates()?;
     let url_builder = depot.url_builder()?;
@@ -34,7 +29,7 @@ pub async fn get(
     let Params { action } = req.parse_queries().unwrap_or_default();
 
     let (cookie_jar, maybe_session) = match load_session_or_fallback(
-        cookie_jar, &clock, &mut rng, &templates, &locale, &mut repo,
+        cookie_jar, &mut repo,
     )
     .await?
     {
@@ -43,13 +38,21 @@ pub async fn get(
             maybe_session,
             ..
         } => (cookie_jar, maybe_session),
-        SessionOrFallback::Fallback { response } => {
-            *res = response;
+
+        SessionOrFallback::AccountError { cookie_jar, error } => {
+            // Render the SPA shell with the error injected so the
+            // Dioxus frontend shows the appropriate error page.
+            let err_state = account_error_to_state(&error);
+            let ctx = AppContext::new(&url_builder, &script_src)
+                .with_error(err_state)
+                .with_language(locale);
+            let content = templates.render_app(&ctx)?;
+            cookie_jar.write_to_response(res);
+            res.render(Text::Html(content));
             return Ok(());
         }
     };
 
-    // TODO: keep the full path, not just the action
     let Some(session) = maybe_session else {
         cookie_jar.write_to_response(res);
         let post_action = PostAuthAction::manage_account(action);
@@ -64,7 +67,7 @@ pub async fn get(
     };
 
     activity_tracker
-        .record_browser_session(&clock, &session)
+        .record_browser_session(&common::make_clock(), &session)
         .await;
 
     let ctx = AppContext::new(&url_builder, &script_src).with_language(locale);
@@ -94,4 +97,26 @@ pub async fn get_anonymous(
 
     res.render(Text::Html(content));
     Ok(())
+}
+
+/// Convert an [`AccountError`] into an [`AppErrorState`] for injection
+/// into the SPA configuration.
+pub(crate) fn account_error_to_state(err: &AccountError) -> AppErrorState {
+    match err {
+        AccountError::Deactivated { username } => AppErrorState {
+            kind: "account_deactivated".to_owned(),
+            username: Some(username.clone()),
+            description: None,
+        },
+        AccountError::Locked { username } => AppErrorState {
+            kind: "account_locked".to_owned(),
+            username: Some(username.clone()),
+            description: None,
+        },
+        AccountError::SessionEnded => AppErrorState {
+            kind: "session_ended".to_owned(),
+            username: None,
+            description: None,
+        },
+    }
 }

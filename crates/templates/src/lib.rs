@@ -30,7 +30,7 @@ mod macros;
 
 pub use self::{
     context::{
-        AccountInactiveContext, ApiDocContext, AppContext, ConsentContext, DeviceConsentContext,
+        ApiDocContext, AppContext, AppErrorState, ConsentContext, DeviceConsentContext,
         DeviceLinkContext, DeviceLinkFormField, DeviceNameContext, EmailRecoveryContext,
         EmailVerificationContext, EmptyContext, ErrorContext, FormPostContext, IndexContext,
         LoginContext, LoginFormField, NotFoundContext, PasswordRegisterContext,
@@ -320,9 +320,6 @@ register_templates! {
     /// Render the form used by the `form_post` response mode (OAuth2 protocol)
     pub fn render_form_post<#[sample(EmptyContext)] T: Serialize>(WithLanguage<FormPostContext<T>>) { "form_post.html" }
 
-    /// Render the HTML error page (server-side fallback)
-    pub fn render_error(ErrorContext) { "pages/error.html" }
-
     /// Render the email recovery email (plain text variant)
     pub fn render_email_recovery_txt(WithLanguage<EmailRecoveryContext>) { "emails/recovery.txt" }
 
@@ -340,15 +337,6 @@ register_templates! {
 
     /// Render the email verification subject
     pub fn render_email_verification_subject(WithLanguage<EmailVerificationContext>) { "emails/verification.subject" }
-
-    /// Render the 'account deactivated' page
-    pub fn render_account_deactivated(WithLanguage<WithCsrf<AccountInactiveContext>>) { "pages/account/deactivated.html" }
-
-    /// Render the 'account locked' page
-    pub fn render_account_locked(WithLanguage<WithCsrf<AccountInactiveContext>>) { "pages/account/locked.html" }
-
-    /// Render the 'account logged out' page
-    pub fn render_account_logged_out(WithLanguage<WithCsrf<AccountInactiveContext>>) { "pages/account/logged_out.html" }
 
     /// Render the automatic device name for OAuth 2.0 client
     pub fn render_device_name(WithLanguage<DeviceNameContext>) { "device_name.txt" }

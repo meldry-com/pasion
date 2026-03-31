@@ -3,7 +3,7 @@ use crate::salvo_utils::{
     GenericError, InternalError,
     csrf::{CsrfExt, ProtectedForm},
 };
-use pasion_templates::{ConsentContext, PolicyViolationContext, TemplateContext};
+use pasion_templates::{AppContext, AppErrorState, ConsentContext, PolicyViolationContext, TemplateContext};
 use salvo::{prelude::*, writing::Text};
 use thiserror::Error;
 use ulid::Ulid;
@@ -12,7 +12,7 @@ use crate::handlers::oauth2::access::{
     OAuth2AccessError, accept_authorization_consent, load_authorization_consent,
 };
 use crate::handlers::account::DepotExt;
-use crate::handlers::session::{SessionOrFallback, load_session_or_fallback};
+use crate::handlers::session::{AccountError, SessionOrFallback, load_session_or_fallback};
 
 #[derive(Debug, Error)]
 pub enum RouteError {
@@ -94,7 +94,7 @@ async fn handle_get(
 
     let mut session_repo = repo_factory.create().await?;
     let (cookie_jar, maybe_session) = match load_session_or_fallback(
-        cookie_jar, &clock, &mut rng, &templates, &locale, &mut session_repo,
+        cookie_jar, &mut session_repo,
     )
     .await?
     {
@@ -103,8 +103,14 @@ async fn handle_get(
             maybe_session,
             ..
         } => (cookie_jar, maybe_session),
-        SessionOrFallback::Fallback { response } => {
-            *res = response;
+        SessionOrFallback::AccountError { cookie_jar, error } => {
+            let err_state = crate::handlers::views::app::account_error_to_state(&error);
+            let ctx = AppContext::new(&url_builder, &depot.frontend_script_src()?)
+                .with_error(err_state)
+                .with_language(locale);
+            let content = templates.render_app(&ctx)?;
+            cookie_jar.write_to_response(res);
+            res.render(Text::Html(content));
             return Ok(());
         }
     };
@@ -199,7 +205,7 @@ async fn handle_post(
 
     let mut session_repo = repo_factory.create().await?;
     let (cookie_jar, maybe_session) = match load_session_or_fallback(
-        cookie_jar, &clock, &mut rng, &templates, &locale, &mut session_repo,
+        cookie_jar, &mut session_repo,
     )
     .await?
     {
@@ -208,8 +214,14 @@ async fn handle_post(
             maybe_session,
             ..
         } => (cookie_jar, maybe_session),
-        SessionOrFallback::Fallback { response } => {
-            *res = response;
+        SessionOrFallback::AccountError { cookie_jar, error } => {
+            let err_state = crate::handlers::views::app::account_error_to_state(&error);
+            let ctx = AppContext::new(&url_builder, &depot.frontend_script_src()?)
+                .with_error(err_state)
+                .with_language(locale);
+            let content = templates.render_app(&ctx)?;
+            cookie_jar.write_to_response(res);
+            res.render(Text::Html(content));
             return Ok(());
         }
     };

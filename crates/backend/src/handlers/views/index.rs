@@ -1,11 +1,11 @@
 use crate::salvo_utils::{InternalError, cookies::CookieJar, csrf::CsrfExt};
-use pasion_templates::{IndexContext, TemplateContext, Templates};
+use pasion_templates::{AppContext, AppErrorState, IndexContext, TemplateContext, Templates};
 use salvo::{prelude::*, writing::Text};
 
 use crate::handlers::account::DepotExt;
 use crate::handlers::{
     rest,
-    session::{SessionOrFallback, load_session_or_fallback},
+    session::{AccountError, SessionOrFallback, load_session_or_fallback},
 };
 
 #[handler]
@@ -24,7 +24,7 @@ pub async fn get(
     let cookie_jar = depot.cookie_jar(req)?;
 
     let (cookie_jar, maybe_session) = match load_session_or_fallback(
-        cookie_jar, &clock, &mut rng, &templates, &locale, &mut repo,
+        cookie_jar, &mut repo,
     )
     .await?
     {
@@ -33,8 +33,14 @@ pub async fn get(
             maybe_session,
             ..
         } => (cookie_jar, maybe_session),
-        SessionOrFallback::Fallback { response } => {
-            *res = response;
+        SessionOrFallback::AccountError { cookie_jar, error } => {
+            let err_state = crate::handlers::views::app::account_error_to_state(&error);
+            let ctx = AppContext::new(&url_builder, &depot.frontend_script_src()?)
+                .with_error(err_state)
+                .with_language(locale);
+            let content = templates.render_app(&ctx)?;
+            cookie_jar.write_to_response(res);
+            res.render(Text::Html(content));
             return Ok(());
         }
     };

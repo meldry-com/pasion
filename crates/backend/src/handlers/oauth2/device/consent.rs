@@ -7,7 +7,7 @@ use crate::salvo_utils::{
     InternalError,
     csrf::{CsrfExt, ProtectedForm},
 };
-use pasion_templates::{DeviceConsentContext, PolicyViolationContext, TemplateContext};
+use pasion_templates::{AppContext, AppErrorState, DeviceConsentContext, PolicyViolationContext, TemplateContext};
 use salvo::{prelude::*, writing::Text};
 use serde::Deserialize;
 use tracing::warn;
@@ -15,7 +15,7 @@ use ulid::Ulid;
 
 use crate::handlers::account::DepotExt;
 use crate::handlers::session::{
-    SessionOrFallback, count_user_sessions_for_limiting, load_session_or_fallback,
+    AccountError, SessionOrFallback, count_user_sessions_for_limiting, load_session_or_fallback,
 };
 
 #[derive(Deserialize, Debug)]
@@ -64,7 +64,7 @@ async fn handle_get(
     })?;
 
     let (cookie_jar, maybe_session) = match load_session_or_fallback(
-        cookie_jar, &clock, &mut rng, &templates, &locale, &mut repo,
+        cookie_jar, &mut repo,
     )
     .await?
     {
@@ -73,8 +73,14 @@ async fn handle_get(
             maybe_session,
             ..
         } => (cookie_jar, maybe_session),
-        SessionOrFallback::Fallback { response } => {
-            *res = response;
+        SessionOrFallback::AccountError { cookie_jar, error } => {
+            let err_state = crate::handlers::views::app::account_error_to_state(&error);
+            let ctx = AppContext::new(&url_builder, &depot.frontend_script_src()?)
+                .with_error(err_state)
+                .with_language(locale);
+            let content = templates.render_app(&ctx)?;
+            cookie_jar.write_to_response(res);
+            res.render(Text::Html(content));
             return Ok(());
         }
     };
@@ -239,7 +245,7 @@ async fn handle_post(
         .map_err(|e| InternalError::new(Box::new(e)))?;
 
     let (cookie_jar, maybe_session) = match load_session_or_fallback(
-        cookie_jar, &clock, &mut rng, &templates, &locale, &mut repo,
+        cookie_jar, &mut repo,
     )
     .await?
     {
@@ -248,8 +254,14 @@ async fn handle_post(
             maybe_session,
             ..
         } => (cookie_jar, maybe_session),
-        SessionOrFallback::Fallback { response } => {
-            *res = response;
+        SessionOrFallback::AccountError { cookie_jar, error } => {
+            let err_state = crate::handlers::views::app::account_error_to_state(&error);
+            let ctx = AppContext::new(&url_builder, &depot.frontend_script_src()?)
+                .with_error(err_state)
+                .with_language(locale);
+            let content = templates.render_app(&ctx)?;
+            cookie_jar.write_to_response(res);
+            res.render(Text::Html(content));
             return Ok(());
         }
     };

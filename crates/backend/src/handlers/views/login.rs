@@ -12,7 +12,7 @@ use crate::salvo_utils::{
 };
 use pasion_data::RepositoryAccess;
 use pasion_templates::{
-    AccountInactiveContext, FieldError, FormError, FormState, LoginContext, LoginFormField,
+    AppContext, AppErrorState, FieldError, FormError, FormState, LoginContext, LoginFormField,
     PostAuthContext, PostAuthContextInner, TemplateContext, Templates, ToFormState,
 };
 use rand::Rng;
@@ -31,7 +31,7 @@ use crate::handlers::{
     },
     passwords::PasswordManager,
     account::{self, DepotExt},
-    session::{SessionOrFallback, load_session_or_fallback},
+    session::{AccountError, SessionOrFallback, load_session_or_fallback},
 };
 
 static PASSWORD_LOGIN_COUNTER: LazyLock<Counter<u64>> = LazyLock::new(|| {
@@ -72,7 +72,7 @@ pub async fn get(
     let cookie_jar = depot.cookie_jar(req)?;
 
     let (cookie_jar, maybe_session) = match load_session_or_fallback(
-        cookie_jar, &clock, &mut rng, &templates, &locale, &mut repo,
+        cookie_jar, &mut repo,
     )
     .await?
     {
@@ -81,8 +81,14 @@ pub async fn get(
             maybe_session,
             ..
         } => (cookie_jar, maybe_session),
-        SessionOrFallback::Fallback { response } => {
-            *res = response;
+        SessionOrFallback::AccountError { cookie_jar, error } => {
+            let err_state = super::app::account_error_to_state(&error);
+            let ctx = AppContext::new(&url_builder, &depot.frontend_script_src()?)
+                .with_error(err_state)
+                .with_language(locale);
+            let content = templates.render_app(&ctx)?;
+            cookie_jar.write_to_response(res);
+            res.render(Text::Html(content));
             return Ok(());
         }
     };
@@ -271,22 +277,24 @@ pub async fn post(
         }
         PasswordLoginOutcome::AccountDeactivated { user } => {
             PASSWORD_LOGIN_COUNTER.add(1, &[KeyValue::new(RESULT, "error")]);
-            let (csrf_token, cookie_jar) = cookie_jar.csrf_token(&clock, &mut rng);
-            let ctx = AccountInactiveContext::new(user)
-                .with_csrf(csrf_token.form_value())
+            let err = AccountError::Deactivated { username: user.username.clone() };
+            let err_state = super::app::account_error_to_state(&err);
+            let ctx = AppContext::new(&url_builder, &depot.frontend_script_src()?)
+                .with_error(err_state)
                 .with_language(locale);
-            let content = templates.render_account_deactivated(&ctx)?;
+            let content = templates.render_app(&ctx)?;
             cookie_jar.write_to_response(res);
             res.render(Text::Html(content));
             Ok(())
         }
         PasswordLoginOutcome::AccountLocked { user } => {
             PASSWORD_LOGIN_COUNTER.add(1, &[KeyValue::new(RESULT, "error")]);
-            let (csrf_token, cookie_jar) = cookie_jar.csrf_token(&clock, &mut rng);
-            let ctx = AccountInactiveContext::new(user)
-                .with_csrf(csrf_token.form_value())
+            let err = AccountError::Locked { username: user.username.clone() };
+            let err_state = super::app::account_error_to_state(&err);
+            let ctx = AppContext::new(&url_builder, &depot.frontend_script_src()?)
+                .with_error(err_state)
                 .with_language(locale);
-            let content = templates.render_account_locked(&ctx)?;
+            let content = templates.render_app(&ctx)?;
             cookie_jar.write_to_response(res);
             res.render(Text::Html(content));
             Ok(())

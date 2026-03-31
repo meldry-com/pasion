@@ -12,7 +12,7 @@ use pasion_data::{
     user::UserRepository,
 };
 use pasion_templates::{
-    AccountInactiveContext, ErrorContext, FieldError, FormError, TemplateContext, Templates,
+    AppContext, AppErrorState, FieldError, FormError, TemplateContext, Templates,
     ToFormState, UpstreamExistingLinkContext, UpstreamRegister, UpstreamSuggestLink,
 };
 use salvo::prelude::*;
@@ -175,47 +175,59 @@ pub async fn get(
             UpstreamLinkWorkflowError::ConflictFail { ref localpart }
             | UpstreamLinkWorkflowError::ConflictSetBlocked { ref localpart },
         ) => {
-            // TODO: translate
-            let ctx = ErrorContext::new()
-                .with_code("User exists")
-                .with_description(format!(
+            let err_state = AppErrorState {
+                kind: "generic".to_owned(),
+                username: None,
+                description: Some(format!(
                     "Upstream account provider returned {localpart:?} as username, \
                      which could not be linked automatically."
-                ))
-                .with_language(&locale);
+                )),
+            };
+            let ctx = AppContext::new(&url_builder, &depot.frontend_script_src()?)
+                .with_error(err_state)
+                .with_language(locale);
+            let content = templates.render_app(&ctx)?;
 
             cookie_jar.write_to_response(&mut *res);
-            res.render(Text::Html(templates.render_error(&ctx)?));
+            res.render(Text::Html(content));
             return Ok(());
         }
         Err(UpstreamLinkWorkflowError::PolicyDeniedLocalpart {
             ref localpart,
             ref detail,
         }) => {
-            // TODO: translate
-            let ctx = ErrorContext::new()
-                .with_code("Policy error")
-                .with_description(format!(
+            let err_state = AppErrorState {
+                kind: "generic".to_owned(),
+                username: None,
+                description: Some(format!(
                     "Upstream account provider returned {localpart:?} as username, \
                      which does not pass the policy check: {detail}"
-                ))
-                .with_language(&locale);
+                )),
+            };
+            let ctx = AppContext::new(&url_builder, &depot.frontend_script_src()?)
+                .with_error(err_state)
+                .with_language(locale);
+            let content = templates.render_app(&ctx)?;
 
             cookie_jar.write_to_response(&mut *res);
-            res.render(Text::Html(templates.render_error(&ctx)?));
+            res.render(Text::Html(content));
             return Ok(());
         }
         Err(UpstreamLinkWorkflowError::LocalpartUnavailable { ref localpart }) => {
-            // TODO: translate
-            let ctx = ErrorContext::new()
-                .with_code("Localpart not available")
-                .with_description(format!(
+            let err_state = AppErrorState {
+                kind: "generic".to_owned(),
+                username: None,
+                description: Some(format!(
                     "Localpart {localpart:?} is not available on this homeserver"
-                ))
-                .with_language(&locale);
+                )),
+            };
+            let ctx = AppContext::new(&url_builder, &depot.frontend_script_src()?)
+                .with_error(err_state)
+                .with_language(locale);
+            let content = templates.render_app(&ctx)?;
 
             cookie_jar.write_to_response(&mut *res);
-            res.render(Text::Html(templates.render_error(&ctx)?));
+            res.render(Text::Html(content));
             return Ok(());
         }
         Err(e) => return Err(e.into()),
@@ -354,43 +366,33 @@ pub async fn get(
         }
 
         LoadUpstreamLinkOutcome::AccountDeactivated { username } => {
-            let user = repo
-                .user()
-                .find_by_username(&username)
-                .await?
-                .ok_or_else(|| {
-                    RouteError::Internal(
-                        format!("User {username:?} not found for deactivated template").into(),
-                    )
-                })?;
-
-            let ctx = AccountInactiveContext::new(user)
-                .with_csrf(csrf_token.form_value())
+            let err_state = AppErrorState {
+                kind: "account_deactivated".to_owned(),
+                username: Some(username),
+                description: None,
+            };
+            let ctx = AppContext::new(&url_builder, &depot.frontend_script_src()?)
+                .with_error(err_state)
                 .with_language(locale);
-            let fallback = templates.render_account_deactivated(&ctx)?;
+            let content = templates.render_app(&ctx)?;
 
             cookie_jar.write_to_response(res);
-            res.render(Text::Html(fallback));
+            res.render(Text::Html(content));
         }
 
         LoadUpstreamLinkOutcome::AccountLocked { username } => {
-            let user = repo
-                .user()
-                .find_by_username(&username)
-                .await?
-                .ok_or_else(|| {
-                    RouteError::Internal(
-                        format!("User {username:?} not found for locked template").into(),
-                    )
-                })?;
-
-            let ctx = AccountInactiveContext::new(user)
-                .with_csrf(csrf_token.form_value())
+            let err_state = AppErrorState {
+                kind: "account_locked".to_owned(),
+                username: Some(username),
+                description: None,
+            };
+            let ctx = AppContext::new(&url_builder, &depot.frontend_script_src()?)
+                .with_error(err_state)
                 .with_language(locale);
-            let fallback = templates.render_account_locked(&ctx)?;
+            let content = templates.render_app(&ctx)?;
 
             cookie_jar.write_to_response(res);
-            res.render(Text::Html(fallback));
+            res.render(Text::Html(content));
         }
     }
 

@@ -2,57 +2,61 @@
 //
 // SPDX-License-Identifier: AGPL-3.0-only
 
-//! Session loading helpers that render HTML fallback pages when the account
-//! state prevents normal operation (deactivated, locked, or remotely logged
-//! out).
+//! Session loading helpers.  When the account state prevents normal
+//! operation (deactivated / locked / remotely ended) the caller receives
+//! an error variant that it can translate into an SPA error page.
 
-use crate::salvo_utils::{SessionInfoExt, cookies::CookieJar, csrf::CsrfExt};
+use crate::salvo_utils::{SessionInfoExt, cookies::CookieJar};
 use pasion_data::{
-    BoxRepository, BrowserSession, Clock, RepositoryError, User,
+    BoxRepository, BrowserSession, RepositoryError, User,
     oauth2::OAuth2SessionFilter, personal::PersonalSessionFilter,
 };
-use pasion_i18n::DataLocale;
 use pasion_policy::model::SessionCounts;
-use pasion_templates::{AccountInactiveContext, TemplateContext, Templates};
-use rand::RngCore;
-use salvo::{prelude::*, writing::Text};
 use thiserror::Error;
 
-/// Failures that can occur while loading a session or rendering the fallback.
+/// Failures that can occur while loading a session.
 #[derive(Debug, Error)]
 #[error(transparent)]
 pub enum SessionLoadError {
-    Template(#[from] pasion_templates::TemplateError),
     Repository(#[from] RepositoryError),
 }
 
-/// Either a usable session (possibly absent) or a pre-built HTML response to
-/// send back to the browser.
+/// The reason why the session could not be used.
+#[derive(Debug, Clone)]
+pub enum AccountError {
+    /// The user's account has been deactivated.
+    Deactivated { username: String },
+    /// The user's account has been locked by an administrator.
+    Locked { username: String },
+    /// The browser session was ended remotely.
+    SessionEnded,
+}
+
+/// Either a usable session (possibly absent) or an account-level error
+/// that the caller should present to the user.
 #[allow(clippy::large_enum_variant)]
 pub enum SessionOrFallback {
     MaybeSession {
         cookie_jar: CookieJar,
         maybe_session: Option<BrowserSession>,
     },
-    Fallback {
-        response: Response,
+    AccountError {
+        cookie_jar: CookieJar,
+        error: AccountError,
     },
 }
 
-/// Attempt to resolve a browser session from cookies. When the associated
-/// account is deactivated, locked, or the session has been remotely ended, an
-/// HTML fallback page is returned instead.
+/// Attempt to resolve a browser session from cookies.  When the
+/// associated account is deactivated, locked, or the session has been
+/// remotely ended, an [`AccountError`] is returned so the caller can
+/// render the SPA shell with an injected error state.
 pub async fn load_session_or_fallback(
     cookie_jar: CookieJar,
-    clock: &impl Clock,
-    rng: impl RngCore,
-    templates: &Templates,
-    locale: &DataLocale,
     repo: &mut BoxRepository,
 ) -> Result<SessionOrFallback, SessionLoadError> {
     let (sess_info, cookie_jar) = cookie_jar.session_info();
 
-    // No session cookie present at all
+    // No session cookie at all.
     let Some(sid) = sess_info.current_session_id() else {
         return Ok(SessionOrFallback::MaybeSession {
             cookie_jar,
@@ -60,53 +64,42 @@ pub async fn load_session_or_fallback(
         });
     };
 
-    // Cookie references a session that no longer exists in the database
+    // Cookie references a session that no longer exists.
     let Some(browser_session) = repo.browser_session().lookup(sid).await? else {
-        let updated_info = sess_info.mark_session_ended();
-        let jar = cookie_jar.update_session_info(&updated_info);
+        let updated = sess_info.mark_session_ended();
+        let jar = cookie_jar.update_session_info(&updated);
         return Ok(SessionOrFallback::MaybeSession {
             cookie_jar: jar,
             maybe_session: None,
         });
     };
 
-    // Account has been deactivated -- show a dedicated page
+    // Account deactivated.
     if browser_session.user.deactivated_at.is_some() {
-        let rendered = render_inactive_page(
-            &browser_session.user,
+        return Ok(SessionOrFallback::AccountError {
             cookie_jar,
-            clock,
-            rng,
-            locale,
-            |ctx| templates.render_account_deactivated(ctx),
-        )?;
-        return Ok(SessionOrFallback::Fallback { response: rendered });
+            error: AccountError::Deactivated {
+                username: browser_session.user.username.clone(),
+            },
+        });
     }
 
-    // Account has been locked
+    // Account locked.
     if browser_session.user.locked_at.is_some() {
-        let rendered = render_inactive_page(
-            &browser_session.user,
+        return Ok(SessionOrFallback::AccountError {
             cookie_jar,
-            clock,
-            rng,
-            locale,
-            |ctx| templates.render_account_locked(ctx),
-        )?;
-        return Ok(SessionOrFallback::Fallback { response: rendered });
+            error: AccountError::Locked {
+                username: browser_session.user.username.clone(),
+            },
+        });
     }
 
-    // Session was ended remotely (admin action or user-management UI)
+    // Session remotely ended.
     if browser_session.finished_at.is_some() {
-        let rendered = render_inactive_page(
-            &browser_session.user,
+        return Ok(SessionOrFallback::AccountError {
             cookie_jar,
-            clock,
-            rng,
-            locale,
-            |ctx| templates.render_account_logged_out(ctx),
-        )?;
-        return Ok(SessionOrFallback::Fallback { response: rendered });
+            error: AccountError::SessionEnded,
+        });
     }
 
     Ok(SessionOrFallback::MaybeSession {
@@ -115,41 +108,8 @@ pub async fn load_session_or_fallback(
     })
 }
 
-/// Shared helper: build a CSRF-protected HTML response for inactive-account
-/// pages.
-fn render_inactive_page(
-    user: &User,
-    cookie_jar: CookieJar,
-    clock: &impl Clock,
-    rng: impl RngCore,
-    locale: &DataLocale,
-    render_fn: impl FnOnce(
-        &pasion_templates::WithLanguage<pasion_templates::WithCsrf<AccountInactiveContext>>,
-    ) -> Result<String, pasion_templates::TemplateError>,
-) -> Result<Response, SessionLoadError> {
-    let (csrf, jar) = cookie_jar.csrf_token(clock, rng);
-    let ctx = AccountInactiveContext::new(user.clone())
-        .with_csrf(csrf.form_value())
-        .with_language(locale.clone());
-    let html_body = render_fn(&ctx)?;
-
-    let mut resp = Response::new();
-    jar.write_to_response(&mut resp);
-    resp.render(Text::Html(html_body));
-    Ok(resp)
-}
-
 /// Count all active sessions belonging to the given user, for use in
 /// session-limit enforcement.
-///
-/// This tallies both OAuth 2.0 sessions and self-owned personal sessions
-/// (administrative personal sessions created on behalf of the user by another
-/// actor are excluded).
-///
-/// We intentionally count *all* sessions regardless of whether they carry
-/// device scopes, because filtering by scope prefix would require a partial
-/// index that is awkward to express cleanly in SQL. In practice the difference
-/// is negligible, and an overall cap is arguably desirable anyway.
 pub(crate) async fn count_user_sessions_for_limiting(
     repo: &mut BoxRepository,
     user: &User,
