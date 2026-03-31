@@ -39,7 +39,6 @@ pasion-backend = { path = "./crates/backend/", version = "=1.8.0" }
 pasion-config = { path = "./crates/config/", version = "=1.8.0" }
 pasion-data = { path = "./crates/data/", version = "=1.8.0" }
 pasion-messaging = { path = "./crates/messaging/", version = "=1.8.0" }
-pasion-http = { path = "./crates/http/", version = "=1.8.0" }
 pasion-i18n = { path = "./crates/i18n/", version = "=1.8.0" }
 pasion-i18n-scan = { path = "./crates/i18n-scan/", version = "=1.8.0" }
 pasion-iana = { path = "./crates/iana/", version = "=1.8.0" }

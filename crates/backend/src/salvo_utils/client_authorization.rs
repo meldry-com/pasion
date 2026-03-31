@@ -1,11 +1,11 @@
 use std::{collections::HashMap, sync::LazyLock};
 
+use crate::outbound_http::RequestBuilderExt;
 use headers::authorization::{Basic, Bearer, Credentials as _};
 use http::StatusCode;
 use oauth2_types::errors::{ClientError, ClientErrorCode};
 use pasion_data::{Client, JwksOrJwksUri};
 use pasion_data::{RepositoryAccess, oauth2::OAuth2ClientRepository};
-use pasion_http::RequestBuilderExt;
 use pasion_iana::oauth::OAuthClientAuthenticationMethod;
 use pasion_jose::{jwk::PublicJsonWebKeySet, jwt::Jwt};
 use pasion_keystore::Encrypter;

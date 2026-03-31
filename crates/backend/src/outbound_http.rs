@@ -1,8 +1,4 @@
-use std::{
-    str::FromStr,
-    sync::{Arc, LazyLock},
-    time::Duration,
-};
+use std::{future::Future, str::FromStr, sync::Arc, time::Duration};
 
 use futures_util::FutureExt as _;
 use headers::{ContentLength, HeaderMapExt as _, UserAgent};
@@ -30,25 +26,27 @@ use tower_service::Service as _;
 use tracing::Instrument;
 use tracing_opentelemetry::OpenTelemetrySpanExt;
 
-use crate::METER;
+use crate::telemetry::METER;
 
 static USER_AGENT: &str = concat!("pasion/", env!("CARGO_PKG_VERSION"));
 
-static HTTP_REQUESTS_DURATION_HISTOGRAM: LazyLock<Histogram<u64>> = LazyLock::new(|| {
-    METER
-        .u64_histogram(HTTP_CLIENT_REQUEST_DURATION)
-        .with_unit("ms")
-        .with_description("Duration of HTTP client requests")
-        .build()
-});
+static HTTP_REQUESTS_DURATION_HISTOGRAM: std::sync::LazyLock<Histogram<u64>> =
+    std::sync::LazyLock::new(|| {
+        METER
+            .u64_histogram(HTTP_CLIENT_REQUEST_DURATION)
+            .with_unit("ms")
+            .with_description("Duration of HTTP client requests")
+            .build()
+    });
 
-static HTTP_REQUESTS_IN_FLIGHT: LazyLock<UpDownCounter<i64>> = LazyLock::new(|| {
-    METER
-        .i64_up_down_counter(HTTP_CLIENT_ACTIVE_REQUESTS)
-        .with_unit("{requests}")
-        .with_description("Number of HTTP client requests in flight")
-        .build()
-});
+static HTTP_REQUESTS_IN_FLIGHT: std::sync::LazyLock<UpDownCounter<i64>> =
+    std::sync::LazyLock::new(|| {
+        METER
+            .i64_up_down_counter(HTTP_CLIENT_ACTIVE_REQUESTS)
+            .with_unit("{requests}")
+            .with_description("Number of HTTP client requests in flight")
+            .build()
+    });
 
 struct TracingResolver {
     inner: GaiResolver,
@@ -56,8 +54,9 @@ struct TracingResolver {
 
 impl TracingResolver {
     fn new() -> Self {
-        let inner = GaiResolver::new();
-        Self { inner }
+        Self {
+            inner: GaiResolver::new(),
+        }
     }
 }
 
@@ -80,18 +79,13 @@ impl reqwest::dns::Resolve for TracingResolver {
     }
 }
 
-/// Create a new [`reqwest::Client`] with sane parameters
+/// Create a new [`reqwest::Client`] with sane parameters.
 ///
 /// # Panics
 ///
-/// Panics if the client fails to build, which should never happen
+/// Panics if the client fails to build, which should never happen.
 #[must_use]
-pub fn client() -> reqwest::Client {
-    // TODO: can/should we limit in-flight requests?
-
-    // The explicit typing here is because `use_preconfigured_tls` accepts
-    // `Any`, but wants a `ClientConfig` under the hood. This helps us detect
-    // breaking changes in the rustls-platform-verifier API.
+pub fn reqwest_client() -> reqwest::Client {
     let tls_config: rustls::ClientConfig =
         rustls::ClientConfig::with_platform_verifier().expect("failed to create TLS config");
 
@@ -122,7 +116,6 @@ async fn send_traced(
     let content_length = headers.typed_get().map(|ContentLength(len)| len);
     let method = request.method().to_string();
 
-    // Create a new span for the request
     let span = tracing::info_span!(
         "http.client.request",
         "otel.kind" = "client",
@@ -144,7 +137,6 @@ async fn send_traced(
         "rust.error" = tracing::field::Empty,
     );
 
-    // Inject the span context into the request headers
     let context = span.context();
     opentelemetry::global::get_text_map_propagator(|propagator| {
         let mut injector = HeaderInjector(request.headers_mut());
@@ -169,9 +161,6 @@ async fn send_traced(
         let span = tracing::Span::current();
         let result = client.execute(request).await;
 
-        // XXX: We *could* loose this if the future is dropped before this, but let's
-        // not worry about it for now. Ideally we would use a `Drop` guard to decrement
-        // the counter
         HTTP_REQUESTS_IN_FLIGHT.add(-1, &metrics_labels);
 
         let duration = start.elapsed().as_millis().try_into().unwrap_or(u64::MAX);
@@ -222,10 +211,7 @@ async fn send_traced(
     .await
 }
 
-/// An extension trait implemented for [`reqwest::RequestBuilder`] to send a
-/// request with a tracing span, and span context propagated.
-pub trait RequestBuilderExt {
-    /// Send the request with a tracing span, and span context propagated.
+pub(crate) trait RequestBuilderExt {
     fn send_traced(self) -> impl Future<Output = Result<reqwest::Response, reqwest::Error>> + Send;
 }
 

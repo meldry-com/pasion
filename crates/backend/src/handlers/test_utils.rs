@@ -233,7 +233,7 @@ impl TestState {
         )
         .await?;
 
-        let http_client = pasion_http::reqwest_client();
+        let http_client = crate::reqwest_client();
 
         // TODO: add more test keys to the store
         let rsa = PrivateKey::load_pem(include_str!("../../../keystore/tests/keys/rsa.pkcs1.pem"))

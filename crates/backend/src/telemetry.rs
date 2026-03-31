@@ -43,9 +43,6 @@ static PROMETHEUS_EXPORTER: OnceLock<PrometheusExporter> = OnceLock::new();
 pub fn setup(config: &TelemetryConfig) -> anyhow::Result<()> {
     let propagator = propagator(&config.tracing.propagators);
 
-    // The CORS filter needs to know what headers it should whitelist for
-    // CORS-protected requests.
-    pasion_http::set_propagator(&propagator);
     opentelemetry::global::set_text_map_propagator(propagator);
 
     init_tracer(&config.tracing).context("Failed to configure traces exporter")?;

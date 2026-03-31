@@ -5536,7 +5536,6 @@ dependencies = [
  "pasion-backend",
  "pasion-config",
  "pasion-data",
- "pasion-http",
  "pasion-i18n",
  "pasion-keystore",
  "pasion-matrix",
@@ -5624,7 +5623,6 @@ dependencies = [
  "p256",
  "pasion-config",
  "pasion-data",
- "pasion-http",
  "pasion-i18n",
  "pasion-iana",
  "pasion-jose",
@@ -5643,6 +5641,7 @@ dependencies = [
  "rand_chacha 0.3.1",
  "reqwest 0.13.2",
  "rustls",
+ "rustls-platform-verifier",
  "salvo",
  "schemars 1.2.1",
  "sd-notify",
@@ -5661,6 +5660,7 @@ dependencies = [
  "tokio-rustls",
  "tokio-test",
  "tokio-util",
+ "tower-service",
  "tracing",
  "tracing-opentelemetry",
  "tracing-subscriber",
@@ -5757,26 +5757,6 @@ dependencies = [
  "serde_json",
  "tracing",
  "web-sys",
-]
-
-[[package]]
-name = "pasion-http"
-version = "1.8.0"
-dependencies = [
- "futures-util",
- "headers",
- "http",
- "hyper-util",
- "opentelemetry",
- "opentelemetry-http",
- "opentelemetry-semantic-conventions",
- "reqwest 0.13.2",
- "rustls",
- "rustls-platform-verifier",
- "tokio",
- "tower-service",
- "tracing",
- "tracing-opentelemetry",
 ]
 
 [[package]]
@@ -5902,7 +5882,6 @@ dependencies = [
  "anyhow",
  "async-trait",
  "http",
- "pasion-http",
  "pasion-matrix",
  "reqwest 0.13.2",
  "serde",

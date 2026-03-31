@@ -69,7 +69,6 @@ pasion-backend.workspace = true
 pasion-config.workspace = true
 pasion-data.workspace = true
 pasion-messaging.workspace = true
-pasion-http.workspace = true
 pasion-i18n.workspace = true
 pasion-keystore.workspace = true
 pasion-matrix.workspace = true

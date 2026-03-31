@@ -2,8 +2,8 @@
 
 use std::collections::HashMap;
 
+use crate::outbound_http::RequestBuilderExt;
 use chrono::{DateTime, Utc};
-use pasion_http::RequestBuilderExt;
 use pasion_iana::jose::JsonWebSignatureAlg;
 use pasion_jose::{
     claims::{self, TimeOptions},

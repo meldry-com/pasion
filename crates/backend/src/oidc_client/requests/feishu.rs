@@ -10,7 +10,7 @@
 
 use std::collections::HashMap;
 
-use pasion_http::RequestBuilderExt;
+use crate::outbound_http::RequestBuilderExt;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use url::Url;

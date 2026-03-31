@@ -1,10 +1,10 @@
 //! Requests for the Token endpoint.
 
+use crate::outbound_http::RequestBuilderExt;
 use chrono::{DateTime, Utc};
 use http::header::ACCEPT;
 use mime::APPLICATION_JSON;
 use oauth2_types::requests::{AccessTokenRequest, AccessTokenResponse};
-use pasion_http::RequestBuilderExt;
 use rand::Rng;
 use url::Url;
 

@@ -4,10 +4,10 @@
 
 use std::collections::HashMap;
 
+use crate::outbound_http::RequestBuilderExt;
 use headers::{ContentType, HeaderMapExt, HeaderValue};
 use http::header::ACCEPT;
 use mime::Mime;
-use pasion_http::RequestBuilderExt;
 use serde_json::Value;
 use url::Url;
 

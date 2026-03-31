@@ -10,7 +10,6 @@ use clap::Parser;
 use figment::Figment;
 use hyper::StatusCode;
 use pasion_config::{ConfigurationSection, RootConfig};
-use pasion_http::RequestBuilderExt;
 use tracing::{error, info, info_span, warn};
 use url::{Host, Url};
 
@@ -30,7 +29,7 @@ impl Options {
         let config = RootConfig::extract(figment).map_err(anyhow::Error::from_boxed)?;
 
         // We'll need an HTTP client
-        let http_client = pasion_http::reqwest_client();
+        let http_client = pasion_backend::reqwest_client();
         let base_url = config.http.public_base.as_str();
         let issuer = config.http.issuer.as_ref().map(url::Url::as_str);
         let issuer = issuer.unwrap_or(base_url);
@@ -49,7 +48,7 @@ This means some clients will refuse to use it."
         }
 
         let well_known_uri = format!("https://{matrix_domain}/.well-known/matrix/client");
-        let result = http_client.get(&well_known_uri).send_traced().await;
+        let result = http_client.get(&well_known_uri).send().await;
 
         let expected_well_known = serde_json::json!({
             "m.homeserver": {
@@ -175,10 +174,7 @@ Error details: {e}
 
         // Now try to reach the homeserver
         let client_versions = hs_api.join("/_matrix/client/versions")?;
-        let result = http_client
-            .get(client_versions.as_str())
-            .send_traced()
-            .await;
+        let result = http_client.get(client_versions.as_str()).send().await;
         let can_reach_cs = match result {
             Ok(response) => {
                 let status = response.status();
@@ -228,7 +224,7 @@ Error details: {e}
             let result = http_client
                 .get(whoami.as_str())
                 .bearer_auth("averyinvalidtokenireallyhopethisisnotvalid")
-                .send_traced()
+                .send()
                 .await;
             match result {
                 Ok(response) => {
@@ -279,7 +275,7 @@ Error details: {e}
             let result = http_client
                 .get(pasion_api.as_str())
                 .bearer_auth(&secret)
-                .send_traced()
+                .send()
                 .await;
             match result {
                 Ok(response) => {

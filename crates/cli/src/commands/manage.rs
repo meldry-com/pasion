@@ -603,7 +603,7 @@ impl Options {
                 yes,
                 ignore_password_complexity,
             } => {
-                let http_client = pasion_http::reqwest_client();
+                let http_client = pasion_backend::reqwest_client();
                 let password_config = PasswordsConfig::extract_or_default(figment)
                     .map_err(anyhow::Error::from_boxed)?;
                 let database_config = DatabaseConfig::extract_or_default(figment)

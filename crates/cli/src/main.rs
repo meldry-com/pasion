@@ -39,7 +39,7 @@ struct SentryTransportFactory {
 impl SentryTransportFactory {
     fn new() -> Self {
         Self {
-            client: pasion_http::reqwest_client(),
+            client: pasion_backend::reqwest_client(),
         }
     }
 }

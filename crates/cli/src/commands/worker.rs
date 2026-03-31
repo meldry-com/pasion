@@ -62,7 +62,7 @@ impl Options {
             test_mailer_in_background(mailer, Duration::from_secs(30));
         }
 
-        let http_client = pasion_http::reqwest_client();
+        let http_client = pasion_backend::reqwest_client();
         let (conn, _registry) =
             homeserver_connection_from_config(&config.matrix, http_client).await?;
 

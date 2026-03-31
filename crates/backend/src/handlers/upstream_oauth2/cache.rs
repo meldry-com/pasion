@@ -312,7 +312,7 @@ mod tests {
     async fn test_metadata_cache() {
         setup();
         let mock_server = MockServer::start().await;
-        let http_client = pasion_http::reqwest_client();
+        let http_client = crate::reqwest_client();
 
         let cache = MetadataCache::new();
 
@@ -376,7 +376,7 @@ mod tests {
         setup();
 
         let mock_server = MockServer::start().await;
-        let http_client = pasion_http::reqwest_client();
+        let http_client = crate::reqwest_client();
 
         let expected_calls = 2;
         let mut calls = 0;

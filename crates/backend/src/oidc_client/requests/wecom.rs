@@ -8,7 +8,7 @@
 
 use std::collections::HashMap;
 
-use pasion_http::RequestBuilderExt;
+use crate::outbound_http::RequestBuilderExt;
 use serde::Deserialize;
 use serde_json::Value;
 use url::Url;

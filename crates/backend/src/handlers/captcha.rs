@@ -1,7 +1,7 @@
 use std::net::IpAddr;
 
+use crate::outbound_http::RequestBuilderExt as _;
 use pasion_data::{CaptchaConfig, CaptchaService};
-use pasion_http::RequestBuilderExt as _;
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 

@@ -162,7 +162,7 @@ impl Options {
         .await?;
         shutdown.register_reloadable(&templates);
 
-        let http_client = pasion_http::reqwest_client();
+        let http_client = pasion_backend::reqwest_client();
 
         let (homeserver_connection, connector_registry) =
             homeserver_connection_from_config(&config.matrix, http_client.clone()).await?;

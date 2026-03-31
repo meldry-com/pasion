@@ -2,7 +2,6 @@ use std::collections::HashSet;
 
 use anyhow::Context as _;
 use http::{Method, StatusCode};
-use pasion_http::RequestBuilderExt;
 use pasion_matrix::{
     ConnectorCapabilities, ConnectorProvider, HomeserverConnection, MatrixUser, ProvisionRequest,
 };
@@ -92,7 +91,7 @@ impl HomeserverConnection for PalpoConnection {
         let url = format!("_palpo/admin/query_user?localpart={encoded_localpart}");
         let response = self
             .get(&url)
-            .send_traced()
+            .send()
             .await
             .context("Failed to query user from Palpo")?;
 
@@ -168,7 +167,7 @@ impl HomeserverConnection for PalpoConnection {
         let response = self
             .post("_palpo/admin/provision_user")
             .json(&body)
-            .send_traced()
+            .send()
             .await
             .context("Failed to provision user in Palpo")?;
 
@@ -206,7 +205,7 @@ impl HomeserverConnection for PalpoConnection {
         let url = format!("_palpo/admin/is_localpart_available?localpart={encoded_localpart}");
         let response = self
             .get(&url)
-            .send_traced()
+            .send()
             .await
             .context("Failed to check localpart availability from Palpo")?;
 
@@ -261,7 +260,7 @@ impl HomeserverConnection for PalpoConnection {
         let response = self
             .post("_palpo/admin/upsert_device")
             .json(&body)
-            .send_traced()
+            .send()
             .await
             .context("Failed to create device in Palpo")?;
 
@@ -305,7 +304,7 @@ impl HomeserverConnection for PalpoConnection {
         let response = self
             .post("_palpo/admin/update_device_display_name")
             .json(&body)
-            .send_traced()
+            .send()
             .await
             .context("Failed to update device display name in Palpo")?;
 
@@ -342,7 +341,7 @@ impl HomeserverConnection for PalpoConnection {
         let response = self
             .post("_palpo/admin/delete_device")
             .json(&body)
-            .send_traced()
+            .send()
             .await
             .context("Failed to delete device in Palpo")?;
 
@@ -380,7 +379,7 @@ impl HomeserverConnection for PalpoConnection {
         let response = self
             .post("_palpo/admin/sync_devices")
             .json(&body)
-            .send_traced()
+            .send()
             .await
             .context("Failed to sync devices in Palpo")?;
 
@@ -414,7 +413,7 @@ impl HomeserverConnection for PalpoConnection {
         let response = self
             .post("_palpo/admin/delete_user")
             .json(&body)
-            .send_traced()
+            .send()
             .await
             .context("Failed to delete user in Palpo")?;
 
@@ -446,7 +445,7 @@ impl HomeserverConnection for PalpoConnection {
         let response = self
             .post("_palpo/admin/reactivate_user")
             .json(&body)
-            .send_traced()
+            .send()
             .await
             .context("Failed to reactivate user in Palpo")?;
 
@@ -486,7 +485,7 @@ impl HomeserverConnection for PalpoConnection {
         let response = self
             .post("_palpo/admin/set_displayname")
             .json(&body)
-            .send_traced()
+            .send()
             .await
             .context("Failed to set displayname in Palpo")?;
 
@@ -518,7 +517,7 @@ impl HomeserverConnection for PalpoConnection {
         let response = self
             .post("_palpo/admin/unset_displayname")
             .json(&body)
-            .send_traced()
+            .send()
             .await
             .context("Failed to unset displayname in Palpo")?;
 
@@ -550,7 +549,7 @@ impl HomeserverConnection for PalpoConnection {
         let response = self
             .post("_palpo/admin/allow_cross_signing_reset")
             .json(&body)
-            .send_traced()
+            .send()
             .await
             .context("Failed to allow cross-signing reset in Palpo")?;
 
