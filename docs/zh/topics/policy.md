@@ -6,8 +6,7 @@ Pasion 内置了一个可扩展的策略引擎，用于控制用户注册、客�
 
 | 后端 | 策略语言 | 性能 | 灵活性 | 特性标志 |
 |------|---------|------|--------|---------|
-| **OPA/WASM**（默认） | Rego | 极高（原生 WASM） | 高 | *（始终可用）* |
-| **Cedar** | Cedar | 极高（原生 Rust） | 中 | `cedar` |
+| **Cedar**（默认） | Cedar | 极高（原生 Rust） | 中 | `cedar` |
 | **Remote HTTP** | 任意语言 | 取决于网络 | 最高 | `remote` |
 
 ## 工作原理
@@ -19,56 +18,13 @@ Pasion 内置了一个可扩展的策略引擎，用于控制用户注册、客�
 
 `PolicyFactory` 和 `Policy` 是面向外部的公共类型，内部通过 Trait 对象委托给选定的后端实现。
 
-## OPA/WASM 后端（默认）
-
-使用 [Open Policy Agent (OPA)](https://www.openpolicyagent.org/) 的编译后 Rego 策略，以 WebAssembly (WASM) 模块形式加载。Pasion 自带默认 OPA 策略，适用于大多数部署场景。
-
-### 配置
-
-```yaml
-policy:
-  engine: opa  # 默认值，可省略
-  wasm_module: ./policies/policy.wasm
-  data:
-    admin_users:
-      - person1
-```
-
-### 编写自定义策略
-
-策略使用 Rego 语言编写，然后编译为 WASM：
-
-```rego
-package register
-
-# 禁止用户名中包含 "admin"
-violation contains {"msg": "reserved username"} if {
-    contains(input.registration_request.username, "admin")
-}
-```
-
-编译为 WASM：
-
-```bash
-opa build -t wasm -e 'register/violation' policy.rego
-```
-
-## Cedar 后端
+## Cedar 后端（默认）
 
 [Amazon Cedar](https://www.cedarpolicy.com/) 是一种专为权限控制设计的策略语言。由于 Cedar 本身使用 Rust 编写，在 Pasion 中集成的性能最高，无需 WebAssembly 开销。
 
 Cedar 适用于以下场景：
-- 希望使用比 Rego 更简单、可读性更好的策略语言
-- 团队已经熟悉 AWS 服务中的 Cedar
+- 希望使用简单、可读性好的策略语言
 - 偏好纯声明式的授权方式
-
-### 启用 Cedar
-
-Cedar 需要在编译时启用 `cedar` 特性标志：
-
-```bash
-cargo build --features cedar
-```
 
 ### 配置
 

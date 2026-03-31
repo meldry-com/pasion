@@ -28,7 +28,7 @@ fn write_schema<T: JsonSchema>(out_dir: Option<&Path>, file: &str) {
 }
 
 /// Write the input schemas to the output directory.
-/// They are then used in rego files to type check the input.
+/// They can be used for validating policy input types.
 fn main() {
     let output_root = std::env::var("OUT_DIR").map(PathBuf::from).ok();
     let output_root = output_root.as_deref();

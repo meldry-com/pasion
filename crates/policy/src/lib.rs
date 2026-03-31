@@ -29,7 +29,6 @@ pub mod cedar;
 #[cfg(feature = "remote")]
 pub mod remote;
 
-use serde::Serialize;
 use thiserror::Error;
 
 pub use self::model::{
@@ -90,77 +89,6 @@ pub enum InstantiateError {
 pub enum EvaluationError {
     Serialization(#[from] serde_json::Error),
     Evaluation(#[from] anyhow::Error),
-}
-
-// ---------------------------------------------------------------------------
-// Shared data types
-// ---------------------------------------------------------------------------
-
-// ---------------------------------------------------------------------------
-// Data merge utilities
-// ---------------------------------------------------------------------------
-
-fn value_kind(value: &serde_json::Value) -> &'static str {
-    match value {
-        serde_json::Value::Object(_) => "object",
-        serde_json::Value::Array(_) => "array",
-        serde_json::Value::String(_) => "string",
-        serde_json::Value::Number(_) => "number",
-        serde_json::Value::Bool(_) => "boolean",
-        serde_json::Value::Null => "null",
-    }
-}
-
-pub(crate) fn merge_data(
-    mut left: serde_json::Value,
-    right: serde_json::Value,
-) -> Result<serde_json::Value, anyhow::Error> {
-    merge_data_rec(&mut left, right)?;
-    Ok(left)
-}
-
-fn merge_data_rec(
-    left: &mut serde_json::Value,
-    right: serde_json::Value,
-) -> Result<(), anyhow::Error> {
-    match (left, right) {
-        (serde_json::Value::Object(left), serde_json::Value::Object(right)) => {
-            for (key, value) in right {
-                if let Some(left_value) = left.get_mut(&key) {
-                    merge_data_rec(left_value, value)?;
-                } else {
-                    left.insert(key, value);
-                }
-            }
-        }
-        (serde_json::Value::Array(left), serde_json::Value::Array(right)) => {
-            left.extend(right);
-        }
-        // Other values override
-        (serde_json::Value::Number(left), serde_json::Value::Number(right)) => {
-            *left = right;
-        }
-        (serde_json::Value::Bool(left), serde_json::Value::Bool(right)) => {
-            *left = right;
-        }
-        (serde_json::Value::String(left), serde_json::Value::String(right)) => {
-            *left = right;
-        }
-
-        // Null gets overridden by anything
-        (left, right) if left.is_null() => *left = right,
-
-        // Null on the right makes the left value null
-        (left, right) if right.is_null() => *left = right,
-
-        (left, right) => anyhow::bail!(
-            "Cannot merge a {} into a {}",
-            value_kind(&right),
-            value_kind(left),
-        ),
-    }
-
-    Ok(())
 }
 
 // ---------------------------------------------------------------------------
@@ -344,53 +272,5 @@ impl Policy {
         input: AuthorizationGrantInput<'_>,
     ) -> Result<EvaluationResult, EvaluationError> {
         self.inner.evaluate_authorization_grant(input).await
-    }
-}
-
-// ---------------------------------------------------------------------------
-// Tests
-// ---------------------------------------------------------------------------
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn test_merge() {
-        use serde_json::json as j;
-
-        // Merging objects
-        let res = merge_data(j!({"hello": "world"}), j!({"foo": "bar"})).unwrap();
-        assert_eq!(res, j!({"hello": "world", "foo": "bar"}));
-
-        // Override a value of the same type
-        let res = merge_data(j!({"hello": "world"}), j!({"hello": "john"})).unwrap();
-        assert_eq!(res, j!({"hello": "john"}));
-
-        let res = merge_data(j!({"hello": true}), j!({"hello": false})).unwrap();
-        assert_eq!(res, j!({"hello": false}));
-
-        let res = merge_data(j!({"hello": 0}), j!({"hello": 42})).unwrap();
-        assert_eq!(res, j!({"hello": 42}));
-
-        // Override a value of a different type
-        merge_data(j!({"hello": "world"}), j!({"hello": 123}))
-            .expect_err("Can't merge different types");
-
-        // Merge arrays
-        let res = merge_data(j!({"hello": ["world"]}), j!({"hello": ["john"]})).unwrap();
-        assert_eq!(res, j!({"hello": ["world", "john"]}));
-
-        // Null overrides a value
-        let res = merge_data(j!({"hello": "world"}), j!({"hello": null})).unwrap();
-        assert_eq!(res, j!({"hello": null}));
-
-        // Null gets overridden by a value
-        let res = merge_data(j!({"hello": null}), j!({"hello": "world"})).unwrap();
-        assert_eq!(res, j!({"hello": "world"}));
-
-        // Objects get deeply merged
-        let res = merge_data(j!({"a": {"b": {"c": "d"}}}), j!({"a": {"b": {"e": "f"}}})).unwrap();
-        assert_eq!(res, j!({"a": {"b": {"c": "d", "e": "f"}}}));
     }
 }

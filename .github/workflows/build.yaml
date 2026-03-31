@@ -68,16 +68,15 @@ jobs:
         uses: dtolnay/rust-toolchain@stable
 
       - uses: ./.github/actions/build-frontend
-      - uses: ./.github/actions/build-policies
 
       - name: Prepare assets artifact
         run: |
           mkdir -p assets-dist/share
-          cp policies/policy.wasm assets-dist/share/policy.wasm
           cp dist/manifest.json assets-dist/share/manifest.json
           cp -r dist/ assets-dist/share/assets
           cp -r templates/ assets-dist/share/templates
           cp -r translations/ assets-dist/share/translations
+          cp -r policies/cedar/ assets-dist/share/cedar
           cp LICENSE assets-dist/LICENSE
           chmod -R u=rwX,go=rX assets-dist/
 

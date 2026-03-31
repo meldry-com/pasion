@@ -82,8 +82,8 @@ RUN --network=default \
 #######################################
 FROM --platform=${BUILDPLATFORM} scratch AS share
 
-# policy.wasm is pre-built and checked into the repo
-COPY ./policies/policy.wasm /share/policy.wasm
+# Cedar policies
+COPY ./policies/cedar/ /share/cedar
 COPY ./templates/ /share/templates
 COPY ./translations/ /share/translations
 COPY --from=frontend /frontend-dist/ /share/assets

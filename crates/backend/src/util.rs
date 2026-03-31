@@ -12,7 +12,7 @@ use pasion_config::{
 };
 use pasion_data::UrlBuilder;
 use pasion_data::{BoxRepositoryFactory, RepositoryAccess, RepositoryFactory};
-use pasion_data::{SessionExpirationConfig, SiteConfig};
+use pasion_data::{SessionExpirationConfig, SessionLimitConfig, SiteConfig};
 use pasion_matrix::{ConnectorRegistry, HomeserverConnection, ReadOnlyHomeserverConnection};
 use pasion_matrix_palpo::PalpoConnection;
 use pasion_messaging::{MailTransport, Mailer, NotificationCenter, SmsSender, SmsTransport};

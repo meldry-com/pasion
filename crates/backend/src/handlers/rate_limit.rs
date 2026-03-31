@@ -118,7 +118,10 @@ impl<K: Clone + Eq + Hash + Send + Sync + 'static> KeyedLimiter<K> {
     /// Create a new keyed limiter from a [`RateLimiterConfiguration`].
     fn from_config(cfg: &RateLimiterConfiguration) -> Option<Self> {
         let (limit, period) = cfg.to_limit_and_period()?;
-        let quota = CelledQuota::per_second(limit, period);
+        let period_secs = period.as_secs_f64();
+        // Use 10 cells for sliding window granularity (period / 10 per cell)
+        let cells = 10;
+        let quota = CelledQuota::new(limit, cells, time::Duration::seconds_f64(period_secs));
         Some(Self {
             store: MokaStore::new(),
             template: SlidingGuard::default(),

@@ -15,30 +15,6 @@ env:
   CARGO_NET_GIT_FETCH_WITH_CLI: "true"
 
 jobs:
-  opa:
-    name: Run OPA test suite with coverage
-    runs-on: ubuntu-24.04
-
-    permissions:
-      contents: read
-
-    steps:
-      - name: Checkout the code
-        uses: actions/checkout@v6
-
-      - uses: ./.github/actions/build-policies
-
-      - name: Run OPA tests with coverage
-        working-directory: ./policies
-        run: make coverage
-
-      - name: Upload to codecov.io
-        uses: codecov/codecov-action@v5.5.2
-        with:
-          token: ${{ secrets.CODECOV_TOKEN }}
-          files: policies/coverage.json
-          flags: policies
-
   frontend:
     name: Run frontend test suite with coverage
     runs-on: ubuntu-24.04
@@ -110,7 +86,6 @@ jobs:
           tool: grcov
 
       - uses: ./.github/actions/build-frontend
-      - uses: ./.github/actions/build-policies
 
       - name: Run test suite with profiling enabled
         run: |

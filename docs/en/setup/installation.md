@@ -13,7 +13,7 @@ Each archive contains:
 - assets needed for running the service, including:
   - `share/assets/`: the built frontend assets
   - `share/manifest.json`: the manifest for the frontend assets
-  - `share/policy.wasm`: the built OPA policies
+  - `share/cedar/`: the Cedar policy files
   - `share/templates/`: the default templates
   - `share/translations/`: the default translations
 
@@ -65,7 +65,6 @@ Building from the source requires:
 
 - The latest stable [Rust toolchain](https://www.rust-lang.org/learn/get-started)
 - [Node.js (18 and later)](https://nodejs.org/en/) and [npm](https://www.npmjs.com/get-npm)
-- the [Open Policy Agent](https://www.openpolicyagent.org/docs/latest/#running-opa) binary (or alternatively, Docker)
 
 1. Get the source
    ```sh
@@ -81,20 +80,6 @@ Building from the source requires:
    ```
    This will produce a `dist` directory containing the built frontend assets.
    This folder, along with the `dist/manifest.json` file, can be relocated, as long as the configuration file is updated accordingly.
-1. Build the Open Policy Agent policies
-   ```sh
-   cd policies
-   make
-   cd ..
-   ```
-   OR, if you don't have `opa` installed and want to build through the OPA docker image
-   ```sh
-   cd policies
-   make DOCKER=1
-   cd ..
-   ```
-   This will produce a `policies/policy.wasm` file containing the built OPA policies.
-   This file can be relocated, as long as the configuration file is updated accordingly.
 1. Compile the CLI
    ```sh
    cargo build --release

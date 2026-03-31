@@ -143,26 +143,11 @@ captcha:
 
 Pasion 支持多种策略引擎后端。详细文档请参阅[策略引擎](../topics/policy.md)。
 
-#### OPA 后端（默认）
+#### Cedar 后端（默认）
 
 ```yaml
 policy:
-  engine: opa  # 默认值，可省略
-  wasm_module: ./policies/policy.wasm
-  data:
-    admin_users:
-      - person1
-    allowed_domains:
-      - "example.com"
-```
-
-#### Cedar 后端
-
-需要编译时启用 `cedar` 特性标志。
-
-```yaml
-policy:
-  engine: cedar
+  engine: cedar  # 默认值，可省略
   cedar_policy_file: ./policies/policies.cedar
 ```
 
