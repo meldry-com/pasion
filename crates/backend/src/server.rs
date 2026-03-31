@@ -601,17 +601,17 @@ fn build_admin_router(router: Router) -> Router {
             // Users
             .push(
                 Router::with_path("users")
-                    .get(users::list)
-                    .post(users::add)
+                    .get(users::list_users)
+                    .post(users::add_user)
                     .push(
                         Router::with_path("by-username/{username}")
-                            .get(users::by_username),
+                            .get(users::get_by_username),
                     )
                     .push(Router::with_path("batch-invite").post(users::batch_invite))
                     .push(
                         Router::with_path("{id}")
-                            .get(users::get)
-                            .patch(users::update)
+                            .get(users::get_user)
+                            .patch(users::update_user)
                             .push(
                                 Router::with_path("set-password")
                                     .post(users::set_password),
@@ -624,98 +624,98 @@ fn build_admin_router(router: Router) -> Router {
             // User emails
             .push(
                 Router::with_path("user-emails")
-                    .get(user_emails::list)
-                    .post(user_emails::add)
+                    .get(user_emails::list_emails)
+                    .post(user_emails::add_email)
                     .push(
                         Router::with_path("{id}")
-                            .get(user_emails::get)
-                            .patch(user_emails::update)
-                            .delete(user_emails::delete),
+                            .get(user_emails::get_email)
+                            .patch(user_emails::update_email)
+                            .delete(user_emails::delete_email),
                     ),
             )
             // User sessions
             .push(
                 Router::with_path("user-sessions")
-                    .get(user_sessions::list)
+                    .get(user_sessions::list_sessions)
                     .push(
                         Router::with_path("{id}")
-                            .get(user_sessions::get)
-                            .push(Router::with_path("finish").post(user_sessions::finish)),
+                            .get(user_sessions::get_session)
+                            .push(Router::with_path("finish").post(user_sessions::finish_session)),
                     ),
             )
             // OAuth2 sessions
             .push(
                 Router::with_path("oauth2-sessions")
-                    .get(oauth2_sessions::list)
+                    .get(oauth2_sessions::list_sessions)
                     .push(
                         Router::with_path("{id}")
-                            .get(oauth2_sessions::get)
+                            .get(oauth2_sessions::get_session)
                             .push(
-                                Router::with_path("finish").post(oauth2_sessions::finish),
+                                Router::with_path("finish").post(oauth2_sessions::finish_session),
                             ),
                     ),
             )
             // Personal sessions
             .push(
                 Router::with_path("personal-sessions")
-                    .get(personal_sessions::list)
-                    .post(personal_sessions::add)
+                    .get(personal_sessions::list_sessions)
+                    .post(personal_sessions::add_session)
                     .push(
                         Router::with_path("{id}")
-                            .get(personal_sessions::get)
+                            .get(personal_sessions::get_session)
                             .push(
                                 Router::with_path("regenerate")
-                                    .post(personal_sessions::regenerate),
+                                    .post(personal_sessions::regenerate_session),
                             )
                             .push(
                                 Router::with_path("revoke")
-                                    .post(personal_sessions::revoke),
+                                    .post(personal_sessions::revoke_session),
                             ),
                     ),
             )
             // User registration tokens
             .push(
                 Router::with_path("user-registration-tokens")
-                    .get(user_registration_tokens::list)
-                    .post(user_registration_tokens::add)
+                    .get(user_registration_tokens::list_tokens)
+                    .post(user_registration_tokens::add_token)
                     .push(
                         Router::with_path("{id}")
-                            .get(user_registration_tokens::get)
-                            .put(user_registration_tokens::update)
+                            .get(user_registration_tokens::get_token)
+                            .put(user_registration_tokens::update_token)
                             .push(
                                 Router::with_path("revoke")
-                                    .post(user_registration_tokens::revoke),
+                                    .post(user_registration_tokens::revoke_token),
                             )
                             .push(
                                 Router::with_path("unrevoke")
-                                    .post(user_registration_tokens::unrevoke),
+                                    .post(user_registration_tokens::unrevoke_token),
                             ),
                     ),
             )
             // Upstream OAuth providers
             .push(
                 Router::with_path("upstream-oauth-providers")
-                    .get(upstream_oauth_providers::list)
-                    .push(Router::with_path("{id}").get(upstream_oauth_providers::get)),
+                    .get(upstream_oauth_providers::list_providers)
+                    .push(Router::with_path("{id}").get(upstream_oauth_providers::get_provider)),
             )
             // Upstream OAuth links
             .push(
                 Router::with_path("upstream-oauth-links")
-                    .get(upstream_oauth_links::list)
-                    .post(upstream_oauth_links::add)
+                    .get(upstream_oauth_links::list_links)
+                    .post(upstream_oauth_links::add_link)
                     .push(
                         Router::with_path("{id}")
-                            .get(upstream_oauth_links::get)
-                            .patch(upstream_oauth_links::update)
-                            .delete(upstream_oauth_links::delete),
+                            .get(upstream_oauth_links::get_link)
+                            .patch(upstream_oauth_links::update_link)
+                            .delete(upstream_oauth_links::delete_link),
                     ),
             )
             // Policy data
             .push(
                 Router::with_path("policy-data")
                     .push(Router::with_path("latest").get(policy_data::get_latest))
-                    .push(Router::with_path("{id}").get(policy_data::get))
-                    .put(policy_data::set),
+                    .push(Router::with_path("{id}").get(policy_data::get_by_id))
+                    .put(policy_data::set_data),
             );
 
     // Generate OpenAPI spec and Swagger UI for the admin API

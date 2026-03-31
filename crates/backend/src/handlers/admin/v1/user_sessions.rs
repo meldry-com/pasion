@@ -26,7 +26,7 @@ use crate::handlers::admin::{
 /// exist or has already been finished.
 #[endpoint]
 #[tracing::instrument(name = "handler.admin.v1.user_sessions.finish", skip_all)]
-pub async fn finish(
+pub async fn finish_session(
     req: &mut Request,
     depot: &Depot,
 ) -> JsonResult<SingleResponse<UserSession>> {
@@ -65,7 +65,7 @@ pub async fn finish(
 /// Look up a single browser session by its ULID.
 #[endpoint]
 #[tracing::instrument(name = "handler.admin.v1.user_sessions.get", skip_all)]
-pub async fn get(
+pub async fn get_session(
     req: &mut Request,
     depot: &Depot,
 ) -> JsonResult<SingleResponse<UserSession>> {
@@ -143,7 +143,7 @@ impl std::fmt::Display for FilterParams {
 /// List browser sessions with optional filtering and pagination.
 #[endpoint]
 #[tracing::instrument(name = "handler.admin.v1.user_sessions.list", skip_all)]
-pub async fn list(
+pub async fn list_sessions(
     req: &mut Request,
     depot: &Depot,
 ) -> JsonResult<PaginatedResponse<UserSession>> {

@@ -21,7 +21,7 @@ use crate::handlers::{
 /// Fetch a single policy data record by its ULID.
 #[endpoint]
 #[tracing::instrument(name = "handler.admin.v1.policy_data.get", skip_all)]
-pub async fn get(
+pub async fn get_by_id(
     req: &mut Request,
     depot: &Depot,
 ) -> JsonResult<SingleResponse<PolicyData>> {
@@ -78,7 +78,7 @@ pub struct SetPolicyDataRequest {
 /// Store a new policy data snapshot, replacing the active policy in memory.
 #[endpoint]
 #[tracing::instrument(name = "handler.admin.v1.policy_data.set", skip_all)]
-pub async fn set(
+pub async fn set_data(
     req: &mut Request,
     depot: &Depot,
 ) -> CreatedJsonResult<SingleResponse<PolicyData>> {

@@ -45,7 +45,7 @@ pub struct AddRequest {
 /// Create a new user-registration token.
 #[endpoint]
 #[tracing::instrument(name = "handler.admin.v1.user_registration_tokens.post", skip_all)]
-pub async fn add(
+pub async fn add_token(
     req: &mut Request,
     depot: &Depot,
 ) -> CreatedJsonResult<SingleResponse<UserRegistrationToken>> {
@@ -96,7 +96,7 @@ pub async fn add(
 /// Fetch a single registration token by its ULID.
 #[endpoint]
 #[tracing::instrument(name = "handler.admin.v1.user_registration_tokens.get", skip_all)]
-pub async fn get(
+pub async fn get_token(
     req: &mut Request,
     depot: &Depot,
 ) -> JsonResult<SingleResponse<UserRegistrationToken>> {
@@ -172,7 +172,7 @@ impl std::fmt::Display for FilterParams {
 /// List registration tokens with optional filtering and cursor-based pagination.
 #[endpoint]
 #[tracing::instrument(name = "handler.admin.v1.registration_tokens.list", skip_all)]
-pub async fn list(
+pub async fn list_tokens(
     req: &mut Request,
     depot: &Depot,
 ) -> JsonResult<PaginatedResponse<UserRegistrationToken>> {
@@ -231,7 +231,7 @@ pub async fn list(
 /// Mark a registration token as revoked so it can no longer be used.
 #[endpoint]
 #[tracing::instrument(name = "handler.admin.v1.user_registration_tokens.revoke", skip_all)]
-pub async fn revoke(
+pub async fn revoke_token(
     req: &mut Request,
     depot: &Depot,
 ) -> JsonResult<SingleResponse<UserRegistrationToken>> {
@@ -273,7 +273,7 @@ pub async fn revoke(
 /// Restore a previously revoked registration token so it becomes usable again.
 #[endpoint]
 #[tracing::instrument(name = "handler.admin.v1.user_registration_tokens.unrevoke", skip_all)]
-pub async fn unrevoke(
+pub async fn unrevoke_token(
     req: &mut Request,
     depot: &Depot,
 ) -> JsonResult<SingleResponse<UserRegistrationToken>> {
@@ -344,7 +344,7 @@ pub struct UpdateRequest {
 /// Apply partial updates to a registration token's mutable fields.
 #[endpoint]
 #[tracing::instrument(name = "handler.admin.v1.user_registration_tokens.update", skip_all)]
-pub async fn update(
+pub async fn update_token(
     req: &mut Request,
     depot: &Depot,
 ) -> JsonResult<SingleResponse<UserRegistrationToken>> {

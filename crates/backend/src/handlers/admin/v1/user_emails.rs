@@ -45,7 +45,7 @@ pub struct AddRequest {
 /// Add a new email address to an existing user account.
 #[endpoint]
 #[tracing::instrument(name = "handler.admin.v1.user_emails.add", skip_all)]
-pub async fn add(
+pub async fn add_email(
     req: &mut Request,
     depot: &Depot,
 ) -> CreatedJsonResult<SingleResponse<UserEmail>> {
@@ -110,7 +110,7 @@ pub async fn add(
 /// Remove a user email by its identifier.
 #[endpoint]
 #[tracing::instrument(name = "handler.admin.v1.user_emails.delete", skip_all)]
-pub async fn delete(req: &mut Request, depot: &Depot) -> AppResult<StatusCode> {
+pub async fn delete_email(req: &mut Request, depot: &Depot) -> AppResult<StatusCode> {
     let ctx = extract_call_context(req, depot).await?;
     let crate::handlers::admin::call_context::CallContext {
         mut repo, clock, ..
@@ -138,7 +138,7 @@ pub async fn delete(req: &mut Request, depot: &Depot) -> AppResult<StatusCode> {
 /// Retrieve a single user email record by its identifier.
 #[endpoint]
 #[tracing::instrument(name = "handler.admin.v1.user_emails.get", skip_all)]
-pub async fn get(
+pub async fn get_email(
     req: &mut Request,
     depot: &Depot,
 ) -> JsonResult<SingleResponse<UserEmail>> {
@@ -191,7 +191,7 @@ impl std::fmt::Display for FilterParams {
 /// List user emails with optional filtering and pagination.
 #[endpoint]
 #[tracing::instrument(name = "handler.admin.v1.user_emails.list", skip_all)]
-pub async fn list(
+pub async fn list_emails(
     req: &mut Request,
     depot: &Depot,
 ) -> JsonResult<PaginatedResponse<UserEmail>> {
@@ -264,7 +264,7 @@ pub struct UpdateRequest {
 }
 #[endpoint]
 #[tracing::instrument(name = "handler.admin.v1.user_emails.update", skip_all)]
-pub async fn update(
+pub async fn update_email(
     req: &mut Request,
     depot: &Depot,
 ) -> JsonResult<SingleResponse<UserEmail>> {

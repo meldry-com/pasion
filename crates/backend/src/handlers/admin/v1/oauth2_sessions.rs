@@ -31,7 +31,7 @@ use crate::handlers::admin::{
 /// about the revocation promptly.
 #[endpoint]
 #[tracing::instrument(name = "handler.admin.v1.oauth2_sessions.finish", skip_all)]
-pub async fn finish(
+pub async fn finish_session(
     req: &mut Request,
     depot: &Depot,
 ) -> JsonResult<SingleResponse<OAuth2Session>> {
@@ -83,7 +83,7 @@ pub async fn finish(
 
 #[endpoint]
 #[tracing::instrument(name = "handler.admin.v1.oauth2_session.get", skip_all)]
-pub async fn get(
+pub async fn get_session(
     req: &mut Request,
     depot: &Depot,
 ) -> JsonResult<SingleResponse<OAuth2Session>> {
@@ -212,7 +212,7 @@ impl std::fmt::Display for FilterParams {
 
 #[endpoint]
 #[tracing::instrument(name = "handler.admin.v1.oauth2_sessions.list", skip_all)]
-pub async fn list(
+pub async fn list_sessions(
     req: &mut Request,
     depot: &Depot,
 ) -> JsonResult<PaginatedResponse<OAuth2Session>> {

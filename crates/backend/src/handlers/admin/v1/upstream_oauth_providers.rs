@@ -25,7 +25,7 @@ use crate::handlers::admin::{
 /// Fetch a single upstream OAuth provider by its identifier.
 #[endpoint]
 #[tracing::instrument(name = "handler.admin.v1.upstream_oauth_providers.get", skip_all)]
-pub async fn get(
+pub async fn get_provider(
     req: &mut Request,
     depot: &Depot,
 ) -> JsonResult<SingleResponse<UpstreamOAuthProvider>> {
@@ -70,7 +70,7 @@ impl std::fmt::Display for FilterParams {
 /// List upstream OAuth providers with optional filtering and pagination.
 #[endpoint]
 #[tracing::instrument(name = "handler.admin.v1.upstream_oauth_providers.list", skip_all)]
-pub async fn list(
+pub async fn list_providers(
     req: &mut Request,
     depot: &Depot,
 ) -> JsonResult<PaginatedResponse<UpstreamOAuthProvider>> {

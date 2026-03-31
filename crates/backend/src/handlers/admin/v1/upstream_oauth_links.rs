@@ -88,7 +88,7 @@ pub struct AddRequest {
 /// Create a new upstream OAuth link or associate an existing unlinked one.
 #[endpoint]
 #[tracing::instrument(name = "handler.admin.v1.upstream_oauth_links.post", skip_all)]
-pub async fn add(
+pub async fn add_link(
     req: &mut Request,
     depot: &Depot,
 ) -> CreatedJsonResult<SingleResponse<UpstreamOAuthLink>> {
@@ -176,7 +176,7 @@ pub async fn add(
 /// Remove an upstream OAuth link by its identifier.
 #[endpoint]
 #[tracing::instrument(name = "handler.admin.v1.upstream_oauth_links.delete", skip_all)]
-pub async fn delete(req: &mut Request, depot: &Depot) -> AppResult<StatusCode> {
+pub async fn delete_link(req: &mut Request, depot: &Depot) -> AppResult<StatusCode> {
     let ctx = extract_call_context(req, depot).await?;
     let crate::handlers::admin::call_context::CallContext {
         mut repo, clock, ..
@@ -201,7 +201,7 @@ pub async fn delete(req: &mut Request, depot: &Depot) -> AppResult<StatusCode> {
 /// Retrieve a single upstream OAuth link by its identifier.
 #[endpoint]
 #[tracing::instrument(name = "handler.admin.v1.upstream_oauth_links.get", skip_all)]
-pub async fn get(
+pub async fn get_link(
     req: &mut Request,
     depot: &Depot,
 ) -> JsonResult<SingleResponse<UpstreamOAuthLink>> {
@@ -268,7 +268,7 @@ impl std::fmt::Display for FilterParams {
 /// List upstream OAuth links with optional filtering and pagination.
 #[endpoint]
 #[tracing::instrument(name = "handler.admin.v1.upstream_oauth_links.list", skip_all)]
-pub async fn list(
+pub async fn list_links(
     req: &mut Request,
     depot: &Depot,
 ) -> JsonResult<PaginatedResponse<UpstreamOAuthLink>> {
@@ -359,7 +359,7 @@ pub struct UpdateRequest {
 }
 #[endpoint]
 #[tracing::instrument(name = "handler.admin.v1.upstream_oauth_links.update", skip_all)]
-pub async fn update(
+pub async fn update_link(
     req: &mut Request,
     depot: &Depot,
 ) -> JsonResult<SingleResponse<UpstreamOAuthLink>> {

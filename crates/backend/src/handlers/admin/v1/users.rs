@@ -55,7 +55,7 @@ pub struct AddRequest {
 }
 #[endpoint]
 #[tracing::instrument(name = "handler.admin.v1.users.add", skip_all)]
-pub async fn add(
+pub async fn add_user(
     req: &mut Request,
     depot: &Depot,
 ) -> CreatedJsonResult<SingleResponse<User>> {
@@ -208,7 +208,7 @@ pub struct UsernamePathParam {
 }
 #[endpoint]
 #[tracing::instrument(name = "handler.admin.v1.users.by_username", skip_all)]
-pub async fn by_username(
+pub async fn get_by_username(
     req: &mut Request,
     depot: &Depot,
 ) -> JsonResult<SingleResponse<User>> {
@@ -230,7 +230,7 @@ pub async fn by_username(
 
 #[endpoint]
 #[tracing::instrument(name = "handler.admin.v1.users.get", skip_all)]
-pub async fn get(
+pub async fn get_user(
     req: &mut Request,
     depot: &Depot,
 ) -> JsonResult<SingleResponse<User>> {
@@ -324,7 +324,7 @@ impl std::fmt::Display for FilterParams {
 
 #[endpoint]
 #[tracing::instrument(name = "handler.admin.v1.users.list", skip_all)]
-pub async fn list(
+pub async fn list_users(
     req: &mut Request,
     depot: &Depot,
 ) -> JsonResult<PaginatedResponse<User>> {
@@ -593,7 +593,7 @@ pub struct UpdateRequest {
 }
 #[endpoint]
 #[tracing::instrument(name = "handler.admin.v1.users.update", skip_all)]
-pub async fn update(
+pub async fn update_user(
     req: &mut Request,
     depot: &Depot,
 ) -> JsonResult<SingleResponse<User>> {

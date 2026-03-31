@@ -80,7 +80,7 @@ pub struct AddRequest {
 /// Create a new personal session and its initial access token.
 #[endpoint]
 #[tracing::instrument(name = "handler.admin.v1.personal_sessions.add", skip_all)]
-pub async fn add(
+pub async fn add_session(
     req: &mut Request,
     depot: &Depot,
 ) -> CreatedJsonResult<SingleResponse<PersonalSession>> {
@@ -174,7 +174,7 @@ pub async fn add(
 /// Retrieve a single personal session by its identifier.
 #[endpoint]
 #[tracing::instrument(name = "handler.admin.v1.personal_sessions.get", skip_all)]
-pub async fn get(
+pub async fn get_session(
     req: &mut Request,
     depot: &Depot,
 ) -> JsonResult<SingleResponse<PersonalSession>> {
@@ -311,7 +311,7 @@ impl std::fmt::Display for FilterParams {
 /// List personal sessions, with optional filtering and cursor-based pagination.
 #[endpoint]
 #[tracing::instrument(name = "handler.admin.v1.personal_sessions.list", skip_all)]
-pub async fn list(
+pub async fn list_sessions(
     req: &mut Request,
     depot: &Depot,
 ) -> JsonResult<PaginatedResponse<PersonalSession>> {
@@ -448,7 +448,7 @@ pub struct RegenerateRequest {
 /// Rotate the access token for an existing personal session.
 #[endpoint]
 #[tracing::instrument(name = "handler.admin.v1.personal_sessions.add", skip_all)]
-pub async fn regenerate(
+pub async fn regenerate_session(
     req: &mut Request,
     depot: &Depot,
 ) -> CreatedJsonResult<SingleResponse<PersonalSession>> {
@@ -523,7 +523,7 @@ pub async fn regenerate(
 /// Revoke a personal session, invalidating its access token.
 #[endpoint]
 #[tracing::instrument(name = "handler.admin.v1.personal_sessions.revoke", skip_all)]
-pub async fn revoke(
+pub async fn revoke_session(
     req: &mut Request,
     depot: &Depot,
 ) -> JsonResult<SingleResponse<PersonalSession>> {
