@@ -1,3 +1,8 @@
+// Copyright 2024, 2025 Taidge Ltd.
+// Copyright 2024 The Matrix.org Foundation C.I.C.
+//
+// SPDX-License-Identifier: Apache-2.0
+
 use salvo::prelude::*;
 
 use crate::handlers::admin::{

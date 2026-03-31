@@ -4,18 +4,18 @@
 //! are enqueued during HTTP request handling and processed by a background
 //! worker. Task types include:
 //!
-//! - **Notification delivery** — sending verification codes, password-reset
+//! - **Notification delivery** -- sending verification codes, password-reset
 //!   links, and other outbound messages.
-//! - **Homeserver provisioning** — creating / deactivating Matrix users via the
+//! - **Homeserver provisioning** -- creating / deactivating Matrix users via the
 //!   homeserver admin API
-//! - **Session cleanup** — expiring old sessions and tokens
-//! - **Account recovery** — processing recovery ticket workflows
+//! - **Session cleanup** -- expiring old sessions and tokens
+//! - **Account recovery** -- processing recovery ticket workflows
 //!
 //! # Entry points
 //!
-//! - [`init`] — Register all task handlers and return a [`QueueWorker`] (does
+//! - [`init`] -- Register all task handlers and return a [`QueueWorker`] (does
 //!   **not** start processing).
-//! - [`init_and_run`] — Same as [`init`], but immediately spawns the worker
+//! - [`init_and_run`] -- Same as [`init`], but immediately spawns the worker
 //!   onto the provided [`TaskTracker`].
 
 use std::sync::{Arc, LazyLock};

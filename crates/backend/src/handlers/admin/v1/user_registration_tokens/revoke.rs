@@ -1,3 +1,7 @@
+// Copyright 2025, 2026 Taidge Ltd.
+//
+// SPDX-License-Identifier: AGPL-3.0-only
+
 use salvo::prelude::*;
 
 use crate::handlers::admin::{
@@ -8,40 +12,45 @@ use crate::handlers::admin::{
 };
 use crate::{AppError, JsonResult};
 
+/// Mark a registration token as revoked so it can no longer be used.
 #[endpoint]
 #[tracing::instrument(name = "handler.admin.v1.user_registration_tokens.revoke", skip_all)]
 pub async fn handler(
     req: &mut Request,
     depot: &Depot,
 ) -> JsonResult<SingleResponse<UserRegistrationToken>> {
-    let call_context = extract_call_context(req, depot).await?;
+    let ctx = extract_call_context(req, depot).await?;
     let crate::handlers::admin::call_context::CallContext {
         mut repo, clock, ..
-    } = call_context;
-    let id = extract_ulid_param(req)?;
+    } = ctx;
+    let target_id = extract_ulid_param(req)?;
 
-    // id already extracted above
-    let token = repo
+    let entry = repo
         .user_registration_token()
-        .lookup(id)
+        .lookup(target_id)
         .await?
-        .ok_or_else(|| AppError::not_found(format!("Registration token with ID {id} not found")))?;
+        .ok_or_else(|| {
+            AppError::not_found(format!(
+                "Registration token with ID {target_id} not found"
+            ))
+        })?;
 
-    // Check if the token is already revoked
-    if token.revoked_at.is_some() {
+    if entry.revoked_at.is_some() {
         return Err(AppError::bad_request(format!(
-            "Registration token with ID {id} is already revoked"
+            "Registration token with ID {target_id} is already revoked"
         )));
     }
 
-    // Revoke the token
-    let token = repo.user_registration_token().revoke(&clock, token).await?;
+    let revoked = repo
+        .user_registration_token()
+        .revoke(&clock, entry)
+        .await?;
 
     repo.save().await?;
 
     Ok(Json(SingleResponse::new(
-        UserRegistrationToken::new(token, clock.now()),
-        format!("/api/admin/v1/user-registration-tokens/{id}/revoke"),
+        UserRegistrationToken::new(revoked, clock.now()),
+        format!("/api/admin/v1/user-registration-tokens/{target_id}/revoke"),
     )))
 }
 
@@ -61,7 +70,7 @@ mod tests {
         let token = state.token_with_scope("urn:pasion:admin").await;
 
         let mut repo = state.repository().await.unwrap();
-        let registration_token = repo
+        let reg_token = repo
             .user_registration_token()
             .add(
                 &mut state.rng(),
@@ -76,7 +85,7 @@ mod tests {
 
         let request = Request::post(format!(
             "/api/admin/v1/user-registration-tokens/{}/revoke",
-            registration_token.id
+            reg_token.id
         ))
         .bearer(&token)
         .empty();
@@ -84,7 +93,6 @@ mod tests {
         response.assert_status(StatusCode::OK);
         let body: serde_json::Value = response.json();
 
-        // The revoked_at timestamp should be the same as the current time
         assert_eq!(
             body["data"]["attributes"]["revoked_at"],
             serde_json::json!(state.clock.now())
@@ -99,7 +107,7 @@ mod tests {
         let token = state.token_with_scope("urn:pasion:admin").await;
 
         let mut repo = state.repository().await.unwrap();
-        let registration_token = repo
+        let reg_token = repo
             .user_registration_token()
             .add(
                 &mut state.rng(),
@@ -111,21 +119,19 @@ mod tests {
             .await
             .unwrap();
 
-        // Revoke the token first
-        let registration_token = repo
+        let revoked_entry = repo
             .user_registration_token()
-            .revoke(&state.clock, registration_token)
+            .revoke(&state.clock, reg_token)
             .await
             .unwrap();
 
         repo.save().await.unwrap();
 
-        // Move the clock forward
         state.clock.advance(Duration::try_minutes(1).unwrap());
 
         let request = Request::post(format!(
             "/api/admin/v1/user-registration-tokens/{}/revoke",
-            registration_token.id
+            revoked_entry.id
         ))
         .bearer(&token)
         .empty();
@@ -136,7 +142,7 @@ mod tests {
             body["errors"][0]["title"],
             format!(
                 "Registration token with ID {} is already revoked",
-                registration_token.id
+                revoked_entry.id
             )
         );
     }

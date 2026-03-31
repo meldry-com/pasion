@@ -1,3 +1,7 @@
+// Copyright 2025, 2026 Taidge Ltd.
+//
+// SPDX-License-Identifier: AGPL-3.0-only
+
 use std::sync::Arc;
 
 use anyhow::Context;
@@ -21,112 +25,105 @@ use crate::handlers::{
 };
 use crate::{AppError, CreatedJsonResult};
 
-/// # JSON payload for the `POST /api/admin/v1/personal-sessions` endpoint
+/// Request body accepted by `POST /api/admin/v1/personal-sessions`.
 #[derive(Deserialize, JsonSchema)]
 #[serde(rename = "CreatePersonalSessionRequest")]
 pub struct RequestBody {
-    /// The user this session will act on behalf of
+    /// The user this session acts on behalf of
     #[schemars(with = "crate::handlers::admin::schema::Ulid")]
     actor_user_id: Ulid,
 
-    /// Human-readable name for the session
+    /// A human-friendly label for the session
     human_name: String,
 
-    /// `OAuth2` scopes for this session
+    /// Space-separated OAuth2 scopes
     scope: String,
 
-    /// Token expiry time in seconds.
-    /// If not set, the token won't expire.
+    /// How long (in seconds) before the access token expires.
+    /// Omit for a non-expiring token.
     expires_in: Option<u32>,
 }
+
+/// Create a new personal session and its initial access token.
 #[endpoint]
 #[tracing::instrument(name = "handler.admin.v1.personal_sessions.add", skip_all)]
 pub async fn handler(
     req: &mut Request,
     depot: &Depot,
 ) -> CreatedJsonResult<SingleResponse<PersonalSession>> {
-    let call_context = extract_call_context(req, depot).await?;
+    let ctx = extract_call_context(req, depot).await?;
     let crate::handlers::admin::call_context::CallContext {
         mut repo,
         clock,
-        session,
+        session: caller_session,
         ..
-    } = call_context;
+    } = ctx;
     let mut rng = crate::handlers::rest::make_rng();
     let homeserver = depot.homeserver()?;
-    let params: RequestBody = req
+    let body: RequestBody = req
         .parse_json()
         .await
         .map_err(AppError::internal)?;
-    let owner = personal_session_owner_from_caller(&session);
+    let owner = personal_session_owner_from_caller(&caller_session);
 
-    let actor_user = repo
+    // Look up the target user
+    let target_user = repo
         .user()
-        .lookup(params.actor_user_id)
+        .lookup(body.actor_user_id)
         .await?
-        .ok_or_else(|| AppError::not_found("User not found"))?;
+        .ok_or_else(|| AppError::not_found("Specified user does not exist"))?;
 
-    if !actor_user.is_valid_actor() {
-        return Err(AppError::gone("User is not active"));
+    if !target_user.is_valid_actor() {
+        return Err(AppError::gone("Target user account is not active"));
     }
 
-    let scope: Scope = params
+    let parsed_scope: Scope = body
         .scope
         .parse()
-        .map_err(|_| AppError::bad_request("Invalid scope"))?;
+        .map_err(|_| AppError::bad_request("Provided scope string is malformed"))?;
 
-    // Create the personal session
-    let session = repo
+    // Persist the personal session
+    let new_session = repo
         .personal_session()
         .add(
             &mut rng,
             &clock,
             owner,
-            &actor_user,
-            params.human_name,
-            scope,
+            &target_user,
+            body.human_name,
+            parsed_scope,
         )
         .await?;
 
-    // Create the initial token for the session
-    let access_token_string = TokenType::PersonalAccessToken.generate(&mut rng);
-    let access_token = repo
+    // Issue the initial access token
+    let raw_token = TokenType::PersonalAccessToken.generate(&mut rng);
+    let token_record = repo
         .personal_access_token()
         .add(
             &mut rng,
             &clock,
-            &session,
-            &access_token_string,
-            params
-                .expires_in
-                .map(|exp_in| Duration::seconds(i64::from(exp_in))),
+            &new_session,
+            &raw_token,
+            body.expires_in
+                .map(|secs| Duration::seconds(i64::from(secs))),
         )
         .await?;
 
-    // If the session has a device, we should add those to the homeserver now
-    if session.has_device() {
-        // Lock the user sync to make sure we don't get into a race condition
-        repo.user().acquire_lock_for_sync(&actor_user).await?;
+    // Provision any matrix devices declared through scope entries
+    if new_session.has_device() {
+        repo.user().acquire_lock_for_sync(&target_user).await?;
 
-        for scope in &*session.scope {
-            let s = scope.as_str();
-            let device_id = s
+        for scope_token in &*new_session.scope {
+            let raw = scope_token.as_str();
+            let device = raw
                 .strip_prefix("urn:matrix:client:device:")
-                .or_else(|| s.strip_prefix("urn:matrix:org.matrix.msc2967.client:device:"));
-            if let Some(device_id) = device_id {
-                // NOTE: We haven't relinquished the repo at this point,
-                // so we are holding a transaction across the homeserver
-                // operation.
-                // This is suboptimal, but simpler.
-                // Given this is an administrative endpoint, this is a tolerable
-                // compromise for now.
+                .or_else(|| raw.strip_prefix("urn:matrix:org.matrix.msc2967.client:device:"));
+            if let Some(device_id) = device {
                 homeserver
-                    .upsert_device(&actor_user.username, device_id, None)
+                    .upsert_device(&target_user.username, device_id, None)
                     .await
-                    .context("Failed to provision device")
-                    .map_err(|error| {
-                        AppError::internal(std::io::Error::other(error.to_string()))
-                    })?;
+                    .context("Device provisioning failed")
+                    .map_err(|e| AppError::internal(std::io::Error::other(e.to_string())))?;
             }
         }
     }
@@ -135,8 +132,8 @@ pub async fn handler(
 
     Ok(crate::handlers::admin::CreatedJson(
         SingleResponse::new_canonical(
-            PersonalSession::try_from((session, Some(access_token)))?
-                .with_token(access_token_string),
+            PersonalSession::try_from((new_session, Some(token_record)))?
+                .with_token(raw_token),
         ),
     ))
 }
@@ -156,7 +153,7 @@ mod tests {
         let mut state = TestState::from_pool(pool.clone()).await.unwrap();
         let token = state.token_with_scope("urn:pasion:admin").await;
 
-        // Create a user for testing
+        // Provision a user first
         let mut repo = state.repository().await.unwrap();
         let mut rng = state.rng();
         let user = repo
@@ -167,7 +164,7 @@ mod tests {
 
         repo.save().await.unwrap();
 
-        let request_body = serde_json::json!({
+        let payload = serde_json::json!({
             "actor_user_id": user.id,
             "human_name": "Test Session",
             "scope": "openid urn:pasion:admin",
@@ -176,7 +173,7 @@ mod tests {
 
         let request = Request::post("/api/admin/v1/personal-sessions")
             .bearer(&token)
-            .json(&request_body);
+            .json(&payload);
 
         let response = state.request(request).await;
         response.assert_status(StatusCode::CREATED);
@@ -219,7 +216,7 @@ mod tests {
         let mut state = TestState::from_pool(pool.clone()).await.unwrap();
         let token = state.token_with_scope("urn:pasion:admin").await;
 
-        let request_body = serde_json::json!({
+        let payload = serde_json::json!({
             "actor_user_id": "01FSHN9AG0MZAA6S4AF7CTV32E",
             "scope": "openid",
             "human_name": "Test Session",
@@ -228,7 +225,7 @@ mod tests {
 
         let request = Request::post("/api/admin/v1/personal-sessions")
             .bearer(&token)
-            .json(&request_body);
+            .json(&payload);
 
         let response = state.request(request).await;
         response.assert_status(StatusCode::NOT_FOUND);
@@ -241,7 +238,7 @@ mod tests {
         let mut state = TestState::from_pool(pool.clone()).await.unwrap();
         let token = state.token_with_scope("urn:pasion:admin").await;
 
-        // Create a user for testing
+        // Provision a user first
         let mut repo = state.repository().await.unwrap();
         let mut rng = state.rng();
         let user = repo
@@ -252,7 +249,7 @@ mod tests {
 
         repo.save().await.unwrap();
 
-        let request_body = serde_json::json!({
+        let payload = serde_json::json!({
             "actor_user_id": user.id,
             "human_name": "Test Session",
             "scope": "invalid\nscope",
@@ -261,7 +258,7 @@ mod tests {
 
         let request = Request::post("/api/admin/v1/personal-sessions")
             .bearer(&token)
-            .json(&request_body);
+            .json(&payload);
 
         let response = state.request(request).await;
         response.assert_status(StatusCode::BAD_REQUEST);

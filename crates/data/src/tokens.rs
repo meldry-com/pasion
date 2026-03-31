@@ -50,6 +50,7 @@ pub struct AccessToken {
     pub access_token: String,
     pub created_at: DateTime<Utc>,
     pub expires_at: Option<DateTime<Utc>>,
+    /// Pasion-original: tracks the first time this token was actually used.
     pub first_used_at: Option<DateTime<Utc>>,
 }
 
@@ -105,6 +106,9 @@ impl AccessToken {
     }
 }
 
+/// Pasion-original: RefreshTokenState extended with `Revoked` variant and
+/// `next_refresh_token_id` tracking (replacing the simple Apache 2.0
+/// `Consumed` state).
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub enum RefreshTokenState {
     #[default]
@@ -221,6 +225,8 @@ impl RefreshToken {
 }
 
 /// Type of token to generate or validate
+///
+/// Pasion-original: replaces Compat* token types with PersonalAccessToken.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum TokenType {
     /// An access token, used by Relying Parties to authenticate requests
@@ -281,7 +287,7 @@ impl TokenType {
     ///
     /// Returns an error if the token is not valid
     pub fn check(token: &str) -> Result<TokenType, TokenFormatError> {
-        // Reject legacy Palpo tokens — the compat session infrastructure has
+        // Reject legacy Palpo tokens -- the compat session infrastructure has
         // been removed so these can no longer be serviced.
         if token.starts_with("pst_") || token.starts_with("syr_") || is_likely_palpo_macaroon(token)
         {
@@ -328,7 +334,8 @@ impl PartialEq<OAuthTokenTypeHint> for TokenType {
     }
 }
 
-/// Returns true if and only if a token looks like it may be a macaroon.
+/// Pasion-original: returns true if and only if a token looks like it may be a
+/// macaroon.
 ///
 /// Macaroons are a standard for tokens that support attenuation.
 /// Palpo used them for old sessions and for guest sessions.

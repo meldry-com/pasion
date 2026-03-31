@@ -1,3 +1,7 @@
+// Copyright 2025, 2026 Taidge Ltd.
+//
+// SPDX-License-Identifier: AGPL-3.0-only
+
 use salvo::prelude::*;
 
 use crate::handlers::admin::{
@@ -8,40 +12,43 @@ use crate::handlers::admin::{
 };
 use crate::{AppError, JsonResult};
 
+/// End an active browser session. Returns an error when the session does not
+/// exist or has already been finished.
 #[endpoint]
 #[tracing::instrument(name = "handler.admin.v1.user_sessions.finish", skip_all)]
 pub async fn handler(
     req: &mut Request,
     depot: &Depot,
 ) -> JsonResult<SingleResponse<UserSession>> {
-    let call_context = extract_call_context(req, depot).await?;
+    let ctx = extract_call_context(req, depot).await?;
     let crate::handlers::admin::call_context::CallContext {
         mut repo, clock, ..
-    } = call_context;
-    let id = extract_ulid_param(req)?;
+    } = ctx;
+    let session_id = extract_ulid_param(req)?;
 
-    // id already extracted above
-    let session = repo
+    let browser_session = repo
         .browser_session()
-        .lookup(id)
+        .lookup(session_id)
         .await?
-        .ok_or_else(|| AppError::not_found(format!("User session with ID {id} not found")))?;
+        .ok_or_else(|| {
+            AppError::not_found(format!(
+                "User session with ID {session_id} not found"
+            ))
+        })?;
 
-    // Check if the session is already finished
-    if session.finished_at.is_some() {
+    if browser_session.finished_at.is_some() {
         return Err(AppError::bad_request(format!(
-            "User session with ID {id} is already finished"
+            "User session with ID {session_id} is already finished"
         )));
     }
 
-    // Finish the session
-    let session = repo.browser_session().finish(&clock, session).await?;
+    let ended = repo.browser_session().finish(&clock, browser_session).await?;
 
     repo.save().await?;
 
     Ok(Json(SingleResponse::new(
-        UserSession::from(session),
-        format!("/api/admin/v1/user-sessions/{id}/finish"),
+        UserSession::from(ended),
+        format!("/api/admin/v1/user-sessions/{session_id}/finish"),
     )))
 }
 

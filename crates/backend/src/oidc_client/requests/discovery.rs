@@ -1,11 +1,25 @@
+// Copyright 2022-2024 Kevin Commaille.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 //! Requests for OpenID Connect Provider [Discovery].
 //!
 //! [Discovery]: https://openid.net/specs/openid-connect-discovery-1_0.html
 
-use crate::outbound_http::RequestBuilderExt;
 use oauth2_types::oidc::{ProviderMetadata, VerifiedProviderMetadata};
 use url::Url;
 
+use crate::outbound_http::RequestBuilderExt;
 use super::super::error::DiscoveryError;
 
 /// Fetch the provider metadata.
@@ -63,7 +77,7 @@ pub async fn discover(
 ///
 /// # Arguments
 ///
-/// * `http_client` - The reqwest client to use for making HTTP requests.
+/// * `client` - The reqwest client to use for making HTTP requests.
 ///
 /// * `issuer` - The URL of the OpenID Connect Provider to fetch metadata for.
 ///

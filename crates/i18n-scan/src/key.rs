@@ -1,3 +1,8 @@
+// Copyright 2025 Taidge Ltd.
+// Copyright 2023, 2024 The Matrix.org Foundation C.I.C.
+//
+// SPDX-License-Identifier: Apache-2.0
+
 use minijinja::machinery::Span;
 use pasion_i18n::{Message, translations::TranslationTree};
 

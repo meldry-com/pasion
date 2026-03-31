@@ -1,13 +1,13 @@
 //! Database cleanup tasks
 //!
-//! This module contains tasks for cleaning up old data from the database.
-//! Tasks are grouped by domain:
+//! Periodic jobs that remove stale rows from the database. Each submodule
+//! targets a particular domain:
 //!
-//! - [`tokens`]: OAuth token cleanup (access and refresh tokens)
-//! - [`sessions`]: Session cleanup (`OAuth2`, user sessions and their IPs)
-//! - [`oauth`]: OAuth grants and upstream OAuth cleanup
-//! - [`user`]: User-related cleanup (registrations, recovery, email auth)
-//! - [`misc`]: Miscellaneous cleanup (queue jobs, policy data)
+//! - [`tokens`]: Revoked / expired OAuth access and refresh tokens
+//! - [`sessions`]: Finished OAuth2 and browser sessions, plus inactive session IPs
+//! - [`oauth`]: Authorization grants, device-code grants, upstream OAuth sessions and links
+//! - [`user`]: Abandoned registrations, recovery sessions, email authentication codes
+//! - [`misc`]: Completed queue jobs and stale policy data
 
 mod misc;
 mod oauth;

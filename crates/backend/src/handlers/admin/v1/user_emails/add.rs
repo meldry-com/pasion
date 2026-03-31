@@ -1,3 +1,7 @@
+// Copyright 2025, 2026 Taidge Ltd.
+//
+// SPDX-License-Identifier: AGPL-3.0-only
+
 use std::str::FromStr as _;
 
 use pasion_data::BoxRng;
@@ -17,79 +21,81 @@ use crate::handlers::admin::{
 };
 use crate::{AppError, CreatedJsonResult};
 
-/// # JSON payload for the `POST /api/admin/v1/user-emails`
+/// JSON body accepted by `POST /api/admin/v1/user-emails`.
 #[derive(Deserialize, JsonSchema)]
 #[serde(rename = "AddUserEmailRequest")]
 pub struct RequestBody {
-    /// The ID of the user to which the email should be added.
+    /// Identifier of the user who should own this email.
     #[schemars(with = "crate::handlers::admin::schema::Ulid")]
     user_id: Ulid,
 
-    /// The email address of the user to add.
+    /// The email address to attach.
     #[schemars(email)]
     email: String,
 }
+
+/// Add a new email address to an existing user account.
 #[endpoint]
 #[tracing::instrument(name = "handler.admin.v1.user_emails.add", skip_all)]
 pub async fn handler(
     req: &mut Request,
     depot: &Depot,
 ) -> CreatedJsonResult<SingleResponse<UserEmail>> {
-    let call_context = extract_call_context(req, depot).await?;
+    let ctx = extract_call_context(req, depot).await?;
     let crate::handlers::admin::call_context::CallContext {
         mut repo, clock, ..
-    } = call_context;
+    } = ctx;
     let mut rng = crate::handlers::rest::make_rng();
-    let params: RequestBody = req
+    let body: RequestBody = req
         .parse_json()
         .await
         .map_err(AppError::internal)?;
 
-    // Find the user
-    let user = repo
+    // Resolve the target user
+    let owner = repo
         .user()
-        .lookup(params.user_id)
+        .lookup(body.user_id)
         .await?
-        .ok_or_else(|| AppError::not_found(format!("User ID {} not found", params.user_id)))?;
+        .ok_or_else(|| AppError::not_found(format!("User ID {} not found", body.user_id)))?;
 
-    // Validate the email
-    if let Err(source) = lettre::Address::from_str(&params.email) {
+    // Ensure the provided address is syntactically valid
+    if let Err(source) = lettre::Address::from_str(&body.email) {
         return Err(AppError::with_source(
             StatusCode::BAD_REQUEST,
-            format!("Email {:?} is not valid", params.email),
+            format!("Email {:?} is not valid", body.email),
             Box::new(source),
             false,
         ));
     }
 
-    // Check if the email already exists
-    let count = repo
+    // Reject duplicates
+    let existing = repo
         .user_email()
-        .count(UserEmailFilter::new().for_email(&params.email))
+        .count(UserEmailFilter::new().for_email(&body.email))
         .await?;
 
-    if count > 0 {
+    if existing > 0 {
         return Err(AppError::conflict(format!(
             "User email {:?} already in use",
-            params.email
+            body.email
         )));
     }
 
-    // Add the email to the user
-    let user_email = repo
+    // Persist the new email
+    let entry = repo
         .user_email()
-        .add(&mut rng, &clock, &user, params.email)
+        .add(&mut rng, &clock, &owner, body.email)
         .await?;
 
-    // Schedule a job to update the user
+    // Enqueue a provisioning job so downstream systems pick up the change
     repo.queue_job()
-        .schedule_job(&mut rng, &clock, ProvisionUserJob::new_for_id(user.id))
+        .schedule_job(&mut rng, &clock, ProvisionUserJob::new_for_id(owner.id))
         .await?;
 
     repo.save().await?;
 
     Ok(crate::handlers::admin::CreatedJson(SingleResponse::new_canonical(
-        user_email.into(),
+        entry.into(),
     )))
 }
 

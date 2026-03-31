@@ -1,3 +1,17 @@
+// Copyright 2022-2024 Kevin Commaille.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 //! Types and methods for client credentials.
 
 use std::{collections::HashMap, fmt};
@@ -82,7 +96,7 @@ pub enum ClientCredentials {
         /// The unique ID for the client.
         client_id: String,
 
-        /// The keystore used to sign the JWT
+        /// The keystore used to sign the JWT.
         keystore: Keystore,
 
         /// The algorithm used to sign the JWT.
@@ -92,18 +106,22 @@ pub enum ClientCredentials {
         token_endpoint: Url,
     },
 
-    /// The client authenticates like Sign in with Apple wants
+    // -- Pasion-specific credential types for social login providers --
+
+    /// The client authenticates using Sign in with Apple.
+    ///
+    /// Apple requires a specially constructed JWT as the client_secret.
     SignInWithApple {
         /// The unique ID for the client.
         client_id: String,
 
-        /// The ECDSA key used to sign
+        /// The ECDSA key used to sign the JWT.
         key: elliptic_curve::SecretKey<p256::NistP256>,
 
-        /// The key ID
+        /// The key ID.
         key_id: String,
 
-        /// The Apple Team ID
+        /// The Apple Team ID.
         team_id: String,
     },
 
@@ -156,7 +174,7 @@ pub enum ClientCredentials {
         client_secret: String,
     },
 
-    /// WeCom (企业微信): uses corpid/corpsecret for corp access token.
+    /// WeCom: uses corpid/corpsecret for corp access token.
     WeCom {
         /// The unique ID for the client (WeCom CorpID).
         client_id: String,
@@ -186,8 +204,12 @@ impl ClientCredentials {
         }
     }
 
-    /// Apply these [`ClientCredentials`] to the given request with the given
-    /// form.
+    /// Apply these [`ClientCredentials`] to the given [`reqwest::RequestBuilder`]
+    /// together with the given form body.
+    ///
+    /// Depending on the credential type the authentication may be placed in an
+    /// HTTP header (for `ClientSecretBasic`) or serialised as part of the form
+    /// body.
     pub(crate) fn authenticated_form<T: Serialize>(
         &self,
         request: reqwest::RequestBuilder,
@@ -196,7 +218,7 @@ impl ClientCredentials {
         rng: &mut impl Rng,
     ) -> Result<reqwest::RequestBuilder, CredentialsError> {
         let request = match self {
-            ClientCredentials::None { client_id } => request.form(&RequestWithClientCredentials {
+            ClientCredentials::None { client_id } => request.form(&AuthenticatedForm {
                 body: form,
                 client_id: Some(client_id),
                 client_secret: None,
@@ -208,13 +230,15 @@ impl ClientCredentials {
                 client_id,
                 client_secret,
             } => {
-                let username =
+                // Encode the values with `application/x-www-form-urlencoded`
+                // before setting them as HTTP Basic credentials.
+                let encoded_id =
                     form_urlencoded::byte_serialize(client_id.as_bytes()).collect::<String>();
-                let password =
+                let encoded_secret =
                     form_urlencoded::byte_serialize(client_secret.as_bytes()).collect::<String>();
                 request
-                    .basic_auth(username, Some(password))
-                    .form(&RequestWithClientCredentials {
+                    .basic_auth(encoded_id, Some(encoded_secret))
+                    .form(&AuthenticatedForm {
                         body: form,
                         client_id: None,
                         client_secret: None,
@@ -226,7 +250,7 @@ impl ClientCredentials {
             ClientCredentials::ClientSecretPost {
                 client_id,
                 client_secret,
-            } => request.form(&RequestWithClientCredentials {
+            } => request.form(&AuthenticatedForm {
                 body: form,
                 client_id: Some(client_id),
                 client_secret: Some(client_secret),
@@ -241,16 +265,15 @@ impl ClientCredentials {
                 token_endpoint,
             } => {
                 let claims =
-                    prepare_claims(client_id.clone(), token_endpoint.to_string(), now, rng)?;
+                    prepare_jwt_bearer_claims(client_id.clone(), token_endpoint.to_string(), now, rng)?;
                 let key = SymmetricKey::new_for_alg(
                     client_secret.as_bytes().to_vec(),
                     signing_algorithm,
                 )?;
                 let header = JsonWebSignatureHeader::new(signing_algorithm.clone());
-
                 let jwt = Jwt::sign(header, claims, &key)?;
 
-                request.form(&RequestWithClientCredentials {
+                request.form(&AuthenticatedForm {
                     body: form,
                     client_id: None,
                     client_secret: None,
@@ -266,7 +289,7 @@ impl ClientCredentials {
                 token_endpoint,
             } => {
                 let claims =
-                    prepare_claims(client_id.clone(), token_endpoint.to_string(), now, rng)?;
+                    prepare_jwt_bearer_claims(client_id.clone(), token_endpoint.to_string(), now, rng)?;
 
                 let key = keystore
                     .signing_key_for_algorithm(signing_algorithm)
@@ -283,7 +306,7 @@ impl ClientCredentials {
 
                 let client_assertion = Jwt::sign(header, claims, &signer)?;
 
-                request.form(&RequestWithClientCredentials {
+                request.form(&AuthenticatedForm {
                     body: form,
                     client_id: None,
                     client_secret: None,
@@ -291,6 +314,8 @@ impl ClientCredentials {
                     client_assertion_type: Some(JwtBearerClientAssertionType),
                 })
             }
+
+            // -- Pasion-specific social provider handling --
 
             ClientCredentials::QQConnect {
                 client_id,
@@ -315,7 +340,7 @@ impl ClientCredentials {
             | ClientCredentials::WeCom {
                 client_id,
                 client_secret,
-            } => request.form(&RequestWithClientCredentials {
+            } => request.form(&AuthenticatedForm {
                 body: form,
                 client_id: Some(client_id),
                 client_secret: Some(client_secret),
@@ -329,27 +354,26 @@ impl ClientCredentials {
                 key_id,
                 team_id,
             } => {
-                // SIWA expects a signed JWT as client secret
-                // https://developer.apple.com/documentation/accountorganizationaldatasharing/creating-a-client-secret
+                // Apple expects a specially signed JWT as the client_secret.
+                // See: https://developer.apple.com/documentation/accountorganizationaldatasharing/creating-a-client-secret
                 let signer = AsymmetricSigningKey::es256(key.clone());
 
-                let mut claims = HashMap::new();
-
-                claims::ISS.insert(&mut claims, team_id)?;
-                claims::SUB.insert(&mut claims, client_id)?;
-                claims::AUD.insert(&mut claims, "https://appleid.apple.com".to_owned())?;
-                claims::IAT.insert(&mut claims, now)?;
-                claims::EXP.insert(&mut claims, now + Duration::microseconds(60 * 1000 * 1000))?;
+                let mut apple_claims = HashMap::new();
+                claims::ISS.insert(&mut apple_claims, team_id)?;
+                claims::SUB.insert(&mut apple_claims, client_id)?;
+                claims::AUD.insert(&mut apple_claims, "https://appleid.apple.com".to_owned())?;
+                claims::IAT.insert(&mut apple_claims, now)?;
+                claims::EXP
+                    .insert(&mut apple_claims, now + Duration::microseconds(60 * 1000 * 1000))?;
 
                 let header =
                     JsonWebSignatureHeader::new(JsonWebSignatureAlg::Es256).with_kid(key_id);
+                let client_secret_jwt = Jwt::sign(header, apple_claims, &signer)?;
 
-                let client_secret = Jwt::sign(header, claims, &signer)?;
-
-                request.form(&RequestWithClientCredentials {
+                request.form(&AuthenticatedForm {
                     body: form,
                     client_id: Some(client_id),
-                    client_secret: Some(client_secret.as_str()),
+                    client_secret: Some(client_secret_jwt.as_str()),
                     client_assertion: None,
                     client_assertion_type: None,
                 })
@@ -440,7 +464,9 @@ impl fmt::Debug for ClientCredentials {
 #[serde(rename = "urn:ietf:params:oauth:client-assertion-type:jwt-bearer")]
 struct JwtBearerClientAssertionType;
 
-fn prepare_claims(
+/// Prepare the standard JWT bearer claims used for `client_secret_jwt` and
+/// `private_key_jwt` authentication methods.
+fn prepare_jwt_bearer_claims(
     iss: String,
     aud: String,
     now: DateTime<Utc>,
@@ -465,9 +491,9 @@ fn prepare_claims(
     Ok(claims)
 }
 
-/// A request with client credentials added to it.
+/// A request body combined with client credentials for serialisation.
 #[derive(Clone, Serialize)]
-struct RequestWithClientCredentials<'a, T> {
+struct AuthenticatedForm<'a, T> {
     #[serde(flatten)]
     body: T,
 

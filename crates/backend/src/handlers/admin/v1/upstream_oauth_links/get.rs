@@ -1,5 +1,8 @@
+// Copyright 2025, 2026 Taidge Ltd.
+//
+// SPDX-License-Identifier: AGPL-3.0-only
+
 use salvo::prelude::*;
-use ulid::Ulid;
 
 use crate::handlers::admin::{
     call_context::extract_call_context,
@@ -9,24 +12,27 @@ use crate::handlers::admin::{
 };
 use crate::{AppError, JsonResult};
 
+/// Retrieve a single upstream OAuth link by its identifier.
 #[endpoint]
 #[tracing::instrument(name = "handler.admin.v1.upstream_oauth_links.get", skip_all)]
 pub async fn handler(
     req: &mut Request,
     depot: &Depot,
 ) -> JsonResult<SingleResponse<UpstreamOAuthLink>> {
-    let call_context = extract_call_context(req, depot).await?;
-    let crate::handlers::admin::call_context::CallContext { mut repo, .. } = call_context;
-    let id = extract_ulid_param(req)?;
+    let ctx = extract_call_context(req, depot).await?;
+    let crate::handlers::admin::call_context::CallContext { mut repo, .. } = ctx;
+    let link_id = extract_ulid_param(req)?;
 
-    let link = repo
+    let entry = repo
         .upstream_oauth_link()
-        .lookup(id)
+        .lookup(link_id)
         .await?
-        .ok_or_else(|| AppError::not_found(format!("Upstream OAuth 2.0 Link ID {id} not found")))?;
+        .ok_or_else(|| {
+            AppError::not_found(format!("Upstream OAuth 2.0 Link ID {link_id} not found"))
+        })?;
 
     Ok(Json(SingleResponse::new_canonical(
-        UpstreamOAuthLink::from(link),
+        UpstreamOAuthLink::from(entry),
     )))
 }
 

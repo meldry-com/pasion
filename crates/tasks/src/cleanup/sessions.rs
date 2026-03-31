@@ -19,46 +19,39 @@ use crate::{
 impl RunnableJob for CleanupFinishedOAuth2SessionsJob {
     #[tracing::instrument(name = "job.cleanup_finished_oauth2_sessions", skip_all)]
     async fn run(&self, state: &State, context: JobContext) -> Result<(), JobError> {
-        // Cleanup OAuth2 sessions that were finished more than 30 days ago
-        let until = state.clock().now() - chrono::Duration::days(30);
-        let mut total = 0;
+        // OAuth2 sessions that have been finished for over 30 days are removed.
+        let cutoff = state.clock().now() - chrono::Duration::days(30);
+        let mut removed = 0;
+        let mut cursor = None;
 
-        // Run until we get cancelled. We don't schedule a retry if we get cancelled, as
-        // this is a scheduled job and it will end up being rescheduled later anyway.
-        let mut since = None;
         while !context.cancellation_token.is_cancelled() {
             let mut repo = state.repository().await.map_err(JobError::retry)?;
 
-            // This returns the number of deleted sessions, and the last finished_at
-            // timestamp
-            let (count, last_finished_at) = repo
+            let (batch_count, last_finished_at) = repo
                 .oauth2_session()
-                .cleanup_finished(since, until, BATCH_SIZE)
+                .cleanup_finished(cursor, cutoff, BATCH_SIZE)
                 .await
                 .map_err(JobError::retry)?;
             repo.save().await.map_err(JobError::retry)?;
 
-            since = last_finished_at;
-            total += count;
+            cursor = last_finished_at;
+            removed += batch_count;
 
-            // Check how many we deleted. If we deleted exactly BATCH_SIZE,
-            // there might be more to delete
-            if count != BATCH_SIZE {
+            if batch_count < BATCH_SIZE {
                 break;
             }
         }
 
-        if total == 0 {
+        if removed == 0 {
             debug!("no finished OAuth2 sessions to clean up");
         } else {
-            info!(count = total, "cleaned up finished OAuth2 sessions");
+            info!(count = removed, "cleaned up finished OAuth2 sessions");
         }
 
         Ok(())
     }
 
     fn timeout(&self) -> Option<Duration> {
-        // This job runs every hour, so having it running it for 10 minutes is fine
         Some(Duration::from_secs(10 * 60))
     }
 }
@@ -67,47 +60,40 @@ impl RunnableJob for CleanupFinishedOAuth2SessionsJob {
 impl RunnableJob for CleanupFinishedUserSessionsJob {
     #[tracing::instrument(name = "job.cleanup_finished_user_sessions", skip_all)]
     async fn run(&self, state: &State, context: JobContext) -> Result<(), JobError> {
-        // Cleanup user/browser sessions that were finished more than 30 days ago
-        let until = state.clock().now() - chrono::Duration::days(30);
-        let mut total = 0;
+        // Browser sessions finished more than 30 days ago are removed, provided
+        // they have no remaining child OAuth2 sessions.
+        let cutoff = state.clock().now() - chrono::Duration::days(30);
+        let mut removed = 0;
+        let mut cursor = None;
 
-        // Run until we get cancelled. We don't schedule a retry if we get cancelled, as
-        // this is a scheduled job and it will end up being rescheduled later anyway.
-        let mut since = None;
         while !context.cancellation_token.is_cancelled() {
             let mut repo = state.repository().await.map_err(JobError::retry)?;
 
-            // This returns the number of deleted sessions, and the last finished_at
-            // timestamp. Only deletes sessions that have no child sessions
-            // (oauth2_sessions).
-            let (count, last_finished_at) = repo
+            let (batch_count, last_finished_at) = repo
                 .browser_session()
-                .cleanup_finished(since, until, BATCH_SIZE)
+                .cleanup_finished(cursor, cutoff, BATCH_SIZE)
                 .await
                 .map_err(JobError::retry)?;
             repo.save().await.map_err(JobError::retry)?;
 
-            since = last_finished_at;
-            total += count;
+            cursor = last_finished_at;
+            removed += batch_count;
 
-            // Check how many we deleted. If we deleted exactly BATCH_SIZE,
-            // there might be more to delete
-            if count != BATCH_SIZE {
+            if batch_count < BATCH_SIZE {
                 break;
             }
         }
 
-        if total == 0 {
+        if removed == 0 {
             debug!("no finished user sessions to clean up");
         } else {
-            info!(count = total, "cleaned up finished user sessions");
+            info!(count = removed, "cleaned up finished user sessions");
         }
 
         Ok(())
     }
 
     fn timeout(&self) -> Option<Duration> {
-        // This job runs every hour, so having it running it for 10 minutes is fine
         Some(Duration::from_secs(10 * 60))
     }
 }
@@ -116,33 +102,33 @@ impl RunnableJob for CleanupFinishedUserSessionsJob {
 impl RunnableJob for CleanupInactiveOAuth2SessionIpsJob {
     #[tracing::instrument(name = "job.cleanup_inactive_oauth2_session_ips", skip_all)]
     async fn run(&self, state: &State, context: JobContext) -> Result<(), JobError> {
-        // Clear IPs from sessions inactive for 30+ days
+        // Scrub IP addresses from OAuth2 sessions inactive for 30+ days.
         let threshold = state.clock().now() - chrono::Duration::days(30);
-        let mut total = 0;
+        let mut scrubbed = 0;
+        let mut cursor = None;
 
-        let mut since = None;
         while !context.cancellation_token.is_cancelled() {
             let mut repo = state.repository().await.map_err(JobError::retry)?;
 
-            let (count, last_active_at) = repo
+            let (batch_count, last_active_at) = repo
                 .oauth2_session()
-                .cleanup_inactive_ips(since, threshold, BATCH_SIZE)
+                .cleanup_inactive_ips(cursor, threshold, BATCH_SIZE)
                 .await
                 .map_err(JobError::retry)?;
             repo.save().await.map_err(JobError::retry)?;
 
-            since = last_active_at;
-            total += count;
+            cursor = last_active_at;
+            scrubbed += batch_count;
 
-            if count != BATCH_SIZE {
+            if batch_count < BATCH_SIZE {
                 break;
             }
         }
 
-        if total == 0 {
+        if scrubbed == 0 {
             debug!("no OAuth2 session IPs to clean up");
         } else {
-            info!(count = total, "cleaned up inactive OAuth2 session IPs");
+            info!(count = scrubbed, "cleaned up inactive OAuth2 session IPs");
         }
 
         Ok(())
@@ -157,33 +143,33 @@ impl RunnableJob for CleanupInactiveOAuth2SessionIpsJob {
 impl RunnableJob for CleanupInactiveUserSessionIpsJob {
     #[tracing::instrument(name = "job.cleanup_inactive_user_session_ips", skip_all)]
     async fn run(&self, state: &State, context: JobContext) -> Result<(), JobError> {
-        // Clear IPs from sessions inactive for 30+ days
+        // Scrub IP addresses from user/browser sessions inactive for 30+ days.
         let threshold = state.clock().now() - chrono::Duration::days(30);
-        let mut total = 0;
+        let mut scrubbed = 0;
+        let mut cursor = None;
 
-        let mut since = None;
         while !context.cancellation_token.is_cancelled() {
             let mut repo = state.repository().await.map_err(JobError::retry)?;
 
-            let (count, last_active_at) = repo
+            let (batch_count, last_active_at) = repo
                 .browser_session()
-                .cleanup_inactive_ips(since, threshold, BATCH_SIZE)
+                .cleanup_inactive_ips(cursor, threshold, BATCH_SIZE)
                 .await
                 .map_err(JobError::retry)?;
             repo.save().await.map_err(JobError::retry)?;
 
-            since = last_active_at;
-            total += count;
+            cursor = last_active_at;
+            scrubbed += batch_count;
 
-            if count != BATCH_SIZE {
+            if batch_count < BATCH_SIZE {
                 break;
             }
         }
 
-        if total == 0 {
+        if scrubbed == 0 {
             debug!("no user session IPs to clean up");
         } else {
-            info!(count = total, "cleaned up inactive user session IPs");
+            info!(count = scrubbed, "cleaned up inactive user session IPs");
         }
 
         Ok(())

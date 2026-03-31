@@ -1,3 +1,17 @@
+// Copyright 2022-2024 Kevin Commaille.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 //! Requests for using [Refresh Tokens].
 //!
 //! [Refresh Tokens]: https://openid.net/specs/openid-connect-core-1_0.html#RefreshTokens
@@ -11,17 +25,14 @@ use pasion_jose::claims::{self, TokenHash};
 use rand::Rng;
 use url::Url;
 
+use super::jose::JwtVerificationData;
 use super::super::{
     error::{IdTokenError, TokenRefreshError},
     requests::{jose::verify_id_token, token::request_access_token},
-    types::{IdToken, client_credentials::ClientCredentials},
+    types::{client_credentials::ClientCredentials, IdToken},
 };
-use super::jose::JwtVerificationData;
 
-/// Exchange an authorization code for an access token.
-///
-/// This should be used as the first step for logging in, and to request a
-/// token with a new scope.
+/// Refresh an access token using a refresh token.
 ///
 /// # Arguments
 ///
@@ -43,7 +54,7 @@ use super::jose::JwtVerificationData;
 ///   the response.
 ///
 ///   The signing algorithm corresponds to the `id_token_signed_response_alg`
-/// field in the client metadata.
+///   field in the client metadata.
 ///
 ///   If it is not provided, the ID Token won't be verified.
 ///
@@ -71,7 +82,7 @@ pub async fn refresh_access_token(
     now: DateTime<Utc>,
     rng: &mut impl Rng,
 ) -> Result<(AccessTokenResponse, Option<IdToken<'static>>), TokenRefreshError> {
-    tracing::debug!("Refreshing access token…");
+    tracing::debug!("Refreshing access token...");
 
     let token_response = request_access_token(
         http_client,

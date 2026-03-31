@@ -1,3 +1,7 @@
+// Copyright 2025, 2026 Taidge Ltd.
+//
+// SPDX-License-Identifier: AGPL-3.0-only
+
 use salvo::prelude::*;
 
 use crate::handlers::admin::{
@@ -8,23 +12,26 @@ use crate::handlers::admin::{
 };
 use crate::{AppError, JsonResult};
 
+/// Fetch a single policy data record by its ULID.
 #[endpoint]
 #[tracing::instrument(name = "handler.admin.v1.policy_data.get", skip_all)]
 pub async fn handler(
     req: &mut Request,
     depot: &Depot,
 ) -> JsonResult<SingleResponse<PolicyData>> {
-    let call_context = extract_call_context(req, depot).await?;
-    let crate::handlers::admin::call_context::CallContext { mut repo, .. } = call_context;
-    let id = extract_ulid_param(req)?;
+    let ctx = extract_call_context(req, depot).await?;
+    let crate::handlers::admin::call_context::CallContext { mut repo, .. } = ctx;
+    let record_id = extract_ulid_param(req)?;
 
-    let policy_data = repo
+    let entry = repo
         .policy_data()
         .get()
         .await?
-        .ok_or_else(|| AppError::not_found(format!("Policy data with ID {id} not found")))?;
+        .ok_or_else(|| {
+            AppError::not_found(format!("Policy data with ID {record_id} not found"))
+        })?;
 
-    Ok(Json(SingleResponse::new_canonical(policy_data.into())))
+    Ok(Json(SingleResponse::new_canonical(entry.into())))
 }
 
 #[cfg(test)]

@@ -2,7 +2,7 @@
 
 {% block content %}
   <main class="flex flex-col gap-6">
-    <header class="page-heading">
+    <section class="page-heading">
       <div class="icon invalid">
         {{ icon.delete() }}
       </div>
@@ -14,6 +14,6 @@
       </div>
 
       {{ logout.button(text=_("action.sign_in"), csrf_token=csrf_token) }}
-    </header>
+    </section>
   </main>
 {% endblock %}

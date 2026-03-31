@@ -2,7 +2,8 @@ use rand_chacha::rand_core::CryptoRngCore;
 
 use crate::clock::Clock;
 
-/// A boxed [`Clock`]
+/// Type-erased clock suitable for passing through async boundaries.
 pub type BoxClock = Box<dyn Clock + Send>;
-/// A boxed random number generator
+
+/// Type-erased cryptographic RNG for contexts that need runtime polymorphism.
 pub type BoxRng = Box<dyn CryptoRngCore + Send>;

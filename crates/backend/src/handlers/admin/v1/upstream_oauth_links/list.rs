@@ -1,3 +1,7 @@
+// Copyright 2025, 2026 Taidge Ltd.
+//
+// SPDX-License-Identifier: AGPL-3.0-only
+
 use pasion_data::{Page, upstream_oauth2::UpstreamOAuthLinkFilter};
 use salvo::prelude::*;
 use schemars::JsonSchema;
@@ -12,114 +16,116 @@ use crate::handlers::admin::{
 };
 use crate::{AppError, JsonResult};
 
+/// Query-string filters for the upstream OAuth link list endpoint.
 #[derive(Deserialize, JsonSchema, Default)]
 #[serde(rename = "UpstreamOAuthLinkFilter")]
 pub struct FilterParams {
-    /// Retrieve the items for the given user
+    /// Narrow results to links belonging to this user
     #[serde(rename = "filter[user]")]
     #[schemars(with = "Option<crate::handlers::admin::schema::Ulid>")]
     user: Option<Ulid>,
 
-    /// Retrieve the items for the given provider
+    /// Narrow results to links from this provider
     #[serde(rename = "filter[provider]")]
     #[schemars(with = "Option<crate::handlers::admin::schema::Ulid>")]
     provider: Option<Ulid>,
 
-    /// Retrieve the items with the given subject
+    /// Narrow results to links matching this subject claim
     #[serde(rename = "filter[subject]")]
     subject: Option<String>,
 }
 
 impl std::fmt::Display for FilterParams {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        let mut sep = '?';
+        let mut delimiter = '?';
 
-        if let Some(user) = self.user {
-            write!(f, "{sep}filter[user]={user}")?;
-            sep = '&';
+        if let Some(uid) = self.user {
+            write!(f, "{delimiter}filter[user]={uid}")?;
+            delimiter = '&';
         }
 
-        if let Some(provider) = self.provider {
-            write!(f, "{sep}filter[provider]={provider}")?;
-            sep = '&';
+        if let Some(pid) = self.provider {
+            write!(f, "{delimiter}filter[provider]={pid}")?;
+            delimiter = '&';
         }
 
-        if let Some(subject) = &self.subject {
-            write!(f, "{sep}filter[subject]={subject}")?;
-            sep = '&';
+        if let Some(sub) = &self.subject {
+            write!(f, "{delimiter}filter[subject]={sub}")?;
+            delimiter = '&';
         }
 
-        let _ = sep;
+        let _ = delimiter;
         Ok(())
     }
 }
 
+/// List upstream OAuth links with optional filtering and pagination.
 #[endpoint]
 #[tracing::instrument(name = "handler.admin.v1.upstream_oauth_links.list", skip_all)]
 pub async fn handler(
     req: &mut Request,
     depot: &Depot,
 ) -> JsonResult<PaginatedResponse<UpstreamOAuthLink>> {
-    let call_context = extract_call_context(req, depot).await?;
-    let crate::handlers::admin::call_context::CallContext { mut repo, .. } = call_context;
+    let ctx = extract_call_context(req, depot).await?;
+    let crate::handlers::admin::call_context::CallContext { mut repo, .. } = ctx;
     let (pagination, include_count) = extract_pagination(req)?;
     let params: FilterParams = req.parse_queries().unwrap_or_default();
 
-    let base = format!("{path}{params}", path = UpstreamOAuthLink::PATH);
-    let base = include_count.add_to_base(&base);
-    let filter = UpstreamOAuthLinkFilter::default();
+    let base_url = format!("{path}{params}", path = UpstreamOAuthLink::PATH);
+    let base_url = include_count.add_to_base(&base_url);
+    let mut filter = UpstreamOAuthLinkFilter::default();
 
-    // Load the user from the filter
-    let maybe_user = if let Some(user_id) = params.user {
-        let user = repo
-            .user()
-            .lookup(user_id)
-            .await?
-            .ok_or_else(|| AppError::not_found(format!("User ID {user_id} not found")))?;
-        Some(user)
-    } else {
-        None
+    // Optionally scope to a particular user
+    let resolved_user = match params.user {
+        Some(uid) => {
+            let u = repo
+                .user()
+                .lookup(uid)
+                .await?
+                .ok_or_else(|| AppError::not_found(format!("User ID {uid} not found")))?;
+            Some(u)
+        }
+        None => None,
     };
 
-    let filter = if let Some(user) = &maybe_user {
-        filter.for_user(user)
-    } else {
-        filter
+    filter = match &resolved_user {
+        Some(u) => filter.for_user(u),
+        None => filter,
     };
 
-    // Load the provider from the filter
-    let maybe_provider = if let Some(provider_id) = params.provider {
-        let provider = repo
-            .upstream_oauth_provider()
-            .lookup(provider_id)
-            .await?
-            .ok_or_else(|| AppError::not_found(format!("Provider ID {provider_id} not found")))?;
-        Some(provider)
-    } else {
-        None
+    // Optionally scope to a particular provider
+    let resolved_provider = match params.provider {
+        Some(pid) => {
+            let p = repo
+                .upstream_oauth_provider()
+                .lookup(pid)
+                .await?
+                .ok_or_else(|| AppError::not_found(format!("Provider ID {pid} not found")))?;
+            Some(p)
+        }
+        None => None,
     };
 
-    let filter = if let Some(provider) = &maybe_provider {
-        filter.for_provider(provider)
-    } else {
-        filter
+    filter = match &resolved_provider {
+        Some(p) => filter.for_provider(p),
+        None => filter,
     };
 
-    let filter = if let Some(subject) = &params.subject {
-        filter.for_subject(subject)
-    } else {
-        filter
+    // Optionally match by subject claim
+    filter = match &params.subject {
+        Some(sub) => filter.for_subject(sub),
+        None => filter,
     };
 
-    let response = match include_count {
+    let result = match include_count {
         IncludeCount::True => {
             let page = repo
                 .upstream_oauth_link()
                 .list(filter, pagination)
                 .await?
                 .map(UpstreamOAuthLink::from);
-            let count = repo.upstream_oauth_link().count(filter).await?;
-            PaginatedResponse::for_page(page, pagination, Some(count), &base)
+            let total = repo.upstream_oauth_link().count(filter).await?;
+            PaginatedResponse::for_page(page, pagination, Some(total), &base_url)
         }
         IncludeCount::False => {
             let page = repo
@@ -127,15 +133,15 @@ pub async fn handler(
                 .list(filter, pagination)
                 .await?
                 .map(UpstreamOAuthLink::from);
-            PaginatedResponse::for_page(page, pagination, None, &base)
+            PaginatedResponse::for_page(page, pagination, None, &base_url)
         }
         IncludeCount::Only => {
-            let count = repo.upstream_oauth_link().count(filter).await?;
-            PaginatedResponse::for_count_only(count, &base)
+            let total = repo.upstream_oauth_link().count(filter).await?;
+            PaginatedResponse::for_count_only(total, &base_url)
         }
     };
 
-    Ok(Json(response))
+    Ok(Json(result))
 }
 
 #[cfg(test)]

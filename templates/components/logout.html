@@ -1,3 +1,10 @@
+{#
+Copyright 2025 Taidge Ltd.
+Copyright 2022-2024 The Matrix.org Foundation C.I.C.
+
+SPDX-License-Identifier: Apache-2.0
+-#}
+
 {% macro button(csrf_token, text="", as_link=false, post_logout_action={}) %}
   <form method="POST" action="{{ "/logout" | prefix_url }}" class="inline-flex [&>button]:flex-1">
     <input type="hidden" name="csrf" value="{{ csrf_token }}" />

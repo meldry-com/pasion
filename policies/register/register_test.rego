@@ -3,33 +3,33 @@ package register_test
 import data.register
 import rego.v1
 
-mock_registration := {
+sample_input := {
 	"registration_method": "password",
 	"username": "hello",
 	"email": "hello@staging.element.io",
 }
 
 test_allow_all_domains if {
-	register.allow with input as mock_registration
+	register.allow with input as sample_input
 }
 
 test_allowed_domain if {
-	register.allow with input as mock_registration
+	register.allow with input as sample_input
 		with data.allowed_domains as ["*.element.io"]
 }
 
 test_not_allowed_domain if {
-	not register.allow with input as mock_registration
+	not register.allow with input as sample_input
 		with data.allowed_domains as ["example.com"]
 }
 
 test_banned_domain if {
-	not register.allow with input as mock_registration
+	not register.allow with input as sample_input
 		with data.banned_domains as ["*.element.io"]
 }
 
 test_banned_subdomain if {
-	not register.allow with input as mock_registration
+	not register.allow with input as sample_input
 		with data.allowed_domains as ["*.element.io"]
 		with data.banned_domains as ["staging.element.io"]
 }

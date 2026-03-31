@@ -5,7 +5,6 @@ use diesel::{Queryable, deserialize, pg::Pg, sql_types};
 use rand::Rng;
 use serde::{Deserialize, Serialize};
 use ulid::Ulid;
-use url::Url;
 
 use crate::{new_id, pagination::Node};
 
@@ -37,6 +36,11 @@ type UserSqlRow = (
     Option<String>,
 );
 
+/// A Matrix user stored locally in Pasion.
+///
+/// Pasion-original fields beyond the Apache 2.0 base:
+/// - `updated_at`, `deactivated_at`, `is_guest`
+/// - `display_name`, `avatar_url`, `preferred_locale` (profile fields)
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 pub struct MatrixUser {
     pub mxid: String,
@@ -54,6 +58,7 @@ pub struct User {
     pub deactivated_at: Option<DateTime<Utc>>,
     pub can_request_admin: bool,
     pub is_guest: bool,
+    // Pasion-original profile fields
     pub display_name: Option<String>,
     pub avatar_url: Option<String>,
     pub preferred_locale: Option<String>,
@@ -154,6 +159,7 @@ impl User {
     }
 }
 
+/// Pasion-original: user profile snapshot used for display and API responses.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct UserProfile {
@@ -163,6 +169,7 @@ pub struct UserProfile {
     pub updated_at: DateTime<Utc>,
 }
 
+/// Pasion-original: a patch object for updating user profile fields.
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct UserProfilePatch {
@@ -178,6 +185,7 @@ impl UserProfilePatch {
     }
 }
 
+/// Pasion-original: a patch object for updating user fields.
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct UserPatch {
@@ -214,6 +222,7 @@ impl From<UserProfilePatch> for UserPatch {
     }
 }
 
+/// Pasion-original: admin-specific user patch.
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct AdminUserPatch {
@@ -311,7 +320,7 @@ impl UserRecoveryTicket {
     }
 }
 
-/// A user email authentication session
+/// Pasion-original: a user email authentication session
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 pub struct UserEmailAuthentication {
     pub id: Ulid,
@@ -322,7 +331,7 @@ pub struct UserEmailAuthentication {
     pub completed_at: Option<DateTime<Utc>>,
 }
 
-/// A user email authentication code
+/// Pasion-original: a user email authentication code
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 pub struct UserEmailAuthenticationCode {
     pub id: Ulid,
@@ -407,6 +416,7 @@ impl UserEmail {
     }
 }
 
+/// Pasion-original: a patch object for updating user email fields.
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct UserEmailPatch {
@@ -422,12 +432,14 @@ impl UserEmailPatch {
     }
 }
 
+/// Pasion-original: password data stored during user registration.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 pub struct UserRegistrationPassword {
     pub hashed_password: String,
     pub version: u16,
 }
 
+/// Pasion-original: a registration token for gated signups.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 pub struct UserRegistrationToken {
     pub id: Ulid,
@@ -474,12 +486,13 @@ impl UserRegistrationToken {
     }
 }
 
+/// Pasion-original: an in-progress user registration.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 pub struct UserRegistration {
     pub id: Ulid,
     pub username: String,
     pub display_name: Option<String>,
-    pub terms_url: Option<Url>,
+    pub terms_url: Option<url::Url>,
     pub email_authentication_id: Option<Ulid>,
     pub phone_authentication_id: Option<Ulid>,
     pub user_registration_token_id: Option<Ulid>,
@@ -492,7 +505,7 @@ pub struct UserRegistration {
     pub completed_at: Option<DateTime<Utc>>,
 }
 
-/// A phone number associated with a user
+/// Pasion-original: a phone number associated with a user
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct UserPhone {
     pub id: Ulid,
@@ -501,7 +514,7 @@ pub struct UserPhone {
     pub created_at: DateTime<Utc>,
 }
 
-/// An authentication session for a phone number
+/// Pasion-original: an authentication session for a phone number
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct UserPhoneAuthentication {
     pub id: Ulid,
@@ -511,7 +524,7 @@ pub struct UserPhoneAuthentication {
     pub completed_at: Option<DateTime<Utc>>,
 }
 
-/// A verification code for phone authentication
+/// Pasion-original: a verification code for phone authentication
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct UserPhoneAuthenticationCode {
     pub id: Ulid,

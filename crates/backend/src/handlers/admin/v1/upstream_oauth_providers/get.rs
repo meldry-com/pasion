@@ -1,3 +1,7 @@
+// Copyright 2025, 2026 Taidge Ltd.
+//
+// SPDX-License-Identifier: AGPL-3.0-only
+
 use pasion_data::{RepositoryAccess, upstream_oauth2::UpstreamOAuthProviderRepository};
 use salvo::prelude::*;
 
@@ -9,24 +13,25 @@ use crate::handlers::admin::{
 };
 use crate::{AppError, JsonResult};
 
+/// Fetch a single upstream OAuth provider by its identifier.
 #[endpoint]
 #[tracing::instrument(name = "handler.admin.v1.upstream_oauth_providers.get", skip_all)]
 pub async fn handler(
     req: &mut Request,
     depot: &Depot,
 ) -> JsonResult<SingleResponse<UpstreamOAuthProvider>> {
-    let call_context = extract_call_context(req, depot).await?;
-    let crate::handlers::admin::call_context::CallContext { mut repo, .. } = call_context;
-    let id = extract_ulid_param(req)?;
+    let ctx = extract_call_context(req, depot).await?;
+    let crate::handlers::admin::call_context::CallContext { mut repo, .. } = ctx;
+    let provider_id = extract_ulid_param(req)?;
 
-    let provider = repo
+    let entry = repo
         .upstream_oauth_provider()
-        .lookup(id)
+        .lookup(provider_id)
         .await?
         .ok_or_else(|| AppError::not_found("Provider not found"))?;
 
     Ok(Json(SingleResponse::new_canonical(
-        UpstreamOAuthProvider::from(provider),
+        UpstreamOAuthProvider::from(entry),
     )))
 }
 

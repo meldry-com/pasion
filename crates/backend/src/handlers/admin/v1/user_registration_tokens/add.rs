@@ -1,3 +1,7 @@
+// Copyright 2025, 2026 Taidge Ltd.
+//
+// SPDX-License-Identifier: AGPL-3.0-only
+
 use chrono::{DateTime, Utc};
 use pasion_data::BoxRng;
 use rand::distributions::{Alphanumeric, DistString};
@@ -13,67 +17,69 @@ use crate::handlers::admin::{
 use crate::handlers::admin::CreatedJson;
 use crate::{AppError, CreatedJsonResult};
 
-/// # JSON payload for the `POST /api/admin/v1/user-registration-tokens`
+/// Payload for `POST /api/admin/v1/user-registration-tokens`.
 #[derive(Deserialize, JsonSchema)]
 #[serde(rename = "AddUserRegistrationTokenRequest")]
 pub struct RequestBody {
-    /// The token string. If not provided, a random token will be generated.
+    /// Explicit token string. A random one is generated when omitted.
     token: Option<String>,
 
-    /// Maximum number of times this token can be used. If not provided, the
-    /// token can be used an unlimited number of times.
+    /// Cap on how many times this token may be redeemed. Unlimited when absent.
     usage_limit: Option<u32>,
 
-    /// When the token expires. If not provided, the token never expires.
+    /// Point in time after which the token is no longer valid. Never expires when absent.
     expires_at: Option<DateTime<Utc>>,
 }
 
+/// Create a new user-registration token.
 #[endpoint]
 #[tracing::instrument(name = "handler.admin.v1.user_registration_tokens.post", skip_all)]
 pub async fn handler(
     req: &mut Request,
     depot: &Depot,
 ) -> CreatedJsonResult<SingleResponse<UserRegistrationToken>> {
-    let call_context = extract_call_context(req, depot).await?;
+    let ctx = extract_call_context(req, depot).await?;
     let crate::handlers::admin::call_context::CallContext {
         mut repo, clock, ..
-    } = call_context;
+    } = ctx;
     let mut rng = crate::handlers::rest::make_rng();
-    let params: RequestBody = req
+    let body: RequestBody = req
         .parse_json()
         .await
         .map_err(AppError::internal)?;
 
-    // Generate a random token if none was provided
-    let token = params
+    // Fall back to a randomly generated token string
+    let token_str = body
         .token
         .unwrap_or_else(|| Alphanumeric.sample_string(&mut rng, 12));
 
-    // See if we have an existing token with the same token
-    let existing_token = repo.user_registration_token().find_by_token(&token).await?;
-    if let Some(existing_token) = existing_token {
-        let _ = existing_token;
+    // Guard against duplicate token values
+    let duplicate = repo
+        .user_registration_token()
+        .find_by_token(&token_str)
+        .await?;
+    if duplicate.is_some() {
         return Err(AppError::conflict(
             "A registration token with the same token already exists",
         ));
     }
 
-    let registration_token = repo
+    let entry = repo
         .user_registration_token()
         .add(
             &mut rng,
             &clock,
-            token,
-            params.usage_limit,
-            params.expires_at,
+            token_str,
+            body.usage_limit,
+            body.expires_at,
         )
         .await?;
 
     repo.save().await?;
 
-    Ok(CreatedJson(SingleResponse::new_canonical(UserRegistrationToken::new(
-            registration_token,
-            clock.now()))))
+    Ok(CreatedJson(SingleResponse::new_canonical(
+        UserRegistrationToken::new(entry, clock.now()),
+    )))
 }
 
 #[cfg(test)]

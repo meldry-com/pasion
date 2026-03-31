@@ -1,3 +1,7 @@
+// Copyright 2025, 2026 Taidge Ltd.
+//
+// SPDX-License-Identifier: AGPL-3.0-only
+
 use pasion_data::BoxRng;
 use pasion_data::queue::{QueueJobRepositoryExt as _, SyncDevicesJob};
 use salvo::prelude::*;
@@ -11,44 +15,43 @@ use crate::handlers::admin::{
 };
 use crate::{AppError, JsonResult};
 
+/// Revoke a personal session, invalidating its access token.
 #[endpoint]
 #[tracing::instrument(name = "handler.admin.v1.personal_sessions.revoke", skip_all)]
 pub async fn handler(
     req: &mut Request,
     depot: &Depot,
 ) -> JsonResult<SingleResponse<PersonalSession>> {
-    let call_context = extract_call_context(req, depot).await?;
+    let ctx = extract_call_context(req, depot).await?;
     let crate::handlers::admin::call_context::CallContext {
         mut repo, clock, ..
-    } = call_context;
-    let session_id = extract_ulid_param(req)?;
+    } = ctx;
+    let target_id = extract_ulid_param(req)?;
     let mut rng = crate::handlers::rest::make_rng();
 
-    // session_id already extracted above
-    let session = repo
+    let entry = repo
         .personal_session()
-        .lookup(session_id)
+        .lookup(target_id)
         .await?
         .ok_or_else(|| {
-            AppError::not_found(format!("Personal session with ID {session_id} not found"))
+            AppError::not_found(format!("Personal session with ID {target_id} not found"))
         })?;
 
-    if session.is_revoked() {
+    if entry.is_revoked() {
         return Err(AppError::conflict(format!(
-            "Personal session with ID {session_id} is already revoked"
+            "Personal session with ID {target_id} is already revoked"
         )));
     }
 
-    let session = repo.personal_session().revoke(&clock, session).await?;
+    let revoked = repo.personal_session().revoke(&clock, entry).await?;
 
-    if session.has_device() {
-        // If the session has a device, then we are now
-        // deleting a device and should schedule a device sync to clean up.
+    // Schedule a device-sync job when the session carried device scopes
+    if revoked.has_device() {
         repo.queue_job()
             .schedule_job(
                 &mut rng,
                 &clock,
-                SyncDevicesJob::new_for_id(session.actor_user_id),
+                SyncDevicesJob::new_for_id(revoked.actor_user_id),
             )
             .await?;
     }
@@ -56,7 +59,7 @@ pub async fn handler(
     repo.save().await?;
 
     Ok(Json(SingleResponse::new_canonical(
-        PersonalSession::try_from((session, None))?,
+        PersonalSession::try_from((revoked, None))?,
     )))
 }
 
@@ -76,7 +79,7 @@ mod tests {
         let mut state = TestState::from_pool(pool.clone()).await.unwrap();
         let token = state.token_with_scope("urn:pasion:admin").await;
 
-        // Create a user and personal session for testing
+        // Provision a user and a personal session
         let mut repo = state.repository().await.unwrap();
         let mut rng = state.rng();
         let user = repo
@@ -85,7 +88,7 @@ mod tests {
             .await
             .unwrap();
 
-        let personal_session = repo
+        let sess = repo
             .personal_session()
             .add(
                 &mut rng,
@@ -102,7 +105,7 @@ mod tests {
 
         let request = Request::post(format!(
             "/api/admin/v1/personal-sessions/{}/revoke",
-            personal_session.id
+            sess.id
         ))
         .bearer(&token)
         .empty();
@@ -110,7 +113,6 @@ mod tests {
         response.assert_status(StatusCode::OK);
         let body: serde_json::Value = response.json();
 
-        // The revoked_at timestamp should be the same as the current time
         assert_eq!(
             body["data"]["attributes"]["revoked_at"],
             serde_json::json!(Clock::now(&state.clock))
@@ -124,7 +126,7 @@ mod tests {
         let mut state = TestState::from_pool(pool.clone()).await.unwrap();
         let token = state.token_with_scope("urn:pasion:admin").await;
 
-        // Create a user and personal session for testing
+        // Provision a user and a personal session, then revoke it
         let mut repo = state.repository().await.unwrap();
         let mut rng = state.rng();
         let user = repo
@@ -133,7 +135,7 @@ mod tests {
             .await
             .unwrap();
 
-        let personal_session = repo
+        let sess = repo
             .personal_session()
             .add(
                 &mut rng,
@@ -146,21 +148,19 @@ mod tests {
             .await
             .unwrap();
 
-        // Revoke the session first
-        let session = repo
+        let revoked_sess = repo
             .personal_session()
-            .revoke(&state.clock, personal_session)
+            .revoke(&state.clock, sess)
             .await
             .unwrap();
 
         repo.save().await.unwrap();
 
-        // Move the clock forward
         state.clock.advance(Duration::try_minutes(1).unwrap());
 
         let request = Request::post(format!(
             "/api/admin/v1/personal-sessions/{}/revoke",
-            session.id
+            revoked_sess.id
         ))
         .bearer(&token)
         .empty();
@@ -169,7 +169,7 @@ mod tests {
         let body: serde_json::Value = response.json();
         assert_eq!(
             body["errors"][0]["title"],
-            format!("Personal session with ID {} is already revoked", session.id)
+            format!("Personal session with ID {} is already revoked", revoked_sess.id)
         );
     }
 

@@ -29,7 +29,7 @@ pub struct Client {
     /// Client identifier
     pub client_id: String,
 
-    /// Hash of the client metadata
+    /// Pasion-original: hash of the client metadata
     pub metadata_digest: Option<String>,
 
     pub encrypted_client_secret: Option<String>,
@@ -117,7 +117,7 @@ impl Client {
         }
     }
 
-    /// Create a client metadata object for this client
+    /// Pasion-original: create a client metadata object for this client
     #[must_use]
     pub fn into_metadata(self) -> ClientMetadata {
         let (jwks, jwks_uri) = match self.jwks {

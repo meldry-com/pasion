@@ -1,8 +1,21 @@
-//! Requests and method related to JSON Object Signing and Encryption.
+// Copyright 2022-2024 Kevin Commaille.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+//! Requests and methods related to JSON Object Signing and Encryption.
 
 use std::collections::HashMap;
 
-use crate::outbound_http::RequestBuilderExt;
 use chrono::{DateTime, Utc};
 use pasion_iana::jose::JsonWebSignatureAlg;
 use pasion_jose::{
@@ -13,6 +26,7 @@ use pasion_jose::{
 use serde_json::Value;
 use url::Url;
 
+use crate::outbound_http::RequestBuilderExt;
 use super::super::{
     error::{IdTokenError, JwksError, JwtVerificationError},
     types::IdToken,
@@ -51,6 +65,11 @@ pub async fn fetch_jwks(
 #[derive(Clone, Copy)]
 pub struct JwtVerificationData<'a> {
     /// The URL of the issuer that generated the ID Token.
+    ///
+    /// When `Some`, the `iss` claim is verified against this value.
+    /// When `None`, the `iss` claim check is skipped (useful for
+    /// providers that do not set a standard issuer, such as some
+    /// social login providers).
     pub issuer: Option<&'a str>,
 
     /// The issuer's JWKS.
@@ -70,7 +89,8 @@ pub struct JwtVerificationData<'a> {
 ///
 /// * The signature is verified with the given JWKS.
 ///
-/// * The `iss` claim must be present and match the issuer, if present
+/// * The `iss` claim must be present and match the issuer (when an issuer is
+///   provided).
 ///
 /// * The `aud` claim must be present and match the client ID.
 ///
@@ -80,14 +100,7 @@ pub struct JwtVerificationData<'a> {
 ///
 /// * `jwt` - The serialized JWT to decode and verify.
 ///
-/// * `jwks` - The JWKS that should contain the public key to verify the JWT's
-///   signature.
-///
-/// * `issuer` - The issuer of the JWT.
-///
-/// * `audience` - The audience that the JWT is intended for.
-///
-/// * `signing_algorithm` - The JWA that should have been used to sign the JWT.
+/// * `verification_data` - The verification parameters.
 ///
 /// # Errors
 ///
@@ -111,8 +124,8 @@ pub fn verify_signed_jwt<'a>(
 
     let (header, mut claims) = jwt.clone().into_parts();
 
+    // Verify issuer when one is expected.
     if let Some(issuer) = issuer {
-        // Must have the proper issuer.
         claims::ISS.extract_required_with_options(&mut claims, issuer)?;
     }
 
@@ -134,7 +147,7 @@ pub fn verify_signed_jwt<'a>(
 ///
 /// * The `exp` claim must be present and the token must not have expired.
 ///
-/// * The `iat` claim must be present must be in the past.
+/// * The `iat` claim must be present and must be in the past.
 ///
 /// * The `sub` claim must be present.
 ///
@@ -153,6 +166,8 @@ pub fn verify_signed_jwt<'a>(
 /// * `auth_id_token` - If the ID Token is not verified during an authorization
 ///   request, the ID token that was returned from the latest authorization
 ///   request.
+///
+/// * `now` - The current time.
 ///
 /// # Errors
 ///

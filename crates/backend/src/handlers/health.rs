@@ -1,3 +1,8 @@
+// Copyright 2024, 2025 Taidge Ltd.
+// Copyright 2021-2024 The Matrix.org Foundation C.I.C.
+//
+// SPDX-License-Identifier: Apache-2.0
+
 use crate::salvo_utils::InternalError;
 use diesel_async::AsyncPgConnection;
 use diesel_async::RunQueryDsl;

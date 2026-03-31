@@ -1,21 +1,35 @@
+// Copyright 2022-2024 Kevin Commaille.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 //! Requests for obtaining [Claims] about an end-user.
 //!
 //! [Claims]: https://openid.net/specs/openid-connect-core-1_0.html#Claims
 
 use std::collections::HashMap;
 
-use crate::outbound_http::RequestBuilderExt;
 use headers::{ContentType, HeaderMapExt, HeaderValue};
 use http::header::ACCEPT;
 use mime::Mime;
 use serde_json::Value;
 use url::Url;
 
+use crate::outbound_http::RequestBuilderExt;
+use super::jose::JwtVerificationData;
 use super::super::{
     error::{IdTokenError, ResponseExt, UserInfoError},
     requests::jose::verify_signed_jwt,
 };
-use super::jose::JwtVerificationData;
 
 /// Obtain information about an authenticated end-user.
 ///
@@ -36,9 +50,6 @@ use super::jose::JwtVerificationData;
 ///   The signing algorithm corresponds to the `userinfo_signed_response_alg`
 ///   field in the client metadata.
 ///
-/// * `auth_id_token` - The ID token that was returned from the latest
-///   authorization request.
-///
 /// # Errors
 ///
 /// Returns an error if the request fails, the response is invalid or the
@@ -52,7 +63,7 @@ pub async fn fetch_userinfo(
     access_token: &str,
     jwt_verification_data: Option<JwtVerificationData<'_>>,
 ) -> Result<HashMap<String, Value>, UserInfoError> {
-    tracing::debug!("Obtaining user info…");
+    tracing::debug!("Obtaining user info...");
 
     let expected_content_type = if jwt_verification_data.is_some() {
         "application/jwt"

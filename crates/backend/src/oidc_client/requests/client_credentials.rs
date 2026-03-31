@@ -1,3 +1,17 @@
+// Copyright 2022-2024 Kevin Commaille.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 //! Requests for the [Client Credentials flow].
 //!
 //! [Client Credentials flow]: https://www.rfc-editor.org/rfc/rfc6749#section-4.4
@@ -11,14 +25,12 @@ use rand::Rng;
 use url::Url;
 
 use super::super::{
-    error::TokenRequestError, requests::token::request_access_token,
+    error::TokenRequestError,
+    requests::token::request_access_token,
     types::client_credentials::ClientCredentials,
 };
 
-/// Exchange an authorization code for an access token.
-///
-/// This should be used as the first step for logging in, and to request a
-/// token with a new scope.
+/// Obtain an access token using the client credentials grant.
 ///
 /// # Arguments
 ///

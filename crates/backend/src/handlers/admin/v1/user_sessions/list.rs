@@ -1,3 +1,7 @@
+// Copyright 2025, 2026 Taidge Ltd.
+//
+// SPDX-License-Identifier: AGPL-3.0-only
+
 use pasion_data::{pagination::Page, user::BrowserSessionFilter};
 use salvo::prelude::*;
 use schemars::JsonSchema;
@@ -22,98 +26,101 @@ enum UserSessionStatus {
 impl std::fmt::Display for UserSessionStatus {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            Self::Active => write!(f, "active"),
-            Self::Finished => write!(f, "finished"),
+            Self::Active => f.write_str("active"),
+            Self::Finished => f.write_str("finished"),
         }
     }
 }
 
+/// Query-string filters accepted by the list endpoint.
 #[derive(Deserialize, JsonSchema, Default)]
 #[serde(rename = "UserSessionFilter")]
 pub struct FilterParams {
-    /// Retrieve the items for the given user
+    /// Only return sessions belonging to this user
     #[serde(rename = "filter[user]")]
     #[schemars(with = "Option<crate::handlers::admin::schema::Ulid>")]
     user: Option<Ulid>,
 
-    /// Retrieve the items with the given status
+    /// Restrict results by lifecycle state.
     ///
-    /// Defaults to retrieve all sessions, including finished ones.
+    /// * `active` -- sessions that have not been ended
+    /// * `finished` -- sessions that have been ended
     ///
-    /// * `active`: Only retrieve active sessions
-    ///
-    /// * `finished`: Only retrieve finished sessions
+    /// When omitted, both active and finished sessions are returned.
     #[serde(rename = "filter[status]")]
     status: Option<UserSessionStatus>,
 }
 
 impl std::fmt::Display for FilterParams {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        let mut sep = '?';
+        let mut delimiter = '?';
 
-        if let Some(user) = self.user {
-            write!(f, "{sep}filter[user]={user}")?;
-            sep = '&';
+        if let Some(uid) = self.user {
+            write!(f, "{delimiter}filter[user]={uid}")?;
+            delimiter = '&';
         }
 
-        if let Some(status) = self.status {
-            write!(f, "{sep}filter[status]={status}")?;
-            sep = '&';
+        if let Some(st) = self.status {
+            write!(f, "{delimiter}filter[status]={st}")?;
+            delimiter = '&';
         }
 
-        let _ = sep;
+        let _ = delimiter;
         Ok(())
     }
 }
 
+/// List browser sessions with optional filtering and pagination.
 #[endpoint]
 #[tracing::instrument(name = "handler.admin.v1.user_sessions.list", skip_all)]
 pub async fn handler(
     req: &mut Request,
     depot: &Depot,
 ) -> JsonResult<PaginatedResponse<UserSession>> {
-    let call_context = extract_call_context(req, depot).await?;
-    let crate::handlers::admin::call_context::CallContext { mut repo, .. } = call_context;
+    let ctx = extract_call_context(req, depot).await?;
+    let crate::handlers::admin::call_context::CallContext { mut repo, .. } = ctx;
     let (pagination, include_count) = extract_pagination(req)?;
     let params: FilterParams = req.parse_queries().unwrap_or_default();
 
-    let base = format!("{path}{params}", path = UserSession::PATH);
-    let base = include_count.add_to_base(&base);
-    let filter = BrowserSessionFilter::default();
+    let base_url = format!("{path}{params}", path = UserSession::PATH);
+    let base_url = include_count.add_to_base(&base_url);
 
-    // Load the user from the filter
-    let user = if let Some(user_id) = params.user {
-        let user = repo
-            .user()
-            .lookup(user_id)
-            .await?
-            .ok_or_else(|| AppError::not_found(format!("User ID {user_id} not found")))?;
+    let mut filter = BrowserSessionFilter::default();
 
-        Some(user)
-    } else {
-        None
+    // Optionally restrict to a specific user
+    let resolved_user = match params.user {
+        Some(uid) => {
+            let u = repo
+                .user()
+                .lookup(uid)
+                .await?
+                .ok_or_else(|| AppError::not_found(format!("User ID {uid} not found")))?;
+            Some(u)
+        }
+        None => None,
     };
 
-    let filter = match &user {
-        Some(user) => filter.for_user(user),
+    filter = match &resolved_user {
+        Some(u) => filter.for_user(u),
         None => filter,
     };
 
-    let filter = match params.status {
+    // Optionally restrict by session status
+    filter = match params.status {
         Some(UserSessionStatus::Active) => filter.active_only(),
         Some(UserSessionStatus::Finished) => filter.finished_only(),
         None => filter,
     };
 
-    let response = match include_count {
+    let result = match include_count {
         IncludeCount::True => {
             let page = repo
                 .browser_session()
                 .list(filter, pagination)
                 .await?
                 .map(UserSession::from);
-            let count = repo.browser_session().count(filter).await?;
-            PaginatedResponse::for_page(page, pagination, Some(count), &base)
+            let total = repo.browser_session().count(filter).await?;
+            PaginatedResponse::for_page(page, pagination, Some(total), &base_url)
         }
         IncludeCount::False => {
             let page = repo
@@ -121,15 +128,15 @@ pub async fn handler(
                 .list(filter, pagination)
                 .await?
                 .map(UserSession::from);
-            PaginatedResponse::for_page(page, pagination, None, &base)
+            PaginatedResponse::for_page(page, pagination, None, &base_url)
         }
         IncludeCount::Only => {
-            let count = repo.browser_session().count(filter).await?;
-            PaginatedResponse::for_count_only(count, &base)
+            let total = repo.browser_session().count(filter).await?;
+            PaginatedResponse::for_count_only(total, &base_url)
         }
     };
 
-    Ok(Json(response))
+    Ok(Json(result))
 }
 
 #[cfg(test)]

@@ -8,16 +8,20 @@ import rego.v1
 import data.common
 import data.email as email_policy
 
+# Registration is denied by default.
 default allow := false
 
+# Permit registration only when no violations exist.
 allow if {
 	count(violation) == 0
 }
 
+# If no username allowlist is configured, all usernames pass this check.
 username_allowed if {
 	not data.registration.allowed_usernames
 }
 
+# If an allowlist is set, the username must match its constraints.
 username_allowed if {
 	common.matches_string_constraints(input.username, data.registration.allowed_usernames)
 }
@@ -29,8 +33,8 @@ violation contains {"field": "username", "code": "username-too-short", "msg": "u
 }
 
 violation contains {"field": "username", "code": "username-too-long", "msg": "username too long"} if {
-	user_id := common.mxid(input.username, data.server_name)
-	count(user_id) > 255
+	full_mxid := common.mxid(input.username, data.server_name)
+	count(full_mxid) > 255
 }
 
 violation contains {
@@ -76,12 +80,8 @@ violation contains {"msg": sprintf(
 	common.requester_banned(input.requester, data.requester)
 }
 
-# Check if the email is valid using the email policy
-# and add the email field to the violation object
-violation contains object.union({"field": "email"}, v) if {
-	# Check if we have an email set in the input
+# Delegate email validation to the email policy and tag results with the email field.
+violation contains object.union({"field": "email"}, err) if {
 	input.email
-
-	# Get the violation object from the email policy
-	some v in email_policy.violation
+	some err in email_policy.violation
 }

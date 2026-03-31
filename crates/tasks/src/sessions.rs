@@ -20,7 +20,7 @@ use crate::{
 impl RunnableJob for ExpireInactiveSessionsJob {
     async fn run(&self, state: &State, _context: JobContext) -> Result<(), JobError> {
         let Some(config) = state.site_config().session_expiration.as_ref() else {
-            // Automatic session expiration is disabled
+            // Automatic session expiration is not enabled.
             return Ok(());
         };
 
@@ -29,6 +29,7 @@ impl RunnableJob for ExpireInactiveSessionsJob {
         let now = clock.now();
         let mut repo = state.repository().await.map_err(JobError::retry)?;
 
+        // Schedule a child job for OAuth sessions if TTL is configured.
         if let Some(ttl) = config.oauth_session_inactivity_ttl {
             repo.queue_job()
                 .schedule_job(
@@ -40,6 +41,7 @@ impl RunnableJob for ExpireInactiveSessionsJob {
                 .map_err(JobError::retry)?;
         }
 
+        // Schedule a child job for browser sessions if TTL is configured.
         if let Some(ttl) = config.user_session_inactivity_ttl {
             repo.queue_job()
                 .schedule_job(
@@ -65,9 +67,7 @@ impl RunnableJob for ExpireInactiveOAuthSessionsJob {
         let mut rng = state.rng();
         let mut users_synced = HashSet::new();
 
-        // This delay is used to space out the device sync jobs
-        // We add 10 seconds between each device sync, meaning that it will spread out
-        // the syncs over ~16 minutes max if we get a full batch of 100 users
+        // Stagger device-sync jobs so they don't all hit the homeserver at once.
         let mut delay = Duration::minutes(1);
 
         let filter = OAuth2SessionFilter::new()
@@ -84,18 +84,22 @@ impl RunnableJob for ExpireInactiveOAuthSessionsJob {
             .await
             .map_err(JobError::retry)?;
 
-        if let Some(job) = self.next(&page) {
+        // If there are more sessions beyond this page, schedule a follow-up
+        // job to handle the next batch.
+        if let Some(continuation) = self.next(&page) {
             tracing::info!("Scheduling job to expire the next batch of inactive sessions");
             repo.queue_job()
-                .schedule_job(&mut rng, clock, job)
+                .schedule_job(&mut rng, clock, continuation)
                 .await
                 .map_err(JobError::retry)?;
         }
 
         for edge in page.edges {
+            // For each distinct user we encounter, schedule a device sync so
+            // the homeserver is kept in sync with the expired sessions.
             if let Some(user_id) = edge.node.user_id {
-                let inserted = users_synced.insert(user_id);
-                if inserted {
+                let is_new = users_synced.insert(user_id);
+                if is_new {
                     tracing::info!(user.id = %user_id, "Scheduling devices sync for user");
                     repo.queue_job()
                         .schedule_job_later(
@@ -141,10 +145,10 @@ impl RunnableJob for ExpireInactiveUserSessionsJob {
             .await
             .map_err(JobError::retry)?;
 
-        if let Some(job) = self.next(&page) {
+        if let Some(continuation) = self.next(&page) {
             tracing::info!("Scheduling job to expire the next batch of inactive sessions");
             repo.queue_job()
-                .schedule_job(&mut rng, clock, job)
+                .schedule_job(&mut rng, clock, continuation)
                 .await
                 .map_err(JobError::retry)?;
         }

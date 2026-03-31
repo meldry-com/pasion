@@ -1,3 +1,7 @@
+// Copyright 2025, 2026 Taidge Ltd.
+//
+// SPDX-License-Identifier: AGPL-3.0-only
+
 use pasion_data::{Page, upstream_oauth2::UpstreamOAuthProviderFilter};
 use salvo::prelude::*;
 use schemars::JsonSchema;
@@ -11,58 +15,61 @@ use crate::handlers::admin::{
 };
 use crate::JsonResult;
 
+/// Query-string filters for the provider list endpoint.
 #[derive(Deserialize, JsonSchema, Default)]
 #[serde(rename = "UpstreamOAuthProviderFilter")]
 pub struct FilterParams {
-    /// Retrieve providers that are (or are not) enabled
+    /// When set, only return providers matching this enabled/disabled state
     #[serde(rename = "filter[enabled]")]
     enabled: Option<bool>,
 }
 
 impl std::fmt::Display for FilterParams {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        let mut sep = '?';
+        let mut delimiter = '?';
 
-        if let Some(enabled) = self.enabled {
-            write!(f, "{sep}filter[enabled]={enabled}")?;
-            sep = '&';
+        if let Some(flag) = self.enabled {
+            write!(f, "{delimiter}filter[enabled]={flag}")?;
+            delimiter = '&';
         }
 
-        let _ = sep;
+        let _ = delimiter;
         Ok(())
     }
 }
 
+/// List upstream OAuth providers with optional filtering and pagination.
 #[endpoint]
 #[tracing::instrument(name = "handler.admin.v1.upstream_oauth_providers.list", skip_all)]
 pub async fn handler(
     req: &mut Request,
     depot: &Depot,
 ) -> JsonResult<PaginatedResponse<UpstreamOAuthProvider>> {
-    let call_context = extract_call_context(req, depot).await?;
-    let crate::handlers::admin::call_context::CallContext { mut repo, .. } = call_context;
+    let ctx = extract_call_context(req, depot).await?;
+    let crate::handlers::admin::call_context::CallContext { mut repo, .. } = ctx;
     let (pagination, include_count) = extract_pagination(req)?;
     let params: FilterParams = req.parse_queries().unwrap_or_default();
 
-    let base = format!("{path}{params}", path = UpstreamOAuthProvider::PATH);
-    let base = include_count.add_to_base(&base);
-    let filter = UpstreamOAuthProviderFilter::new();
+    let base_url = format!("{path}{params}", path = UpstreamOAuthProvider::PATH);
+    let base_url = include_count.add_to_base(&base_url);
+    let mut filter = UpstreamOAuthProviderFilter::new();
 
-    let filter = match params.enabled {
+    // Apply the enabled/disabled constraint when requested
+    filter = match params.enabled {
         Some(true) => filter.enabled_only(),
         Some(false) => filter.disabled_only(),
         None => filter,
     };
 
-    let response = match include_count {
+    let result = match include_count {
         IncludeCount::True => {
             let page = repo
                 .upstream_oauth_provider()
                 .list(filter, pagination)
                 .await?
                 .map(UpstreamOAuthProvider::from);
-            let count = repo.upstream_oauth_provider().count(filter).await?;
-            PaginatedResponse::for_page(page, pagination, Some(count), &base)
+            let total = repo.upstream_oauth_provider().count(filter).await?;
+            PaginatedResponse::for_page(page, pagination, Some(total), &base_url)
         }
         IncludeCount::False => {
             let page = repo
@@ -70,15 +77,15 @@ pub async fn handler(
                 .list(filter, pagination)
                 .await?
                 .map(UpstreamOAuthProvider::from);
-            PaginatedResponse::for_page(page, pagination, None, &base)
+            PaginatedResponse::for_page(page, pagination, None, &base_url)
         }
         IncludeCount::Only => {
-            let count = repo.upstream_oauth_provider().count(filter).await?;
-            PaginatedResponse::for_count_only(count, &base)
+            let total = repo.upstream_oauth_provider().count(filter).await?;
+            PaginatedResponse::for_count_only(total, &base_url)
         }
     };
 
-    Ok(Json(response))
+    Ok(Json(result))
 }
 
 #[cfg(test)]

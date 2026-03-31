@@ -7,30 +7,32 @@ import rego.v1
 
 import data.common
 
+# By default, email addresses are not permitted until proven valid.
 default allow := false
 
+# Grant access only when no violations are detected.
 allow if {
 	count(violation) == 0
 }
 
-# Allow any domains if the data.allowed_domains array is not set
+# When no domain allowlist is configured, all domains are acceptable.
 domain_allowed if {
 	not data.allowed_domains
 }
 
-# Allow an email only if its domain is in the list of allowed domains
+# When a domain allowlist exists, verify the email's domain appears in it.
 domain_allowed if {
-	[_, domain] := split(input.email, "@")
-	some allowed_domain in data.allowed_domains
-	glob.match(allowed_domain, ["."], domain)
+	[_, email_domain] := split(input.email, "@")
+	some permitted in data.allowed_domains
+	glob.match(permitted, ["."], email_domain)
 }
 
-# Allow any emails if the data.emails.allowed_addresses is not set
+# When no address-level allowlist is configured, all addresses pass.
 address_allowed if {
 	not data.emails.allowed_addresses
 }
 
-# Allow an email only if its address is in the list of allowed addresses
+# When an address allowlist exists, the email must match its constraints.
 address_allowed if {
 	common.matches_string_constraints(input.email, data.emails.allowed_addresses)
 }
@@ -41,19 +43,19 @@ violation contains {"code": "email-domain-not-allowed", "msg": "email domain is 
 	not domain_allowed
 }
 
-# Deny emails with their domain in the domains banlist
+# Reject emails whose domain appears on the banned domains list.
 violation contains {"code": "email-domain-banned", "msg": "email domain is banned"} if {
-	[_, domain] := split(input.email, "@")
-	some banned_domain in data.banned_domains
-	glob.match(banned_domain, ["."], domain)
+	[_, email_domain] := split(input.email, "@")
+	some blocked in data.banned_domains
+	glob.match(blocked, ["."], email_domain)
 }
 
-# Deny emails if it's not allowed
+# Reject emails that fail the address-level allowlist check.
 violation contains {"code": "email-not-allowed", "msg": "email is not allowed"} if {
 	not address_allowed
 }
 
-# Deny emails which match the email ban list constraint
+# Reject emails that match any entry in the address-level banlist.
 violation contains {"code": "email-banned", "msg": "email is not allowed"} if {
 	common.matches_string_constraints(input.email, data.emails.banned_addresses)
 }

@@ -1,3 +1,17 @@
+// Copyright 2022-2024 Kevin Commaille.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 //! Requests for the [Authorization Code flow].
 //!
 //! [Authorization Code flow]: https://openid.net/specs/openid-connect-core-1_0.html#CodeFlowAuth
@@ -14,23 +28,23 @@ use oauth2_types::{
         AccessTokenRequest, AccessTokenResponse, AuthorizationCodeGrant, AuthorizationRequest,
         Display, Prompt, ResponseMode,
     },
-    scope::{OPENID, Scope},
+    scope::{Scope, OPENID},
 };
 use pasion_iana::oauth::{OAuthAuthorizationEndpointResponseType, PkceCodeChallengeMethod};
 use pasion_jose::claims::{self, TokenHash};
 use rand::{
-    Rng,
     distributions::{Alphanumeric, DistString},
+    Rng,
 };
 use serde::Serialize;
 use url::Url;
 
+use super::jose::JwtVerificationData;
 use super::super::{
     error::{AuthorizationError, IdTokenError, TokenAuthorizationCodeError},
     requests::{jose::verify_id_token, token::request_access_token},
-    types::{IdToken, client_credentials::ClientCredentials},
+    types::{client_credentials::ClientCredentials, IdToken},
 };
-use super::jose::JwtVerificationData;
 
 /// The data necessary to build an authorization request.
 #[derive(Debug, Clone)]
@@ -85,6 +99,9 @@ pub struct AuthorizationRequestData {
     pub acr_values: Option<HashSet<String>>,
 
     /// Requested response mode.
+    ///
+    /// Pasion addition: allows callers to request a specific response mode
+    /// (e.g. `form_post` for certain social providers).
     pub response_mode: Option<ResponseMode>,
 }
 
@@ -185,8 +202,9 @@ pub struct AuthorizationValidationData {
     pub state: String,
 
     /// A string to mitigate replay attacks.
-    /// Used when the `openid` scope is set (and therefore we are using OpenID
-    /// Connect).
+    ///
+    /// Present when the `openid` scope was requested (i.e. when operating
+    /// in OpenID Connect mode). `None` for plain OAuth 2.0 flows.
     pub nonce: Option<String>,
 
     /// The URI where the end-user will be redirected after authorization.
@@ -225,15 +243,20 @@ fn build_authorization_request(
         response_mode,
     } = authorization_data;
 
+    // Check whether this is an OpenID Connect flow (has the `openid` scope).
     let is_openid = scope.contains(&OPENID);
 
-    // Generate a random CSRF "state" token and a nonce.
+    // Generate a random CSRF "state" token.
     let state = Alphanumeric.sample_string(rng, 16);
 
-    // Generate a random nonce if we're in 'OpenID Connect' mode
-    let nonce = is_openid.then(|| Alphanumeric.sample_string(rng, 16));
+    // Only generate a nonce when operating in OpenID Connect mode.
+    let nonce = if is_openid {
+        Some(Alphanumeric.sample_string(rng, 16))
+    } else {
+        None
+    };
 
-    // Use PKCE, whenever possible.
+    // Use PKCE whenever the provider supports S256.
     let (pkce, code_challenge_verifier) = if code_challenge_methods_supported
         .iter()
         .any(|methods| methods.contains(&PkceCodeChallengeMethod::S256))
@@ -440,7 +463,7 @@ pub async fn access_token_with_authorization_code(
             .extract_optional_with_options(&mut claims, TokenHash::new(signing_alg, &code))
             .map_err(IdTokenError::from)?;
 
-        // Nonce must match if we have one.
+        // Nonce must match when present (OpenID Connect mode).
         if let Some(nonce) = validation_data.nonce.as_deref() {
             claims::NONCE
                 .extract_required_with_options(&mut claims, nonce)

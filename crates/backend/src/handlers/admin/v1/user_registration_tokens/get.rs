@@ -1,3 +1,7 @@
+// Copyright 2025, 2026 Taidge Ltd.
+//
+// SPDX-License-Identifier: AGPL-3.0-only
+
 use salvo::prelude::*;
 
 use crate::handlers::admin::{
@@ -8,26 +12,31 @@ use crate::handlers::admin::{
 };
 use crate::{AppError, JsonResult};
 
+/// Fetch a single registration token by its ULID.
 #[endpoint]
 #[tracing::instrument(name = "handler.admin.v1.user_registration_tokens.get", skip_all)]
 pub async fn handler(
     req: &mut Request,
     depot: &Depot,
 ) -> JsonResult<SingleResponse<UserRegistrationToken>> {
-    let call_context = extract_call_context(req, depot).await?;
+    let ctx = extract_call_context(req, depot).await?;
     let crate::handlers::admin::call_context::CallContext {
         mut repo, clock, ..
-    } = call_context;
-    let id = extract_ulid_param(req)?;
+    } = ctx;
+    let target_id = extract_ulid_param(req)?;
 
-    let token = repo
+    let entry = repo
         .user_registration_token()
-        .lookup(id)
+        .lookup(target_id)
         .await?
-        .ok_or_else(|| AppError::not_found(format!("Registration token with ID {id} not found")))?;
+        .ok_or_else(|| {
+            AppError::not_found(format!(
+                "Registration token with ID {target_id} not found"
+            ))
+        })?;
 
     Ok(Json(SingleResponse::new_canonical(
-        UserRegistrationToken::new(token, clock.now()),
+        UserRegistrationToken::new(entry, clock.now()),
     )))
 }
 
@@ -47,7 +56,7 @@ mod tests {
         let token = state.token_with_scope("urn:pasion:admin").await;
 
         let mut repo = state.repository().await.unwrap();
-        let registration_token = repo
+        let reg_token = repo
             .user_registration_token()
             .add(
                 &mut state.rng(),
@@ -62,7 +71,7 @@ mod tests {
 
         let request = Request::get(format!(
             "/api/admin/v1/user-registration-tokens/{}",
-            registration_token.id
+            reg_token.id
         ))
         .bearer(&token)
         .empty();
@@ -103,10 +112,9 @@ mod tests {
         let mut state = TestState::from_pool(pool.clone()).await.unwrap();
         let token = state.token_with_scope("urn:pasion:admin").await;
 
-        // Use a fixed ID for the test to ensure consistent snapshots
-        let nonexistent_id = Ulid::from_string("00000000000000000000000000").unwrap();
+        let missing_id = Ulid::from_string("00000000000000000000000000").unwrap();
         let request = Request::get(format!(
-            "/api/admin/v1/user-registration-tokens/{nonexistent_id}"
+            "/api/admin/v1/user-registration-tokens/{missing_id}"
         ))
         .bearer(&token)
         .empty();

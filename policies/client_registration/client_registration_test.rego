@@ -371,9 +371,9 @@ test_native_redirect_uri_custom_scheme if {
 }
 
 test_reverse_dns_match_parse if {
-	client_uri := client_registration.parse_uri("https://element.io/")
-	redirect_uri := client_registration.parse_uri("io.element.app:/callback")
-	client_registration.reverse_dns_match(client_uri.host, redirect_uri.scheme)
+	base_parsed := client_registration.parse_uri("https://element.io/")
+	redir_parsed := client_registration.parse_uri("io.element.app:/callback")
+	client_registration.reverse_dns_match(base_parsed.host, redir_parsed.scheme)
 }
 
 test_client_credentials_grant if {
@@ -412,11 +412,11 @@ test_reverse_dns_match if {
 }
 
 test_parse_uri if {
-	client_uri_query := client_registration.parse_uri("https://example.com:8080/users?query=test")
-	client_uri_query.authority == "example.com:8080"
-	client_uri_query.host == "example.com"
-	client_uri_query.path == "/users"
-	client_uri_query.scheme == "https"
-	client_uri_query.port == "8080"
-	client_uri_query.query == "?query=test"
+	parsed_with_query := client_registration.parse_uri("https://example.com:8080/users?query=test")
+	parsed_with_query.authority == "example.com:8080"
+	parsed_with_query.host == "example.com"
+	parsed_with_query.path == "/users"
+	parsed_with_query.scheme == "https"
+	parsed_with_query.port == "8080"
+	parsed_with_query.query == "?query=test"
 }

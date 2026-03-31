@@ -1,4 +1,7 @@
-use pasion_data::BoxRng;
+// Copyright 2025, 2026 Taidge Ltd.
+//
+// SPDX-License-Identifier: AGPL-3.0-only
+
 use pasion_data::queue::{QueueJobRepositoryExt as _, SyncDevicesJob};
 use salvo::prelude::*;
 
@@ -10,48 +13,58 @@ use crate::handlers::admin::{
 };
 use crate::{AppError, JsonResult};
 
+/// Terminate an active OAuth 2.0 session. If the session is associated with a
+/// user, a device-sync job is enqueued so that downstream homeservers learn
+/// about the revocation promptly.
 #[endpoint]
 #[tracing::instrument(name = "handler.admin.v1.oauth2_sessions.finish", skip_all)]
 pub async fn handler(
     req: &mut Request,
     depot: &Depot,
 ) -> JsonResult<SingleResponse<OAuth2Session>> {
-    let call_context = extract_call_context(req, depot).await?;
+    let ctx = extract_call_context(req, depot).await?;
     let crate::handlers::admin::call_context::CallContext {
         mut repo, clock, ..
-    } = call_context;
-    let id = extract_ulid_param(req)?;
+    } = ctx;
+    let session_id = extract_ulid_param(req)?;
     let mut rng = crate::handlers::rest::make_rng();
 
-    // id already extracted above
-    let session = repo
+    let oauth_session = repo
         .oauth2_session()
-        .lookup(id)
+        .lookup(session_id)
         .await?
-        .ok_or_else(|| AppError::not_found(format!("OAuth 2.0 session with ID {id} not found")))?;
+        .ok_or_else(|| {
+            AppError::not_found(format!(
+                "OAuth 2.0 session with ID {session_id} not found"
+            ))
+        })?;
 
-    // Check if the session is already finished
-    if session.finished_at().is_some() {
+    if oauth_session.finished_at().is_some() {
         return Err(AppError::bad_request(format!(
-            "OAuth 2.0 session with ID {id} is already finished"
+            "OAuth 2.0 session with ID {session_id} is already finished"
         )));
     }
 
-    // If the session has a user associated with it, schedule a job to sync devices
-    if let Some(user_id) = session.user_id {
-        tracing::info!(user.id = %user_id, "Scheduling device sync job for user");
-        let job = SyncDevicesJob::new_for_id(user_id);
-        repo.queue_job().schedule_job(&mut rng, &clock, job).await?;
+    // When the session belongs to a user, schedule a device list sync so that
+    // the homeserver is notified of the change.
+    if let Some(uid) = oauth_session.user_id {
+        tracing::info!(user.id = %uid, "Scheduling device sync job for user");
+        let sync_job = SyncDevicesJob::new_for_id(uid);
+        repo.queue_job()
+            .schedule_job(&mut rng, &clock, sync_job)
+            .await?;
     }
 
-    // Finish the session
-    let session = repo.oauth2_session().finish(&clock, session).await?;
+    let ended = repo
+        .oauth2_session()
+        .finish(&clock, oauth_session)
+        .await?;
 
     repo.save().await?;
 
     Ok(Json(SingleResponse::new(
-        OAuth2Session::from(session),
-        format!("/api/admin/v1/oauth2-sessions/{id}/finish"),
+        OAuth2Session::from(ended),
+        format!("/api/admin/v1/oauth2-sessions/{session_id}/finish"),
     )))
 }
 

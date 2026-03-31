@@ -1,3 +1,8 @@
+// Copyright 2025 Taidge Ltd.
+// Copyright 2023, 2024 The Matrix.org Foundation C.I.C.
+//
+// SPDX-License-Identifier: Apache-2.0
+
 // Without the custom_syntax feature, the `SyntaxConfig` is a unit struct
 // which is annoying with this clippy lint
 #![allow(clippy::default_constructed_unit_structs)]

@@ -1,3 +1,7 @@
+// Copyright 2025, 2026 Taidge Ltd.
+//
+// SPDX-License-Identifier: AGPL-3.0-only
+
 use salvo::prelude::*;
 
 use crate::handlers::admin::{
@@ -8,34 +12,33 @@ use crate::handlers::admin::{
 };
 use crate::{AppError, JsonResult};
 
+/// Retrieve a single personal session by its identifier.
 #[endpoint]
 #[tracing::instrument(name = "handler.admin.v1.personal_sessions.get", skip_all)]
 pub async fn handler(
     req: &mut Request,
     depot: &Depot,
 ) -> JsonResult<SingleResponse<PersonalSession>> {
-    let call_context = extract_call_context(req, depot).await?;
-    let crate::handlers::admin::call_context::CallContext { mut repo, .. } = call_context;
-    let id = extract_ulid_param(req)?;
+    let ctx = extract_call_context(req, depot).await?;
+    let crate::handlers::admin::call_context::CallContext { mut repo, .. } = ctx;
+    let target_id = extract_ulid_param(req)?;
 
-    let session_id = id;
-
-    let session = repo
+    let entry = repo
         .personal_session()
-        .lookup(session_id)
+        .lookup(target_id)
         .await?
-        .ok_or_else(|| AppError::not_found("Personal session not found"))?;
+        .ok_or_else(|| AppError::not_found("No personal session matches the given ID"))?;
 
-    let token = if session.is_revoked() {
+    let active_token = if entry.is_revoked() {
         None
     } else {
         repo.personal_access_token()
-            .find_active_for_session(&session)
+            .find_active_for_session(&entry)
             .await?
     };
 
     Ok(Json(SingleResponse::new_canonical(
-        PersonalSession::try_from((session, token))?,
+        PersonalSession::try_from((entry, active_token))?,
     )))
 }
 
@@ -129,8 +132,8 @@ mod tests {
         let mut state = TestState::from_pool(pool.clone()).await.unwrap();
         let token = state.token_with_scope("urn:pasion:admin").await;
 
-        let session_id = Ulid::nil();
-        let request = Request::get(format!("/api/admin/v1/personal-sessions/{session_id}"))
+        let missing_id = Ulid::nil();
+        let request = Request::get(format!("/api/admin/v1/personal-sessions/{missing_id}"))
             .bearer(&token)
             .empty();
         let response = state.request(request).await;

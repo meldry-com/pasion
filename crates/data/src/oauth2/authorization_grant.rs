@@ -136,6 +136,7 @@ impl AuthorizationGrantStage {
     }
 }
 
+/// Pasion-original: parsed login hint for the authorization grant.
 pub enum LoginHint<'a> {
     MXID(&'a UserId),
     Email(lettre::Address),
@@ -156,7 +157,9 @@ pub struct AuthorizationGrant {
     pub response_mode: ResponseMode,
     pub response_type_id_token: bool,
     pub created_at: DateTime<Utc>,
+    /// Pasion-original: login hint passed through the authorization request.
     pub login_hint: Option<String>,
+    /// Pasion-original: preferred locale from the authorization request.
     pub locale: Option<String>,
 }
 
@@ -169,7 +172,7 @@ impl std::ops::Deref for AuthorizationGrant {
 }
 
 impl AuthorizationGrant {
-    /// Parse a `login_hint`
+    /// Pasion-original: parse a `login_hint`
     ///
     /// Returns `LoginHint::MXID` for valid mxid 'mxid:@john.doe:example.com'
     ///

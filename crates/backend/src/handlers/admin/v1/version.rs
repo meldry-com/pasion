@@ -1,25 +1,29 @@
+// Copyright 2025, 2026 Taidge Ltd.
+//
+// SPDX-License-Identifier: AGPL-3.0-only
+
+use crate::handlers::{admin::call_context::extract_call_context, rest::DepotExt};
 use crate::salvo_utils::InternalError;
-use pasion_data::AppVersion;
 use salvo::oapi::ToSchema;
 use salvo::prelude::*;
 use schemars::JsonSchema;
 use serde::Serialize;
 
-use crate::handlers::{admin::call_context::extract_call_context, rest::DepotExt};
-
+/// Payload returned by the version endpoint.
 #[derive(Serialize, JsonSchema, ToSchema)]
 pub struct Version {
-    /// The semver version of the app
+    /// Semver string of the running application
     pub version: &'static str,
 }
 
+/// Return the application version.
 #[endpoint]
 #[tracing::instrument(name = "handler.admin.v1.version", skip_all)]
 pub async fn handler(req: &mut Request, depot: &Depot) -> Result<Json<Version>, InternalError> {
-    let _call_context = extract_call_context(req, depot).await?;
-    let pasion_data::AppVersion(version) = depot.app_version()?;
+    let _ctx = extract_call_context(req, depot).await?;
+    let pasion_data::AppVersion(ver) = depot.app_version()?;
 
-    Ok(Json(Version { version }))
+    Ok(Json(Version { version: ver }))
 }
 
 #[cfg(test)]

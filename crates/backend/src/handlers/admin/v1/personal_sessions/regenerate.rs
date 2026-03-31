@@ -1,3 +1,7 @@
+// Copyright 2025, 2026 Taidge Ltd.
+//
+// SPDX-License-Identifier: AGPL-3.0-only
+
 use chrono::Duration;
 use pasion_data::{BoxRng, TokenType};
 use salvo::prelude::*;
@@ -14,81 +18,76 @@ use crate::handlers::admin::{
 };
 use crate::{AppError, CreatedJsonResult};
 
-/// # JSON payload for the `POST /api/admin/v1/personal-sessions/{id}/regenerate` endpoint
+/// Optional payload for the regenerate endpoint.
 #[derive(Deserialize, JsonSchema)]
 #[serde(rename = "RegeneratePersonalSessionRequest")]
 pub struct RequestBody {
-    /// Token expiry time in seconds.
-    /// If not set, the token won't expire.
+    /// Lifetime of the new token in seconds; omit for a non-expiring token.
     expires_in: Option<u32>,
 }
+
+/// Rotate the access token for an existing personal session.
 #[endpoint]
 #[tracing::instrument(name = "handler.admin.v1.personal_sessions.add", skip_all)]
 pub async fn handler(
     req: &mut Request,
     depot: &Depot,
 ) -> CreatedJsonResult<SingleResponse<PersonalSession>> {
-    let call_context = extract_call_context(req, depot).await?;
+    let ctx = extract_call_context(req, depot).await?;
     let crate::handlers::admin::call_context::CallContext {
         mut repo,
         clock,
         session: caller_session,
         ..
-    } = call_context;
-    let id = extract_ulid_param(req)?;
+    } = ctx;
+    let target_id = extract_ulid_param(req)?;
     let mut rng = crate::handlers::rest::make_rng();
-    let params: RequestBody = req
+    let body: RequestBody = req
         .parse_json()
         .await
         .unwrap_or(RequestBody { expires_in: None });
 
-    let session_id = id;
-
-    let session = repo
+    let entry = repo
         .personal_session()
-        .lookup(session_id)
+        .lookup(target_id)
         .await?
-        .ok_or_else(|| AppError::not_found("Session not found"))?;
+        .ok_or_else(|| AppError::not_found("Requested session does not exist"))?;
 
-    if !session.is_valid() {
-        // We don't revive revoked sessions through regeneration
+    if !entry.is_valid() {
         return Err(AppError::unprocessable_entity("Session not valid"));
     }
 
-    // If the owner is not the current caller, then currently we reject the
-    // regeneration.
-    let caller = personal_session_owner_from_caller(&caller_session);
-    if session.owner != caller {
+    // Only the session owner may regenerate the token
+    let caller_owner = personal_session_owner_from_caller(&caller_session);
+    if entry.owner != caller_owner {
         return Err(AppError::forbidden("Session does not belong to you"));
     }
 
-    // Revoke the existing active token for the session.
-    let old_token_opt = repo
+    // Revoke the currently-active token
+    let previous_token = repo
         .personal_access_token()
-        .find_active_for_session(&session)
+        .find_active_for_session(&entry)
         .await?;
-    let Some(old_token) = old_token_opt else {
-        // This shouldn't happen
-        error!("session is supposedly valid but had no access token");
+    let Some(prev) = previous_token else {
+        error!("session appears valid but has no active access token");
         return Err(AppError::unprocessable_entity("Session not valid"));
     };
 
     repo.personal_access_token()
-        .revoke(&clock, old_token)
+        .revoke(&clock, prev)
         .await?;
 
-    // Create the regenerated token for the session
-    let access_token_string = TokenType::PersonalAccessToken.generate(&mut rng);
-    let access_token = repo
+    // Mint the replacement token
+    let new_token_str = TokenType::PersonalAccessToken.generate(&mut rng);
+    let new_token_record = repo
         .personal_access_token()
         .add(
             &mut rng,
             &clock,
-            &session,
-            &access_token_string,
-            params
-                .expires_in
-                .map(|exp_in| Duration::seconds(i64::from(exp_in))),
+            &entry,
+            &new_token_str,
+            body.expires_in
+                .map(|secs| Duration::seconds(i64::from(secs))),
         )
         .await?;
 
@@ -96,8 +95,8 @@ pub async fn handler(
 
     Ok(crate::handlers::admin::CreatedJson(
         SingleResponse::new_canonical(
-            PersonalSession::try_from((session, Some(access_token)))?
-                .with_token(access_token_string),
+            PersonalSession::try_from((entry, Some(new_token_record)))?
+                .with_token(new_token_str),
         ),
     ))
 }
@@ -118,7 +117,7 @@ mod tests {
         let mut state = TestState::from_pool(pool.clone()).await.unwrap();
         let token = state.token_with_scope("urn:pasion:admin").await;
 
-        // Create a user for testing
+        // Provision a user first
         let mut repo = state.repository().await.unwrap();
         let mut rng = state.rng();
         let user = repo
@@ -140,14 +139,14 @@ mod tests {
 
         let response = state.request(request).await;
         response.assert_status(StatusCode::CREATED);
-        let created: Value = response.json();
+        let created_body: Value = response.json();
 
-        let session_id = created["data"]["id"].as_str().unwrap();
+        let sess_id = created_body["data"]["id"].as_str().unwrap();
 
         state.clock.advance(Duration::minutes(3));
 
         let request = Request::post(format!(
-            "/api/admin/v1/personal-sessions/{session_id}/regenerate"
+            "/api/admin/v1/personal-sessions/{sess_id}/regenerate"
         ))
         .bearer(&token)
         .json(json!({

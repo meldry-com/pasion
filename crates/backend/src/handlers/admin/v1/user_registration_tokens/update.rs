@@ -1,3 +1,7 @@
+// Copyright 2025, 2026 Taidge Ltd.
+//
+// SPDX-License-Identifier: AGPL-3.0-only
+
 use chrono::{DateTime, Utc};
 use salvo::prelude::*;
 use schemars::JsonSchema;
@@ -11,8 +15,8 @@ use crate::handlers::admin::{
 };
 use crate::{AppError, JsonResult};
 
-// Any value that is present is considered Some value, including null.
-fn deserialize_some<'de, T, D>(deserializer: D) -> Result<Option<T>, D::Error>
+/// Treat any value that is present (including explicit `null`) as `Some`.
+fn nullable_field<'de, T, D>(deserializer: D) -> Result<Option<T>, D::Error>
 where
     T: Deserialize<'de>,
     D: Deserializer<'de>,
@@ -20,75 +24,77 @@ where
     Deserialize::deserialize(deserializer).map(Some)
 }
 
-/// # JSON payload for the `PUT /api/admin/v1/user-registration-tokens/{id}` endpoint
+/// Payload for `PUT /api/admin/v1/user-registration-tokens/{id}`.
 #[derive(Deserialize, JsonSchema)]
 #[serde(rename = "EditUserRegistrationTokenRequest")]
 pub struct RequestBody {
-    /// New expiration date for the token, or null to remove expiration
+    /// Updated expiration timestamp, or `null` to clear it
     #[serde(
         skip_serializing_if = "Option::is_none",
         default,
-        deserialize_with = "deserialize_some"
+        deserialize_with = "nullable_field"
     )]
     #[expect(clippy::option_option)]
     expires_at: Option<Option<DateTime<Utc>>>,
 
-    /// New usage limit for the token, or null to remove the limit
+    /// Updated usage cap, or `null` to remove the limit
     #[expect(clippy::option_option)]
     #[serde(
         skip_serializing_if = "Option::is_none",
         default,
-        deserialize_with = "deserialize_some"
+        deserialize_with = "nullable_field"
     )]
     usage_limit: Option<Option<u32>>,
 }
 
+/// Apply partial updates to a registration token's mutable fields.
 #[endpoint]
 #[tracing::instrument(name = "handler.admin.v1.user_registration_tokens.update", skip_all)]
 pub async fn handler(
     req: &mut Request,
     depot: &Depot,
 ) -> JsonResult<SingleResponse<UserRegistrationToken>> {
-    let call_context = extract_call_context(req, depot).await?;
+    let ctx = extract_call_context(req, depot).await?;
     let crate::handlers::admin::call_context::CallContext {
         mut repo, clock, ..
-    } = call_context;
-    let id = extract_ulid_param(req)?;
-    let request: RequestBody = req
+    } = ctx;
+    let target_id = extract_ulid_param(req)?;
+    let body: RequestBody = req
         .parse_json()
         .await
         .map_err(AppError::internal)?;
 
-    // id already extracted above
-
-    // Get the token
-    let mut token = repo
+    let mut entry = repo
         .user_registration_token()
-        .lookup(id)
+        .lookup(target_id)
         .await?
-        .ok_or_else(|| AppError::not_found(format!("Registration token with ID {id} not found")))?;
+        .ok_or_else(|| {
+            AppError::not_found(format!(
+                "Registration token with ID {target_id} not found"
+            ))
+        })?;
 
-    // Update expiration if present in the request
-    if let Some(expires_at) = request.expires_at {
-        token = repo
+    // Patch expiry when the field was explicitly supplied
+    if let Some(new_expiry) = body.expires_at {
+        entry = repo
             .user_registration_token()
-            .set_expiry(token, expires_at)
+            .set_expiry(entry, new_expiry)
             .await?;
     }
 
-    // Update usage limit if present in the request
-    if let Some(usage_limit) = request.usage_limit {
-        token = repo
+    // Patch usage limit when the field was explicitly supplied
+    if let Some(new_limit) = body.usage_limit {
+        entry = repo
             .user_registration_token()
-            .set_usage_limit(token, usage_limit)
+            .set_usage_limit(entry, new_limit)
             .await?;
     }
 
     repo.save().await?;
 
     Ok(Json(SingleResponse::new(
-        UserRegistrationToken::new(token, clock.now()),
-        format!("/api/admin/v1/user-registration-tokens/{id}"),
+        UserRegistrationToken::new(entry, clock.now()),
+        format!("/api/admin/v1/user-registration-tokens/{target_id}"),
     )))
 }
 
@@ -110,8 +116,7 @@ mod tests {
 
         let mut repo = state.repository().await.unwrap();
 
-        // Create a token without expiry
-        let registration_token = repo
+        let reg_token = repo
             .user_registration_token()
             .add(
                 &mut state.rng(),
@@ -125,22 +130,21 @@ mod tests {
 
         repo.save().await.unwrap();
 
-        // Update with an expiry date
-        let future_date = state.clock.now() + Duration::days(30);
+        // Set an expiry date
+        let new_expiry = state.clock.now() + Duration::days(30);
         let request = Request::put(format!(
             "/api/admin/v1/user-registration-tokens/{}",
-            registration_token.id
+            reg_token.id
         ))
         .bearer(&token)
         .json(json!({
-            "expires_at": future_date
+            "expires_at": new_expiry
         }));
 
         let response = state.request(request).await;
         response.assert_status(StatusCode::OK);
         let body: serde_json::Value = response.json();
 
-        // Verify expiry was updated
         insta::assert_json_snapshot!(body, @r#"
         {
           "data": {
@@ -166,10 +170,10 @@ mod tests {
         }
         "#);
 
-        // Now remove the expiry
+        // Clear the expiry
         let request = Request::put(format!(
             "/api/admin/v1/user-registration-tokens/{}",
-            registration_token.id
+            reg_token.id
         ))
         .bearer(&token)
         .json(json!({
@@ -180,7 +184,6 @@ mod tests {
         response.assert_status(StatusCode::OK);
         let body: serde_json::Value = response.json();
 
-        // Verify expiry was removed
         insta::assert_json_snapshot!(body, @r#"
         {
           "data": {
@@ -216,8 +219,7 @@ mod tests {
 
         let mut repo = state.repository().await.unwrap();
 
-        // Create a token with usage limit
-        let registration_token = repo
+        let reg_token = repo
             .user_registration_token()
             .add(
                 &mut state.rng(),
@@ -231,10 +233,10 @@ mod tests {
 
         repo.save().await.unwrap();
 
-        // Update the usage limit
+        // Increase the limit
         let request = Request::put(format!(
             "/api/admin/v1/user-registration-tokens/{}",
-            registration_token.id
+            reg_token.id
         ))
         .bearer(&token)
         .json(json!({
@@ -245,7 +247,6 @@ mod tests {
         response.assert_status(StatusCode::OK);
         let body: serde_json::Value = response.json();
 
-        // Verify usage limit was updated
         insta::assert_json_snapshot!(body, @r#"
         {
           "data": {
@@ -271,10 +272,10 @@ mod tests {
         }
         "#);
 
-        // Now remove the usage limit
+        // Remove the limit entirely
         let request = Request::put(format!(
             "/api/admin/v1/user-registration-tokens/{}",
-            registration_token.id
+            reg_token.id
         ))
         .bearer(&token)
         .json(json!({
@@ -285,7 +286,6 @@ mod tests {
         response.assert_status(StatusCode::OK);
         let body: serde_json::Value = response.json();
 
-        // Verify usage limit was removed
         insta::assert_json_snapshot!(body, @r#"
         {
           "data": {
@@ -321,8 +321,7 @@ mod tests {
 
         let mut repo = state.repository().await.unwrap();
 
-        // Create a token
-        let registration_token = repo
+        let reg_token = repo
             .user_registration_token()
             .add(
                 &mut state.rng(),
@@ -336,15 +335,14 @@ mod tests {
 
         repo.save().await.unwrap();
 
-        // Update both fields
-        let future_date = state.clock.now() + Duration::days(30);
+        let new_expiry = state.clock.now() + Duration::days(30);
         let request = Request::put(format!(
             "/api/admin/v1/user-registration-tokens/{}",
-            registration_token.id
+            reg_token.id
         ))
         .bearer(&token)
         .json(json!({
-            "expires_at": future_date,
+            "expires_at": new_expiry,
             "usage_limit": 20
         }));
 
@@ -352,7 +350,6 @@ mod tests {
         response.assert_status(StatusCode::OK);
         let body: serde_json::Value = response.json();
 
-        // Both fields were updated
         insta::assert_json_snapshot!(body, @r#"
         {
           "data": {
@@ -388,8 +385,7 @@ mod tests {
 
         let mut repo = state.repository().await.unwrap();
 
-        // Create a token
-        let registration_token = repo
+        let reg_token = repo
             .user_registration_token()
             .add(
                 &mut state.rng(),
@@ -403,10 +399,10 @@ mod tests {
 
         repo.save().await.unwrap();
 
-        // Send empty update
+        // Empty body -- nothing changes
         let request = Request::put(format!(
             "/api/admin/v1/user-registration-tokens/{}",
-            registration_token.id
+            reg_token.id
         ))
         .bearer(&token)
         .json(json!({}));
@@ -415,7 +411,6 @@ mod tests {
         response.assert_status(StatusCode::OK);
         let body: serde_json::Value = response.json();
 
-        // It shouldn't have updated the token
         insta::assert_json_snapshot!(body, @r#"
         {
           "data": {
@@ -449,7 +444,6 @@ mod tests {
         let mut state = TestState::from_pool(pool.clone()).await.unwrap();
         let token = state.token_with_scope("urn:pasion:admin").await;
 
-        // Try to update a non-existent token
         let request =
             Request::put("/api/admin/v1/user-registration-tokens/01040G2081040G2081040G2081")
                 .bearer(&token)

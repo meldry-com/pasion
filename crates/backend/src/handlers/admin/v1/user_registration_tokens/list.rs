@@ -1,3 +1,7 @@
+// Copyright 2025, 2026 Taidge Ltd.
+//
+// SPDX-License-Identifier: AGPL-3.0-only
+
 use pasion_data::{Page, user::UserRegistrationTokenFilter};
 use salvo::prelude::*;
 use schemars::JsonSchema;
@@ -11,114 +15,111 @@ use crate::handlers::admin::{
 };
 use crate::JsonResult;
 
+/// Query-string filters for the registration-token list endpoint.
 #[derive(Deserialize, JsonSchema, Default)]
 #[serde(rename = "RegistrationTokenFilter")]
 pub struct FilterParams {
-    /// Retrieve tokens that have (or have not) been used at least once
+    /// Whether the token has been redeemed at least once
     #[serde(rename = "filter[used]")]
     used: Option<bool>,
 
-    /// Retrieve tokens that are (or are not) revoked
+    /// Whether the token is currently revoked
     #[serde(rename = "filter[revoked]")]
     revoked: Option<bool>,
 
-    /// Retrieve tokens that are (or are not) expired
+    /// Whether the token has passed its expiry timestamp
     #[serde(rename = "filter[expired]")]
     expired: Option<bool>,
 
-    /// Retrieve tokens that are (or are not) valid
-    ///
-    /// Valid means that the token has not expired, is not revoked, and has not
-    /// reached its usage limit.
+    /// Whether the token is still usable (not expired, not revoked,
+    /// and has not exhausted its usage limit)
     #[serde(rename = "filter[valid]")]
     valid: Option<bool>,
 }
 
 impl std::fmt::Display for FilterParams {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        let mut sep = '?';
+        let mut delim = '?';
 
-        if let Some(used) = self.used {
-            write!(f, "{sep}filter[used]={used}")?;
-            sep = '&';
+        if let Some(val) = self.used {
+            write!(f, "{delim}filter[used]={val}")?;
+            delim = '&';
         }
-        if let Some(revoked) = self.revoked {
-            write!(f, "{sep}filter[revoked]={revoked}")?;
-            sep = '&';
+        if let Some(val) = self.revoked {
+            write!(f, "{delim}filter[revoked]={val}")?;
+            delim = '&';
         }
-        if let Some(expired) = self.expired {
-            write!(f, "{sep}filter[expired]={expired}")?;
-            sep = '&';
+        if let Some(val) = self.expired {
+            write!(f, "{delim}filter[expired]={val}")?;
+            delim = '&';
         }
-        if let Some(valid) = self.valid {
-            write!(f, "{sep}filter[valid]={valid}")?;
-            sep = '&';
+        if let Some(val) = self.valid {
+            write!(f, "{delim}filter[valid]={val}")?;
+            delim = '&';
         }
 
-        let _ = sep;
+        let _ = delim;
         Ok(())
     }
 }
 
+/// List registration tokens with optional filtering and cursor-based pagination.
 #[endpoint]
 #[tracing::instrument(name = "handler.admin.v1.registration_tokens.list", skip_all)]
 pub async fn handler(
     req: &mut Request,
     depot: &Depot,
 ) -> JsonResult<PaginatedResponse<UserRegistrationToken>> {
-    let call_context = extract_call_context(req, depot).await?;
+    let ctx = extract_call_context(req, depot).await?;
     let crate::handlers::admin::call_context::CallContext {
         mut repo, clock, ..
-    } = call_context;
+    } = ctx;
     let (pagination, include_count) = extract_pagination(req)?;
     let params: FilterParams = req.parse_queries().unwrap_or_default();
 
-    let base = format!("{path}{params}", path = UserRegistrationToken::PATH);
-    let base = include_count.add_to_base(&base);
+    let base_url = format!("{path}{params}", path = UserRegistrationToken::PATH);
+    let base_url = include_count.add_to_base(&base_url);
     let now = clock.now();
     let mut filter = UserRegistrationTokenFilter::new(now);
 
-    if let Some(used) = params.used {
-        filter = filter.with_been_used(used);
+    if let Some(val) = params.used {
+        filter = filter.with_been_used(val);
+    }
+    if let Some(val) = params.revoked {
+        filter = filter.with_revoked(val);
+    }
+    if let Some(val) = params.expired {
+        filter = filter.with_expired(val);
+    }
+    if let Some(val) = params.valid {
+        filter = filter.with_valid(val);
     }
 
-    if let Some(revoked) = params.revoked {
-        filter = filter.with_revoked(revoked);
-    }
-
-    if let Some(expired) = params.expired {
-        filter = filter.with_expired(expired);
-    }
-
-    if let Some(valid) = params.valid {
-        filter = filter.with_valid(valid);
-    }
-
-    let response = match include_count {
+    let result = match include_count {
         IncludeCount::True => {
             let page = repo
                 .user_registration_token()
                 .list(filter, pagination)
                 .await?
-                .map(|token| UserRegistrationToken::new(token, now));
-            let count = repo.user_registration_token().count(filter).await?;
-            PaginatedResponse::for_page(page, pagination, Some(count), &base)
+                .map(|t| UserRegistrationToken::new(t, now));
+            let total = repo.user_registration_token().count(filter).await?;
+            PaginatedResponse::for_page(page, pagination, Some(total), &base_url)
         }
         IncludeCount::False => {
             let page = repo
                 .user_registration_token()
                 .list(filter, pagination)
                 .await?
-                .map(|token| UserRegistrationToken::new(token, now));
-            PaginatedResponse::for_page(page, pagination, None, &base)
+                .map(|t| UserRegistrationToken::new(t, now));
+            PaginatedResponse::for_page(page, pagination, None, &base_url)
         }
         IncludeCount::Only => {
-            let count = repo.user_registration_token().count(filter).await?;
-            PaginatedResponse::for_count_only(count, &base)
+            let total = repo.user_registration_token().count(filter).await?;
+            PaginatedResponse::for_count_only(total, &base_url)
         }
     };
 
-    Ok(Json(response))
+    Ok(Json(result))
 }
 
 #[cfg(test)]
@@ -129,14 +130,17 @@ mod tests {
 
     use crate::handlers::test_utils::{RequestBuilderExt, ResponseExt, TestState, setup};
 
-    async fn create_test_tokens(state: &mut TestState) {
-        let mut repo = state.repository().await.unwrap();
+    /// Provision a set of tokens covering all relevant combinations of
+    /// used / revoked / expired status so that filter tests can work
+    /// against a known data set.
+    async fn seed_tokens(ts: &mut TestState) {
+        let mut repo = ts.repository().await.unwrap();
 
-        // Token 1: Never used, not revoked
+        // 1 -- never used, not revoked, not expired
         repo.user_registration_token()
             .add(
-                &mut state.rng(),
-                &state.clock,
+                &mut ts.rng(),
+                &ts.clock,
                 "token_unused".to_owned(),
                 Some(10),
                 None,
@@ -144,12 +148,12 @@ mod tests {
             .await
             .unwrap();
 
-        // Token 2: Used, not revoked
-        let token = repo
+        // 2 -- used once, not revoked
+        let tok = repo
             .user_registration_token()
             .add(
-                &mut state.rng(),
-                &state.clock,
+                &mut ts.rng(),
+                &ts.clock,
                 "token_used".to_owned(),
                 Some(10),
                 None,
@@ -157,16 +161,16 @@ mod tests {
             .await
             .unwrap();
         repo.user_registration_token()
-            .use_token(&state.clock, token)
+            .use_token(&ts.clock, tok)
             .await
             .unwrap();
 
-        // Token 3: Never used, revoked
-        let token = repo
+        // 3 -- never used, revoked
+        let tok = repo
             .user_registration_token()
             .add(
-                &mut state.rng(),
-                &state.clock,
+                &mut ts.rng(),
+                &ts.clock,
                 "token_revoked".to_owned(),
                 Some(10),
                 None,
@@ -174,41 +178,41 @@ mod tests {
             .await
             .unwrap();
         repo.user_registration_token()
-            .revoke(&state.clock, token)
+            .revoke(&ts.clock, tok)
             .await
             .unwrap();
 
-        // Token 4: Used, revoked
-        let token = repo
+        // 4 -- used once, then revoked
+        let tok = repo
             .user_registration_token()
             .add(
-                &mut state.rng(),
-                &state.clock,
+                &mut ts.rng(),
+                &ts.clock,
                 "token_used_revoked".to_owned(),
                 Some(10),
                 None,
             )
             .await
             .unwrap();
-        let token = repo
+        let tok = repo
             .user_registration_token()
-            .use_token(&state.clock, token)
+            .use_token(&ts.clock, tok)
             .await
             .unwrap();
         repo.user_registration_token()
-            .revoke(&state.clock, token)
+            .revoke(&ts.clock, tok)
             .await
             .unwrap();
 
-        // Token 5: Expired token
-        let expires_at = state.clock.now() - Duration::try_days(1).unwrap();
+        // 5 -- already expired
+        let past = ts.clock.now() - Duration::try_days(1).unwrap();
         repo.user_registration_token()
             .add(
-                &mut state.rng(),
-                &state.clock,
+                &mut ts.rng(),
+                &ts.clock,
                 "token_expired".to_owned(),
                 Some(5),
-                Some(expires_at),
+                Some(past),
             )
             .await
             .unwrap();
@@ -222,7 +226,7 @@ mod tests {
         let pool = pasion_data::test_utils::setup_test_pool().await;
         let mut state = TestState::from_pool(pool.clone()).await.unwrap();
         let admin_token = state.token_with_scope("urn:pasion:admin").await;
-        create_test_tokens(&mut state).await;
+        seed_tokens(&mut state).await;
 
         let request = Request::get("/api/admin/v1/user-registration-tokens")
             .bearer(&admin_token)
@@ -363,9 +367,9 @@ mod tests {
         let pool = pasion_data::test_utils::setup_test_pool().await;
         let mut state = TestState::from_pool(pool.clone()).await.unwrap();
         let admin_token = state.token_with_scope("urn:pasion:admin").await;
-        create_test_tokens(&mut state).await;
+        seed_tokens(&mut state).await;
 
-        // Filter for used tokens
+        // used=true
         let request = Request::get("/api/admin/v1/user-registration-tokens?filter[used]=true")
             .bearer(&admin_token)
             .empty();
@@ -432,7 +436,7 @@ mod tests {
         }
         "#);
 
-        // Filter for unused tokens
+        // used=false
         let request = Request::get("/api/admin/v1/user-registration-tokens?filter[used]=false")
             .bearer(&admin_token)
             .empty();
@@ -528,9 +532,9 @@ mod tests {
         let pool = pasion_data::test_utils::setup_test_pool().await;
         let mut state = TestState::from_pool(pool.clone()).await.unwrap();
         let admin_token = state.token_with_scope("urn:pasion:admin").await;
-        create_test_tokens(&mut state).await;
+        seed_tokens(&mut state).await;
 
-        // Filter for revoked tokens
+        // revoked=true
         let request = Request::get("/api/admin/v1/user-registration-tokens?filter[revoked]=true")
             .bearer(&admin_token)
             .empty();
@@ -597,7 +601,7 @@ mod tests {
         }
         "#);
 
-        // Filter for non-revoked tokens
+        // revoked=false
         let request = Request::get("/api/admin/v1/user-registration-tokens?filter[revoked]=false")
             .bearer(&admin_token)
             .empty();
@@ -693,9 +697,9 @@ mod tests {
         let pool = pasion_data::test_utils::setup_test_pool().await;
         let mut state = TestState::from_pool(pool.clone()).await.unwrap();
         let admin_token = state.token_with_scope("urn:pasion:admin").await;
-        create_test_tokens(&mut state).await;
+        seed_tokens(&mut state).await;
 
-        // Filter for expired tokens
+        // expired=true
         let request = Request::get("/api/admin/v1/user-registration-tokens?filter[expired]=true")
             .bearer(&admin_token)
             .empty();
@@ -740,7 +744,7 @@ mod tests {
         }
         "#);
 
-        // Filter for non-expired tokens
+        // expired=false
         let request = Request::get("/api/admin/v1/user-registration-tokens?filter[expired]=false")
             .bearer(&admin_token)
             .empty();
@@ -858,9 +862,9 @@ mod tests {
         let pool = pasion_data::test_utils::setup_test_pool().await;
         let mut state = TestState::from_pool(pool.clone()).await.unwrap();
         let admin_token = state.token_with_scope("urn:pasion:admin").await;
-        create_test_tokens(&mut state).await;
+        seed_tokens(&mut state).await;
 
-        // Filter for valid tokens
+        // valid=true
         let request = Request::get("/api/admin/v1/user-registration-tokens?filter[valid]=true")
             .bearer(&admin_token)
             .empty();
@@ -927,7 +931,7 @@ mod tests {
         }
         "#);
 
-        // Filter for invalid tokens
+        // valid=false
         let request = Request::get("/api/admin/v1/user-registration-tokens?filter[valid]=false")
             .bearer(&admin_token)
             .empty();
@@ -1023,9 +1027,9 @@ mod tests {
         let pool = pasion_data::test_utils::setup_test_pool().await;
         let mut state = TestState::from_pool(pool.clone()).await.unwrap();
         let admin_token = state.token_with_scope("urn:pasion:admin").await;
-        create_test_tokens(&mut state).await;
+        seed_tokens(&mut state).await;
 
-        // Filter for used AND revoked tokens
+        // used AND revoked
         let request = Request::get(
             "/api/admin/v1/user-registration-tokens?filter[used]=true&filter[revoked]=true",
         )
@@ -1079,9 +1083,9 @@ mod tests {
         let pool = pasion_data::test_utils::setup_test_pool().await;
         let mut state = TestState::from_pool(pool.clone()).await.unwrap();
         let admin_token = state.token_with_scope("urn:pasion:admin").await;
-        create_test_tokens(&mut state).await;
+        seed_tokens(&mut state).await;
 
-        // Request with pagination (2 per page)
+        // First page of 2
         let request = Request::get("/api/admin/v1/user-registration-tokens?page[first]=2")
             .bearer(&admin_token)
             .empty();
@@ -1149,7 +1153,7 @@ mod tests {
         }
         "#);
 
-        // Request second page
+        // Second page
         let request = Request::get("/api/admin/v1/user-registration-tokens?page[after]=01FSHN9AG07HNEZXNQM2KNBNF6&page[first]=2")
             .bearer(&admin_token)
             .empty();
@@ -1217,7 +1221,7 @@ mod tests {
         }
         "#);
 
-        // Request last item
+        // Last item via page[last]=1
         let request = Request::get("/api/admin/v1/user-registration-tokens?page[last]=1")
             .bearer(&admin_token)
             .empty();
@@ -1271,7 +1275,6 @@ mod tests {
         let mut state = TestState::from_pool(pool.clone()).await.unwrap();
         let admin_token = state.token_with_scope("urn:pasion:admin").await;
 
-        // Try with invalid filter value
         let request = Request::get("/api/admin/v1/user-registration-tokens?filter[used]=invalid")
             .bearer(&admin_token)
             .empty();
@@ -1293,9 +1296,9 @@ mod tests {
         let pool = pasion_data::test_utils::setup_test_pool().await;
         let mut state = TestState::from_pool(pool.clone()).await.unwrap();
         let admin_token = state.token_with_scope("urn:pasion:admin").await;
-        create_test_tokens(&mut state).await;
+        seed_tokens(&mut state).await;
 
-        // Test count=false
+        // count=false -- no meta.count in the response
         let request = Request::get("/api/admin/v1/user-registration-tokens?count=false")
             .bearer(&admin_token)
             .empty();
@@ -1424,7 +1427,7 @@ mod tests {
         }
         "#);
 
-        // Test count=only
+        // count=only -- just the total
         let request = Request::get("/api/admin/v1/user-registration-tokens?count=only")
             .bearer(&admin_token)
             .empty();
@@ -1442,7 +1445,7 @@ mod tests {
         }
         "#);
 
-        // Test count=false with filtering
+        // count=false combined with a filter
         let request =
             Request::get("/api/admin/v1/user-registration-tokens?count=false&filter[valid]=true")
                 .bearer(&admin_token)
@@ -1506,7 +1509,7 @@ mod tests {
         }
         "#);
 
-        // Test count=only with filtering
+        // count=only combined with a filter
         let request =
             Request::get("/api/admin/v1/user-registration-tokens?count=only&filter[revoked]=true")
                 .bearer(&admin_token)

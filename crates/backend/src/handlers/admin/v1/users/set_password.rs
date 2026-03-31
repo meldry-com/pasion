@@ -1,3 +1,8 @@
+// Copyright 2024, 2025 Taidge Ltd.
+// Copyright 2024 The Matrix.org Foundation C.I.C.
+//
+// SPDX-License-Identifier: Apache-2.0
+
 use pasion_data::{BoxRng, audit::AdminOperation};
 use salvo::{http::StatusCode, prelude::*};
 use schemars::JsonSchema;
@@ -154,7 +159,7 @@ mod tests {
             )
             .await
             .unwrap();
-        assert_eq!(res, PasswordVerificationResult::Success(()));
+        assert_eq!(res, PasswordVerificationResult::Matched(()));
     }
 
     #[tokio::test]
@@ -215,7 +220,7 @@ mod tests {
             )
             .await
             .unwrap();
-        assert_eq!(res, PasswordVerificationResult::Success(()));
+        assert_eq!(res, PasswordVerificationResult::Matched(()));
     }
 
     #[tokio::test]

@@ -5,67 +5,72 @@ package client_registration
 
 import rego.v1
 
+# OAuth2 dynamic client registration is denied by default.
 default allow := false
 
+# Permit registration only when there are zero violations.
 allow if {
 	count(violation) == 0
 }
 
-parse_uri(url) := obj if {
-	is_string(url)
-	url_regex := `^(?P<scheme>[a-z][a-z0-9+.-]*):(?://(?P<host>((?:(?:[a-z0-9]|[a-z0-9][a-z0-9-]*[a-z0-9])\.)*(?:[a-z0-9]|[a-z0-9][a-z0-9-]*[a-z0-9])|127.0.0.1|0.0.0.0|\[::1\])(?::(?P<port>[0-9]+))?))?(?P<path>/[A-Za-z0-9/._~-]*)?(?P<query>\?[-a-zA-Z0-9()@:%_+.~#?&/=]*)?$`
-	[matches] := regex.find_all_string_submatch_n(url_regex, url, 1)
-	obj := {"scheme": matches[1], "authority": matches[2], "host": matches[3], "port": matches[4], "path": matches[5], "query": matches[6]}
+# Decompose a URI string into its constituent parts using regex capture groups.
+parse_uri(raw_url) := components if {
+	is_string(raw_url)
+	uri_pattern := `^(?P<scheme>[a-z][a-z0-9+.-]*):(?://(?P<host>((?:(?:[a-z0-9]|[a-z0-9][a-z0-9-]*[a-z0-9])\.)*(?:[a-z0-9]|[a-z0-9][a-z0-9-]*[a-z0-9])|127.0.0.1|0.0.0.0|\[::1\])(?::(?P<port>[0-9]+))?))?(?P<path>/[A-Za-z0-9/._~-]*)?(?P<query>\?[-a-zA-Z0-9()@:%_+.~#?&/=]*)?$`
+	[groups] := regex.find_all_string_submatch_n(uri_pattern, raw_url, 1)
+	components := {"scheme": groups[1], "authority": groups[2], "host": groups[3], "port": groups[4], "path": groups[5], "query": groups[6]}
 }
 
+# A URL is considered secure if insecure URIs are explicitly permitted.
 secure_url(_) if {
 	data.client_registration.allow_insecure_uris
 }
 
-secure_url(x) if {
-	url := parse_uri(x)
-	url.scheme == "https"
-
-	# Disallow localhost variants
-	url.host != "localhost"
-	url.host != "127.0.0.1"
-	url.host != "0.0.0.0"
-	url.host != "[::1]"
+# Otherwise a URL must use HTTPS and must not point to a loopback address.
+secure_url(url_str) if {
+	parsed := parse_uri(url_str)
+	parsed.scheme == "https"
+	parsed.host != "localhost"
+	parsed.host != "127.0.0.1"
+	parsed.host != "0.0.0.0"
+	parsed.host != "[::1]"
 }
 
+# Host matching is skipped when the configuration allows mismatched hosts.
 host_matches_client_uri(_) if {
-	# Do not check we allow host mismatch
 	data.client_registration.allow_host_mismatch
 }
 
+# Host matching is also skipped when client_uri is absent and that is permitted.
 host_matches_client_uri(_) if {
-	# Do not check if the client_uri is missing and we allow that
 	data.client_registration.allow_missing_client_uri
 	not data.client_metadata.client_uri
 }
 
-host_matches_client_uri(x) if {
-	client_uri := parse_uri(input.client_metadata.client_uri)
-	uri := parse_uri(x)
-	is_subdomain(client_uri.host, uri.host)
+# Verify that a given URL's host is a subdomain of (or equal to) the client_uri host.
+host_matches_client_uri(url_str) if {
+	base_uri := parse_uri(input.client_metadata.client_uri)
+	target_uri := parse_uri(url_str)
+	is_subdomain(base_uri.host, target_uri.host)
 }
 
-# If the grant_types is missing, we assume it is authorization_code
-uses_grant_type("authorization_code", client_metadata) if {
-	not client_metadata.grant_types
+# When grant_types is absent, default to authorization_code per spec.
+uses_grant_type("authorization_code", metadata) if {
+	not metadata.grant_types
 }
 
-# Else, we check that the grant_types contains the given grant_type
-uses_grant_type(grant_type, client_metadata) if {
-	some grant in client_metadata.grant_types
-	grant == grant_type
+# Check whether the metadata's grant_types list includes the specified type.
+uses_grant_type(gtype, metadata) if {
+	some g in metadata.grant_types
+	g == gtype
 }
 
-# Consider a client public if the authentication method is none
+# A client is considered public when it uses no token endpoint authentication.
 is_public_client if {
 	input.client_metadata.token_endpoint_auth_method == "none"
 }
 
+# Redirect URIs are mandatory for authorization_code and implicit flows.
 requires_redirect_uris if {
 	uses_grant_type("authorization_code", input.client_metadata)
 }
@@ -74,37 +79,25 @@ requires_redirect_uris if {
 	uses_grant_type("implicit", input.client_metadata)
 }
 
-# Used to verify that a reverse-dns formatted scheme is a strict subdomain of
-# another host.
-# This is used so a redirect_uri like 'com.example.app:/' works for
-# a 'client_uri' of 'https://example.com/'
-reverse_dns_match(host, reverse_dns) if {
-	is_string(host)
-	is_string(reverse_dns)
+# Verify that a reverse-DNS scheme (e.g. "com.example.app") corresponds
+# to a given hostname (e.g. "app.example.com") by reversing and comparing segments.
+reverse_dns_match(hostname, rdns_scheme) if {
+	is_string(hostname)
+	is_string(rdns_scheme)
 
-	# Reverse the host
-	host_parts := array.reverse(split(host, "."))
-
-	# Split the already reversed DNS
-	dns_parts := split(reverse_dns, ".")
-
-	# Check that the reverse_dns strictly is a subdomain of the host
-	array.slice(dns_parts, 0, count(host_parts)) == host_parts
+	reversed_host := array.reverse(split(hostname, "."))
+	rdns_segments := split(rdns_scheme, ".")
+	array.slice(rdns_segments, 0, count(reversed_host)) == reversed_host
 }
 
-# Used to verify that all the various URIs are subdomains of the client_uri
-is_subdomain(host, subdomain) if {
-	is_string(host)
-	is_string(subdomain)
+# Verify that candidate_host is the same as or a subdomain of base_host.
+is_subdomain(base_host, candidate_host) if {
+	is_string(base_host)
+	is_string(candidate_host)
 
-	# Split the host
-	host_parts := array.reverse(split(host, "."))
-
-	# Split the subdomain
-	subdomain_parts := array.reverse(split(subdomain, "."))
-
-	# Check that the subdomain strictly is a subdomain of the host
-	array.slice(subdomain_parts, 0, count(host_parts)) == host_parts
+	base_segments := array.reverse(split(base_host, "."))
+	candidate_segments := array.reverse(split(candidate_host, "."))
+	array.slice(candidate_segments, 0, count(base_segments)) == base_segments
 }
 
 is_localhost("localhost")
@@ -113,33 +106,33 @@ is_localhost("127.0.0.1")
 
 is_localhost("[::1]")
 
-valid_native_redirector(x) if {
-	url := parse_uri(x)
-	is_localhost(url.host)
-	url.scheme == "http"
+# Native apps may redirect to localhost over plain HTTP.
+valid_native_redirector(uri_str) if {
+	parsed := parse_uri(uri_str)
+	is_localhost(parsed.host)
+	parsed.scheme == "http"
 }
 
-# Custom schemes should match the client_uri, reverse-dns style
-# e.g. io.element.app:/ matches https://app.element.io/
-valid_native_redirector(x) if {
-	url := parse_uri(x)
-	url.scheme != "http"
-	url.scheme != "https"
-
-	# They should have no host/port
-	url.authority == ""
-	client_uri := parse_uri(input.client_metadata.client_uri)
-	reverse_dns_match(client_uri.host, url.scheme)
+# Native apps may also use custom URL schemes that map to the client_uri via reverse-DNS.
+valid_native_redirector(uri_str) if {
+	parsed := parse_uri(uri_str)
+	parsed.scheme != "http"
+	parsed.scheme != "https"
+	parsed.authority == ""
+	base := parse_uri(input.client_metadata.client_uri)
+	reverse_dns_match(base.host, parsed.scheme)
 }
 
-valid_redirect_uri(uri) if {
+# A redirect URI is valid for native clients if it uses a native redirector.
+valid_redirect_uri(redir) if {
 	input.client_metadata.application_type == "native"
-	valid_native_redirector(uri)
+	valid_native_redirector(redir)
 }
 
-valid_redirect_uri(uri) if {
-	secure_url(uri)
-	host_matches_client_uri(uri)
+# Any redirect URI that is secure and host-matched is valid.
+valid_redirect_uri(redir) if {
+	secure_url(redir)
+	host_matches_client_uri(redir)
 }
 
 # METADATA
@@ -196,7 +189,7 @@ violation contains {"msg": "invalid redirect_uris: it must have at least one red
 	count(input.client_metadata.redirect_uris) == 0
 }
 
-violation contains {"msg": "invalid redirect_uri", "redirect_uri": redirect_uri} if {
-	some redirect_uri in input.client_metadata.redirect_uris
-	not valid_redirect_uri(redirect_uri)
+violation contains {"msg": "invalid redirect_uri", "redirect_uri": redir} if {
+	some redir in input.client_metadata.redirect_uris
+	not valid_redirect_uri(redir)
 }

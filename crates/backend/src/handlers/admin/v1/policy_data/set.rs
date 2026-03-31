@@ -1,7 +1,7 @@
-use std::sync::Arc;
+// Copyright 2025, 2026 Taidge Ltd.
+//
+// SPDX-License-Identifier: AGPL-3.0-only
 
-use pasion_data::BoxRng;
-use pasion_policy::PolicyFactory;
 use salvo::prelude::*;
 use schemars::JsonSchema;
 use serde::Deserialize;
@@ -11,10 +11,10 @@ use crate::handlers::{
         call_context::extract_call_context,
         model::PolicyData,
         response::SingleResponse,
+        CreatedJson,
     },
     rest::DepotExt,
 };
-use crate::handlers::admin::CreatedJson;
 use crate::{AppError, CreatedJsonResult};
 
 fn data_example() -> serde_json::Value {
@@ -25,51 +25,55 @@ fn data_example() -> serde_json::Value {
     })
 }
 
-/// # JSON payload for the `POST /api/admin/v1/policy-data`
+/// Request body for creating a new policy data record.
 #[derive(Deserialize, JsonSchema)]
 #[serde(rename = "SetPolicyDataRequest")]
 pub struct SetPolicyDataRequest {
     #[schemars(example = data_example())]
     pub data: serde_json::Value,
 }
+
+/// Store a new policy data snapshot, replacing the active policy in memory.
 #[endpoint]
 #[tracing::instrument(name = "handler.admin.v1.policy_data.set", skip_all)]
 pub async fn handler(
     req: &mut Request,
     depot: &Depot,
 ) -> CreatedJsonResult<SingleResponse<PolicyData>> {
-    let call_context = extract_call_context(req, depot).await?;
+    let ctx = extract_call_context(req, depot).await?;
     let crate::handlers::admin::call_context::CallContext {
         mut repo, clock, ..
-    } = call_context;
+    } = ctx;
     let mut rng = crate::handlers::rest::make_rng();
-    let policy_factory = depot.policy_factory()?;
-    let request: SetPolicyDataRequest = req
+    let factory = depot.policy_factory()?;
+
+    let body: SetPolicyDataRequest = req
         .parse_json()
         .await
         .map_err(AppError::internal)?;
 
-    let policy_data = repo
+    let record = repo
         .policy_data()
-        .set(&mut rng, &clock, request.data)
+        .set(&mut rng, &clock, body.data)
         .await?;
 
-    // Swap the policy data. This will fail if the policy data is invalid
-    policy_factory
-        .set_dynamic_data(policy_data.clone())
+    // Validate by attempting to load the new data into the policy engine.
+    // Rolls back on failure since we haven't called save() yet.
+    factory
+        .set_dynamic_data(record.clone())
         .await
-        .map_err(|error| {
+        .map_err(|err| {
             AppError::with_source(
                 salvo::http::StatusCode::BAD_REQUEST,
-                "Failed to instanciate policy with the provided data",
-                Box::new(error),
+                "Provided data could not be loaded as a valid policy",
+                Box::new(err),
                 false,
             )
         })?;
 
     repo.save().await?;
 
-    Ok(CreatedJson(SingleResponse::new_canonical(policy_data.into())))
+    Ok(CreatedJson(SingleResponse::new_canonical(record.into())))
 }
 
 #[cfg(test)]

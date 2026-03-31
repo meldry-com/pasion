@@ -1,3 +1,8 @@
+// Copyright 2024, 2025 Taidge Ltd.
+// Copyright 2021-2024 The Matrix.org Foundation C.I.C.
+//
+// SPDX-License-Identifier: Apache-2.0
+
 //! OAuth 2.0 and OpenID Connect protocol endpoint handlers.
 //!
 //! This module implements the server-side of the OAuth 2.0 / OIDC flows:

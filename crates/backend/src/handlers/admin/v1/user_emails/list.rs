@@ -1,3 +1,7 @@
+// Copyright 2025, 2026 Taidge Ltd.
+//
+// SPDX-License-Identifier: AGPL-3.0-only
+
 use pasion_data::{Page, user::UserEmailFilter};
 use salvo::prelude::*;
 use schemars::JsonSchema;
@@ -12,85 +16,88 @@ use crate::handlers::admin::{
 };
 use crate::{AppError, JsonResult};
 
+/// Query-string parameters for filtering user email results.
 #[derive(Deserialize, JsonSchema, Default)]
 #[serde(rename = "UserEmailFilter")]
 pub struct FilterParams {
-    /// Retrieve the items for the given user
+    /// Narrow results to emails belonging to this user
     #[serde(rename = "filter[user]")]
     #[schemars(with = "Option<crate::handlers::admin::schema::Ulid>")]
     user: Option<Ulid>,
 
-    /// Retrieve the user email with the given email address
+    /// Narrow results to a specific email address
     #[serde(rename = "filter[email]")]
     email: Option<String>,
 }
 
 impl std::fmt::Display for FilterParams {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        let mut sep = '?';
+        let mut delimiter = '?';
 
-        if let Some(user) = self.user {
-            write!(f, "{sep}filter[user]={user}")?;
-            sep = '&';
+        if let Some(uid) = self.user {
+            write!(f, "{delimiter}filter[user]={uid}")?;
+            delimiter = '&';
         }
 
-        if let Some(email) = &self.email {
-            write!(f, "{sep}filter[email]={email}")?;
-            sep = '&';
+        if let Some(addr) = &self.email {
+            write!(f, "{delimiter}filter[email]={addr}")?;
+            delimiter = '&';
         }
 
-        let _ = sep;
+        let _ = delimiter;
         Ok(())
     }
 }
 
+/// List user emails with optional filtering and pagination.
 #[endpoint]
 #[tracing::instrument(name = "handler.admin.v1.user_emails.list", skip_all)]
 pub async fn handler(
     req: &mut Request,
     depot: &Depot,
 ) -> JsonResult<PaginatedResponse<UserEmail>> {
-    let call_context = extract_call_context(req, depot).await?;
-    let crate::handlers::admin::call_context::CallContext { mut repo, .. } = call_context;
+    let ctx = extract_call_context(req, depot).await?;
+    let crate::handlers::admin::call_context::CallContext { mut repo, .. } = ctx;
     let (pagination, include_count) = extract_pagination(req)?;
     let params: FilterParams = req.parse_queries().unwrap_or_default();
 
-    let base = format!("{path}{params}", path = UserEmail::PATH);
-    let base = include_count.add_to_base(&base);
-    let filter = UserEmailFilter::default();
+    let base_url = format!("{path}{params}", path = UserEmail::PATH);
+    let base_url = include_count.add_to_base(&base_url);
+    let mut filter = UserEmailFilter::default();
 
-    // Load the user from the filter
-    let user = if let Some(user_id) = params.user {
-        let user = repo
-            .user()
-            .lookup(user_id)
-            .await?
-            .ok_or_else(|| AppError::not_found(format!("User ID {user_id} not found")))?;
-
-        Some(user)
-    } else {
-        None
+    // Optionally scope to a particular user
+    let resolved_user = match params.user {
+        Some(uid) => {
+            let u = repo
+                .user()
+                .lookup(uid)
+                .await?
+                .ok_or_else(|| AppError::not_found(format!("User ID {uid} not found")))?;
+            Some(u)
+        }
+        None => None,
     };
 
-    let filter = match &user {
-        Some(user) => filter.for_user(user),
+    filter = match &resolved_user {
+        Some(u) => filter.for_user(u),
         None => filter,
     };
 
-    let filter = match &params.email {
-        Some(email) => filter.for_email(email),
+    // Optionally match by email address
+    filter = match &params.email {
+        Some(addr) => filter.for_email(addr),
         None => filter,
     };
 
-    let response = match include_count {
+    let result = match include_count {
         IncludeCount::True => {
             let page = repo
                 .user_email()
                 .list(filter, pagination)
                 .await?
                 .map(UserEmail::from);
-            let count = repo.user_email().count(filter).await?;
-            PaginatedResponse::for_page(page, pagination, Some(count), &base)
+            let total = repo.user_email().count(filter).await?;
+            PaginatedResponse::for_page(page, pagination, Some(total), &base_url)
         }
         IncludeCount::False => {
             let page = repo
@@ -98,15 +105,15 @@ pub async fn handler(
                 .list(filter, pagination)
                 .await?
                 .map(UserEmail::from);
-            PaginatedResponse::for_page(page, pagination, None, &base)
+            PaginatedResponse::for_page(page, pagination, None, &base_url)
         }
         IncludeCount::Only => {
-            let count = repo.user_email().count(filter).await?;
-            PaginatedResponse::for_count_only(count, &base)
+            let total = repo.user_email().count(filter).await?;
+            PaginatedResponse::for_count_only(total, &base_url)
         }
     };
 
-    Ok(Json(response))
+    Ok(Json(result))
 }
 
 #[cfg(test)]

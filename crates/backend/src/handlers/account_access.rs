@@ -96,7 +96,7 @@ pub async fn login_with_password(
         )
         .await
     {
-        Ok(PasswordVerificationResult::Success(Some((version, new_password_hash)))) => {
+        Ok(PasswordVerificationResult::Matched(Some((version, new_password_hash)))) => {
             repo.user_password()
                 .add(
                     &mut *rng,
@@ -108,8 +108,8 @@ pub async fn login_with_password(
                 )
                 .await?
         }
-        Ok(PasswordVerificationResult::Success(None)) => user_password,
-        Ok(PasswordVerificationResult::Failure) => {
+        Ok(PasswordVerificationResult::Matched(None)) => user_password,
+        Ok(PasswordVerificationResult::NotMatched) => {
             return Ok(PasswordLoginOutcome::InvalidCredentials);
         }
         Err(error) => return Err(PasswordLoginError::Password(error.into())),

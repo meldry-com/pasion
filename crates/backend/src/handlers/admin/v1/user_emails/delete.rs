@@ -1,34 +1,38 @@
+// Copyright 2025, 2026 Taidge Ltd.
+//
+// SPDX-License-Identifier: AGPL-3.0-only
+
 use pasion_data::BoxRng;
 use pasion_data::queue::{ProvisionUserJob, QueueJobRepositoryExt as _};
 use salvo::{http::StatusCode, prelude::*};
-use ulid::Ulid;
 
 use crate::handlers::admin::{
     call_context::extract_call_context, params::extract_ulid_param,
 };
 use crate::{AppError, AppResult};
 
+/// Remove a user email by its identifier.
 #[endpoint]
 #[tracing::instrument(name = "handler.admin.v1.user_emails.delete", skip_all)]
 pub async fn handler(req: &mut Request, depot: &Depot) -> AppResult<StatusCode> {
-    let call_context = extract_call_context(req, depot).await?;
+    let ctx = extract_call_context(req, depot).await?;
     let crate::handlers::admin::call_context::CallContext {
         mut repo, clock, ..
-    } = call_context;
-    let id = extract_ulid_param(req)?;
+    } = ctx;
+    let email_id = extract_ulid_param(req)?;
     let mut rng = crate::handlers::rest::make_rng();
 
-    let email = repo
+    let entry = repo
         .user_email()
-        .lookup(id)
+        .lookup(email_id)
         .await?
-        .ok_or_else(|| AppError::not_found(format!("User email ID {id} not found")))?;
+        .ok_or_else(|| AppError::not_found(format!("User email ID {email_id} not found")))?;
 
-    let job = ProvisionUserJob::new_for_id(email.user_id);
-    repo.user_email().remove(email).await?;
+    let provision_job = ProvisionUserJob::new_for_id(entry.user_id);
+    repo.user_email().remove(entry).await?;
 
-    // Schedule a job to update the user
-    repo.queue_job().schedule_job(&mut rng, &clock, job).await?;
+    // Notify downstream systems about the change
+    repo.queue_job().schedule_job(&mut rng, &clock, provision_job).await?;
 
     repo.save().await?;
 

@@ -1,3 +1,7 @@
+// Copyright 2025 Taidge Ltd.
+//
+// SPDX-License-Identifier: Apache-2.0
+
 //! Test utilities for creating temporary test databases.
 
 use diesel_async::AsyncPgConnection;

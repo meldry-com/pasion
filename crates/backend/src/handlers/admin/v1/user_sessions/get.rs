@@ -1,3 +1,7 @@
+// Copyright 2025, 2026 Taidge Ltd.
+//
+// SPDX-License-Identifier: AGPL-3.0-only
+
 use salvo::prelude::*;
 
 use crate::handlers::admin::{
@@ -8,25 +12,28 @@ use crate::handlers::admin::{
 };
 use crate::{AppError, JsonResult};
 
+/// Look up a single browser session by its ULID.
 #[endpoint]
 #[tracing::instrument(name = "handler.admin.v1.user_sessions.get", skip_all)]
 pub async fn handler(
     req: &mut Request,
     depot: &Depot,
 ) -> JsonResult<SingleResponse<UserSession>> {
-    let call_context = extract_call_context(req, depot).await?;
-    let crate::handlers::admin::call_context::CallContext { mut repo, .. } = call_context;
-    let id = extract_ulid_param(req)?;
+    let ctx = extract_call_context(req, depot).await?;
+    let crate::handlers::admin::call_context::CallContext { mut repo, .. } = ctx;
+    let session_id = extract_ulid_param(req)?;
 
-    let session = repo
+    let browser_session = repo
         .browser_session()
-        .lookup(id)
+        .lookup(session_id)
         .await?
-        .ok_or_else(|| AppError::not_found(format!("User session ID {id} not found")))?;
+        .ok_or_else(|| {
+            AppError::not_found(format!("User session ID {session_id} not found"))
+        })?;
 
-    Ok(Json(SingleResponse::new_canonical(UserSession::from(
-        session,
-    ))))
+    Ok(Json(SingleResponse::new_canonical(
+        UserSession::from(browser_session),
+    )))
 }
 
 #[cfg(test)]

@@ -2,83 +2,91 @@ package common
 
 import rego.v1
 
-matches_string_constraints(str, constraints) if matches_regexes(str, constraints.regexes)
+# Evaluate whether a given text satisfies any of the provided string constraints.
+# Each constraint type is checked independently - matching any one is sufficient.
 
-matches_string_constraints(str, constraints) if matches_substrings(str, constraints.substrings)
+matches_string_constraints(text, constraints) if check_regexes(text, constraints.regexes)
 
-matches_string_constraints(str, constraints) if matches_literals(str, constraints.literals)
+matches_string_constraints(text, constraints) if check_substrings(text, constraints.substrings)
 
-matches_string_constraints(str, constraints) if matches_suffixes(str, constraints.suffixes)
+matches_string_constraints(text, constraints) if check_literals(text, constraints.literals)
 
-matches_string_constraints(str, constraints) if matches_prefixes(str, constraints.prefixes)
+matches_string_constraints(text, constraints) if check_suffixes(text, constraints.suffixes)
 
-matches_regexes(str, regexes) if {
-	some pattern in regexes
-	regex.match(pattern, str)
+matches_string_constraints(text, constraints) if check_prefixes(text, constraints.prefixes)
+
+check_regexes(text, patterns) if {
+	some pat in patterns
+	regex.match(pat, text)
 }
 
-matches_substrings(str, substrings) if {
-	some pattern in substrings
-	contains(str, pattern)
+check_substrings(text, fragments) if {
+	some frag in fragments
+	contains(text, frag)
 }
 
-matches_literals(str, literals) if {
-	some literal in literals
-	str == literal
+check_literals(text, exact_values) if {
+	some val in exact_values
+	text == val
 }
 
-matches_suffixes(str, suffixes) if {
-	some suffix in suffixes
-	endswith(str, suffix)
+check_suffixes(text, suffix_list) if {
+	some suf in suffix_list
+	endswith(text, suf)
 }
 
-matches_prefixes(str, prefixes) if {
-	some prefix in prefixes
-	startswith(str, prefix)
+check_prefixes(text, prefix_list) if {
+	some pre in prefix_list
+	startswith(text, pre)
 }
 
-# Normalize an IP address or CIDR to a CIDR
-normalize_cidr(ip) := ip if contains(ip, "/")
+# Convert a bare IP address to CIDR notation for consistent comparison.
+# Already-CIDR values pass through unchanged.
+normalize_cidr(addr) := addr if contains(addr, "/")
 
-# If it's an IPv4, append /32
-normalize_cidr(ip) := sprintf("%s/32", [ip]) if {
-	not contains(ip, "/")
-	not contains(ip, ":")
+# Bare IPv4 addresses get a /32 mask
+normalize_cidr(addr) := sprintf("%s/32", [addr]) if {
+	not contains(addr, "/")
+	not contains(addr, ":")
 }
 
-# If it's an IPv6, append /128
-normalize_cidr(ip) := sprintf("%s/128", [ip]) if {
-	not contains(ip, "/")
-	contains(ip, ":")
+# Bare IPv6 addresses get a /128 mask
+normalize_cidr(addr) := sprintf("%s/128", [addr]) if {
+	not contains(addr, "/")
+	contains(addr, ":")
 }
 
-ip_in_list(ip, list) if {
-	some cidr in list
-	net.cidr_contains(normalize_cidr(cidr), ip)
+# Determine if a given IP falls within any CIDR range in the provided list.
+ip_in_list(addr, ranges) if {
+	some entry in ranges
+	net.cidr_contains(normalize_cidr(entry), addr)
 }
 
-mxid(username, server_name) := sprintf("@%s:%s", [username, server_name])
+# Build a Matrix user ID from username and server name.
+mxid(name, server) := sprintf("@%s:%s", [name, server])
 
-requester_banned(requester, policy) if ip_in_list(requester.ip_address, policy.banned_ips)
+# Check whether a requester is blocked based on IP or user-agent rules.
+requester_banned(req, policy) if ip_in_list(req.ip_address, policy.banned_ips)
 
-requester_banned(requester, policy) if matches_string_constraints(requester.user_agent, policy.banned_user_agents)
+requester_banned(req, policy) if matches_string_constraints(req.user_agent, policy.banned_user_agents)
 
-format_requester(requester) := "unknown" if {
-	not requester.ip_address
-	not requester.user_agent
+# Produce a human-readable description of a requester for error messages.
+format_requester(req) := "unknown" if {
+	not req.ip_address
+	not req.user_agent
 }
 
-format_requester(requester) := sprintf("%s / %s", [requester.ip_address, requester.user_agent]) if {
-	requester.ip_address
-	requester.user_agent
+format_requester(req) := sprintf("%s / %s", [req.ip_address, req.user_agent]) if {
+	req.ip_address
+	req.user_agent
 }
 
-format_requester(requester) := sprintf("%s", [requester.ip_address]) if {
-	requester.ip_address
-	not requester.user_agent
+format_requester(req) := sprintf("%s", [req.ip_address]) if {
+	req.ip_address
+	not req.user_agent
 }
 
-format_requester(requester) := sprintf("%s", [requester.user_agent]) if {
-	not requester.ip_address
-	requester.user_agent
+format_requester(req) := sprintf("%s", [req.user_agent]) if {
+	not req.ip_address
+	req.user_agent
 }

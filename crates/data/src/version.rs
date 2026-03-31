@@ -1,3 +1,3 @@
-/// A structure which holds information about the running version of the app
+/// Holds the compile-time version string of the running application.
 #[derive(Debug, Clone, Copy)]
 pub struct AppVersion(pub &'static str);

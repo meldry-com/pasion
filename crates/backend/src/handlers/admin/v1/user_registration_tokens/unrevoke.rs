@@ -1,3 +1,7 @@
+// Copyright 2025, 2026 Taidge Ltd.
+//
+// SPDX-License-Identifier: AGPL-3.0-only
+
 use salvo::prelude::*;
 
 use crate::handlers::admin::{
@@ -8,40 +12,42 @@ use crate::handlers::admin::{
 };
 use crate::{AppError, JsonResult};
 
+/// Restore a previously revoked registration token so it becomes usable again.
 #[endpoint]
 #[tracing::instrument(name = "handler.admin.v1.user_registration_tokens.unrevoke", skip_all)]
 pub async fn handler(
     req: &mut Request,
     depot: &Depot,
 ) -> JsonResult<SingleResponse<UserRegistrationToken>> {
-    let call_context = extract_call_context(req, depot).await?;
+    let ctx = extract_call_context(req, depot).await?;
     let crate::handlers::admin::call_context::CallContext {
         mut repo, clock, ..
-    } = call_context;
-    let id = extract_ulid_param(req)?;
+    } = ctx;
+    let target_id = extract_ulid_param(req)?;
 
-    // id already extracted above
-    let token = repo
+    let entry = repo
         .user_registration_token()
-        .lookup(id)
+        .lookup(target_id)
         .await?
-        .ok_or_else(|| AppError::not_found(format!("Registration token with ID {id} not found")))?;
+        .ok_or_else(|| {
+            AppError::not_found(format!(
+                "Registration token with ID {target_id} not found"
+            ))
+        })?;
 
-    // Check if the token is not revoked
-    if token.revoked_at.is_none() {
+    if entry.revoked_at.is_none() {
         return Err(AppError::bad_request(format!(
-            "Registration token with ID {id} is not revoked"
+            "Registration token with ID {target_id} is not revoked"
         )));
     }
 
-    // Unrevoke the token using the repository method
-    let token = repo.user_registration_token().unrevoke(token).await?;
+    let restored = repo.user_registration_token().unrevoke(entry).await?;
 
     repo.save().await?;
 
     Ok(Json(SingleResponse::new(
-        UserRegistrationToken::new(token, clock.now()),
-        format!("/api/admin/v1/user-registration-tokens/{id}/unrevoke"),
+        UserRegistrationToken::new(restored, clock.now()),
+        format!("/api/admin/v1/user-registration-tokens/{target_id}/unrevoke"),
     )))
 }
 
@@ -60,8 +66,7 @@ mod tests {
 
         let mut repo = state.repository().await.unwrap();
 
-        // Create a token
-        let registration_token = repo
+        let reg_token = repo
             .user_registration_token()
             .add(
                 &mut state.rng(),
@@ -73,19 +78,17 @@ mod tests {
             .await
             .unwrap();
 
-        // Revoke it
-        let registration_token = repo
+        let revoked_entry = repo
             .user_registration_token()
-            .revoke(&state.clock, registration_token)
+            .revoke(&state.clock, reg_token)
             .await
             .unwrap();
 
         repo.save().await.unwrap();
 
-        // Now unrevoke it
         let request = Request::post(format!(
             "/api/admin/v1/user-registration-tokens/{}/unrevoke",
-            registration_token.id
+            revoked_entry.id
         ))
         .bearer(&token)
         .empty();
@@ -93,7 +96,6 @@ mod tests {
         response.assert_status(StatusCode::OK);
         let body: serde_json::Value = response.json();
 
-        // The revoked_at timestamp should be null
         insta::assert_json_snapshot!(body, @r#"
         {
           "data": {
@@ -128,7 +130,7 @@ mod tests {
         let token = state.token_with_scope("urn:pasion:admin").await;
 
         let mut repo = state.repository().await.unwrap();
-        let registration_token = repo
+        let reg_token = repo
             .user_registration_token()
             .add(
                 &mut state.rng(),
@@ -142,10 +144,9 @@ mod tests {
 
         repo.save().await.unwrap();
 
-        // Try to unrevoke a token that's not revoked
         let request = Request::post(format!(
             "/api/admin/v1/user-registration-tokens/{}/unrevoke",
-            registration_token.id
+            reg_token.id
         ))
         .bearer(&token)
         .empty();
@@ -156,7 +157,7 @@ mod tests {
             body["errors"][0]["title"],
             format!(
                 "Registration token with ID {} is not revoked",
-                registration_token.id
+                reg_token.id
             )
         );
     }

@@ -5,6 +5,10 @@ use ulid::Ulid;
 use super::UpstreamOAuthLink;
 use crate::InvalidTransitionError;
 
+/// Pasion extends the Apache 2.0 base with:
+/// - `id_token_claims`, `extra_callback_parameters`, `userinfo` fields in
+///   Completed/Consumed
+/// - `Unlinked` state variant
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize)]
 pub enum UpstreamOAuthAuthorizationSessionState {
     #[default]
@@ -26,6 +30,7 @@ pub enum UpstreamOAuthAuthorizationSessionState {
         extra_callback_parameters: Option<serde_json::Value>,
         userinfo: Option<serde_json::Value>,
     },
+    /// Pasion-original: the link has been removed after completion/consumption.
     Unlinked {
         completed_at: DateTime<Utc>,
         consumed_at: Option<DateTime<Utc>>,
@@ -147,11 +152,11 @@ impl UpstreamOAuthAuthorizationSessionState {
         }
     }
 
-    /// Get the ID token claims for the upstream OAuth 2.0 authorization
-    /// session.
+    /// Pasion-original: get the ID token claims for the upstream OAuth 2.0
+    /// authorization session.
     ///
     /// Returns `None` if the upstream OAuth 2.0 authorization session state is
-    /// not [`Pending`].
+    /// [`Pending`].
     ///
     /// [`Pending`]: UpstreamOAuthAuthorizationSessionState::Pending
     #[must_use]
@@ -170,10 +175,11 @@ impl UpstreamOAuthAuthorizationSessionState {
         }
     }
 
-    /// Get the extra query parameters that were sent to the upstream provider.
+    /// Pasion-original: get the extra query parameters that were sent to the
+    /// upstream provider.
     ///
     /// Returns `None` if the upstream OAuth 2.0 authorization session state is
-    /// not [`Pending`].
+    /// [`Pending`].
     ///
     /// [`Pending`]: UpstreamOAuthAuthorizationSessionState::Pending
     #[must_use]
@@ -191,6 +197,7 @@ impl UpstreamOAuthAuthorizationSessionState {
         }
     }
 
+    /// Pasion-original: get the userinfo response.
     #[must_use]
     pub fn userinfo(&self) -> Option<&serde_json::Value> {
         match self {
@@ -215,8 +222,8 @@ impl UpstreamOAuthAuthorizationSessionState {
         }
     }
 
-    /// Get the time at which the upstream OAuth 2.0 authorization session was
-    /// unlinked.
+    /// Pasion-original: get the time at which the upstream OAuth 2.0
+    /// authorization session was unlinked.
     ///
     /// Returns `None` if the upstream OAuth 2.0 authorization session state is
     /// not [`Unlinked`].
@@ -257,8 +264,8 @@ impl UpstreamOAuthAuthorizationSessionState {
         matches!(self, Self::Consumed { .. })
     }
 
-    /// Returns `true` if the upstream OAuth 2.0 authorization session state is
-    /// [`Unlinked`].
+    /// Pasion-original: returns `true` if the upstream OAuth 2.0 authorization
+    /// session state is [`Unlinked`].
     ///
     /// [`Unlinked`]: UpstreamOAuthAuthorizationSessionState::Unlinked
     #[must_use]
@@ -274,6 +281,7 @@ pub struct UpstreamOAuthAuthorizationSession {
     pub provider_id: Ulid,
     pub state_str: String,
     pub code_challenge_verifier: Option<String>,
+    /// Pasion-original: nonce is Optional (for non-OIDC providers)
     pub nonce: Option<String>,
     pub created_at: DateTime<Utc>,
 }

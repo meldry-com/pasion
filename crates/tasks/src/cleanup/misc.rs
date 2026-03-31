@@ -17,36 +17,37 @@ use crate::{
 impl RunnableJob for CleanupQueueJobsJob {
     #[tracing::instrument(name = "job.cleanup_queue_jobs", skip_all)]
     async fn run(&self, state: &State, context: JobContext) -> Result<(), JobError> {
-        // Remove completed and failed queue jobs after 30 days.
-        // Keep them for debugging purposes.
-        let until = state.clock().now() - chrono::Duration::days(30);
-        let until = Ulid::from_parts(
-            u64::try_from(until.timestamp_millis()).unwrap_or(u64::MIN),
+        // Completed and failed queue jobs older than 30 days are removed.
+        let cutoff = state.clock().now() - chrono::Duration::days(30);
+        let upper_bound = Ulid::from_parts(
+            u64::try_from(cutoff.timestamp_millis()).unwrap_or(u64::MIN),
             u128::MAX,
         );
-        let mut total = 0;
 
-        let mut since = None;
+        let mut removed = 0;
+        let mut cursor = None;
+
         while !context.cancellation_token.is_cancelled() {
             let mut repo = state.repository().await.map_err(JobError::retry)?;
-            let (count, cursor) = repo
+            let (batch_count, next_cursor) = repo
                 .queue_job()
-                .cleanup(since, until, BATCH_SIZE)
+                .cleanup(cursor, upper_bound, BATCH_SIZE)
                 .await
                 .map_err(JobError::retry)?;
             repo.save().await.map_err(JobError::retry)?;
-            since = cursor;
-            total += count;
 
-            if count != BATCH_SIZE {
+            cursor = next_cursor;
+            removed += batch_count;
+
+            if batch_count < BATCH_SIZE {
                 break;
             }
         }
 
-        if total == 0 {
+        if removed == 0 {
             debug!("no queue jobs to clean up");
         } else {
-            info!(count = total, "cleaned up queue jobs");
+            info!(count = removed, "cleaned up queue jobs");
         }
 
         Ok(())
@@ -63,8 +64,8 @@ impl RunnableJob for PruneStalePolicyDataJob {
     async fn run(&self, state: &State, _context: JobContext) -> Result<(), JobError> {
         let mut repo = state.repository().await.map_err(JobError::retry)?;
 
-        // Keep the last 10 policy data
-        let count = repo
+        // Retain only the 10 most recent policy snapshots.
+        let pruned = repo
             .policy_data()
             .prune(10)
             .await
@@ -72,10 +73,10 @@ impl RunnableJob for PruneStalePolicyDataJob {
 
         repo.save().await.map_err(JobError::retry)?;
 
-        if count == 0 {
+        if pruned == 0 {
             debug!("no stale policy data to prune");
         } else {
-            info!(count, "pruned stale policy data");
+            info!(count = pruned, "pruned stale policy data");
         }
 
         Ok(())

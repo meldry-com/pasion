@@ -1,32 +1,39 @@
-//! A [`Clock`] is a way to get the current date and time.
+//! Abstractions over wall-clock time.
 //!
-//! This module defines two implemetation of the [`Clock`] trait:
-//! [`SystemClock`] which uses the system time, and a [`MockClock`], which can
-//! be used and freely manipulated in tests.
+//! Production code uses [`SystemClock`] to obtain the real time, while tests
+//! can substitute a [`MockClock`] whose value is fully deterministic and can
+//! be moved forward on demand.
 
-use std::sync::{Arc, atomic::AtomicI64};
+use std::sync::{
+    Arc,
+    atomic::{AtomicI64, Ordering},
+};
 
-use chrono::{DateTime, TimeZone, Utc};
+use chrono::{DateTime, Utc};
 
-/// Represents a clock which can give the current date and time
+/// A source of "current" timestamps.
+///
+/// Implementors must be safe to share across threads.
 pub trait Clock: Send + Sync {
-    /// Get the current date and time
+    /// Return the current instant as a UTC datetime.
     fn now(&self) -> DateTime<Utc>;
 }
 
+// Delegate through `Arc` so that cloned handles share the same clock.
 impl<C: Clock + Send + ?Sized> Clock for Arc<C> {
     fn now(&self) -> DateTime<Utc> {
         (**self).now()
     }
 }
 
+// Delegate through `Box` so that trait-object holders can call `now()`.
 impl<C: Clock + ?Sized> Clock for Box<C> {
     fn now(&self) -> DateTime<Utc> {
         (**self).now()
     }
 }
 
-/// A clock which uses the system time
+/// Wall-clock implementation that returns the real system time.
 #[derive(Clone, Default)]
 pub struct SystemClock {
     _private: (),
@@ -34,44 +41,52 @@ pub struct SystemClock {
 
 impl Clock for SystemClock {
     fn now(&self) -> DateTime<Utc> {
-        // This is the clock used elsewhere, it's fine to call Utc::now here
         #[allow(clippy::disallowed_methods)]
         Utc::now()
     }
 }
 
-/// A fake clock, which uses a fixed timestamp, and can be advanced with the
-/// [`MockClock::advance`] method.
+/// A controllable clock for use in tests.
+///
+/// Internally stores a Unix timestamp as an atomic integer so it can be
+/// shared across threads without a mutex.  The time starts at whatever
+/// instant is supplied to [`MockClock::new`] and only changes when
+/// [`MockClock::advance`] is called.
 pub struct MockClock {
-    timestamp: AtomicI64,
+    epoch_secs: AtomicI64,
 }
 
 impl Default for MockClock {
+    /// Creates a mock clock pinned to 2022-01-16 14:40:00 UTC.
     fn default() -> Self {
-        let datetime = Utc.with_ymd_and_hms(2022, 1, 16, 14, 40, 0).unwrap();
-        Self::new(datetime)
+        let dt = chrono::TimeZone::with_ymd_and_hms(&Utc, 2022, 1, 16, 14, 40, 0).unwrap();
+        Self::new(dt)
     }
 }
 
 impl MockClock {
-    /// Create a new clock which starts at the given datetime
+    /// Build a mock clock starting at `start`.
     #[must_use]
-    pub fn new(datetime: DateTime<Utc>) -> Self {
-        let timestamp = AtomicI64::new(datetime.timestamp());
-        Self { timestamp }
+    pub fn new(start: DateTime<Utc>) -> Self {
+        Self {
+            epoch_secs: AtomicI64::new(start.timestamp()),
+        }
     }
 
-    /// Move the clock forward by the given amount of time
-    pub fn advance(&self, duration: chrono::Duration) {
-        self.timestamp
-            .fetch_add(duration.num_seconds(), std::sync::atomic::Ordering::Relaxed);
+    /// Push the clock forward by `delta`.
+    ///
+    /// Negative durations are technically accepted by the underlying atomic
+    /// add, but callers should treat this as moving time forward only.
+    pub fn advance(&self, delta: chrono::Duration) {
+        self.epoch_secs
+            .fetch_add(delta.num_seconds(), Ordering::Relaxed);
     }
 }
 
 impl Clock for MockClock {
     fn now(&self) -> DateTime<Utc> {
-        let timestamp = self.timestamp.load(std::sync::atomic::Ordering::Relaxed);
-        chrono::TimeZone::timestamp_opt(&Utc, timestamp, 0).unwrap()
+        let ts = self.epoch_secs.load(Ordering::Relaxed);
+        DateTime::from_timestamp(ts, 0).expect("stored timestamp is always valid")
     }
 }
 
@@ -82,32 +97,37 @@ mod tests {
     use super::*;
 
     #[test]
-    fn test_mocked_clock() {
-        let clock = MockClock::default();
+    fn mock_clock_is_frozen_by_default() {
+        let clk = MockClock::default();
 
-        // Time should be frozen, and give out the same timestamp on each call
-        let first = clock.now();
+        let t1 = clk.now();
+        // A short sleep must not move the mock clock.
         std::thread::sleep(std::time::Duration::from_millis(10));
-        let second = clock.now();
+        let t2 = clk.now();
 
-        assert_eq!(first, second);
-
-        // Clock can be advanced by a fixed duration
-        clock.advance(Duration::microseconds(10 * 1000 * 1000));
-        let third = clock.now();
-        assert_eq!(first + Duration::microseconds(10 * 1000 * 1000), third);
+        assert_eq!(t1, t2, "mock clock should not advance on its own");
     }
 
     #[test]
-    fn test_real_clock() {
-        let clock = SystemClock::default();
+    fn mock_clock_advances_by_requested_amount() {
+        let clk = MockClock::default();
+        let before = clk.now();
 
-        // Time should not be frozen
-        let first = clock.now();
+        let step = Duration::seconds(10);
+        clk.advance(step);
+
+        let after = clk.now();
+        assert_eq!(after, before + step);
+    }
+
+    #[test]
+    fn system_clock_progresses() {
+        let clk = SystemClock::default();
+
+        let t1 = clk.now();
         std::thread::sleep(std::time::Duration::from_millis(10));
-        let second = clock.now();
+        let t2 = clk.now();
 
-        assert_ne!(first, second);
-        assert!(first < second);
+        assert!(t2 > t1, "real clock must move forward");
     }
 }

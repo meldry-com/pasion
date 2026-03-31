@@ -1,5 +1,8 @@
+// Copyright 2025, 2026 Taidge Ltd.
+//
+// SPDX-License-Identifier: AGPL-3.0-only
+
 use salvo::prelude::*;
-use ulid::Ulid;
 
 use crate::handlers::admin::{
     call_context::extract_call_context,
@@ -9,23 +12,24 @@ use crate::handlers::admin::{
 };
 use crate::{AppError, JsonResult};
 
+/// Retrieve a single user email record by its identifier.
 #[endpoint]
 #[tracing::instrument(name = "handler.admin.v1.user_emails.get", skip_all)]
 pub async fn handler(
     req: &mut Request,
     depot: &Depot,
 ) -> JsonResult<SingleResponse<UserEmail>> {
-    let call_context = extract_call_context(req, depot).await?;
-    let crate::handlers::admin::call_context::CallContext { mut repo, .. } = call_context;
-    let id = extract_ulid_param(req)?;
+    let ctx = extract_call_context(req, depot).await?;
+    let crate::handlers::admin::call_context::CallContext { mut repo, .. } = ctx;
+    let email_id = extract_ulid_param(req)?;
 
-    let email = repo
+    let entry = repo
         .user_email()
-        .lookup(id)
+        .lookup(email_id)
         .await?
-        .ok_or_else(|| AppError::not_found(format!("User email ID {id} not found")))?;
+        .ok_or_else(|| AppError::not_found(format!("User email ID {email_id} not found")))?;
 
-    Ok(Json(SingleResponse::new_canonical(UserEmail::from(email))))
+    Ok(Json(SingleResponse::new_canonical(UserEmail::from(entry))))
 }
 
 #[cfg(test)]

@@ -1,3 +1,7 @@
+// Copyright 2025, 2026 Taidge Ltd.
+//
+// SPDX-License-Identifier: AGPL-3.0-only
+
 use pasion_data::BoxRng;
 use salvo::prelude::*;
 use schemars::JsonSchema;
@@ -11,103 +15,110 @@ use crate::handlers::admin::{
 };
 use crate::{AppError, CreatedJsonResult};
 
-/// # JSON payload for the `POST /api/admin/v1/upstream-oauth-links`
+/// JSON body accepted by `POST /api/admin/v1/upstream-oauth-links`.
 #[derive(Deserialize, JsonSchema)]
 #[serde(rename = "AddUpstreamOauthLinkRequest")]
 pub struct RequestBody {
-    /// The ID of the user to which the link should be added.
+    /// Identifier of the user to associate with this link.
     #[schemars(with = "crate::handlers::admin::schema::Ulid")]
     user_id: Ulid,
 
-    /// The ID of the upstream provider to which the link is for.
+    /// Identifier of the upstream OAuth provider.
     #[schemars(with = "crate::handlers::admin::schema::Ulid")]
     provider_id: Ulid,
 
-    /// The subject (sub) claim of the user on the provider.
+    /// The subject (sub) claim identifying the user at the provider.
     subject: String,
 
-    /// A human readable account name.
+    /// Optional human-readable label for this account.
     human_account_name: Option<String>,
 }
+
+/// Create a new upstream OAuth link or associate an existing unlinked one.
 #[endpoint]
 #[tracing::instrument(name = "handler.admin.v1.upstream_oauth_links.post", skip_all)]
 pub async fn handler(
     req: &mut Request,
     depot: &Depot,
 ) -> CreatedJsonResult<SingleResponse<UpstreamOAuthLink>> {
-    let call_context = extract_call_context(req, depot).await?;
+    let ctx = extract_call_context(req, depot).await?;
     let crate::handlers::admin::call_context::CallContext {
         mut repo, clock, ..
-    } = call_context;
+    } = ctx;
     let mut rng = crate::handlers::rest::make_rng();
-    let params: RequestBody = req
+    let body: RequestBody = req
         .parse_json()
         .await
         .map_err(AppError::internal)?;
 
-    // Find the user
-    let user = repo
+    // Resolve the target user
+    let owner = repo
         .user()
-        .lookup(params.user_id)
+        .lookup(body.user_id)
         .await?
-        .ok_or_else(|| AppError::not_found(format!("User ID {} not found", params.user_id)))?;
+        .ok_or_else(|| AppError::not_found(format!("User ID {} not found", body.user_id)))?;
 
-    // Find the provider
+    // Resolve the upstream provider
     let provider = repo
         .upstream_oauth_provider()
-        .lookup(params.provider_id)
+        .lookup(body.provider_id)
         .await?
         .ok_or_else(|| {
             AppError::not_found(format!(
                 "Upstream OAuth 2.0 Provider ID {} not found",
-                params.provider_id
+                body.provider_id
             ))
         })?;
 
-    let maybe_link = repo
+    // Check whether a link with this subject already exists for the provider
+    let existing_link = repo
         .upstream_oauth_link()
-        .find_by_subject(&provider, &params.subject)
+        .find_by_subject(&provider, &body.subject)
         .await?;
-    if let Some(mut link) = maybe_link {
-        if link.user_id.is_some() {
+
+    if let Some(mut entry) = existing_link {
+        // If already associated to a user, reject as conflict
+        if entry.user_id.is_some() {
             return Err(AppError::conflict(format!(
                 "Upstream Oauth 2.0 Provider ID {} with subject {} is already linked to a user",
-                link.provider_id, link.subject
+                entry.provider_id, entry.subject
             )));
         }
 
+        // Otherwise, associate the orphaned link to the requested user
         repo.upstream_oauth_link()
-            .associate_to_user(&link, &user)
+            .associate_to_user(&entry, &owner)
             .await?;
-        link.user_id = Some(user.id);
+        entry.user_id = Some(owner.id);
 
         repo.save().await?;
 
         return Ok(crate::handlers::admin::CreatedJson(
-            SingleResponse::new_canonical(link.into()),
+            SingleResponse::new_canonical(entry.into()),
         ));
     }
 
-    let mut link = repo
+    // No existing link -- create a brand-new one
+    let mut entry = repo
         .upstream_oauth_link()
         .add(
             &mut rng,
             &clock,
             &provider,
-            params.subject,
-            params.human_account_name,
+            body.subject,
+            body.human_account_name,
         )
         .await?;
 
     repo.upstream_oauth_link()
-        .associate_to_user(&link, &user)
+        .associate_to_user(&entry, &owner)
         .await?;
-    link.user_id = Some(user.id);
+    entry.user_id = Some(owner.id);
 
     repo.save().await?;
 
     Ok(crate::handlers::admin::CreatedJson(
-        SingleResponse::new_canonical(link.into()),
+        SingleResponse::new_canonical(entry.into()),
     ))
 }
 
