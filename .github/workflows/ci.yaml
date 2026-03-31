@@ -85,80 +85,6 @@ jobs:
         with:
           rust-version: stable
 
-  # -- Frontend checks --
-
-  frontend-lint:
-    name: Lint frontend sources
-    runs-on: ubuntu-24.04
-
-    permissions:
-      contents: read
-
-    steps:
-      - name: Fetch repository
-        uses: actions/checkout@v6
-
-      - name: Prepare Node environment
-        uses: actions/setup-node@v6.1.0
-        with:
-          node-version: 24
-
-      - name: Install frontend dependencies
-        working-directory: ./frontend
-        run: npm ci
-
-      - name: Run linter
-        working-directory: ./frontend
-        run: npm run lint
-
-  frontend-test:
-    name: Execute frontend tests
-    runs-on: ubuntu-24.04
-
-    permissions:
-      contents: read
-
-    steps:
-      - name: Fetch repository
-        uses: actions/checkout@v6
-
-      - name: Prepare Node environment
-        uses: actions/setup-node@v6.1.0
-        with:
-          node-version: 24
-
-      - name: Install frontend dependencies
-        working-directory: ./frontend
-        run: npm ci
-
-      - name: Run test suite
-        working-directory: ./frontend
-        run: npm test
-
-  frontend-knip:
-    name: Detect unused frontend dependencies
-    runs-on: ubuntu-24.04
-
-    permissions:
-      contents: read
-
-    steps:
-      - name: Fetch repository
-        uses: actions/checkout@v6
-
-      - name: Prepare Node environment
-        uses: actions/setup-node@v6.1.0
-        with:
-          node-version: 24
-
-      - name: Install frontend dependencies
-        working-directory: ./frontend
-        run: npm ci
-
-      - name: Scan for unused dependencies
-        working-directory: ./frontend
-        run: npm run knip
-
   # -- Schema validation --
 
   check-schema:
@@ -179,8 +105,6 @@ jobs:
 
       - name: Configure sccache
         uses: mozilla-actions/sccache-action@v0.0.9
-
-      - uses: ./.github/actions/build-frontend
 
       - name: Regenerate schemas
         run: sh ./misc/update.sh
@@ -273,8 +197,6 @@ jobs:
         with:
           tool: cargo-nextest
 
-      - uses: ./.github/actions/build-frontend
-
       - name: Retrieve nextest archive
         uses: actions/download-artifact@v7
         with:
@@ -298,9 +220,6 @@ jobs:
       - rustfmt
       - clippy
       - cargo-deny
-      - frontend-lint
-      - frontend-test
-      - frontend-knip
       - check-schema
       - test
 

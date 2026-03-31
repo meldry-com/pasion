@@ -67,20 +67,12 @@ jobs:
       - name: Fetch repository
         uses: actions/checkout@v6
 
-      - name: Set up stable Rust
-        uses: dtolnay/rust-toolchain@stable
-
-      - uses: ./.github/actions/build-frontend
-
       - name: Assemble asset directory
         run: |
           mkdir -p assets-dist/share
-          cp dist/manifest.json assets-dist/share/manifest.json
-          cp -r dist/ assets-dist/share/assets
           cp -r templates/ assets-dist/share/templates
           cp -r translations/ assets-dist/share/translations
           cp -r policies/cedar/ assets-dist/share/cedar
-          cp LICENSE assets-dist/LICENSE
           chmod -R u=rwX,go=rX assets-dist/
 
       - name: Store asset artifact
@@ -186,7 +178,6 @@ jobs:
           for arch in x86_64 aarch64; do
             mkdir -p dist/${arch}/share
             cp -r assets-dist/share/* dist/${arch}/share/
-            cp assets-dist/LICENSE dist/${arch}/LICENSE
             cp binary-$arch/pasion dist/${arch}/pasion
             chmod -R u=rwX,go=rX dist/${arch}/
             chmod u=rwx,go=rx dist/${arch}/pasion
@@ -291,7 +282,6 @@ jobs:
             base.cache-to=type=registry,ref=${{ env.BUILDCACHE }}:buildcache,mode=max
 
       - name: Normalize bake output to digest/tag map
-        # Produces an object like: { regular: { digest: "...", tags: [...] }, debug: { digest: "...", tags: [...] }, ... }
         id: extract-metadata
         run: |
           echo 'metadata<<EOF' >> $GITHUB_OUTPUT
@@ -299,7 +289,6 @@ jobs:
           echo 'EOF' >> $GITHUB_OUTPUT
 
       - name: Cosign the published images
-        # Signing restricted to tag pushes and commits on main
         if: |
           github.event_name != 'pull_request'
           && (startsWith(github.ref, 'refs/tags/v') || github.ref == 'refs/heads/main')
@@ -366,111 +355,3 @@ jobs:
           files: |
             artifacts/pasion-aarch64-linux.tar.gz
             artifacts/pasion-x86_64-linux.tar.gz
-
-  # -- Unstable rolling release --
-
-  unstable:
-    name: Refresh unstable rolling release
-    runs-on: ubuntu-24.04
-    if: github.ref == 'refs/heads/main'
-    needs:
-      - assemble-archives
-      - build-image
-
-    permissions:
-      contents: write
-
-    steps:
-      - name: Fetch repository (sparse)
-        uses: actions/checkout@v6
-        with:
-          sparse-checkout: |
-            .github/scripts
-
-      - name: Retrieve release artifacts
-        uses: actions/download-artifact@v7
-        with:
-          pattern: pasion-*
-          path: artifacts
-          merge-multiple: true
-
-      - name: Advance unstable tag to current commit
-        uses: actions/github-script@v8.0.0
-        with:
-          script: |
-            const script = require('./.github/scripts/update-unstable-tag.cjs');
-            await script({ core, github, context });
-
-      - name: Publish unstable release
-        uses: softprops/action-gh-release@v2.5.0
-        with:
-          name: "Unstable build"
-          tag_name: unstable
-          prerelease: true
-          make_latest: false
-          body: |
-            This is an automatically updated unstable release containing the latest builds from the main branch.
-
-            **⚠️ Warning: These are development builds and may be unstable.**
-
-            Last updated: ${{ github.event.head_commit.timestamp }}
-            Commit: ${{ github.sha }}
-
-            ### Docker image
-
-            Regular image:
-
-              - Digest:
-                ```
-                ${{ env.IMAGE }}@${{ fromJSON(needs.build-image.outputs.metadata).regular.digest }}
-                ```
-              - Tags:
-                ```
-                ${{ join(fromJSON(needs.build-image.outputs.metadata).regular.tags, '
-                ') }}
-                ```
-
-            Debug variant:
-
-              - Digest:
-                ```
-                ${{ env.IMAGE }}@${{ fromJSON(needs.build-image.outputs.metadata).debug.digest }}
-                ```
-              - Tags:
-                ```
-                ${{ join(fromJSON(needs.build-image.outputs.metadata).debug.tags, '
-                ') }}
-                ```
-
-          files: |
-            artifacts/pasion-aarch64-linux.tar.gz
-            artifacts/pasion-x86_64-linux.tar.gz
-
-  # -- PR label cleanup --
-
-  pr-cleanup:
-    name: Clean up build workflow label on PR
-    runs-on: ubuntu-24.04
-    if: github.event_name == 'pull_request' && github.event.label.name == 'Z-Build-Workflow'
-    needs:
-      - build-image
-
-    permissions:
-      contents: read
-      pull-requests: write
-
-    steps:
-      - name: Fetch repository (sparse)
-        uses: actions/checkout@v6
-        with:
-          sparse-checkout: |
-            .github/scripts
-
-      - name: Strip label and post comment
-        uses: actions/github-script@v8.0.0
-        env:
-          BUILD_IMAGE_MANIFEST: ${{ needs.build-image.outputs.metadata }}
-        with:
-          script: |
-            const script = require('./.github/scripts/cleanup-pr.cjs');
-            await script({ core, github, context });

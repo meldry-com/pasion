@@ -58,8 +58,6 @@ jobs:
         with:
           tool: grcov
 
-      - uses: ./.github/actions/build-frontend
-
       - name: Execute tests with coverage instrumentation
         run: |
           cargo test --no-fail-fast --workspace
@@ -79,30 +77,3 @@ jobs:
           token: ${{ secrets.CODECOV_TOKEN }}
           files: target/coverage/*.lcov
           flags: unit
-
-  frontend:
-    name: Gather frontend coverage data
-    runs-on: ubuntu-24.04
-
-    permissions:
-      contents: read
-      id-token: write
-
-    steps:
-      - name: Fetch repository
-        uses: actions/checkout@v6
-
-      - uses: ./.github/actions/build-frontend
-        env:
-          CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
-
-      - name: Execute frontend tests with coverage
-        working-directory: ./frontend
-        run: npm run coverage
-
-      - name: Submit frontend coverage to codecov.io
-        uses: codecov/codecov-action@v5.5.2
-        with:
-          token: ${{ secrets.CODECOV_TOKEN }}
-          directory: frontend/coverage/
-          flags: frontend

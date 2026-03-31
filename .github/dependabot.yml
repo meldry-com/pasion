@@ -11,63 +11,6 @@ updates:
       - "Z-Deps-CI"
       - "A-Dependencies"
 
-  # Frontend (npm) dependency updates
-  - package-ecosystem: "npm"
-    directory: "/frontend/"
-    schedule:
-      interval: "daily"
-    labels:
-      - "Z-Deps-Frontend"
-      - "A-Dependencies"
-    groups:
-      types:
-        patterns:
-          - "@types/*"
-      react:
-        patterns:
-          - "react"
-          - "react-*"
-        exclude-patterns:
-          - "react-i18next"
-      tanstack-query:
-        patterns:
-          - "@tanstack/react-query"
-          - "@tanstack/react-query-*"
-      tanstack-router:
-        patterns:
-          - "@tanstack/react-router"
-          - "@tanstack/react-router-*"
-          - "@tanstack/router-*"
-      vite:
-        patterns:
-          - "vite"
-          - "vite-*"
-          - "@vitejs/*"
-      vitest:
-        patterns:
-          - "vitest"
-          - "@vitest/*"
-      storybook:
-        patterns:
-          - "storybook"
-          - "storybook-*"
-          - "@storybook/*"
-      i18next:
-        patterns:
-          - "i18next"
-          - "i18next-*"
-          - "react-i18next"
-      fontsource:
-        patterns:
-          - "@fontsource/*"
-      jotai:
-        patterns:
-          - "jotai"
-          - "jotai-*"
-      browser-logos:
-        patterns:
-          - "@browser-logos/*"
-
   # Rust (Cargo) dependency updates
   - package-ecosystem: "cargo"
     directory: "/"
@@ -76,10 +19,6 @@ updates:
     labels:
       - "Z-Deps-Backend"
       - "A-Dependencies"
-    ignore:
-      # apalis is slated for removal, skip updates for it
-      - dependency-name: "apalis"
-      - dependency-name: "apalis-*"
     groups:
       icu:
         patterns:
@@ -100,11 +39,13 @@ updates:
         patterns:
           - "sentry"
           - "sentry-*"
-      axum:
+      salvo:
         patterns:
-          - "axum"
-          - "axum-*"
-      sea-query:
+          - "salvo"
+          - "salvo-*"
+          - "salvo_*"
+      diesel:
         patterns:
-          - "sea-query"
-          - "sea-query-*"
+          - "diesel"
+          - "diesel-*"
+          - "diesel_*"
