@@ -496,114 +496,114 @@ impl TestState {
                     .push(Router::with_path("audit-feed").get(crate::handlers::admin::v1::audit_feed::handler))
                     .push(
                         Router::with_path("users")
-                            .get(crate::handlers::admin::v1::users::list::handler)
-                            .post(crate::handlers::admin::v1::users::add::handler)
+                            .get(crate::handlers::admin::v1::users::list)
+                            .post(crate::handlers::admin::v1::users::add)
                             .push(
                                 Router::with_path("by-username/{username}")
-                                    .get(crate::handlers::admin::v1::users::by_username::handler),
+                                    .get(crate::handlers::admin::v1::users::by_username),
                             )
                             .push(
                                 Router::with_path("batch-invite")
-                                    .post(crate::handlers::admin::v1::users::batch_invite::handler),
+                                    .post(crate::handlers::admin::v1::users::batch_invite),
                             )
                             .push(
                                 Router::with_path("{id}")
-                                    .get(crate::handlers::admin::v1::users::get::handler)
-                                    .patch(crate::handlers::admin::v1::users::update::handler)
+                                    .get(crate::handlers::admin::v1::users::get)
+                                    .patch(crate::handlers::admin::v1::users::update)
                                     .push(
                                         Router::with_path("set-password")
-                                            .post(crate::handlers::admin::v1::users::set_password::handler),
+                                            .post(crate::handlers::admin::v1::users::set_password),
                                     )
-                                    .push(Router::with_path("risk-action").post(crate::handlers::admin::v1::users::risk_action::handler)),
+                                    .push(Router::with_path("risk-action").post(crate::handlers::admin::v1::users::risk_action)),
                             ),
                     )
                     .push(
                         Router::with_path("user-emails")
-                            .get(crate::handlers::admin::v1::user_emails::list::handler)
-                            .post(crate::handlers::admin::v1::user_emails::add::handler)
+                            .get(crate::handlers::admin::v1::user_emails::list)
+                            .post(crate::handlers::admin::v1::user_emails::add)
                             .push(
                                 Router::with_path("{id}")
-                                    .get(crate::handlers::admin::v1::user_emails::get::handler)
-                                    .patch(crate::handlers::admin::v1::user_emails::update::handler)
-                                    .delete(crate::handlers::admin::v1::user_emails::delete::handler),
+                                    .get(crate::handlers::admin::v1::user_emails::get)
+                                    .patch(crate::handlers::admin::v1::user_emails::update)
+                                    .delete(crate::handlers::admin::v1::user_emails::delete),
                             ),
                     )
                     .push(
                         Router::with_path("user-sessions")
-                            .get(crate::handlers::admin::v1::user_sessions::list::handler)
+                            .get(crate::handlers::admin::v1::user_sessions::list)
                             .push(
                                 Router::with_path("{id}")
-                                    .get(crate::handlers::admin::v1::user_sessions::get::handler)
-                                    .push(Router::with_path("finish").post(crate::handlers::admin::v1::user_sessions::finish::handler)),
+                                    .get(crate::handlers::admin::v1::user_sessions::get)
+                                    .push(Router::with_path("finish").post(crate::handlers::admin::v1::user_sessions::finish)),
                             ),
                     )
                     .push(
                         Router::with_path("oauth2-sessions")
-                            .get(crate::handlers::admin::v1::oauth2_sessions::list::handler)
+                            .get(crate::handlers::admin::v1::oauth2_sessions::list)
                             .push(
                                 Router::with_path("{id}")
-                                    .get(crate::handlers::admin::v1::oauth2_sessions::get::handler)
+                                    .get(crate::handlers::admin::v1::oauth2_sessions::get)
                                     .push(
-                                        Router::with_path("finish").post(crate::handlers::admin::v1::oauth2_sessions::finish::handler),
+                                        Router::with_path("finish").post(crate::handlers::admin::v1::oauth2_sessions::finish),
                                     ),
                             ),
                     )
                     .push(
                         Router::with_path("personal-sessions")
-                            .get(crate::handlers::admin::v1::personal_sessions::list::handler)
-                            .post(crate::handlers::admin::v1::personal_sessions::add::handler)
+                            .get(crate::handlers::admin::v1::personal_sessions::list)
+                            .post(crate::handlers::admin::v1::personal_sessions::add)
                             .push(
                                 Router::with_path("{id}")
-                                    .get(crate::handlers::admin::v1::personal_sessions::get::handler)
+                                    .get(crate::handlers::admin::v1::personal_sessions::get)
                                     .push(
                                         Router::with_path("regenerate")
-                                            .post(crate::handlers::admin::v1::personal_sessions::regenerate::handler),
+                                            .post(crate::handlers::admin::v1::personal_sessions::regenerate),
                                     )
                                     .push(
                                         Router::with_path("revoke")
-                                            .post(crate::handlers::admin::v1::personal_sessions::revoke::handler),
+                                            .post(crate::handlers::admin::v1::personal_sessions::revoke),
                                     ),
                             ),
                     )
                     .push(
                         Router::with_path("user-registration-tokens")
-                            .get(crate::handlers::admin::v1::user_registration_tokens::list::handler)
-                            .post(crate::handlers::admin::v1::user_registration_tokens::add::handler)
+                            .get(crate::handlers::admin::v1::user_registration_tokens::list)
+                            .post(crate::handlers::admin::v1::user_registration_tokens::add)
                             .push(
                                 Router::with_path("{id}")
-                                    .get(crate::handlers::admin::v1::user_registration_tokens::get::handler)
-                                    .put(crate::handlers::admin::v1::user_registration_tokens::update::handler)
+                                    .get(crate::handlers::admin::v1::user_registration_tokens::get)
+                                    .put(crate::handlers::admin::v1::user_registration_tokens::update)
                                     .push(
                                         Router::with_path("revoke")
-                                            .post(crate::handlers::admin::v1::user_registration_tokens::revoke::handler),
+                                            .post(crate::handlers::admin::v1::user_registration_tokens::revoke),
                                     )
                                     .push(
                                         Router::with_path("unrevoke")
-                                            .post(crate::handlers::admin::v1::user_registration_tokens::unrevoke::handler),
+                                            .post(crate::handlers::admin::v1::user_registration_tokens::unrevoke),
                                     ),
                             ),
                     )
                     .push(
                         Router::with_path("upstream-oauth-providers")
-                            .get(crate::handlers::admin::v1::upstream_oauth_providers::list::handler)
-                            .push(Router::with_path("{id}").get(crate::handlers::admin::v1::upstream_oauth_providers::get::handler)),
+                            .get(crate::handlers::admin::v1::upstream_oauth_providers::list)
+                            .push(Router::with_path("{id}").get(crate::handlers::admin::v1::upstream_oauth_providers::get)),
                     )
                     .push(
                         Router::with_path("upstream-oauth-links")
-                            .get(crate::handlers::admin::v1::upstream_oauth_links::list::handler)
-                            .post(crate::handlers::admin::v1::upstream_oauth_links::add::handler)
+                            .get(crate::handlers::admin::v1::upstream_oauth_links::list)
+                            .post(crate::handlers::admin::v1::upstream_oauth_links::add)
                             .push(
                                 Router::with_path("{id}")
-                                    .get(crate::handlers::admin::v1::upstream_oauth_links::get::handler)
-                                    .patch(crate::handlers::admin::v1::upstream_oauth_links::update::handler)
-                                    .delete(crate::handlers::admin::v1::upstream_oauth_links::delete::handler),
+                                    .get(crate::handlers::admin::v1::upstream_oauth_links::get)
+                                    .patch(crate::handlers::admin::v1::upstream_oauth_links::update)
+                                    .delete(crate::handlers::admin::v1::upstream_oauth_links::delete),
                             ),
                     )
                     .push(
                         Router::with_path("policy-data")
-                            .push(Router::with_path("latest").get(crate::handlers::admin::v1::policy_data::get_latest::handler))
-                            .push(Router::with_path("{id}").get(crate::handlers::admin::v1::policy_data::get::handler))
-                            .put(crate::handlers::admin::v1::policy_data::set::handler),
+                            .push(Router::with_path("latest").get(crate::handlers::admin::v1::policy_data::get_latest))
+                            .push(Router::with_path("{id}").get(crate::handlers::admin::v1::policy_data::get))
+                            .put(crate::handlers::admin::v1::policy_data::set),
                     ),
             )
     }

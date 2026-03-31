@@ -2,18 +2,47 @@
 //
 // SPDX-License-Identifier: AGPL-3.0-only
 
-use pasion_data::{Page, upstream_oauth2::UpstreamOAuthProviderFilter};
+use pasion_data::Page;
+use pasion_data::RepositoryAccess;
+use pasion_data::upstream_oauth2::{UpstreamOAuthProviderFilter, UpstreamOAuthProviderRepository};
 use salvo::prelude::*;
 use schemars::JsonSchema;
 use serde::Deserialize;
 
+use crate::AppError;
+use crate::JsonResult;
 use crate::handlers::admin::{
     call_context::extract_call_context,
-    model::{Resource, UpstreamOAuthProvider},
-    params::{IncludeCount, extract_pagination},
+    model::Resource,
+    model::UpstreamOAuthProvider,
+    params::IncludeCount,
+    params::extract_pagination,
+    params::extract_ulid_param,
     response::PaginatedResponse,
+    response::SingleResponse,
 };
-use crate::JsonResult;
+
+/// Fetch a single upstream OAuth provider by its identifier.
+#[endpoint]
+#[tracing::instrument(name = "handler.admin.v1.upstream_oauth_providers.get", skip_all)]
+pub async fn get(
+    req: &mut Request,
+    depot: &Depot,
+) -> JsonResult<SingleResponse<UpstreamOAuthProvider>> {
+    let ctx = extract_call_context(req, depot).await?;
+    let crate::handlers::admin::call_context::CallContext { mut repo, .. } = ctx;
+    let provider_id = extract_ulid_param(req)?;
+
+    let entry = repo
+        .upstream_oauth_provider()
+        .lookup(provider_id)
+        .await?
+        .ok_or_else(|| AppError::not_found("Provider not found"))?;
+
+    Ok(Json(SingleResponse::new_canonical(
+        UpstreamOAuthProvider::from(entry),
+    )))
+}
 
 /// Query-string filters for the provider list endpoint.
 #[derive(Deserialize, JsonSchema, Default)]
@@ -41,7 +70,7 @@ impl std::fmt::Display for FilterParams {
 /// List upstream OAuth providers with optional filtering and pagination.
 #[endpoint]
 #[tracing::instrument(name = "handler.admin.v1.upstream_oauth_providers.list", skip_all)]
-pub async fn handler(
+pub async fn list(
     req: &mut Request,
     depot: &Depot,
 ) -> JsonResult<PaginatedResponse<UpstreamOAuthProvider>> {
@@ -90,20 +119,125 @@ pub async fn handler(
 
 #[cfg(test)]
 mod tests {
-    use hyper::{Request, StatusCode};
+    use hyper::Request;
+    use hyper::StatusCode;
     use oauth2_types::scope::{OPENID, Scope};
-    use pasion_data::{
-        RepositoryAccess,
-        upstream_oauth2::{UpstreamOAuthProviderParams, UpstreamOAuthProviderRepository},
-    };
-    use pasion_data::{
-        UpstreamOAuthProviderClaimsImports, UpstreamOAuthProviderDiscoveryMode,
-        UpstreamOAuthProviderOnBackchannelLogout, UpstreamOAuthProviderPkceMode,
-        UpstreamOAuthProviderTokenAuthMethod,
-    };
+    use pasion_data::RepositoryAccess;
+    use pasion_data::UpstreamOAuthProvider;
+    use pasion_data::UpstreamOAuthProviderClaimsImports;
+    use pasion_data::UpstreamOAuthProviderDiscoveryMode;
+    use pasion_data::UpstreamOAuthProviderOnBackchannelLogout;
+    use pasion_data::UpstreamOAuthProviderPkceMode;
+    use pasion_data::UpstreamOAuthProviderTokenAuthMethod;
+    use pasion_data::upstream_oauth2::{UpstreamOAuthProviderParams, UpstreamOAuthProviderRepository};
     use pasion_iana::jose::JsonWebSignatureAlg;
-
+    use ulid::Ulid;
+    
     use crate::handlers::test_utils::{RequestBuilderExt, ResponseExt, TestState, setup};
+
+    async fn create_test_provider(state: &mut TestState) -> UpstreamOAuthProvider {
+        let mut repo = state.repository().await.unwrap();
+
+        let params = UpstreamOAuthProviderParams {
+            issuer: Some("https://accounts.google.com".to_owned()),
+            human_name: Some("Google".to_owned()),
+            brand_name: Some("google".to_owned()),
+            discovery_mode: UpstreamOAuthProviderDiscoveryMode::Oidc,
+            pkce_mode: UpstreamOAuthProviderPkceMode::Auto,
+            jwks_uri_override: None,
+            authorization_endpoint_override: None,
+            token_endpoint_override: None,
+            userinfo_endpoint_override: None,
+            fetch_userinfo: true,
+            userinfo_signed_response_alg: None,
+            client_id: "google-client-id".to_owned(),
+            encrypted_client_secret: Some("encrypted-secret".to_owned()),
+            token_endpoint_signing_alg: None,
+            token_endpoint_auth_method: UpstreamOAuthProviderTokenAuthMethod::ClientSecretPost,
+            id_token_signed_response_alg: JsonWebSignatureAlg::Rs256,
+            response_mode: None,
+            scope: Scope::from_iter([OPENID]),
+            claims_imports: UpstreamOAuthProviderClaimsImports::default(),
+            additional_authorization_parameters: vec![],
+            forward_login_hint: false,
+            on_backchannel_logout: UpstreamOAuthProviderOnBackchannelLogout::DoNothing,
+            ui_order: 0,
+        };
+
+        let provider = repo
+            .upstream_oauth_provider()
+            .add(&mut state.rng(), &state.clock, params)
+            .await
+            .unwrap();
+
+        Box::new(repo).save().await.unwrap();
+
+        provider
+    }
+
+    #[tokio::test]
+    async fn test_get_provider() {
+        setup();
+        let pool = pasion_data::test_utils::setup_test_pool().await;
+        let mut state = TestState::from_pool(pool.clone()).await.unwrap();
+        let admin_token = state.token_with_scope("urn:pasion:admin").await;
+        let provider = create_test_provider(&mut state).await;
+
+        let request = Request::get(format!(
+            "/api/admin/v1/upstream-oauth-providers/{}",
+            provider.id
+        ))
+        .bearer(&admin_token)
+        .empty();
+
+        let response = state.request(request).await;
+        response.assert_status(StatusCode::OK);
+        let body: serde_json::Value = response.json::<serde_json::Value>();
+
+        assert_eq!(body["data"]["type"], "upstream-oauth-provider");
+        assert_eq!(body["data"]["id"], provider.id.to_string());
+        assert_eq!(body["data"]["attributes"]["human_name"], "Google");
+
+        insta::assert_json_snapshot!(body, @r###"
+        {
+          "data": {
+            "type": "upstream-oauth-provider",
+            "id": "01FSHN9AG0MZAA6S4AF7CTV32E",
+            "attributes": {
+              "issuer": "https://accounts.google.com",
+              "human_name": "Google",
+              "brand_name": "google",
+              "created_at": "2022-01-16T14:40:00Z",
+              "disabled_at": null
+            },
+            "links": {
+              "self": "/api/admin/v1/upstream-oauth-providers/01FSHN9AG0MZAA6S4AF7CTV32E"
+            }
+          },
+          "links": {
+            "self": "/api/admin/v1/upstream-oauth-providers/01FSHN9AG0MZAA6S4AF7CTV32E"
+          }
+        }
+        "###);
+    }
+
+    #[tokio::test]
+    async fn test_not_found() {
+        setup();
+        let pool = pasion_data::test_utils::setup_test_pool().await;
+        let mut state = TestState::from_pool(pool.clone()).await.unwrap();
+        let admin_token = state.token_with_scope("urn:pasion:admin").await;
+
+        let provider_id = Ulid::nil();
+        let request = Request::get(format!(
+            "/api/admin/v1/upstream-oauth-providers/{provider_id}"
+        ))
+        .bearer(&admin_token)
+        .empty();
+
+        let response = state.request(request).await;
+        response.assert_status(StatusCode::NOT_FOUND);
+    }
 
     async fn create_test_providers(state: &mut TestState) {
         let mut repo = state.repository().await.unwrap();

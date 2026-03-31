@@ -2,18 +2,124 @@
 //
 // SPDX-License-Identifier: AGPL-3.0-only
 
-use pasion_data::{Page, user::UserRegistrationTokenFilter};
+use chrono::DateTime;
+use chrono::Utc;
+use pasion_data::BoxRng;
+use pasion_data::Page;
+use pasion_data::user::UserRegistrationTokenFilter;
+use rand::distributions::{Alphanumeric, DistString};
 use salvo::prelude::*;
 use schemars::JsonSchema;
 use serde::Deserialize;
+use serde::Deserializer;
 
-use crate::handlers::admin::{
-    call_context::extract_call_context,
-    model::{Resource, UserRegistrationToken},
-    params::{IncludeCount, extract_pagination},
-    response::PaginatedResponse,
-};
+use crate::AppError;
+use crate::CreatedJsonResult;
 use crate::JsonResult;
+use crate::handlers::admin::{
+    CreatedJson,
+    call_context::extract_call_context,
+    model::Resource,
+    model::UserRegistrationToken,
+    params::IncludeCount,
+    params::extract_pagination,
+    params::extract_ulid_param,
+    response::PaginatedResponse,
+    response::SingleResponse,
+};
+
+/// Payload for `POST /api/admin/v1/user-registration-tokens`.
+#[derive(Deserialize, JsonSchema)]
+#[serde(rename = "AddUserRegistrationTokenRequest")]
+pub struct AddRequest {
+    /// Explicit token string. A random one is generated when omitted.
+    token: Option<String>,
+
+    /// Cap on how many times this token may be redeemed. Unlimited when absent.
+    usage_limit: Option<u32>,
+
+    /// Point in time after which the token is no longer valid. Never expires when absent.
+    expires_at: Option<DateTime<Utc>>,
+}
+
+/// Create a new user-registration token.
+#[endpoint]
+#[tracing::instrument(name = "handler.admin.v1.user_registration_tokens.post", skip_all)]
+pub async fn add(
+    req: &mut Request,
+    depot: &Depot,
+) -> CreatedJsonResult<SingleResponse<UserRegistrationToken>> {
+    let ctx = extract_call_context(req, depot).await?;
+    let crate::handlers::admin::call_context::CallContext {
+        mut repo, clock, ..
+    } = ctx;
+    let mut rng = crate::handlers::rest::make_rng();
+    let body: AddRequest = req
+        .parse_json()
+        .await
+        .map_err(AppError::internal)?;
+
+    // Fall back to a randomly generated token string
+    let token_str = body
+        .token
+        .unwrap_or_else(|| Alphanumeric.sample_string(&mut rng, 12));
+
+    // Guard against duplicate token values
+    let duplicate = repo
+        .user_registration_token()
+        .find_by_token(&token_str)
+        .await?;
+    if duplicate.is_some() {
+        return Err(AppError::conflict(
+            "A registration token with the same token already exists",
+        ));
+    }
+
+    let entry = repo
+        .user_registration_token()
+        .add(
+            &mut rng,
+            &clock,
+            token_str,
+            body.usage_limit,
+            body.expires_at,
+        )
+        .await?;
+
+    repo.save().await?;
+
+    Ok(CreatedJson(SingleResponse::new_canonical(
+        UserRegistrationToken::new(entry, clock.now()),
+    )))
+}
+
+/// Fetch a single registration token by its ULID.
+#[endpoint]
+#[tracing::instrument(name = "handler.admin.v1.user_registration_tokens.get", skip_all)]
+pub async fn get(
+    req: &mut Request,
+    depot: &Depot,
+) -> JsonResult<SingleResponse<UserRegistrationToken>> {
+    let ctx = extract_call_context(req, depot).await?;
+    let crate::handlers::admin::call_context::CallContext {
+        mut repo, clock, ..
+    } = ctx;
+    let target_id = extract_ulid_param(req)?;
+
+    let entry = repo
+        .user_registration_token()
+        .lookup(target_id)
+        .await?
+        .ok_or_else(|| {
+            AppError::not_found(format!(
+                "Registration token with ID {target_id} not found"
+            ))
+        })?;
+
+    Ok(Json(SingleResponse::new_canonical(
+        UserRegistrationToken::new(entry, clock.now()),
+    )))
+}
 
 /// Query-string filters for the registration-token list endpoint.
 #[derive(Deserialize, JsonSchema, Default)]
@@ -66,7 +172,7 @@ impl std::fmt::Display for FilterParams {
 /// List registration tokens with optional filtering and cursor-based pagination.
 #[endpoint]
 #[tracing::instrument(name = "handler.admin.v1.registration_tokens.list", skip_all)]
-pub async fn handler(
+pub async fn list(
     req: &mut Request,
     depot: &Depot,
 ) -> JsonResult<PaginatedResponse<UserRegistrationToken>> {
@@ -122,13 +228,405 @@ pub async fn handler(
     Ok(Json(result))
 }
 
+/// Mark a registration token as revoked so it can no longer be used.
+#[endpoint]
+#[tracing::instrument(name = "handler.admin.v1.user_registration_tokens.revoke", skip_all)]
+pub async fn revoke(
+    req: &mut Request,
+    depot: &Depot,
+) -> JsonResult<SingleResponse<UserRegistrationToken>> {
+    let ctx = extract_call_context(req, depot).await?;
+    let crate::handlers::admin::call_context::CallContext {
+        mut repo, clock, ..
+    } = ctx;
+    let target_id = extract_ulid_param(req)?;
+
+    let entry = repo
+        .user_registration_token()
+        .lookup(target_id)
+        .await?
+        .ok_or_else(|| {
+            AppError::not_found(format!(
+                "Registration token with ID {target_id} not found"
+            ))
+        })?;
+
+    if entry.revoked_at.is_some() {
+        return Err(AppError::bad_request(format!(
+            "Registration token with ID {target_id} is already revoked"
+        )));
+    }
+
+    let revoked = repo
+        .user_registration_token()
+        .revoke(&clock, entry)
+        .await?;
+
+    repo.save().await?;
+
+    Ok(Json(SingleResponse::new(
+        UserRegistrationToken::new(revoked, clock.now()),
+        format!("/api/admin/v1/user-registration-tokens/{target_id}/revoke"),
+    )))
+}
+
+/// Restore a previously revoked registration token so it becomes usable again.
+#[endpoint]
+#[tracing::instrument(name = "handler.admin.v1.user_registration_tokens.unrevoke", skip_all)]
+pub async fn unrevoke(
+    req: &mut Request,
+    depot: &Depot,
+) -> JsonResult<SingleResponse<UserRegistrationToken>> {
+    let ctx = extract_call_context(req, depot).await?;
+    let crate::handlers::admin::call_context::CallContext {
+        mut repo, clock, ..
+    } = ctx;
+    let target_id = extract_ulid_param(req)?;
+
+    let entry = repo
+        .user_registration_token()
+        .lookup(target_id)
+        .await?
+        .ok_or_else(|| {
+            AppError::not_found(format!(
+                "Registration token with ID {target_id} not found"
+            ))
+        })?;
+
+    if entry.revoked_at.is_none() {
+        return Err(AppError::bad_request(format!(
+            "Registration token with ID {target_id} is not revoked"
+        )));
+    }
+
+    let restored = repo.user_registration_token().unrevoke(entry).await?;
+
+    repo.save().await?;
+
+    Ok(Json(SingleResponse::new(
+        UserRegistrationToken::new(restored, clock.now()),
+        format!("/api/admin/v1/user-registration-tokens/{target_id}/unrevoke"),
+    )))
+}
+
+/// Treat any value that is present (including explicit `null`) as `Some`.
+fn nullable_field<'de, T, D>(deserializer: D) -> Result<Option<T>, D::Error>
+where
+    T: Deserialize<'de>,
+    D: Deserializer<'de>,
+{
+    Deserialize::deserialize(deserializer).map(Some)
+}
+
+/// Payload for `PUT /api/admin/v1/user-registration-tokens/{id}`.
+#[derive(Deserialize, JsonSchema)]
+#[serde(rename = "EditUserRegistrationTokenRequest")]
+pub struct UpdateRequest {
+    /// Updated expiration timestamp, or `null` to clear it
+    #[serde(
+        skip_serializing_if = "Option::is_none",
+        default,
+        deserialize_with = "nullable_field"
+    )]
+    #[expect(clippy::option_option)]
+    expires_at: Option<Option<DateTime<Utc>>>,
+
+    /// Updated usage cap, or `null` to remove the limit
+    #[expect(clippy::option_option)]
+    #[serde(
+        skip_serializing_if = "Option::is_none",
+        default,
+        deserialize_with = "nullable_field"
+    )]
+    usage_limit: Option<Option<u32>>,
+}
+
+/// Apply partial updates to a registration token's mutable fields.
+#[endpoint]
+#[tracing::instrument(name = "handler.admin.v1.user_registration_tokens.update", skip_all)]
+pub async fn update(
+    req: &mut Request,
+    depot: &Depot,
+) -> JsonResult<SingleResponse<UserRegistrationToken>> {
+    let ctx = extract_call_context(req, depot).await?;
+    let crate::handlers::admin::call_context::CallContext {
+        mut repo, clock, ..
+    } = ctx;
+    let target_id = extract_ulid_param(req)?;
+    let body: UpdateRequest = req
+        .parse_json()
+        .await
+        .map_err(AppError::internal)?;
+
+    let mut entry = repo
+        .user_registration_token()
+        .lookup(target_id)
+        .await?
+        .ok_or_else(|| {
+            AppError::not_found(format!(
+                "Registration token with ID {target_id} not found"
+            ))
+        })?;
+
+    // Patch expiry when the field was explicitly supplied
+    if let Some(new_expiry) = body.expires_at {
+        entry = repo
+            .user_registration_token()
+            .set_expiry(entry, new_expiry)
+            .await?;
+    }
+
+    // Patch usage limit when the field was explicitly supplied
+    if let Some(new_limit) = body.usage_limit {
+        entry = repo
+            .user_registration_token()
+            .set_usage_limit(entry, new_limit)
+            .await?;
+    }
+
+    repo.save().await?;
+
+    Ok(Json(SingleResponse::new(
+        UserRegistrationToken::new(entry, clock.now()),
+        format!("/api/admin/v1/user-registration-tokens/{target_id}"),
+    )))
+}
+
 #[cfg(test)]
 mod tests {
     use chrono::Duration;
-    use hyper::{Request, StatusCode};
+    use hyper::Request;
+    use hyper::StatusCode;
+    use insta::assert_json_snapshot;
     use pasion_data::Clock as _;
-
+    use serde_json::json;
+    use ulid::Ulid;
+    
     use crate::handlers::test_utils::{RequestBuilderExt, ResponseExt, TestState, setup};
+
+    #[tokio::test]
+    async fn test_create() {
+        setup();
+        let pool = pasion_data::test_utils::setup_test_pool().await;
+        let mut state = TestState::from_pool(pool.clone()).await.unwrap();
+        let token = state.token_with_scope("urn:pasion:admin").await;
+
+        let request = Request::post("/api/admin/v1/user-registration-tokens")
+            .bearer(&token)
+            .json(serde_json::json!({
+                "token": "test_token_123",
+                "usage_limit": 5,
+            }));
+        let response = state.request(request).await;
+        response.assert_status(StatusCode::CREATED);
+        let body: serde_json::Value = response.json();
+
+        assert_json_snapshot!(body, @r#"
+        {
+          "data": {
+            "type": "user-registration_token",
+            "id": "01FSHN9AG0MZAA6S4AF7CTV32E",
+            "attributes": {
+              "token": "test_token_123",
+              "valid": true,
+              "usage_limit": 5,
+              "times_used": 0,
+              "created_at": "2022-01-16T14:40:00Z",
+              "last_used_at": null,
+              "expires_at": null,
+              "revoked_at": null
+            },
+            "links": {
+              "self": "/api/admin/v1/user-registration-tokens/01FSHN9AG0MZAA6S4AF7CTV32E"
+            }
+          },
+          "links": {
+            "self": "/api/admin/v1/user-registration-tokens/01FSHN9AG0MZAA6S4AF7CTV32E"
+          }
+        }
+        "#);
+    }
+
+    #[tokio::test]
+    async fn test_create_auto_token() {
+        setup();
+        let pool = pasion_data::test_utils::setup_test_pool().await;
+        let mut state = TestState::from_pool(pool.clone()).await.unwrap();
+        let token = state.token_with_scope("urn:pasion:admin").await;
+
+        let request = Request::post("/api/admin/v1/user-registration-tokens")
+            .bearer(&token)
+            .json(serde_json::json!({
+                "usage_limit": 1
+            }));
+        let response = state.request(request).await;
+        response.assert_status(StatusCode::CREATED);
+
+        let body: serde_json::Value = response.json();
+
+        assert_json_snapshot!(body, @r#"
+        {
+          "data": {
+            "type": "user-registration_token",
+            "id": "01FSHN9AG0QMGC989M0XSFVF2X",
+            "attributes": {
+              "token": "42oTpLoieH5I",
+              "valid": true,
+              "usage_limit": 1,
+              "times_used": 0,
+              "created_at": "2022-01-16T14:40:00Z",
+              "last_used_at": null,
+              "expires_at": null,
+              "revoked_at": null
+            },
+            "links": {
+              "self": "/api/admin/v1/user-registration-tokens/01FSHN9AG0QMGC989M0XSFVF2X"
+            }
+          },
+          "links": {
+            "self": "/api/admin/v1/user-registration-tokens/01FSHN9AG0QMGC989M0XSFVF2X"
+          }
+        }
+        "#);
+    }
+
+    #[tokio::test]
+    async fn test_create_conflict() {
+        setup();
+        let pool = pasion_data::test_utils::setup_test_pool().await;
+        let mut state = TestState::from_pool(pool.clone()).await.unwrap();
+        let token = state.token_with_scope("urn:pasion:admin").await;
+
+        let request = Request::post("/api/admin/v1/user-registration-tokens")
+            .bearer(&token)
+            .json(serde_json::json!({
+                "token": "test_token_123",
+                "usage_limit": 5
+            }));
+        let response = state.request(request).await;
+        response.assert_status(StatusCode::CREATED);
+
+        let body: serde_json::Value = response.json();
+
+        assert_json_snapshot!(body, @r#"
+        {
+          "data": {
+            "type": "user-registration_token",
+            "id": "01FSHN9AG0MZAA6S4AF7CTV32E",
+            "attributes": {
+              "token": "test_token_123",
+              "valid": true,
+              "usage_limit": 5,
+              "times_used": 0,
+              "created_at": "2022-01-16T14:40:00Z",
+              "last_used_at": null,
+              "expires_at": null,
+              "revoked_at": null
+            },
+            "links": {
+              "self": "/api/admin/v1/user-registration-tokens/01FSHN9AG0MZAA6S4AF7CTV32E"
+            }
+          },
+          "links": {
+            "self": "/api/admin/v1/user-registration-tokens/01FSHN9AG0MZAA6S4AF7CTV32E"
+          }
+        }
+        "#);
+
+        let request = Request::post("/api/admin/v1/user-registration-tokens")
+            .bearer(&token)
+            .json(serde_json::json!({
+                "token": "test_token_123",
+                "usage_limit": 5
+            }));
+        let response = state.request(request).await;
+        response.assert_status(StatusCode::CONFLICT);
+    }
+
+    #[tokio::test]
+    async fn test_get_token() {
+        setup();
+        let pool = pasion_data::test_utils::setup_test_pool().await;
+        let mut state = TestState::from_pool(pool.clone()).await.unwrap();
+        let token = state.token_with_scope("urn:pasion:admin").await;
+
+        let mut repo = state.repository().await.unwrap();
+        let reg_token = repo
+            .user_registration_token()
+            .add(
+                &mut state.rng(),
+                &state.clock,
+                "test_token_123".to_owned(),
+                Some(5),
+                None,
+            )
+            .await
+            .unwrap();
+        repo.save().await.unwrap();
+
+        let request = Request::get(format!(
+            "/api/admin/v1/user-registration-tokens/{}",
+            reg_token.id
+        ))
+        .bearer(&token)
+        .empty();
+        let response = state.request(request).await;
+        response.assert_status(StatusCode::OK);
+        let body: serde_json::Value = response.json();
+
+        assert_json_snapshot!(body, @r#"
+        {
+          "data": {
+            "type": "user-registration_token",
+            "id": "01FSHN9AG0MZAA6S4AF7CTV32E",
+            "attributes": {
+              "token": "test_token_123",
+              "valid": true,
+              "usage_limit": 5,
+              "times_used": 0,
+              "created_at": "2022-01-16T14:40:00Z",
+              "last_used_at": null,
+              "expires_at": null,
+              "revoked_at": null
+            },
+            "links": {
+              "self": "/api/admin/v1/user-registration-tokens/01FSHN9AG0MZAA6S4AF7CTV32E"
+            }
+          },
+          "links": {
+            "self": "/api/admin/v1/user-registration-tokens/01FSHN9AG0MZAA6S4AF7CTV32E"
+          }
+        }
+        "#);
+    }
+
+    #[tokio::test]
+    async fn test_get_nonexistent_token() {
+        setup();
+        let pool = pasion_data::test_utils::setup_test_pool().await;
+        let mut state = TestState::from_pool(pool.clone()).await.unwrap();
+        let token = state.token_with_scope("urn:pasion:admin").await;
+
+        let missing_id = Ulid::from_string("00000000000000000000000000").unwrap();
+        let request = Request::get(format!(
+            "/api/admin/v1/user-registration-tokens/{missing_id}"
+        ))
+        .bearer(&token)
+        .empty();
+        let response = state.request(request).await;
+        response.assert_status(StatusCode::NOT_FOUND);
+        let body: serde_json::Value = response.json();
+
+        assert_json_snapshot!(body, @r###"
+        {
+          "errors": [
+            {
+              "title": "Registration token with ID 00000000000000000000000000 not found"
+            }
+          ]
+        }
+        "###);
+    }
 
     /// Provision a set of tokens covering all relevant combinations of
     /// used / revoked / expired status so that filter tests can work
@@ -1527,5 +2025,591 @@ mod tests {
           }
         }
         "#);
+    }
+
+    #[tokio::test]
+    async fn test_revoke_token() {
+        setup();
+        let pool = pasion_data::test_utils::setup_test_pool().await;
+        let mut state = TestState::from_pool(pool.clone()).await.unwrap();
+        let token = state.token_with_scope("urn:pasion:admin").await;
+
+        let mut repo = state.repository().await.unwrap();
+        let reg_token = repo
+            .user_registration_token()
+            .add(
+                &mut state.rng(),
+                &state.clock,
+                "test_token_456".to_owned(),
+                Some(5),
+                None,
+            )
+            .await
+            .unwrap();
+        repo.save().await.unwrap();
+
+        let request = Request::post(format!(
+            "/api/admin/v1/user-registration-tokens/{}/revoke",
+            reg_token.id
+        ))
+        .bearer(&token)
+        .empty();
+        let response = state.request(request).await;
+        response.assert_status(StatusCode::OK);
+        let body: serde_json::Value = response.json();
+
+        assert_eq!(
+            body["data"]["attributes"]["revoked_at"],
+            serde_json::json!(state.clock.now())
+        );
+    }
+
+    #[tokio::test]
+    async fn test_revoke_already_revoked_token() {
+        setup();
+        let pool = pasion_data::test_utils::setup_test_pool().await;
+        let mut state = TestState::from_pool(pool.clone()).await.unwrap();
+        let token = state.token_with_scope("urn:pasion:admin").await;
+
+        let mut repo = state.repository().await.unwrap();
+        let reg_token = repo
+            .user_registration_token()
+            .add(
+                &mut state.rng(),
+                &state.clock,
+                "test_token_789".to_owned(),
+                None,
+                None,
+            )
+            .await
+            .unwrap();
+
+        let revoked_entry = repo
+            .user_registration_token()
+            .revoke(&state.clock, reg_token)
+            .await
+            .unwrap();
+
+        repo.save().await.unwrap();
+
+        state.clock.advance(Duration::try_minutes(1).unwrap());
+
+        let request = Request::post(format!(
+            "/api/admin/v1/user-registration-tokens/{}/revoke",
+            revoked_entry.id
+        ))
+        .bearer(&token)
+        .empty();
+        let response = state.request(request).await;
+        response.assert_status(StatusCode::BAD_REQUEST);
+        let body: serde_json::Value = response.json();
+        assert_eq!(
+            body["errors"][0]["title"],
+            format!(
+                "Registration token with ID {} is already revoked",
+                revoked_entry.id
+            )
+        );
+    }
+
+    #[tokio::test]
+    async fn test_revoke_unknown_token() {
+        setup();
+        let pool = pasion_data::test_utils::setup_test_pool().await;
+        let mut state = TestState::from_pool(pool.clone()).await.unwrap();
+        let token = state.token_with_scope("urn:pasion:admin").await;
+
+        let request = Request::post(
+            "/api/admin/v1/user-registration-tokens/01040G2081040G2081040G2081/revoke",
+        )
+        .bearer(&token)
+        .empty();
+        let response = state.request(request).await;
+        response.assert_status(StatusCode::NOT_FOUND);
+        let body: serde_json::Value = response.json();
+        assert_eq!(
+            body["errors"][0]["title"],
+            "Registration token with ID 01040G2081040G2081040G2081 not found"
+        );
+    }
+
+    #[tokio::test]
+    async fn test_unrevoke_token() {
+        setup();
+        let pool = pasion_data::test_utils::setup_test_pool().await;
+        let mut state = TestState::from_pool(pool.clone()).await.unwrap();
+        let token = state.token_with_scope("urn:pasion:admin").await;
+
+        let mut repo = state.repository().await.unwrap();
+
+        let reg_token = repo
+            .user_registration_token()
+            .add(
+                &mut state.rng(),
+                &state.clock,
+                "test_token_456".to_owned(),
+                Some(5),
+                None,
+            )
+            .await
+            .unwrap();
+
+        let revoked_entry = repo
+            .user_registration_token()
+            .revoke(&state.clock, reg_token)
+            .await
+            .unwrap();
+
+        repo.save().await.unwrap();
+
+        let request = Request::post(format!(
+            "/api/admin/v1/user-registration-tokens/{}/unrevoke",
+            revoked_entry.id
+        ))
+        .bearer(&token)
+        .empty();
+        let response = state.request(request).await;
+        response.assert_status(StatusCode::OK);
+        let body: serde_json::Value = response.json();
+
+        insta::assert_json_snapshot!(body, @r#"
+        {
+          "data": {
+            "type": "user-registration_token",
+            "id": "01FSHN9AG0MZAA6S4AF7CTV32E",
+            "attributes": {
+              "token": "test_token_456",
+              "valid": true,
+              "usage_limit": 5,
+              "times_used": 0,
+              "created_at": "2022-01-16T14:40:00Z",
+              "last_used_at": null,
+              "expires_at": null,
+              "revoked_at": null
+            },
+            "links": {
+              "self": "/api/admin/v1/user-registration-tokens/01FSHN9AG0MZAA6S4AF7CTV32E"
+            }
+          },
+          "links": {
+            "self": "/api/admin/v1/user-registration-tokens/01FSHN9AG0MZAA6S4AF7CTV32E/unrevoke"
+          }
+        }
+        "#);
+    }
+
+    #[tokio::test]
+    async fn test_unrevoke_not_revoked_token() {
+        setup();
+        let pool = pasion_data::test_utils::setup_test_pool().await;
+        let mut state = TestState::from_pool(pool.clone()).await.unwrap();
+        let token = state.token_with_scope("urn:pasion:admin").await;
+
+        let mut repo = state.repository().await.unwrap();
+        let reg_token = repo
+            .user_registration_token()
+            .add(
+                &mut state.rng(),
+                &state.clock,
+                "test_token_789".to_owned(),
+                None,
+                None,
+            )
+            .await
+            .unwrap();
+
+        repo.save().await.unwrap();
+
+        let request = Request::post(format!(
+            "/api/admin/v1/user-registration-tokens/{}/unrevoke",
+            reg_token.id
+        ))
+        .bearer(&token)
+        .empty();
+        let response = state.request(request).await;
+        response.assert_status(StatusCode::BAD_REQUEST);
+        let body: serde_json::Value = response.json();
+        assert_eq!(
+            body["errors"][0]["title"],
+            format!(
+                "Registration token with ID {} is not revoked",
+                reg_token.id
+            )
+        );
+    }
+
+    #[tokio::test]
+    async fn test_unrevoke_unknown_token() {
+        setup();
+        let pool = pasion_data::test_utils::setup_test_pool().await;
+        let mut state = TestState::from_pool(pool.clone()).await.unwrap();
+        let token = state.token_with_scope("urn:pasion:admin").await;
+
+        let request = Request::post(
+            "/api/admin/v1/user-registration-tokens/01040G2081040G2081040G2081/unrevoke",
+        )
+        .bearer(&token)
+        .empty();
+        let response = state.request(request).await;
+        response.assert_status(StatusCode::NOT_FOUND);
+        let body: serde_json::Value = response.json();
+        assert_eq!(
+            body["errors"][0]["title"],
+            "Registration token with ID 01040G2081040G2081040G2081 not found"
+        );
+    }
+
+    #[tokio::test]
+    async fn test_update_expiry() {
+        setup();
+        let pool = pasion_data::test_utils::setup_test_pool().await;
+        let mut state = TestState::from_pool(pool.clone()).await.unwrap();
+        let token = state.token_with_scope("urn:pasion:admin").await;
+
+        let mut repo = state.repository().await.unwrap();
+
+        let reg_token = repo
+            .user_registration_token()
+            .add(
+                &mut state.rng(),
+                &state.clock,
+                "test_update_expiry".to_owned(),
+                None,
+                None,
+            )
+            .await
+            .unwrap();
+
+        repo.save().await.unwrap();
+
+        // Set an expiry date
+        let new_expiry = state.clock.now() + Duration::days(30);
+        let request = Request::put(format!(
+            "/api/admin/v1/user-registration-tokens/{}",
+            reg_token.id
+        ))
+        .bearer(&token)
+        .json(json!({
+            "expires_at": new_expiry
+        }));
+
+        let response = state.request(request).await;
+        response.assert_status(StatusCode::OK);
+        let body: serde_json::Value = response.json();
+
+        insta::assert_json_snapshot!(body, @r#"
+        {
+          "data": {
+            "type": "user-registration_token",
+            "id": "01FSHN9AG0MZAA6S4AF7CTV32E",
+            "attributes": {
+              "token": "test_update_expiry",
+              "valid": true,
+              "usage_limit": null,
+              "times_used": 0,
+              "created_at": "2022-01-16T14:40:00Z",
+              "last_used_at": null,
+              "expires_at": "2022-02-15T14:40:00Z",
+              "revoked_at": null
+            },
+            "links": {
+              "self": "/api/admin/v1/user-registration-tokens/01FSHN9AG0MZAA6S4AF7CTV32E"
+            }
+          },
+          "links": {
+            "self": "/api/admin/v1/user-registration-tokens/01FSHN9AG0MZAA6S4AF7CTV32E"
+          }
+        }
+        "#);
+
+        // Clear the expiry
+        let request = Request::put(format!(
+            "/api/admin/v1/user-registration-tokens/{}",
+            reg_token.id
+        ))
+        .bearer(&token)
+        .json(json!({
+            "expires_at": null
+        }));
+
+        let response = state.request(request).await;
+        response.assert_status(StatusCode::OK);
+        let body: serde_json::Value = response.json();
+
+        insta::assert_json_snapshot!(body, @r#"
+        {
+          "data": {
+            "type": "user-registration_token",
+            "id": "01FSHN9AG0MZAA6S4AF7CTV32E",
+            "attributes": {
+              "token": "test_update_expiry",
+              "valid": true,
+              "usage_limit": null,
+              "times_used": 0,
+              "created_at": "2022-01-16T14:40:00Z",
+              "last_used_at": null,
+              "expires_at": null,
+              "revoked_at": null
+            },
+            "links": {
+              "self": "/api/admin/v1/user-registration-tokens/01FSHN9AG0MZAA6S4AF7CTV32E"
+            }
+          },
+          "links": {
+            "self": "/api/admin/v1/user-registration-tokens/01FSHN9AG0MZAA6S4AF7CTV32E"
+          }
+        }
+        "#);
+    }
+
+    #[tokio::test]
+    async fn test_update_usage_limit() {
+        setup();
+        let pool = pasion_data::test_utils::setup_test_pool().await;
+        let mut state = TestState::from_pool(pool.clone()).await.unwrap();
+        let token = state.token_with_scope("urn:pasion:admin").await;
+
+        let mut repo = state.repository().await.unwrap();
+
+        let reg_token = repo
+            .user_registration_token()
+            .add(
+                &mut state.rng(),
+                &state.clock,
+                "test_update_limit".to_owned(),
+                Some(5),
+                None,
+            )
+            .await
+            .unwrap();
+
+        repo.save().await.unwrap();
+
+        // Increase the limit
+        let request = Request::put(format!(
+            "/api/admin/v1/user-registration-tokens/{}",
+            reg_token.id
+        ))
+        .bearer(&token)
+        .json(json!({
+            "usage_limit": 10
+        }));
+
+        let response = state.request(request).await;
+        response.assert_status(StatusCode::OK);
+        let body: serde_json::Value = response.json();
+
+        insta::assert_json_snapshot!(body, @r#"
+        {
+          "data": {
+            "type": "user-registration_token",
+            "id": "01FSHN9AG0MZAA6S4AF7CTV32E",
+            "attributes": {
+              "token": "test_update_limit",
+              "valid": true,
+              "usage_limit": 10,
+              "times_used": 0,
+              "created_at": "2022-01-16T14:40:00Z",
+              "last_used_at": null,
+              "expires_at": null,
+              "revoked_at": null
+            },
+            "links": {
+              "self": "/api/admin/v1/user-registration-tokens/01FSHN9AG0MZAA6S4AF7CTV32E"
+            }
+          },
+          "links": {
+            "self": "/api/admin/v1/user-registration-tokens/01FSHN9AG0MZAA6S4AF7CTV32E"
+          }
+        }
+        "#);
+
+        // Remove the limit entirely
+        let request = Request::put(format!(
+            "/api/admin/v1/user-registration-tokens/{}",
+            reg_token.id
+        ))
+        .bearer(&token)
+        .json(json!({
+            "usage_limit": null
+        }));
+
+        let response = state.request(request).await;
+        response.assert_status(StatusCode::OK);
+        let body: serde_json::Value = response.json();
+
+        insta::assert_json_snapshot!(body, @r#"
+        {
+          "data": {
+            "type": "user-registration_token",
+            "id": "01FSHN9AG0MZAA6S4AF7CTV32E",
+            "attributes": {
+              "token": "test_update_limit",
+              "valid": true,
+              "usage_limit": null,
+              "times_used": 0,
+              "created_at": "2022-01-16T14:40:00Z",
+              "last_used_at": null,
+              "expires_at": null,
+              "revoked_at": null
+            },
+            "links": {
+              "self": "/api/admin/v1/user-registration-tokens/01FSHN9AG0MZAA6S4AF7CTV32E"
+            }
+          },
+          "links": {
+            "self": "/api/admin/v1/user-registration-tokens/01FSHN9AG0MZAA6S4AF7CTV32E"
+          }
+        }
+        "#);
+    }
+
+    #[tokio::test]
+    async fn test_update_multiple_fields() {
+        setup();
+        let pool = pasion_data::test_utils::setup_test_pool().await;
+        let mut state = TestState::from_pool(pool.clone()).await.unwrap();
+        let token = state.token_with_scope("urn:pasion:admin").await;
+
+        let mut repo = state.repository().await.unwrap();
+
+        let reg_token = repo
+            .user_registration_token()
+            .add(
+                &mut state.rng(),
+                &state.clock,
+                "test_update_multiple".to_owned(),
+                None,
+                None,
+            )
+            .await
+            .unwrap();
+
+        repo.save().await.unwrap();
+
+        let new_expiry = state.clock.now() + Duration::days(30);
+        let request = Request::put(format!(
+            "/api/admin/v1/user-registration-tokens/{}",
+            reg_token.id
+        ))
+        .bearer(&token)
+        .json(json!({
+            "expires_at": new_expiry,
+            "usage_limit": 20
+        }));
+
+        let response = state.request(request).await;
+        response.assert_status(StatusCode::OK);
+        let body: serde_json::Value = response.json();
+
+        insta::assert_json_snapshot!(body, @r#"
+        {
+          "data": {
+            "type": "user-registration_token",
+            "id": "01FSHN9AG0MZAA6S4AF7CTV32E",
+            "attributes": {
+              "token": "test_update_multiple",
+              "valid": true,
+              "usage_limit": 20,
+              "times_used": 0,
+              "created_at": "2022-01-16T14:40:00Z",
+              "last_used_at": null,
+              "expires_at": "2022-02-15T14:40:00Z",
+              "revoked_at": null
+            },
+            "links": {
+              "self": "/api/admin/v1/user-registration-tokens/01FSHN9AG0MZAA6S4AF7CTV32E"
+            }
+          },
+          "links": {
+            "self": "/api/admin/v1/user-registration-tokens/01FSHN9AG0MZAA6S4AF7CTV32E"
+          }
+        }
+        "#);
+    }
+
+    #[tokio::test]
+    async fn test_update_no_fields() {
+        setup();
+        let pool = pasion_data::test_utils::setup_test_pool().await;
+        let mut state = TestState::from_pool(pool.clone()).await.unwrap();
+        let token = state.token_with_scope("urn:pasion:admin").await;
+
+        let mut repo = state.repository().await.unwrap();
+
+        let reg_token = repo
+            .user_registration_token()
+            .add(
+                &mut state.rng(),
+                &state.clock,
+                "test_update_none".to_owned(),
+                Some(5),
+                Some(state.clock.now() + Duration::days(30)),
+            )
+            .await
+            .unwrap();
+
+        repo.save().await.unwrap();
+
+        // Empty body -- nothing changes
+        let request = Request::put(format!(
+            "/api/admin/v1/user-registration-tokens/{}",
+            reg_token.id
+        ))
+        .bearer(&token)
+        .json(json!({}));
+
+        let response = state.request(request).await;
+        response.assert_status(StatusCode::OK);
+        let body: serde_json::Value = response.json();
+
+        insta::assert_json_snapshot!(body, @r#"
+        {
+          "data": {
+            "type": "user-registration_token",
+            "id": "01FSHN9AG0MZAA6S4AF7CTV32E",
+            "attributes": {
+              "token": "test_update_none",
+              "valid": true,
+              "usage_limit": 5,
+              "times_used": 0,
+              "created_at": "2022-01-16T14:40:00Z",
+              "last_used_at": null,
+              "expires_at": "2022-02-15T14:40:00Z",
+              "revoked_at": null
+            },
+            "links": {
+              "self": "/api/admin/v1/user-registration-tokens/01FSHN9AG0MZAA6S4AF7CTV32E"
+            }
+          },
+          "links": {
+            "self": "/api/admin/v1/user-registration-tokens/01FSHN9AG0MZAA6S4AF7CTV32E"
+          }
+        }
+        "#);
+    }
+
+    #[tokio::test]
+    async fn test_update_unknown_token() {
+        setup();
+        let pool = pasion_data::test_utils::setup_test_pool().await;
+        let mut state = TestState::from_pool(pool.clone()).await.unwrap();
+        let token = state.token_with_scope("urn:pasion:admin").await;
+
+        let request =
+            Request::put("/api/admin/v1/user-registration-tokens/01040G2081040G2081040G2081")
+                .bearer(&token)
+                .json(json!({
+                    "usage_limit": 5
+                }));
+
+        let response = state.request(request).await;
+        response.assert_status(StatusCode::NOT_FOUND);
+        let body: serde_json::Value = response.json();
+
+        assert_eq!(
+            body["errors"][0]["title"],
+            "Registration token with ID 01040G2081040G2081040G2081 not found"
+        );
     }
 }

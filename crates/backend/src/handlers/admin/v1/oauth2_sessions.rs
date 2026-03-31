@@ -1,24 +1,106 @@
-// Copyright 2024, 2025 Taidge Ltd.
-// Copyright 2024 The Matrix.org Foundation C.I.C.
+// Copyright 2025, 2026 Taidge Ltd.
 //
-// SPDX-License-Identifier: Apache-2.0
+// SPDX-License-Identifier: AGPL-3.0-only
 
 use std::str::FromStr;
 
 use oauth2_types::scope::{Scope, ScopeToken};
-use pasion_data::{Page, oauth2::OAuth2SessionFilter};
+use pasion_data::Page;
+use pasion_data::oauth2::OAuth2SessionFilter;
+use pasion_data::queue::{QueueJobRepositoryExt as _, SyncDevicesJob};
 use salvo::prelude::*;
 use schemars::JsonSchema;
 use serde::Deserialize;
 use ulid::Ulid;
 
+use crate::AppError;
+use crate::JsonResult;
 use crate::handlers::admin::{
     call_context::extract_call_context,
-    model::{OAuth2Session, Resource},
-    params::{IncludeCount, extract_pagination},
+    model::OAuth2Session,
+    model::Resource,
+    params::IncludeCount,
+    params::extract_pagination,
+    params::extract_ulid_param,
     response::PaginatedResponse,
+    response::SingleResponse,
 };
-use crate::{AppError, JsonResult};
+
+/// Terminate an active OAuth 2.0 session. If the session is associated with a
+/// user, a device-sync job is enqueued so that downstream homeservers learn
+/// about the revocation promptly.
+#[endpoint]
+#[tracing::instrument(name = "handler.admin.v1.oauth2_sessions.finish", skip_all)]
+pub async fn finish(
+    req: &mut Request,
+    depot: &Depot,
+) -> JsonResult<SingleResponse<OAuth2Session>> {
+    let ctx = extract_call_context(req, depot).await?;
+    let crate::handlers::admin::call_context::CallContext {
+        mut repo, clock, ..
+    } = ctx;
+    let session_id = extract_ulid_param(req)?;
+    let mut rng = crate::handlers::rest::make_rng();
+
+    let oauth_session = repo
+        .oauth2_session()
+        .lookup(session_id)
+        .await?
+        .ok_or_else(|| {
+            AppError::not_found(format!(
+                "OAuth 2.0 session with ID {session_id} not found"
+            ))
+        })?;
+
+    if oauth_session.finished_at().is_some() {
+        return Err(AppError::bad_request(format!(
+            "OAuth 2.0 session with ID {session_id} is already finished"
+        )));
+    }
+
+    // When the session belongs to a user, schedule a device list sync so that
+    // the homeserver is notified of the change.
+    if let Some(uid) = oauth_session.user_id {
+        tracing::info!(user.id = %uid, "Scheduling device sync job for user");
+        let sync_job = SyncDevicesJob::new_for_id(uid);
+        repo.queue_job()
+            .schedule_job(&mut rng, &clock, sync_job)
+            .await?;
+    }
+
+    let ended = repo
+        .oauth2_session()
+        .finish(&clock, oauth_session)
+        .await?;
+
+    repo.save().await?;
+
+    Ok(Json(SingleResponse::new(
+        OAuth2Session::from(ended),
+        format!("/api/admin/v1/oauth2-sessions/{session_id}/finish"),
+    )))
+}
+
+#[endpoint]
+#[tracing::instrument(name = "handler.admin.v1.oauth2_session.get", skip_all)]
+pub async fn get(
+    req: &mut Request,
+    depot: &Depot,
+) -> JsonResult<SingleResponse<OAuth2Session>> {
+    let call_context = extract_call_context(req, depot).await?;
+    let crate::handlers::admin::call_context::CallContext { mut repo, .. } = call_context;
+    let id = extract_ulid_param(req)?;
+
+    let session = repo
+        .oauth2_session()
+        .lookup(id)
+        .await?
+        .ok_or_else(|| AppError::not_found(format!("OAuth 2.0 session ID {id} not found")))?;
+
+    Ok(Json(SingleResponse::new_canonical(OAuth2Session::from(
+        session,
+    ))))
+}
 
 #[derive(Deserialize, JsonSchema, Clone, Copy)]
 #[serde(rename_all = "snake_case")]
@@ -130,7 +212,7 @@ impl std::fmt::Display for FilterParams {
 
 #[endpoint]
 #[tracing::instrument(name = "handler.admin.v1.oauth2_sessions.list", skip_all)]
-pub async fn handler(
+pub async fn list(
     req: &mut Request,
     depot: &Depot,
 ) -> JsonResult<PaginatedResponse<OAuth2Session>> {
@@ -254,9 +336,190 @@ pub async fn handler(
 
 #[cfg(test)]
 mod tests {
-    use hyper::{Request, StatusCode};
-
+    use chrono::Duration;
+    use hyper::Request;
+    use hyper::StatusCode;
+    use pasion_data::AccessToken;
+    use pasion_data::Clock as _;
+    use ulid::Ulid;
+    
     use crate::handlers::test_utils::{RequestBuilderExt, ResponseExt, TestState, setup};
+
+    #[tokio::test]
+    async fn test_finish_session() {
+        setup();
+        let pool = pasion_data::test_utils::setup_test_pool().await;
+        let mut state = TestState::from_pool(pool.clone()).await.unwrap();
+        let token = state.token_with_scope("urn:pasion:admin").await;
+
+        // Get the session ID from the token we just created
+        let mut repo = state.repository().await.unwrap();
+        let AccessToken { session_id, .. } = repo
+            .oauth2_access_token()
+            .find_by_token(&token)
+            .await
+            .unwrap()
+            .unwrap();
+        repo.save().await.unwrap();
+
+        let request = Request::post(format!("/api/admin/v1/oauth2-sessions/{session_id}/finish"))
+            .bearer(&token)
+            .empty();
+        let response = state.request(request).await;
+        response.assert_status(StatusCode::OK);
+        let body: serde_json::Value = response.json();
+
+        // The finished_at timestamp should be the same as the current time
+        assert_eq!(
+            body["data"]["attributes"]["finished_at"],
+            serde_json::json!(state.clock.now())
+        );
+    }
+
+    #[tokio::test]
+    async fn test_finish_already_finished_session() {
+        setup();
+        let pool = pasion_data::test_utils::setup_test_pool().await;
+        let mut state = TestState::from_pool(pool.clone()).await.unwrap();
+
+        // Create first admin token for the API call
+        let admin_token = state.token_with_scope("urn:pasion:admin").await;
+
+        // Create a second admin session that we'll finish
+        let second_admin_token = state.token_with_scope("urn:pasion:admin").await;
+
+        // Get the second session and finish it first
+        let mut repo = state.repository().await.unwrap();
+        let AccessToken { session_id, .. } = repo
+            .oauth2_access_token()
+            .find_by_token(&second_admin_token)
+            .await
+            .unwrap()
+            .unwrap();
+
+        let session = repo
+            .oauth2_session()
+            .lookup(session_id)
+            .await
+            .unwrap()
+            .unwrap();
+
+        // Finish the session first
+        let session = repo
+            .oauth2_session()
+            .finish(&state.clock, session)
+            .await
+            .unwrap();
+
+        repo.save().await.unwrap();
+
+        // Move the clock forward
+        state.clock.advance(Duration::try_minutes(1).unwrap());
+
+        let request = Request::post(format!(
+            "/api/admin/v1/oauth2-sessions/{}/finish",
+            session.id
+        ))
+        .bearer(&admin_token)
+        .empty();
+        let response = state.request(request).await;
+        response.assert_status(StatusCode::BAD_REQUEST);
+        let body: serde_json::Value = response.json();
+        assert_eq!(
+            body["errors"][0]["title"],
+            format!(
+                "OAuth 2.0 session with ID {} is already finished",
+                session.id
+            )
+        );
+    }
+
+    #[tokio::test]
+    async fn test_finish_unknown_session() {
+        setup();
+        let pool = pasion_data::test_utils::setup_test_pool().await;
+        let mut state = TestState::from_pool(pool.clone()).await.unwrap();
+        let token = state.token_with_scope("urn:pasion:admin").await;
+
+        let request =
+            Request::post("/api/admin/v1/oauth2-sessions/01040G2081040G2081040G2081/finish")
+                .bearer(&token)
+                .empty();
+        let response = state.request(request).await;
+        response.assert_status(StatusCode::NOT_FOUND);
+        let body: serde_json::Value = response.json();
+        assert_eq!(
+            body["errors"][0]["title"],
+            "OAuth 2.0 session with ID 01040G2081040G2081040G2081 not found"
+        );
+    }
+
+    #[tokio::test]
+    async fn test_get() {
+        setup();
+        let pool = pasion_data::test_utils::setup_test_pool().await;
+        let mut state = TestState::from_pool(pool.clone()).await.unwrap();
+        let token = state.token_with_scope("urn:pasion:admin").await;
+
+        // state.token_with_scope did create a session, so we can get it here
+        let mut repo = state.repository().await.unwrap();
+        let AccessToken { session_id, .. } = repo
+            .oauth2_access_token()
+            .find_by_token(&token)
+            .await
+            .unwrap()
+            .unwrap();
+        repo.save().await.unwrap();
+
+        let request = Request::get(format!("/api/admin/v1/oauth2-sessions/{session_id}"))
+            .bearer(&token)
+            .empty();
+        let response = state.request(request).await;
+        response.assert_status(StatusCode::OK);
+        let body: serde_json::Value = response.json();
+        assert_eq!(body["data"]["type"], "oauth2-session");
+        insta::assert_json_snapshot!(body, @r#"
+        {
+          "data": {
+            "type": "oauth2-session",
+            "id": "01FSHN9AG0MKGTBNZ16RDR3PVY",
+            "attributes": {
+              "created_at": "2022-01-16T14:40:00Z",
+              "finished_at": null,
+              "user_id": null,
+              "user_session_id": null,
+              "client_id": "01FSHN9AG0FAQ50MT1E9FFRPZR",
+              "scope": "urn:pasion:admin",
+              "user_agent": null,
+              "last_active_at": null,
+              "last_active_ip": null,
+              "human_name": null
+            },
+            "links": {
+              "self": "/api/admin/v1/oauth2-sessions/01FSHN9AG0MKGTBNZ16RDR3PVY"
+            }
+          },
+          "links": {
+            "self": "/api/admin/v1/oauth2-sessions/01FSHN9AG0MKGTBNZ16RDR3PVY"
+          }
+        }
+        "#);
+    }
+
+    #[tokio::test]
+    async fn test_not_found() {
+        setup();
+        let pool = pasion_data::test_utils::setup_test_pool().await;
+        let mut state = TestState::from_pool(pool.clone()).await.unwrap();
+        let token = state.token_with_scope("urn:pasion:admin").await;
+
+        let session_id = Ulid::nil();
+        let request = Request::get(format!("/api/admin/v1/oauth2-sessions/{session_id}"))
+            .bearer(&token)
+            .empty();
+        let response = state.request(request).await;
+        response.assert_status(StatusCode::NOT_FOUND);
+    }
 
     #[tokio::test]
     async fn test_oauth2_simple_session_list() {

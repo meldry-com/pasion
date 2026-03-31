@@ -601,121 +601,121 @@ fn build_admin_router(router: Router) -> Router {
             // Users
             .push(
                 Router::with_path("users")
-                    .get(users::list::handler)
-                    .post(users::add::handler)
+                    .get(users::list)
+                    .post(users::add)
                     .push(
                         Router::with_path("by-username/{username}")
-                            .get(users::by_username::handler),
+                            .get(users::by_username),
                     )
-                    .push(Router::with_path("batch-invite").post(users::batch_invite::handler))
+                    .push(Router::with_path("batch-invite").post(users::batch_invite))
                     .push(
                         Router::with_path("{id}")
-                            .get(users::get::handler)
-                            .patch(users::update::handler)
+                            .get(users::get)
+                            .patch(users::update)
                             .push(
                                 Router::with_path("set-password")
-                                    .post(users::set_password::handler),
+                                    .post(users::set_password),
                             )
                             .push(
-                                Router::with_path("risk-action").post(users::risk_action::handler),
+                                Router::with_path("risk-action").post(users::risk_action),
                             ),
                     ),
             )
             // User emails
             .push(
                 Router::with_path("user-emails")
-                    .get(user_emails::list::handler)
-                    .post(user_emails::add::handler)
+                    .get(user_emails::list)
+                    .post(user_emails::add)
                     .push(
                         Router::with_path("{id}")
-                            .get(user_emails::get::handler)
-                            .patch(user_emails::update::handler)
-                            .delete(user_emails::delete::handler),
+                            .get(user_emails::get)
+                            .patch(user_emails::update)
+                            .delete(user_emails::delete),
                     ),
             )
             // User sessions
             .push(
                 Router::with_path("user-sessions")
-                    .get(user_sessions::list::handler)
+                    .get(user_sessions::list)
                     .push(
                         Router::with_path("{id}")
-                            .get(user_sessions::get::handler)
-                            .push(Router::with_path("finish").post(user_sessions::finish::handler)),
+                            .get(user_sessions::get)
+                            .push(Router::with_path("finish").post(user_sessions::finish)),
                     ),
             )
             // OAuth2 sessions
             .push(
                 Router::with_path("oauth2-sessions")
-                    .get(oauth2_sessions::list::handler)
+                    .get(oauth2_sessions::list)
                     .push(
                         Router::with_path("{id}")
-                            .get(oauth2_sessions::get::handler)
+                            .get(oauth2_sessions::get)
                             .push(
-                                Router::with_path("finish").post(oauth2_sessions::finish::handler),
+                                Router::with_path("finish").post(oauth2_sessions::finish),
                             ),
                     ),
             )
             // Personal sessions
             .push(
                 Router::with_path("personal-sessions")
-                    .get(personal_sessions::list::handler)
-                    .post(personal_sessions::add::handler)
+                    .get(personal_sessions::list)
+                    .post(personal_sessions::add)
                     .push(
                         Router::with_path("{id}")
-                            .get(personal_sessions::get::handler)
+                            .get(personal_sessions::get)
                             .push(
                                 Router::with_path("regenerate")
-                                    .post(personal_sessions::regenerate::handler),
+                                    .post(personal_sessions::regenerate),
                             )
                             .push(
                                 Router::with_path("revoke")
-                                    .post(personal_sessions::revoke::handler),
+                                    .post(personal_sessions::revoke),
                             ),
                     ),
             )
             // User registration tokens
             .push(
                 Router::with_path("user-registration-tokens")
-                    .get(user_registration_tokens::list::handler)
-                    .post(user_registration_tokens::add::handler)
+                    .get(user_registration_tokens::list)
+                    .post(user_registration_tokens::add)
                     .push(
                         Router::with_path("{id}")
-                            .get(user_registration_tokens::get::handler)
-                            .put(user_registration_tokens::update::handler)
+                            .get(user_registration_tokens::get)
+                            .put(user_registration_tokens::update)
                             .push(
                                 Router::with_path("revoke")
-                                    .post(user_registration_tokens::revoke::handler),
+                                    .post(user_registration_tokens::revoke),
                             )
                             .push(
                                 Router::with_path("unrevoke")
-                                    .post(user_registration_tokens::unrevoke::handler),
+                                    .post(user_registration_tokens::unrevoke),
                             ),
                     ),
             )
             // Upstream OAuth providers
             .push(
                 Router::with_path("upstream-oauth-providers")
-                    .get(upstream_oauth_providers::list::handler)
-                    .push(Router::with_path("{id}").get(upstream_oauth_providers::get::handler)),
+                    .get(upstream_oauth_providers::list)
+                    .push(Router::with_path("{id}").get(upstream_oauth_providers::get)),
             )
             // Upstream OAuth links
             .push(
                 Router::with_path("upstream-oauth-links")
-                    .get(upstream_oauth_links::list::handler)
-                    .post(upstream_oauth_links::add::handler)
+                    .get(upstream_oauth_links::list)
+                    .post(upstream_oauth_links::add)
                     .push(
                         Router::with_path("{id}")
-                            .get(upstream_oauth_links::get::handler)
-                            .patch(upstream_oauth_links::update::handler)
-                            .delete(upstream_oauth_links::delete::handler),
+                            .get(upstream_oauth_links::get)
+                            .patch(upstream_oauth_links::update)
+                            .delete(upstream_oauth_links::delete),
                     ),
             )
             // Policy data
             .push(
                 Router::with_path("policy-data")
-                    .push(Router::with_path("latest").get(policy_data::get_latest::handler))
-                    .push(Router::with_path("{id}").get(policy_data::get::handler))
-                    .put(policy_data::set::handler),
+                    .push(Router::with_path("latest").get(policy_data::get_latest))
+                    .push(Router::with_path("{id}").get(policy_data::get))
+                    .put(policy_data::set),
             );
 
     // Generate OpenAPI spec and Swagger UI for the admin API
