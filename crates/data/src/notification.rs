@@ -6,7 +6,9 @@ use url::Url;
 use crate::Ulid;
 
 pub use crate::pg::notification::PgNotificationRepository;
+pub use crate::pg::notification_template::PgNotificationTemplateRepository;
 pub use crate::storage::notification::*;
+pub use crate::storage::notification_template::NotificationTemplateRepository;
 
 /// A persisted logical notification request.
 ///

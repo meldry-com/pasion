@@ -1250,7 +1250,7 @@ mod tests {
             .await
             .unwrap();
         state
-            .homeserver_connection
+            .homeserver_admin
             .provision_user(&ProvisionRequest::new(&user.username, &user.sub))
             .await
             .unwrap();
@@ -1275,7 +1275,7 @@ mod tests {
         assert!(body["data"]["attributes"]["locked_at"].is_string());
 
         let user = state
-            .homeserver_connection
+            .homeserver_admin
             .query_user(&username)
             .await
             .unwrap();
@@ -1303,12 +1303,12 @@ mod tests {
         repo.save().await.unwrap();
 
         state
-            .homeserver_connection
+            .homeserver_admin
             .provision_user(&ProvisionRequest::new(&user.username, &user.sub))
             .await
             .unwrap();
         state
-            .homeserver_connection
+            .homeserver_admin
             .delete_user(&user.username, true)
             .await
             .unwrap();
@@ -1328,7 +1328,7 @@ mod tests {
         );
 
         let matrix_user = state
-            .homeserver_connection
+            .homeserver_admin
             .query_user(&user.username)
             .await
             .unwrap();

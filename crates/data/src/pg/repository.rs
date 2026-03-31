@@ -9,8 +9,7 @@ use pasion_data::{
     account::AccountRepository,
     app_session::AppSessionRepository,
     audit::AuditRepository,
-    notification::NotificationRepository,
-    storage::NotificationTemplateRepository,
+    notification::{NotificationRepository, NotificationTemplateRepository},
     oauth2::{
         OAuth2AccessTokenRepository, OAuth2AuthorizationGrantRepository, OAuth2ClientRepository,
         OAuth2DeviceCodeGrantRepository, OAuth2RefreshTokenRepository, OAuth2SessionRepository,
@@ -36,8 +35,7 @@ use crate::{
     account::PgAccountRepository,
     app_session::PgAppSessionRepository,
     audit::PgAuditRepository,
-    notification::PgNotificationRepository,
-    notification_template::PgNotificationTemplateRepository,
+    notification::{PgNotificationRepository, PgNotificationTemplateRepository},
     oauth2::{
         PgOAuth2AccessTokenRepository, PgOAuth2AuthorizationGrantRepository,
         PgOAuth2ClientRepository, PgOAuth2DeviceCodeGrantRepository,
