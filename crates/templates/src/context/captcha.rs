@@ -10,35 +10,82 @@ use serde::Serialize;
 
 use crate::{TemplateContext, context::SampleIdentifier};
 
-/// Wraps a [`pasion_data::CaptchaConfig`] so it can be exposed as a minijinja
-/// object with named fields.
-#[derive(Debug)]
-struct CaptchaConfigObject {
-    inner: pasion_data::CaptchaConfig,
+const CAPTCHA_FIELD_NAMES: [&str; 2] = ["service", "site_key"];
+
+#[derive(Debug, Clone, Copy)]
+enum CaptchaField {
+    Service,
+    SiteKey,
 }
 
-impl CaptchaConfigObject {
-    /// Translate the service enum variant into the template-facing string key
-    fn service_name(&self) -> &'static str {
-        match &self.inner.service {
-            pasion_data::CaptchaService::RecaptchaV2 => "recaptcha_v2",
-            pasion_data::CaptchaService::CloudflareTurnstile => "cloudflare_turnstile",
-            pasion_data::CaptchaService::HCaptcha => "hcaptcha",
-        }
-    }
-}
-
-impl Object for CaptchaConfigObject {
-    fn get_value(self: &Arc<Self>, key: &Value) -> Option<Value> {
-        match key.as_str()? {
-            "service" => Some(Value::from(self.service_name())),
-            "site_key" => Some(Value::from(self.inner.site_key.clone())),
+impl CaptchaField {
+    fn from_key(key: &str) -> Option<Self> {
+        match key {
+            "service" => Some(Self::Service),
+            "site_key" => Some(Self::SiteKey),
             _ => None,
         }
     }
 
+    fn value(self, captcha: &CaptchaDescriptor) -> Value {
+        match self {
+            Self::Service => Value::from(captcha.service.as_template_key()),
+            Self::SiteKey => Value::from(captcha.site_key.clone()),
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy)]
+enum CaptchaServiceKey {
+    RecaptchaV2,
+    CloudflareTurnstile,
+    HCaptcha,
+}
+
+impl CaptchaServiceKey {
+    const fn as_template_key(self) -> &'static str {
+        match self {
+            Self::RecaptchaV2 => "recaptcha_v2",
+            Self::CloudflareTurnstile => "cloudflare_turnstile",
+            Self::HCaptcha => "hcaptcha",
+        }
+    }
+}
+
+impl From<pasion_data::CaptchaService> for CaptchaServiceKey {
+    fn from(service: pasion_data::CaptchaService) -> Self {
+        match service {
+            pasion_data::CaptchaService::RecaptchaV2 => Self::RecaptchaV2,
+            pasion_data::CaptchaService::CloudflareTurnstile => Self::CloudflareTurnstile,
+            pasion_data::CaptchaService::HCaptcha => Self::HCaptcha,
+        }
+    }
+}
+
+/// Wraps a [`pasion_data::CaptchaConfig`] so it can be exposed as a minijinja
+/// object with named fields.
+#[derive(Debug)]
+struct CaptchaDescriptor {
+    service: CaptchaServiceKey,
+    site_key: Arc<str>,
+}
+
+impl From<pasion_data::CaptchaConfig> for CaptchaDescriptor {
+    fn from(config: pasion_data::CaptchaConfig) -> Self {
+        Self {
+            service: config.service.into(),
+            site_key: Arc::<str>::from(config.site_key),
+        }
+    }
+}
+
+impl Object for CaptchaDescriptor {
+    fn get_value(self: &Arc<Self>, key: &Value) -> Option<Value> {
+        CaptchaField::from_key(key.as_str()?).map(|field| field.value(self))
+    }
+
     fn enumerate(self: &Arc<Self>) -> Enumerator {
-        Enumerator::Str(&["service", "site_key"])
+        Enumerator::Str(&CAPTCHA_FIELD_NAMES)
     }
 }
 
@@ -54,8 +101,7 @@ pub struct WithCaptcha<T> {
 impl<T> WithCaptcha<T> {
     #[must_use]
     pub(crate) fn new(captcha: Option<pasion_data::CaptchaConfig>, inner: T) -> Self {
-        let captcha_value =
-            captcha.map(|cfg| Value::from_object(CaptchaConfigObject { inner: cfg }));
+        let captcha_value = captcha.map(|config| Value::from_object(CaptchaDescriptor::from(config)));
         Self {
             captcha: captcha_value,
             inner,

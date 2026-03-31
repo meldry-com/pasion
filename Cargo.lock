@@ -5292,7 +5292,6 @@ dependencies = [
  "tracing-subscriber",
  "url",
  "uuid",
- "vergen-gitcl",
  "zeroize",
 ]
 

@@ -5,6 +5,44 @@ use minijinja::{
     value::{Enumerator, Object},
 };
 
+type FeatureReader = fn(&SiteFeatures) -> bool;
+
+struct FeatureField {
+    name: &'static str,
+    read: FeatureReader,
+}
+
+const FEATURE_FIELD_NAMES: [&str; 5] = [
+    "password_registration",
+    "password_registration_contact_required",
+    "password_login",
+    "account_recovery",
+    "login_with_email_allowed",
+];
+
+const FEATURE_FIELDS: [FeatureField; 5] = [
+    FeatureField {
+        name: FEATURE_FIELD_NAMES[0],
+        read: |features| features.password_registration,
+    },
+    FeatureField {
+        name: FEATURE_FIELD_NAMES[1],
+        read: |features| features.password_registration_contact_required,
+    },
+    FeatureField {
+        name: FEATURE_FIELD_NAMES[2],
+        read: |features| features.password_login,
+    },
+    FeatureField {
+        name: FEATURE_FIELD_NAMES[3],
+        read: |features| features.account_recovery,
+    },
+    FeatureField {
+        name: FEATURE_FIELD_NAMES[4],
+        read: |features| features.login_with_email_allowed,
+    },
+];
+
 /// Site features information.
 #[allow(clippy::struct_excessive_bools)]
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -26,27 +64,20 @@ pub struct SiteFeatures {
     pub login_with_email_allowed: bool,
 }
 
+impl SiteFeatures {
+    fn resolve(&self, name: &str) -> Option<bool> {
+        FEATURE_FIELDS
+            .iter()
+            .find_map(|field| (field.name == name).then(|| (field.read)(self)))
+    }
+}
+
 impl Object for SiteFeatures {
     fn get_value(self: &Arc<Self>, field: &Value) -> Option<Value> {
-        match field.as_str()? {
-            "password_registration" => Some(Value::from(self.password_registration)),
-            "password_registration_contact_required" => {
-                Some(Value::from(self.password_registration_contact_required))
-            }
-            "password_login" => Some(Value::from(self.password_login)),
-            "account_recovery" => Some(Value::from(self.account_recovery)),
-            "login_with_email_allowed" => Some(Value::from(self.login_with_email_allowed)),
-            _ => None,
-        }
+        self.resolve(field.as_str()?).map(Value::from)
     }
 
     fn enumerate(self: &Arc<Self>) -> Enumerator {
-        Enumerator::Str(&[
-            "password_registration",
-            "password_registration_contact_required",
-            "password_login",
-            "account_recovery",
-            "login_with_email_allowed",
-        ])
+        Enumerator::Str(&FEATURE_FIELD_NAMES)
     }
 }

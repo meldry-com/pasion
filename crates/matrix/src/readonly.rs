@@ -4,41 +4,80 @@ use crate::{
     ConnectorCapabilities, ConnectorProvider, HomeserverConnection, MatrixUser, ProvisionRequest,
 };
 
-/// A wrapper around a [`HomeserverConnection`] that only allows read
-/// operations.
+#[derive(Clone, Copy)]
+enum BlockedMatrixWrite {
+    ProvisionUser,
+    UpsertDevice,
+    UpdateDeviceDisplayName,
+    DeleteDevice,
+    SyncDevices,
+    DeleteUser,
+    ReactivateUser,
+    SetDisplayname,
+    UnsetDisplayname,
+    AllowCrossSigningReset,
+}
+
+impl BlockedMatrixWrite {
+    fn summary(self) -> &'static str {
+        match self {
+            Self::ProvisionUser => "provision users",
+            Self::UpsertDevice => "create devices",
+            Self::UpdateDeviceDisplayName => "rename devices",
+            Self::DeleteDevice => "delete devices",
+            Self::SyncDevices => "synchronize devices",
+            Self::DeleteUser => "delete users",
+            Self::ReactivateUser => "reactivate users",
+            Self::SetDisplayname => "set display names",
+            Self::UnsetDisplayname => "clear display names",
+            Self::AllowCrossSigningReset => "allow cross-signing reset",
+        }
+    }
+}
+
+fn read_only_error(operation: BlockedMatrixWrite) -> anyhow::Error {
+    anyhow::anyhow!(
+        "matrix connector is configured as read-only and cannot {}",
+        operation.summary()
+    )
+}
+
+fn deny_write<T>(operation: BlockedMatrixWrite) -> Result<T, anyhow::Error> {
+    Err(read_only_error(operation))
+}
+
+/// Wraps a homeserver connector and forwards only read operations.
 pub struct ReadOnlyHomeserverConnection<C> {
-    inner: C,
+    source: C,
 }
 
 impl<C> ReadOnlyHomeserverConnection<C> {
-    pub fn new(inner: C) -> Self
-    where
-        C: HomeserverConnection,
-    {
-        Self { inner }
+    #[must_use]
+    pub fn new(source: C) -> Self {
+        Self { source }
     }
 }
 
 #[async_trait::async_trait]
 impl<C: HomeserverConnection> HomeserverConnection for ReadOnlyHomeserverConnection<C> {
     fn homeserver(&self) -> &str {
-        self.inner.homeserver()
+        self.source.homeserver()
     }
 
     async fn verify_token(&self, token: &str) -> Result<bool, anyhow::Error> {
-        self.inner.verify_token(token).await
+        self.source.verify_token(token).await
     }
 
     async fn query_user(&self, localpart: &str) -> Result<MatrixUser, anyhow::Error> {
-        self.inner.query_user(localpart).await
+        self.source.query_user(localpart).await
     }
 
     async fn provision_user(&self, _request: &ProvisionRequest) -> Result<bool, anyhow::Error> {
-        anyhow::bail!("Provisioning is not supported in read-only mode");
+        deny_write(BlockedMatrixWrite::ProvisionUser)
     }
 
     async fn is_localpart_available(&self, localpart: &str) -> Result<bool, anyhow::Error> {
-        self.inner.is_localpart_available(localpart).await
+        self.source.is_localpart_available(localpart).await
     }
 
     async fn upsert_device(
@@ -47,7 +86,7 @@ impl<C: HomeserverConnection> HomeserverConnection for ReadOnlyHomeserverConnect
         _device_id: &str,
         _initial_display_name: Option<&str>,
     ) -> Result<(), anyhow::Error> {
-        anyhow::bail!("Device creation is not supported in read-only mode");
+        deny_write(BlockedMatrixWrite::UpsertDevice)
     }
 
     async fn update_device_display_name(
@@ -56,11 +95,11 @@ impl<C: HomeserverConnection> HomeserverConnection for ReadOnlyHomeserverConnect
         _device_id: &str,
         _display_name: &str,
     ) -> Result<(), anyhow::Error> {
-        anyhow::bail!("Device display name update is not supported in read-only mode");
+        deny_write(BlockedMatrixWrite::UpdateDeviceDisplayName)
     }
 
     async fn delete_device(&self, _localpart: &str, _device_id: &str) -> Result<(), anyhow::Error> {
-        anyhow::bail!("Device deletion is not supported in read-only mode");
+        deny_write(BlockedMatrixWrite::DeleteDevice)
     }
 
     async fn sync_devices(
@@ -68,15 +107,15 @@ impl<C: HomeserverConnection> HomeserverConnection for ReadOnlyHomeserverConnect
         _localpart: &str,
         _devices: HashSet<String>,
     ) -> Result<(), anyhow::Error> {
-        anyhow::bail!("Device synchronization is not supported in read-only mode");
+        deny_write(BlockedMatrixWrite::SyncDevices)
     }
 
     async fn delete_user(&self, _localpart: &str, _erase: bool) -> Result<(), anyhow::Error> {
-        anyhow::bail!("User deletion is not supported in read-only mode");
+        deny_write(BlockedMatrixWrite::DeleteUser)
     }
 
     async fn reactivate_user(&self, _localpart: &str) -> Result<(), anyhow::Error> {
-        anyhow::bail!("User reactivation is not supported in read-only mode");
+        deny_write(BlockedMatrixWrite::ReactivateUser)
     }
 
     async fn set_displayname(
@@ -84,31 +123,102 @@ impl<C: HomeserverConnection> HomeserverConnection for ReadOnlyHomeserverConnect
         _localpart: &str,
         _displayname: &str,
     ) -> Result<(), anyhow::Error> {
-        anyhow::bail!("User displayname update is not supported in read-only mode");
+        deny_write(BlockedMatrixWrite::SetDisplayname)
     }
 
     async fn unset_displayname(&self, _localpart: &str) -> Result<(), anyhow::Error> {
-        anyhow::bail!("User displayname update is not supported in read-only mode");
+        deny_write(BlockedMatrixWrite::UnsetDisplayname)
     }
 
     async fn allow_cross_signing_reset(&self, _localpart: &str) -> Result<(), anyhow::Error> {
-        anyhow::bail!("Allowing cross-signing reset is not supported in read-only mode");
+        deny_write(BlockedMatrixWrite::AllowCrossSigningReset)
     }
 }
 
 impl<C: ConnectorProvider> ConnectorProvider for ReadOnlyHomeserverConnection<C> {
     fn provider_name(&self) -> &str {
-        self.inner.provider_name()
+        self.source.provider_name()
     }
 
     fn capabilities(&self) -> ConnectorCapabilities {
-        // Read-only mode: none of the write capabilities are available.
-        ConnectorCapabilities {
-            can_provision_users: false,
-            can_delete_users: false,
-            can_manage_devices: false,
-            can_set_displayname: false,
-            can_cross_signing_reset: false,
+        ConnectorCapabilities::default()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::mock::HomeserverConnection as MockHomeserverConnection;
+
+    impl ConnectorProvider for MockHomeserverConnection {
+        fn provider_name(&self) -> &str {
+            "mock-homeserver"
         }
+
+        fn capabilities(&self) -> ConnectorCapabilities {
+            ConnectorCapabilities {
+                can_provision_users: true,
+                can_delete_users: true,
+                can_manage_devices: true,
+                can_set_displayname: true,
+                can_cross_signing_reset: true,
+            }
+        }
+    }
+
+    fn assert_all_writes_disabled(capabilities: ConnectorCapabilities) {
+        assert!(!capabilities.can_provision_users);
+        assert!(!capabilities.can_delete_users);
+        assert!(!capabilities.can_manage_devices);
+        assert!(!capabilities.can_set_displayname);
+        assert!(!capabilities.can_cross_signing_reset);
+    }
+
+    #[tokio::test]
+    async fn forwards_read_operations_to_source() {
+        let source = MockHomeserverConnection::new("example.org");
+        source.reserve_localpart("reserved").await;
+        source
+            .provision_user(
+                &ProvisionRequest::new("alice", "sub-alice")
+                    .set_displayname("Alice".to_owned()),
+            )
+            .await
+            .unwrap();
+
+        let connection = ReadOnlyHomeserverConnection::new(source);
+
+        assert!(connection
+            .verify_token(MockHomeserverConnection::VALID_BEARER_TOKEN)
+            .await
+            .unwrap());
+        assert!(!connection.is_localpart_available("alice").await.unwrap());
+        assert!(!connection.is_localpart_available("reserved").await.unwrap());
+
+        let user = connection.query_user("alice").await.unwrap();
+        assert_eq!(user.displayname.as_deref(), Some("Alice"));
+    }
+
+    #[tokio::test]
+    async fn blocks_mutations_and_reports_no_write_capabilities() {
+        let connection = ReadOnlyHomeserverConnection::new(MockHomeserverConnection::new(
+            "example.org",
+        ));
+
+        assert_eq!(connection.provider_name(), "mock-homeserver");
+        assert_all_writes_disabled(connection.capabilities());
+
+        let provision_error = connection
+            .provision_user(&ProvisionRequest::new("bob", "sub-bob"))
+            .await
+            .unwrap_err();
+        assert!(provision_error.to_string().contains("read-only"));
+        assert!(provision_error.to_string().contains("provision users"));
+
+        let rename_error = connection
+            .update_device_display_name("bob", "DEVICE", "Phone")
+            .await
+            .unwrap_err();
+        assert!(rename_error.to_string().contains("rename devices"));
     }
 }
