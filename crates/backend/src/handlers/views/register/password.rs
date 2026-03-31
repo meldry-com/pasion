@@ -683,7 +683,7 @@ mod tests {
             .unwrap();
 
         // Reserve "john" on the homeserver
-        state.homeserver_connection.reserve_localpart("john").await;
+        state.homeserver_admin.reserve_localpart("john").await;
 
         // Submit the registration form
         let request = Request::post("/register/password")

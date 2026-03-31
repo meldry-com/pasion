@@ -1,7 +1,7 @@
 use std::collections::HashSet;
 
 use crate::{
-    ConnectorCapabilities, ConnectorProvider, HomeserverConnection, MatrixUser, ProvisionRequest,
+    ConnectorCapabilities, ConnectorProvider, HomeserverAdmin, MatrixUser, ProvisionRequest,
 };
 
 #[derive(Clone, Copy)]
@@ -47,11 +47,11 @@ fn deny_write<T>(operation: BlockedMatrixWrite) -> Result<T, anyhow::Error> {
 }
 
 /// Wraps a homeserver connector and forwards only read operations.
-pub struct ReadOnlyHomeserverConnection<C> {
+pub struct ReadOnlyHomeserverAdmin<C> {
     source: C,
 }
 
-impl<C> ReadOnlyHomeserverConnection<C> {
+impl<C> ReadOnlyHomeserverAdmin<C> {
     #[must_use]
     pub fn new(source: C) -> Self {
         Self { source }
@@ -59,7 +59,7 @@ impl<C> ReadOnlyHomeserverConnection<C> {
 }
 
 #[async_trait::async_trait]
-impl<C: HomeserverConnection> HomeserverConnection for ReadOnlyHomeserverConnection<C> {
+impl<C: HomeserverAdmin> HomeserverAdmin for ReadOnlyHomeserverAdmin<C> {
     fn homeserver(&self) -> &str {
         self.source.homeserver()
     }
@@ -135,7 +135,7 @@ impl<C: HomeserverConnection> HomeserverConnection for ReadOnlyHomeserverConnect
     }
 }
 
-impl<C: ConnectorProvider> ConnectorProvider for ReadOnlyHomeserverConnection<C> {
+impl<C: ConnectorProvider> ConnectorProvider for ReadOnlyHomeserverAdmin<C> {
     fn provider_name(&self) -> &str {
         self.source.provider_name()
     }
@@ -148,9 +148,9 @@ impl<C: ConnectorProvider> ConnectorProvider for ReadOnlyHomeserverConnection<C>
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::mock::HomeserverConnection as MockHomeserverConnection;
+    use crate::mock::HomeserverAdmin as MockHomeserverAdmin;
 
-    impl ConnectorProvider for MockHomeserverConnection {
+    impl ConnectorProvider for MockHomeserverAdmin {
         fn provider_name(&self) -> &str {
             "mock-homeserver"
         }
@@ -176,7 +176,7 @@ mod tests {
 
     #[tokio::test]
     async fn forwards_read_operations_to_source() {
-        let source = MockHomeserverConnection::new("example.org");
+        let source = MockHomeserverAdmin::new("example.org");
         source.reserve_localpart("reserved").await;
         source
             .provision_user(
@@ -186,10 +186,10 @@ mod tests {
             .await
             .unwrap();
 
-        let connection = ReadOnlyHomeserverConnection::new(source);
+        let connection = ReadOnlyHomeserverAdmin::new(source);
 
         assert!(connection
-            .verify_token(MockHomeserverConnection::VALID_BEARER_TOKEN)
+            .verify_token(MockHomeserverAdmin::VALID_BEARER_TOKEN)
             .await
             .unwrap());
         assert!(!connection.is_localpart_available("alice").await.unwrap());
@@ -201,7 +201,7 @@ mod tests {
 
     #[tokio::test]
     async fn blocks_mutations_and_reports_no_write_capabilities() {
-        let connection = ReadOnlyHomeserverConnection::new(MockHomeserverConnection::new(
+        let connection = ReadOnlyHomeserverAdmin::new(MockHomeserverAdmin::new(
             "example.org",
         ));
 

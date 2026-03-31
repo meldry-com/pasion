@@ -10,6 +10,7 @@ use pasion_data::{
     app_session::AppSessionRepository,
     audit::AuditRepository,
     notification::NotificationRepository,
+    storage::NotificationTemplateRepository,
     oauth2::{
         OAuth2AccessTokenRepository, OAuth2AuthorizationGrantRepository, OAuth2ClientRepository,
         OAuth2DeviceCodeGrantRepository, OAuth2RefreshTokenRepository, OAuth2SessionRepository,
@@ -36,6 +37,7 @@ use crate::{
     app_session::PgAppSessionRepository,
     audit::PgAuditRepository,
     notification::PgNotificationRepository,
+    notification_template::PgNotificationTemplateRepository,
     oauth2::{
         PgOAuth2AccessTokenRepository, PgOAuth2AuthorizationGrantRepository,
         PgOAuth2ClientRepository, PgOAuth2DeviceCodeGrantRepository,
@@ -331,6 +333,12 @@ impl RepositoryAccess for PgRepository {
 
     fn policy_data<'c>(&'c mut self) -> Box<dyn PolicyDataRepository<Error = Self::Error> + 'c> {
         Box::new(PgPolicyDataRepository::new(&mut *self.conn))
+    }
+
+    fn notification_template<'c>(
+        &'c mut self,
+    ) -> Box<dyn NotificationTemplateRepository<Error = Self::Error> + 'c> {
+        Box::new(PgNotificationTemplateRepository::new(&mut *self.conn))
     }
 
     fn workflow<'c>(&'c mut self) -> Box<dyn WorkflowRepository<Error = Self::Error> + 'c> {

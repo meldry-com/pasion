@@ -19,7 +19,7 @@ use pasion_data::{
 };
 use pasion_data::{PostAuthAction, UrlBuilder};
 use pasion_jose::jwt::Jwt;
-use pasion_matrix::HomeserverConnection;
+use pasion_matrix::HomeserverAdmin;
 use pasion_policy::{Policy, RegisterInput, RegistrationMethod, Requester as PolicyRequester};
 use rand::RngCore;
 use serde_json::{Map as JsonMap, Value as JsonValue};
@@ -82,8 +82,8 @@ pub enum UpstreamLinkWorkflowError {
     #[error("localpart not available on homeserver")]
     LocalpartUnavailable { localpart: String },
 
-    #[error("homeserver connection failed")]
-    HomeserverConnection(#[source] AnyhowError),
+    #[error("homeserver admin call failed")]
+    HomeserverAdmin(#[source] AnyhowError),
 
     #[error(transparent)]
     Repository(#[from] RepositoryError),
@@ -101,7 +101,7 @@ impl UpstreamLinkWorkflowError {
     }
 
     fn homeserver(error: AnyhowError) -> Self {
-        Self::HomeserverConnection(error)
+        Self::HomeserverAdmin(error)
     }
 }
 
@@ -239,7 +239,7 @@ pub async fn load_upstream_link_state(
     rng: &mut (dyn RngCore + Send),
     clock: &dyn Clock,
     url_builder: &UrlBuilder,
-    homeserver: &dyn HomeserverConnection,
+    homeserver: &dyn HomeserverAdmin,
     policy: &mut Policy,
     site_config: &SiteConfig,
     user_agent: Option<String>,
@@ -362,7 +362,7 @@ pub async fn submit_upstream_link_action(
     rng: &mut (dyn RngCore + Send),
     clock: &dyn Clock,
     url_builder: &UrlBuilder,
-    homeserver: &dyn HomeserverConnection,
+    homeserver: &dyn HomeserverAdmin,
     policy: &mut Policy,
     site_config: &SiteConfig,
     user_agent: Option<String>,
@@ -472,7 +472,7 @@ async fn load_upstream_registration_screen(
     rng: &mut (dyn RngCore + Send),
     clock: &dyn Clock,
     url_builder: &UrlBuilder,
-    homeserver: &dyn HomeserverConnection,
+    homeserver: &dyn HomeserverAdmin,
     policy: &mut Policy,
     site_config: &SiteConfig,
     user_agent: Option<String>,
@@ -615,7 +615,7 @@ enum LocalpartPreCheckResult {
 async fn pre_check_localpart(
     repo: &mut BoxRepository,
     clock: &dyn Clock,
-    homeserver: &dyn HomeserverConnection,
+    homeserver: &dyn HomeserverAdmin,
     policy: &mut Policy,
     provider: &UpstreamOAuthProvider,
     link: &UpstreamOAuthLink,
@@ -921,7 +921,7 @@ fn resolve_registration_attributes(
 
 async fn validate_registration_action(
     repo: &mut BoxRepository,
-    homeserver: &dyn HomeserverConnection,
+    homeserver: &dyn HomeserverAdmin,
     policy: &mut Policy,
     site_config: &SiteConfig,
     ip_address: Option<IpAddr>,

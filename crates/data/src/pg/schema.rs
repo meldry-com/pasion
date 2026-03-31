@@ -630,6 +630,20 @@ diesel::table! {
     }
 }
 
+diesel::table! {
+    notification_template_versions (id) {
+        id -> Uuid,
+        template_key -> Text,
+        version -> Int4,
+        channel -> Text,
+        locale -> Text,
+        subject_template -> Nullable<Text>,
+        body_template -> Text,
+        created_at -> Timestamptz,
+        published_at -> Nullable<Timestamptz>,
+    }
+}
+
 // Foreign key relationships
 diesel::joinable!(user_totp_configs -> users (user_id));
 diesel::joinable!(user_passwords -> users (user_id));
@@ -699,6 +713,7 @@ diesel::allow_tables_to_appear_in_same_query!(
     notification_deliveries,
     notification_event_logs,
     notification_preferences,
+    notification_template_versions,
     admin_operation_logs,
     account_security_events,
     workflow_instances,

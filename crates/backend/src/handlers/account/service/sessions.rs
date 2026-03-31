@@ -5,7 +5,7 @@ use pasion_data::{
     queue::{QueueJobRepositoryExt as _, SyncDevicesJob},
     user::{BrowserSessionRepository, UserRepository},
 };
-use pasion_matrix::HomeserverConnection;
+use pasion_matrix::HomeserverAdmin;
 use rand_chacha::rand_core::CryptoRngCore;
 use thiserror::Error;
 use ulid::Ulid;
@@ -145,7 +145,7 @@ pub async fn set_oauth2_session_human_name(
     mut repo: BoxRepository,
     requester: &Requester,
     _clock: &dyn Clock,
-    homeserver: &dyn HomeserverConnection,
+    homeserver: &dyn HomeserverAdmin,
     session_id: Ulid,
     human_name: Option<String>,
 ) -> Result<(), AccountSessionError> {

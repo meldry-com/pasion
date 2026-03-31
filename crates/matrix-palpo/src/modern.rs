@@ -3,7 +3,7 @@ use std::collections::HashSet;
 use anyhow::Context as _;
 use http::{Method, StatusCode};
 use pasion_matrix::{
-    ConnectorCapabilities, ConnectorProvider, HomeserverConnection, MatrixUser, ProvisionRequest,
+    ConnectorCapabilities, ConnectorProvider, HomeserverAdmin, MatrixUser, ProvisionRequest,
 };
 use serde::{Deserialize, Serialize};
 use tracing::debug;
@@ -12,14 +12,14 @@ use url::Url;
 use crate::error::{M_EXCLUSIVE, M_INVALID_USERNAME, M_USER_IN_USE, PalpoResponseExt as _};
 
 #[derive(Clone)]
-pub struct PalpoConnection {
+pub struct PalpoAdmin {
     homeserver: String,
     endpoint: Url,
     access_token: String,
     http_client: reqwest::Client,
 }
 
-impl PalpoConnection {
+impl PalpoAdmin {
     #[must_use]
     pub fn new(
         homeserver: String,
@@ -57,7 +57,7 @@ impl PalpoConnection {
 }
 
 #[async_trait::async_trait]
-impl HomeserverConnection for PalpoConnection {
+impl HomeserverAdmin for PalpoAdmin {
     fn homeserver(&self) -> &str {
         &self.homeserver
     }
@@ -562,7 +562,7 @@ impl HomeserverConnection for PalpoConnection {
     }
 }
 
-impl ConnectorProvider for PalpoConnection {
+impl ConnectorProvider for PalpoAdmin {
     fn provider_name(&self) -> &str {
         "palpo"
     }

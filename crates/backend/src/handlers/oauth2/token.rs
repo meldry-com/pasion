@@ -10,7 +10,7 @@ use pasion_data::UrlBuilder;
 use pasion_data::{BoxClock, BoxRng, SiteConfig, SystemClock};
 use pasion_data::{BoxRepository, BoxRepositoryFactory};
 use pasion_keystore::Keystore;
-use pasion_matrix::HomeserverConnection;
+use pasion_matrix::HomeserverAdmin;
 use pasion_policy::Policy;
 use pasion_templates::Templates;
 use rand::{SeedableRng, thread_rng};
@@ -364,8 +364,8 @@ async fn handle_post(
         .get::<UrlBuilder>("url_builder")
         .expect("UrlBuilder not found in depot");
     let homeserver = depot
-        .get::<Arc<dyn HomeserverConnection>>("homeserver_connection")
-        .expect("HomeserverConnection not found in depot");
+        .get::<Arc<dyn HomeserverAdmin>>("homeserver_admin")
+        .expect("HomeserverAdmin not found in depot");
     let site_config = depot
         .get::<SiteConfig>("site_config")
         .expect("SiteConfig not found in depot");

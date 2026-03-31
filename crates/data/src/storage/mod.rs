@@ -111,6 +111,8 @@ pub mod app_session;
 pub mod audit;
 /// Notification persistence repositories.
 pub mod notification;
+/// Notification template version repositories.
+pub mod notification_template;
 /// OAuth 2.0 repositories.
 pub mod oauth2;
 /// Personal access repositories.
@@ -127,6 +129,7 @@ pub mod user;
 pub mod workflow;
 
 pub use self::{
+    notification_template::NotificationTemplateRepository,
     pagination::{Page, Pagination},
     repository::{
         BoxRepository, BoxRepositoryFactory, Repository, RepositoryAccess, RepositoryError,

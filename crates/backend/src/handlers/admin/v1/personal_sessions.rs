@@ -14,7 +14,7 @@ use pasion_data::BoxRng;
 use pasion_data::TokenType;
 use pasion_data::personal::PersonalSessionFilter;
 use pasion_data::queue::{QueueJobRepositoryExt as _, SyncDevicesJob};
-use pasion_matrix::HomeserverConnection;
+use pasion_matrix::HomeserverAdmin;
 use salvo::prelude::*;
 use schemars::JsonSchema;
 use serde::Deserialize;

@@ -704,7 +704,7 @@ mod tests {
     use hyper::StatusCode;
     use pasion_data::RepositoryAccess;
     use pasion_data::user::{UserPasswordRepository, UserRepository};
-    use pasion_matrix::HomeserverConnection;
+    use pasion_matrix::HomeserverAdmin;
     use pasion_matrix::ProvisionRequest;
     use rand::SeedableRng;
     use rand_chacha::ChaChaRng;
@@ -754,7 +754,7 @@ mod tests {
         assert_eq!(user.username, "alice");
 
         // Check that the user was created on the homeserver
-        let result = state.homeserver_connection.query_user("alice").await;
+        let result = state.homeserver_admin.query_user("alice").await;
         assert!(result.is_ok());
     }
 
@@ -819,7 +819,7 @@ mod tests {
         let token = state.token_with_scope("urn:pasion:admin").await;
 
         // Reserve a username on the homeserver and try to add it
-        state.homeserver_connection.reserve_localpart("bob").await;
+        state.homeserver_admin.reserve_localpart("bob").await;
 
         let request = Request::post("/api/admin/v1/users")
             .bearer(&token)

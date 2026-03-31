@@ -19,7 +19,7 @@ use pasion_data::{
     BoxClock, BoxRng, BoxRepository, BoxRepositoryFactory, BrowserSession,
     Clock, RepositoryError, Session, SiteConfig, SystemClock, User,
 };
-use pasion_matrix::HomeserverConnection;
+use pasion_matrix::HomeserverAdmin;
 use pasion_policy::PolicyFactory;
 use rand::{SeedableRng, thread_rng};
 use rand_chacha::ChaChaRng;
@@ -220,7 +220,7 @@ impl salvo::oapi::EndpointOutRegister for RouteError {
 pub trait DepotExt {
     fn repo_factory(&self) -> Result<&BoxRepositoryFactory, RouteError>;
     fn site_config(&self) -> Result<SiteConfig, RouteError>;
-    fn homeserver(&self) -> Result<Arc<dyn HomeserverConnection>, RouteError>;
+    fn homeserver(&self) -> Result<Arc<dyn HomeserverAdmin>, RouteError>;
     fn policy_factory(&self) -> Result<Arc<PolicyFactory>, RouteError>;
     fn password_manager(&self) -> Result<PasswordManager, RouteError>;
     fn url_builder(&self) -> Result<UrlBuilder, RouteError>;
@@ -261,8 +261,8 @@ impl DepotExt for Depot {
         depot_get(self, "site_config")
     }
 
-    fn homeserver(&self) -> Result<Arc<dyn HomeserverConnection>, RouteError> {
-        depot_get(self, "homeserver_connection")
+    fn homeserver(&self) -> Result<Arc<dyn HomeserverAdmin>, RouteError> {
+        depot_get(self, "homeserver_admin")
     }
 
     fn policy_factory(&self) -> Result<Arc<PolicyFactory>, RouteError> {

@@ -13,7 +13,7 @@ use pasion_data::{AppVersion, BoxClock, BoxRng, SiteConfig, SystemClock};
 use pasion_data::{BoxRepository, BoxRepositoryFactory, RepositoryFactory};
 use pasion_i18n::Translator;
 use pasion_keystore::{Encrypter, Keystore};
-use pasion_matrix::{ConnectorRegistry, HomeserverConnection};
+use pasion_matrix::{ConnectorRegistry, HomeserverAdmin};
 use pasion_policy::{Policy, PolicyFactory};
 use pasion_templates::Templates;
 use rand::SeedableRng;
@@ -33,7 +33,7 @@ pub struct AppState {
     pub cookie_manager: CookieManager,
     pub encrypter: Encrypter,
     pub url_builder: UrlBuilder,
-    pub homeserver_connection: Arc<dyn HomeserverConnection>,
+    pub homeserver_admin: Arc<dyn HomeserverAdmin>,
     pub connector_registry: ConnectorRegistry,
     pub policy_factory: Arc<PolicyFactory>,
     pub http_client: reqwest::Client,
@@ -153,8 +153,8 @@ pub async fn inject_app_state(
     depot.insert("limiter", state.limiter.clone());
     depot.insert("policy_factory", state.policy_factory.clone());
     depot.insert(
-        "homeserver_connection",
-        Arc::clone(&state.homeserver_connection),
+        "homeserver_admin",
+        Arc::clone(&state.homeserver_admin),
     );
     depot.insert("connector_registry", state.connector_registry.clone());
     depot.insert("app_version", AppVersion(crate::version()));
@@ -183,7 +183,7 @@ pub trait DepotExt {
     fn get_site_config(&self) -> Option<&SiteConfig>;
     fn get_limiter(&self) -> Option<&Limiter>;
     fn get_policy_factory(&self) -> Option<&Arc<PolicyFactory>>;
-    fn get_homeserver_connection(&self) -> Option<&Arc<dyn HomeserverConnection>>;
+    fn get_homeserver_admin(&self) -> Option<&Arc<dyn HomeserverAdmin>>;
     fn get_connector_registry(&self) -> Option<&ConnectorRegistry>;
     fn get_app_version(&self) -> Option<&AppVersion>;
     fn get_activity_tracker(&self) -> Option<&ActivityTracker>;
@@ -248,8 +248,8 @@ impl DepotExt for Depot {
         self.get::<Arc<PolicyFactory>>("policy_factory").ok()
     }
 
-    fn get_homeserver_connection(&self) -> Option<&Arc<dyn HomeserverConnection>> {
-        self.get::<Arc<dyn HomeserverConnection>>("homeserver_connection")
+    fn get_homeserver_admin(&self) -> Option<&Arc<dyn HomeserverAdmin>> {
+        self.get::<Arc<dyn HomeserverAdmin>>("homeserver_admin")
             .ok()
     }
 

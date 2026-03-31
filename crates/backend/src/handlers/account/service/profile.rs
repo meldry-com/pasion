@@ -5,7 +5,7 @@ use pasion_data::{
     user::UserRepository,
 };
 use pasion_data::{Clock, SiteConfig, User};
-use pasion_matrix::HomeserverConnection;
+use pasion_matrix::HomeserverAdmin;
 use rand_chacha::rand_core::CryptoRngCore;
 use thiserror::Error;
 use ulid::Ulid;
@@ -45,7 +45,7 @@ pub enum AccountProfileError {
 pub async fn allow_cross_signing_reset(
     mut repo: BoxRepository,
     requester: &Requester,
-    homeserver: &dyn HomeserverConnection,
+    homeserver: &dyn HomeserverAdmin,
     user_id: Ulid,
 ) -> Result<User, AccountProfileError> {
     if !requester.is_owner_or_admin(Some(user_id)) {

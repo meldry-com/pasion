@@ -22,7 +22,7 @@ use pasion_data::{
     queue::{ProvisionUserJob, QueueJobRepositoryExt as _},
     user::{UserEmailRepository, UserPasswordRepository, UserRepository},
 };
-use pasion_matrix::HomeserverConnection;
+use pasion_matrix::HomeserverAdmin;
 use pasion_messaging::Address;
 use rand::{RngCore, SeedableRng};
 use tracing::{info, warn};
@@ -54,7 +54,7 @@ impl std::fmt::Display for HumanReadable<&UpstreamOAuthProvider> {
 async fn check_and_normalize_username<'a>(
     localpart_or_mxid: &'a str,
     repo: &mut dyn RepositoryAccess<Error = DatabaseError>,
-    homeserver: &dyn HomeserverConnection,
+    homeserver: &dyn HomeserverAdmin,
 ) -> anyhow::Result<&'a str> {
     // XXX: this is a very basic MXID to localpart conversion
     // Strip any leading '@'
@@ -136,7 +136,7 @@ impl UserCreationRequest<'_> {
     }
 
     /// Show the user creation request in a human-readable format
-    fn show(&self, term: &Term, homeserver: &dyn HomeserverConnection) -> std::io::Result<()> {
+    fn show(&self, term: &Term, homeserver: &dyn HomeserverAdmin) -> std::io::Result<()> {
         let value_style = Style::new().green();
         let key_style = Style::new().bold();
         let warning_style = Style::new().italic().red().bright();

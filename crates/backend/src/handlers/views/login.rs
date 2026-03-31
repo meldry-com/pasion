@@ -3,7 +3,7 @@ use std::sync::{Arc, LazyLock};
 use opentelemetry::{Key, KeyValue, metrics::Counter};
 use pasion_data::{Clock, oauth2::LoginHint};
 use pasion_i18n::DataLocale;
-use pasion_matrix::HomeserverConnection;
+use pasion_matrix::HomeserverAdmin;
 use pasion_data::PostAuthAction;
 use crate::salvo_utils::{
     InternalError, SessionInfoExt,
@@ -318,7 +318,7 @@ pub async fn post(
 fn handle_login_hint(
     mut ctx: LoginContext,
     next: &PostAuthContext,
-    homeserver: &dyn HomeserverConnection,
+    homeserver: &dyn HomeserverAdmin,
     site_config: &SiteConfig,
 ) -> LoginContext {
     let form_state = ctx.form_state_mut();
@@ -351,7 +351,7 @@ async fn render(
     clock: &impl Clock,
     rng: impl Rng,
     templates: &Templates,
-    homeserver: &dyn HomeserverConnection,
+    homeserver: &dyn HomeserverAdmin,
     site_config: &SiteConfig,
     res: &mut Response,
 ) -> Result<(), InternalError> {

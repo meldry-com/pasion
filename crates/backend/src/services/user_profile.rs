@@ -9,7 +9,7 @@ use pasion_data::{
 use pasion_data::{
     Clock, NotificationChannel, SiteConfig, User, UserEmail, UserProfile, UserProfilePatch,
 };
-use pasion_matrix::HomeserverConnection;
+use pasion_matrix::HomeserverAdmin;
 use rand::RngCore;
 use thiserror::Error;
 
@@ -70,7 +70,7 @@ pub async fn patch_viewer_profile(
     repo: &mut BoxRepository,
     requester: &Requester,
     clock: &dyn Clock,
-    homeserver: &dyn HomeserverConnection,
+    homeserver: &dyn HomeserverAdmin,
     patch: UserProfilePatch,
 ) -> Result<User, UserProfileServiceError> {
     let requester_user = requester
@@ -98,7 +98,7 @@ pub async fn patch_viewer_profile(
 
 pub async fn load_viewer_profile(
     repo: &mut BoxRepository,
-    homeserver: &dyn HomeserverConnection,
+    homeserver: &dyn HomeserverAdmin,
     user: &User,
 ) -> Result<ViewerProfile, UserProfileServiceError> {
     let mxid = homeserver.mxid(&user.username);
@@ -230,7 +230,7 @@ pub(crate) fn validate_display_name_patch(
 }
 
 pub(crate) async fn sync_display_name_patch(
-    homeserver: &dyn HomeserverConnection,
+    homeserver: &dyn HomeserverAdmin,
     user: &User,
     patch: Option<Option<String>>,
 ) -> Result<(), UserProfileServiceError> {

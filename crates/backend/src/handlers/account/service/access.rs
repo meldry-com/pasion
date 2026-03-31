@@ -5,7 +5,7 @@ use pasion_data::{
     user::{BrowserSessionRepository, UserPasswordRepository, UserRepository},
 };
 use pasion_data::{BrowserSession, Clock, SiteConfig, UpstreamOAuthProvider, User};
-use pasion_matrix::HomeserverConnection;
+use pasion_matrix::HomeserverAdmin;
 use rand_chacha::rand_core::CryptoRngCore;
 use thiserror::Error;
 use ulid::Ulid;
@@ -62,7 +62,7 @@ pub async fn login_with_password(
     clock: &dyn Clock,
     password_manager: &PasswordManager,
     limiter: &Limiter,
-    homeserver: &dyn HomeserverConnection,
+    homeserver: &dyn HomeserverAdmin,
     site_config: &SiteConfig,
     request: PasswordLoginRequest,
 ) -> Result<PasswordLoginOutcome, PasswordLoginError> {

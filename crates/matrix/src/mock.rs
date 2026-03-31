@@ -18,7 +18,7 @@ struct UserRecord {
     is_deactivated: bool,
 }
 
-/// Holds the full in-memory state backing a [`HomeserverConnection`].
+/// Holds the full in-memory state backing a [`HomeserverAdmin`].
 struct ServerState {
     accounts: HashMap<String, UserRecord>,
     blocked_localparts: HashSet<&'static str>,
@@ -47,16 +47,16 @@ impl ServerState {
     }
 }
 
-/// A mock implementation of a [`HomeserverConnection`], which never fails and
+/// A mock implementation of a [`HomeserverAdmin`], which never fails and
 /// doesn't do anything.
-pub struct HomeserverConnection {
+pub struct HomeserverAdmin {
     homeserver: String,
     state: RwLock<ServerState>,
 }
 
-impl HomeserverConnection {
+impl HomeserverAdmin {
     /// A valid bearer token that will be accepted by
-    /// [`crate::HomeserverConnection::verify_token`].
+    /// [`crate::HomeserverAdmin::verify_token`].
     pub const VALID_BEARER_TOKEN: &str = "mock_homeserver_bearer_token";
 
     /// Create a new mock connection.
@@ -76,7 +76,7 @@ impl HomeserverConnection {
 }
 
 #[async_trait]
-impl crate::HomeserverConnection for HomeserverConnection {
+impl crate::HomeserverAdmin for HomeserverAdmin {
     fn homeserver(&self) -> &str {
         self.homeserver.as_str()
     }
@@ -249,11 +249,11 @@ impl crate::HomeserverConnection for HomeserverConnection {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::HomeserverConnection as _;
+    use crate::HomeserverAdmin as _;
 
     #[tokio::test]
-    async fn test_mock_connection() {
-        let conn = HomeserverConnection::new("example.org");
+    async fn test_mock_admin() {
+        let conn = HomeserverAdmin::new("example.org");
 
         let mxid = "@test:example.org";
         let device = "test";

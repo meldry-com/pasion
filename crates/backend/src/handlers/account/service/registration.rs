@@ -24,7 +24,7 @@ use pasion_data::{
     BrowserSession, Clock, UpstreamOAuthAuthorizationSession, UpstreamOAuthLink, User,
     UserEmailAuthentication, UserPhoneAuthentication, UserRegistration, UserRegistrationToken,
 };
-use pasion_matrix::HomeserverConnection;
+use pasion_matrix::HomeserverAdmin;
 use pasion_policy::PolicyFactory;
 use rand_chacha::rand_core::CryptoRngCore;
 use serde_json::Value;
@@ -1069,7 +1069,7 @@ pub async fn begin_password_registration(
     rng: &mut (dyn CryptoRngCore + Send),
     clock: &dyn Clock,
     password_manager: &PasswordManager,
-    homeserver: &dyn HomeserverConnection,
+    homeserver: &dyn HomeserverAdmin,
     policy_factory: &PolicyFactory,
     limiter: &Limiter,
     request: BeginPasswordRegistrationRequest,
@@ -1614,7 +1614,7 @@ pub async fn submit_registration_display_name(
 pub async fn check_registration_finish_eligibility(
     repo: &mut BoxRepository,
     clock: &dyn Clock,
-    homeserver: &dyn HomeserverConnection,
+    homeserver: &dyn HomeserverAdmin,
     registration: &UserRegistration,
     browser_session_present: Option<bool>,
     homeserver_check_mode: HomeserverCheckMode,
@@ -1655,7 +1655,7 @@ pub async fn check_registration_finish_eligibility(
 pub async fn load_registration_finish_preparation(
     repo: &mut BoxRepository,
     clock: &dyn Clock,
-    homeserver: &dyn HomeserverConnection,
+    homeserver: &dyn HomeserverAdmin,
     registration_id: Ulid,
     browser_session_present: Option<bool>,
     homeserver_check_mode: HomeserverCheckMode,
@@ -1927,7 +1927,7 @@ pub async fn finish_registration(
     mut repo: BoxRepository,
     rng: &mut (dyn CryptoRngCore + Send),
     clock: &dyn Clock,
-    homeserver: &dyn HomeserverConnection,
+    homeserver: &dyn HomeserverAdmin,
     registration_id: Ulid,
     browser_session_present: Option<bool>,
     homeserver_check_mode: HomeserverCheckMode,

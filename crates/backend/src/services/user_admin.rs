@@ -12,7 +12,7 @@ use pasion_data::{
     upstream_oauth2::{UpstreamOAuthLinkRepository, UpstreamOAuthProviderRepository},
     user::{UserEmailRepository, UserRepository},
 };
-use pasion_matrix::HomeserverConnection;
+use pasion_matrix::HomeserverAdmin;
 use rand::RngCore;
 use thiserror::Error;
 use ulid::Ulid;
@@ -66,7 +66,7 @@ pub async fn patch_user(
     repo: &mut BoxRepository,
     rng: &mut (dyn RngCore + Send),
     clock: &dyn Clock,
-    homeserver: &dyn HomeserverConnection,
+    homeserver: &dyn HomeserverAdmin,
     admin_user: Option<&User>,
     user_id: Ulid,
     patch: AdminUserPatch,

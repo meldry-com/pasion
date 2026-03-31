@@ -2,6 +2,7 @@ use async_trait::async_trait;
 use futures_util::future::BoxFuture;
 use thiserror::Error;
 
+use super::notification_template::NotificationTemplateRepository;
 use crate::{
     account::AccountRepository,
     app_session::AppSessionRepository,
@@ -228,6 +229,11 @@ pub trait RepositoryAccess: Send {
     /// Get a [`PolicyDataRepository`]
     fn policy_data<'c>(&'c mut self) -> Box<dyn PolicyDataRepository<Error = Self::Error> + 'c>;
 
+    /// Get a [`NotificationTemplateRepository`]
+    fn notification_template<'c>(
+        &'c mut self,
+    ) -> Box<dyn NotificationTemplateRepository<Error = Self::Error> + 'c>;
+
     /// Get a [`WorkflowRepository`]
     fn workflow<'c>(&'c mut self) -> Box<dyn WorkflowRepository<Error = Self::Error> + 'c>;
 }
@@ -244,6 +250,7 @@ mod impls {
         app_session::AppSessionRepository,
         audit::AuditRepository,
         notification::NotificationRepository,
+        storage::notification_template::NotificationTemplateRepository,
         oauth2::{
             OAuth2AccessTokenRepository, OAuth2AuthorizationGrantRepository,
             OAuth2ClientRepository, OAuth2DeviceCodeGrantRepository, OAuth2RefreshTokenRepository,
@@ -491,6 +498,15 @@ mod impls {
             Box::new(MapErr::new(self.inner.policy_data(), &mut self.mapper))
         }
 
+        fn notification_template<'c>(
+            &'c mut self,
+        ) -> Box<dyn NotificationTemplateRepository<Error = Self::Error> + 'c> {
+            Box::new(MapErr::new(
+                self.inner.notification_template(),
+                &mut self.mapper,
+            ))
+        }
+
         fn workflow<'c>(&'c mut self) -> Box<dyn WorkflowRepository<Error = Self::Error> + 'c> {
             Box::new(MapErr::new(self.inner.workflow(), &mut self.mapper))
         }
@@ -655,6 +671,12 @@ mod impls {
             &'c mut self,
         ) -> Box<dyn PolicyDataRepository<Error = Self::Error> + 'c> {
             (**self).policy_data()
+        }
+
+        fn notification_template<'c>(
+            &'c mut self,
+        ) -> Box<dyn NotificationTemplateRepository<Error = Self::Error> + 'c> {
+            (**self).notification_template()
         }
 
         fn workflow<'c>(&'c mut self) -> Box<dyn WorkflowRepository<Error = Self::Error> + 'c> {

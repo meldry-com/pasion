@@ -15,7 +15,7 @@ use pasion_data::{
     user::BrowserSessionRepository,
 };
 use pasion_keystore::Keystore;
-use pasion_matrix::HomeserverConnection;
+use pasion_matrix::HomeserverAdmin;
 use pasion_policy::{Policy, PolicyFactory};
 use thiserror::Error;
 use ulid::Ulid;
@@ -116,7 +116,7 @@ pub enum OAuth2AccessError {
 pub async fn load_authorization_consent(
     mut repo: BoxRepository,
     policy_factory: &PolicyFactory,
-    homeserver: &dyn HomeserverConnection,
+    homeserver: &dyn HomeserverAdmin,
     _clock: &dyn Clock,
     browser_session: &BrowserSession,
     grant_id: Ulid,
@@ -280,7 +280,7 @@ pub async fn lookup_device_link(
 pub async fn load_device_consent(
     mut repo: BoxRepository,
     policy_factory: &PolicyFactory,
-    homeserver: &dyn HomeserverConnection,
+    homeserver: &dyn HomeserverAdmin,
     clock: &dyn Clock,
     browser_session: &BrowserSession,
     grant_id: Ulid,
@@ -434,7 +434,7 @@ async fn has_policy_violation(
 }
 
 async fn fetch_display_name(
-    homeserver: &dyn HomeserverConnection,
+    homeserver: &dyn HomeserverAdmin,
     localpart: &str,
 ) -> Option<String> {
     match tokio::time::timeout(Duration::from_secs(1), homeserver.query_user(localpart)).await {

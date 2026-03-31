@@ -10,7 +10,7 @@ use pasion_data::{BoxClock, SystemClock};
 use pasion_data::{BoxRepository, BoxRepositoryFactory};
 use pasion_iana::oauth::{OAuthClientAuthenticationMethod, OAuthTokenTypeHint};
 use pasion_keystore::Encrypter;
-use pasion_matrix::HomeserverConnection;
+use pasion_matrix::HomeserverAdmin;
 use salvo::{Extractible, prelude::*};
 use thiserror::Error;
 use ulid::Ulid;
@@ -175,8 +175,8 @@ async fn handle_post(
         .get::<Encrypter>("encrypter")
         .expect("Encrypter not found in depot");
     let homeserver = depot
-        .get::<Arc<dyn HomeserverConnection>>("homeserver_connection")
-        .expect("HomeserverConnection not found in depot");
+        .get::<Arc<dyn HomeserverAdmin>>("homeserver_admin")
+        .expect("HomeserverAdmin not found in depot");
     let repo_factory = depot
         .get::<BoxRepositoryFactory>("box_repository_factory")
         .expect("BoxRepositoryFactory not found in depot");

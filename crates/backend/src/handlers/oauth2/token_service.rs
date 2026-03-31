@@ -31,7 +31,7 @@ use pasion_data::{
 };
 use pasion_i18n::DataLocale;
 use pasion_keystore::Keystore;
-use pasion_matrix::HomeserverConnection;
+use pasion_matrix::HomeserverAdmin;
 use pasion_policy::Policy;
 use pasion_templates::{DeviceNameContext, TemplateContext, Templates};
 use thiserror::Error;
@@ -231,7 +231,7 @@ pub async fn exchange_authorization_code(
     url_builder: &UrlBuilder,
     site_config: &SiteConfig,
     mut repo: BoxRepository,
-    homeserver: &Arc<dyn HomeserverConnection>,
+    homeserver: &Arc<dyn HomeserverAdmin>,
     templates: &Templates,
     user_agent: Option<String>,
 ) -> Result<(AccessTokenResponse, BoxRepository), AuthorizationCodeExchangeError> {
@@ -684,7 +684,7 @@ pub async fn exchange_device_code(
     url_builder: &UrlBuilder,
     site_config: &SiteConfig,
     mut repo: BoxRepository,
-    homeserver: &Arc<dyn HomeserverConnection>,
+    homeserver: &Arc<dyn HomeserverAdmin>,
     user_agent: Option<String>,
 ) -> Result<(AccessTokenResponse, BoxRepository), DeviceCodeExchangeError> {
     // Check that the client is allowed to use this grant type

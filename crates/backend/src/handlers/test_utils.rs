@@ -37,7 +37,7 @@ use pasion_data::{
 };
 use pasion_i18n::Translator;
 use pasion_keystore::{Encrypter, JsonWebKey, JsonWebKeySet, Keystore, PrivateKey};
-use pasion_matrix::{HomeserverConnection, MockHomeserverConnection};
+use pasion_matrix::{HomeserverAdmin, MockHomeserverAdmin};
 use pasion_messaging::{MailTransport, Mailer, NotificationCenter};
 use pasion_policy::{InstantiateError, Policy, PolicyFactory};
 use pasion_tasks::QueueWorker;
@@ -117,7 +117,7 @@ pub(crate) struct TestState {
     pub metadata_cache: MetadataCache,
     pub encrypter: Encrypter,
     pub url_builder: UrlBuilder,
-    pub homeserver_connection: Arc<MockHomeserverConnection>,
+    pub homeserver_admin: Arc<MockHomeserverAdmin>,
     pub policy_factory: Arc<PolicyFactory>,
     pub password_manager: PasswordManager,
     pub site_config: SiteConfig,
@@ -198,8 +198,8 @@ impl Handler for InjectTestState {
         depot.insert("limiter", state.limiter.clone());
         depot.insert("policy_factory", state.policy_factory.clone());
         depot.insert(
-            "homeserver_connection",
-            Arc::clone(&state.homeserver_connection) as Arc<dyn HomeserverConnection>,
+            "homeserver_admin",
+            Arc::clone(&state.homeserver_admin) as Arc<dyn HomeserverAdmin>,
         );
         depot.insert("app_version", AppVersion("v0.0.0-test"));
         depot.insert("activity_tracker", state.activity_tracker.clone());
@@ -264,8 +264,8 @@ impl TestState {
         let policy_factory =
             policy_factory(&site_config.server_name, serde_json::json!({})).await?;
 
-        let homeserver_connection =
-            Arc::new(MockHomeserverConnection::new(&site_config.server_name));
+        let homeserver_admin =
+            Arc::new(MockHomeserverAdmin::new(&site_config.server_name));
 
         let clock = Arc::new(MockClock::default());
         let rng = Arc::new(Mutex::new(ChaChaRng::seed_from_u64(42)));
@@ -294,7 +294,7 @@ impl TestState {
             database_url,
             Arc::clone(&clock),
             &notifications,
-            homeserver_connection.clone(),
+            homeserver_admin.clone(),
             url_builder.clone(),
             &site_config,
             shutdown_token.child_token(),
@@ -312,7 +312,7 @@ impl TestState {
             metadata_cache,
             encrypter,
             url_builder,
-            homeserver_connection,
+            homeserver_admin,
             policy_factory,
             password_manager,
             site_config,

@@ -23,7 +23,7 @@ use pasion_data::PgRepositoryFactory;
 use pasion_data::UrlBuilder;
 use pasion_data::{BoxRepository, RepositoryError, RepositoryFactory};
 use pasion_data::{Clock, SiteConfig};
-use pasion_matrix::HomeserverConnection;
+use pasion_matrix::HomeserverAdmin;
 use pasion_messaging::NotificationCenter;
 use rand::SeedableRng;
 use tokio_util::{sync::CancellationToken, task::TaskTracker};
@@ -62,7 +62,7 @@ struct State {
     db_url: String,
     notifier: NotificationCenter,
     wall_clock: Arc<dyn Clock>,
-    hs_connection: Arc<dyn HomeserverConnection>,
+    hs_connection: Arc<dyn HomeserverAdmin>,
     urls: UrlBuilder,
     site_cfg: SiteConfig,
 }
@@ -74,7 +74,7 @@ impl State {
         db_url: String,
         clock: impl Clock + 'static,
         notifier: NotificationCenter,
-        homeserver: impl HomeserverConnection + 'static,
+        homeserver: impl HomeserverAdmin + 'static,
         urls: UrlBuilder,
         site_cfg: SiteConfig,
     ) -> Self {
@@ -117,7 +117,7 @@ impl State {
         self.repo_factory.create().await
     }
 
-    pub fn matrix_connection(&self) -> &dyn HomeserverConnection {
+    pub fn matrix_connection(&self) -> &dyn HomeserverAdmin {
         self.hs_connection.as_ref()
     }
 
@@ -337,7 +337,7 @@ pub async fn init(
     database_url: String,
     clock: impl Clock + 'static,
     notifications: &NotificationCenter,
-    homeserver: impl HomeserverConnection + 'static,
+    homeserver: impl HomeserverAdmin + 'static,
     url_builder: UrlBuilder,
     site_config: &SiteConfig,
     cancellation_token: CancellationToken,
@@ -371,7 +371,7 @@ pub async fn init_and_run(
     database_url: String,
     clock: impl Clock + 'static,
     notifications: &NotificationCenter,
-    homeserver: impl HomeserverConnection + 'static,
+    homeserver: impl HomeserverAdmin + 'static,
     url_builder: UrlBuilder,
     site_config: &SiteConfig,
     cancellation_token: CancellationToken,

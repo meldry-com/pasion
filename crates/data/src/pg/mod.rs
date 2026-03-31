@@ -34,6 +34,8 @@ pub mod user;
 pub mod workflow;
 
 mod errors;
+/// PostgreSQL notification template version repository.
+pub mod notification_template;
 pub mod policy_data;
 pub(crate) mod repository;
 pub(crate) mod telemetry;
@@ -48,6 +50,7 @@ pub(crate) mod tracing;
 pub(crate) use self::errors::DatabaseInconsistencyError;
 pub use self::{
     errors::DatabaseError,
+    notification_template::PgNotificationTemplateRepository,
     repository::{PgRepository, PgRepositoryFactory},
 };
 

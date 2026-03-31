@@ -246,7 +246,7 @@ mod tests {
         RepositoryAccess,
         user::{BrowserSessionRepository, UserRepository},
     };
-    use pasion_matrix::{HomeserverConnection, ProvisionRequest};
+    use pasion_matrix::{HomeserverAdmin, ProvisionRequest};
     use rand::SeedableRng;
     use rand_chacha::ChaChaRng;
     use ulid::Ulid;
@@ -282,7 +282,7 @@ mod tests {
         repo.save().await.unwrap();
 
         state
-            .homeserver_connection
+            .homeserver_admin
             .provision_user(&ProvisionRequest::new(&user.username, &user.sub))
             .await
             .unwrap();
@@ -317,7 +317,7 @@ mod tests {
         assert_eq!(stored.preferred_locale.as_deref(), Some("zh-CN"));
 
         let matrix_user = state
-            .homeserver_connection
+            .homeserver_admin
             .query_user(&username)
             .await
             .unwrap();

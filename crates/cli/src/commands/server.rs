@@ -164,7 +164,7 @@ impl Options {
 
         let http_client = pasion_backend::reqwest_client();
 
-        let (homeserver_connection, connector_registry) =
+        let (homeserver_admin, connector_registry) =
             homeserver_connection_from_config(&config.matrix, http_client.clone()).await?;
 
         if !self.no_worker {
@@ -181,7 +181,7 @@ impl Options {
                 database_url,
                 SystemClock::default(),
                 &notifications,
-                homeserver_connection.clone(),
+                homeserver_admin.clone(),
                 url_builder.clone(),
                 &site_config,
                 shutdown.soft_shutdown_token(),
@@ -243,7 +243,7 @@ impl Options {
                 cookie_manager,
                 encrypter,
                 url_builder,
-                homeserver_connection,
+                homeserver_admin,
                 connector_registry,
                 policy_factory,
                 http_client,

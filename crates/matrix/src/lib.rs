@@ -7,7 +7,7 @@ use std::{collections::HashSet, sync::Arc};
 use ruma_common::UserId;
 
 pub use self::{
-    mock::HomeserverConnection as MockHomeserverConnection, readonly::ReadOnlyHomeserverConnection,
+    mock::HomeserverAdmin as MockHomeserverAdmin, readonly::ReadOnlyHomeserverAdmin,
     registry::ConnectorRegistry,
 };
 
@@ -203,7 +203,7 @@ impl ProvisionRequest {
 /// Implementations can target real homeservers (e.g. via the admin API) or
 /// in-memory fakes for testing.
 #[async_trait::async_trait]
-pub trait HomeserverConnection: Send + Sync {
+pub trait HomeserverAdmin: Send + Sync {
     /// Get the homeserver URL.
     fn homeserver(&self) -> &str;
 
@@ -417,56 +417,56 @@ pub trait HomeserverConnection: Send + Sync {
     async fn allow_cross_signing_reset(&self, localpart: &str) -> Result<(), anyhow::Error>;
 }
 
-/// Helper trait: obtain a reference to the inner `HomeserverConnection`
+/// Helper trait: obtain a reference to the inner `HomeserverAdmin`
 /// from a wrapper type. Used to de-duplicate the two blanket impls below.
-trait AsConnection {
-    type Target: HomeserverConnection + ?Sized;
-    fn as_connection(&self) -> &Self::Target;
+trait AsAdmin {
+    type Target: HomeserverAdmin + ?Sized;
+    fn as_admin(&self) -> &Self::Target;
 }
 
-impl<T: HomeserverConnection + ?Sized> AsConnection for &T {
+impl<T: HomeserverAdmin + ?Sized> AsAdmin for &T {
     type Target = T;
-    fn as_connection(&self) -> &T {
+    fn as_admin(&self) -> &T {
         *self
     }
 }
 
-impl<T: HomeserverConnection + ?Sized> AsConnection for Arc<T> {
+impl<T: HomeserverAdmin + ?Sized> AsAdmin for Arc<T> {
     type Target = T;
-    fn as_connection(&self) -> &T {
+    fn as_admin(&self) -> &T {
         self.as_ref()
     }
 }
 
-/// Blanket implementation: anything that can produce a `&dyn HomeserverConnection`
-/// via [`AsConnection`] is itself a valid connection.
+/// Blanket implementation: anything that can produce a `&dyn HomeserverAdmin`
+/// via [`AsAdmin`] is itself a valid admin handle.
 #[async_trait::async_trait]
-impl<W> HomeserverConnection for W
+impl<W> HomeserverAdmin for W
 where
-    W: AsConnection + Send + Sync,
-    W::Target: HomeserverConnection,
+    W: AsAdmin + Send + Sync,
+    W::Target: HomeserverAdmin,
 {
     fn homeserver(&self) -> &str {
-        self.as_connection().homeserver()
+        self.as_admin().homeserver()
     }
 
     async fn verify_token(&self, token: &str) -> Result<bool, anyhow::Error> {
-        self.as_connection().verify_token(token).await
+        self.as_admin().verify_token(token).await
     }
 
     async fn query_user(&self, localpart: &str) -> Result<MatrixUser, anyhow::Error> {
-        self.as_connection().query_user(localpart).await
+        self.as_admin().query_user(localpart).await
     }
 
     async fn provision_user(
         &self,
         request: &ProvisionRequest,
     ) -> Result<bool, anyhow::Error> {
-        self.as_connection().provision_user(request).await
+        self.as_admin().provision_user(request).await
     }
 
     async fn is_localpart_available(&self, localpart: &str) -> Result<bool, anyhow::Error> {
-        self.as_connection().is_localpart_available(localpart).await
+        self.as_admin().is_localpart_available(localpart).await
     }
 
     async fn upsert_device(
@@ -475,7 +475,7 @@ where
         device_id: &str,
         initial_display_name: Option<&str>,
     ) -> Result<(), anyhow::Error> {
-        self.as_connection()
+        self.as_admin()
             .upsert_device(localpart, device_id, initial_display_name)
             .await
     }
@@ -486,7 +486,7 @@ where
         device_id: &str,
         display_name: &str,
     ) -> Result<(), anyhow::Error> {
-        self.as_connection()
+        self.as_admin()
             .update_device_display_name(localpart, device_id, display_name)
             .await
     }
@@ -496,7 +496,7 @@ where
         localpart: &str,
         device_id: &str,
     ) -> Result<(), anyhow::Error> {
-        self.as_connection().delete_device(localpart, device_id).await
+        self.as_admin().delete_device(localpart, device_id).await
     }
 
     async fn sync_devices(
@@ -504,7 +504,7 @@ where
         localpart: &str,
         devices: HashSet<String>,
     ) -> Result<(), anyhow::Error> {
-        self.as_connection().sync_devices(localpart, devices).await
+        self.as_admin().sync_devices(localpart, devices).await
     }
 
     async fn delete_user(
@@ -512,11 +512,11 @@ where
         localpart: &str,
         erase: bool,
     ) -> Result<(), anyhow::Error> {
-        self.as_connection().delete_user(localpart, erase).await
+        self.as_admin().delete_user(localpart, erase).await
     }
 
     async fn reactivate_user(&self, localpart: &str) -> Result<(), anyhow::Error> {
-        self.as_connection().reactivate_user(localpart).await
+        self.as_admin().reactivate_user(localpart).await
     }
 
     async fn set_displayname(
@@ -524,17 +524,17 @@ where
         localpart: &str,
         displayname: &str,
     ) -> Result<(), anyhow::Error> {
-        self.as_connection()
+        self.as_admin()
             .set_displayname(localpart, displayname)
             .await
     }
 
     async fn unset_displayname(&self, localpart: &str) -> Result<(), anyhow::Error> {
-        self.as_connection().unset_displayname(localpart).await
+        self.as_admin().unset_displayname(localpart).await
     }
 
     async fn allow_cross_signing_reset(&self, localpart: &str) -> Result<(), anyhow::Error> {
-        self.as_connection()
+        self.as_admin()
             .allow_cross_signing_reset(localpart)
             .await
     }
@@ -543,9 +543,9 @@ where
 /// A connector provider represents an external system that Pasion can
 /// provision users into, query state from, and synchronize with.
 ///
-/// [`HomeserverConnection`] is the primary implementation of this trait
+/// [`HomeserverAdmin`] is the primary implementation of this trait
 /// for Matrix homeserver backends like Palpo.
-pub trait ConnectorProvider: HomeserverConnection {
+pub trait ConnectorProvider: HomeserverAdmin {
     /// A human-readable name for this connector (e.g. "Palpo", "Synapse").
     fn provider_name(&self) -> &str;
 
