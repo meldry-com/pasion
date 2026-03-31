@@ -10,7 +10,7 @@ use rand_chacha::rand_core::CryptoRngCore;
 use thiserror::Error;
 use ulid::Ulid;
 
-use crate::handlers::rest::Requester;
+use crate::handlers::account::Requester;
 
 pub struct BrowserSessionDetailData {
     pub session: BrowserSession,

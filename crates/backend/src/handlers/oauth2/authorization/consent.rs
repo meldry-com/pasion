@@ -8,10 +8,10 @@ use salvo::{prelude::*, writing::Text};
 use thiserror::Error;
 use ulid::Ulid;
 
-use crate::handlers::oauth2_access::{
+use crate::handlers::oauth2::access::{
     OAuth2AccessError, accept_authorization_consent, load_authorization_consent,
 };
-use crate::handlers::rest::DepotExt;
+use crate::handlers::account::DepotExt;
 use crate::handlers::session::{SessionOrFallback, load_session_or_fallback};
 
 #[derive(Debug, Error)]
@@ -50,7 +50,7 @@ impl From<OAuth2AccessError> for RouteError {
 impl_from_error_for_route!(pasion_templates::TemplateError);
 impl_from_error_for_route!(pasion_data::RepositoryError);
 impl_from_error_for_route!(crate::handlers::session::SessionLoadError);
-impl_from_error_for_route!(crate::handlers::rest::RouteError);
+impl_from_error_for_route!(crate::handlers::account::RouteError);
 impl_from_error_for_route!(super::callback::CallbackDestinationError);
 
 impl Scribe for RouteError {
@@ -79,15 +79,15 @@ async fn handle_get(
     depot: &Depot,
     res: &mut Response,
 ) -> Result<(), RouteError> {
-    let mut rng = crate::handlers::rest::make_rng();
-    let clock = crate::handlers::rest::make_clock();
+    let mut rng = crate::handlers::account::make_rng();
+    let clock = crate::handlers::account::make_clock();
     let locale = crate::handlers::preferred_language(req, depot);
     let templates = depot.templates()?;
     let url_builder = depot.url_builder()?;
     let homeserver = depot.homeserver()?;
     let policy_factory = depot.policy_factory()?;
     let repo_factory = depot.repo_factory()?;
-    let activity_tracker = crate::handlers::rest::extract_bound_activity_tracker(req, depot);
+    let activity_tracker = crate::handlers::account::extract_bound_activity_tracker(req, depot);
     let user_agent: Option<String> = req.header("user-agent");
     let cookie_jar = depot.cookie_jar(req)?;
     let grant_id: Ulid = req.param("grant_id").ok_or(RouteError::GrantNotFound)?;
@@ -178,15 +178,15 @@ async fn handle_post(
     depot: &Depot,
     res: &mut Response,
 ) -> Result<(), RouteError> {
-    let mut rng = crate::handlers::rest::make_rng();
-    let clock = crate::handlers::rest::make_clock();
+    let mut rng = crate::handlers::account::make_rng();
+    let clock = crate::handlers::account::make_clock();
     let locale = crate::handlers::preferred_language(req, depot);
     let templates = depot.templates()?;
     let key_store = depot.key_store()?;
     let url_builder = depot.url_builder()?;
     let policy_factory = depot.policy_factory()?;
     let repo_factory = depot.repo_factory()?;
-    let activity_tracker = crate::handlers::rest::extract_bound_activity_tracker(req, depot);
+    let activity_tracker = crate::handlers::account::extract_bound_activity_tracker(req, depot);
     let user_agent: Option<String> = req.header("user-agent");
     let cookie_jar = depot.cookie_jar(req)?;
     let grant_id: Ulid = req.param("grant_id").ok_or(RouteError::GrantNotFound)?;

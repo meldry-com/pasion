@@ -53,7 +53,7 @@ pub async fn add_email(
     let crate::handlers::admin::call_context::CallContext {
         mut repo, clock, ..
     } = ctx;
-    let mut rng = crate::handlers::rest::make_rng();
+    let mut rng = crate::handlers::account::make_rng();
     let body: AddRequest = req
         .parse_json()
         .await
@@ -116,7 +116,7 @@ pub async fn delete_email(req: &mut Request, depot: &Depot) -> AppResult<StatusC
         mut repo, clock, ..
     } = ctx;
     let email_id = extract_ulid_param(req)?;
-    let mut rng = crate::handlers::rest::make_rng();
+    let mut rng = crate::handlers::account::make_rng();
 
     let entry = repo
         .user_email()
@@ -276,7 +276,7 @@ pub async fn update_email(
         ..
     } = call_context;
     let id = extract_ulid_param(req)?;
-    let mut rng = crate::handlers::rest::make_rng();
+    let mut rng = crate::handlers::account::make_rng();
     let body: UpdateRequest = req
         .parse_json()
         .await

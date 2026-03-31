@@ -96,7 +96,7 @@ pub async fn add_link(
     let crate::handlers::admin::call_context::CallContext {
         mut repo, clock, ..
     } = ctx;
-    let mut rng = crate::handlers::rest::make_rng();
+    let mut rng = crate::handlers::account::make_rng();
     let body: AddRequest = req
         .parse_json()
         .await
@@ -371,7 +371,7 @@ pub async fn update_link(
         ..
     } = call_context;
     let id = extract_ulid_param(req)?;
-    let mut rng = crate::handlers::rest::make_rng();
+    let mut rng = crate::handlers::account::make_rng();
     let body: UpdateRequest = req
         .parse_json()
         .await

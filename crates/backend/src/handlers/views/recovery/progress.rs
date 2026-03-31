@@ -7,7 +7,7 @@ use pasion_templates::{EmptyContext, RecoveryProgressContext, TemplateContext, T
 use salvo::{prelude::*, writing::Text};
 use ulid::Ulid;
 
-use crate::handlers::rest::DepotExt;
+use crate::handlers::account::DepotExt;
 use crate::handlers::{
     RequesterFingerprint,
     account_recovery::{

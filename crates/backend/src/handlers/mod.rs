@@ -77,38 +77,24 @@ pub mod oauth2;
 pub mod passwords;
 /// Post-authentication action utilities (shared across handlers).
 pub mod post_auth;
-/// REST API endpoints consumed by the account-management frontend.
-pub mod rest;
+/// Shared infrastructure types (DepotExt, RouteError, etc.).
+pub mod common;
+/// Account management API endpoints consumed by the frontend SPA.
+pub mod account;
 /// SPA shell serving (renders the Dioxus frontend HTML wrapper).
 pub mod spa;
 /// Upstream (federated) OAuth 2.0 / OIDC provider integration.
 pub mod upstream_oauth2;
-/// Cookie management for user registration sessions.
-pub mod user_registration_cookie;
 
-mod account_access;
-mod account_connections;
-mod account_contacts;
-mod account_password;
-mod account_profile;
-mod account_recovery;
-mod account_registration;
-mod account_sessions;
 mod activity_tracker;
-pub(crate) mod admin_audit_helper;
 mod captcha;
 mod notification_dispatch;
 mod notification_language;
-mod oauth2_access;
-mod oauth2_introspection;
-mod oauth2_revocation;
-mod oauth2_token_service;
 mod preferred_language;
 mod rate_limit;
 mod session;
 #[cfg(test)]
 mod test_utils;
-mod upstream_link_workflow;
 
 static METER: LazyLock<Meter> = LazyLock::new(|| {
     let scope = opentelemetry::InstrumentationScope::builder(env!("CARGO_PKG_NAME"))

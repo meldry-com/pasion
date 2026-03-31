@@ -277,3 +277,8 @@ mod tests {
         assert_generated_id_token_works(JsonWebSignatureAlg::EdDsa);
     }
 }
+
+pub(crate) mod access;
+pub(crate) mod introspection_service;
+pub(crate) mod revocation_service;
+pub(crate) mod token_service;

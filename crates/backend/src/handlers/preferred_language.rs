@@ -10,7 +10,7 @@ use headers::HeaderMapExt as _;
 use pasion_i18n::{DataLocale, Translator, locale};
 use salvo::prelude::*;
 
-use crate::handlers::rest::RouteError;
+use crate::handlers::account::RouteError;
 
 pub fn preferred_language(req: &Request, depot: &Depot) -> DataLocale {
     let translator = depot

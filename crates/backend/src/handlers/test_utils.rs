@@ -396,75 +396,75 @@ impl TestState {
                     .post(crate::handlers::oauth2::device::authorize::post),
             )
             // REST API
-            .push(Router::with_path("/api/v1/viewer").get(crate::handlers::rest::viewer::get_viewer))
-            .push(Router::with_path("/api/v1/site-config").get(crate::handlers::rest::site_config::get))
+            .push(Router::with_path("/api/v1/viewer").get(crate::handlers::account::viewer::get_viewer))
+            .push(Router::with_path("/api/v1/site-config").get(crate::handlers::account::site_config::get))
             .push(
-                Router::with_path("/api/v1/sessions/{id}").get(crate::handlers::rest::sessions::get_session),
+                Router::with_path("/api/v1/sessions/{id}").get(crate::handlers::account::sessions::get_session),
             )
             .push(
                 Router::with_path("/api/v1/browser-sessions/{id}")
-                    .delete(crate::handlers::rest::sessions::end_browser_session),
+                    .delete(crate::handlers::account::sessions::end_browser_session),
             )
             .push(
                 Router::with_path("/api/v1/oauth2-sessions/{id}")
-                    .delete(crate::handlers::rest::sessions::end_oauth2_session),
+                    .delete(crate::handlers::account::sessions::end_oauth2_session),
             )
             .push(
                 Router::with_path("/api/v1/oauth2-sessions/{id}/name")
-                    .put(crate::handlers::rest::sessions::set_oauth2_session_name),
+                    .put(crate::handlers::account::sessions::set_oauth2_session_name),
             )
             .push(
                 Router::with_path("/api/v1/oauth2-clients/{id}")
-                    .get(crate::handlers::rest::oauth2_clients::get_client),
+                    .get(crate::handlers::account::oauth2_clients::get_client),
             )
             .push(
                 Router::with_path("/api/v1/viewer/password")
-                    .post(crate::handlers::rest::password::set_password),
+                    .post(crate::handlers::account::password::set_password),
             )
             .push(
                 Router::with_path("/api/v1/password-recovery/set")
-                    .post(crate::handlers::rest::password::set_password_by_recovery),
+                    .post(crate::handlers::account::password::set_password_by_recovery),
             )
             .push(
                 Router::with_path("/api/v1/password-recovery/resend")
-                    .post(crate::handlers::rest::password::resend_recovery_email),
+                    .post(crate::handlers::account::password::resend_recovery_email),
             )
             .push(
                 Router::with_path("/api/v1/viewer/profile")
-                    .patch(crate::handlers::rest::users::patch_profile),
+                    .patch(crate::handlers::account::users::patch_profile),
             )
             .push(
                 Router::with_path("/api/v1/viewer/cross-signing-reset")
-                    .post(crate::handlers::rest::users::allow_cross_signing_reset),
+                    .post(crate::handlers::account::users::allow_cross_signing_reset),
             )
             .push(
                 Router::with_path("/api/v1/viewer/deactivate")
-                    .post(crate::handlers::rest::users::deactivate_user),
+                    .post(crate::handlers::account::users::deactivate_user),
             )
             .push(
                 Router::with_path("/api/v1/viewer/preferences")
-                    .get(crate::handlers::rest::notification_prefs::get_notification_preferences)
-                    .patch(crate::handlers::rest::notification_prefs::patch_notification_preferences),
+                    .get(crate::handlers::account::notification_prefs::get_notification_preferences)
+                    .patch(crate::handlers::account::notification_prefs::patch_notification_preferences),
             )
             .push(
                 Router::with_path("/api/v1/email-auth/start")
-                    .post(crate::handlers::rest::emails::start_email_auth),
+                    .post(crate::handlers::account::emails::start_email_auth),
             )
             .push(
                 Router::with_path("/api/v1/email-auth/{id}")
-                    .get(crate::handlers::rest::emails::get_email_auth),
+                    .get(crate::handlers::account::emails::get_email_auth),
             )
             .push(
                 Router::with_path("/api/v1/email-auth/{id}/complete")
-                    .post(crate::handlers::rest::emails::complete_email_auth),
+                    .post(crate::handlers::account::emails::complete_email_auth),
             )
             .push(
                 Router::with_path("/api/v1/email-auth/{id}/resend")
-                    .post(crate::handlers::rest::emails::resend_email_auth_code),
+                    .post(crate::handlers::account::emails::resend_email_auth_code),
             )
             .push(
                 Router::with_path("/api/v1/user-emails/{id}")
-                    .delete(crate::handlers::rest::emails::remove_email),
+                    .delete(crate::handlers::account::emails::remove_email),
             )
             // OAuth2 authorization
             .push(

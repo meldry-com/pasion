@@ -141,10 +141,10 @@ pub async fn login(req: &mut Request, depot: &Depot, res: &mut Response) -> Resu
     )
     .await
     .map_err(|error| match error {
-        crate::handlers::account_access::PasswordLoginError::Repository(error) => {
+        crate::handlers::account::service::access::PasswordLoginError::Repository(error) => {
             RouteError::from(error)
         }
-        crate::handlers::account_access::PasswordLoginError::Password(error) => {
+        crate::handlers::account::service::access::PasswordLoginError::Password(error) => {
             RouteError::Internal(error.into())
         }
     })? {

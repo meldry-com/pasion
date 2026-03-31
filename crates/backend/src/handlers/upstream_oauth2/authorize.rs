@@ -11,7 +11,7 @@ use ulid::Ulid;
 
 use super::{UpstreamSessionsCookie, cache::LazyProviderInfos};
 use crate::handlers::post_auth::OptionalPostAuthAction;
-use crate::handlers::rest::DepotExt;
+use crate::handlers::account::DepotExt;
 
 #[derive(Debug, Error)]
 pub enum RouteError {
@@ -25,7 +25,7 @@ pub enum RouteError {
 impl_from_error_for_route!(crate::oidc_client::error::DiscoveryError);
 impl_from_error_for_route!(crate::oidc_client::error::AuthorizationError);
 impl_from_error_for_route!(pasion_data::RepositoryError);
-impl_from_error_for_route!(crate::handlers::rest::RouteError);
+impl_from_error_for_route!(crate::handlers::account::RouteError);
 
 impl Scribe for RouteError {
     fn render(self, res: &mut Response) {
@@ -48,8 +48,8 @@ pub async fn get(
     res: &mut Response,
 ) -> Result<(), RouteError> {
     let provider_id: Ulid = req.param("id").ok_or(RouteError::ProviderNotFound)?;
-    let mut rng = crate::handlers::rest::make_rng();
-    let clock = crate::handlers::rest::make_clock();
+    let mut rng = crate::handlers::account::make_rng();
+    let clock = crate::handlers::account::make_clock();
     let metadata_cache = depot.metadata_cache()?;
     let mut repo = depot.repo_factory()?.create().await?;
     let url_builder = depot.url_builder()?;

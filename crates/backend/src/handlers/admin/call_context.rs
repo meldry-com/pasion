@@ -15,7 +15,7 @@ use ulid::Ulid;
 
 use super::response::ErrorResponse;
 use crate::handlers::BoundActivityTracker;
-use crate::handlers::rest::DepotExt;
+use crate::handlers::account::DepotExt;
 
 #[derive(Debug, thiserror::Error)]
 pub enum Rejection {
@@ -120,8 +120,8 @@ pub struct CallContext {
 }
 
 pub async fn extract_call_context(req: &Request, depot: &Depot) -> Result<CallContext, Rejection> {
-    let activity_tracker = crate::handlers::rest::extract_bound_activity_tracker(req, depot);
-    let clock = crate::handlers::rest::make_clock();
+    let activity_tracker = crate::handlers::account::extract_bound_activity_tracker(req, depot);
+    let clock = crate::handlers::account::make_clock();
 
     // Load the database repository
     let repo_factory = depot

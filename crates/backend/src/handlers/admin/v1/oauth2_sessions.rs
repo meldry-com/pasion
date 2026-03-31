@@ -40,7 +40,7 @@ pub async fn finish_session(
         mut repo, clock, ..
     } = ctx;
     let session_id = extract_ulid_param(req)?;
-    let mut rng = crate::handlers::rest::make_rng();
+    let mut rng = crate::handlers::account::make_rng();
 
     let oauth_session = repo
         .oauth2_session()

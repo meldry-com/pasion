@@ -214,7 +214,7 @@ async fn handle_post(req: &mut Request, depot: &Depot) -> Result<RouteResponse, 
     let policy_factory = depot
         .get::<Arc<PolicyFactory>>("policy_factory")
         .expect("PolicyFactory not found in depot");
-    let activity_tracker = crate::handlers::rest::extract_bound_activity_tracker(req, depot);
+    let activity_tracker = crate::handlers::account::extract_bound_activity_tracker(req, depot);
 
     let clock: BoxClock = Box::new(SystemClock::default());
     #[allow(clippy::disallowed_methods)]

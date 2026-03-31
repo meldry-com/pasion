@@ -12,7 +12,7 @@ use super::{
     DepotExt, RouteError, extract_bound_activity_tracker, extract_session_info, get_requester,
     make_clock,
 };
-use crate::handlers::account_connections::{
+use crate::handlers::account::service::connections::{
     LinkedAccountError, list_linked_accounts as list_linked_accounts_service, unlink_linked_account,
 };
 

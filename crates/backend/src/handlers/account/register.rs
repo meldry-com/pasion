@@ -1,7 +1,7 @@
 //! REST API endpoints for user registration.
 //!
 //! These endpoints serve as thin HTTP adapters over the business logic in
-//! [`crate::handlers::account_registration`]. They parse requests, check config/policy
+//! [`crate::handlers::account::service::registration`]. They parse requests, check config/policy
 //! constraints, delegate to service functions, and map results to JSON
 //! responses.
 

@@ -380,7 +380,7 @@ async fn handle_post(
     let repo_factory = depot
         .get::<BoxRepositoryFactory>("box_repository_factory")
         .expect("BoxRepositoryFactory not found in depot");
-    let activity_tracker = crate::handlers::rest::extract_bound_activity_tracker(req, depot);
+    let activity_tracker = crate::handlers::account::extract_bound_activity_tracker(req, depot);
     let policy_factory = depot
         .get::<Arc<pasion_policy::PolicyFactory>>("policy_factory")
         .expect("PolicyFactory not found in depot");

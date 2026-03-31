@@ -8,7 +8,7 @@
 //! The API specification is available as an OpenAPI document served by the
 //! [`swagger`] handler.
 
-use crate::handlers::rest::DepotExt;
+use crate::handlers::account::DepotExt;
 use crate::salvo_utils::InternalError;
 use pasion_templates::{ApiDocContext, Templates};
 use salvo::prelude::*;
@@ -104,3 +104,5 @@ impl<T: Serialize + Send + salvo::oapi::ToSchema + 'static> salvo::oapi::Endpoin
         operation.responses.insert("201", salvo::oapi::RefOr::Type(response));
     }
 }
+
+pub(crate) mod audit_helper;

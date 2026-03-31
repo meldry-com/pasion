@@ -3,7 +3,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 
 use crate::handlers::admin::call_context::extract_call_context;
-use crate::handlers::rest::DepotExt;
+use crate::handlers::account::DepotExt;
 use crate::salvo_utils::InternalError;
 use salvo::oapi::ToSchema;
 use salvo::prelude::*;

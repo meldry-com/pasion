@@ -53,7 +53,7 @@ pub async fn add_token(
     let crate::handlers::admin::call_context::CallContext {
         mut repo, clock, ..
     } = ctx;
-    let mut rng = crate::handlers::rest::make_rng();
+    let mut rng = crate::handlers::account::make_rng();
     let body: AddRequest = req
         .parse_json()
         .await

@@ -13,7 +13,7 @@ use pasion_matrix::HomeserverConnection;
 use rand::RngCore;
 use thiserror::Error;
 
-use crate::handlers::rest::Requester;
+use crate::handlers::account::Requester;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ViewerProfile {

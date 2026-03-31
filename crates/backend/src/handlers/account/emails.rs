@@ -6,7 +6,7 @@ use super::{
     DepotExt, NodeType, RouteError, extract_bound_activity_tracker, extract_session_info,
     get_requester, make_clock, make_rng,
 };
-use crate::handlers::account_contacts::{
+use crate::handlers::account::service::contacts::{
     CompleteEmailVerificationError, LoadEmailVerificationStatusError, RemoveUserEmailError,
     ResendEmailVerificationError, StartEmailVerificationError, complete_email_verification,
     load_email_verification_status, remove_user_email, resend_email_verification_code,

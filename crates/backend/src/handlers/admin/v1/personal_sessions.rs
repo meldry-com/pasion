@@ -91,7 +91,7 @@ pub async fn add_session(
         session: caller_session,
         ..
     } = ctx;
-    let mut rng = crate::handlers::rest::make_rng();
+    let mut rng = crate::handlers::account::make_rng();
     let homeserver = depot.homeserver()?;
     let body: AddRequest = req
         .parse_json()
@@ -460,7 +460,7 @@ pub async fn regenerate_session(
         ..
     } = ctx;
     let target_id = extract_ulid_param(req)?;
-    let mut rng = crate::handlers::rest::make_rng();
+    let mut rng = crate::handlers::account::make_rng();
     let body: RegenerateRequest = req
         .parse_json()
         .await
@@ -532,7 +532,7 @@ pub async fn revoke_session(
         mut repo, clock, ..
     } = ctx;
     let target_id = extract_ulid_param(req)?;
-    let mut rng = crate::handlers::rest::make_rng();
+    let mut rng = crate::handlers::account::make_rng();
 
     let entry = repo
         .personal_session()

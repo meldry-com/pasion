@@ -7,9 +7,9 @@ use crate::salvo_utils::{
 };
 use salvo::prelude::*;
 
-use crate::handlers::account_access::logout_browser_session;
+use crate::handlers::account::service::access::logout_browser_session;
 use crate::handlers::rest;
-use crate::handlers::rest::DepotExt;
+use crate::handlers::account::DepotExt;
 
 #[handler]
 pub async fn post(

@@ -67,7 +67,7 @@ impl_from_error_for_route!(pasion_templates::TemplateError);
 impl_from_error_for_route!(crate::salvo_utils::csrf::CsrfError);
 impl_from_error_for_route!(super::cookie::UpstreamSessionNotFound);
 impl_from_error_for_route!(pasion_data::RepositoryError);
-impl_from_error_for_route!(crate::handlers::rest::RouteError);
+impl_from_error_for_route!(crate::handlers::account::RouteError);
 impl_from_error_for_route!(pasion_policy::InstantiateError);
 impl_from_error_for_route!(salvo::http::ParseError);
 
@@ -126,8 +126,8 @@ pub async fn get(
     res: &mut Response,
 ) -> Result<(), RouteError> {
     let link_id: Ulid = req.param("id").ok_or(RouteError::LinkNotFound)?;
-    let mut rng = crate::handlers::rest::make_rng();
-    let clock = crate::handlers::rest::make_clock();
+    let mut rng = crate::handlers::account::make_rng();
+    let clock = crate::handlers::account::make_clock();
     let mut repo = depot.repo_factory()?.create().await?;
     let locale = crate::handlers::preferred_language(req, depot);
     let templates = depot.templates()?;
@@ -143,7 +143,7 @@ pub async fn get(
     let policy_factory = depot.policy_factory()?;
     let mut policy = policy_factory.instantiate().await?;
     let site_config = depot.site_config()?;
-    let ip_address = crate::handlers::rest::extract_bound_activity_tracker(req, depot).ip();
+    let ip_address = crate::handlers::account::extract_bound_activity_tracker(req, depot).ip();
 
     let sessions_cookie = UpstreamSessionsCookie::load(&cookie_jar);
     let (session_info, cookie_jar) = cookie_jar.session_info();
@@ -405,8 +405,8 @@ pub async fn post(
     res: &mut Response,
 ) -> Result<(), RouteError> {
     let link_id: Ulid = req.param("id").ok_or(RouteError::LinkNotFound)?;
-    let mut rng = crate::handlers::rest::make_rng();
-    let clock = crate::handlers::rest::make_clock();
+    let mut rng = crate::handlers::account::make_rng();
+    let clock = crate::handlers::account::make_clock();
     let mut repo = depot.repo_factory()?.create().await?;
     let cookie_jar = depot.cookie_jar(req)?;
     let user_agent = req
@@ -421,7 +421,7 @@ pub async fn post(
     let homeserver = depot.homeserver()?;
     let url_builder = depot.url_builder()?;
     let site_config = depot.site_config()?;
-    let ip_address = crate::handlers::rest::extract_bound_activity_tracker(req, depot).ip();
+    let ip_address = crate::handlers::account::extract_bound_activity_tracker(req, depot).ip();
 
     let form: ProtectedForm<FormData> = req.parse_form().await?;
     let form = cookie_jar.verify_form(&clock, form)?;
@@ -598,7 +598,7 @@ mod tests {
     use ulid::Ulid;
 
     use super::UpstreamSessionsCookie;
-    use crate::handlers::rest::DepotExt;
+    use crate::handlers::account::DepotExt;
     #[cfg(test)]
     use crate::handlers::test_utils::{CookieHelper, RequestBuilderExt, ResponseExt, TestState, setup};
 

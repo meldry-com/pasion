@@ -25,7 +25,7 @@ use super::{
     template::{AttributeMappingContext, environment},
 };
 use crate::handlers::METER;
-use crate::handlers::rest::DepotExt;
+use crate::handlers::account::DepotExt;
 
 static CALLBACK_COUNTER: LazyLock<Counter<u64>> = LazyLock::new(|| {
     METER
@@ -126,7 +126,7 @@ pub enum RouteError {
 
 impl_from_error_for_route!(pasion_templates::TemplateError);
 impl_from_error_for_route!(pasion_data::RepositoryError);
-impl_from_error_for_route!(crate::handlers::rest::RouteError);
+impl_from_error_for_route!(crate::handlers::account::RouteError);
 impl_from_error_for_route!(crate::oidc_client::error::DiscoveryError);
 impl_from_error_for_route!(crate::oidc_client::error::JwksError);
 impl_from_error_for_route!(crate::oidc_client::error::TokenRequestError);
@@ -156,8 +156,8 @@ pub async fn handler(
     res: &mut Response,
 ) -> Result<(), RouteError> {
     let provider_id: Ulid = req.param("id").ok_or(RouteError::ProviderNotFound)?;
-    let mut rng = crate::handlers::rest::make_rng();
-    let clock = crate::handlers::rest::make_clock();
+    let mut rng = crate::handlers::account::make_rng();
+    let clock = crate::handlers::account::make_clock();
     let metadata_cache = depot.metadata_cache()?;
     let mut repo = depot.repo_factory()?.create().await?;
     let url_builder = depot.url_builder()?;

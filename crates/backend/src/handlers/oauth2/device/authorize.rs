@@ -15,7 +15,7 @@ use salvo::{Extractible, prelude::*};
 use thiserror::Error;
 use ulid::Ulid;
 
-use crate::handlers::rest::DepotExt;
+use crate::handlers::account::DepotExt;
 
 #[derive(Debug, Error)]
 pub enum RouteError {
@@ -44,7 +44,7 @@ pub enum RouteError {
 }
 
 impl_from_error_for_route!(pasion_data::RepositoryError);
-impl_from_error_for_route!(crate::handlers::rest::RouteError);
+impl_from_error_for_route!(crate::handlers::account::RouteError);
 impl_from_error_for_route!(crate::salvo_utils::client_authorization::ClientAuthorizationError);
 
 impl Scribe for RouteError {
@@ -105,10 +105,10 @@ async fn handle_post(
     let http_client = depot.http_client()?;
     let encrypter = depot.encrypter()?;
     let mut repo = depot.repo_factory()?.create().await?;
-    let activity_tracker = crate::handlers::rest::extract_bound_activity_tracker(req, depot);
+    let activity_tracker = crate::handlers::account::extract_bound_activity_tracker(req, depot);
 
-    let mut rng = crate::handlers::rest::make_rng();
-    let clock = crate::handlers::rest::make_clock();
+    let mut rng = crate::handlers::account::make_rng();
+    let clock = crate::handlers::account::make_clock();
 
     let user_agent: Option<String> = req.header("user-agent");
 

@@ -1,4 +1,4 @@
-use crate::handlers::rest::DepotExt;
+use crate::handlers::account::DepotExt;
 use pasion_data::Clock;
 use crate::salvo_utils::InternalError;
 use pasion_templates::{
@@ -27,7 +27,7 @@ async fn handle_get(
     depot: &Depot,
     res: &mut Response,
 ) -> Result<(), InternalError> {
-    let clock = crate::handlers::rest::make_clock();
+    let clock = crate::handlers::account::make_clock();
     let templates = depot.templates()?;
     let url_builder = depot.url_builder()?;
     let mut repo = depot.repo_factory()?.create().await?;

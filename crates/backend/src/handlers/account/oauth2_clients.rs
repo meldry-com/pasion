@@ -3,7 +3,7 @@ use salvo::prelude::*;
 use serde::Serialize;
 
 use super::{DepotExt, NodeType, RouteError};
-use crate::handlers::account_connections::{OAuth2ClientLookupError, load_oauth2_client};
+use crate::handlers::account::service::connections::{OAuth2ClientLookupError, load_oauth2_client};
 
 #[derive(Serialize, ToSchema)]
 #[serde(rename_all = "camelCase")]

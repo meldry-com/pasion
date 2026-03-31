@@ -13,7 +13,7 @@ use serde::Deserialize;
 use tracing::warn;
 use ulid::Ulid;
 
-use crate::handlers::rest::DepotExt;
+use crate::handlers::account::DepotExt;
 use crate::handlers::session::{
     SessionOrFallback, count_user_sessions_for_limiting, load_session_or_fallback,
 };
@@ -44,8 +44,8 @@ async fn handle_get(
     depot: &Depot,
     res: &mut Response,
 ) -> Result<(), InternalError> {
-    let mut rng = crate::handlers::rest::make_rng();
-    let clock = crate::handlers::rest::make_clock();
+    let mut rng = crate::handlers::account::make_rng();
+    let clock = crate::handlers::account::make_clock();
     let locale = crate::handlers::preferred_language(req, depot);
     let templates = depot.templates()?;
     let url_builder = depot.url_builder()?;
@@ -56,7 +56,7 @@ async fn handle_get(
         .instantiate()
         .await
         .map_err(|e| InternalError::new(Box::new(e)))?;
-    let activity_tracker = crate::handlers::rest::extract_bound_activity_tracker(req, depot);
+    let activity_tracker = crate::handlers::account::extract_bound_activity_tracker(req, depot);
     let user_agent: Option<String> = req.header("user-agent");
     let cookie_jar = depot.cookie_jar(req)?;
     let grant_id: Ulid = req.param("device_code_id").ok_or_else(|| {
@@ -211,8 +211,8 @@ async fn handle_post(
     depot: &Depot,
     res: &mut Response,
 ) -> Result<(), InternalError> {
-    let mut rng = crate::handlers::rest::make_rng();
-    let clock = crate::handlers::rest::make_clock();
+    let mut rng = crate::handlers::account::make_rng();
+    let clock = crate::handlers::account::make_clock();
     let locale = crate::handlers::preferred_language(req, depot);
     let templates = depot.templates()?;
     let url_builder = depot.url_builder()?;
@@ -223,7 +223,7 @@ async fn handle_post(
         .instantiate()
         .await
         .map_err(|e| InternalError::new(Box::new(e)))?;
-    let activity_tracker = crate::handlers::rest::extract_bound_activity_tracker(req, depot);
+    let activity_tracker = crate::handlers::account::extract_bound_activity_tracker(req, depot);
     let user_agent: Option<String> = req.header("user-agent");
     let cookie_jar = depot.cookie_jar(req)?;
     let grant_id: Ulid = req.param("device_code_id").ok_or_else(|| {

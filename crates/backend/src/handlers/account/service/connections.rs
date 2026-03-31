@@ -9,7 +9,7 @@ use pasion_data::{Client, Clock, User};
 use thiserror::Error;
 use ulid::Ulid;
 
-use crate::handlers::rest::Requester;
+use crate::handlers::account::Requester;
 
 pub struct LinkedAccountSummary {
     pub id: Ulid,

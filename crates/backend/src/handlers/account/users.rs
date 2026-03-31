@@ -5,7 +5,7 @@ use super::{
     DepotExt, NodeType, RouteError, extract_bound_activity_tracker, extract_session_info,
     get_requester, make_clock, make_rng,
 };
-use crate::handlers::account_profile::{
+use crate::handlers::account::service::profile::{
     AccountProfileError, DeactivateAccountOutcome,
     allow_cross_signing_reset as allow_cross_signing_reset_service, deactivate_current_account,
 };

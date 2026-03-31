@@ -12,7 +12,7 @@ use salvo::{prelude::*, writing::Text};
 use serde::{Deserialize, Serialize};
 use ulid::Ulid;
 
-use crate::handlers::rest::DepotExt;
+use crate::handlers::account::DepotExt;
 use crate::handlers::{
     account_registration::{
         LoadRegistrationDisplayNameStepError, SetRegistrationDisplayNameError,

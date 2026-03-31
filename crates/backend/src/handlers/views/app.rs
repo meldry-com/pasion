@@ -4,7 +4,7 @@ use pasion_templates::{AppContext, TemplateContext, Templates};
 use salvo::{prelude::*, writing::Text};
 use serde::Deserialize;
 
-use crate::handlers::rest::DepotExt;
+use crate::handlers::account::DepotExt;
 use crate::handlers::{
     rest,
     session::{SessionOrFallback, load_session_or_fallback},

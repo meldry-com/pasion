@@ -4,9 +4,9 @@ use pasion_templates::{RegisterContext, TemplateContext, Templates};
 use salvo::{prelude::*, writing::Text};
 
 use super::shared::OptionalPostAuthAction;
-use crate::handlers::account_access::load_enabled_upstream_providers;
+use crate::handlers::account::service::access::load_enabled_upstream_providers;
 use crate::handlers::rest;
-use crate::handlers::rest::DepotExt;
+use crate::handlers::account::DepotExt;
 
 mod cookie;
 pub mod password;

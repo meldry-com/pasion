@@ -6,7 +6,7 @@ use super::{
     DepotExt, NodeType, RouteError, UserAgentInfo, extract_bound_activity_tracker,
     extract_session_info, get_requester, make_clock, make_rng, parse_user_agent,
 };
-use crate::handlers::account_sessions::{
+use crate::handlers::account::service::sessions::{
     AccountSessionError, end_browser_session as end_browser_session_service,
     end_oauth2_session as end_oauth2_session_service, load_browser_session_detail,
     load_oauth2_session_detail, set_oauth2_session_human_name,

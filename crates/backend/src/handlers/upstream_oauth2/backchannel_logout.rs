@@ -24,7 +24,7 @@ use serde_json::Value;
 use thiserror::Error;
 use ulid::Ulid;
 
-use crate::handlers::rest::DepotExt;
+use crate::handlers::account::DepotExt;
 use crate::handlers::upstream_oauth2::cache::LazyProviderInfos;
 
 #[derive(Debug, Error)]
@@ -100,7 +100,7 @@ impl Scribe for RouteError {
 }
 
 impl_from_error_for_route!(pasion_data::RepositoryError);
-impl_from_error_for_route!(crate::handlers::rest::RouteError);
+impl_from_error_for_route!(crate::handlers::account::RouteError);
 impl_from_error_for_route!(crate::oidc_client::error::DiscoveryError);
 impl_from_error_for_route!(crate::oidc_client::error::JwksError);
 
@@ -122,8 +122,8 @@ const EVENTS: Claim<LogoutTokenEvents> = Claim::new("events");
 #[tracing::instrument(name = "handlers.upstream_oauth2.backchannel_logout.post", skip_all)]
 pub async fn post(req: &mut Request, depot: &mut Depot) -> Result<(), RouteError> {
     let provider_id: Ulid = req.param("id").ok_or(RouteError::ProviderNotFound)?;
-    let clock = crate::handlers::rest::make_clock();
-    let mut rng = crate::handlers::rest::make_rng();
+    let clock = crate::handlers::account::make_clock();
+    let mut rng = crate::handlers::account::make_rng();
     let mut repo = depot.repo_factory()?.create().await?;
     let metadata_cache = depot.metadata_cache()?;
     let client = depot.http_client()?;

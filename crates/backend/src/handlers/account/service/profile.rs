@@ -87,7 +87,7 @@ pub async fn deactivate_current_account(
         return Err(AccountProfileError::DeactivationDisabled);
     }
 
-    let password_ok = crate::handlers::account_password::verify_password_if_needed(
+    let password_ok = crate::handlers::account::service::password::verify_password_if_needed(
         requester.is_admin(),
         config.password_login_enabled,
         password_manager,
@@ -97,10 +97,10 @@ pub async fn deactivate_current_account(
     )
     .await
     .map_err(|error| match error {
-        crate::handlers::account_password::VerifyPasswordIfNeededError::Password(error) => {
+        crate::handlers::account::service::password::VerifyPasswordIfNeededError::Password(error) => {
             AccountProfileError::Password(error)
         }
-        crate::handlers::account_password::VerifyPasswordIfNeededError::Repository(error) => {
+        crate::handlers::account::service::password::VerifyPasswordIfNeededError::Repository(error) => {
             AccountProfileError::Repository(error)
         }
     })?;

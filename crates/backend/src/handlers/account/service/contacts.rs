@@ -2,7 +2,7 @@
 //!
 //! These functions encapsulate the business logic for adding, verifying, and
 //! removing contact information on an existing user account. They are consumed
-//! by the REST handlers in [`crate::handlers::rest::emails`].
+//! by the REST handlers in [`crate::handlers::account::emails`].
 //!
 //! # Migration path
 //!
@@ -22,7 +22,7 @@ use rand::RngCore;
 use thiserror::Error;
 use ulid::Ulid;
 
-use crate::handlers::account_password::{
+use crate::handlers::account::service::password::{
     VerifyPasswordIfNeededError, verify_password_if_needed as verify_contact_password_if_needed,
 };
 use crate::handlers::{

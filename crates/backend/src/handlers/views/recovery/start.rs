@@ -10,7 +10,7 @@ use pasion_templates::{
 use salvo::{prelude::*, writing::Text};
 use serde::{Deserialize, Serialize};
 
-use crate::handlers::rest::DepotExt;
+use crate::handlers::account::DepotExt;
 use crate::handlers::{
     RequesterFingerprint,
     account_recovery::{StartAccountRecoveryError, start_account_recovery},

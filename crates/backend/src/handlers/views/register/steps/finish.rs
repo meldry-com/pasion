@@ -9,7 +9,7 @@ use salvo::{prelude::*, writing::Text};
 use ulid::Ulid;
 
 use super::super::cookie::UserRegistrationSessions;
-use crate::handlers::rest::DepotExt;
+use crate::handlers::account::DepotExt;
 use crate::handlers::{
     METER,
     account_registration::{
@@ -57,7 +57,7 @@ pub async fn get(
         homeserver.as_ref(),
         id,
         Some(registrations.contains_id(id)),
-        crate::handlers::account_registration::HomeserverCheckMode::Strict,
+        crate::handlers::account::service::registration::HomeserverCheckMode::Strict,
         site_config.registration_token_required,
     )
     .await
@@ -82,30 +82,30 @@ pub async fn get(
             return Err(InternalError::from_anyhow(error.into()));
         }
         Err(LoadRegistrationFinishPreparationError::Eligibility { source, .. }) => match source {
-            crate::handlers::account_registration::CheckRegistrationFinishEligibilityError::RegistrationExpired => {
+            crate::handlers::account::service::registration::CheckRegistrationFinishEligibilityError::RegistrationExpired => {
                 return Err(InternalError::from_anyhow(anyhow::anyhow!(
                     "Registration session has expired"
                 )));
             }
-            crate::handlers::account_registration::CheckRegistrationFinishEligibilityError::BrowserSessionMissing => {
+            crate::handlers::account::service::registration::CheckRegistrationFinishEligibilityError::BrowserSessionMissing => {
                 return Err(InternalError::from_anyhow(anyhow::anyhow!(
                     "Could not find the registration in the browser cookies"
                 )));
             }
-            crate::handlers::account_registration::CheckRegistrationFinishEligibilityError::UsernameTaken => {
+            crate::handlers::account::service::registration::CheckRegistrationFinishEligibilityError::UsernameTaken => {
                 return Err(InternalError::from_anyhow(anyhow::anyhow!(
                     "Username is already taken"
                 )));
             }
-            crate::handlers::account_registration::CheckRegistrationFinishEligibilityError::UsernameNotAvailable => {
+            crate::handlers::account::service::registration::CheckRegistrationFinishEligibilityError::UsernameNotAvailable => {
                 return Err(InternalError::from_anyhow(anyhow::anyhow!(
                     "Username is not available"
                 )));
             }
-            crate::handlers::account_registration::CheckRegistrationFinishEligibilityError::HomeserverUnavailable(error) => {
+            crate::handlers::account::service::registration::CheckRegistrationFinishEligibilityError::HomeserverUnavailable(error) => {
                 return Err(InternalError::from_anyhow(error));
             }
-            crate::handlers::account_registration::CheckRegistrationFinishEligibilityError::Repository(error) => {
+            crate::handlers::account::service::registration::CheckRegistrationFinishEligibilityError::Repository(error) => {
                 return Err(InternalError::from_anyhow(error.into()));
             }
         },
@@ -113,21 +113,21 @@ pub async fn get(
             registration,
             source,
         }) => match source {
-            crate::handlers::account_registration::PrepareRegistrationCompletionError::RegistrationTokenRequired => {
+            crate::handlers::account::service::registration::PrepareRegistrationCompletionError::RegistrationTokenRequired => {
                 cookie_jar.write_to_response(res);
                 res.render(salvo::writing::Redirect::other(&url_builder.relative_url(
                     &format!("/register/steps/{}/token", registration.id),
                 )));
                 return Ok(());
             }
-            crate::handlers::account_registration::PrepareRegistrationCompletionError::EmailNotVerified => {
+            crate::handlers::account::service::registration::PrepareRegistrationCompletionError::EmailNotVerified => {
                 cookie_jar.write_to_response(res);
                 res.render(salvo::writing::Redirect::other(&url_builder.relative_url(
                     &format!("/register/steps/{}/verify-email", registration.id),
                 )));
                 return Ok(());
             }
-            crate::handlers::account_registration::PrepareRegistrationCompletionError::EmailInUse(email) => {
+            crate::handlers::account::service::registration::PrepareRegistrationCompletionError::EmailInUse(email) => {
                 let action = registration
                     .post_auth_action
                     .clone()
@@ -142,59 +142,59 @@ pub async fn get(
                 ));
                 return Ok(());
             }
-            crate::handlers::account_registration::PrepareRegistrationCompletionError::DisplayNameRequired => {
+            crate::handlers::account::service::registration::PrepareRegistrationCompletionError::DisplayNameRequired => {
                 cookie_jar.write_to_response(res);
                 res.render(salvo::writing::Redirect::other(&url_builder.relative_url(
                     &format!("/register/steps/{}/display-name", registration.id),
                 )));
                 return Ok(());
             }
-            crate::handlers::account_registration::PrepareRegistrationCompletionError::RegistrationTokenMissing => {
+            crate::handlers::account::service::registration::PrepareRegistrationCompletionError::RegistrationTokenMissing => {
                 return Err(InternalError::from_anyhow(anyhow::anyhow!(
                     "Could not load the registration token"
                 )));
             }
-            crate::handlers::account_registration::PrepareRegistrationCompletionError::RegistrationTokenInvalid => {
+            crate::handlers::account::service::registration::PrepareRegistrationCompletionError::RegistrationTokenInvalid => {
                 return Err(InternalError::from_anyhow(anyhow::anyhow!(
                     "Registration token used is no longer valid"
                 )));
             }
-            crate::handlers::account_registration::PrepareRegistrationCompletionError::EmailAuthenticationMissing => {
+            crate::handlers::account::service::registration::PrepareRegistrationCompletionError::EmailAuthenticationMissing => {
                 return Err(InternalError::from_anyhow(anyhow::anyhow!(
                     "Could not load the email authentication"
                 )));
             }
-            crate::handlers::account_registration::PrepareRegistrationCompletionError::PhoneAuthenticationMissing => {
+            crate::handlers::account::service::registration::PrepareRegistrationCompletionError::PhoneAuthenticationMissing => {
                 return Err(InternalError::from_anyhow(anyhow::anyhow!(
                     "Could not load the phone authentication"
                 )));
             }
-            crate::handlers::account_registration::PrepareRegistrationCompletionError::PhoneNotVerified => {
+            crate::handlers::account::service::registration::PrepareRegistrationCompletionError::PhoneNotVerified => {
                 return Err(InternalError::from_anyhow(anyhow::anyhow!(
                     "Phone verification is not complete"
                 )));
             }
-            crate::handlers::account_registration::PrepareRegistrationCompletionError::PhoneInUse => {
+            crate::handlers::account::service::registration::PrepareRegistrationCompletionError::PhoneInUse => {
                 return Err(InternalError::from_anyhow(anyhow::anyhow!(
                     "Phone number is already in use"
                 )));
             }
-            crate::handlers::account_registration::PrepareRegistrationCompletionError::UpstreamOAuthSessionMissing => {
+            crate::handlers::account::service::registration::PrepareRegistrationCompletionError::UpstreamOAuthSessionMissing => {
                 return Err(InternalError::from_anyhow(anyhow::anyhow!(
                     "Could not load the upstream OAuth authorization session"
                 )));
             }
-            crate::handlers::account_registration::PrepareRegistrationCompletionError::UpstreamOAuthLinkMissing => {
+            crate::handlers::account::service::registration::PrepareRegistrationCompletionError::UpstreamOAuthLinkMissing => {
                 return Err(InternalError::from_anyhow(anyhow::anyhow!(
                     "Could not load the upstream OAuth link"
                 )));
             }
-            crate::handlers::account_registration::PrepareRegistrationCompletionError::UpstreamOAuthLinkAlreadyUsed => {
+            crate::handlers::account::service::registration::PrepareRegistrationCompletionError::UpstreamOAuthLinkAlreadyUsed => {
                 return Err(InternalError::from_anyhow(anyhow::anyhow!(
                     "The upstream identity was already linked to a user. Try logging in again"
                 )));
             }
-            crate::handlers::account_registration::PrepareRegistrationCompletionError::Repository(error) => {
+            crate::handlers::account::service::registration::PrepareRegistrationCompletionError::Repository(error) => {
                 return Err(InternalError::from_anyhow(error.into()));
             }
         },

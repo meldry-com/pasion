@@ -308,7 +308,7 @@ pub fn build_router(
             pasion_config::HttpResource::RestApi {
                 playground: _,
                 undocumented_oauth2_access: _,
-            } => build_rest_api_router(router),
+            } => build_account_api_router(router),
             pasion_config::HttpResource::Assets { path } => router.push(
                 Router::with_path("/assets/{**path}")
                     .hoop(cache_control_middleware)
@@ -437,8 +437,8 @@ fn build_oauth_router(router: Router) -> Router {
         )
 }
 
-fn build_rest_api_router(router: Router) -> Router {
-    use crate::handlers::rest::*;
+fn build_account_api_router(router: Router) -> Router {
+    use crate::handlers::account::*;
 
     let api_router = Router::with_path("/api/v1")
             // Viewer

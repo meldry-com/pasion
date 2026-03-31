@@ -1,7 +1,7 @@
 //! REST API endpoints for account recovery.
 //!
 //! These endpoints serve as thin HTTP adapters over the business logic in
-//! [`crate::handlers::account_recovery`]. They parse requests, delegate to service
+//! [`crate::handlers::account::service::recovery`]. They parse requests, delegate to service
 //! functions, and map results to JSON responses.
 use chrono::Utc;
 use pasion_data::flow::{FlowSession, FlowSessionStatus};

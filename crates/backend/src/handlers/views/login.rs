@@ -393,7 +393,7 @@ mod test {
 
     use pasion_data::SiteConfig;
 
-    use crate::handlers::rest::DepotExt;
+    use crate::handlers::account::DepotExt;
     use crate::handlers::test_utils::{
         CookieHelper, RequestBuilderExt, ResponseExt, TestState, setup, test_site_config,
     };

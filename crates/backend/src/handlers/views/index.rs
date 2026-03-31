@@ -2,7 +2,7 @@ use crate::salvo_utils::{InternalError, cookies::CookieJar, csrf::CsrfExt};
 use pasion_templates::{IndexContext, TemplateContext, Templates};
 use salvo::{prelude::*, writing::Text};
 
-use crate::handlers::rest::DepotExt;
+use crate::handlers::account::DepotExt;
 use crate::handlers::{
     rest,
     session::{SessionOrFallback, load_session_or_fallback},

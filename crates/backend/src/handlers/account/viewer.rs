@@ -10,7 +10,7 @@ use super::{
     DepotExt, NodeType, RouteError, UserAgentInfo, extract_bound_activity_tracker,
     extract_session_info, get_requester, make_clock, parse_user_agent,
 };
-use crate::handlers::account_connections::load_linked_accounts;
+use crate::handlers::account::service::connections::load_linked_accounts;
 use crate::services::user_profile::{UserProfileServiceError, load_viewer_profile};
 
 // ── Response types ─────────────────────────────────────────────

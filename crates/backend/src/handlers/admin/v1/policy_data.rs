@@ -86,7 +86,7 @@ pub async fn set_data(
     let crate::handlers::admin::call_context::CallContext {
         mut repo, clock, ..
     } = ctx;
-    let mut rng = crate::handlers::rest::make_rng();
+    let mut rng = crate::handlers::account::make_rng();
     let factory = depot.policy_factory()?;
 
     let body: SetPolicyDataRequest = req

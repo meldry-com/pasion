@@ -63,7 +63,7 @@ pub async fn add_user(
     let crate::handlers::admin::call_context::CallContext {
         mut repo, clock, ..
     } = call_context;
-    let mut rng = crate::handlers::rest::make_rng();
+    let mut rng = crate::handlers::account::make_rng();
     let homeserver = depot.homeserver()?;
     let params: AddRequest = req
         .parse_json()
@@ -143,7 +143,7 @@ pub async fn batch_invite(
         user: admin_user,
         ..
     } = call_context;
-    let mut rng = crate::handlers::rest::make_rng();
+    let mut rng = crate::handlers::account::make_rng();
     let params: BatchInviteRequest = req
         .parse_json()
         .await
@@ -422,7 +422,7 @@ pub async fn risk_action(
         ..
     } = call_context;
     let id = extract_ulid_param(req)?;
-    let mut rng = crate::handlers::rest::make_rng();
+    let mut rng = crate::handlers::account::make_rng();
     let params: RiskActionRequest = req
         .parse_json()
         .await
@@ -519,7 +519,7 @@ pub async fn set_password(req: &mut Request, depot: &Depot) -> AppResult<StatusC
         ..
     } = call_context;
     let id = extract_ulid_param(req)?;
-    let mut rng = crate::handlers::rest::make_rng();
+    let mut rng = crate::handlers::account::make_rng();
     let password_manager = depot.password_manager()?;
     let params: SetPasswordRequest = req
         .parse_json()
@@ -563,7 +563,7 @@ pub async fn set_password(req: &mut Request, depot: &Depot) -> AppResult<StatusC
         .add(&mut rng, &clock, &user, version, hashed_password, None)
         .await?;
 
-    crate::handlers::admin_audit_helper::record_admin_operation(
+    crate::handlers::admin::audit_helper::record_admin_operation(
         &mut repo,
         &mut rng,
         &*clock,
@@ -606,7 +606,7 @@ pub async fn update_user(
     } = call_context;
     let id = extract_ulid_param(req)?;
     let homeserver = depot.homeserver()?;
-    let mut rng = crate::handlers::rest::make_rng();
+    let mut rng = crate::handlers::account::make_rng();
     let body: UpdateRequest = req
         .parse_json()
         .await

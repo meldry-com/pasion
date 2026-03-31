@@ -2,7 +2,7 @@
 //!
 //! These functions encapsulate the business logic for changing a user's
 //! password while already authenticated. Recovery-session orchestration lives
-//! in [`crate::handlers::account_recovery`].
+//! in [`crate::handlers::account::service::recovery`].
 
 use anyhow::Error as AnyhowError;
 use pasion_data::{

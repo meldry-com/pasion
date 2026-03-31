@@ -8,7 +8,7 @@ use pasion_templates::{AppContext, TemplateContext, Templates};
 use salvo::{prelude::*, writing::Text};
 
 use crate::handlers::rest;
-use crate::handlers::rest::DepotExt;
+use crate::handlers::account::DepotExt;
 
 /// Serve the SPA shell for anonymous (public) pages.
 ///

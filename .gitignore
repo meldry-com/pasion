@@ -16,3 +16,4 @@ _*.*
 config.dev.yaml
 *.log
 .sqlx
+*.py
