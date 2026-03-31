@@ -1,9 +1,0 @@
-rules:
-  imports:
-    unresolved-reference:
-      level: ignore
-  style:
-    external-reference:
-      level: ignore
-    line-length:
-      level: ignore

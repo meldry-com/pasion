@@ -16,7 +16,6 @@ camino.workspace = true
 chrono.workspace = true
 figment.workspace = true
 futures-util.workspace = true
-governor.workspace = true
 hex.workspace = true
 indoc.workspace = true
 ipnetwork.workspace = true

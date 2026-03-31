@@ -1191,20 +1191,20 @@ pub async fn begin_password_registration(
     if issues.is_empty() {
         let mut rate_limited = false;
 
-        if let Err(error) = limiter.check_registration(request.requester) {
+        if let Err(error) = limiter.check_registration(request.requester).await {
             tracing::warn!(error = &error as &dyn std::error::Error);
             rate_limited = true;
         }
 
         if let Some(email) = &email
-            && let Err(error) = limiter.check_email_authentication_email(request.requester, email)
+            && let Err(error) = limiter.check_email_authentication_email(request.requester, email).await
         {
             tracing::warn!(error = &error as &dyn std::error::Error);
             rate_limited = true;
         }
 
         if let Some(phone) = &phone
-            && let Err(error) = limiter.check_phone_authentication_phone(request.requester, phone)
+            && let Err(error) = limiter.check_phone_authentication_phone(request.requester, phone).await
         {
             tracing::warn!(error = &error as &dyn std::error::Error);
             rate_limited = true;
@@ -1276,7 +1276,7 @@ pub async fn resend_pending_registration_verification(
             .ok_or(ResendRegistrationVerificationError::NotFound)?;
 
         if auth.completed_at.is_none() {
-            if let Err(error) = limiter.check_email_authentication_send_code(requester, &auth) {
+            if let Err(error) = limiter.check_email_authentication_send_code(requester, &auth).await {
                 tracing::warn!(error = &error as &dyn std::error::Error);
                 return Err(ResendRegistrationVerificationError::RateLimited);
             }
@@ -1302,7 +1302,7 @@ pub async fn resend_pending_registration_verification(
             .ok_or(ResendRegistrationVerificationError::NotFound)?;
 
         if auth.completed_at.is_none() {
-            if let Err(error) = limiter.check_phone_authentication_send_code(requester, &auth) {
+            if let Err(error) = limiter.check_phone_authentication_send_code(requester, &auth).await {
                 tracing::warn!(error = &error as &dyn std::error::Error);
                 return Err(ResendRegistrationVerificationError::RateLimited);
             }
@@ -1355,7 +1355,7 @@ pub async fn verify_registration_email_code(
         return Err(VerifyRegistrationEmailCodeError::EmailAlreadyVerified);
     }
 
-    if let Err(error) = limiter.check_email_authentication_attempt(&email_authentication) {
+    if let Err(error) = limiter.check_email_authentication_attempt(&email_authentication).await {
         tracing::warn!(error = &error as &dyn std::error::Error);
         return Err(VerifyRegistrationEmailCodeError::RateLimited);
     }
@@ -1412,7 +1412,7 @@ pub async fn verify_registration_phone_code(
         return Err(VerifyRegistrationPhoneCodeError::PhoneAlreadyVerified);
     }
 
-    if let Err(error) = limiter.check_phone_authentication_attempt(&phone_authentication) {
+    if let Err(error) = limiter.check_phone_authentication_attempt(&phone_authentication).await {
         tracing::warn!(error = &error as &dyn std::error::Error);
         return Err(VerifyRegistrationPhoneCodeError::RateLimited);
     }

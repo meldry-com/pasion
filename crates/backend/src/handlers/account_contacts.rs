@@ -112,7 +112,7 @@ pub async fn start_email_verification(
         return Err(StartEmailVerificationError::IncorrectPassword);
     }
 
-    if let Err(error) = limiter.check_email_authentication_email(requester, &email) {
+    if let Err(error) = limiter.check_email_authentication_email(requester, &email).await {
         tracing::warn!(error = &error as &dyn std::error::Error);
         return Err(StartEmailVerificationError::RateLimited);
     }
@@ -195,7 +195,7 @@ pub async fn complete_email_verification(
         return Err(CompleteEmailVerificationError::AlreadyCompleted);
     }
 
-    if let Err(error) = limiter.check_email_authentication_attempt(&auth) {
+    if let Err(error) = limiter.check_email_authentication_attempt(&auth).await {
         tracing::warn!(error = &error as &dyn std::error::Error);
         return Err(CompleteEmailVerificationError::RateLimited);
     }
@@ -282,7 +282,7 @@ pub async fn resend_email_verification_code(
         return Err(ResendEmailVerificationError::AlreadyCompleted);
     }
 
-    if let Err(error) = limiter.check_email_authentication_send_code(requester, &auth) {
+    if let Err(error) = limiter.check_email_authentication_send_code(requester, &auth).await {
         tracing::warn!(error = &error as &dyn std::error::Error);
         return Err(ResendEmailVerificationError::RateLimited);
     }

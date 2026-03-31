@@ -79,7 +79,7 @@ pub async fn login_with_password(
         return Ok(PasswordLoginOutcome::InvalidCredentials);
     };
 
-    if limiter.check_password(request.requester, &user).is_err() {
+    if limiter.check_password(request.requester, &user).await.is_err() {
         return Ok(PasswordLoginOutcome::RateLimited);
     }
 

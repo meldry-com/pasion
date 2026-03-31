@@ -85,26 +85,16 @@ pub(crate) fn unique_test_nonce() -> u64 {
 }
 
 pub(crate) async fn policy_factory(
-    server_name: &str,
-    data: serde_json::Value,
+    _server_name: &str,
+    _data: serde_json::Value,
 ) -> Result<Arc<PolicyFactory>, anyhow::Error> {
     let workspace_root = camino::Utf8Path::new(env!("CARGO_MANIFEST_DIR"))
         .join("..")
         .join("..");
 
-    let file = tokio::fs::File::open(workspace_root.join("policies").join("policy.wasm")).await?;
+    let cedar_path = workspace_root.join("policies").join("cedar").join("default.cedar");
 
-    let entrypoints = pasion_policy::Entrypoints {
-        register: "register/violation".to_owned(),
-        client_registration: "client_registration/violation".to_owned(),
-        authorization_grant: "authorization_grant/violation".to_owned(),
-
-        email: "email/violation".to_owned(),
-    };
-
-    let data = pasion_policy::Data::new(server_name.to_owned(), None).with_rest(data);
-
-    let policy_factory = PolicyFactory::load(file, data, entrypoints).await?;
+    let policy_factory = PolicyFactory::load_cedar_from_file(cedar_path.as_str()).await?;
     let policy_factory = Arc::new(policy_factory);
     Ok(policy_factory)
 }

@@ -39,7 +39,7 @@ pub use self::{
         Algorithm as PasswordAlgorithm, HashingScheme as PasswordHashingScheme, PasswordsConfig,
     },
     policy::{PolicyConfig, PolicyEngine},
-    rate_limiting::RateLimitingConfig,
+    rate_limiting::{RateLimiterConfiguration, RateLimitingConfig},
     secrets::SecretsConfig,
     sms::{SmsConfig, SmsTransportKind},
     telemetry::{
@@ -100,7 +100,7 @@ pub struct RootConfig {
     /// Configuration related to the homeserver
     pub matrix: MatrixConfig,
 
-    /// Configuration related to the OPA policies
+    /// Configuration related to the policy engine
     #[serde(default, skip_serializing_if = "PolicyConfig::is_default")]
     pub policy: PolicyConfig,
 

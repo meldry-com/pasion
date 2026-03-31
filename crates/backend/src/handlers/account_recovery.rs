@@ -143,7 +143,7 @@ pub async fn start_account_recovery(
         return Err(StartAccountRecoveryError::InvalidEmail);
     }
 
-    if let Err(error) = limiter.check_account_recovery(requester, &email) {
+    if let Err(error) = limiter.check_account_recovery(requester, &email).await {
         tracing::warn!(error = &error as &dyn std::error::Error);
         return Err(StartAccountRecoveryError::RateLimited);
     }
@@ -196,7 +196,7 @@ pub async fn resend_account_recovery(
         return Err(ResendAccountRecoveryError::AlreadyConsumed);
     }
 
-    if let Err(error) = limiter.check_account_recovery(requester, &session.email) {
+    if let Err(error) = limiter.check_account_recovery(requester, &session.email).await {
         tracing::warn!(error = &error as &dyn std::error::Error);
         return Err(ResendAccountRecoveryError::RateLimited);
     }

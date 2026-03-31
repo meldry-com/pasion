@@ -1,6 +1,5 @@
-use std::{num::NonZeroU32, time::Duration};
+use std::num::NonZeroU32;
 
-use governor::Quota;
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize, de::Error as _};
 
@@ -131,6 +130,8 @@ pub struct PhoneAuthenticationRateLimitingConfig {
     pub attempt_per_session: RateLimiterConfiguration,
 }
 
+/// Configuration for a single rate limiter, specifying burst allowance and
+/// replenishment rate.
 #[derive(Copy, Clone, Debug, Serialize, Deserialize, JsonSchema, PartialEq)]
 pub struct RateLimiterConfiguration {
     /// A one-off burst of actions that the user can perform
@@ -173,7 +174,7 @@ impl ConfigurationSection for RateLimitingConfig {
         let error_on_limiter =
             |limiter: &RateLimiterConfiguration| -> Option<figment::error::Error> {
                 let recip = limiter.per_second.recip();
-                // period must be at least 1 nanosecond according to the governor library
+                // period must be within a reasonable range
                 if recip < 1.0e-9 || !recip.is_finite() {
                     return Some(figment::error::Error::custom(
                         "`per_second` must be a number that is more than zero and less than 1_000_000_000 (1e9)",
@@ -252,12 +253,18 @@ impl RateLimitingConfig {
 }
 
 impl RateLimiterConfiguration {
-    pub fn to_quota(self) -> Option<Quota> {
+    /// Convert to a (limit, period) pair suitable for rate limiter construction.
+    ///
+    /// The `limit` is the burst count, and `period` is the time window
+    /// computed from `burst / per_second`.
+    pub fn to_limit_and_period(&self) -> Option<(usize, std::time::Duration)> {
         let reciprocal = self.per_second.recip();
-        if !reciprocal.is_finite() {
+        if !reciprocal.is_finite() || reciprocal < 1.0e-9 {
             return None;
         }
-        Some(Quota::with_period(Duration::from_secs_f64(reciprocal))?.allow_burst(self.burst))
+        let limit = self.burst.get() as usize;
+        let period_secs = reciprocal * limit as f64;
+        Some((limit, std::time::Duration::from_secs_f64(period_secs)))
     }
 }
 

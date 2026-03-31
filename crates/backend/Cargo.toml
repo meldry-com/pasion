@@ -80,7 +80,6 @@ camino.workspace = true
 cookie.workspace = true
 elliptic-curve.workspace = true
 form_urlencoded.workspace = true
-governor.workspace = true
 hex.workspace = true
 icu_locid.workspace = true
 icu_normalizer.workspace = true

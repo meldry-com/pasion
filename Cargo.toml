@@ -57,7 +57,7 @@ pasion-frontend = { path = "./crates/frontend/", version = "=1.8.0" }
 # Salvo web framework
 [workspace.dependencies.salvo]
 version = "0.89"
-features = ["oapi", "cors", "cookie", "serve-static", "logging", "test"]
+features = ["oapi", "cors", "cookie", "serve-static", "logging", "test", "rate-limiter"]
 
 # An `Arc` that can be atomically updated
 [workspace.dependencies.arc-swap]
@@ -222,11 +222,7 @@ version = "0.3.32"
 [workspace.dependencies.generic-array]
 version = "0.14.9"
 
-# Rate-limiting
-[workspace.dependencies.governor]
-version = "0.10.4"
-default-features = false
-features = ["std", "dashmap", "quanta"]
+# Rate-limiting (using Salvo's built-in rate-limiter instead of governor)
 
 # HMAC calculation
 [workspace.dependencies.hmac]
@@ -379,10 +375,6 @@ version = "0.3.0"
 # Cedar policy language (Amazon Cedar)
 [workspace.dependencies.cedar-policy]
 version = "4"
-
-# Open Policy Agent support through WASM
-[workspace.dependencies.opa-wasm]
-version = "0.1.9"
 
 # OpenTelemetry
 [workspace.dependencies.opentelemetry]

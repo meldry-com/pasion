@@ -3,8 +3,6 @@
 //! This crate provides a unified interface for policy evaluation that supports
 //! multiple backends:
 //!
-//! - **OPA/WASM** (default): Compiled Open Policy Agent Rego policies running
-//!   as WebAssembly modules. This is the original and most mature backend.
 //! - **Cedar** (feature `cedar`): Amazon Cedar policies evaluated natively in
 //!   Rust, offering a simpler policy language with high performance.
 //! - **Remote HTTP** (feature `remote`): Delegates policy evaluation to an
@@ -24,7 +22,6 @@
 
 pub mod audit;
 pub mod model;
-pub mod opa;
 pub mod provider;
 
 #[cfg(feature = "cedar")]
@@ -32,10 +29,8 @@ pub mod cedar;
 #[cfg(feature = "remote")]
 pub mod remote;
 
-use pasion_data::SessionLimitConfig;
 use serde::Serialize;
 use thiserror::Error;
-use tokio::io::AsyncRead;
 
 pub use self::model::{
     AuthorizationGrantInput, ClientRegistrationInput, Code as ViolationCode, EmailInput,
@@ -98,73 +93,8 @@ pub enum EvaluationError {
 }
 
 // ---------------------------------------------------------------------------
-// OPA-specific types (kept at crate root for backward compatibility)
-// ---------------------------------------------------------------------------
-
-/// Holds the entrypoint name for each policy (OPA-specific).
-#[derive(Debug, Clone)]
-pub struct Entrypoints {
-    pub register: String,
-    pub client_registration: String,
-    pub authorization_grant: String,
-    pub email: String,
-}
-
-impl Entrypoints {
-    pub(crate) fn all(&self) -> [&str; 4] {
-        [
-            self.register.as_str(),
-            self.client_registration.as_str(),
-            self.authorization_grant.as_str(),
-            self.email.as_str(),
-        ]
-    }
-}
-
-// ---------------------------------------------------------------------------
 // Shared data types
 // ---------------------------------------------------------------------------
-
-#[derive(Debug)]
-pub struct Data {
-    base: BaseData,
-    rest: Option<serde_json::Value>,
-}
-
-#[derive(Serialize, Debug)]
-struct BaseData {
-    server_name: String,
-    session_limit: Option<SessionLimitConfig>,
-}
-
-impl Data {
-    #[must_use]
-    pub fn new(server_name: String, session_limit: Option<SessionLimitConfig>) -> Self {
-        Self {
-            base: BaseData {
-                server_name,
-                session_limit,
-            },
-            rest: None,
-        }
-    }
-
-    #[must_use]
-    pub fn with_rest(mut self, rest: serde_json::Value) -> Self {
-        self.rest = Some(rest);
-        self
-    }
-
-    pub(crate) fn to_value(&self) -> Result<serde_json::Value, anyhow::Error> {
-        let base = serde_json::to_value(&self.base)?;
-
-        if let Some(rest) = &self.rest {
-            merge_data(base, rest.clone())
-        } else {
-            Ok(base)
-        }
-    }
-}
 
 // ---------------------------------------------------------------------------
 // Data merge utilities
@@ -247,38 +177,6 @@ pub struct PolicyFactory {
 }
 
 impl PolicyFactory {
-    /// Load an OPA WASM policy from the given async reader.
-    ///
-    /// This is the default constructor, kept for backward compatibility.
-    ///
-    /// # Errors
-    ///
-    /// Returns an error if the policy can't be loaded or instantiated.
-    #[tracing::instrument(name = "policy.load", skip(source))]
-    pub async fn load(
-        source: impl AsyncRead + std::marker::Unpin,
-        data: Data,
-        entrypoints: Entrypoints,
-    ) -> Result<Self, LoadError> {
-        Self::load_opa(source, data, entrypoints).await
-    }
-
-    /// Load an OPA WASM policy from the given async reader.
-    ///
-    /// # Errors
-    ///
-    /// Returns an error if the policy can't be loaded or instantiated.
-    pub async fn load_opa(
-        source: impl AsyncRead + std::marker::Unpin,
-        data: Data,
-        entrypoints: Entrypoints,
-    ) -> Result<Self, LoadError> {
-        let factory = opa::OpaProviderFactory::load(source, data, entrypoints).await?;
-        Ok(Self {
-            inner: Box::new(factory),
-        })
-    }
-
     /// Load Cedar policies from a source string.
     ///
     /// Requires the `cedar` feature to be enabled.
@@ -455,205 +353,7 @@ impl Policy {
 
 #[cfg(test)]
 mod tests {
-    use std::time::SystemTime;
-
-    use pasion_data::Ulid;
-
     use super::*;
-
-    fn make_entrypoints() -> Entrypoints {
-        Entrypoints {
-            register: "register/violation".to_owned(),
-            client_registration: "client_registration/violation".to_owned(),
-            authorization_grant: "authorization_grant/violation".to_owned(),
-            email: "email/violation".to_owned(),
-        }
-    }
-
-    #[tokio::test]
-    async fn test_register() {
-        let data = Data::new("example.com".to_owned(), None).with_rest(serde_json::json!({
-            "allowed_domains": ["element.io", "*.element.io"],
-            "banned_domains": ["staging.element.io"],
-        }));
-
-        #[allow(clippy::disallowed_types)]
-        let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
-            .join("..")
-            .join("..")
-            .join("policies")
-            .join("policy.wasm");
-
-        let file = tokio::fs::File::open(path).await.unwrap();
-
-        let factory = PolicyFactory::load(file, data, make_entrypoints())
-            .await
-            .unwrap();
-
-        let mut policy = factory.instantiate().await.unwrap();
-
-        let res = policy
-            .evaluate_register(RegisterInput {
-                registration_method: RegistrationMethod::Password,
-                username: "hello",
-                email: Some("hello@example.com"),
-                requester: Requester {
-                    ip_address: None,
-                    user_agent: None,
-                    ..Default::default()
-                },
-            })
-            .await
-            .unwrap();
-        assert!(!res.valid());
-
-        let res = policy
-            .evaluate_register(RegisterInput {
-                registration_method: RegistrationMethod::Password,
-                username: "hello",
-                email: Some("hello@foo.element.io"),
-                requester: Requester {
-                    ip_address: None,
-                    user_agent: None,
-                    ..Default::default()
-                },
-            })
-            .await
-            .unwrap();
-        assert!(res.valid());
-
-        let res = policy
-            .evaluate_register(RegisterInput {
-                registration_method: RegistrationMethod::Password,
-                username: "hello",
-                email: Some("hello@staging.element.io"),
-                requester: Requester {
-                    ip_address: None,
-                    user_agent: None,
-                    ..Default::default()
-                },
-            })
-            .await
-            .unwrap();
-        assert!(!res.valid());
-    }
-
-    #[tokio::test]
-    async fn test_dynamic_data() {
-        let data = Data::new("example.com".to_owned(), None);
-
-        #[allow(clippy::disallowed_types)]
-        let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
-            .join("..")
-            .join("..")
-            .join("policies")
-            .join("policy.wasm");
-
-        let file = tokio::fs::File::open(path).await.unwrap();
-
-        let factory = PolicyFactory::load(file, data, make_entrypoints())
-            .await
-            .unwrap();
-
-        let mut policy = factory.instantiate().await.unwrap();
-
-        let res = policy
-            .evaluate_register(RegisterInput {
-                registration_method: RegistrationMethod::Password,
-                username: "hello",
-                email: Some("hello@example.com"),
-                requester: Requester {
-                    ip_address: None,
-                    user_agent: None,
-                    ..Default::default()
-                },
-            })
-            .await
-            .unwrap();
-        assert!(res.valid());
-
-        // Update the policy data
-        factory
-            .set_dynamic_data(pasion_data::PolicyData {
-                id: Ulid::nil(),
-                created_at: SystemTime::now().into(),
-                data: serde_json::json!({
-                    "emails": {
-                        "banned_addresses": {
-                            "substrings": ["hello"]
-                        }
-                    }
-                }),
-            })
-            .await
-            .unwrap();
-        let mut policy = factory.instantiate().await.unwrap();
-        let res = policy
-            .evaluate_register(RegisterInput {
-                registration_method: RegistrationMethod::Password,
-                username: "hello",
-                email: Some("hello@example.com"),
-                requester: Requester {
-                    ip_address: None,
-                    user_agent: None,
-                    ..Default::default()
-                },
-            })
-            .await
-            .unwrap();
-        assert!(!res.valid());
-    }
-
-    #[tokio::test]
-    async fn test_big_dynamic_data() {
-        let data = Data::new("example.com".to_owned(), None);
-
-        #[allow(clippy::disallowed_types)]
-        let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
-            .join("..")
-            .join("..")
-            .join("policies")
-            .join("policy.wasm");
-
-        let file = tokio::fs::File::open(path).await.unwrap();
-
-        let factory = PolicyFactory::load(file, data, make_entrypoints())
-            .await
-            .unwrap();
-
-        // That is around 1 MB of JSON data. Each element is a 5-digit string, so 8
-        // characters including the quotes and a comma.
-        let data: Vec<String> = (0..(1024 * 1024 / 8))
-            .map(|i| format!("{:05}", i % 100_000))
-            .collect();
-        let json = serde_json::json!({ "emails": { "banned_addresses": { "substrings": data } } });
-        factory
-            .set_dynamic_data(pasion_data::PolicyData {
-                id: Ulid::nil(),
-                created_at: SystemTime::now().into(),
-                data: json,
-            })
-            .await
-            .unwrap();
-
-        // Try instantiating the policy, make sure 5-digit numbers are banned from email
-        // addresses
-        let mut policy = factory.instantiate().await.unwrap();
-        let res = policy
-            .evaluate_register(RegisterInput {
-                registration_method: RegistrationMethod::Password,
-                username: "hello",
-                email: Some("12345@example.com"),
-                requester: Requester {
-                    ip_address: None,
-                    user_agent: None,
-                    ..Default::default()
-                },
-            })
-            .await
-            .unwrap();
-        assert!(!res.valid());
-    }
 
     #[test]
     fn test_merge() {
