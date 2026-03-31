@@ -2,10 +2,9 @@
 //!
 //! [Dynamic Client Registration]: https://openid.net/specs/openid-connect-registration-1_0.html
 
-use std::ops::Deref;
+use std::{fmt, ops::Deref};
 
 use chrono::{DateTime, Duration, Utc};
-use indexmap::IndexMap;
 use language_tags::LanguageTag;
 use pasion_iana::{
     jose::{JsonWebEncryptionAlg, JsonWebEncryptionEnc, JsonWebSignatureAlg},
@@ -49,62 +48,105 @@ pub const DEFAULT_ENCRYPTION_ENC_ALGORITHM: &JsonWebEncryptionEnc =
 
 /// A collection of localized variants.
 ///
-/// Always includes one non-localized variant.
+/// Always includes one non-localized variant. Localized variants are stored
+/// as a sorted vector of `(LanguageTag, T)` pairs, kept in lexicographic
+/// order by the tag's string representation for deterministic iteration and
+/// serialization.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Localized<T> {
-    non_localized: T,
-    localized: IndexMap<LanguageTag, T>,
+    /// The non-localized (default) value, always present for a well-formed
+    /// instance.
+    default_value: Option<T>,
+
+    /// Language-tagged variants, maintained in sorted order by tag string.
+    tagged: Vec<(LanguageTag, T)>,
 }
 
 impl<T> Localized<T> {
     /// Constructs a new `Localized` with the given non-localized and localized
     /// variants.
     pub fn new(non_localized: T, localized: impl IntoIterator<Item = (LanguageTag, T)>) -> Self {
+        let mut tagged: Vec<(LanguageTag, T)> = localized.into_iter().collect();
+        tagged.sort_by(|(a, _), (b, _)| a.as_str().cmp(b.as_str()));
         Self {
-            non_localized,
-            localized: localized.into_iter().collect(),
+            default_value: Some(non_localized),
+            tagged,
         }
     }
 
     /// Returns the number of variants.
     #[allow(clippy::len_without_is_empty)]
     pub fn len(&self) -> usize {
-        self.localized.len() + 1
+        self.tagged.len() + usize::from(self.default_value.is_some())
     }
 
     /// Get the non-localized variant.
     pub fn non_localized(&self) -> &T {
-        &self.non_localized
+        self.default_value
+            .as_ref()
+            .expect("Localized must have a default value")
     }
 
     /// Get the non-localized variant.
     pub fn to_non_localized(self) -> T {
-        self.non_localized
+        self.default_value
+            .expect("Localized must have a default value")
     }
 
     /// Get the variant corresponding to the given language, if it exists.
     pub fn get(&self, language: Option<&LanguageTag>) -> Option<&T> {
         match language {
-            Some(lang) => self.localized.get(lang),
-            None => Some(&self.non_localized),
+            Some(tag) => self
+                .tagged
+                .iter()
+                .find(|(t, _)| t == tag)
+                .map(|(_, val)| val),
+            None => self.default_value.as_ref(),
         }
     }
 
     /// Get an iterator over the variants.
     pub fn iter(&self) -> impl Iterator<Item = (Option<&LanguageTag>, &T)> {
-        Some(&self.non_localized)
-            .into_iter()
+        self.default_value
+            .iter()
             .map(|val| (None, val))
-            .chain(self.localized.iter().map(|(lang, val)| (Some(lang), val)))
+            .chain(self.tagged.iter().map(|(tag, val)| (Some(tag), val)))
+    }
+
+    /// Sort the localized keys. This is inteded to ensure a stable
+    /// serialization order when needed.
+    pub(super) fn sort(&mut self) {
+        self.tagged
+            .sort_by(|(a, _), (b, _)| a.as_str().cmp(b.as_str()));
+    }
+
+    /// Access the default value directly.
+    pub(crate) fn default_value(&self) -> Option<&T> {
+        self.default_value.as_ref()
+    }
+
+    /// Access the tagged variants directly.
+    pub(crate) fn tagged_pairs(&self) -> &[(LanguageTag, T)] {
+        &self.tagged
+    }
+
+    /// Construct from separate parts (used during deserialization).
+    pub(crate) fn from_parts(
+        default_value: Option<T>,
+        tagged: Vec<(LanguageTag, T)>,
+    ) -> Self {
+        let mut inst = Self {
+            default_value,
+            tagged,
+        };
+        inst.sort();
+        inst
     }
 }
 
-impl<T> From<(T, IndexMap<LanguageTag, T>)> for Localized<T> {
-    fn from(t: (T, IndexMap<LanguageTag, T>)) -> Self {
-        Localized {
-            non_localized: t.0,
-            localized: t.1,
-        }
+impl<T> From<(T, Vec<(LanguageTag, T)>)> for Localized<T> {
+    fn from(t: (T, Vec<(LanguageTag, T)>)) -> Self {
+        Localized::from_parts(Some(t.0), t.1)
     }
 }
 
@@ -112,10 +154,19 @@ impl<T> From<(T, IndexMap<LanguageTag, T>)> for Localized<T> {
 ///
 /// All the fields with a default value are accessible via methods.
 ///
+/// Fields are organized by spec section:
+/// - RFC 7591 (OAuth 2.0 Dynamic Client Registration) core fields
+/// - OpenID Connect Registration 1.0 fields
+/// - RFC 9101 / RFC 9126 extension fields
+/// - Token introspection extension fields
+/// - RP-Initiated Logout fields
+///
 /// [IANA registry]: https://www.iana.org/assignments/oauth-parameters/oauth-parameters.xhtml#client-metadata
 #[derive(Serialize, Deserialize, Debug, PartialEq, Eq, Clone, Default)]
 #[serde(from = "ClientMetadataSerdeHelper", into = "ClientMetadataSerdeHelper")]
 pub struct ClientMetadata {
+    // -- RFC 7591: OAuth 2.0 Dynamic Client Registration Protocol --
+
     /// Array of redirection URIs for use in redirect-based flows such as the
     /// [authorization code flow].
     ///
@@ -155,13 +206,28 @@ pub struct ClientMetadata {
     /// [token endpoint]: https://www.rfc-editor.org/rfc/rfc6749.html#section-3.2
     pub grant_types: Option<Vec<GrantType>>,
 
-    /// The kind of the application.
+    /// Requested client authentication method for the [token endpoint].
     ///
-    /// Defaults to [`DEFAULT_APPLICATION_TYPE`].
-    pub application_type: Option<ApplicationType>,
+    /// If this is set to [`OAuthClientAuthenticationMethod::PrivateKeyJwt`],
+    /// one of the `jwks_uri` or `jwks` fields is required.
+    ///
+    /// Defaults to [`DEFAULT_TOKEN_AUTH_METHOD`].
+    ///
+    /// [token endpoint]: https://www.rfc-editor.org/rfc/rfc6749.html#section-3.2
+    pub token_endpoint_auth_method: Option<OAuthClientAuthenticationMethod>,
 
-    /// Array of e-mail addresses of people responsible for this client.
-    pub contacts: Option<Vec<String>>,
+    /// [JWS] `alg` algorithm that must be used for signing the [JWT] used to
+    /// authenticate the client at the token endpoint.
+    ///
+    /// If this field is present, it must not be
+    /// [`JsonWebSignatureAlg::None`]. This field is required if
+    /// `token_endpoint_auth_method` is one of
+    /// [`OAuthClientAuthenticationMethod::PrivateKeyJwt`] or
+    /// [`OAuthClientAuthenticationMethod::ClientSecretJwt`].
+    ///
+    /// [JWS]: http://tools.ietf.org/html/draft-ietf-jose-json-web-signature
+    /// [JWT]: http://tools.ietf.org/html/draft-ietf-oauth-json-web-token
+    pub token_endpoint_auth_signing_alg: Option<JsonWebSignatureAlg>,
 
     /// Name of the client to be presented to the end-user during authorization.
     pub client_name: Option<Localized<String>>,
@@ -179,6 +245,9 @@ pub struct ClientMetadata {
     /// URL that the client provides to the end-user to read about the client's
     /// terms of service.
     pub tos_uri: Option<Localized<Url>>,
+
+    /// Array of e-mail addresses of people responsible for this client.
+    pub contacts: Option<Vec<String>>,
 
     /// URL for the client's [JWK] Set document.
     ///
@@ -214,6 +283,13 @@ pub struct ClientMetadata {
     /// `software_id`.
     pub software_version: Option<String>,
 
+    // -- OpenID Connect Registration 1.0 --
+
+    /// The kind of the application.
+    ///
+    /// Defaults to [`DEFAULT_APPLICATION_TYPE`].
+    pub application_type: Option<ApplicationType>,
+
     /// URL to be used in calculating pseudonymous identifiers by the OpenID
     /// Connect provider when [pairwise subject identifiers] are used.
     ///
@@ -226,29 +302,6 @@ pub struct ClientMetadata {
     ///
     /// This field must match one of the supported types by the provider.
     pub subject_type: Option<SubjectType>,
-
-    /// Requested client authentication method for the [token endpoint].
-    ///
-    /// If this is set to [`OAuthClientAuthenticationMethod::PrivateKeyJwt`],
-    /// one of the `jwks_uri` or `jwks` fields is required.
-    ///
-    /// Defaults to [`DEFAULT_TOKEN_AUTH_METHOD`].
-    ///
-    /// [token endpoint]: https://www.rfc-editor.org/rfc/rfc6749.html#section-3.2
-    pub token_endpoint_auth_method: Option<OAuthClientAuthenticationMethod>,
-
-    /// [JWS] `alg` algorithm that must be used for signing the [JWT] used to
-    /// authenticate the client at the token endpoint.
-    ///
-    /// If this field is present, it must not be
-    /// [`JsonWebSignatureAlg::None`]. This field is required if
-    /// `token_endpoint_auth_method` is one of
-    /// [`OAuthClientAuthenticationMethod::PrivateKeyJwt`] or
-    /// [`OAuthClientAuthenticationMethod::ClientSecretJwt`].
-    ///
-    /// [JWS]: http://tools.ietf.org/html/draft-ietf-jose-json-web-signature
-    /// [JWT]: http://tools.ietf.org/html/draft-ietf-oauth-json-web-token
-    pub token_endpoint_auth_signing_alg: Option<JsonWebSignatureAlg>,
 
     /// [JWS] `alg` algorithm required for signing the ID Token issued to this
     /// client.
@@ -369,6 +422,8 @@ pub struct ClientMetadata {
     /// value for that URI with the old fragment value is no longer valid.
     pub request_uris: Option<Vec<Url>>,
 
+    // -- RFC 9101 / RFC 9126 extensions --
+
     /// Whether the client will only send authorization requests as [Request
     /// Objects].
     ///
@@ -384,6 +439,8 @@ pub struct ClientMetadata {
     ///
     /// [pushed authorization request endpoint]: https://www.rfc-editor.org/rfc/rfc9126.html
     pub require_pushed_authorization_requests: Option<bool>,
+
+    // -- Token introspection extensions --
 
     /// [JWS] `alg` algorithm for signing responses of the [introspection
     /// endpoint].
@@ -418,6 +475,8 @@ pub struct ClientMetadata {
     /// [introspection endpoint]: https://www.rfc-editor.org/info/rfc7662
     pub introspection_encrypted_response_enc: Option<JsonWebEncryptionEnc>,
 
+    // -- RP-Initiated Logout --
+
     /// `post_logout_redirect_uri` values that are pre-registered by the client
     /// for use at the provider's [RP-Initiated Logout endpoint].
     ///
@@ -429,32 +488,40 @@ impl ClientMetadata {
     /// Validate this `ClientMetadata` according to the [OpenID Connect Dynamic
     /// Client Registration Spec 1.0].
     ///
+    /// This method collects all validation errors rather than stopping at the
+    /// first one. When multiple errors are found, they are returned as a
+    /// [`ClientMetadataVerificationError::Multiple`] variant.
+    ///
     /// # Errors
     ///
     /// Will return `Err` if validation fails.
     ///
     /// [OpenID Connect Dynamic Client Registration Spec 1.0]: https://openid.net/specs/openid-connect-registration-1_0.html#ClientMetadata
     pub fn validate(self) -> Result<VerifiedClientMetadata, ClientMetadataVerificationError> {
+        let mut collected_errors: Vec<ClientMetadataVerificationError> = Vec::new();
+
         let grant_types = self.grant_types();
         let has_implicit = grant_types.contains(&GrantType::Implicit);
         let has_authorization_code = grant_types.contains(&GrantType::AuthorizationCode);
         let has_both = has_implicit && has_authorization_code;
 
+        // Validate redirect URIs
         if let Some(uris) = &self.redirect_uris {
-            if let Some(uri) = uris.iter().find(|uri| uri.fragment().is_some()) {
-                return Err(ClientMetadataVerificationError::RedirectUriWithFragment(
-                    uri.clone(),
-                ));
+            for uri in uris {
+                if uri.fragment().is_some() {
+                    collected_errors.push(
+                        ClientMetadataVerificationError::RedirectUriWithFragment(uri.clone()),
+                    );
+                }
             }
         } else if has_authorization_code || has_implicit {
-            // Required for authorization code and implicit flows
-            return Err(ClientMetadataVerificationError::MissingRedirectUris);
+            collected_errors.push(ClientMetadataVerificationError::MissingRedirectUris);
         }
 
+        // Validate response types against grant types
         let response_type_code = [OAuthAuthorizationEndpointResponseType::Code.into()];
         let response_types = match &self.response_types {
             Some(types) => &types[..],
-            // Default to code only if the client uses the authorization code or implicit flow
             None if has_authorization_code || has_implicit => &response_type_code[..],
             None => &[],
         };
@@ -469,99 +536,119 @@ impl ClientMetadata {
                 || !has_code && !has_id_token && !has_token;
 
             if !is_ok {
-                return Err(ClientMetadataVerificationError::IncoherentResponseType(
-                    response_type.clone(),
-                ));
+                collected_errors.push(
+                    ClientMetadataVerificationError::IncoherentResponseType(
+                        response_type.clone(),
+                    ),
+                );
             }
         }
 
+        // Validate JWKS mutual exclusivity
         if self.jwks_uri.is_some() && self.jwks.is_some() {
-            return Err(ClientMetadataVerificationError::JwksUriAndJwksMutuallyExclusive);
+            collected_errors
+                .push(ClientMetadataVerificationError::JwksUriAndJwksMutuallyExclusive);
         }
 
+        // Validate sector_identifier_uri scheme
         if let Some(url) = self
             .sector_identifier_uri
             .as_ref()
             .filter(|url| url.scheme() != "https")
         {
-            return Err(ClientMetadataVerificationError::UrlNonHttpsScheme(
+            collected_errors.push(ClientMetadataVerificationError::UrlNonHttpsScheme(
                 "sector_identifier_uri",
                 url.clone(),
             ));
         }
 
+        // Validate token endpoint auth requirements
         if *self.token_endpoint_auth_method() == OAuthClientAuthenticationMethod::PrivateKeyJwt
             && self.jwks_uri.is_none()
             && self.jwks.is_none()
         {
-            return Err(ClientMetadataVerificationError::MissingJwksForTokenMethod);
+            collected_errors.push(ClientMetadataVerificationError::MissingJwksForTokenMethod);
         }
 
         if let Some(alg) = &self.token_endpoint_auth_signing_alg {
             if *alg == JsonWebSignatureAlg::None {
-                return Err(ClientMetadataVerificationError::UnauthorizedSigningAlgNone(
-                    "token_endpoint",
-                ));
+                collected_errors.push(
+                    ClientMetadataVerificationError::UnauthorizedSigningAlgNone("token_endpoint"),
+                );
             }
         } else if matches!(
             self.token_endpoint_auth_method(),
             OAuthClientAuthenticationMethod::PrivateKeyJwt
                 | OAuthClientAuthenticationMethod::ClientSecretJwt
         ) {
-            return Err(ClientMetadataVerificationError::MissingAuthSigningAlg(
+            collected_errors.push(ClientMetadataVerificationError::MissingAuthSigningAlg(
                 "token_endpoint",
             ));
         }
 
+        // Validate ID token signing algorithm
         if *self.id_token_signed_response_alg() == JsonWebSignatureAlg::None
             && response_types.iter().any(ResponseType::has_id_token)
         {
-            return Err(ClientMetadataVerificationError::IdTokenSigningAlgNone);
+            collected_errors.push(ClientMetadataVerificationError::IdTokenSigningAlgNone);
         }
 
-        if self.id_token_encrypted_response_enc.is_some() {
-            self.id_token_encrypted_response_alg.as_ref().ok_or(
-                ClientMetadataVerificationError::MissingEncryptionAlg("id_token"),
-            )?;
+        // Validate encryption alg/enc pairs
+        if self.id_token_encrypted_response_enc.is_some()
+            && self.id_token_encrypted_response_alg.is_none()
+        {
+            collected_errors
+                .push(ClientMetadataVerificationError::MissingEncryptionAlg("id_token"));
         }
 
-        if self.userinfo_encrypted_response_enc.is_some() {
-            self.userinfo_encrypted_response_alg.as_ref().ok_or(
-                ClientMetadataVerificationError::MissingEncryptionAlg("userinfo"),
-            )?;
+        if self.userinfo_encrypted_response_enc.is_some()
+            && self.userinfo_encrypted_response_alg.is_none()
+        {
+            collected_errors
+                .push(ClientMetadataVerificationError::MissingEncryptionAlg("userinfo"));
         }
 
-        if self.request_object_encryption_enc.is_some() {
-            self.request_object_encryption_alg.as_ref().ok_or(
-                ClientMetadataVerificationError::MissingEncryptionAlg("request_object"),
-            )?;
+        if self.request_object_encryption_enc.is_some()
+            && self.request_object_encryption_alg.is_none()
+        {
+            collected_errors.push(ClientMetadataVerificationError::MissingEncryptionAlg(
+                "request_object",
+            ));
         }
 
+        // Validate initiate_login_uri scheme
         if let Some(url) = self
             .initiate_login_uri
             .as_ref()
             .filter(|url| url.scheme() != "https")
         {
-            return Err(ClientMetadataVerificationError::UrlNonHttpsScheme(
+            collected_errors.push(ClientMetadataVerificationError::UrlNonHttpsScheme(
                 "initiate_login_uri",
                 url.clone(),
             ));
         }
 
-        if self.introspection_encrypted_response_enc.is_some() {
-            self.introspection_encrypted_response_alg.as_ref().ok_or(
-                ClientMetadataVerificationError::MissingEncryptionAlg("introspection"),
-            )?;
+        // Validate introspection encryption alg/enc pair
+        if self.introspection_encrypted_response_enc.is_some()
+            && self.introspection_encrypted_response_alg.is_none()
+        {
+            collected_errors.push(ClientMetadataVerificationError::MissingEncryptionAlg(
+                "introspection",
+            ));
         }
 
-        Ok(VerifiedClientMetadata { inner: self })
+        // Return collected errors or the validated metadata
+        match collected_errors.len() {
+            0 => Ok(VerifiedClientMetadata { inner: self }),
+            1 => Err(collected_errors.into_iter().next().expect("validated")),
+            _ => Err(ClientMetadataVerificationError::Multiple(collected_errors)),
+        }
     }
 
     /// Sort the properties. This is inteded to ensure a stable serialization
     /// order when needed.
     #[must_use]
     pub fn sorted(mut self) -> Self {
-        // This sorts all the Vec<T> and Localized<T> fields
         if let Some(redirect_uris) = &mut self.redirect_uris {
             redirect_uris.sort();
         }
@@ -825,10 +912,9 @@ impl VerifiedClientMetadata {
     /// [authorization code flow]: https://openid.net/specs/openid-connect-core-1_0.html#CodeFlowAuth
     #[must_use]
     pub fn redirect_uris(&self) -> &[Url] {
-        match &self.redirect_uris {
-            Some(v) => v,
-            None => &[],
-        }
+        self.redirect_uris
+            .as_deref()
+            .expect("validated")
     }
 }
 
@@ -886,6 +972,25 @@ pub enum ClientMetadataVerificationError {
     /// The given encryption field has an `enc` value but not `alg` value.
     #[error("{0} missing encryption alg value")]
     MissingEncryptionAlg(&'static str),
+
+    /// Multiple validation errors were found.
+    #[error("multiple validation errors: {}", MultipleErrorsDisplay(.0))]
+    Multiple(Vec<ClientMetadataVerificationError>),
+}
+
+/// Helper for displaying a list of errors.
+struct MultipleErrorsDisplay<'a>(&'a [ClientMetadataVerificationError]);
+
+impl fmt::Display for MultipleErrorsDisplay<'_> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        for (idx, err) in self.0.iter().enumerate() {
+            if idx > 0 {
+                write!(f, "; ")?;
+            }
+            write!(f, "{err}")?;
+        }
+        Ok(())
+    }
 }
 
 /// The issuer response to dynamic client registration.

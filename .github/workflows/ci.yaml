@@ -1,161 +1,191 @@
-name: CI
+name: Continuous Integration
 
 on:
+  pull_request:
   push:
     branches:
       - main
       - "release/**"
     tags:
       - "v*"
-  pull_request:
-
-concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: true
 
 env:
-  CARGO_TERM_COLOR: always
   CARGO_NET_GIT_FETCH_WITH_CLI: "true"
-  SCCACHE_GHA_ENABLED: "true"
+  CARGO_TERM_COLOR: always
   RUSTC_WRAPPER: "sccache"
+  SCCACHE_GHA_ENABLED: "true"
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
-  frontend-lint:
-    name: Check frontend style
-    runs-on: ubuntu-24.04
-
-    permissions:
-      contents: read
-
-    steps:
-      - name: Checkout the code
-        uses: actions/checkout@v6
-
-      - name: Install Node
-        uses: actions/setup-node@v6.1.0
-        with:
-          node-version: 24
-
-      - name: Install Node dependencies
-        working-directory: ./frontend
-        run: npm ci
-
-      - name: Lint
-        working-directory: ./frontend
-        run: npm run lint
-
-  frontend-test:
-    name: Run the frontend test suite
-    runs-on: ubuntu-24.04
-
-    permissions:
-      contents: read
-
-    steps:
-      - name: Checkout the code
-        uses: actions/checkout@v6
-
-      - name: Install Node
-        uses: actions/setup-node@v6.1.0
-        with:
-          node-version: 24
-
-      - name: Install Node dependencies
-        working-directory: ./frontend
-        run: npm ci
-
-      - name: Test
-        working-directory: ./frontend
-        run: npm test
-
-  frontend-knip:
-    name: Check the frontend for unused dependencies
-    runs-on: ubuntu-24.04
-
-    permissions:
-      contents: read
-
-    steps:
-      - name: Checkout the code
-        uses: actions/checkout@v6
-
-      - name: Install Node
-        uses: actions/setup-node@v6.1.0
-        with:
-          node-version: 24
-
-      - name: Install Node dependencies
-        working-directory: ./frontend
-        run: npm ci
-
-      - name: Check for unused dependencies
-        working-directory: ./frontend
-        run: npm run knip
+  # -- Rust checks --
 
   rustfmt:
-    name: Check Rust style
+    name: Verify Rust formatting
     runs-on: ubuntu-24.04
 
     permissions:
       contents: read
 
     steps:
-      - name: Checkout the code
+      - name: Fetch repository
         uses: actions/checkout@v6
 
-      - name: Install Rust toolchain
+      - name: Set up nightly Rust for rustfmt
         uses: dtolnay/rust-toolchain@nightly
         with:
           components: rustfmt
 
-      - name: Check style
+      - name: Verify formatting
         run: cargo fmt --all -- --check
 
+  clippy:
+    name: Lint with Clippy
+    runs-on: ubuntu-24.04
+    needs: [rustfmt]
+
+    permissions:
+      contents: read
+
+    steps:
+      - name: Fetch repository
+        uses: actions/checkout@v6
+
+      - name: Set up Rust 1.89.0 with Clippy
+        uses: dtolnay/rust-toolchain@1.89.0
+        with:
+          components: clippy
+
+      - name: Configure sccache
+        uses: mozilla-actions/sccache-action@v0.0.9
+
+      - name: Execute Clippy lints
+        run: |
+          cargo clippy --workspace --tests --bins --lib -- -D warnings
+
   cargo-deny:
-    name: Run `cargo deny` checks
+    name: Audit dependencies with cargo-deny
     runs-on: ubuntu-24.04
 
     env:
-      # We need to remove the sccache wrapper because we don't install it in this job
+      # Disable sccache wrapper since this job does not install sccache
       RUSTC_WRAPPER: ""
 
     permissions:
       contents: read
 
     steps:
-      - name: Checkout the code
+      - name: Fetch repository
         uses: actions/checkout@v6
 
-      - name: Run `cargo-deny`
+      - name: Audit with cargo-deny
         uses: EmbarkStudios/cargo-deny-action@v2.0.14
         with:
           rust-version: stable
 
-  check-schema:
-    name: Check schema
+  # -- Frontend checks --
+
+  frontend-lint:
+    name: Lint frontend sources
     runs-on: ubuntu-24.04
 
     permissions:
       contents: read
 
     steps:
-      - name: Checkout the code
+      - name: Fetch repository
         uses: actions/checkout@v6
 
-      - name: Install Rust toolchain
+      - name: Prepare Node environment
+        uses: actions/setup-node@v6.1.0
+        with:
+          node-version: 24
+
+      - name: Install frontend dependencies
+        working-directory: ./frontend
+        run: npm ci
+
+      - name: Run linter
+        working-directory: ./frontend
+        run: npm run lint
+
+  frontend-test:
+    name: Execute frontend tests
+    runs-on: ubuntu-24.04
+
+    permissions:
+      contents: read
+
+    steps:
+      - name: Fetch repository
+        uses: actions/checkout@v6
+
+      - name: Prepare Node environment
+        uses: actions/setup-node@v6.1.0
+        with:
+          node-version: 24
+
+      - name: Install frontend dependencies
+        working-directory: ./frontend
+        run: npm ci
+
+      - name: Run test suite
+        working-directory: ./frontend
+        run: npm test
+
+  frontend-knip:
+    name: Detect unused frontend dependencies
+    runs-on: ubuntu-24.04
+
+    permissions:
+      contents: read
+
+    steps:
+      - name: Fetch repository
+        uses: actions/checkout@v6
+
+      - name: Prepare Node environment
+        uses: actions/setup-node@v6.1.0
+        with:
+          node-version: 24
+
+      - name: Install frontend dependencies
+        working-directory: ./frontend
+        run: npm ci
+
+      - name: Scan for unused dependencies
+        working-directory: ./frontend
+        run: npm run knip
+
+  # -- Schema validation --
+
+  check-schema:
+    name: Validate generated schemas
+    runs-on: ubuntu-24.04
+
+    permissions:
+      contents: read
+
+    steps:
+      - name: Fetch repository
+        uses: actions/checkout@v6
+
+      - name: Set up stable Rust
         run: |
           rustup toolchain install stable
           rustup default stable
 
-      - name: Setup sccache
+      - name: Configure sccache
         uses: mozilla-actions/sccache-action@v0.0.9
 
       - uses: ./.github/actions/build-frontend
 
-      - name: Update the schemas
+      - name: Regenerate schemas
         run: sh ./misc/update.sh
 
-      - name: Check that the workspace is clean
+      - name: Ensure working tree is clean
         run: |
           if ! [[ -z $(git status -s) ]]; then
             echo "::error title=Workspace is not clean::Please run 'sh ./misc/update.sh' (or 'pwsh -File ./misc/update.ps1' on Windows) and commit the changes"
@@ -171,65 +201,43 @@ jobs:
             exit 1
           fi
 
-  clippy:
-    name: Run Clippy
-    needs: [rustfmt]
-    runs-on: ubuntu-24.04
-
-    permissions:
-      contents: read
-
-    steps:
-      - name: Checkout the code
-        uses: actions/checkout@v6
-
-      - name: Install Rust toolchain
-        uses: dtolnay/rust-toolchain@1.89.0
-        with:
-          components: clippy
-
-      - name: Setup sccache
-        uses: mozilla-actions/sccache-action@v0.0.9
-
-      - name: Run clippy
-        run: |
-          cargo clippy --workspace --tests --bins --lib -- -D warnings
+  # -- Test execution --
 
   compile-test-artifacts:
-    name: Compile test artifacts
+    name: Build nextest archive
     runs-on: ubuntu-24.04
 
     permissions:
       contents: read
 
     steps:
-      - name: Checkout
+      - name: Fetch repository
         uses: actions/checkout@v6
 
-      - name: Install Rust toolchain
+      - name: Set up stable Rust
         uses: dtolnay/rust-toolchain@stable
 
-      - name: Install nextest
+      - name: Configure sccache
+        uses: mozilla-actions/sccache-action@v0.0.9
+
+      - name: Set up nextest
         uses: taiki-e/install-action@v2
         with:
           tool: cargo-nextest
 
-      - name: Setup sccache
-        uses: mozilla-actions/sccache-action@v0.0.9
-
-      - name: Build and archive tests
+      - name: Compile and archive test binaries
         run: cargo nextest archive --workspace --archive-file nextest-archive.tar.zst
 
-      - name: Upload archive to workflow
+      - name: Store nextest archive
         uses: actions/upload-artifact@v6.0.0
         with:
           name: nextest-archive
           path: nextest-archive.tar.zst
 
   test:
-    name: Run test suite with Rust stable
-    needs: [rustfmt, compile-test-artifacts]
+    name: Run partitioned Rust tests
     runs-on: ubuntu-24.04
+    needs: [rustfmt, compile-test-artifacts]
 
     permissions:
       contents: read
@@ -242,37 +250,37 @@ jobs:
       postgres:
         image: docker.io/library/postgres:15.3
         env:
+          POSTGRES_DB: postgres
           POSTGRES_USER: postgres
           POSTGRES_PASSWORD: postgres
-          POSTGRES_DB: postgres
+        ports:
+          - "5432:5432"
         options: >-
           --health-cmd pg_isready
           --health-interval 10s
           --health-timeout 5s
           --health-retries 5
-        ports:
-          - "5432:5432"
 
     steps:
-      - name: Checkout the code
+      - name: Fetch repository
         uses: actions/checkout@v6
 
-      - name: Install Rust toolchain
+      - name: Set up stable Rust
         uses: dtolnay/rust-toolchain@stable
 
-      - name: Install nextest
+      - name: Set up nextest
         uses: taiki-e/install-action@v2
         with:
           tool: cargo-nextest
 
       - uses: ./.github/actions/build-frontend
 
-      - name: Download archive
+      - name: Retrieve nextest archive
         uses: actions/download-artifact@v7
         with:
           name: nextest-archive
 
-      - name: Test
+      - name: Execute test partition
         env:
           DATABASE_URL: postgresql://postgres:postgres@localhost/postgres
         run: |
@@ -280,19 +288,21 @@ jobs:
             --archive-file nextest-archive.tar.zst \
             --partition count:${{ matrix.partition }}/3
 
+  # -- Final gate --
+
   tests-done:
-    name: Tests done
+    name: All checks passed
     if: ${{ always() }}
+    runs-on: ubuntu-24.04
     needs:
+      - rustfmt
+      - clippy
+      - cargo-deny
       - frontend-lint
       - frontend-test
       - frontend-knip
-      - rustfmt
-      - cargo-deny
-      - clippy
       - check-schema
       - test
-    runs-on: ubuntu-24.04
 
     steps:
       - uses: matrix-org/done-action@v3

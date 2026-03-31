@@ -1,8 +1,9 @@
 {#
-Copyright 2025 Taidge Ltd.
-Copyright 2021-2024 The Matrix.org Foundation C.I.C.
-
+Copyright 2025 Taidge contributors
 SPDX-License-Identifier: Apache-2.0
+
+OAuth 2.0 Form Post Response Mode (RFC 9126 / OpenID Connect).
+Auto-submits parameters back to the client's redirect URI via POST.
 -#}
 
 {% extends "base.html" %}
@@ -14,18 +15,22 @@ SPDX-License-Identifier: Apache-2.0
     </div>
   </header>
 
-  <form method="post" class="flex flex-col"{% if redirect_uri is not none %} action="{{ redirect_uri }}"{% endif %}>
+  <form
+    method="post"
+    class="flex flex-col"
+    {% if redirect_uri is not none %}action="{{ redirect_uri }}"{% endif %}
+  >
     {% for key, value in params|items %}
       <input type="hidden" name="{{ key }}" value="{{ value }}" />
     {% endfor %}
 
     <noscript>
-      {# Display a button to submit the form in case JavaScript is disabled #}
       {{ button.button(text=_("action.continue")) }}
     </noscript>
   </form>
 
-  {# Submit the form in JavaScript on the next tick, so that if the browser
-     wants to display the placeholder instead of a blank page, it can #}
-  <script>setTimeout(function() { document.forms[0].submit(); }, 0);</script>
+  <script>
+    // Submit on next tick so the browser can paint the loading state first.
+    setTimeout(function () { document.forms[0].submit(); }, 0);
+  </script>
 {% endblock %}

@@ -7,59 +7,177 @@ use serde::{Deserialize, Serialize};
 
 use crate::ConfigurationSection;
 
-fn default_schemes() -> Vec<HashingScheme> {
+// ---------------------------------------------------------------------------
+// Defaults
+// ---------------------------------------------------------------------------
+
+/// Minimum password strength score (zxcvbn)
+const DEFAULT_MIN_COMPLEXITY: u8 = 3;
+
+/// bcrypt cost factor used when none is specified
+#[allow(clippy::unnecessary_wraps)]
+fn bcrypt_cost_default() -> Option<u32> {
+    Some(12)
+}
+
+fn initial_scheme() -> Vec<HashingScheme> {
     vec![HashingScheme {
         version: 1,
         algorithm: Algorithm::default(),
+        unicode_normalization: false,
         cost: None,
         secret: None,
         secret_file: None,
-        unicode_normalization: false,
     }]
 }
 
-fn default_enabled() -> bool {
+// ---------------------------------------------------------------------------
+// Algorithm enum
+// ---------------------------------------------------------------------------
+
+/// Supported password hashing algorithms
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, JsonSchema, PartialEq, Eq, Default)]
+#[serde(rename_all = "lowercase")]
+pub enum Algorithm {
+    /// bcrypt adaptive hashing
+    Bcrypt,
+    /// argon2id (memory-hard)
+    #[default]
+    Argon2id,
+    /// PBKDF2 key derivation
+    Pbkdf2,
+}
+
+// ---------------------------------------------------------------------------
+// HashingScheme
+// ---------------------------------------------------------------------------
+
+#[allow(clippy::trivially_copy_pass_by_ref)]
+const fn bool_is_false(v: &bool) -> bool {
+    !*v
+}
+
+/// A versioned set of parameters that controls how passwords are hashed
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
+pub struct HashingScheme {
+    /// Monotonic version tag -- the highest version is used for new passwords
+    pub version: u16,
+
+    /// Which hashing algorithm to apply
+    pub algorithm: Algorithm,
+
+    /// Apply NFKC normalization before hashing. Normally `false`; enable when
+    /// migrating password hashes from Palpo which performs this normalization.
+    #[serde(default, skip_serializing_if = "bool_is_false")]
+    pub unicode_normalization: bool,
+
+    /// bcrypt work-factor (only relevant for bcrypt)
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[schemars(default = "bcrypt_cost_default")]
+    pub cost: Option<u32>,
+
+    /// Pepper secret mixed into the hash -- makes brute-force harder after a
+    /// database leak
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub secret: Option<String>,
+
+    /// Like `secret` but read from an external file
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[schemars(with = "Option<String>")]
+    pub secret_file: Option<Utf8PathBuf>,
+}
+
+// ---------------------------------------------------------------------------
+// PasswordsConfig
+// ---------------------------------------------------------------------------
+
+/// Password authentication and hashing behaviour
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
+pub struct PasswordsConfig {
+    /// Master switch for password-based login
+    #[serde(default = "default_pw_enabled")]
+    pub enabled: bool,
+
+    /// Ordered list of hashing schemes (newest version wins for new passwords)
+    #[serde(default = "initial_scheme")]
+    pub schemes: Vec<HashingScheme>,
+
+    /// Minimum zxcvbn complexity score (0-4):
+    ///   0 = <100 guesses, 1 = <10k, 2 = <1M, 3 = <100M, 4 = beyond
+    #[serde(default = "default_min_complexity")]
+    minimum_complexity: u8,
+}
+
+fn default_pw_enabled() -> bool {
     true
 }
 
-fn default_minimum_complexity() -> u8 {
-    3
-}
-
-/// User password hashing config
-#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
-pub struct PasswordsConfig {
-    /// Whether password-based authentication is enabled
-    #[serde(default = "default_enabled")]
-    pub enabled: bool,
-
-    /// The hashing schemes to use for hashing and validating passwords
-    ///
-    /// The hashing scheme with the highest version number will be used for
-    /// hashing new passwords.
-    #[serde(default = "default_schemes")]
-    pub schemes: Vec<HashingScheme>,
-
-    /// Score between 0 and 4 determining the minimum allowed password
-    /// complexity. Scores are based on the ESTIMATED number of guesses
-    /// needed to guess the password.
-    ///
-    /// - 0: less than 10^2 (100)
-    /// - 1: less than 10^4 (10'000)
-    /// - 2: less than 10^6 (1'000'000)
-    /// - 3: less than 10^8 (100'000'000)
-    /// - 4: any more than that
-    #[serde(default = "default_minimum_complexity")]
-    minimum_complexity: u8,
+fn default_min_complexity() -> u8 {
+    DEFAULT_MIN_COMPLEXITY
 }
 
 impl Default for PasswordsConfig {
     fn default() -> Self {
         Self {
-            enabled: default_enabled(),
-            schemes: default_schemes(),
-            minimum_complexity: default_minimum_complexity(),
+            enabled: default_pw_enabled(),
+            schemes: initial_scheme(),
+            minimum_complexity: DEFAULT_MIN_COMPLEXITY,
         }
+    }
+}
+
+impl PasswordsConfig {
+    /// Whether password login is turned on
+    #[must_use]
+    pub fn enabled(&self) -> bool {
+        self.enabled
+    }
+
+    /// Required minimum password complexity score (0--4)
+    #[must_use]
+    pub fn minimum_complexity(&self) -> u8 {
+        self.minimum_complexity
+    }
+
+    /// Resolve every scheme, reading secrets from disk where needed, and return
+    /// the fully-expanded list sorted by descending version.
+    ///
+    /// # Errors
+    ///
+    /// Fails if two schemes share the same version, if the scheme list is
+    /// empty, or if an external secret file cannot be read.
+    pub async fn load(
+        &self,
+    ) -> Result<Vec<(u16, Algorithm, Option<u32>, Option<Vec<u8>>, bool)>, anyhow::Error> {
+        // Deduplicate by version (descending)
+        let mut ordered: Vec<&HashingScheme> = self.schemes.iter().collect();
+        ordered.sort_unstable_by_key(|s| Reverse(s.version));
+        ordered.dedup_by_key(|s| s.version);
+
+        if ordered.len() != self.schemes.len() {
+            bail!("Multiple password schemes have the same versions");
+        }
+        if ordered.is_empty() {
+            bail!("Requires at least one password scheme in the config");
+        }
+
+        let mut out = Vec::with_capacity(ordered.len());
+        for scheme in ordered {
+            let pepper = match (&scheme.secret, &scheme.secret_file) {
+                (Some(s), None) => Some(s.clone().into_bytes()),
+                (None, Some(path)) => Some(tokio::fs::read(path).await?),
+                (Some(_), Some(_)) => bail!("Cannot specify both `secret` and `secret_file`"),
+                (None, None) => None,
+            };
+            out.push((
+                scheme.version,
+                scheme.algorithm,
+                scheme.cost,
+                pepper,
+                scheme.unicode_normalization,
+            ));
+        }
+        Ok(out)
     }
 }
 
@@ -70,155 +188,33 @@ impl ConfigurationSection for PasswordsConfig {
         &self,
         figment: &figment::Figment,
     ) -> Result<(), Box<dyn std::error::Error + Send + Sync + 'static>> {
-        let annotate = |mut error: figment::Error| {
-            error.metadata = figment.find_metadata(Self::PATH).cloned();
-            error.profile = Some(figment::Profile::Default);
-            error.path = vec![Self::PATH.to_owned()];
-            error
+        let make_err = |msg: String| {
+            let mut err = figment::Error::from(msg);
+            err.metadata = figment.find_metadata(Self::PATH).cloned();
+            err.profile = Some(figment::Profile::Default);
+            err.path = vec![Self::PATH.to_owned()];
+            err
         };
 
+        // Nothing to validate when password auth is off
         if !self.enabled {
-            // Skip validation if password-based authentication is disabled
             return Ok(());
         }
 
         if self.schemes.is_empty() {
-            return Err(annotate(figment::Error::from(
-                "Requires at least one password scheme in the config".to_owned(),
-            ))
-            .into());
+            return Err(
+                make_err("Requires at least one password scheme in the config".into()).into(),
+            );
         }
 
         for scheme in &self.schemes {
             if scheme.secret.is_some() && scheme.secret_file.is_some() {
-                return Err(annotate(figment::Error::from(
-                    "Cannot specify both `secret` and `secret_file`".to_owned(),
-                ))
-                .into());
+                return Err(
+                    make_err("Cannot specify both `secret` and `secret_file`".into()).into(),
+                );
             }
         }
 
         Ok(())
     }
-}
-
-impl PasswordsConfig {
-    /// Whether password-based authentication is enabled
-    #[must_use]
-    pub fn enabled(&self) -> bool {
-        self.enabled
-    }
-
-    /// Minimum complexity of passwords, from 0 to 4, according to the zxcvbn
-    /// scorer.
-    #[must_use]
-    pub fn minimum_complexity(&self) -> u8 {
-        self.minimum_complexity
-    }
-
-    /// Load the password hashing schemes defined by the config
-    ///
-    /// # Errors
-    ///
-    /// Returns an error if the config is invalid, or if the secret file could
-    /// not be read.
-    pub async fn load(
-        &self,
-    ) -> Result<Vec<(u16, Algorithm, Option<u32>, Option<Vec<u8>>, bool)>, anyhow::Error> {
-        let mut schemes: Vec<&HashingScheme> = self.schemes.iter().collect();
-        schemes.sort_unstable_by_key(|a| Reverse(a.version));
-        schemes.dedup_by_key(|a| a.version);
-
-        if schemes.len() != self.schemes.len() {
-            // Some schemes had duplicated versions
-            bail!("Multiple password schemes have the same versions");
-        }
-
-        if schemes.is_empty() {
-            bail!("Requires at least one password scheme in the config");
-        }
-
-        let mut mapped_result = Vec::with_capacity(schemes.len());
-
-        for scheme in schemes {
-            let secret = match (&scheme.secret, &scheme.secret_file) {
-                (Some(secret), None) => Some(secret.clone().into_bytes()),
-                (None, Some(secret_file)) => {
-                    let secret = tokio::fs::read(secret_file).await?;
-                    Some(secret)
-                }
-                (Some(_), Some(_)) => bail!("Cannot specify both `secret` and `secret_file`"),
-                (None, None) => None,
-            };
-
-            mapped_result.push((
-                scheme.version,
-                scheme.algorithm,
-                scheme.cost,
-                secret,
-                scheme.unicode_normalization,
-            ));
-        }
-
-        Ok(mapped_result)
-    }
-}
-
-#[allow(clippy::trivially_copy_pass_by_ref)]
-const fn is_default_false(value: &bool) -> bool {
-    !*value
-}
-
-/// Parameters for a password hashing scheme
-#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
-pub struct HashingScheme {
-    /// The version of the hashing scheme. They must be unique, and the highest
-    /// version will be used for hashing new passwords.
-    pub version: u16,
-
-    /// The hashing algorithm to use
-    pub algorithm: Algorithm,
-
-    /// Whether to apply Unicode normalization to the password before hashing
-    ///
-    /// Defaults to `false`, and generally recommended to stay false. This is
-    /// although recommended when importing password hashs from Palpo, as it
-    /// applies an NFKC normalization to the password before hashing it.
-    #[serde(default, skip_serializing_if = "is_default_false")]
-    pub unicode_normalization: bool,
-
-    /// Cost for the bcrypt algorithm
-    #[serde(skip_serializing_if = "Option::is_none")]
-    #[schemars(default = "default_bcrypt_cost")]
-    pub cost: Option<u32>,
-
-    /// An optional secret to use when hashing passwords. This makes it harder
-    /// to brute-force the passwords in case of a database leak.
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub secret: Option<String>,
-
-    /// Same as `secret`, but read from a file.
-    #[serde(skip_serializing_if = "Option::is_none")]
-    #[schemars(with = "Option<String>")]
-    pub secret_file: Option<Utf8PathBuf>,
-}
-
-#[allow(clippy::unnecessary_wraps)]
-fn default_bcrypt_cost() -> Option<u32> {
-    Some(12)
-}
-
-/// A hashing algorithm
-#[derive(Debug, Clone, Copy, Serialize, Deserialize, JsonSchema, PartialEq, Eq, Default)]
-#[serde(rename_all = "lowercase")]
-pub enum Algorithm {
-    /// bcrypt
-    Bcrypt,
-
-    /// argon2id
-    #[default]
-    Argon2id,
-
-    /// PBKDF2
-    Pbkdf2,
 }

@@ -1,3 +1,8 @@
+// ── Upstream OAuth 2.0 / OIDC Provider Configuration ──
+//
+// Defines how the application connects to external identity providers
+// using OAuth 2.0 and OpenID Connect protocols.
+
 use std::collections::BTreeMap;
 
 use camino::Utf8PathBuf;
@@ -10,7 +15,9 @@ use url::Url;
 
 use crate::{ClientSecret, ClientSecretRaw, ConfigurationSection};
 
-/// Upstream OAuth 2.0 providers configuration
+// ── Top-level Section ──
+
+/// Holds the list of upstream OAuth 2.0 identity providers
 #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema, Default)]
 pub struct UpstreamOAuth2Config {
     /// List of OAuth 2.0 providers
@@ -18,7 +25,7 @@ pub struct UpstreamOAuth2Config {
 }
 
 impl UpstreamOAuth2Config {
-    /// Returns true if the configuration is the default one
+    /// Returns `true` when no providers have been configured
     pub(crate) fn is_default(&self) -> bool {
         self.providers.is_empty()
     }
@@ -45,6 +52,7 @@ impl ConfigurationSection for UpstreamOAuth2Config {
                 error
             };
 
+            // Discovery requires an issuer
             if !matches!(provider.discovery_mode, DiscoveryMode::Disabled)
                 && provider.issuer.is_none()
             {
@@ -54,124 +62,181 @@ impl ConfigurationSection for UpstreamOAuth2Config {
                 .into());
             }
 
-            match provider.token_endpoint_auth_method {
-                TokenAuthMethod::None
-                | TokenAuthMethod::PrivateKeyJwt
-                | TokenAuthMethod::SignInWithApple => {
-                    if provider.client_secret.is_some() {
-                        return Err(annotate(figment::Error::custom(
-                            "Unexpected field `client_secret` for the selected authentication method",
-                        )).into());
-                    }
-                }
-                TokenAuthMethod::ClientSecretBasic
-                | TokenAuthMethod::ClientSecretPost
-                | TokenAuthMethod::ClientSecretJwt
-                | TokenAuthMethod::QQConnect
-                | TokenAuthMethod::Feishu
-                | TokenAuthMethod::Lark
-                | TokenAuthMethod::DingTalk
-                | TokenAuthMethod::WeChat
-                | TokenAuthMethod::WeCom => {
-                    if provider.client_secret.is_none() {
-                        return Err(annotate(figment::Error::missing_field("client_secret")).into());
-                    }
-                }
-            }
+            // Validate client_secret presence based on auth method
+            validate_client_secret_for_method(provider, &annotate)?;
 
-            match provider.token_endpoint_auth_method {
-                TokenAuthMethod::None
-                | TokenAuthMethod::ClientSecretBasic
-                | TokenAuthMethod::ClientSecretPost
-                | TokenAuthMethod::SignInWithApple
-                | TokenAuthMethod::QQConnect
-                | TokenAuthMethod::Feishu
-                | TokenAuthMethod::Lark
-                | TokenAuthMethod::DingTalk
-                | TokenAuthMethod::WeChat
-                | TokenAuthMethod::WeCom => {
-                    if provider.token_endpoint_auth_signing_alg.is_some() {
-                        return Err(annotate(figment::Error::custom(
-                            "Unexpected field `token_endpoint_auth_signing_alg` for the selected authentication method",
-                        )).into());
-                    }
-                }
-                TokenAuthMethod::ClientSecretJwt | TokenAuthMethod::PrivateKeyJwt => {
-                    if provider.token_endpoint_auth_signing_alg.is_none() {
-                        return Err(annotate(figment::Error::missing_field(
-                            "token_endpoint_auth_signing_alg",
-                        ))
-                        .into());
-                    }
-                }
-            }
+            // Validate signing algorithm requirement
+            validate_signing_alg_for_method(provider, &annotate)?;
 
-            match provider.token_endpoint_auth_method {
-                TokenAuthMethod::SignInWithApple => {
-                    if provider.sign_in_with_apple.is_none() {
-                        return Err(
-                            annotate(figment::Error::missing_field("sign_in_with_apple")).into(),
-                        );
-                    }
-                }
+            // Validate Apple-specific fields
+            validate_apple_fields(provider, &annotate)?;
 
-                TokenAuthMethod::None
-                | TokenAuthMethod::ClientSecretBasic
-                | TokenAuthMethod::ClientSecretPost
-                | TokenAuthMethod::ClientSecretJwt
-                | TokenAuthMethod::PrivateKeyJwt
-                | TokenAuthMethod::QQConnect
-                | TokenAuthMethod::Feishu
-                | TokenAuthMethod::Lark
-                | TokenAuthMethod::DingTalk
-                | TokenAuthMethod::WeChat
-                | TokenAuthMethod::WeCom => {
-                    if provider.sign_in_with_apple.is_some() {
-                        return Err(annotate(figment::Error::custom(
-                            "Unexpected field `sign_in_with_apple` for the selected authentication method",
-                        )).into());
-                    }
-                }
-            }
-
-            if provider.claims_imports.skip_confirmation {
-                if provider.claims_imports.localpart.action != ImportAction::Require {
-                    return Err(annotate(figment::Error::custom(
-                        "The field `action` must be `require` when `skip_confirmation` is set to `true`",
-                    )).with_path("claims_imports.localpart").into());
-                }
-
-                if provider.claims_imports.email.action == ImportAction::Suggest {
-                    return Err(annotate(figment::Error::custom(
-                        "The field `action` must not be `suggest` when `skip_confirmation` is set to `true`",
-                    )).with_path("claims_imports.email").into());
-                }
-
-                if provider.claims_imports.displayname.action == ImportAction::Suggest {
-                    return Err(annotate(figment::Error::custom(
-                        "The field `action` must not be `suggest` when `skip_confirmation` is set to `true`",
-                    )).with_path("claims_imports.displayname").into());
-                }
-            }
-
-            if matches!(
-                provider.claims_imports.localpart.on_conflict,
-                OnConflict::Add | OnConflict::Replace | OnConflict::Set
-            ) && !matches!(
-                provider.claims_imports.localpart.action,
-                ImportAction::Force | ImportAction::Require
-            ) {
-                return Err(annotate(figment::Error::custom(
-                    "The field `action` must be either `force` or `require` when `on_conflict` is set to `add`, `replace` or `set`",
-                )).with_path("claims_imports.localpart").into());
-            }
+            // Validate claims import consistency
+            validate_claims_imports(provider, &annotate)?;
         }
 
         Ok(())
     }
 }
 
-/// The response mode we ask the provider to use for the callback
+// ── Validation Helpers ──
+
+/// Ensures client_secret is present/absent as required by the auth method
+fn validate_client_secret_for_method(
+    provider: &Provider,
+    annotate: &dyn Fn(figment::Error) -> figment::Error,
+) -> Result<(), Box<dyn std::error::Error + Send + Sync + 'static>> {
+    match provider.token_endpoint_auth_method {
+        TokenAuthMethod::None | TokenAuthMethod::PrivateKeyJwt | TokenAuthMethod::SignInWithApple => {
+            if provider.client_secret.is_some() {
+                return Err(annotate(figment::Error::custom(
+                    "Unexpected field `client_secret` for the selected authentication method",
+                ))
+                .into());
+            }
+        }
+        TokenAuthMethod::ClientSecretBasic
+        | TokenAuthMethod::ClientSecretPost
+        | TokenAuthMethod::ClientSecretJwt
+        | TokenAuthMethod::QQConnect
+        | TokenAuthMethod::Feishu
+        | TokenAuthMethod::Lark
+        | TokenAuthMethod::DingTalk
+        | TokenAuthMethod::WeChat
+        | TokenAuthMethod::WeCom => {
+            if provider.client_secret.is_none() {
+                return Err(annotate(figment::Error::missing_field("client_secret")).into());
+            }
+        }
+    }
+    Ok(())
+}
+
+/// Ensures token_endpoint_auth_signing_alg is present/absent as required
+fn validate_signing_alg_for_method(
+    provider: &Provider,
+    annotate: &dyn Fn(figment::Error) -> figment::Error,
+) -> Result<(), Box<dyn std::error::Error + Send + Sync + 'static>> {
+    match provider.token_endpoint_auth_method {
+        TokenAuthMethod::ClientSecretJwt | TokenAuthMethod::PrivateKeyJwt => {
+            if provider.token_endpoint_auth_signing_alg.is_none() {
+                return Err(annotate(figment::Error::missing_field(
+                    "token_endpoint_auth_signing_alg",
+                ))
+                .into());
+            }
+        }
+        TokenAuthMethod::None
+        | TokenAuthMethod::ClientSecretBasic
+        | TokenAuthMethod::ClientSecretPost
+        | TokenAuthMethod::SignInWithApple
+        | TokenAuthMethod::QQConnect
+        | TokenAuthMethod::Feishu
+        | TokenAuthMethod::Lark
+        | TokenAuthMethod::DingTalk
+        | TokenAuthMethod::WeChat
+        | TokenAuthMethod::WeCom => {
+            if provider.token_endpoint_auth_signing_alg.is_some() {
+                return Err(annotate(figment::Error::custom(
+                    "Unexpected field `token_endpoint_auth_signing_alg` for the selected authentication method",
+                ))
+                .into());
+            }
+        }
+    }
+    Ok(())
+}
+
+/// Ensures sign_in_with_apple fields are only present when appropriate
+fn validate_apple_fields(
+    provider: &Provider,
+    annotate: &dyn Fn(figment::Error) -> figment::Error,
+) -> Result<(), Box<dyn std::error::Error + Send + Sync + 'static>> {
+    match provider.token_endpoint_auth_method {
+        TokenAuthMethod::SignInWithApple => {
+            if provider.sign_in_with_apple.is_none() {
+                return Err(annotate(figment::Error::missing_field("sign_in_with_apple")).into());
+            }
+        }
+        TokenAuthMethod::None
+        | TokenAuthMethod::ClientSecretBasic
+        | TokenAuthMethod::ClientSecretPost
+        | TokenAuthMethod::ClientSecretJwt
+        | TokenAuthMethod::PrivateKeyJwt
+        | TokenAuthMethod::QQConnect
+        | TokenAuthMethod::Feishu
+        | TokenAuthMethod::Lark
+        | TokenAuthMethod::DingTalk
+        | TokenAuthMethod::WeChat
+        | TokenAuthMethod::WeCom => {
+            if provider.sign_in_with_apple.is_some() {
+                return Err(annotate(figment::Error::custom(
+                    "Unexpected field `sign_in_with_apple` for the selected authentication method",
+                ))
+                .into());
+            }
+        }
+    }
+    Ok(())
+}
+
+/// Validates the claims_imports section for internal consistency
+fn validate_claims_imports(
+    provider: &Provider,
+    annotate: &dyn Fn(figment::Error) -> figment::Error,
+) -> Result<(), Box<dyn std::error::Error + Send + Sync + 'static>> {
+    let imports = &provider.claims_imports;
+
+    if imports.skip_confirmation {
+        if imports.localpart.action != ImportAction::Require {
+            return Err(annotate(figment::Error::custom(
+                "The field `action` must be `require` when `skip_confirmation` is set to `true`",
+            ))
+            .with_path("claims_imports.localpart")
+            .into());
+        }
+
+        if imports.email.action == ImportAction::Suggest {
+            return Err(annotate(figment::Error::custom(
+                "The field `action` must not be `suggest` when `skip_confirmation` is set to `true`",
+            ))
+            .with_path("claims_imports.email")
+            .into());
+        }
+
+        if imports.displayname.action == ImportAction::Suggest {
+            return Err(annotate(figment::Error::custom(
+                "The field `action` must not be `suggest` when `skip_confirmation` is set to `true`",
+            ))
+            .with_path("claims_imports.displayname")
+            .into());
+        }
+    }
+
+    // Localpart on_conflict requires force/require action
+    let conflict_requires_force = matches!(
+        imports.localpart.on_conflict,
+        OnConflict::Add | OnConflict::Replace | OnConflict::Set
+    );
+    let action_is_force_or_require = matches!(
+        imports.localpart.action,
+        ImportAction::Force | ImportAction::Require
+    );
+
+    if conflict_requires_force && !action_is_force_or_require {
+        return Err(annotate(figment::Error::custom(
+            "The field `action` must be either `force` or `require` when `on_conflict` is set to `add`, `replace` or `set`",
+        ))
+        .with_path("claims_imports.localpart")
+        .into());
+    }
+
+    Ok(())
+}
+
+// ── Response Mode ──
+
+/// Specifies how the authorization server delivers the response back
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, JsonSchema)]
 #[serde(rename_all = "snake_case")]
 pub enum ResponseMode {
@@ -186,7 +251,9 @@ pub enum ResponseMode {
     FormPost,
 }
 
-/// Authentication methods used against the OAuth 2.0 provider
+// ── Token Auth Method ──
+
+/// Supported methods for authenticating with the upstream token endpoint
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, JsonSchema)]
 #[serde(rename_all = "snake_case")]
 pub enum TokenAuthMethod {
@@ -231,7 +298,9 @@ pub enum TokenAuthMethod {
     WeCom,
 }
 
-/// How to handle a claim
+// ── Import Action ──
+
+/// Controls how an upstream claim is mapped during account linking
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default, JsonSchema)]
 #[serde(rename_all = "lowercase")]
 pub enum ImportAction {
@@ -252,11 +321,13 @@ pub enum ImportAction {
 impl ImportAction {
     #[allow(clippy::trivially_copy_pass_by_ref)]
     const fn is_default(&self) -> bool {
-        matches!(self, ImportAction::Ignore)
+        matches!(self, Self::Ignore)
     }
 }
 
-/// How to handle an existing localpart claim
+// ── On Conflict ──
+
+/// Determines behavior when a matching local account already exists
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default, JsonSchema)]
 #[serde(rename_all = "lowercase")]
 pub enum OnConflict {
@@ -279,11 +350,13 @@ pub enum OnConflict {
 impl OnConflict {
     #[allow(clippy::trivially_copy_pass_by_ref)]
     const fn is_default(&self) -> bool {
-        matches!(self, OnConflict::Fail)
+        matches!(self, Self::Fail)
     }
 }
 
-/// What should be done for the subject attribute
+// ── Claims Import Preferences ──
+
+/// Controls how the subject identifier is derived
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Default, JsonSchema)]
 pub struct SubjectImportPreference {
     /// The Jinja2 template to use for the subject attribute
@@ -299,7 +372,7 @@ impl SubjectImportPreference {
     }
 }
 
-/// What should be done for the localpart attribute
+/// Controls how the MXID localpart is imported
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Default, JsonSchema)]
 pub struct LocalpartImportPreference {
     /// How to handle the attribute
@@ -323,7 +396,7 @@ impl LocalpartImportPreference {
     }
 }
 
-/// What should be done for the displayname attribute
+/// Controls how the display name attribute is imported
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Default, JsonSchema)]
 pub struct DisplaynameImportPreference {
     /// How to handle the attribute
@@ -343,7 +416,7 @@ impl DisplaynameImportPreference {
     }
 }
 
-/// What should be done with the email attribute
+/// Controls how the email address attribute is imported
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Default, JsonSchema)]
 pub struct EmailImportPreference {
     /// How to handle the claim
@@ -363,7 +436,7 @@ impl EmailImportPreference {
     }
 }
 
-/// What should be done for the account name attribute
+/// Controls how the upstream account display name is derived
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Default, JsonSchema)]
 pub struct AccountNameImportPreference {
     /// The Jinja2 template to use for the account name. This name is only used
@@ -380,7 +453,7 @@ impl AccountNameImportPreference {
     }
 }
 
-/// How claims should be imported
+/// Governs how user attributes are imported from the upstream provider
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Default, JsonSchema)]
 pub struct ClaimsImports {
     /// How to determine the subject of the user
@@ -428,7 +501,9 @@ impl ClaimsImports {
     }
 }
 
-/// How to discover the provider's configuration
+// ── Discovery & PKCE ──
+
+/// Determines how the provider's endpoints and metadata are discovered
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, JsonSchema, Default)]
 #[serde(rename_all = "snake_case")]
 pub enum DiscoveryMode {
@@ -446,12 +521,12 @@ pub enum DiscoveryMode {
 impl DiscoveryMode {
     #[allow(clippy::trivially_copy_pass_by_ref)]
     const fn is_default(&self) -> bool {
-        matches!(self, DiscoveryMode::Oidc)
+        matches!(self, Self::Oidc)
     }
 }
 
-/// Whether to use proof key for code exchange (PKCE) when requesting and
-/// exchanging the token.
+/// Controls whether Proof Key for Code Exchange is used during the
+/// authorization code flow
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, JsonSchema, Default)]
 #[serde(rename_all = "snake_case")]
 pub enum PkceMethod {
@@ -471,56 +546,13 @@ pub enum PkceMethod {
 impl PkceMethod {
     #[allow(clippy::trivially_copy_pass_by_ref)]
     const fn is_default(&self) -> bool {
-        matches!(self, PkceMethod::Auto)
+        matches!(self, Self::Auto)
     }
 }
 
-fn default_true() -> bool {
-    true
-}
+// ── Backchannel Logout ──
 
-#[allow(clippy::trivially_copy_pass_by_ref)]
-fn is_default_true(value: &bool) -> bool {
-    *value
-}
-
-#[allow(clippy::ref_option)]
-fn is_signed_response_alg_default(signed_response_alg: &JsonWebSignatureAlg) -> bool {
-    *signed_response_alg == signed_response_alg_default()
-}
-
-#[allow(clippy::unnecessary_wraps)]
-fn signed_response_alg_default() -> JsonWebSignatureAlg {
-    JsonWebSignatureAlg::Rs256
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
-pub struct SignInWithApple {
-    /// The private key file used to sign the `id_token`
-    #[serde(skip_serializing_if = "Option::is_none")]
-    #[schemars(with = "Option<String>")]
-    pub private_key_file: Option<Utf8PathBuf>,
-
-    /// The private key used to sign the `id_token`
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub private_key: Option<String>,
-
-    /// The Team ID of the Apple Developer Portal
-    pub team_id: String,
-
-    /// The key ID of the Apple Developer Portal
-    pub key_id: String,
-}
-
-fn default_scope() -> String {
-    "openid".to_owned()
-}
-
-fn is_default_scope(scope: &str) -> bool {
-    scope == default_scope()
-}
-
-/// What to do when receiving an OIDC Backchannel logout request.
+/// Determines the server's response to an OIDC Backchannel logout notification
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, JsonSchema, Default)]
 #[serde(rename_all = "snake_case")]
 pub enum OnBackchannelLogout {
@@ -539,11 +571,63 @@ pub enum OnBackchannelLogout {
 impl OnBackchannelLogout {
     #[allow(clippy::trivially_copy_pass_by_ref)]
     const fn is_default(&self) -> bool {
-        matches!(self, OnBackchannelLogout::DoNothing)
+        matches!(self, Self::DoNothing)
     }
 }
 
-/// Configuration for one upstream OAuth 2 provider.
+// ── Sign In With Apple ──
+
+/// Additional parameters required for Apple's authentication flow
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
+pub struct SignInWithApple {
+    /// The private key file used to sign the `id_token`
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[schemars(with = "Option<String>")]
+    pub private_key_file: Option<Utf8PathBuf>,
+
+    /// The private key used to sign the `id_token`
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub private_key: Option<String>,
+
+    /// The Team ID of the Apple Developer Portal
+    pub team_id: String,
+
+    /// The key ID of the Apple Developer Portal
+    pub key_id: String,
+}
+
+// ── Default Helpers ──
+
+fn default_true() -> bool {
+    true
+}
+
+#[allow(clippy::trivially_copy_pass_by_ref)]
+fn is_default_true(value: &bool) -> bool {
+    *value
+}
+
+fn default_scope() -> String {
+    "openid".to_owned()
+}
+
+fn is_default_scope(scope: &str) -> bool {
+    scope == "openid"
+}
+
+#[allow(clippy::ref_option)]
+fn is_signed_response_alg_default(alg: &JsonWebSignatureAlg) -> bool {
+    *alg == signed_response_alg_default()
+}
+
+#[allow(clippy::unnecessary_wraps)]
+fn signed_response_alg_default() -> JsonWebSignatureAlg {
+    JsonWebSignatureAlg::Rs256
+}
+
+// ── Provider Configuration ──
+
+/// Full configuration for a single upstream OAuth 2.0 / OIDC provider
 #[serde_as]
 #[skip_serializing_none]
 #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
@@ -736,20 +820,22 @@ pub struct Provider {
 }
 
 impl Provider {
-    /// Returns the client secret.
+    /// Resolves and returns the client secret for this provider.
     ///
-    /// If `client_secret_file` was given, the secret is read from that file.
+    /// When `client_secret_file` was specified, the file is read at call time.
     ///
     /// # Errors
     ///
-    /// Returns an error when the client secret could not be read from file.
+    /// Returns an error if the referenced file cannot be read.
     pub async fn client_secret(&self) -> anyhow::Result<Option<String>> {
-        Ok(match &self.client_secret {
-            Some(client_secret) => Some(client_secret.value().await?),
-            None => None,
-        })
+        match &self.client_secret {
+            Some(secret) => Ok(Some(secret.value().await?)),
+            None => Ok(None),
+        }
     }
 }
+
+// ── Tests ──
 
 #[cfg(test)]
 mod tests {

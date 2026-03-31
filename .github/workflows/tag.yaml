@@ -7,21 +7,18 @@ on:
         type: string
     outputs:
       sha:
-        description: "The SHA of the commit made which bumps the version"
+        description: "The SHA of the version bump commit"
         value: ${{ jobs.tag.outputs.sha }}
-    secrets:
-      BOT_GITHUB_TOKEN:
-        required: true
 
 jobs:
   tag:
-    name: Tag a new version
+    name: Tag version ${{ inputs.version }}
     runs-on: ubuntu-24.04
     permissions:
       contents: write
 
     outputs:
-      sha: ${{ fromJSON(steps.commit.outputs.result).commit }}
+      sha: ${{ steps.push.outputs.sha }}
 
     steps:
       - name: Checkout the code
@@ -30,37 +27,30 @@ jobs:
       - name: Install Rust toolchain
         uses: dtolnay/rust-toolchain@stable
 
-      - name: Set the crates version
+      - name: Update workspace version
         env:
           VERSION: ${{ inputs.version }}
         run: |
+          # Update the workspace package version
           sed -i "s/^package.version = .*/package.version = \"$VERSION\"/" Cargo.toml
+          # Update all internal crate dependency versions
           sed -i "/path = \".\/crates\//s/version = \".*\"/version = \"=$VERSION\"/" Cargo.toml
 
-      - name: Run `cargo metadata` to make sure the lockfile is up to date
-        run: cargo metadata --format-version 1
+      - name: Regenerate lockfile
+        run: cargo metadata --format-version 1 > /dev/null
 
-      - name: Commit and tag using the GitHub API
-        uses: actions/github-script@v8.0.0
-        id: commit
+      - name: Configure git
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+      - name: Commit and tag
+        id: push
         env:
           VERSION: ${{ inputs.version }}
-        with:
-          # Commit & tag with the actions token, so that they get signed
-          # This returns the commit sha and the tag object sha
-          script: |
-            const script = require('./.github/scripts/commit-and-tag.cjs');
-            return await script({ core, github, context });
-
-      - name: Update the refs
-        uses: actions/github-script@v8.0.0
-        env:
-          VERSION: ${{ inputs.version }}
-          TAG_SHA: ${{ fromJSON(steps.commit.outputs.result).tag }}
-          COMMIT_SHA: ${{ fromJSON(steps.commit.outputs.result).commit }}
-        with:
-          # Update the refs with the bot token, so that workflows are triggered
-          github-token: ${{ secrets.BOT_GITHUB_TOKEN }}
-          script: |
-            const script = require('./.github/scripts/create-version-tag.cjs');
-            await script({ core, github, context });
+        run: |
+          git add Cargo.toml Cargo.lock
+          git commit -m "chore: bump version to ${VERSION}"
+          git tag -a "v${VERSION}" -m "Release v${VERSION}"
+          git push origin HEAD --follow-tags
+          echo "sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"

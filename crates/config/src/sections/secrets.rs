@@ -1,3 +1,8 @@
+// ── Secret and Key Configuration ──
+//
+// Manages cryptographic keys and encryption secrets used for signing,
+// verifying, and encrypting application payloads and cookies.
+
 use std::borrow::Cow;
 
 use anyhow::{Context, bail};
@@ -14,17 +19,16 @@ use tracing::info;
 
 use super::ConfigurationSection;
 
-/// Password config option.
-///
-/// It either holds the password value directly or references a file where the
-/// password is stored.
+// ── Password Config ──
+
+/// Represents a password that can be specified inline or via a file reference
 #[derive(Clone, Debug)]
 pub enum Password {
     File(Utf8PathBuf),
     Value(String),
 }
 
-/// Password fields as serialized in JSON.
+/// Serialization wrapper for password fields
 #[derive(JsonSchema, Serialize, Deserialize, Clone, Debug)]
 struct PasswordRaw {
     #[schemars(with = "Option<String>")]
@@ -37,46 +41,45 @@ struct PasswordRaw {
 impl TryFrom<PasswordRaw> for Option<Password> {
     type Error = anyhow::Error;
 
-    fn try_from(value: PasswordRaw) -> Result<Self, Self::Error> {
-        match (value.password, value.password_file) {
+    fn try_from(raw: PasswordRaw) -> Result<Self, Self::Error> {
+        match (raw.password, raw.password_file) {
             (None, None) => Ok(None),
+            (Some(pw), None) => Ok(Some(Password::Value(pw))),
             (None, Some(path)) => Ok(Some(Password::File(path))),
-            (Some(password), None) => Ok(Some(Password::Value(password))),
             (Some(_), Some(_)) => bail!("Cannot specify both `password` and `password_file`"),
         }
     }
 }
 
 impl From<Option<Password>> for PasswordRaw {
-    fn from(value: Option<Password>) -> Self {
-        match value {
-            Some(Password::File(path)) => PasswordRaw {
-                password_file: Some(path),
-                password: None,
-            },
-            Some(Password::Value(password)) => PasswordRaw {
-                password_file: None,
-                password: Some(password),
-            },
+    fn from(opt: Option<Password>) -> Self {
+        match opt {
             None => PasswordRaw {
-                password_file: None,
                 password: None,
+                password_file: None,
+            },
+            Some(Password::Value(pw)) => PasswordRaw {
+                password: Some(pw),
+                password_file: None,
+            },
+            Some(Password::File(path)) => PasswordRaw {
+                password: None,
+                password_file: Some(path),
             },
         }
     }
 }
 
-/// Key config option.
-///
-/// It either holds the key value directly or references a file where the key is
-/// stored.
+// ── Key Config ──
+
+/// Represents a cryptographic key that can be specified inline or via a file
 #[derive(Clone, Debug)]
 pub enum Key {
     File(Utf8PathBuf),
     Value(String),
 }
 
-/// Key fields as serialized in JSON.
+/// Serialization wrapper for key fields
 #[derive(JsonSchema, Serialize, Deserialize, Clone, Debug)]
 struct KeyRaw {
     #[schemars(with = "Option<String>")]
@@ -89,38 +92,40 @@ struct KeyRaw {
 impl TryFrom<KeyRaw> for Key {
     type Error = anyhow::Error;
 
-    fn try_from(value: KeyRaw) -> Result<Key, Self::Error> {
-        match (value.key, value.key_file) {
+    fn try_from(raw: KeyRaw) -> Result<Key, Self::Error> {
+        match (raw.key, raw.key_file) {
             (None, None) => bail!("Missing `key` or `key_file`"),
+            (Some(k), None) => Ok(Key::Value(k)),
             (None, Some(path)) => Ok(Key::File(path)),
-            (Some(key), None) => Ok(Key::Value(key)),
             (Some(_), Some(_)) => bail!("Cannot specify both `key` and `key_file`"),
         }
     }
 }
 
 impl From<Key> for KeyRaw {
-    fn from(value: Key) -> Self {
-        match value {
-            Key::File(path) => KeyRaw {
-                key_file: Some(path),
-                key: None,
-            },
-            Key::Value(key) => KeyRaw {
+    fn from(k: Key) -> Self {
+        match k {
+            Key::Value(val) => KeyRaw {
+                key: Some(val),
                 key_file: None,
-                key: Some(key),
+            },
+            Key::File(path) => KeyRaw {
+                key: None,
+                key_file: Some(path),
             },
         }
     }
 }
 
-/// A single key with its key ID and optional password.
+// ── Single Key Entry ──
+
+/// Configuration for a single signing/encryption key, optionally password-protected
 #[serde_as]
 #[derive(JsonSchema, Serialize, Deserialize, Clone, Debug)]
 pub struct KeyConfig {
     /// The key ID `kid` of the key as used by JWKs.
     ///
-    /// If not given, `kid` will be the key’s RFC 7638 JWK Thumbprint.
+    /// If not given, `kid` will be the key's RFC 7638 JWK Thumbprint.
     #[serde(skip_serializing_if = "Option::is_none")]
     kid: Option<String>,
 
@@ -136,42 +141,42 @@ pub struct KeyConfig {
 }
 
 impl KeyConfig {
-    /// Returns the password in case any is provided.
-    ///
-    /// If `password_file` was given, the password is read from that file.
+    /// Loads the password bytes, reading from file if necessary
     async fn password(&self) -> anyhow::Result<Option<Cow<'_, [u8]>>> {
-        Ok(match &self.password {
-            Some(Password::File(path)) => Some(Cow::Owned(tokio::fs::read(path).await?)),
-            Some(Password::Value(password)) => Some(Cow::Borrowed(password.as_bytes())),
-            None => None,
-        })
+        match &self.password {
+            None => Ok(None),
+            Some(Password::Value(pw)) => Ok(Some(Cow::Borrowed(pw.as_bytes()))),
+            Some(Password::File(path)) => {
+                let bytes = tokio::fs::read(path).await?;
+                Ok(Some(Cow::Owned(bytes)))
+            }
+        }
     }
 
-    /// Returns the key.
-    ///
-    /// If `key_file` was given, the key is read from that file.
+    /// Loads the key bytes, reading from file if necessary
     async fn key(&self) -> anyhow::Result<Cow<'_, [u8]>> {
-        Ok(match &self.key {
-            Key::File(path) => Cow::Owned(tokio::fs::read(path).await?),
-            Key::Value(key) => Cow::Borrowed(key.as_bytes()),
-        })
+        match &self.key {
+            Key::Value(val) => Ok(Cow::Borrowed(val.as_bytes())),
+            Key::File(path) => {
+                let bytes = tokio::fs::read(path).await?;
+                Ok(Cow::Owned(bytes))
+            }
+        }
     }
 
-    /// Returns the JSON Web Key derived from this key config.
-    ///
-    /// Password and/or key are read from file if they’re given as path.
+    /// Derives a JSON Web Key from this configuration entry
     async fn json_web_key(&self) -> anyhow::Result<JsonWebKey<pasion_keystore::PrivateKey>> {
-        let (key, password) = try_join(self.key(), self.password()).await?;
+        let (key_data, password_data) = try_join(self.key(), self.password()).await?;
 
-        let private_key = match password {
-            Some(password) => PrivateKey::load_encrypted(&key, password)?,
-            None => PrivateKey::load(&key)?,
+        let private_key = match password_data {
+            Some(pw) => PrivateKey::load_encrypted(&key_data, pw)?,
+            None => PrivateKey::load(&key_data)?,
         };
 
-        let kid = match self.kid.clone() {
-            Some(kid) => kid,
-            None => private_key.thumbprint_sha256_base64(),
-        };
+        let kid = self
+            .kid
+            .clone()
+            .unwrap_or_else(|| private_key.thumbprint_sha256_base64());
 
         Ok(JsonWebKey::new(private_key)
             .with_kid(kid)
@@ -179,14 +184,16 @@ impl KeyConfig {
     }
 }
 
-/// Encryption config option.
+// ── Encryption Config ──
+
+/// Represents the 32-byte encryption key used for secure cookies
 #[derive(Debug, Clone)]
 pub enum Encryption {
     File(Utf8PathBuf),
     Value([u8; 32]),
 }
 
-/// Encryption fields as serialized in JSON.
+/// Serialization wrapper for encryption key fields
 #[serde_as]
 #[derive(JsonSchema, Serialize, Deserialize, Debug, Clone)]
 struct EncryptionRaw {
@@ -209,49 +216,56 @@ struct EncryptionRaw {
 impl TryFrom<EncryptionRaw> for Encryption {
     type Error = anyhow::Error;
 
-    fn try_from(value: EncryptionRaw) -> Result<Encryption, Self::Error> {
-        match (value.encryption, value.encryption_file) {
+    fn try_from(raw: EncryptionRaw) -> Result<Encryption, Self::Error> {
+        match (raw.encryption, raw.encryption_file) {
             (None, None) => bail!("Missing `encryption` or `encryption_file`"),
+            (Some(val), None) => Ok(Encryption::Value(val)),
             (None, Some(path)) => Ok(Encryption::File(path)),
-            (Some(encryption), None) => Ok(Encryption::Value(encryption)),
             (Some(_), Some(_)) => bail!("Cannot specify both `encryption` and `encryption_file`"),
         }
     }
 }
 
 impl From<Encryption> for EncryptionRaw {
-    fn from(value: Encryption) -> Self {
-        match value {
-            Encryption::File(path) => EncryptionRaw {
-                encryption_file: Some(path),
-                encryption: None,
-            },
-            Encryption::Value(encryption) => EncryptionRaw {
+    fn from(enc: Encryption) -> Self {
+        match enc {
+            Encryption::Value(val) => EncryptionRaw {
+                encryption: Some(val),
                 encryption_file: None,
-                encryption: Some(encryption),
+            },
+            Encryption::File(path) => EncryptionRaw {
+                encryption: None,
+                encryption_file: Some(path),
             },
         }
     }
 }
 
-/// Reads all keys from the given directory.
-async fn key_configs_from_path(path: &Utf8PathBuf) -> anyhow::Result<Vec<KeyConfig>> {
-    let mut result = vec![];
-    let mut read_dir = tokio::fs::read_dir(path).await?;
-    while let Some(dir_entry) = read_dir.next_entry().await? {
-        if !dir_entry.path().is_file() {
+// ── Directory Key Scanner ──
+
+/// Scans a directory and produces a `KeyConfig` for each regular file found
+async fn key_configs_from_path(dir: &Utf8PathBuf) -> anyhow::Result<Vec<KeyConfig>> {
+    let mut configs = vec![];
+    let mut entries = tokio::fs::read_dir(dir).await?;
+
+    while let Some(entry) = entries.next_entry().await? {
+        if !entry.path().is_file() {
             continue;
         }
-        result.push(KeyConfig {
+        configs.push(KeyConfig {
             kid: None,
             password: None,
-            key: Key::File(dir_entry.path().try_into()?),
+            key: Key::File(entry.path().try_into()?),
         });
     }
-    Ok(result)
+
+    Ok(configs)
 }
 
-/// Application secrets
+// ── Secrets Section ──
+
+/// Holds all cryptographic material: signing keys, encryption keys, and
+/// optional key directories
 #[serde_as]
 #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
 pub struct SecretsConfig {
@@ -271,20 +285,25 @@ pub struct SecretsConfig {
     keys_dir: Option<Utf8PathBuf>,
 }
 
+impl ConfigurationSection for SecretsConfig {
+    const PATH: &'static str = "secrets";
+}
+
 impl SecretsConfig {
-    /// Derive a signing and verifying keystore out of the config
+    // ── Public API ──
+
+    /// Builds a signing/verifying keystore from the configured keys
     ///
     /// # Errors
     ///
     /// Returns an error when a key could not be imported
     #[tracing::instrument(name = "secrets.load", skip_all)]
     pub async fn key_store(&self) -> anyhow::Result<Keystore> {
-        let key_configs = self.key_configs().await?;
-        let web_keys = try_join_all(key_configs.iter().map(KeyConfig::json_web_key)).await?;
-        let web_keys =
-            JsonWebKeySet::try_new(web_keys).context("invalid JWK metadata in secrets config")?;
-
-        Ok(Keystore::new(web_keys))
+        let all_keys = self.key_configs().await?;
+        let jwk_list = try_join_all(all_keys.iter().map(KeyConfig::json_web_key)).await?;
+        let jwk_set =
+            JsonWebKeySet::try_new(jwk_list).context("invalid JWK metadata in secrets config")?;
+        Ok(Keystore::new(jwk_set))
     }
 
     /// Derive an [`Encrypter`] out of the config
@@ -293,7 +312,8 @@ impl SecretsConfig {
     ///
     /// Returns an error when the Encryptor can not be created.
     pub async fn encrypter(&self) -> anyhow::Result<Encrypter> {
-        Ok(Encrypter::new(&self.encryption().await?))
+        let key = self.encryption().await?;
+        Ok(Encrypter::new(&key))
     }
 
     /// Returns the encryption secret.
@@ -302,42 +322,41 @@ impl SecretsConfig {
     ///
     /// Returns an error when the encryption secret could not be read from file.
     pub async fn encryption(&self) -> anyhow::Result<[u8; 32]> {
-        // Read the encryption secret either embedded in the config file or on disk
         match self.encryption {
-            Encryption::Value(encryption) => Ok(encryption),
+            Encryption::Value(bytes) => Ok(bytes),
             Encryption::File(ref path) => {
-                let mut bytes = [0; 32];
                 let content = tokio::fs::read(path).await?;
-                hex::decode_to_slice(content, &mut bytes).context(
+                let mut buf = [0u8; 32];
+                hex::decode_to_slice(content, &mut buf).context(
                     "Content of `encryption_file` must contain hex characters \
                     encoding exactly 32 bytes",
                 )?;
-                Ok(bytes)
+                Ok(buf)
             }
         }
     }
 
-    /// Returns a combined list of key configs given inline and from files.
-    ///
-    /// If `keys_dir` was given, the keys are read from file.
+    // ── Internal helpers ──
+
+    /// Merges directory-based and inline key configs into a single list
     async fn key_configs(&self) -> anyhow::Result<Vec<KeyConfig>> {
-        let mut key_configs = match &self.keys_dir {
-            Some(keys_dir) => key_configs_from_path(keys_dir).await?,
+        let mut combined = match &self.keys_dir {
+            Some(dir) => key_configs_from_path(dir).await?,
             None => vec![],
         };
 
-        let inline_key_configs = self.keys.as_deref().unwrap_or_default();
-        key_configs.extend(inline_key_configs.iter().cloned());
+        let inline_keys = self.keys.as_deref().unwrap_or_default();
+        combined.extend(inline_keys.iter().cloned());
 
-        Ok(key_configs)
+        Ok(combined)
     }
 }
 
-impl ConfigurationSection for SecretsConfig {
-    const PATH: &'static str = "secrets";
-}
+// ── Key Generation ──
 
 impl SecretsConfig {
+    /// Generates a fresh configuration with randomly-created keys for all
+    /// supported algorithms
     #[expect(clippy::similar_names, reason = "Key type names are very similar")]
     #[tracing::instrument(skip_all)]
     pub(crate) async fn generate<R>(mut rng: R) -> anyhow::Result<Self>
@@ -456,6 +475,7 @@ impl SecretsConfig {
         })
     }
 
+    /// Returns a deterministic test configuration with hardcoded keys
     pub(crate) fn test() -> Self {
         let rsa_key = KeyConfig {
             kid: None,
@@ -498,6 +518,8 @@ impl SecretsConfig {
         }
     }
 }
+
+// ── Tests ──
 
 #[cfg(test)]
 mod tests {

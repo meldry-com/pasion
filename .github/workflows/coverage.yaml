@@ -1,108 +1,108 @@
-name: Coverage
+name: Test Coverage Reports
 
 on:
-  push:
-    branches: [main]
   pull_request:
     branches: [main]
-
-concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: false
+  push:
+    branches: [main]
 
 env:
-  CARGO_TERM_COLOR: always
   CARGO_NET_GIT_FETCH_WITH_CLI: "true"
+  CARGO_TERM_COLOR: always
+
+concurrency:
+  group: coverage-${{ github.ref }}
+  cancel-in-progress: false
 
 jobs:
-  frontend:
-    name: Run frontend test suite with coverage
-    runs-on: ubuntu-24.04
-
-    permissions:
-      id-token: write
-      contents: read
-
-    steps:
-      - name: Checkout the code
-        uses: actions/checkout@v6
-
-      - uses: ./.github/actions/build-frontend
-        env:
-          CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
-
-      - name: Test
-        working-directory: ./frontend
-        run: npm run coverage
-
-      - name: Upload to codecov.io
-        uses: codecov/codecov-action@v5.5.2
-        with:
-          token: ${{ secrets.CODECOV_TOKEN }}
-          directory: frontend/coverage/
-          flags: frontend
-
   rust:
-    name: Run Rust test suite with coverage
+    name: Gather Rust coverage data
     runs-on: ubuntu-24.04
 
     permissions:
       contents: read
 
     env:
-      SCCACHE_GHA_ENABLED: "true"
       RUSTC_WRAPPER: "sccache"
+      SCCACHE_GHA_ENABLED: "true"
 
     services:
       postgres:
         image: docker.io/library/postgres:15.3
         env:
+          POSTGRES_DB: postgres
           POSTGRES_USER: postgres
           POSTGRES_PASSWORD: postgres
-          POSTGRES_DB: postgres
+        ports:
+          - "5432:5432"
         options: >-
           --health-cmd pg_isready
           --health-interval 10s
           --health-timeout 5s
           --health-retries 5
-        ports:
-          - "5432:5432"
 
     steps:
-      - name: Checkout the code
+      - name: Fetch repository
         uses: actions/checkout@v6
 
-      - name: Install Rust toolchain
+      - name: Set up Rust with llvm-tools
         uses: dtolnay/rust-toolchain@stable
         with:
           components: llvm-tools-preview
 
-      - name: Setup sccache
+      - name: Configure sccache
         uses: mozilla-actions/sccache-action@v0.0.9
 
-      - name: Install grcov
+      - name: Set up grcov
         uses: taiki-e/install-action@v2
         with:
           tool: grcov
 
       - uses: ./.github/actions/build-frontend
 
-      - name: Run test suite with profiling enabled
+      - name: Execute tests with coverage instrumentation
         run: |
           cargo test --no-fail-fast --workspace
         env:
-          RUSTFLAGS: "-Cinstrument-coverage --cfg tokio_unstable"
-          LLVM_PROFILE_FILE: "cargo-test-%p-%m.profraw"
           DATABASE_URL: postgresql://postgres:postgres@localhost/postgres
+          LLVM_PROFILE_FILE: "cargo-test-%p-%m.profraw"
+          RUSTFLAGS: "-Cinstrument-coverage --cfg tokio_unstable"
 
-      - name: Build grcov report
+      - name: Produce grcov lcov report
         run: |
           mkdir -p target/coverage
           grcov . --binary-path ./target/debug/deps/ -s . -t lcov --branch --ignore-not-existing --ignore '../*' --ignore "/*" -o target/coverage/tests.lcov
 
-      - name: Upload to codecov.io
+      - name: Submit Rust coverage to codecov.io
         uses: codecov/codecov-action@v5.5.2
         with:
           token: ${{ secrets.CODECOV_TOKEN }}
           files: target/coverage/*.lcov
           flags: unit
+
+  frontend:
+    name: Gather frontend coverage data
+    runs-on: ubuntu-24.04
+
+    permissions:
+      contents: read
+      id-token: write
+
+    steps:
+      - name: Fetch repository
+        uses: actions/checkout@v6
+
+      - uses: ./.github/actions/build-frontend
+        env:
+          CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
+
+      - name: Execute frontend tests with coverage
+        working-directory: ./frontend
+        run: npm run coverage
+
+      - name: Submit frontend coverage to codecov.io
+        uses: codecov/codecov-action@v5.5.2
+        with:
+          token: ${{ secrets.CODECOV_TOKEN }}
+          directory: frontend/coverage/
+          flags: frontend

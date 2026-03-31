@@ -10,18 +10,29 @@ use serde::Serialize;
 
 use crate::{TemplateContext, context::SampleIdentifier};
 
+/// Wraps a [`pasion_data::CaptchaConfig`] so it can be exposed as a minijinja
+/// object with named fields.
 #[derive(Debug)]
-struct CaptchaConfig(pasion_data::CaptchaConfig);
+struct CaptchaConfigObject {
+    inner: pasion_data::CaptchaConfig,
+}
 
-impl Object for CaptchaConfig {
+impl CaptchaConfigObject {
+    /// Translate the service enum variant into the template-facing string key
+    fn service_name(&self) -> &'static str {
+        match &self.inner.service {
+            pasion_data::CaptchaService::RecaptchaV2 => "recaptcha_v2",
+            pasion_data::CaptchaService::CloudflareTurnstile => "cloudflare_turnstile",
+            pasion_data::CaptchaService::HCaptcha => "hcaptcha",
+        }
+    }
+}
+
+impl Object for CaptchaConfigObject {
     fn get_value(self: &Arc<Self>, key: &Value) -> Option<Value> {
-        match key.as_str() {
-            Some("service") => Some(match &self.0.service {
-                pasion_data::CaptchaService::RecaptchaV2 => "recaptcha_v2".into(),
-                pasion_data::CaptchaService::CloudflareTurnstile => "cloudflare_turnstile".into(),
-                pasion_data::CaptchaService::HCaptcha => "hcaptcha".into(),
-            }),
-            Some("site_key") => Some(self.0.site_key.clone().into()),
+        match key.as_str()? {
+            "service" => Some(Value::from(self.service_name())),
+            "site_key" => Some(Value::from(self.inner.site_key.clone())),
             _ => None,
         }
     }
@@ -43,8 +54,10 @@ pub struct WithCaptcha<T> {
 impl<T> WithCaptcha<T> {
     #[must_use]
     pub(crate) fn new(captcha: Option<pasion_data::CaptchaConfig>, inner: T) -> Self {
+        let captcha_value =
+            captcha.map(|cfg| Value::from_object(CaptchaConfigObject { inner: cfg }));
         Self {
-            captcha: captcha.map(|captcha| Value::from_object(CaptchaConfig(captcha))),
+            captcha: captcha_value,
             inner,
         }
     }
@@ -61,7 +74,7 @@ impl<T: TemplateContext> TemplateContext for WithCaptcha<T> {
     {
         T::sample(now, rng, locales)
             .into_iter()
-            .map(|(k, inner)| (k, Self::new(None, inner)))
+            .map(|(identifier, inner_ctx)| (identifier, Self::new(None, inner_ctx)))
             .collect()
     }
 }

@@ -2,14 +2,15 @@ use std::{collections::HashMap, hash::Hash};
 
 use serde::{Deserialize, Serialize};
 
-/// A trait which should be used for form field enums
+/// Marker trait for form field enum types, controlling which values to retain
+/// (e.g. password fields should not be retained).
 pub trait FormField: Copy + Hash + PartialEq + Eq + Serialize + for<'de> Deserialize<'de> {
     /// Return false for fields where values should not be kept (e.g. password
     /// fields)
     fn keep(&self) -> bool;
 }
 
-/// An error on a form field
+/// Describes a single field-level validation error
 #[derive(Debug, Serialize)]
 #[serde(rename_all = "snake_case", tag = "kind")]
 pub enum FieldError {
@@ -38,7 +39,7 @@ pub enum FieldError {
     },
 }
 
-/// An error on the whole form
+/// Describes a form-level validation error
 #[derive(Debug, Serialize)]
 #[serde(rename_all = "snake_case", tag = "kind")]
 pub enum FormError {
@@ -67,13 +68,16 @@ pub enum FormError {
     Captcha,
 }
 
+/// Internal representation of a single field's current state
 #[derive(Debug, Default, Serialize)]
 struct FieldState {
     value: Option<String>,
     errors: Vec<FieldError>,
 }
 
-/// The state of a form and its fields
+/// Tracks state and validation errors for a form and its individual fields.
+///
+/// The type parameter `K` represents the field name enum.
 #[derive(Debug, Serialize)]
 pub struct FormState<K: Hash + Eq> {
     fields: HashMap<K, FieldState>,
@@ -85,56 +89,65 @@ pub struct FormState<K: Hash + Eq> {
 
 impl<K: Hash + Eq> Default for FormState<K> {
     fn default() -> Self {
-        FormState {
-            fields: HashMap::default(),
-            errors: Vec::default(),
+        Self {
+            fields: HashMap::new(),
+            errors: Vec::new(),
             has_errors: false,
         }
     }
 }
 
+/// Intermediate enum used during deserialization to handle both known and
+/// unknown field keys gracefully.
 #[derive(Deserialize, PartialEq, Eq, Hash)]
 #[serde(untagged)]
-enum KeyOrOther<K> {
-    Key(K),
-    Other(String),
+enum FieldKeyOrUnknown<K> {
+    Known(K),
+    Unknown(String),
 }
 
-impl<K> KeyOrOther<K> {
-    fn key(self) -> Option<K> {
+impl<K> FieldKeyOrUnknown<K> {
+    /// Extract the known key variant, discarding unknowns
+    fn into_known(self) -> Option<K> {
         match self {
-            Self::Key(key) => Some(key),
-            Self::Other(_) => None,
+            Self::Known(k) => Some(k),
+            Self::Unknown(_) => None,
         }
     }
 }
 
 impl<K: FormField> FormState<K> {
-    /// Generate a [`FormState`] out of a form
+    /// Build a [`FormState`] from a serializable form struct.
+    ///
+    /// Field values are retained or cleared based on the [`FormField::keep`]
+    /// implementation for each key.
     ///
     /// # Panics
     ///
     /// If the form fails to serialize, or the form field keys fail to
     /// deserialize
     pub fn from_form<F: Serialize>(form: &F) -> Self {
-        let form = serde_json::to_value(form).unwrap();
-        let fields: HashMap<KeyOrOther<K>, Option<String>> = serde_json::from_value(form).unwrap();
+        // Serialize the form to a generic JSON value, then re-parse the keys
+        let json_val = serde_json::to_value(form).expect("form serialization should not fail");
+        let raw_fields: HashMap<FieldKeyOrUnknown<K>, Option<String>> =
+            serde_json::from_value(json_val).expect("field key deserialization should not fail");
 
-        let fields = fields
+        let populated_fields = raw_fields
             .into_iter()
-            .filter_map(|(key, value)| {
-                let key = key.key()?;
-                let value = key.keep().then_some(value).flatten();
-                let field = FieldState {
-                    value,
+            .filter_map(|(maybe_key, val)| {
+                let key = maybe_key.into_known()?;
+                // Only preserve the value when the field type says to keep it
+                let retained_value = if key.keep() { val } else { None };
+                let state = FieldState {
+                    value: retained_value,
                     errors: Vec::new(),
                 };
-                Some((key, field))
+                Some((key, state))
             })
             .collect();
 
-        FormState {
-            fields,
+        Self {
+            fields: populated_fields,
             errors: Vec::new(),
             has_errors: false,
         }
@@ -173,7 +186,9 @@ impl<K: FormField> FormState<K> {
 
     /// Checks if a field contains a value
     pub fn has_value(&self, field: K) -> bool {
-        self.fields.get(&field).is_some_and(|f| f.value.is_some())
+        self.fields
+            .get(&field)
+            .is_some_and(|state| state.value.is_some())
     }
 
     /// Returns `true` if the form has no error attached to it
@@ -203,34 +218,31 @@ mod tests {
     use super::*;
 
     #[derive(Serialize)]
-    struct TestForm {
+    struct SampleForm {
         foo: String,
         bar: String,
     }
 
     #[derive(Serialize, Deserialize, Debug, Clone, Copy, Hash, PartialEq, Eq)]
     #[serde(rename_all = "snake_case")]
-    enum TestFormField {
+    enum SampleField {
         Foo,
         Bar,
     }
 
-    impl FormField for TestFormField {
+    impl FormField for SampleField {
         fn keep(&self) -> bool {
-            match self {
-                Self::Foo => true,
-                Self::Bar => false,
-            }
+            matches!(self, Self::Foo)
         }
     }
 
-    impl ToFormState for TestForm {
-        type Field = TestFormField;
+    impl ToFormState for SampleForm {
+        type Field = SampleField;
     }
 
     #[test]
     fn form_state_serialization() {
-        let form = TestForm {
+        let form = SampleForm {
             foo: "john".to_owned(),
             bar: "hunter2".to_owned(),
         };
@@ -254,14 +266,14 @@ mod tests {
             })
         );
 
-        let form = TestForm {
+        let form = SampleForm {
             foo: String::new(),
             bar: String::new(),
         };
         let state = form
             .to_form_state()
-            .with_error_on_field(TestFormField::Foo, FieldError::Required)
-            .with_error_on_field(TestFormField::Bar, FieldError::Required)
+            .with_error_on_field(SampleField::Foo, FieldError::Required)
+            .with_error_on_field(SampleField::Bar, FieldError::Required)
             .with_error_on_form(FormError::InvalidCredentials);
 
         let state = serde_json::to_value(state).unwrap();

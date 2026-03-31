@@ -8,142 +8,148 @@ use serde::{Deserialize, Serialize, de::Error};
 
 use super::ConfigurationSection;
 
+// ---------------------------------------------------------------------------
+// Sub-types
+// ---------------------------------------------------------------------------
+
 #[derive(Clone, Debug, Serialize, Deserialize, JsonSchema)]
 pub struct Credentials {
-    /// Username for use to authenticate when connecting to the SMTP server
+    /// SMTP login name
     pub username: String,
-
-    /// Password for use to authenticate when connecting to the SMTP server
+    /// SMTP password
     pub password: String,
 }
 
-/// Encryption mode to use
+/// Wire encryption mode for the SMTP relay
 #[derive(Clone, Copy, Debug, Serialize, Deserialize, JsonSchema)]
 #[serde(rename_all = "lowercase")]
 pub enum EmailSmtpMode {
-    /// Plain text
+    /// Unencrypted connection
     Plain,
-
-    /// `StartTLS` (starts as plain text then upgrade to TLS)
+    /// Opportunistic upgrade (`STARTTLS`)
     StartTls,
-
-    /// TLS
+    /// Implicit TLS from the start
     Tls,
 }
 
-/// What backend should be used when sending emails
+/// Which transport delivers outbound emails
 #[derive(Clone, Copy, Debug, Serialize, Deserialize, JsonSchema, Default)]
 #[serde(rename_all = "snake_case")]
 pub enum EmailTransportKind {
-    /// Don't send emails anywhere
+    /// Silently discard all emails (useful for development)
     #[default]
     Blackhole,
-
-    /// Send emails via an SMTP relay
+    /// Relay through an SMTP server
     Smtp,
-
-    /// Send emails by calling sendmail
+    /// Pipe through the local `sendmail` binary
     Sendmail,
 }
 
-fn default_email() -> String {
-    r#""Authentication Service" <root@localhost>"#.to_owned()
+// ---------------------------------------------------------------------------
+// Defaults
+// ---------------------------------------------------------------------------
+
+const DEFAULT_FROM_ADDRESS: &str = r#""Authentication Service" <root@localhost>"#;
+
+fn from_address_default() -> String {
+    DEFAULT_FROM_ADDRESS.to_owned()
 }
 
 #[allow(clippy::unnecessary_wraps)]
-fn default_sendmail_command() -> Option<String> {
+fn sendmail_binary_default() -> Option<String> {
     Some("sendmail".to_owned())
 }
 
-/// Configuration related to sending emails
+// ---------------------------------------------------------------------------
+// Main struct
+// ---------------------------------------------------------------------------
+
+/// Outbound email delivery settings
 #[derive(Clone, Debug, Serialize, Deserialize, JsonSchema)]
 pub struct EmailConfig {
-    /// Email address to use as From when sending emails
-    #[serde(default = "default_email")]
+    /// Envelope From / sender address
+    #[serde(default = "from_address_default")]
     #[schemars(email)]
     pub from: String,
 
-    /// Email address to use as Reply-To when sending emails
-    #[serde(default = "default_email")]
+    /// Reply-To header value
+    #[serde(default = "from_address_default")]
     #[schemars(email)]
     pub reply_to: String,
 
-    /// What backend should be used when sending emails
+    /// Transport backend selection
     transport: EmailTransportKind,
 
-    /// SMTP transport: Connection mode to the relay
+    /// SMTP: connection encryption mode
     #[serde(skip_serializing_if = "Option::is_none")]
     mode: Option<EmailSmtpMode>,
 
-    /// SMTP transport: Hostname to connect to
+    /// SMTP: relay hostname
     #[serde(skip_serializing_if = "Option::is_none")]
     #[schemars(with = "Option<crate::schema::Hostname>")]
     hostname: Option<String>,
 
-    /// SMTP transport: Port to connect to. Default is 25 for plain, 465 for TLS
-    /// and 587 for `StartTLS`
+    /// SMTP: relay port (defaults: 25 plain, 465 TLS, 587 STARTTLS)
     #[serde(skip_serializing_if = "Option::is_none")]
     #[schemars(range(min = 1, max = 65535))]
     port: Option<NonZeroU16>,
 
-    /// SMTP transport: Username for use to authenticate when connecting to the
-    /// SMTP server
-    ///
-    /// Must be set if the `password` field is set
+    /// SMTP: authentication username (must accompany `password`)
     #[serde(skip_serializing_if = "Option::is_none")]
     username: Option<String>,
 
-    /// SMTP transport: Password for use to authenticate when connecting to the
-    /// SMTP server
-    ///
-    /// Must be set if the `username` field is set
+    /// SMTP: authentication password (must accompany `username`)
     #[serde(skip_serializing_if = "Option::is_none")]
     password: Option<String>,
 
-    /// Sendmail transport: Command to use to send emails
+    /// Sendmail: path to the sendmail-compatible binary
     #[serde(skip_serializing_if = "Option::is_none")]
-    #[schemars(default = "default_sendmail_command")]
+    #[schemars(default = "sendmail_binary_default")]
     command: Option<String>,
 }
 
+// ---------------------------------------------------------------------------
+// Accessors
+// ---------------------------------------------------------------------------
+
 impl EmailConfig {
-    /// What backend should be used when sending emails
+    /// Active transport backend
     #[must_use]
     pub fn transport(&self) -> EmailTransportKind {
         self.transport
     }
 
-    /// Connection mode to the relay
+    /// SMTP encryption mode, if configured
     #[must_use]
     pub fn mode(&self) -> Option<EmailSmtpMode> {
         self.mode
     }
 
-    /// Hostname to connect to
+    /// SMTP relay hostname, if configured
     #[must_use]
     pub fn hostname(&self) -> Option<&str> {
         self.hostname.as_deref()
     }
 
-    /// Port to connect to
+    /// SMTP port override, if configured
     #[must_use]
     pub fn port(&self) -> Option<NonZeroU16> {
         self.port
     }
 
-    /// Username for use to authenticate when connecting to the SMTP server
+    /// SMTP authentication username
     #[must_use]
     pub fn username(&self) -> Option<&str> {
         self.username.as_deref()
     }
 
-    /// Password for use to authenticate when connecting to the SMTP server
+    /// SMTP authentication password
     #[must_use]
     pub fn password(&self) -> Option<&str> {
         self.password.as_deref()
     }
 
-    /// Command to use to send emails
+    /// Sendmail binary path
     #[must_use]
     pub fn command(&self) -> Option<&str> {
         self.command.as_deref()
@@ -153,8 +159,8 @@ impl EmailConfig {
 impl Default for EmailConfig {
     fn default() -> Self {
         Self {
-            from: default_email(),
-            reply_to: default_email(),
+            from: from_address_default(),
+            reply_to: from_address_default(),
             transport: EmailTransportKind::Blackhole,
             mode: None,
             hostname: None,
@@ -166,6 +172,10 @@ impl Default for EmailConfig {
     }
 }
 
+// ---------------------------------------------------------------------------
+// Validation
+// ---------------------------------------------------------------------------
+
 impl ConfigurationSection for EmailConfig {
     const PATH: &'static str = "email";
 
@@ -173,107 +183,78 @@ impl ConfigurationSection for EmailConfig {
         &self,
         figment: &figment::Figment,
     ) -> Result<(), Box<dyn std::error::Error + Send + Sync + 'static>> {
-        let metadata = figment.find_metadata(Self::PATH);
+        let meta = figment.find_metadata(Self::PATH);
 
-        let error_on_field = |mut error: figment::error::Error, field: &'static str| {
-            error.metadata = metadata.cloned();
-            error.profile = Some(figment::Profile::Default);
-            error.path = vec![Self::PATH.to_owned(), field.to_owned()];
-            error
+        let field_error = |mut e: figment::error::Error, field: &'static str| {
+            e.metadata = meta.cloned();
+            e.profile = Some(figment::Profile::Default);
+            e.path = vec![Self::PATH.to_owned(), field.to_owned()];
+            e
         };
 
-        let missing_field = |field: &'static str| {
-            error_on_field(figment::error::Error::missing_field(field), field)
-        };
+        let require = |field: &'static str| field_error(figment::error::Error::missing_field(field), field);
 
-        let unexpected_field = |field: &'static str, expected_fields: &'static [&'static str]| {
-            error_on_field(
-                figment::error::Error::unknown_field(field, expected_fields),
-                field,
-            )
+        let reject = |field: &'static str, allowed: &'static [&'static str]| {
+            field_error(figment::error::Error::unknown_field(field, allowed), field)
         };
 
         match self.transport {
-            EmailTransportKind::Blackhole => {}
+            EmailTransportKind::Blackhole => { /* nothing to check */ }
 
             EmailTransportKind::Smtp => {
+                // Validate sender addresses
                 if let Err(e) = Mailbox::from_str(&self.from) {
-                    return Err(error_on_field(figment::error::Error::custom(e), "from").into());
+                    return Err(field_error(figment::error::Error::custom(e), "from").into());
                 }
-
                 if let Err(e) = Mailbox::from_str(&self.reply_to) {
-                    return Err(error_on_field(figment::error::Error::custom(e), "reply_to").into());
+                    return Err(field_error(figment::error::Error::custom(e), "reply_to").into());
                 }
 
+                // Username and password must be paired
                 match (self.username.is_some(), self.password.is_some()) {
-                    (true, true) | (false, false) => {}
-                    (true, false) => {
-                        return Err(missing_field("password").into());
-                    }
-                    (false, true) => {
-                        return Err(missing_field("username").into());
-                    }
+                    (true, false) => return Err(require("password").into()),
+                    (false, true) => return Err(require("username").into()),
+                    _ => {}
                 }
 
                 if self.mode.is_none() {
-                    return Err(missing_field("mode").into());
+                    return Err(require("mode").into());
                 }
-
                 if self.hostname.is_none() {
-                    return Err(missing_field("hostname").into());
+                    return Err(require("hostname").into());
                 }
-
                 if self.command.is_some() {
-                    return Err(unexpected_field(
+                    return Err(reject(
                         "command",
-                        &[
-                            "from",
-                            "reply_to",
-                            "transport",
-                            "mode",
-                            "hostname",
-                            "port",
-                            "username",
-                            "password",
-                        ],
+                        &["from", "reply_to", "transport", "mode", "hostname", "port", "username", "password"],
                     )
                     .into());
                 }
             }
 
             EmailTransportKind::Sendmail => {
-                let expected_fields = &["from", "reply_to", "transport", "command"];
+                const ALLOWED: &[&str] = &["from", "reply_to", "transport", "command"];
 
                 if let Err(e) = Mailbox::from_str(&self.from) {
-                    return Err(error_on_field(figment::error::Error::custom(e), "from").into());
+                    return Err(field_error(figment::error::Error::custom(e), "from").into());
                 }
-
                 if let Err(e) = Mailbox::from_str(&self.reply_to) {
-                    return Err(error_on_field(figment::error::Error::custom(e), "reply_to").into());
+                    return Err(field_error(figment::error::Error::custom(e), "reply_to").into());
                 }
 
                 if self.command.is_none() {
-                    return Err(missing_field("command").into());
+                    return Err(require("command").into());
                 }
-
-                if self.mode.is_some() {
-                    return Err(unexpected_field("mode", expected_fields).into());
-                }
-
-                if self.hostname.is_some() {
-                    return Err(unexpected_field("hostname", expected_fields).into());
-                }
-
-                if self.port.is_some() {
-                    return Err(unexpected_field("port", expected_fields).into());
-                }
-
-                if self.username.is_some() {
-                    return Err(unexpected_field("username", expected_fields).into());
-                }
-
-                if self.password.is_some() {
-                    return Err(unexpected_field("password", expected_fields).into());
+                for (flag, name) in [
+                    (self.mode.is_some(), "mode"),
+                    (self.hostname.is_some(), "hostname"),
+                    (self.port.is_some(), "port"),
+                    (self.username.is_some(), "username"),
+                    (self.password.is_some(), "password"),
+                ] {
+                    if flag {
+                        return Err(reject(name, ALLOWED).into());
+                    }
                 }
             }
         }

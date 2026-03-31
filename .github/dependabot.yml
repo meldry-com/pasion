@@ -1,105 +1,110 @@
+---
 version: 2
-updates:
-  - package-ecosystem: "cargo"
-    directory: "/"
-    labels:
-      - "A-Dependencies"
-      - "Z-Deps-Backend"
-    schedule:
-      interval: "daily"
-    ignore:
-      # We plan to remove apalis soon, let's ignore it for now
-      - dependency-name: "apalis"
-      - dependency-name: "apalis-*"
-    groups:
-      axum:
-        patterns:
-          - "axum"
-          - "axum-*"
-      opentelemetry:
-        patterns:
-          - "opentelemetry"
-          - "opentelemetry_sdk"
-          - "opentelemetry-*"
-          - "tracing-opentelemetry"
-      sea-query:
-        patterns:
-          - "sea-query"
-          - "sea-query-*"
-      sentry:
-        patterns:
-          - "sentry"
-          - "sentry-*"
-      tracing:
-        patterns:
-          - "tracing-*"
-        exclude-patterns:
-          - "tracing-opentelemetry"
-      icu:
-        patterns:
-          - "icu"
-          - "icu_*"
 
+updates:
+  # GitHub Actions dependency updates
   - package-ecosystem: "github-actions"
     directory: "/"
-    labels:
-      - "A-Dependencies"
-      - "Z-Deps-CI"
     schedule:
       interval: "daily"
+    labels:
+      - "Z-Deps-CI"
+      - "A-Dependencies"
 
+  # Frontend (npm) dependency updates
   - package-ecosystem: "npm"
     directory: "/frontend/"
-    labels:
-      - "A-Dependencies"
-      - "Z-Deps-Frontend"
     schedule:
       interval: "daily"
+    labels:
+      - "Z-Deps-Frontend"
+      - "A-Dependencies"
     groups:
-      storybook:
+      types:
         patterns:
-          - "storybook"
-          - "storybook-*"
-          - "@storybook/*"
-      fontsource:
-        patterns:
-          - "@fontsource/*"
-      vitest:
-        patterns:
-          - "vitest"
-          - "@vitest/*"
-      vite:
-        patterns:
-          - "vite"
-          - "@vitejs/*"
-          - "vite-*"
-      i18next:
-        patterns:
-          - "i18next"
-          - "i18next-*"
-          - "react-i18next"
+          - "@types/*"
       react:
         patterns:
           - "react"
           - "react-*"
         exclude-patterns:
           - "react-i18next"
-      jotai:
+      tanstack-query:
         patterns:
-          - "jotai"
-          - "jotai-*"
+          - "@tanstack/react-query"
+          - "@tanstack/react-query-*"
       tanstack-router:
         patterns:
           - "@tanstack/react-router"
           - "@tanstack/react-router-*"
           - "@tanstack/router-*"
-      tanstack-query:
+      vite:
         patterns:
-          - "@tanstack/react-query"
-          - "@tanstack/react-query-*"
-      types:
+          - "vite"
+          - "vite-*"
+          - "@vitejs/*"
+      vitest:
         patterns:
-          - "@types/*"
+          - "vitest"
+          - "@vitest/*"
+      storybook:
+        patterns:
+          - "storybook"
+          - "storybook-*"
+          - "@storybook/*"
+      i18next:
+        patterns:
+          - "i18next"
+          - "i18next-*"
+          - "react-i18next"
+      fontsource:
+        patterns:
+          - "@fontsource/*"
+      jotai:
+        patterns:
+          - "jotai"
+          - "jotai-*"
       browser-logos:
         patterns:
           - "@browser-logos/*"
+
+  # Rust (Cargo) dependency updates
+  - package-ecosystem: "cargo"
+    directory: "/"
+    schedule:
+      interval: "daily"
+    labels:
+      - "Z-Deps-Backend"
+      - "A-Dependencies"
+    ignore:
+      # apalis is slated for removal, skip updates for it
+      - dependency-name: "apalis"
+      - dependency-name: "apalis-*"
+    groups:
+      icu:
+        patterns:
+          - "icu"
+          - "icu_*"
+      tracing:
+        patterns:
+          - "tracing-*"
+        exclude-patterns:
+          - "tracing-opentelemetry"
+      opentelemetry:
+        patterns:
+          - "opentelemetry"
+          - "opentelemetry_sdk"
+          - "opentelemetry-*"
+          - "tracing-opentelemetry"
+      sentry:
+        patterns:
+          - "sentry"
+          - "sentry-*"
+      axum:
+        patterns:
+          - "axum"
+          - "axum-*"
+      sea-query:
+        patterns:
+          - "sea-query"
+          - "sea-query-*"

@@ -11,242 +11,277 @@ use minijinja::{
 
 use crate::key::{Context, Key};
 
+/// Top-level entry: walk a single statement and record any translation keys
+/// discovered within.
 pub fn find_in_stmt<'a>(context: &mut Context, stmt: &'a Stmt<'a>) -> Result<(), minijinja::Error> {
+    dispatch_stmt(context, stmt)
+}
+
+// ── Statement visitors ──────────────────────────────────────────────
+
+fn dispatch_stmt<'a>(
+    ctx: &mut Context,
+    stmt: &'a Stmt<'a>,
+) -> Result<(), minijinja::Error> {
     match stmt {
-        Stmt::Template(template) => find_in_stmts(context, &template.children)?,
-        Stmt::EmitExpr(emit_expr) => find_in_expr(context, &emit_expr.expr)?,
-        Stmt::EmitRaw(_raw) => {}
-        Stmt::ForLoop(for_loop) => {
-            find_in_expr(context, &for_loop.iter)?;
-            find_in_optional_expr(context, for_loop.filter_expr.as_ref())?;
-            find_in_expr(context, &for_loop.target)?;
-            find_in_stmts(context, &for_loop.body)?;
-            find_in_stmts(context, &for_loop.else_body)?;
+        Stmt::Template(tpl) => visit_stmt_list(ctx, &tpl.children),
+        Stmt::EmitExpr(emit) => visit_expr(ctx, &emit.expr),
+        Stmt::EmitRaw(_) => Ok(()),
+
+        Stmt::ForLoop(fl) => {
+            visit_expr(ctx, &fl.iter)?;
+            visit_optional_expr(ctx, fl.filter_expr.as_ref())?;
+            visit_expr(ctx, &fl.target)?;
+            visit_stmt_list(ctx, &fl.body)?;
+            visit_stmt_list(ctx, &fl.else_body)
         }
-        Stmt::IfCond(if_cond) => {
-            find_in_expr(context, &if_cond.expr)?;
-            find_in_stmts(context, &if_cond.true_body)?;
-            find_in_stmts(context, &if_cond.false_body)?;
+
+        Stmt::IfCond(ic) => {
+            visit_expr(ctx, &ic.expr)?;
+            visit_stmt_list(ctx, &ic.true_body)?;
+            visit_stmt_list(ctx, &ic.false_body)
         }
-        Stmt::WithBlock(with_block) => {
-            find_in_stmts(context, &with_block.body)?;
-            for (left, right) in &with_block.assignments {
-                find_in_expr(context, left)?;
-                find_in_expr(context, right)?;
+
+        Stmt::WithBlock(wb) => {
+            visit_stmt_list(ctx, &wb.body)?;
+            for (lhs, rhs) in &wb.assignments {
+                visit_expr(ctx, lhs)?;
+                visit_expr(ctx, rhs)?;
             }
+            Ok(())
         }
+
         Stmt::Set(set) => {
-            find_in_expr(context, &set.target)?;
-            find_in_expr(context, &set.expr)?;
+            visit_expr(ctx, &set.target)?;
+            visit_expr(ctx, &set.expr)
         }
-        Stmt::SetBlock(set_block) => {
-            find_in_expr(context, &set_block.target)?;
-            find_in_stmts(context, &set_block.body)?;
-            if let Some(expr) = &set_block.filter {
-                find_in_expr(context, expr)?;
+
+        Stmt::SetBlock(sb) => {
+            visit_expr(ctx, &sb.target)?;
+            visit_stmt_list(ctx, &sb.body)?;
+            visit_optional_expr(ctx, sb.filter.as_ref())
+        }
+
+        Stmt::AutoEscape(ae) => {
+            visit_expr(ctx, &ae.enabled)?;
+            visit_stmt_list(ctx, &ae.body)
+        }
+
+        Stmt::FilterBlock(fb) => {
+            visit_expr(ctx, &fb.filter)?;
+            visit_stmt_list(ctx, &fb.body)
+        }
+
+        Stmt::Block(blk) => visit_stmt_list(ctx, &blk.body),
+
+        Stmt::Import(imp) => {
+            visit_expr(ctx, &imp.name)?;
+            visit_expr(ctx, &imp.expr)
+        }
+
+        Stmt::FromImport(fi) => {
+            visit_expr(ctx, &fi.expr)?;
+            for (name_expr, alias_expr) in &fi.names {
+                visit_expr(ctx, name_expr)?;
+                visit_optional_expr(ctx, alias_expr.as_ref())?;
             }
+            Ok(())
         }
-        Stmt::AutoEscape(auto_escape) => {
-            find_in_expr(context, &auto_escape.enabled)?;
-            find_in_stmts(context, &auto_escape.body)?;
+
+        Stmt::Extends(ext) => visit_expr(ctx, &ext.name),
+        Stmt::Include(inc) => visit_expr(ctx, &inc.name),
+
+        Stmt::Macro(mac) => visit_macro_decl(ctx, mac),
+
+        Stmt::CallBlock(cb) => {
+            visit_call_spanned(ctx, &cb.call)?;
+            visit_macro_decl(ctx, &cb.macro_decl)
         }
-        Stmt::FilterBlock(filter_block) => {
-            find_in_expr(context, &filter_block.filter)?;
-            find_in_stmts(context, &filter_block.body)?;
-        }
-        Stmt::Block(block) => {
-            find_in_stmts(context, &block.body)?;
-        }
-        Stmt::Import(import) => {
-            find_in_expr(context, &import.name)?;
-            find_in_expr(context, &import.expr)?;
-        }
-        Stmt::FromImport(from_import) => {
-            find_in_expr(context, &from_import.expr)?;
-            for (name, alias) in &from_import.names {
-                find_in_expr(context, name)?;
-                find_in_optional_expr(context, alias.as_ref())?;
-            }
-        }
-        Stmt::Extends(extends) => {
-            find_in_expr(context, &extends.name)?;
-        }
-        Stmt::Include(include) => {
-            find_in_expr(context, &include.name)?;
-        }
-        Stmt::Macro(macro_) => {
-            find_in_macro(context, macro_)?;
-        }
-        Stmt::CallBlock(call_block) => {
-            find_in_call(context, &call_block.call)?;
-            find_in_macro(context, &call_block.macro_decl)?;
-        }
-        Stmt::Do(do_) => {
-            find_in_call(context, &do_.call)?;
+
+        Stmt::Do(do_stmt) => visit_call_spanned(ctx, &do_stmt.call),
+    }
+}
+
+// ── Macro helpers ───────────────────────────────────────────────────
+
+fn visit_macro_decl<'a>(
+    ctx: &mut Context,
+    mac: &'a Macro<'a>,
+) -> Result<(), minijinja::Error> {
+    visit_stmt_list(ctx, &mac.body)?;
+    visit_expr_list(ctx, &mac.args)?;
+    visit_expr_list(ctx, &mac.defaults)
+}
+
+// ── Call handling (where translation keys are extracted) ─────────────
+
+fn visit_call_spanned<'a>(
+    ctx: &mut Context,
+    call: &'a Spanned<Call<'a>>,
+) -> Result<(), minijinja::Error> {
+    let source_span = call.span();
+
+    // Detect whether this call invokes the translation function.
+    if let Expr::Var(v) = &call.expr {
+        if v.id == ctx.func() {
+            record_translation_key(ctx, &call.args, source_span)?;
         }
     }
+
+    visit_expr(ctx, &call.expr)?;
+    visit_call_arg_list(ctx, &call.args)
+}
+
+/// Extract the translation key from the first positional argument of
+/// a call to the translation function.
+fn record_translation_key<'a>(
+    ctx: &mut Context,
+    args: &'a [CallArg<'a>],
+    span: minijinja::machinery::Span,
+) -> Result<(), minijinja::Error> {
+    let first_arg = args.first().and_then(extract_const_from_call_arg);
+
+    let key_str = first_arg
+        .and_then(|c| c.value.as_str())
+        .ok_or_else(|| {
+            minijinja::Error::new(
+                ErrorKind::UndefinedError,
+                "t() first argument must be a string literal",
+            )
+        })?;
+
+    let is_plural = args
+        .iter()
+        .any(|a| matches!(a, CallArg::Kwarg("count", _)));
+
+    let kind = if is_plural {
+        crate::key::Kind::Plural
+    } else {
+        crate::key::Kind::Message
+    };
+
+    let mut key = Key::new(kind, key_str.to_owned());
+    key = ctx.set_key_location(key, span);
+    ctx.record(key);
 
     Ok(())
 }
 
-fn as_const<'a>(call_arg: &'a CallArg<'a>) -> Option<&'a Const> {
-    match call_arg {
-        CallArg::Pos(Expr::Const(const_)) => Some(const_),
+fn extract_const_from_call_arg<'a>(arg: &'a CallArg<'a>) -> Option<&'a Const> {
+    match arg {
+        CallArg::Pos(Expr::Const(c)) => Some(c),
         _ => None,
     }
 }
 
-fn find_in_macro<'a>(context: &mut Context, macro_: &'a Macro<'a>) -> Result<(), minijinja::Error> {
-    find_in_stmts(context, &macro_.body)?;
-    find_in_exprs(context, &macro_.args)?;
-    find_in_exprs(context, &macro_.defaults)?;
+// ── Call-argument visitors ──────────────────────────────────────────
 
-    Ok(())
-}
-
-fn find_in_call<'a>(
-    context: &mut Context,
-    call: &'a Spanned<Call<'a>>,
-) -> Result<(), minijinja::Error> {
-    let span = call.span();
-    if let Expr::Var(var_) = &call.expr
-        && var_.id == context.func()
-    {
-        let key = call
-            .args
-            .first()
-            .and_then(as_const)
-            .and_then(|const_| const_.value.as_str())
-            .ok_or(minijinja::Error::new(
-                ErrorKind::UndefinedError,
-                "t() first argument must be a string literal",
-            ))?;
-
-        let has_count = call
-            .args
-            .iter()
-            .any(|arg| matches!(arg, CallArg::Kwarg("count", _)));
-
-        let key = Key::new(
-            if has_count {
-                crate::key::Kind::Plural
-            } else {
-                crate::key::Kind::Message
-            },
-            key.to_owned(),
-        );
-
-        let key = context.set_key_location(key, span);
-
-        context.record(key);
-    }
-
-    find_in_expr(context, &call.expr)?;
-    find_in_call_args(context, &call.args)?;
-
-    Ok(())
-}
-
-fn find_in_call_args<'a>(
-    context: &mut Context,
+fn visit_call_arg_list<'a>(
+    ctx: &mut Context,
     args: &'a [CallArg<'a>],
 ) -> Result<(), minijinja::Error> {
     for arg in args {
-        find_in_call_arg(context, arg)?;
+        visit_single_call_arg(ctx, arg)?;
     }
-
     Ok(())
 }
 
-fn find_in_call_arg<'a>(
-    context: &mut Context,
+fn visit_single_call_arg<'a>(
+    ctx: &mut Context,
     arg: &'a CallArg<'a>,
 ) -> Result<(), minijinja::Error> {
-    match arg {
-        CallArg::Pos(expr)
-        | CallArg::Kwarg(_, expr)
-        | CallArg::PosSplat(expr)
-        | CallArg::KwargSplat(expr) => find_in_expr(context, expr),
-    }
+    let inner = match arg {
+        CallArg::Pos(e) | CallArg::Kwarg(_, e) | CallArg::PosSplat(e) | CallArg::KwargSplat(e) => {
+            e
+        }
+    };
+    visit_expr(ctx, inner)
 }
 
-fn find_in_stmts<'a>(context: &mut Context, stmts: &'a [Stmt<'a>]) -> Result<(), minijinja::Error> {
-    for stmt in stmts {
-        find_in_stmt(context, stmt)?;
-    }
+// ── Statement / expression list visitors ────────────────────────────
 
-    Ok(())
-}
-
-fn find_in_expr<'a>(context: &mut Context, expr: &'a Expr<'a>) -> Result<(), minijinja::Error> {
-    match expr {
-        Expr::Var(_var) => {}
-        Expr::Const(_const) => {}
-        Expr::Slice(slice) => {
-            find_in_expr(context, &slice.expr)?;
-            find_in_optional_expr(context, slice.start.as_ref())?;
-            find_in_optional_expr(context, slice.stop.as_ref())?;
-            find_in_optional_expr(context, slice.step.as_ref())?;
-        }
-        Expr::UnaryOp(unary_op) => {
-            find_in_expr(context, &unary_op.expr)?;
-        }
-        Expr::BinOp(bin_op) => {
-            find_in_expr(context, &bin_op.left)?;
-            find_in_expr(context, &bin_op.right)?;
-        }
-        Expr::IfExpr(if_expr) => {
-            find_in_expr(context, &if_expr.test_expr)?;
-            find_in_expr(context, &if_expr.true_expr)?;
-            find_in_optional_expr(context, if_expr.false_expr.as_ref())?;
-        }
-        Expr::Filter(filter) => {
-            find_in_optional_expr(context, filter.expr.as_ref())?;
-            find_in_call_args(context, &filter.args)?;
-        }
-        Expr::Test(test) => {
-            find_in_expr(context, &test.expr)?;
-            find_in_call_args(context, &test.args)?;
-        }
-        Expr::GetAttr(get_attr) => {
-            find_in_expr(context, &get_attr.expr)?;
-        }
-        Expr::GetItem(get_item) => {
-            find_in_expr(context, &get_item.expr)?;
-            find_in_expr(context, &get_item.subscript_expr)?;
-        }
-        Expr::Call(call) => {
-            find_in_call(context, call)?;
-        }
-        Expr::List(list) => {
-            find_in_exprs(context, &list.items)?;
-        }
-        Expr::Map(map) => {
-            find_in_exprs(context, &map.keys)?;
-            find_in_exprs(context, &map.values)?;
-        }
-    }
-
-    Ok(())
-}
-
-fn find_in_exprs<'a>(context: &mut Context, exprs: &'a [Expr<'a>]) -> Result<(), minijinja::Error> {
-    for expr in exprs {
-        find_in_expr(context, expr)?;
-    }
-
-    Ok(())
-}
-
-fn find_in_optional_expr<'a>(
-    context: &mut Context,
-    expr: Option<&'a Expr<'a>>,
+fn visit_stmt_list<'a>(
+    ctx: &mut Context,
+    stmts: &'a [Stmt<'a>],
 ) -> Result<(), minijinja::Error> {
-    if let Some(expr) = expr {
-        find_in_expr(context, expr)?;
+    for s in stmts {
+        dispatch_stmt(ctx, s)?;
     }
-
     Ok(())
+}
+
+fn visit_expr_list<'a>(
+    ctx: &mut Context,
+    exprs: &'a [Expr<'a>],
+) -> Result<(), minijinja::Error> {
+    for e in exprs {
+        visit_expr(ctx, e)?;
+    }
+    Ok(())
+}
+
+fn visit_optional_expr<'a>(
+    ctx: &mut Context,
+    maybe: Option<&'a Expr<'a>>,
+) -> Result<(), minijinja::Error> {
+    if let Some(e) = maybe {
+        visit_expr(ctx, e)?;
+    }
+    Ok(())
+}
+
+// ── Expression visitor ──────────────────────────────────────────────
+
+fn visit_expr<'a>(ctx: &mut Context, expr: &'a Expr<'a>) -> Result<(), minijinja::Error> {
+    match expr {
+        Expr::Var(_) | Expr::Const(_) => Ok(()),
+
+        Expr::Slice(sl) => {
+            visit_expr(ctx, &sl.expr)?;
+            visit_optional_expr(ctx, sl.start.as_ref())?;
+            visit_optional_expr(ctx, sl.stop.as_ref())?;
+            visit_optional_expr(ctx, sl.step.as_ref())
+        }
+
+        Expr::UnaryOp(uo) => visit_expr(ctx, &uo.expr),
+
+        Expr::BinOp(bo) => {
+            visit_expr(ctx, &bo.left)?;
+            visit_expr(ctx, &bo.right)
+        }
+
+        Expr::IfExpr(ie) => {
+            visit_expr(ctx, &ie.test_expr)?;
+            visit_expr(ctx, &ie.true_expr)?;
+            visit_optional_expr(ctx, ie.false_expr.as_ref())
+        }
+
+        Expr::Filter(flt) => {
+            visit_optional_expr(ctx, flt.expr.as_ref())?;
+            visit_call_arg_list(ctx, &flt.args)
+        }
+
+        Expr::Test(tst) => {
+            visit_expr(ctx, &tst.expr)?;
+            visit_call_arg_list(ctx, &tst.args)
+        }
+
+        Expr::GetAttr(ga) => visit_expr(ctx, &ga.expr),
+
+        Expr::GetItem(gi) => {
+            visit_expr(ctx, &gi.expr)?;
+            visit_expr(ctx, &gi.subscript_expr)
+        }
+
+        Expr::Call(call) => visit_call_spanned(ctx, call),
+
+        Expr::List(lst) => visit_expr_list(ctx, &lst.items),
+
+        Expr::Map(map) => {
+            visit_expr_list(ctx, &map.keys)?;
+            visit_expr_list(ctx, &map.values)
+        }
+    }
 }
 
 #[cfg(test)]

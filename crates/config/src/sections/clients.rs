@@ -1,3 +1,8 @@
+// ── OAuth 2.0 Client Configuration ──
+//
+// Defines configuration for statically-registered OAuth 2.0 clients,
+// including authentication methods, secrets, and redirect URIs.
+
 use std::ops::Deref;
 
 use pasion_iana::oauth::OAuthClientAuthenticationMethod;
@@ -10,6 +15,9 @@ use url::Url;
 
 use super::{ClientSecret, ClientSecretRaw, ConfigurationSection};
 
+// ── JWKS Variant ──
+
+/// Represents either an inline JWKS or a remote JWKS URI reference
 #[derive(JsonSchema, Serialize, Deserialize, Clone, Debug)]
 #[serde(rename_all = "snake_case")]
 pub enum JwksOrJwksUri {
@@ -23,7 +31,9 @@ impl From<PublicJsonWebKeySet> for JwksOrJwksUri {
     }
 }
 
-/// Authentication method used by clients
+// ── Client Auth Method ──
+
+/// Supported token endpoint authentication methods for configured clients
 #[derive(JsonSchema, Serialize, Deserialize, Copy, Clone, Debug)]
 #[serde(rename_all = "snake_case")]
 pub enum ClientAuthMethodConfig {
@@ -49,21 +59,24 @@ pub enum ClientAuthMethodConfig {
 
 impl std::fmt::Display for ClientAuthMethodConfig {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            ClientAuthMethodConfig::None => write!(f, "none"),
-            ClientAuthMethodConfig::ClientSecretBasic => write!(f, "client_secret_basic"),
-            ClientAuthMethodConfig::ClientSecretPost => write!(f, "client_secret_post"),
-            ClientAuthMethodConfig::ClientSecretJwt => write!(f, "client_secret_jwt"),
-            ClientAuthMethodConfig::PrivateKeyJwt => write!(f, "private_key_jwt"),
-        }
+        let label = match self {
+            Self::None => "none",
+            Self::ClientSecretBasic => "client_secret_basic",
+            Self::ClientSecretPost => "client_secret_post",
+            Self::ClientSecretJwt => "client_secret_jwt",
+            Self::PrivateKeyJwt => "private_key_jwt",
+        };
+        f.write_str(label)
     }
 }
 
-/// An OAuth 2.0 client configuration
+// ── Single Client Configuration ──
+
+/// Represents the configuration of a single statically-registered OAuth 2.0 client
 #[serde_as]
 #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
 pub struct ClientConfig {
-    /// The client ID
+    /// Unique identifier for this client (ULID format)
     #[schemars(
         with = "String",
         regex(pattern = r"^[0123456789ABCDEFGHJKMNPQRSTVWXYZ]{26}$"),
@@ -71,15 +84,15 @@ pub struct ClientConfig {
     )]
     pub client_id: Ulid,
 
-    /// Authentication method used for this client
+    /// Token endpoint authentication method for this client
     client_auth_method: ClientAuthMethodConfig,
 
     /// Name of the `OAuth2` client
     #[serde(skip_serializing_if = "Option::is_none")]
     pub client_name: Option<String>,
 
-    /// The client secret, used by the `client_secret_basic`,
-    /// `client_secret_post` and `client_secret_jwt` authentication methods
+    /// Shared secret used for `client_secret_basic`, `client_secret_post`,
+    /// and `client_secret_jwt` authentication methods
     #[schemars(with = "ClientSecretRaw")]
     #[serde_as(as = "serde_with::TryFromInto<ClientSecretRaw>")]
     #[serde(flatten)]
@@ -95,88 +108,112 @@ pub struct ClientConfig {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub jwks_uri: Option<Url>,
 
-    /// List of allowed redirect URIs
+    /// Allowed redirect URIs for authorization responses
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub redirect_uris: Vec<Url>,
 }
 
 impl ClientConfig {
+    // ── Validation helpers ──
+
+    /// Checks that the fields present are consistent with the chosen auth method
     fn validate(&self) -> Result<(), Box<figment::error::Error>> {
-        let auth_method = self.client_auth_method;
-        match self.client_auth_method {
-            ClientAuthMethodConfig::PrivateKeyJwt => {
-                if self.jwks.is_none() && self.jwks_uri.is_none() {
-                    let error = figment::error::Error::custom(
-                        "jwks or jwks_uri is required for private_key_jwt",
-                    );
-                    return Err(Box::new(error.with_path("client_auth_method")));
-                }
+        let method = self.client_auth_method;
 
-                if self.jwks.is_some() && self.jwks_uri.is_some() {
-                    let error =
-                        figment::error::Error::custom("jwks and jwks_uri are mutually exclusive");
-                    return Err(Box::new(error.with_path("jwks")));
-                }
-
-                if self.client_secret.is_some() {
-                    let error = figment::error::Error::custom(
-                        "client_secret is not allowed with private_key_jwt",
-                    );
-                    return Err(Box::new(error.with_path("client_secret")));
-                }
-            }
-
-            ClientAuthMethodConfig::ClientSecretPost
-            | ClientAuthMethodConfig::ClientSecretBasic
-            | ClientAuthMethodConfig::ClientSecretJwt => {
-                if self.client_secret.is_none() {
-                    let error = figment::error::Error::custom(format!(
-                        "client_secret is required for {auth_method}"
-                    ));
-                    return Err(Box::new(error.with_path("client_auth_method")));
-                }
-
-                if self.jwks.is_some() {
-                    let error = figment::error::Error::custom(format!(
-                        "jwks is not allowed with {auth_method}"
-                    ));
-                    return Err(Box::new(error.with_path("jwks")));
-                }
-
-                if self.jwks_uri.is_some() {
-                    let error = figment::error::Error::custom(format!(
-                        "jwks_uri is not allowed with {auth_method}"
-                    ));
-                    return Err(Box::new(error.with_path("jwks_uri")));
-                }
-            }
-
+        match method {
             ClientAuthMethodConfig::None => {
-                if self.client_secret.is_some() {
-                    let error = figment::error::Error::custom(
-                        "client_secret is not allowed with none authentication method",
-                    );
-                    return Err(Box::new(error.with_path("client_secret")));
-                }
+                self.reject_secret_for_method("none authentication method")?;
+                self.reject_jwks_for_method("none authentication method")?;
+            }
 
-                if self.jwks.is_some() {
-                    let error = figment::error::Error::custom(
-                        "jwks is not allowed with none authentication method",
-                    );
-                    return Err(Box::new(error));
-                }
+            ClientAuthMethodConfig::ClientSecretBasic
+            | ClientAuthMethodConfig::ClientSecretPost
+            | ClientAuthMethodConfig::ClientSecretJwt => {
+                self.require_secret_for_method(method)?;
+                self.reject_jwks_for_method(method)?;
+            }
 
-                if self.jwks_uri.is_some() {
-                    let error = figment::error::Error::custom(
-                        "jwks_uri is not allowed with none authentication method",
-                    );
-                    return Err(Box::new(error));
-                }
+            ClientAuthMethodConfig::PrivateKeyJwt => {
+                self.validate_private_key_jwt()?;
             }
         }
 
         Ok(())
     }
+
+    /// Ensures a client_secret is present, returning an error otherwise
+    fn require_secret_for_method(
+        &self,
+        method: impl std::fmt::Display,
+    ) -> Result<(), Box<figment::error::Error>> {
+        if self.client_secret.is_none() {
+            let msg = format!("client_secret is required for {method}");
+            let err = figment::error::Error::custom(msg);
+            return Err(Box::new(err.with_path("client_auth_method")));
+        }
+        Ok(())
+    }
+
+    /// Ensures client_secret is absent for the given method
+    fn reject_secret_for_method(
+        &self,
+        method: impl std::fmt::Display,
+    ) -> Result<(), Box<figment::error::Error>> {
+        if self.client_secret.is_some() {
+            let msg = format!("client_secret is not allowed with {method}");
+            let err = figment::error::Error::custom(msg);
+            return Err(Box::new(err.with_path("client_secret")));
+        }
+        Ok(())
+    }
+
+    /// Ensures jwks and jwks_uri are both absent for the given method
+    fn reject_jwks_for_method(
+        &self,
+        method: impl std::fmt::Display,
+    ) -> Result<(), Box<figment::error::Error>> {
+        if self.jwks.is_some() {
+            let msg = format!("jwks is not allowed with {method}");
+            let err = figment::error::Error::custom(msg);
+            return Err(Box::new(err));
+        }
+        if self.jwks_uri.is_some() {
+            let msg = format!("jwks_uri is not allowed with {method}");
+            let err = figment::error::Error::custom(msg);
+            return Err(Box::new(err));
+        }
+        Ok(())
+    }
+
+    /// Validates field constraints specific to the `private_key_jwt` method
+    fn validate_private_key_jwt(&self) -> Result<(), Box<figment::error::Error>> {
+        let has_jwks = self.jwks.is_some();
+        let has_jwks_uri = self.jwks_uri.is_some();
+
+        if !has_jwks && !has_jwks_uri {
+            let err = figment::error::Error::custom(
+                "jwks or jwks_uri is required for private_key_jwt",
+            );
+            return Err(Box::new(err.with_path("client_auth_method")));
+        }
+
+        if has_jwks && has_jwks_uri {
+            let err =
+                figment::error::Error::custom("jwks and jwks_uri are mutually exclusive");
+            return Err(Box::new(err.with_path("jwks")));
+        }
+
+        if self.client_secret.is_some() {
+            let err = figment::error::Error::custom(
+                "client_secret is not allowed with private_key_jwt",
+            );
+            return Err(Box::new(err.with_path("client_secret")));
+        }
+
+        Ok(())
+    }
+
+    // ── Public accessors ──
 
     /// Authentication method used for this client
     #[must_use]
@@ -204,14 +241,16 @@ impl ClientConfig {
     ///
     /// Returns an error when the client secret could not be read from file.
     pub async fn client_secret(&self) -> anyhow::Result<Option<String>> {
-        Ok(match &self.client_secret {
-            Some(client_secret) => Some(client_secret.value().await?),
-            None => None,
-        })
+        match &self.client_secret {
+            Some(secret) => Ok(Some(secret.value().await?)),
+            None => Ok(None),
+        }
     }
 }
 
-/// List of OAuth 2.0/OIDC clients config
+// ── Clients Collection ──
+
+/// Wrapper around a list of statically-configured OAuth 2.0 clients
 #[derive(Debug, Clone, Default, Serialize, Deserialize, JsonSchema)]
 #[serde(transparent)]
 pub struct ClientsConfig(#[schemars(with = "Vec::<ClientConfig>")] Vec<ClientConfig>);
@@ -240,6 +279,8 @@ impl IntoIterator for ClientsConfig {
     }
 }
 
+// ── ConfigurationSection impl ──
+
 impl ConfigurationSection for ClientsConfig {
     const PATH: &'static str = "clients";
 
@@ -249,7 +290,7 @@ impl ConfigurationSection for ClientsConfig {
     ) -> Result<(), Box<dyn std::error::Error + Send + Sync + 'static>> {
         for (index, client) in self.0.iter().enumerate() {
             client.validate().map_err(|mut err| {
-                // Save the error location information in the error
+                // Annotate the error with location metadata from figment
                 err.metadata = figment.find_metadata(Self::PATH).cloned();
                 err.profile = Some(figment::Profile::Default);
                 err.path.insert(0, Self::PATH.to_owned());
@@ -261,6 +302,8 @@ impl ConfigurationSection for ClientsConfig {
         Ok(())
     }
 }
+
+// ── Tests ──
 
 #[cfg(test)]
 mod tests {

@@ -1,40 +1,37 @@
 changelog:
   categories:
+    - title: Breaking Changes
+      labels:
+        - breaking-change
+
     - title: Bug Fixes
       labels:
-        - T-Defect
+        - bug
 
     - title: New Features
       labels:
-        - T-Enhancement
+        - enhancement
       exclude:
         labels:
-          - A-Admin-API
-          - A-Documentation
-
-    - title: Changes to the admin API
-      labels:
-        - A-Admin-API
+          - documentation
+          - dependencies
 
     - title: Documentation
       labels:
-        - A-Documentation
-
-    - title: Translations
-      labels:
-        - A-I18n
+        - documentation
 
     - title: Internal Changes
       labels:
-        - T-Task
+        - chore
+        - refactor
 
     - title: Other Changes
       labels:
         - "*"
       exclude:
         labels:
-          - A-Dependencies
+          - dependencies
 
     - title: Dependency Updates
       labels:
-        - A-Dependencies
+        - dependencies

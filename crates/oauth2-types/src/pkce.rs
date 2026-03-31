@@ -1,6 +1,10 @@
-//! Types for the [Proof Key for Code Exchange].
+// Copyright 2025 Taidge contributors
+//
+// SPDX-License-Identifier: Apache-2.0
+
+//! Proof Key for Code Exchange (PKCE) per [RFC 7636].
 //!
-//! [Proof Key for Code Exchange]: https://www.rfc-editor.org/rfc/rfc7636
+//! [RFC 7636]: https://www.rfc-editor.org/rfc/rfc7636
 
 use std::borrow::Cow;
 
@@ -10,7 +14,12 @@ use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use thiserror::Error;
 
-/// Errors that can occur when verifying a code challenge.
+/// Min length of a code verifier (RFC 7636 §4.1).
+const VERIFIER_MIN_LEN: usize = 43;
+/// Max length of a code verifier (RFC 7636 §4.1).
+const VERIFIER_MAX_LEN: usize = 128;
+
+/// Errors arising from PKCE code challenge operations.
 #[derive(Debug, Error, PartialEq, Eq)]
 pub enum CodeChallengeError {
     /// The code verifier should be at least 43 characters long.
@@ -34,47 +43,51 @@ pub enum CodeChallengeError {
     UnknownChallengeMethod,
 }
 
-fn validate_verifier(verifier: &str) -> Result<(), CodeChallengeError> {
-    if verifier.len() < 43 {
+/// Validate that a code verifier conforms to [RFC 7636 §4.1]:
+///
+///   code-verifier = 43*128unreserved
+///   unreserved    = ALPHA / DIGIT / "-" / "." / "_" / "~"
+///
+/// [RFC 7636 §4.1]: https://www.rfc-editor.org/rfc/rfc7636#section-4.1
+fn check_verifier(verifier: &str) -> Result<(), CodeChallengeError> {
+    if verifier.len() < VERIFIER_MIN_LEN {
         return Err(CodeChallengeError::TooShort);
     }
-
-    if verifier.len() > 128 {
+    if verifier.len() > VERIFIER_MAX_LEN {
         return Err(CodeChallengeError::TooLong);
     }
-
-    if !verifier
-        .chars()
-        .all(|c| c.is_ascii_alphanumeric() || c == '-' || c == '.' || c == '_' || c == '~')
-    {
+    let all_unreserved = verifier
+        .bytes()
+        .all(|b| b.is_ascii_alphanumeric() || b == b'-' || b == b'.' || b == b'_' || b == b'~');
+    if !all_unreserved {
         return Err(CodeChallengeError::InvalidCharacters);
     }
-
     Ok(())
 }
 
-/// Helper trait to compute and verify code challenges.
+/// Extension trait for computing and verifying PKCE code challenges.
 pub trait CodeChallengeMethodExt {
-    /// Compute the challenge for a given verifier
+    /// Derive the code challenge from the given verifier.
     ///
     /// # Errors
     ///
-    /// Returns an error if the verifier did not adhere to the rules defined by
-    /// the RFC in terms of length and allowed characters
+    /// Returns an error when the verifier violates the length or character
+    /// constraints defined in RFC 7636.
     fn compute_challenge<'a>(&self, verifier: &'a str) -> Result<Cow<'a, str>, CodeChallengeError>;
 
-    /// Verify that a given verifier is valid for the given challenge
+    /// Verify that `verifier` matches the previously stored `challenge`.
     ///
     /// # Errors
     ///
-    /// Returns an error if the verifier did not match the challenge, or if the
-    /// verifier did not adhere to the rules defined by the RFC in terms of
-    /// length and allowed characters
+    /// Returns [`CodeChallengeError::VerificationFailed`] on mismatch, or
+    /// any error that [`compute_challenge`](Self::compute_challenge) may
+    /// produce.
     fn verify(&self, challenge: &str, verifier: &str) -> Result<(), CodeChallengeError>
     where
         Self: Sized,
     {
-        if self.compute_challenge(verifier)? == challenge {
+        let computed = self.compute_challenge(verifier)?;
+        if computed == challenge {
             Ok(())
         } else {
             Err(CodeChallengeError::VerificationFailed)
@@ -84,38 +97,33 @@ pub trait CodeChallengeMethodExt {
 
 impl CodeChallengeMethodExt for PkceCodeChallengeMethod {
     fn compute_challenge<'a>(&self, verifier: &'a str) -> Result<Cow<'a, str>, CodeChallengeError> {
-        validate_verifier(verifier)?;
+        check_verifier(verifier)?;
 
-        let challenge = match self {
-            Self::Plain => verifier.into(),
+        match self {
+            Self::Plain => Ok(Cow::Borrowed(verifier)),
             Self::S256 => {
-                let mut hasher = Sha256::new();
-                hasher.update(verifier.as_bytes());
-                let hash = hasher.finalize();
-                let verifier = Base64UrlUnpadded::encode_string(&hash);
-                verifier.into()
+                let digest = Sha256::digest(verifier.as_bytes());
+                Ok(Cow::Owned(Base64UrlUnpadded::encode_string(&digest)))
             }
-            _ => return Err(CodeChallengeError::UnknownChallengeMethod),
-        };
-
-        Ok(challenge)
+            _ => Err(CodeChallengeError::UnknownChallengeMethod),
+        }
     }
 }
 
-/// The code challenge data added to an authorization request.
+/// PKCE parameters attached to an authorization request.
 #[derive(Clone, Serialize, Deserialize)]
 pub struct AuthorizationRequest {
-    /// The code challenge method.
+    /// The challenge method used.
     pub code_challenge_method: PkceCodeChallengeMethod,
 
-    /// The code challenge computed from the verifier and the method.
+    /// The computed challenge value.
     pub code_challenge: String,
 }
 
-/// The code challenge data added to a token request.
+/// PKCE parameters attached to a token request.
 #[derive(Clone, Serialize, Deserialize)]
 pub struct TokenRequest {
-    /// The code challenge verifier.
+    /// The original code verifier that produced the challenge.
     pub code_challenge_verifier: String,
 }
 
@@ -123,38 +131,58 @@ pub struct TokenRequest {
 mod tests {
     use super::*;
 
+    // Test vectors from RFC 7636 Appendix B.
+    const RFC_VERIFIER: &str = "dBjftJeZ4CVP-mB92K27uhbUJU1p1r_wW1gFWFOEjXk";
+    const RFC_CHALLENGE_S256: &str = "E9Melhoa2OwvFrEMTJguCHaoeK1t8URWbuGJSstw-cM";
+
     #[test]
-    fn test_pkce_verification() {
-        use PkceCodeChallengeMethod::{Plain, S256};
-        // This challenge comes from the RFC7636 appendices
-        let challenge = "E9Melhoa2OwvFrEMTJguCHaoeK1t8URWbuGJSstw-cM";
+    fn s256_matches_rfc_vector() {
+        assert!(PkceCodeChallengeMethod::S256
+            .verify(RFC_CHALLENGE_S256, RFC_VERIFIER)
+            .is_ok());
+    }
 
-        assert!(
-            S256.verify(challenge, "dBjftJeZ4CVP-mB92K27uhbUJU1p1r_wW1gFWFOEjXk")
-                .is_ok()
-        );
+    #[test]
+    fn plain_identity() {
+        assert!(PkceCodeChallengeMethod::Plain
+            .verify(RFC_CHALLENGE_S256, RFC_CHALLENGE_S256)
+            .is_ok());
+    }
 
-        assert!(Plain.verify(challenge, challenge).is_ok());
-
+    #[test]
+    fn s256_wrong_verifier() {
         assert_eq!(
-            S256.verify(challenge, "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"),
+            PkceCodeChallengeMethod::S256.verify(
+                RFC_CHALLENGE_S256,
+                "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+            ),
             Err(CodeChallengeError::VerificationFailed),
         );
+    }
 
+    #[test]
+    fn rejects_short_verifier() {
         assert_eq!(
-            S256.verify(challenge, "tooshort"),
+            PkceCodeChallengeMethod::S256.verify(RFC_CHALLENGE_S256, "tooshort"),
             Err(CodeChallengeError::TooShort),
         );
+    }
 
+    #[test]
+    fn rejects_long_verifier() {
+        let long = "a".repeat(VERIFIER_MAX_LEN + 1);
         assert_eq!(
-            S256.verify(challenge, "toolongtoolongtoolongtoolongtoolongtoolongtoolongtoolongtoolongtoolongtoolongtoolongtoolongtoolongtoolongtoolongtoolongtoolongtoolong"),
+            PkceCodeChallengeMethod::S256.verify(RFC_CHALLENGE_S256, &long),
             Err(CodeChallengeError::TooLong),
         );
+    }
 
+    #[test]
+    fn rejects_invalid_characters() {
         assert_eq!(
-            S256.verify(
-                challenge,
-                "this is long enough but has invalid characters in it"
+            PkceCodeChallengeMethod::S256.verify(
+                RFC_CHALLENGE_S256,
+                "this is long enough but has invalid characters in it",
             ),
             Err(CodeChallengeError::InvalidCharacters),
         );

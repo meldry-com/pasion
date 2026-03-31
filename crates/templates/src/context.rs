@@ -1,4 +1,8 @@
-//! Contexts used in templates
+//! Rendering context types for page and email templates.
+//!
+//! Every template consumes a dedicated context struct that carries the data it
+//! needs.  Context wrappers -- for session, CSRF token, locale and CAPTCHA --
+//! can be stacked via [`TemplateContext`] trait methods.
 
 mod branding;
 mod captcha;
@@ -15,15 +19,16 @@ use chrono::{DateTime, Duration, Utc};
 use http::{Method, Uri, Version};
 use oauth2_types::scope::{OPENID, Scope};
 use pasion_data::{
-    AuthorizationGrant, BrowserSession, Client, DeviceCodeGrant, MatrixUser, UpstreamOAuthLink,
-    UpstreamOAuthProvider, UpstreamOAuthProviderClaimsImports, UpstreamOAuthProviderDiscoveryMode,
-    UpstreamOAuthProviderOnBackchannelLogout, UpstreamOAuthProviderPkceMode,
-    UpstreamOAuthProviderTokenAuthMethod, User, UserEmailAuthentication,
-    UserEmailAuthenticationCode, UserRecoverySession, UserRegistration,
+    AuthorizationGrant, BrowserSession, Client, DeviceCodeGrant, MatrixUser, PostAuthAction,
+    UpstreamOAuthLink, UpstreamOAuthProvider, UpstreamOAuthProviderClaimsImports,
+    UpstreamOAuthProviderDiscoveryMode, UpstreamOAuthProviderOnBackchannelLogout,
+    UpstreamOAuthProviderPkceMode, UpstreamOAuthProviderTokenAuthMethod, UrlBuilder, User,
+    UserEmailAuthentication, UserEmailAuthenticationCode, UserRecoverySession, UserRegistration,
 };
-use pasion_data::{PostAuthAction, UrlBuilder};
 use pasion_i18n::DataLocale;
 use pasion_iana::jose::JsonWebSignatureAlg;
+// Retained for downstream context types or future additions
+#[allow(unused_imports)]
 use pasion_policy::{Violation, ViolationCode};
 use rand::{
     Rng, SeedableRng,
@@ -39,9 +44,14 @@ pub use self::{
 };
 use crate::{FieldError, FormField, FormState};
 
-/// Helper trait to construct context wrappers
+// ===========================================================================
+// Core trait & sample helpers
+// ===========================================================================
+
+/// Trait implemented by every template context to provide wrapper constructors
+/// and deterministic sample data for template validation.
 pub trait TemplateContext: Serialize {
-    /// Attach a user session to the template context
+    /// Wrap this context with a browser session.
     fn with_session(self, current_session: BrowserSession) -> WithSession<Self>
     where
         Self: Sized,
@@ -52,7 +62,7 @@ pub trait TemplateContext: Serialize {
         }
     }
 
-    /// Attach an optional user session to the template context
+    /// Wrap this context with an optional browser session.
     fn maybe_with_session(
         self,
         current_session: Option<BrowserSession>,
@@ -66,7 +76,7 @@ pub trait TemplateContext: Serialize {
         }
     }
 
-    /// Attach a CSRF token to the template context
+    /// Wrap this context with a CSRF token.
     fn with_csrf<C>(self, csrf_token: C) -> WithCsrf<Self>
     where
         Self: Sized,
@@ -79,7 +89,7 @@ pub trait TemplateContext: Serialize {
         }
     }
 
-    /// Attach a language to the template context
+    /// Wrap this context with a locale tag.
     fn with_language(self, lang: DataLocale) -> WithLanguage<Self>
     where
         Self: Sized,
@@ -90,7 +100,7 @@ pub trait TemplateContext: Serialize {
         }
     }
 
-    /// Attach a CAPTCHA configuration to the template context
+    /// Wrap this context with optional CAPTCHA configuration.
     fn with_captcha(self, captcha: Option<pasion_data::CaptchaConfig>) -> WithCaptcha<Self>
     where
         Self: Sized,
@@ -98,10 +108,9 @@ pub trait TemplateContext: Serialize {
         WithCaptcha::new(captcha, self)
     }
 
-    /// Generate sample values for this context type
+    /// Produce sample values for template validation.
     ///
-    /// This is then used to check for template validity in unit tests and in
-    /// the CLI (`cargo run -- templates check`)
+    /// Used by unit tests and the CLI command (`cargo run -- templates check`).
     fn sample<R: Rng>(
         now: chrono::DateTime<Utc>,
         rng: &mut R,
@@ -111,6 +120,7 @@ pub trait TemplateContext: Serialize {
         Self: Sized;
 }
 
+/// Key that identifies one particular sample rendering variant.
 #[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord)]
 pub struct SampleIdentifier {
     pub components: Vec<(&'static str, String)>,
@@ -131,13 +141,18 @@ impl SampleIdentifier {
     }
 }
 
-pub(crate) fn sample_list<T: TemplateContext>(samples: Vec<T>) -> BTreeMap<SampleIdentifier, T> {
-    samples
+/// Turn a plain list of context values into an indexed sample map.
+pub(crate) fn sample_list<T: TemplateContext>(items: Vec<T>) -> BTreeMap<SampleIdentifier, T> {
+    items
         .into_iter()
         .enumerate()
-        .map(|(index, sample)| (SampleIdentifier::from_index(index), sample))
+        .map(|(idx, ctx)| (SampleIdentifier::from_index(idx), ctx))
         .collect()
 }
+
+// ===========================================================================
+// TemplateContext for the unit type
+// ===========================================================================
 
 impl TemplateContext for () {
     fn sample<R: Rng>(
@@ -152,7 +167,11 @@ impl TemplateContext for () {
     }
 }
 
-/// Context with a specified locale in it
+// ===========================================================================
+// Wrapper: WithLanguage
+// ===========================================================================
+
+/// Wraps a context with a locale string.
 #[derive(Serialize, Debug)]
 pub struct WithLanguage<T> {
     lang: String,
@@ -162,7 +181,7 @@ pub struct WithLanguage<T> {
 }
 
 impl<T> WithLanguage<T> {
-    /// Get the language of this context
+    /// Return the language tag carried by this wrapper.
     pub fn language(&self) -> &str {
         &self.lang
     }
@@ -186,27 +205,30 @@ impl<T: TemplateContext> TemplateContext for WithLanguage<T> {
         Self: Sized,
     {
         // Create a forked RNG so we make samples deterministic between locales
-        let rng = ChaCha8Rng::from_rng(rng).unwrap();
+        let forked_rng = ChaCha8Rng::from_rng(rng).unwrap();
         locales
             .iter()
-            .flat_map(|locale| {
-                T::sample(now, &mut rng.clone(), locales)
+            .flat_map(|loc| {
+                T::sample(now, &mut forked_rng.clone(), locales)
                     .into_iter()
-                    .map(|(sample_id, sample)| {
-                        (
-                            sample_id.with_appended("locale", locale.to_string()),
-                            WithLanguage {
-                                lang: locale.to_string(),
-                                inner: sample,
-                            },
-                        )
+                    .map(|(id, ctx)| {
+                        let new_id = id.with_appended("locale", loc.to_string());
+                        let wrapped = WithLanguage {
+                            lang: loc.to_string(),
+                            inner: ctx,
+                        };
+                        (new_id, wrapped)
                     })
             })
             .collect()
     }
 }
 
-/// Context with a CSRF token in it
+// ===========================================================================
+// Wrapper: WithCsrf
+// ===========================================================================
+
+/// Wraps a context with a CSRF token.
 #[derive(Serialize, Debug)]
 pub struct WithCsrf<T> {
     csrf_token: String,
@@ -226,20 +248,22 @@ impl<T: TemplateContext> TemplateContext for WithCsrf<T> {
     {
         T::sample(now, rng, locales)
             .into_iter()
-            .map(|(k, inner)| {
-                (
-                    k,
-                    WithCsrf {
-                        csrf_token: "fake_csrf_token".into(),
-                        inner,
-                    },
-                )
+            .map(|(id, ctx)| {
+                let wrapped = WithCsrf {
+                    csrf_token: "fake_csrf_token".into(),
+                    inner: ctx,
+                };
+                (id, wrapped)
             })
             .collect()
     }
 }
 
-/// Context with a user session in it
+// ===========================================================================
+// Wrapper: WithSession
+// ===========================================================================
+
+/// Wraps a context with an authenticated browser session.
 #[derive(Serialize)]
 pub struct WithSession<T> {
     current_session: BrowserSession,
@@ -260,24 +284,27 @@ impl<T: TemplateContext> TemplateContext for WithSession<T> {
         BrowserSession::samples(now, rng)
             .into_iter()
             .enumerate()
-            .flat_map(|(session_index, session)| {
+            .flat_map(|(sess_idx, session)| {
                 T::sample(now, rng, locales)
                     .into_iter()
-                    .map(move |(k, inner)| {
-                        (
-                            k.with_appended("browser-session", session_index.to_string()),
-                            WithSession {
-                                current_session: session.clone(),
-                                inner,
-                            },
-                        )
+                    .map(move |(id, ctx)| {
+                        let new_id = id.with_appended("browser-session", sess_idx.to_string());
+                        let wrapped = WithSession {
+                            current_session: session.clone(),
+                            inner: ctx,
+                        };
+                        (new_id, wrapped)
                     })
             })
             .collect()
     }
 }
 
-/// Context with an optional user session in it
+// ===========================================================================
+// Wrapper: WithOptionalSession
+// ===========================================================================
+
+/// Wraps a context with an optional browser session.
 #[derive(Serialize)]
 pub struct WithOptionalSession<T> {
     current_session: Option<BrowserSession>,
@@ -295,33 +322,40 @@ impl<T: TemplateContext> TemplateContext for WithOptionalSession<T> {
     where
         Self: Sized,
     {
-        BrowserSession::samples(now, rng)
+        let session_variants: Vec<Option<BrowserSession>> = BrowserSession::samples(now, rng)
             .into_iter()
-            .map(Some) // Wrap all samples in an Option
-            .chain(std::iter::once(None)) // Add the "None" option
+            .map(Some)
+            .chain(std::iter::once(None))
+            .collect();
+
+        session_variants
+            .into_iter()
             .enumerate()
-            .flat_map(|(session_index, session)| {
+            .flat_map(|(sess_idx, maybe_session)| {
                 T::sample(now, rng, locales)
                     .into_iter()
-                    .map(move |(k, inner)| {
-                        (
-                            if session.is_some() {
-                                k.with_appended("browser-session", session_index.to_string())
-                            } else {
-                                k
-                            },
-                            WithOptionalSession {
-                                current_session: session.clone(),
-                                inner,
-                            },
-                        )
+                    .map(move |(id, ctx)| {
+                        let new_id = if maybe_session.is_some() {
+                            id.with_appended("browser-session", sess_idx.to_string())
+                        } else {
+                            id
+                        };
+                        let wrapped = WithOptionalSession {
+                            current_session: maybe_session.clone(),
+                            inner: ctx,
+                        };
+                        (new_id, wrapped)
                     })
             })
             .collect()
     }
 }
 
-/// An empty context used for composition
+// ===========================================================================
+// EmptyContext
+// ===========================================================================
+
+/// Placeholder context that serializes to an empty struct.
 pub struct EmptyContext;
 
 impl Serialize for EmptyContext {
@@ -350,15 +384,18 @@ impl TemplateContext for EmptyContext {
     }
 }
 
-/// Context used by the `index.html` template
+// ===========================================================================
+// Simple page contexts -- Index, App, ApiDoc
+// ===========================================================================
+
+/// Data passed to the `index.html` landing page.
 #[derive(Serialize)]
 pub struct IndexContext {
     discovery_url: Url,
 }
 
 impl IndexContext {
-    /// Constructs the context for the index page from the OIDC discovery
-    /// document URL
+    /// Build the context from the OIDC discovery document URL.
     #[must_use]
     pub fn new(discovery_url: Url) -> Self {
         Self { discovery_url }
@@ -382,7 +419,9 @@ impl TemplateContext for IndexContext {
     }
 }
 
-/// Config used by the frontend app
+// ---------------------------------------------------------------------------
+
+/// Frontend application configuration serialized as camelCase JSON.
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct AppConfig {
@@ -391,24 +430,24 @@ pub struct AppConfig {
     script_src: String,
 }
 
-/// Context used by the `app.html` template
+/// Data passed to the `app.html` template.
 #[derive(Serialize)]
 pub struct AppContext {
     app_config: AppConfig,
 }
 
 impl AppContext {
-    /// Constructs the context given the [`UrlBuilder`] and the frontend script
-    /// path (discovered from the Dioxus build output at startup).
+    /// Build the context from a [`UrlBuilder`] and frontend script path
+    /// (resolved from the Dioxus build output at startup).
     #[must_use]
     pub fn new(url_builder: &UrlBuilder, script_src: &str) -> Self {
         let root = url_builder.relative_url("/account/");
         let prefix = url_builder.prefix().unwrap_or_default();
-        let api_endpoint = format!("{prefix}/api/v1");
+        let api_base = format!("{prefix}/api/v1");
         Self {
             app_config: AppConfig {
                 root,
-                api_endpoint,
+                api_endpoint: api_base,
                 script_src: script_src.to_owned(),
             },
         }
@@ -424,12 +463,14 @@ impl TemplateContext for AppContext {
     where
         Self: Sized,
     {
-        let url_builder = UrlBuilder::new("https://example.com/".parse().unwrap(), None, None);
-        sample_list(vec![Self::new(&url_builder, "/assets/pasion-frontend.js")])
+        let builder = UrlBuilder::new("https://example.com/".parse().unwrap(), None, None);
+        sample_list(vec![Self::new(&builder, "/assets/pasion-frontend.js")])
     }
 }
 
-/// Context used by the `swagger/doc.html` template
+// ---------------------------------------------------------------------------
+
+/// Data passed to the `swagger/doc.html` template.
 #[derive(Serialize)]
 pub struct ApiDocContext {
     openapi_url: Url,
@@ -437,8 +478,7 @@ pub struct ApiDocContext {
 }
 
 impl ApiDocContext {
-    /// Constructs a context for the API documentation page giben the
-    /// [`UrlBuilder`]
+    /// Build the context from a [`UrlBuilder`].
     #[must_use]
     pub fn from_url_builder(url_builder: &UrlBuilder) -> Self {
         Self {
@@ -457,51 +497,53 @@ impl TemplateContext for ApiDocContext {
     where
         Self: Sized,
     {
-        let url_builder = UrlBuilder::new("https://example.com/".parse().unwrap(), None, None);
-        sample_list(vec![Self::from_url_builder(&url_builder)])
+        let builder = UrlBuilder::new("https://example.com/".parse().unwrap(), None, None);
+        sample_list(vec![Self::from_url_builder(&builder)])
     }
 }
 
-/// Fields of the login form
+// ===========================================================================
+// Login
+// ===========================================================================
+
+/// Enumeration of login form fields.
 #[derive(Serialize, Deserialize, Debug, Clone, Copy, Hash, PartialEq, Eq)]
 #[serde(rename_all = "snake_case")]
 pub enum LoginFormField {
-    /// The username field
+    /// Username field
     Username,
 
-    /// The password field
+    /// Password field
     Password,
 }
 
 impl FormField for LoginFormField {
     fn keep(&self) -> bool {
-        match self {
-            Self::Username => true,
-            Self::Password => false,
-        }
+        matches!(self, Self::Username)
     }
 }
 
-/// Inner context used in login screen. See [`PostAuthContext`].
+/// Discriminated union describing the post-authentication action variant.
+/// See [`PostAuthContext`].
 #[derive(Serialize)]
 #[serde(tag = "kind", rename_all = "snake_case")]
 pub enum PostAuthContextInner {
-    /// Continue an authorization grant
+    /// Resume an in-progress authorization grant.
     ContinueAuthorizationGrant {
         /// The authorization grant that will be continued after authentication
         grant: Box<AuthorizationGrant>,
     },
 
-    /// Continue a device code grant
+    /// Resume an in-progress device code grant.
     ContinueDeviceCodeGrant {
         /// The device code grant that will be continued after authentication
         grant: Box<DeviceCodeGrant>,
     },
 
-    /// Change the account password
+    /// Proceed to password change flow.
     ChangePassword,
 
-    /// Link an upstream account
+    /// Link an upstream OAuth provider account.
     LinkUpstream {
         /// The upstream provider
         provider: Box<UpstreamOAuthProvider>,
@@ -510,22 +552,22 @@ pub enum PostAuthContextInner {
         link: Box<UpstreamOAuthLink>,
     },
 
-    /// Go to the account management page
+    /// Navigate to account management.
     ManageAccount,
 }
 
-/// Context used in login screen, for the post-auth action to do
+/// Resolved post-authentication action presented on the login screen.
 #[derive(Serialize)]
 pub struct PostAuthContext {
-    /// The post auth action params from the URL
+    /// URL-level action parameters.
     pub params: PostAuthAction,
 
-    /// The loaded post auth context
+    /// Loaded context details for the action.
     #[serde(flatten)]
     pub ctx: PostAuthContextInner,
 }
 
-/// Context used by the `login.html` template
+/// Data passed to the `login.html` template.
 #[derive(Serialize, Default)]
 pub struct LoginContext {
     form: FormState<LoginFormField>,
@@ -578,24 +620,24 @@ impl TemplateContext for LoginContext {
 }
 
 impl LoginContext {
-    /// Set the form state
+    /// Replace the current form state.
     #[must_use]
     pub fn with_form_state(self, form: FormState<LoginFormField>) -> Self {
         Self { form, ..self }
     }
 
-    /// Mutably borrow the form state
+    /// Obtain a mutable reference to the form state.
     pub fn form_state_mut(&mut self) -> &mut FormState<LoginFormField> {
         &mut self.form
     }
 
-    /// Set the upstream OAuth 2.0 providers
+    /// Attach upstream OAuth 2.0 providers to the context.
     #[must_use]
     pub fn with_upstream_providers(self, providers: Vec<UpstreamOAuthProvider>) -> Self {
         Self { providers, ..self }
     }
 
-    /// Add a post authentication action to the context
+    /// Set the post-authentication action.
     #[must_use]
     pub fn with_post_action(self, context: PostAuthContext) -> Self {
         Self {
@@ -605,23 +647,27 @@ impl LoginContext {
     }
 }
 
-/// Fields of the registration form
+// ===========================================================================
+// Registration
+// ===========================================================================
+
+/// Enumeration of registration form fields.
 #[derive(Serialize, Deserialize, Debug, Clone, Copy, Hash, PartialEq, Eq)]
 #[serde(rename_all = "snake_case")]
 pub enum RegisterFormField {
-    /// The username field
+    /// Username field
     Username,
 
-    /// The email field
+    /// Email field
     Email,
 
-    /// The password field
+    /// Password field
     Password,
 
-    /// The password confirmation field
+    /// Confirmation password field
     PasswordConfirm,
 
-    /// The terms of service agreement field
+    /// Terms-of-service acceptance checkbox
     AcceptTerms,
 }
 
@@ -634,7 +680,7 @@ impl FormField for RegisterFormField {
     }
 }
 
-/// Context used by the `register.html` template
+/// Data passed to the `register.html` template.
 #[derive(Serialize, Default)]
 pub struct RegisterContext {
     providers: Vec<UpstreamOAuthProvider>,
@@ -658,7 +704,7 @@ impl TemplateContext for RegisterContext {
 }
 
 impl RegisterContext {
-    /// Create a new context with the given upstream providers
+    /// Build a registration context with the given upstream providers.
     #[must_use]
     pub fn new(providers: Vec<UpstreamOAuthProvider>) -> Self {
         Self {
@@ -667,7 +713,7 @@ impl RegisterContext {
         }
     }
 
-    /// Add a post authentication action to the context
+    /// Attach a post-authentication action.
     #[must_use]
     pub fn with_post_action(self, next: PostAuthContext) -> Self {
         Self {
@@ -677,7 +723,7 @@ impl RegisterContext {
     }
 }
 
-/// Context used by the `password_register.html` template
+/// Data passed to the `password_register.html` template.
 #[derive(Serialize, Default)]
 pub struct PasswordRegisterContext {
     form: FormState<RegisterFormField>,
@@ -702,13 +748,13 @@ impl TemplateContext for PasswordRegisterContext {
 }
 
 impl PasswordRegisterContext {
-    /// Add an error on the registration form
+    /// Replace the form state for the password registration form.
     #[must_use]
     pub fn with_form_state(self, form: FormState<RegisterFormField>) -> Self {
         Self { form, ..self }
     }
 
-    /// Add a post authentication action to the context
+    /// Attach a post-authentication action.
     #[must_use]
     pub fn with_post_action(self, next: PostAuthContext) -> Self {
         Self {
@@ -718,7 +764,11 @@ impl PasswordRegisterContext {
     }
 }
 
-/// Context used by the `consent.html` template
+// ===========================================================================
+// Consent
+// ===========================================================================
+
+/// Data passed to the `consent.html` template.
 #[derive(Serialize)]
 pub struct ConsentContext {
     grant: AuthorizationGrant,
@@ -760,7 +810,7 @@ impl TemplateContext for ConsentContext {
 }
 
 impl ConsentContext {
-    /// Constructs a context for the client consent page
+    /// Build a consent-page context for the given grant, client and Matrix user.
     #[must_use]
     pub fn new(grant: AuthorizationGrant, client: Client, matrix_user: MatrixUser) -> Self {
         let action = PostAuthAction::continue_grant(grant.id);
@@ -773,6 +823,10 @@ impl ConsentContext {
     }
 }
 
+// ===========================================================================
+// Policy violation
+// ===========================================================================
+
 #[derive(Serialize)]
 #[serde(tag = "grant_type")]
 enum PolicyViolationGrant {
@@ -782,7 +836,7 @@ enum PolicyViolationGrant {
     DeviceCode(DeviceCodeGrant),
 }
 
-/// Context used by the `policy_violation.html` template
+/// Data passed to the `policy_violation.html` template.
 #[derive(Serialize)]
 pub struct PolicyViolationContext {
     grant: PolicyViolationGrant,
@@ -807,9 +861,9 @@ impl TemplateContext for PolicyViolationContext {
                     // XXX
                     grant.client_id = client.id;
 
-                    let authorization_grant =
+                    let auth_ctx =
                         PolicyViolationContext::for_authorization_grant(grant, client.clone());
-                    let device_code_grant = PolicyViolationContext::for_device_code_grant(
+                    let device_ctx = PolicyViolationContext::for_device_code_grant(
                         DeviceCodeGrant {
                             id: pasion_data::new_id(now, rng),
                             state: pasion_data::DeviceCodeGrantState::Pending,
@@ -825,7 +879,7 @@ impl TemplateContext for PolicyViolationContext {
                         client,
                     );
 
-                    [authorization_grant, device_code_grant]
+                    [auth_ctx, device_ctx]
                 })
                 .collect(),
         )
@@ -833,8 +887,7 @@ impl TemplateContext for PolicyViolationContext {
 }
 
 impl PolicyViolationContext {
-    /// Constructs a context for the policy violation page for an authorization
-    /// grant
+    /// Build a policy-violation page context for an authorization grant.
     #[must_use]
     pub const fn for_authorization_grant(grant: AuthorizationGrant, client: Client) -> Self {
         let action = PostAuthAction::continue_grant(grant.id);
@@ -845,8 +898,7 @@ impl PolicyViolationContext {
         }
     }
 
-    /// Constructs a context for the policy violation page for a device code
-    /// grant
+    /// Build a policy-violation page context for a device-code grant.
     #[must_use]
     pub const fn for_device_code_grant(grant: DeviceCodeGrant, client: Client) -> Self {
         let action = PostAuthAction::continue_device_code_grant(grant.id);
@@ -858,7 +910,11 @@ impl PolicyViolationContext {
     }
 }
 
-/// Context used by the `emails/recovery.{txt,html,subject}` templates
+// ===========================================================================
+// Email templates
+// ===========================================================================
+
+/// Data passed to the `emails/recovery.{txt,html,subject}` templates.
 #[derive(Serialize)]
 pub struct EmailRecoveryContext {
     user: User,
@@ -867,7 +923,7 @@ pub struct EmailRecoveryContext {
 }
 
 impl EmailRecoveryContext {
-    /// Constructs a context for the recovery email
+    /// Build the recovery-email context.
     #[must_use]
     pub fn new(user: User, session: UserRecoverySession, recovery_link: Url) -> Self {
         Self {
@@ -877,13 +933,13 @@ impl EmailRecoveryContext {
         }
     }
 
-    /// Returns the user associated with the recovery email
+    /// The user this recovery email is addressed to.
     #[must_use]
     pub fn user(&self) -> &User {
         &self.user
     }
 
-    /// Returns the recovery session associated with the recovery email
+    /// The recovery session associated with this email.
     #[must_use]
     pub fn session(&self) -> &UserRecoverySession {
         &self.session
@@ -917,7 +973,9 @@ impl TemplateContext for EmailRecoveryContext {
     }
 }
 
-/// Context used by the `emails/verification.{txt,html,subject}` templates
+// ---------------------------------------------------------------------------
+
+/// Data passed to the `emails/verification.{txt,html,subject}` templates.
 #[derive(Serialize)]
 pub struct EmailVerificationContext {
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -928,7 +986,7 @@ pub struct EmailVerificationContext {
 }
 
 impl EmailVerificationContext {
-    /// Constructs a context for the verification email
+    /// Build the verification-email context.
     #[must_use]
     pub fn new(
         authentication_code: UserEmailAuthenticationCode,
@@ -942,13 +1000,13 @@ impl EmailVerificationContext {
         }
     }
 
-    /// Get the user to which this email is being sent
+    /// The user this verification email is addressed to, if available.
     #[must_use]
     pub fn user(&self) -> Option<&User> {
         self.browser_session.as_ref().map(|s| &s.user)
     }
 
-    /// Get the verification code being sent
+    /// The verification code carried by this email.
     #[must_use]
     pub fn code(&self) -> &str {
         &self.authentication_code.code
@@ -967,8 +1025,8 @@ impl TemplateContext for EmailVerificationContext {
         sample_list(
             BrowserSession::samples(now, rng)
                 .into_iter()
-                .map(|browser_session| {
-                    let authentication_code = UserEmailAuthenticationCode {
+                .map(|session| {
+                    let code = UserEmailAuthenticationCode {
                         id: pasion_data::new_id(now, rng),
                         user_email_authentication_id: pasion_data::new_id(now, rng),
                         code: "123456".to_owned(),
@@ -977,9 +1035,9 @@ impl TemplateContext for EmailVerificationContext {
                     };
 
                     Self {
-                        browser_session: Some(browser_session),
+                        browser_session: Some(session),
                         user_registration: None,
-                        authentication_code,
+                        authentication_code: code,
                     }
                 })
                 .collect(),
@@ -987,11 +1045,15 @@ impl TemplateContext for EmailVerificationContext {
     }
 }
 
-/// Fields of the email verification form
+// ===========================================================================
+// Registration steps
+// ===========================================================================
+
+/// Fields on the email-verification step form.
 #[derive(Serialize, Deserialize, Debug, Clone, Copy, Hash, PartialEq, Eq)]
 #[serde(rename_all = "snake_case")]
 pub enum RegisterStepsVerifyEmailFormField {
-    /// The code field
+    /// Verification code
     Code,
 }
 
@@ -1003,7 +1065,7 @@ impl FormField for RegisterStepsVerifyEmailFormField {
     }
 }
 
-/// Context used by the `pages/register/steps/verify_email.html` templates
+/// Data for the `pages/register/steps/verify_email.html` template.
 #[derive(Serialize)]
 pub struct RegisterStepsVerifyEmailContext {
     form: FormState<RegisterStepsVerifyEmailFormField>,
@@ -1011,7 +1073,7 @@ pub struct RegisterStepsVerifyEmailContext {
 }
 
 impl RegisterStepsVerifyEmailContext {
-    /// Constructs a context for the email verification page
+    /// Create a context for the email verification step.
     #[must_use]
     pub fn new(authentication: UserEmailAuthentication) -> Self {
         Self {
@@ -1020,7 +1082,7 @@ impl RegisterStepsVerifyEmailContext {
         }
     }
 
-    /// Set the form state
+    /// Replace the form state.
     #[must_use]
     pub fn with_form_state(self, form: FormState<RegisterStepsVerifyEmailFormField>) -> Self {
         Self { form, ..self }
@@ -1036,7 +1098,7 @@ impl TemplateContext for RegisterStepsVerifyEmailContext {
     where
         Self: Sized,
     {
-        let authentication = UserEmailAuthentication {
+        let auth = UserEmailAuthentication {
             id: pasion_data::new_id(now, rng),
             user_session_id: None,
             user_registration_id: None,
@@ -1047,12 +1109,14 @@ impl TemplateContext for RegisterStepsVerifyEmailContext {
 
         sample_list(vec![Self {
             form: FormState::default(),
-            authentication,
+            authentication: auth,
         }])
     }
 }
 
-/// Context used by the `pages/register/steps/email_in_use.html` template
+// ---------------------------------------------------------------------------
+
+/// Data for the `pages/register/steps/email_in_use.html` template.
 #[derive(Serialize)]
 pub struct RegisterStepsEmailInUseContext {
     email: String,
@@ -1060,7 +1124,7 @@ pub struct RegisterStepsEmailInUseContext {
 }
 
 impl RegisterStepsEmailInUseContext {
-    /// Constructs a context for the email in use page
+    /// Create a context for the email-in-use page.
     #[must_use]
     pub fn new(email: String, action: Option<PostAuthAction>) -> Self {
         Self { email, action }
@@ -1076,17 +1140,19 @@ impl TemplateContext for RegisterStepsEmailInUseContext {
     where
         Self: Sized,
     {
-        let email = "hello@example.com".to_owned();
+        let addr = "hello@example.com".to_owned();
         let action = PostAuthAction::continue_grant(Ulid::nil());
-        sample_list(vec![Self::new(email, Some(action))])
+        sample_list(vec![Self::new(addr, Some(action))])
     }
 }
 
-/// Fields for the display name form
+// ---------------------------------------------------------------------------
+
+/// Fields on the display-name step form.
 #[derive(Serialize, Deserialize, Debug, Clone, Copy, Hash, PartialEq, Eq)]
 #[serde(rename_all = "snake_case")]
 pub enum RegisterStepsDisplayNameFormField {
-    /// The display name
+    /// Display name
     DisplayName,
 }
 
@@ -1098,20 +1164,20 @@ impl FormField for RegisterStepsDisplayNameFormField {
     }
 }
 
-/// Context used by the `display_name.html` template
+/// Data for the `display_name.html` template.
 #[derive(Serialize, Default)]
 pub struct RegisterStepsDisplayNameContext {
     form: FormState<RegisterStepsDisplayNameFormField>,
 }
 
 impl RegisterStepsDisplayNameContext {
-    /// Constructs a context for the display name page
+    /// Build the display-name page context.
     #[must_use]
     pub fn new() -> Self {
         Self::default()
     }
 
-    /// Set the form state
+    /// Replace the form state.
     #[must_use]
     pub fn with_form_state(
         mut self,
@@ -1137,11 +1203,13 @@ impl TemplateContext for RegisterStepsDisplayNameContext {
     }
 }
 
-/// Fields of the registration token form
+// ---------------------------------------------------------------------------
+
+/// Fields on the registration-token step form.
 #[derive(Serialize, Deserialize, Debug, Clone, Copy, Hash, PartialEq, Eq)]
 #[serde(rename_all = "snake_case")]
 pub enum RegisterStepsRegistrationTokenFormField {
-    /// The registration token
+    /// Registration token
     Token,
 }
 
@@ -1153,20 +1221,20 @@ impl FormField for RegisterStepsRegistrationTokenFormField {
     }
 }
 
-/// The registration token page context
+/// Data for the registration-token step page.
 #[derive(Serialize, Default)]
 pub struct RegisterStepsRegistrationTokenContext {
     form: FormState<RegisterStepsRegistrationTokenFormField>,
 }
 
 impl RegisterStepsRegistrationTokenContext {
-    /// Constructs a context for the registration token page
+    /// Build the registration-token page context.
     #[must_use]
     pub fn new() -> Self {
         Self::default()
     }
 
-    /// Set the form state
+    /// Replace the form state.
     #[must_use]
     pub fn with_form_state(
         mut self,
@@ -1192,11 +1260,15 @@ impl TemplateContext for RegisterStepsRegistrationTokenContext {
     }
 }
 
-/// Fields of the account recovery start form
+// ===========================================================================
+// Account recovery
+// ===========================================================================
+
+/// Fields on the recovery start form.
 #[derive(Serialize, Deserialize, Debug, Clone, Copy, Hash, PartialEq, Eq)]
 #[serde(rename_all = "snake_case")]
 pub enum RecoveryStartFormField {
-    /// The email
+    /// Email address
     Email,
 }
 
@@ -1208,20 +1280,20 @@ impl FormField for RecoveryStartFormField {
     }
 }
 
-/// Context used by the `pages/recovery/start.html` template
+/// Data for the `pages/recovery/start.html` template.
 #[derive(Serialize, Default)]
 pub struct RecoveryStartContext {
     form: FormState<RecoveryStartFormField>,
 }
 
 impl RecoveryStartContext {
-    /// Constructs a context for the recovery start page
+    /// Build the recovery-start page context.
     #[must_use]
     pub fn new() -> Self {
         Self::default()
     }
 
-    /// Set the form state
+    /// Replace the form state.
     #[must_use]
     pub fn with_form_state(self, form: FormState<RecoveryStartFormField>) -> Self {
         Self { form }
@@ -1251,16 +1323,18 @@ impl TemplateContext for RecoveryStartContext {
     }
 }
 
-/// Context used by the `pages/recovery/progress.html` template
+// ---------------------------------------------------------------------------
+
+/// Data for the `pages/recovery/progress.html` template.
 #[derive(Serialize)]
 pub struct RecoveryProgressContext {
     session: UserRecoverySession,
-    /// Whether resending the e-mail was denied because of rate limits
+    /// True when a resend attempt was blocked by the rate limiter.
     resend_failed_due_to_rate_limit: bool,
 }
 
 impl RecoveryProgressContext {
-    /// Constructs a context for the recovery progress page
+    /// Build the recovery-progress page context.
     #[must_use]
     pub fn new(session: UserRecoverySession, resend_failed_due_to_rate_limit: bool) -> Self {
         Self {
@@ -1279,7 +1353,7 @@ impl TemplateContext for RecoveryProgressContext {
     where
         Self: Sized,
     {
-        let session = UserRecoverySession {
+        let sess = UserRecoverySession {
             id: pasion_data::new_id(now, rng),
             email: "name@mail.com".to_owned(),
             user_agent: "Mozilla/5.0".to_owned(),
@@ -1291,25 +1365,27 @@ impl TemplateContext for RecoveryProgressContext {
 
         sample_list(vec![
             Self {
-                session: session.clone(),
+                session: sess.clone(),
                 resend_failed_due_to_rate_limit: false,
             },
             Self {
-                session,
+                session: sess,
                 resend_failed_due_to_rate_limit: true,
             },
         ])
     }
 }
 
-/// Context used by the `pages/recovery/expired.html` template
+// ---------------------------------------------------------------------------
+
+/// Data for the `pages/recovery/expired.html` template.
 #[derive(Serialize)]
 pub struct RecoveryExpiredContext {
     session: UserRecoverySession,
 }
 
 impl RecoveryExpiredContext {
-    /// Constructs a context for the recovery expired page
+    /// Build the recovery-expired page context.
     #[must_use]
     pub fn new(session: UserRecoverySession) -> Self {
         Self { session }
@@ -1325,7 +1401,7 @@ impl TemplateContext for RecoveryExpiredContext {
     where
         Self: Sized,
     {
-        let session = UserRecoverySession {
+        let sess = UserRecoverySession {
             id: pasion_data::new_id(now, rng),
             email: "name@mail.com".to_owned(),
             user_agent: "Mozilla/5.0".to_owned(),
@@ -1335,17 +1411,20 @@ impl TemplateContext for RecoveryExpiredContext {
             consumed_at: None,
         };
 
-        sample_list(vec![Self { session }])
+        sample_list(vec![Self { session: sess }])
     }
 }
-/// Fields of the account recovery finish form
+
+// ---------------------------------------------------------------------------
+
+/// Fields on the recovery-finish form.
 #[derive(Serialize, Deserialize, Debug, Clone, Copy, Hash, PartialEq, Eq)]
 #[serde(rename_all = "snake_case")]
 pub enum RecoveryFinishFormField {
-    /// The new password
+    /// New password
     NewPassword,
 
-    /// The new password confirmation
+    /// New password confirmation
     NewPasswordConfirm,
 }
 
@@ -1355,7 +1434,7 @@ impl FormField for RecoveryFinishFormField {
     }
 }
 
-/// Context used by the `pages/recovery/finish.html` template
+/// Data for the `pages/recovery/finish.html` template.
 #[derive(Serialize)]
 pub struct RecoveryFinishContext {
     user: User,
@@ -1363,7 +1442,7 @@ pub struct RecoveryFinishContext {
 }
 
 impl RecoveryFinishContext {
-    /// Constructs a context for the recovery finish page
+    /// Build the recovery-finish page context.
     #[must_use]
     pub fn new(user: User) -> Self {
         Self {
@@ -1372,7 +1451,7 @@ impl RecoveryFinishContext {
         }
     }
 
-    /// Set the form state
+    /// Replace the form state.
     #[must_use]
     pub fn with_form_state(mut self, form: FormState<RecoveryFinishFormField>) -> Self {
         self.form = form;
@@ -1392,16 +1471,16 @@ impl TemplateContext for RecoveryFinishContext {
         sample_list(
             User::samples(now, rng)
                 .into_iter()
-                .flat_map(|user| {
+                .flat_map(|u| {
                     vec![
-                        Self::new(user.clone()),
-                        Self::new(user.clone()).with_form_state(
+                        Self::new(u.clone()),
+                        Self::new(u.clone()).with_form_state(
                             FormState::default().with_error_on_field(
                                 RecoveryFinishFormField::NewPassword,
                                 FieldError::Invalid,
                             ),
                         ),
-                        Self::new(user.clone()).with_form_state(
+                        Self::new(u.clone()).with_form_state(
                             FormState::default().with_error_on_field(
                                 RecoveryFinishFormField::NewPasswordConfirm,
                                 FieldError::Invalid,
@@ -1414,15 +1493,18 @@ impl TemplateContext for RecoveryFinishContext {
     }
 }
 
-/// Context used by the `pages/upstream_oauth2/link_mismatch.html`
-/// templates
+// ===========================================================================
+// Upstream OAuth 2.0
+// ===========================================================================
+
+/// Data for the `pages/upstream_oauth2/link_mismatch.html` template.
 #[derive(Serialize)]
 pub struct UpstreamExistingLinkContext {
     linked_user: User,
 }
 
 impl UpstreamExistingLinkContext {
-    /// Constructs a new context with an existing linked user
+    /// Build the context from an already-linked user.
     #[must_use]
     pub fn new(linked_user: User) -> Self {
         Self { linked_user }
@@ -1441,21 +1523,22 @@ impl TemplateContext for UpstreamExistingLinkContext {
         sample_list(
             User::samples(now, rng)
                 .into_iter()
-                .map(|linked_user| Self { linked_user })
+                .map(|u| Self { linked_user: u })
                 .collect(),
         )
     }
 }
 
-/// Context used by the `pages/upstream_oauth2/suggest_link.html`
-/// templates
+// ---------------------------------------------------------------------------
+
+/// Data for the `pages/upstream_oauth2/suggest_link.html` template.
 #[derive(Serialize)]
 pub struct UpstreamSuggestLink {
     post_logout_action: PostAuthAction,
 }
 
 impl UpstreamSuggestLink {
-    /// Constructs a new context with an existing linked user
+    /// Build the context from an upstream OAuth link.
     #[must_use]
     pub fn new(link: &UpstreamOAuthLink) -> Self {
         Self::for_link_id(link.id)
@@ -1476,19 +1559,21 @@ impl TemplateContext for UpstreamSuggestLink {
     where
         Self: Sized,
     {
-        let id = pasion_data::new_id(now, rng);
-        sample_list(vec![Self::for_link_id(id)])
+        let link_id = pasion_data::new_id(now, rng);
+        sample_list(vec![Self::for_link_id(link_id)])
     }
 }
 
-/// User-editeable fields of the upstream account link form
+// ---------------------------------------------------------------------------
+
+/// User-editable fields on the upstream account registration form.
 #[derive(Serialize, Deserialize, Debug, Clone, Copy, Hash, PartialEq, Eq)]
 #[serde(rename_all = "snake_case")]
 pub enum UpstreamRegisterFormField {
-    /// The username field
+    /// Username field
     Username,
 
-    /// Accept the terms of service
+    /// Terms-of-service acceptance
     AcceptTerms,
 }
 
@@ -1500,8 +1585,7 @@ impl FormField for UpstreamRegisterFormField {
     }
 }
 
-/// Context used by the `pages/upstream_oauth2/do_register.html`
-/// templates
+/// Data for the `pages/upstream_oauth2/do_register.html` template.
 #[derive(Serialize)]
 pub struct UpstreamRegister {
     upstream_oauth_link: UpstreamOAuthLink,
@@ -1516,8 +1600,7 @@ pub struct UpstreamRegister {
 }
 
 impl UpstreamRegister {
-    /// Constructs a new context for registering a new user from an upstream
-    /// provider
+    /// Build the context for registering via an upstream provider.
     #[must_use]
     pub fn new(
         upstream_oauth_link: UpstreamOAuthLink,
@@ -1646,11 +1729,15 @@ impl TemplateContext for UpstreamRegister {
     }
 }
 
-/// Form fields on the device link page
+// ===========================================================================
+// Device code flow
+// ===========================================================================
+
+/// Fields on the device-link page form.
 #[derive(Serialize, Deserialize, Debug, Clone, Copy, Hash, PartialEq, Eq)]
 #[serde(rename_all = "snake_case")]
 pub enum DeviceLinkFormField {
-    /// The device code field
+    /// Device code
     Code,
 }
 
@@ -1662,20 +1749,20 @@ impl FormField for DeviceLinkFormField {
     }
 }
 
-/// Context used by the `device_link.html` template
+/// Data for the `device_link.html` template.
 #[derive(Serialize, Default, Debug)]
 pub struct DeviceLinkContext {
     form_state: FormState<DeviceLinkFormField>,
 }
 
 impl DeviceLinkContext {
-    /// Constructs a new context with an existing linked user
+    /// Build the device-link page context.
     #[must_use]
     pub fn new() -> Self {
         Self::default()
     }
 
-    /// Set the form state
+    /// Replace the form state.
     #[must_use]
     pub fn with_form_state(mut self, form_state: FormState<DeviceLinkFormField>) -> Self {
         self.form_state = form_state;
@@ -1702,7 +1789,9 @@ impl TemplateContext for DeviceLinkContext {
     }
 }
 
-/// Context used by the `device_consent.html` template
+// ---------------------------------------------------------------------------
+
+/// Data for the `device_consent.html` template.
 #[derive(Serialize, Debug)]
 pub struct DeviceConsentContext {
     grant: DeviceCodeGrant,
@@ -1711,7 +1800,7 @@ pub struct DeviceConsentContext {
 }
 
 impl DeviceConsentContext {
-    /// Constructs a new context with an existing linked user
+    /// Build the device-consent page context.
     #[must_use]
     pub fn new(grant: DeviceCodeGrant, client: Client, matrix_user: MatrixUser) -> Self {
         Self {
@@ -1759,15 +1848,19 @@ impl TemplateContext for DeviceConsentContext {
     }
 }
 
-/// Context used by the `account/deactivated.html` and `account/locked.html`
-/// templates
+// ===========================================================================
+// Account state
+// ===========================================================================
+
+/// Data for the `account/deactivated.html` and `account/locked.html`
+/// templates.
 #[derive(Serialize)]
 pub struct AccountInactiveContext {
     user: User,
 }
 
 impl AccountInactiveContext {
-    /// Constructs a new context with an existing linked user
+    /// Build the account-inactive page context.
     #[must_use]
     pub fn new(user: User) -> Self {
         Self { user }
@@ -1786,13 +1879,17 @@ impl TemplateContext for AccountInactiveContext {
         sample_list(
             User::samples(now, rng)
                 .into_iter()
-                .map(|user| AccountInactiveContext { user })
+                .map(|u| AccountInactiveContext { user: u })
                 .collect(),
         )
     }
 }
 
-/// Context used by the `device_name.txt` template
+// ===========================================================================
+// Device naming
+// ===========================================================================
+
+/// Data for the `device_name.txt` template.
 #[derive(Serialize)]
 pub struct DeviceNameContext {
     client: Client,
@@ -1800,7 +1897,7 @@ pub struct DeviceNameContext {
 }
 
 impl DeviceNameContext {
-    /// Constructs a new context with a client and user agent
+    /// Build the context from a client and an optional User-Agent string.
     #[must_use]
     pub fn new(client: Client, user_agent: Option<String>) -> Self {
         Self {
@@ -1829,7 +1926,11 @@ impl TemplateContext for DeviceNameContext {
     }
 }
 
-/// Context used by the `form_post.html` template
+// ===========================================================================
+// OAuth 2.0 form_post response mode
+// ===========================================================================
+
+/// Data for the `form_post.html` template.
 #[derive(Serialize)]
 pub struct FormPostContext<T> {
     redirect_uri: Option<Url>,
@@ -1845,25 +1946,21 @@ impl<T: TemplateContext> TemplateContext for FormPostContext<T> {
     where
         Self: Sized,
     {
-        let sample_params = T::sample(now, rng, locales);
-        sample_params
+        T::sample(now, rng, locales)
             .into_iter()
-            .map(|(k, params)| {
-                (
-                    k,
-                    FormPostContext {
-                        redirect_uri: "https://example.com/callback".parse().ok(),
-                        params,
-                    },
-                )
+            .map(|(id, inner_params)| {
+                let ctx = FormPostContext {
+                    redirect_uri: "https://example.com/callback".parse().ok(),
+                    params: inner_params,
+                };
+                (id, ctx)
             })
             .collect()
     }
 }
 
 impl<T> FormPostContext<T> {
-    /// Constructs a context for the `form_post` response mode form for a given
-    /// URL
+    /// Build a form-post context that redirects to the given URL.
     pub fn new_for_url(redirect_uri: Url, params: T) -> Self {
         Self {
             redirect_uri: Some(redirect_uri),
@@ -1871,8 +1968,7 @@ impl<T> FormPostContext<T> {
         }
     }
 
-    /// Constructs a context for the `form_post` response mode form for the
-    /// current URL
+    /// Build a form-post context that posts to the current URL.
     pub fn new_for_current_url(params: T) -> Self {
         Self {
             redirect_uri: None,
@@ -1880,10 +1976,10 @@ impl<T> FormPostContext<T> {
         }
     }
 
-    /// Add the language to the context
+    /// Attach a language tag.
     ///
-    /// This is usually implemented by the [`TemplateContext`] trait, but it is
-    /// annoying to make it work because of the generic parameter
+    /// Provided separately from the [`TemplateContext`] trait because the
+    /// generic parameter makes blanket implementation awkward.
     pub fn with_language(self, lang: &DataLocale) -> WithLanguage<Self> {
         WithLanguage {
             lang: lang.to_string(),
@@ -1892,7 +1988,11 @@ impl<T> FormPostContext<T> {
     }
 }
 
-/// Context used by the `error.html` template
+// ===========================================================================
+// Error pages
+// ===========================================================================
+
+/// Data for the `error.html` template.
 #[derive(Default, Serialize, Debug, Clone)]
 pub struct ErrorContext {
     code: Option<&'static str>,
@@ -1906,14 +2006,12 @@ impl std::fmt::Display for ErrorContext {
         if let Some(code) = &self.code {
             writeln!(f, "code: {code}")?;
         }
-        if let Some(description) = &self.description {
-            writeln!(f, "{description}")?;
+        if let Some(desc) = &self.description {
+            writeln!(f, "{desc}")?;
         }
-
-        if let Some(details) = &self.details {
-            writeln!(f, "details: {details}")?;
+        if let Some(detail) = &self.details {
+            writeln!(f, "details: {detail}")?;
         }
-
         Ok(())
     }
 }
@@ -1939,60 +2037,62 @@ impl TemplateContext for ErrorContext {
 }
 
 impl ErrorContext {
-    /// Constructs a context for the error page
+    /// Create a blank error context.
     #[must_use]
     pub fn new() -> Self {
         Self::default()
     }
 
-    /// Add the error code to the context
+    /// Set the error code.
     #[must_use]
     pub fn with_code(mut self, code: &'static str) -> Self {
         self.code = Some(code);
         self
     }
 
-    /// Add the error description to the context
+    /// Set the human-readable description.
     #[must_use]
     pub fn with_description(mut self, description: String) -> Self {
         self.description = Some(description);
         self
     }
 
-    /// Add the error details to the context
+    /// Set additional detail text.
     #[must_use]
     pub fn with_details(mut self, details: String) -> Self {
         self.details = Some(details);
         self
     }
 
-    /// Add the language to the context
+    /// Set the language tag for the error page.
     #[must_use]
     pub fn with_language(mut self, lang: &DataLocale) -> Self {
         self.lang = Some(lang.to_string());
         self
     }
 
-    /// Get the error code, if any
+    /// Return the error code, if set.
     #[must_use]
     pub fn code(&self) -> Option<&'static str> {
         self.code
     }
 
-    /// Get the description, if any
+    /// Return the description, if set.
     #[must_use]
     pub fn description(&self) -> Option<&str> {
         self.description.as_deref()
     }
 
-    /// Get the details, if any
+    /// Return the detail text, if set.
     #[must_use]
     pub fn details(&self) -> Option<&str> {
         self.details.as_deref()
     }
 }
 
-/// Context used by the not found (`404.html`) template
+// ---------------------------------------------------------------------------
+
+/// Data for the `404.html` not-found template.
 #[derive(Serialize)]
 pub struct NotFoundContext {
     method: String,
@@ -2001,7 +2101,7 @@ pub struct NotFoundContext {
 }
 
 impl NotFoundContext {
-    /// Constructs a context for the not found page
+    /// Build the context from the incoming request metadata.
     #[must_use]
     pub fn new(method: &Method, version: Version, uri: &Uri) -> Self {
         Self {

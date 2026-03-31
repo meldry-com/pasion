@@ -74,8 +74,11 @@ pub enum LoadError {
 /// A translator for a set of translations.
 #[derive(Debug)]
 pub struct Translator {
-    translations: HashMap<DataLocale, TranslationTree>,
+    /// Locale-keyed translation data, stored in insertion order is irrelevant.
+    locale_trees: HashMap<DataLocale, TranslationTree>,
+    /// Fallback-aware plural-rule provider.
     plural_provider: LocaleFallbackProvider<icu_plurals::provider::Baked>,
+    /// The ultimate fallback locale when the chain hits `und`.
     default_locale: DataLocale,
 }
 
@@ -83,14 +86,14 @@ impl Translator {
     /// Create a new translator from a set of translations.
     #[must_use]
     pub fn new(translations: HashMap<DataLocale, TranslationTree>) -> Self {
-        let fallbacker = LocaleFallbacker::new().static_to_owned();
+        let owned_fallbacker = LocaleFallbacker::new().static_to_owned();
         let plural_provider = LocaleFallbackProvider::new_with_fallbacker(
             icu_plurals::provider::Baked,
-            fallbacker.clone(),
+            owned_fallbacker,
         );
 
         Self {
-            translations,
+            locale_trees: translations,
             plural_provider,
             // TODO: make this configurable
             default_locale: icu_locid::locale!("en").into(),
@@ -111,44 +114,63 @@ impl Translator {
     /// Returns an error if the directory cannot be read, or if any of the files
     /// cannot be parsed.
     pub fn load_from_path(path: &Utf8Path) -> Result<Self, LoadError> {
-        let mut translations = HashMap::new();
-
-        let dir = path.read_dir_utf8().map_err(|source| LoadError::ReadDir {
+        let entries = path.read_dir_utf8().map_err(|source| LoadError::ReadDir {
             path: path.to_owned(),
             source,
         })?;
 
-        for entry in dir {
-            let entry = entry.map_err(|source| LoadError::ReadDir {
+        let mut collected: HashMap<DataLocale, TranslationTree> = HashMap::new();
+
+        for dir_result in entries {
+            let dir_entry = dir_result.map_err(|source| LoadError::ReadDir {
                 path: path.to_owned(),
                 source,
             })?;
-            let path = entry.into_path();
-            let Some(name) = path.file_stem() else {
-                return Err(LoadError::InvalidFileName { path });
-            };
 
-            let locale: Locale = match Locale::from_str(name) {
-                Ok(locale) => locale,
-                Err(source) => return Err(LoadError::InvalidLocale { path, source }),
-            };
+            let file_path = dir_entry.into_path();
 
-            let file = match File::open(&path) {
-                Ok(file) => file,
-                Err(source) => return Err(LoadError::ReadFile { path, source }),
-            };
+            let stem = file_path
+                .file_stem()
+                .ok_or_else(|| LoadError::InvalidFileName {
+                    path: file_path.clone(),
+                })?;
 
-            let mut reader = BufReader::new(file);
+            let locale = Locale::from_str(stem).map_err(|source| LoadError::InvalidLocale {
+                path: file_path.clone(),
+                source,
+            })?;
 
-            let content = match serde_json::from_reader(&mut reader) {
-                Ok(content) => content,
-                Err(source) => return Err(LoadError::Deserialize { path, source }),
-            };
+            let handle = File::open(&file_path).map_err(|source| LoadError::ReadFile {
+                path: file_path.clone(),
+                source,
+            })?;
 
-            translations.insert(locale.into(), content);
+            let tree: TranslationTree =
+                serde_json::from_reader(BufReader::new(handle)).map_err(|source| {
+                    LoadError::Deserialize {
+                        path: file_path.clone(),
+                        source,
+                    }
+                })?;
+
+            collected.insert(locale.into(), tree);
         }
 
-        Ok(Self::new(translations))
+        Ok(Self::new(collected))
+    }
+
+    /// Resolve a locale to its translation tree, if present.
+    fn tree_for(&self, locale: &DataLocale) -> Option<&TranslationTree> {
+        self.locale_trees.get(locale)
+    }
+
+    /// Build a `DataError` for a missing locale or key.
+    fn missing_locale_error(&self, locale: &DataLocale) -> DataError {
+        DataErrorKind::MissingLocale.with_req(DATA_KEY, data_request_for_locale(locale))
+    }
+
+    fn missing_key_error(&self, locale: &DataLocale) -> DataError {
+        DataErrorKind::MissingDataKey.with_req(DATA_KEY, data_request_for_locale(locale))
     }
 
     /// Get a message from the tree by key, with locale fallback.
@@ -166,26 +188,27 @@ impl Translator {
         locale: DataLocale,
         key: &str,
     ) -> Option<(&Message, DataLocale)> {
-        if let Ok(message) = self.message(&locale, key) {
-            return Some((message, locale));
+        // Direct hit before entering the fallback loop.
+        if let Ok(msg) = self.message(&locale, key) {
+            return Some((msg, locale));
         }
 
-        let mut iter = FALLBACKER.fallback_for(locale);
+        let mut chain = FALLBACKER.fallback_for(locale);
 
         loop {
-            let locale = iter.get();
+            let candidate = chain.get();
 
-            if let Ok(message) = self.message(locale, key) {
-                return Some((message, iter.take()));
+            if let Ok(msg) = self.message(candidate, key) {
+                return Some((msg, chain.take()));
             }
 
-            // Try the defaut locale if we hit the `und` locale
-            if locale.is_und() {
-                let message = self.message(&self.default_locale, key).ok()?;
-                return Some((message, self.default_locale.clone()));
+            if candidate.is_und() {
+                // Last resort: the configured default locale.
+                let msg = self.message(&self.default_locale, key).ok()?;
+                return Some((msg, self.default_locale.clone()));
             }
 
-            iter.step();
+            chain.step();
         }
     }
 
@@ -201,18 +224,12 @@ impl Translator {
     /// Returns an error if the requested locale is not found, or if the
     /// requested key is not found.
     pub fn message(&self, locale: &DataLocale, key: &str) -> Result<&Message, DataError> {
-        let request = data_request_for_locale(locale);
-
         let tree = self
-            .translations
-            .get(locale)
-            .ok_or_else(|| DataErrorKind::MissingLocale.with_req(DATA_KEY, request))?;
+            .tree_for(locale)
+            .ok_or_else(|| self.missing_locale_error(locale))?;
 
-        let message = tree
-            .message(key)
-            .ok_or_else(|| DataErrorKind::MissingDataKey.with_req(DATA_KEY, request))?;
-
-        Ok(message)
+        tree.message(key)
+            .ok_or_else(|| self.missing_key_error(locale))
     }
 
     /// Get a plural message from the tree by key, with locale fallback.
@@ -232,21 +249,21 @@ impl Translator {
         key: &str,
         count: usize,
     ) -> Option<(&Message, DataLocale)> {
-        let mut iter = FALLBACKER.fallback_for(locale);
+        let mut chain = FALLBACKER.fallback_for(locale);
 
         loop {
-            let locale = iter.get();
+            let candidate = chain.get();
 
-            if let Ok(message) = self.plural(locale, key, count) {
-                return Some((message, iter.take()));
+            if let Ok(msg) = self.plural(candidate, key, count) {
+                return Some((msg, chain.take()));
             }
 
             // Stop if we hit the `und` locale
-            if locale.is_und() {
+            if candidate.is_und() {
                 return None;
             }
 
-            iter.step();
+            chain.step();
         }
     }
 
@@ -268,21 +285,15 @@ impl Translator {
         key: &str,
         count: usize,
     ) -> Result<&Message, PluralsError> {
-        let plurals = PluralRules::try_new_cardinal_unstable(&self.plural_provider, locale)?;
-        let category = plurals.category_for(count);
-
-        let request = data_request_for_locale(locale);
+        let rules = PluralRules::try_new_cardinal_unstable(&self.plural_provider, locale)?;
+        let category = rules.category_for(count);
 
         let tree = self
-            .translations
-            .get(locale)
-            .ok_or_else(|| DataErrorKind::MissingLocale.with_req(DATA_KEY, request))?;
+            .tree_for(locale)
+            .ok_or_else(|| self.missing_locale_error(locale))?;
 
-        let message = tree
-            .pluralize(key, category)
-            .ok_or_else(|| DataErrorKind::MissingDataKey.with_req(DATA_KEY, request))?;
-
-        Ok(message)
+        tree.pluralize(key, category)
+            .ok_or_else(|| self.missing_key_error(locale).into())
     }
 
     /// Format a relative date
@@ -302,15 +313,12 @@ impl Translator {
         days: i64,
     ) -> Result<String, icu_experimental::relativetime::RelativeTimeError> {
         // TODO: this is not using the fallbacker
-        let formatter = RelativeTimeFormatter::try_new_long_day(
-            locale,
-            RelativeTimeFormatterOptions {
-                numeric: Numeric::Auto,
-            },
-        )?;
-
-        let date = formatter.format(days.into());
-        Ok(date.write_to_string().into_owned())
+        let opts = RelativeTimeFormatterOptions {
+            numeric: Numeric::Auto,
+        };
+        let formatter = RelativeTimeFormatter::try_new_long_day(locale, opts)?;
+        let writeable = formatter.format(days.into());
+        Ok(writeable.write_to_string().into_owned())
     }
 
     /// Format time
@@ -329,48 +337,49 @@ impl Translator {
         time: &T,
     ) -> Result<String, icu_datetime::DateTimeError> {
         // TODO: this is not using the fallbacker
-        let formatter = icu_datetime::TimeFormatter::try_new_with_length(
-            locale,
-            icu_datetime::options::length::Time::Short,
-        )?;
-
-        Ok(formatter.format_to_string(time))
+        let time_length = icu_datetime::options::length::Time::Short;
+        let fmt = icu_datetime::TimeFormatter::try_new_with_length(locale, time_length)?;
+        Ok(fmt.format_to_string(time))
     }
 
     /// Get a list of available locales.
     #[must_use]
     pub fn available_locales(&self) -> Vec<DataLocale> {
-        self.translations.keys().cloned().collect()
+        self.locale_trees.keys().cloned().collect()
     }
 
     /// Check if a locale is available.
     #[must_use]
     pub fn has_locale(&self, locale: &DataLocale) -> bool {
-        self.translations.contains_key(locale)
+        self.locale_trees.contains_key(locale)
     }
 
     /// Choose the best available locale from a list of candidates.
     #[must_use]
     pub fn choose_locale(&self, iter: impl Iterator<Item = DataLocale>) -> DataLocale {
-        for locale in iter {
-            if self.has_locale(&locale) {
-                return locale;
+        for candidate in iter {
+            // Exact match?
+            if self.has_locale(&candidate) {
+                return candidate;
             }
 
-            let mut fallbacker = FALLBACKER.fallback_for(locale);
-
+            // Walk the fallback chain for this candidate.
+            let mut chain = FALLBACKER.fallback_for(candidate);
             loop {
-                if fallbacker.get().is_und() {
+                let current = chain.get();
+                if current.is_und() {
                     break;
                 }
 
-                if self.has_locale(fallbacker.get()) {
-                    return fallbacker.take();
+                if self.has_locale(current) {
+                    return chain.take();
                 }
-                fallbacker.step();
+
+                chain.step();
             }
         }
 
+        // Nothing matched; return the default.
         self.default_locale.clone()
     }
 }

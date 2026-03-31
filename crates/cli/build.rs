@@ -1,29 +1,31 @@
 use vergen_gitcl::{Emitter, GitclBuilder, RustcBuilder};
 
 fn main() -> anyhow::Result<()> {
-    // Instruct rustc that we'll be using #[cfg(tokio_unstable)]
+    // Register the custom cfg so rustc knows about it
     println!("cargo::rustc-check-cfg=cfg(tokio_unstable)");
 
-    // At build time, we override the version through the environment variable
-    // VERGEN_GIT_DESCRIBE. In some contexts, it means this variable is set but
-    // empty, so we unset it here.
-    if let Ok(ver) = std::env::var("VERGEN_GIT_DESCRIBE")
-        && ver.is_empty()
+    // VERGEN_GIT_DESCRIBE can be set externally to override the version;
+    // however some CI environments set it to an empty string, which
+    // confuses vergen.  Clear it in that case so vergen falls back to
+    // running `git describe` itself.
+    if std::env::var("VERGEN_GIT_DESCRIBE")
+        .is_ok_and(|v| v.is_empty())
     {
         #[allow(unsafe_code)]
-        // SAFETY: This is safe because the build script is running a single thread
+        // SAFETY: build scripts are single-threaded.
         unsafe {
             std::env::remove_var("VERGEN_GIT_DESCRIBE");
         }
     }
 
-    let gitcl = GitclBuilder::default()
+    let git = GitclBuilder::default()
         .describe(true, false, Some("v*.*.*"))
         .build()?;
+
     let rustc = RustcBuilder::default().semver(true).build()?;
 
     Emitter::default()
-        .add_instructions(&gitcl)?
+        .add_instructions(&git)?
         .add_instructions(&rustc)?
         .emit()?;
 

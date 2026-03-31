@@ -1,4 +1,4 @@
-name: Build
+name: Build and Release Pipeline
 
 on:
   push:
@@ -8,68 +8,71 @@ on:
     tags:
       - "v*"
 
-  # Run when there is a label change on the pull request
-  # This runs only if the 'Z-Build-Workflow' is added to the pull request
+  # Trigger on pull request label changes; only runs when 'Z-Build-Workflow' label is present
   pull_request:
     types: [labeled]
 
-concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: true
-
 env:
-  CARGO_TERM_COLOR: always
   CARGO_NET_GIT_FETCH_WITH_CLI: "true"
-  SCCACHE_GHA_ENABLED: "true"
+  CARGO_TERM_COLOR: always
   RUSTC_WRAPPER: "sccache"
+  SCCACHE_GHA_ENABLED: "true"
   IMAGE: ghcr.io/palpo-im/pasion
   BUILDCACHE: ghcr.io/palpo-im/pasion/buildcache
   DOCKER_METADATA_ANNOTATIONS_LEVELS: manifest,index
 
+concurrency:
+  group: build-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
+  # -- Version computation --
+
   compute-version:
-    name: Compute version using git describe
-    if: github.event_name == 'push' || github.event.label.name == 'Z-Build-Workflow'
+    name: Derive version from git tags
     runs-on: ubuntu-24.04
+    if: github.event_name == 'push' || github.event.label.name == 'Z-Build-Workflow'
 
     permissions:
       contents: read
 
     outputs:
-      describe: ${{ steps.git.outputs.describe }}
-      timestamp: ${{ steps.git.outputs.timestamp }}
+      describe: ${{ steps.version-info.outputs.describe }}
+      timestamp: ${{ steps.version-info.outputs.timestamp }}
 
     steps:
-      - name: Checkout the code
+      - name: Fetch repository with full history
         uses: actions/checkout@v6
         with:
-          # Need a full clone so that `git describe` reports the right version
+          # Full clone required for accurate git describe output
           fetch-depth: 0
 
-      - name: Compute version and timestamp out of git history
-        id: git
+      - name: Extract version and commit timestamp
+        id: version-info
         run: |
           echo "describe=$(git describe --tags --match 'v*.*.*' --always)" >> $GITHUB_OUTPUT
           echo "timestamp=$(git log -1 --format=%ct)" >> $GITHUB_OUTPUT
 
+  # -- Asset preparation --
+
   build-assets:
-    name: Build assets
-    if: github.event_name == 'push' || github.event.label.name == 'Z-Build-Workflow'
+    name: Prepare distributable assets
     runs-on: ubuntu-24.04
+    if: github.event_name == 'push' || github.event.label.name == 'Z-Build-Workflow'
 
     permissions:
       contents: read
 
     steps:
-      - name: Checkout the code
+      - name: Fetch repository
         uses: actions/checkout@v6
 
-      - name: Install Rust toolchain
+      - name: Set up stable Rust
         uses: dtolnay/rust-toolchain@stable
 
       - uses: ./.github/actions/build-frontend
 
-      - name: Prepare assets artifact
+      - name: Assemble asset directory
         run: |
           mkdir -p assets-dist/share
           cp dist/manifest.json assets-dist/share/manifest.json
@@ -80,17 +83,18 @@ jobs:
           cp LICENSE assets-dist/LICENSE
           chmod -R u=rwX,go=rX assets-dist/
 
-      - name: Upload assets
+      - name: Store asset artifact
         uses: actions/upload-artifact@v6.0.0
         with:
           name: assets
           path: assets-dist
 
-  build-binaries:
-    name: Build binaries
-    if: github.event_name == 'push' || github.event.label.name == 'Z-Build-Workflow'
-    runs-on: ubuntu-24.04
+  # -- Binary compilation --
 
+  build-binaries:
+    name: Compile release binaries
+    runs-on: ubuntu-24.04
+    if: github.event_name == 'push' || github.event.label.name == 'Z-Build-Workflow'
     needs:
       - compute-version
 
@@ -108,29 +112,29 @@ jobs:
       contents: read
 
     steps:
-      - name: Checkout the code
+      - name: Fetch repository
         uses: actions/checkout@v6
 
-      - name: Install Rust toolchain
+      - name: Set up Rust with target ${{ matrix.target }}
         uses: dtolnay/rust-toolchain@stable
         with:
           targets: |
             ${{ matrix.target }}
 
-      - name: Setup sccache
+      - name: Configure sccache
         uses: mozilla-actions/sccache-action@v0.0.9
 
-      - name: Install zig
+      - name: Set up zig toolchain
         uses: goto-bus-stop/setup-zig@v2
         with:
           version: 0.13.0
 
-      - name: Install cargo-zigbuild
+      - name: Set up cargo-zigbuild
         uses: taiki-e/install-action@v2
         with:
           tool: cargo-zigbuild
 
-      - name: Build the binary
+      - name: Compile pasion binary
         run: |
           cargo zigbuild \
             --release \
@@ -139,44 +143,45 @@ jobs:
             --features dist \
             -p pasion
 
-      - name: Upload binary artifact
+      - name: Store compiled binary
         uses: actions/upload-artifact@v6.0.0
         with:
           name: binary-${{ matrix.target }}
           path: target/${{ matrix.target }}/release/pasion
 
-  assemble-archives:
-    name: Assemble release archives
-    if: github.event_name == 'push' || github.event.label.name == 'Z-Build-Workflow'
-    runs-on: ubuntu-24.04
+  # -- Archive assembly --
 
+  assemble-archives:
+    name: Package release archives
+    runs-on: ubuntu-24.04
+    if: github.event_name == 'push' || github.event.label.name == 'Z-Build-Workflow'
     needs:
-      - build-assets
       - build-binaries
+      - build-assets
 
     permissions:
       contents: read
 
     steps:
-      - name: Download assets
+      - name: Retrieve asset artifact
         uses: actions/download-artifact@v7
         with:
           name: assets
           path: assets-dist
 
-      - name: Download binary x86_64
+      - name: Retrieve x86_64 binary
         uses: actions/download-artifact@v7
         with:
           name: binary-x86_64-unknown-linux-gnu
           path: binary-x86_64
 
-      - name: Download binary aarch64
+      - name: Retrieve aarch64 binary
         uses: actions/download-artifact@v7
         with:
           name: binary-aarch64-unknown-linux-gnu
           path: binary-aarch64
 
-      - name: Create final archives
+      - name: Build tarballs for each architecture
         run: |
           for arch in x86_64 aarch64; do
             mkdir -p dist/${arch}/share
@@ -188,40 +193,41 @@ jobs:
             tar -czvf pasion-${arch}-linux.tar.gz --owner=0 --group=0 -C dist/${arch}/ .
           done
 
-      - name: Upload aarch64 archive
+      - name: Store aarch64 archive
         uses: actions/upload-artifact@v6.0.0
         with:
           name: pasion-aarch64-linux
           path: pasion-aarch64-linux.tar.gz
 
-      - name: Upload x86_64 archive
+      - name: Store x86_64 archive
         uses: actions/upload-artifact@v6.0.0
         with:
           name: pasion-x86_64-linux
           path: pasion-x86_64-linux.tar.gz
 
+  # -- Container image --
+
   build-image:
-    name: Build and push Docker image
-    if: github.event_name == 'push' || github.event.label.name == 'Z-Build-Workflow'
+    name: Build and publish container image
     runs-on: ubuntu-24.04
+    if: github.event_name == 'push' || github.event.label.name == 'Z-Build-Workflow'
+    needs:
+      - compute-version
 
     outputs:
-      metadata: ${{ steps.output.outputs.metadata }}
+      metadata: ${{ steps.extract-metadata.outputs.metadata }}
 
     permissions:
       contents: read
-      packages: write
       id-token: write
-
-    needs:
-      - compute-version
+      packages: write
 
     env:
       VERGEN_GIT_DESCRIBE: ${{ needs.compute-version.outputs.describe }}
       SOURCE_DATE_EPOCH: ${{ needs.compute-version.outputs.timestamp }}
 
     steps:
-      - name: Docker meta
+      - name: Compute Docker tags (standard)
         id: meta
         uses: docker/metadata-action@v5.10.0
         with:
@@ -237,7 +243,7 @@ jobs:
             type=semver,pattern={{major}}
             type=sha
 
-      - name: Docker meta (debug variant)
+      - name: Compute Docker tags (debug variant)
         id: meta-debug
         uses: docker/metadata-action@v5.10.0
         with:
@@ -254,24 +260,24 @@ jobs:
             type=semver,pattern={{major}}
             type=sha
 
-      - name: Setup Cosign
+      - name: Set up Cosign
         uses: sigstore/cosign-installer@v4.0.0
 
-      - name: Set up Docker Buildx
+      - name: Configure Docker Buildx
         uses: docker/setup-buildx-action@v3.11.1
         with:
           buildkitd-config-inline: |
             [registry."docker.io"]
               mirrors = ["mirror.gcr.io"]
 
-      - name: Login to GitHub Container Registry
+      - name: Authenticate with GitHub Container Registry
         uses: docker/login-action@v3.6.0
         with:
           registry: ghcr.io
           username: ${{ github.repository_owner }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Build and push
+      - name: Execute Docker Bake build
         id: bake
         uses: docker/bake-action@v6.10.0
         with:
@@ -284,48 +290,51 @@ jobs:
             base.cache-from=type=registry,ref=${{ env.BUILDCACHE }}:buildcache
             base.cache-to=type=registry,ref=${{ env.BUILDCACHE }}:buildcache,mode=max
 
-      - name: Transform bake output
-        # This transforms the ouput to an object which looks like this:
-        # { reguar: { digest: "…", tags: ["…", "…"] }, debug: { digest: "…", tags: ["…"] }, … }
-        id: output
+      - name: Normalize bake output to digest/tag map
+        # Produces an object like: { regular: { digest: "...", tags: [...] }, debug: { digest: "...", tags: [...] }, ... }
+        id: extract-metadata
         run: |
           echo 'metadata<<EOF' >> $GITHUB_OUTPUT
           echo '${{ steps.bake.outputs.metadata }}' | jq -c 'with_entries(select(.value | (type == "object" and has("containerimage.digest")))) | map_values({ digest: .["containerimage.digest"], tags: (.["image.name"] | split(",")) })' >> $GITHUB_OUTPUT
           echo 'EOF' >> $GITHUB_OUTPUT
 
-      - name: Sign the images with GitHub Actions provided token
-        # Only sign on tags and on commits on main branch
+      - name: Cosign the published images
+        # Signing restricted to tag pushes and commits on main
         if: |
           github.event_name != 'pull_request'
           && (startsWith(github.ref, 'refs/tags/v') || github.ref == 'refs/heads/main')
 
         env:
-          REGULAR_DIGEST: ${{ steps.output.outputs.metadata && fromJSON(steps.output.outputs.metadata).regular.digest }}
-          DEBUG_DIGEST: ${{ steps.output.outputs.metadata && fromJSON(steps.output.outputs.metadata).debug.digest }}
+          REGULAR_DIGEST: ${{ steps.extract-metadata.outputs.metadata && fromJSON(steps.extract-metadata.outputs.metadata).regular.digest }}
+          DEBUG_DIGEST: ${{ steps.extract-metadata.outputs.metadata && fromJSON(steps.extract-metadata.outputs.metadata).debug.digest }}
 
         run: |-
           cosign sign --yes \
             "$IMAGE@$REGULAR_DIGEST" \
             "$IMAGE@$DEBUG_DIGEST" \
 
+  # -- Tagged release --
+
   release:
-    name: Release
-    if: startsWith(github.ref, 'refs/tags/')
+    name: Publish tagged release
     runs-on: ubuntu-24.04
+    if: startsWith(github.ref, 'refs/tags/')
     needs:
       - assemble-archives
       - build-image
+
     steps:
-      - name: Download the artifacts from the previous job
+      - name: Retrieve release artifacts
         uses: actions/download-artifact@v7
         with:
           pattern: pasion-*
           path: artifacts
           merge-multiple: true
 
-      - name: Prepare a release
+      - name: Create GitHub release
         uses: softprops/action-gh-release@v2.5.0
         with:
+          draft: true
           generate_release_notes: true
           body: |
             ### Docker image
@@ -357,13 +366,13 @@ jobs:
           files: |
             artifacts/pasion-aarch64-linux.tar.gz
             artifacts/pasion-x86_64-linux.tar.gz
-          draft: true
+
+  # -- Unstable rolling release --
 
   unstable:
-    name: Update the unstable release
-    if: github.ref == 'refs/heads/main'
+    name: Refresh unstable rolling release
     runs-on: ubuntu-24.04
-
+    if: github.ref == 'refs/heads/main'
     needs:
       - assemble-archives
       - build-image
@@ -372,31 +381,33 @@ jobs:
       contents: write
 
     steps:
-      - name: Checkout the code
+      - name: Fetch repository (sparse)
         uses: actions/checkout@v6
         with:
           sparse-checkout: |
             .github/scripts
 
-      - name: Download the artifacts from the previous job
+      - name: Retrieve release artifacts
         uses: actions/download-artifact@v7
         with:
           pattern: pasion-*
           path: artifacts
           merge-multiple: true
 
-      - name: Update unstable git tag
+      - name: Advance unstable tag to current commit
         uses: actions/github-script@v8.0.0
         with:
           script: |
             const script = require('./.github/scripts/update-unstable-tag.cjs');
             await script({ core, github, context });
 
-      - name: Update unstable release
+      - name: Publish unstable release
         uses: softprops/action-gh-release@v2.5.0
         with:
           name: "Unstable build"
           tag_name: unstable
+          prerelease: true
+          make_latest: false
           body: |
             This is an automatically updated unstable release containing the latest builds from the main branch.
 
@@ -434,14 +445,13 @@ jobs:
           files: |
             artifacts/pasion-aarch64-linux.tar.gz
             artifacts/pasion-x86_64-linux.tar.gz
-          prerelease: true
-          make_latest: false
+
+  # -- PR label cleanup --
 
   pr-cleanup:
-    name: "Remove workflow build PR label and comment on it"
+    name: Clean up build workflow label on PR
     runs-on: ubuntu-24.04
     if: github.event_name == 'pull_request' && github.event.label.name == 'Z-Build-Workflow'
-
     needs:
       - build-image
 
@@ -450,13 +460,13 @@ jobs:
       pull-requests: write
 
     steps:
-      - name: Checkout the code
+      - name: Fetch repository (sparse)
         uses: actions/checkout@v6
         with:
           sparse-checkout: |
             .github/scripts
 
-      - name: Remove label and comment
+      - name: Strip label and post comment
         uses: actions/github-script@v8.0.0
         env:
           BUILD_IMAGE_MANIFEST: ${{ needs.build-image.outputs.metadata }}

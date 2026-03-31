@@ -111,6 +111,10 @@ impl LoadError {
     }
 }
 
+/// OID constant for Ed25519 (RFC 8410)
+const ED25519_ALGORITHM_OID: const_oid::ObjectIdentifier =
+    const_oid::ObjectIdentifier::new_unwrap("1.3.101.112");
+
 /// A single private key
 #[non_exhaustive]
 #[derive(Debug)]
@@ -128,63 +132,126 @@ pub enum PrivateKey {
 #[error("Wrong algorithm for key")]
 pub struct WrongAlgorithmError;
 
-const ED25519_OID: const_oid::ObjectIdentifier =
-    const_oid::ObjectIdentifier::new_unwrap("1.3.101.112");
+/// Helper: parse a DER-encoded PKCS#1 RSA private key into our enum.
+fn parse_pkcs1_rsa_key(pkcs1_key: &pkcs1::RsaPrivateKey) -> Result<PrivateKey, LoadError> {
+    if pkcs1_key.version() != pkcs1::Version::TwoPrime {
+        return Err(pkcs1::Error::Version.into());
+    }
+
+    let n = BigUint::from_bytes_be(pkcs1_key.modulus.as_bytes());
+    let e = BigUint::from_bytes_be(pkcs1_key.public_exponent.as_bytes());
+    let d = BigUint::from_bytes_be(pkcs1_key.private_exponent.as_bytes());
+    let primes = vec![
+        BigUint::from_bytes_be(pkcs1_key.prime1.as_bytes()),
+        BigUint::from_bytes_be(pkcs1_key.prime2.as_bytes()),
+    ];
+
+    let rsa_key = rsa::RsaPrivateKey::from_components(n, e, d, primes)?;
+    Ok(PrivateKey::Rsa(Box::new(rsa_key)))
+}
+
+/// Helper: resolve a PKCS#8 `PrivateKeyInfo` into the appropriate key variant.
+fn parse_pkcs8_key_info(info: PrivateKeyInfo) -> Result<PrivateKey, LoadError> {
+    let algo_oid = info.algorithm.oid;
+
+    if algo_oid == pkcs1::ALGORITHM_OID {
+        return Ok(PrivateKey::Rsa(Box::new(info.try_into()?)));
+    }
+
+    if algo_oid == elliptic_curve::ALGORITHM_OID {
+        let curve_oid = info.algorithm.parameters_oid()?;
+        return match curve_oid {
+            oid if oid == p256::NistP256::OID => {
+                Ok(PrivateKey::EcP256(Box::new(info.try_into()?)))
+            }
+            oid if oid == p384::NistP384::OID => {
+                Ok(PrivateKey::EcP384(Box::new(info.try_into()?)))
+            }
+            oid if oid == p521::NistP521::OID => {
+                Ok(PrivateKey::EcP521(Box::new(info.try_into()?)))
+            }
+            oid if oid == k256::Secp256k1::OID => {
+                Ok(PrivateKey::EcK256(Box::new(info.try_into()?)))
+            }
+            other => Err(LoadError::UnknownEllipticCurveOid { oid: other }),
+        };
+    }
+
+    if algo_oid == ED25519_ALGORITHM_OID {
+        let serialized = info.to_der()?;
+        let signing_key = ed25519_dalek::SigningKey::from_pkcs8_der(&serialized)?;
+        return Ok(PrivateKey::OkpEd25519(Box::new(signing_key)));
+    }
+
+    Err(LoadError::UnknownAlgorithmOid { oid: algo_oid })
+}
+
+/// Helper: decode a SEC1-encoded EC private key into the correct curve variant.
+fn parse_sec1_ec_key(ec_key: sec1::EcPrivateKey) -> Result<PrivateKey, LoadError> {
+    let params = ec_key
+        .parameters
+        .ok_or(LoadError::MissingSec1Parameters)?;
+
+    let curve_oid = params
+        .named_curve()
+        .ok_or(LoadError::MissingSec1CurveName)?;
+
+    match curve_oid {
+        oid if oid == p256::NistP256::OID => {
+            Ok(PrivateKey::EcP256(Box::new(ec_key.try_into()?)))
+        }
+        oid if oid == p384::NistP384::OID => {
+            Ok(PrivateKey::EcP384(Box::new(ec_key.try_into()?)))
+        }
+        oid if oid == p521::NistP521::OID => {
+            Ok(PrivateKey::EcP521(Box::new(ec_key.try_into()?)))
+        }
+        oid if oid == k256::Secp256k1::OID => {
+            Ok(PrivateKey::EcK256(Box::new(ec_key.try_into()?)))
+        }
+        other => Err(LoadError::UnknownEllipticCurveOid { oid: other }),
+    }
+}
+
+/// Encode an EC secret key to SEC1 DER with the named-curve OID included,
+/// matching OpenSSL's default output format.
+fn ec_to_sec1_der<C>(key: &elliptic_curve::SecretKey<C>) -> Result<Zeroizing<Vec<u8>>, der::Error>
+where
+    C: elliptic_curve::Curve + elliptic_curve::CurveArithmetic + AssociatedOid,
+    elliptic_curve::PublicKey<C>: elliptic_curve::sec1::ToEncodedPoint<C>,
+    C::FieldBytesSize: elliptic_curve::sec1::ModulusSize,
+{
+    let scalar_bytes = Zeroizing::new(key.to_bytes());
+    let pub_point = key.public_key().to_encoded_point(false);
+    let ec_private = sec1::EcPrivateKey {
+        private_key: &scalar_bytes,
+        parameters: Some(sec1::EcParameters::NamedCurve(C::OID)),
+        public_key: Some(pub_point.as_bytes()),
+    };
+    Ok(Zeroizing::new(ec_private.to_der()?))
+}
+
+/// Encode an EC secret key to SEC1 PEM with the named-curve OID included.
+fn ec_to_sec1_pem<C>(
+    key: &elliptic_curve::SecretKey<C>,
+    line_ending: pem_rfc7468::LineEnding,
+) -> Result<Zeroizing<String>, der::Error>
+where
+    C: elliptic_curve::Curve + elliptic_curve::CurveArithmetic + AssociatedOid,
+    elliptic_curve::PublicKey<C>: elliptic_curve::sec1::ToEncodedPoint<C>,
+    C::FieldBytesSize: elliptic_curve::sec1::ModulusSize,
+{
+    let scalar_bytes = Zeroizing::new(key.to_bytes());
+    let pub_point = key.public_key().to_encoded_point(false);
+    let ec_private = sec1::EcPrivateKey {
+        private_key: &scalar_bytes,
+        parameters: Some(sec1::EcParameters::NamedCurve(C::OID)),
+        public_key: Some(pub_point.as_bytes()),
+    };
+    Ok(Zeroizing::new(ec_private.to_pem(line_ending)?))
+}
 
 impl PrivateKey {
-    fn from_pkcs1_private_key(pkcs1_key: &pkcs1::RsaPrivateKey) -> Result<Self, LoadError> {
-        // Taken from `TryFrom<pkcs8::PrivateKeyInfo<'_>> for RsaPrivateKey`
-
-        // Multi-prime RSA keys not currently supported
-        if pkcs1_key.version() != pkcs1::Version::TwoPrime {
-            return Err(pkcs1::Error::Version.into());
-        }
-
-        let n = BigUint::from_bytes_be(pkcs1_key.modulus.as_bytes());
-        let e = BigUint::from_bytes_be(pkcs1_key.public_exponent.as_bytes());
-        let d = BigUint::from_bytes_be(pkcs1_key.private_exponent.as_bytes());
-        let first_prime = BigUint::from_bytes_be(pkcs1_key.prime1.as_bytes());
-        let second_prime = BigUint::from_bytes_be(pkcs1_key.prime2.as_bytes());
-        let primes = vec![first_prime, second_prime];
-        let key = rsa::RsaPrivateKey::from_components(n, e, d, primes)?;
-        Ok(Self::Rsa(Box::new(key)))
-    }
-
-    fn from_private_key_info(info: PrivateKeyInfo) -> Result<Self, LoadError> {
-        match info.algorithm.oid {
-            pkcs1::ALGORITHM_OID => Ok(Self::Rsa(Box::new(info.try_into()?))),
-            elliptic_curve::ALGORITHM_OID => match info.algorithm.parameters_oid()? {
-                p256::NistP256::OID => Ok(Self::EcP256(Box::new(info.try_into()?))),
-                p384::NistP384::OID => Ok(Self::EcP384(Box::new(info.try_into()?))),
-                p521::NistP521::OID => Ok(Self::EcP521(Box::new(info.try_into()?))),
-                k256::Secp256k1::OID => Ok(Self::EcK256(Box::new(info.try_into()?))),
-                oid => Err(LoadError::UnknownEllipticCurveOid { oid }),
-            },
-            ED25519_OID => {
-                let der = info.to_der()?;
-                let key = ed25519_dalek::SigningKey::from_pkcs8_der(der.as_slice())?;
-                Ok(Self::OkpEd25519(Box::new(key)))
-            }
-            oid => Err(LoadError::UnknownAlgorithmOid { oid }),
-        }
-    }
-
-    fn from_ec_private_key(key: sec1::EcPrivateKey) -> Result<Self, LoadError> {
-        let curve = key
-            .parameters
-            .ok_or(LoadError::MissingSec1Parameters)?
-            .named_curve()
-            .ok_or(LoadError::MissingSec1CurveName)?;
-
-        match curve {
-            p256::NistP256::OID => Ok(Self::EcP256(Box::new(key.try_into()?))),
-            p384::NistP384::OID => Ok(Self::EcP384(Box::new(key.try_into()?))),
-            p521::NistP521::OID => Ok(Self::EcP521(Box::new(key.try_into()?))),
-            k256::Secp256k1::OID => Ok(Self::EcK256(Box::new(key.try_into()?))),
-            oid => Err(LoadError::UnknownEllipticCurveOid { oid }),
-        }
-    }
-
     /// Serialize the key as a DER document
     ///
     /// It will use the most common format depending on the key type: PKCS1 for
@@ -195,16 +262,14 @@ impl PrivateKey {
     ///
     /// Returns an error if the encoding failed
     pub fn to_der(&self) -> Result<Zeroizing<Vec<u8>>, pkcs1::Error> {
-        let der = match self {
-            PrivateKey::Rsa(key) => key.to_pkcs1_der()?.to_bytes(),
-            PrivateKey::EcP256(key) => to_sec1_der(key)?,
-            PrivateKey::EcP384(key) => to_sec1_der(key)?,
-            PrivateKey::EcP521(key) => to_sec1_der(key)?,
-            PrivateKey::EcK256(key) => to_sec1_der(key)?,
-            PrivateKey::OkpEd25519(key) => key.to_pkcs8_der()?.to_bytes(),
-        };
-
-        Ok(der)
+        match self {
+            Self::Rsa(k) => Ok(k.to_pkcs1_der()?.to_bytes()),
+            Self::EcP256(k) => Ok(ec_to_sec1_der(k)?),
+            Self::EcP384(k) => Ok(ec_to_sec1_der(k)?),
+            Self::EcP521(k) => Ok(ec_to_sec1_der(k)?),
+            Self::EcK256(k) => Ok(ec_to_sec1_der(k)?),
+            Self::OkpEd25519(k) => Ok(k.to_pkcs8_der()?.to_bytes()),
+        }
     }
 
     /// Serialize the key as a PKCS8 DER document
@@ -213,16 +278,15 @@ impl PrivateKey {
     ///
     /// Returns an error if the encoding failed
     pub fn to_pkcs8_der(&self) -> Result<Zeroizing<Vec<u8>>, pkcs8::Error> {
-        let der = match self {
-            PrivateKey::Rsa(key) => key.to_pkcs8_der()?,
-            PrivateKey::EcP256(key) => key.to_pkcs8_der()?,
-            PrivateKey::EcP384(key) => key.to_pkcs8_der()?,
-            PrivateKey::EcP521(key) => key.to_pkcs8_der()?,
-            PrivateKey::EcK256(key) => key.to_pkcs8_der()?,
-            PrivateKey::OkpEd25519(key) => key.to_pkcs8_der()?,
+        let doc = match self {
+            Self::Rsa(k) => k.to_pkcs8_der()?,
+            Self::EcP256(k) => k.to_pkcs8_der()?,
+            Self::EcP384(k) => k.to_pkcs8_der()?,
+            Self::EcP521(k) => k.to_pkcs8_der()?,
+            Self::EcK256(k) => k.to_pkcs8_der()?,
+            Self::OkpEd25519(k) => k.to_pkcs8_der()?,
         };
-
-        Ok(der.to_bytes())
+        Ok(doc.to_bytes())
     }
 
     /// Serialize the key as a PEM document
@@ -238,16 +302,14 @@ impl PrivateKey {
         &self,
         line_ending: pem_rfc7468::LineEnding,
     ) -> Result<Zeroizing<String>, pkcs1::Error> {
-        let pem = match self {
-            PrivateKey::Rsa(key) => key.to_pkcs1_pem(line_ending)?,
-            PrivateKey::EcP256(key) => to_sec1_pem(key, line_ending)?,
-            PrivateKey::EcP384(key) => to_sec1_pem(key, line_ending)?,
-            PrivateKey::EcP521(key) => to_sec1_pem(key, line_ending)?,
-            PrivateKey::EcK256(key) => to_sec1_pem(key, line_ending)?,
-            PrivateKey::OkpEd25519(key) => key.to_pkcs8_pem(line_ending)?,
-        };
-
-        Ok(pem)
+        match self {
+            Self::Rsa(k) => Ok(k.to_pkcs1_pem(line_ending)?),
+            Self::EcP256(k) => Ok(ec_to_sec1_pem(k, line_ending)?),
+            Self::EcP384(k) => Ok(ec_to_sec1_pem(k, line_ending)?),
+            Self::EcP521(k) => Ok(ec_to_sec1_pem(k, line_ending)?),
+            Self::EcK256(k) => Ok(ec_to_sec1_pem(k, line_ending)?),
+            Self::OkpEd25519(k) => Ok(k.to_pkcs8_pem(line_ending)?),
+        }
     }
 
     /// Load an unencrypted PEM or DER encoded key
@@ -257,13 +319,12 @@ impl PrivateKey {
     /// Returns the same kind of errors as [`Self::load_pem`] and
     /// [`Self::load_der`].
     pub fn load(bytes: &[u8]) -> Result<Self, LoadError> {
-        if let Ok(pem) = std::str::from_utf8(bytes) {
-            match Self::load_pem(pem) {
-                Ok(s) => return Ok(s),
-                // If there was an error loading the document as PEM, ignore it and continue by
-                // trying to load it as DER
-                Err(LoadError::Pem { .. }) => {}
-                Err(e) => return Err(e),
+        // Attempt PEM first when the bytes are valid UTF-8.
+        if let Ok(text) = std::str::from_utf8(bytes) {
+            match Self::load_pem(text) {
+                Ok(key) => return Ok(key),
+                Err(LoadError::Pem { .. }) => { /* fall through to DER */ }
+                Err(other) => return Err(other),
             }
         }
 
@@ -278,13 +339,11 @@ impl PrivateKey {
     /// Returns the same kind of errors as [`Self::load_encrypted_pem`] and
     /// [`Self::load_encrypted_der`].
     pub fn load_encrypted(bytes: &[u8], password: impl AsRef<[u8]>) -> Result<Self, LoadError> {
-        if let Ok(pem) = std::str::from_utf8(bytes) {
-            match Self::load_encrypted_pem(pem, password.as_ref()) {
-                Ok(s) => return Ok(s),
-                // If there was an error loading the document as PEM, ignore it and continue by
-                // trying to load it as DER
-                Err(LoadError::Pem { .. }) => {}
-                Err(e) => return Err(e),
+        if let Ok(text) = std::str::from_utf8(bytes) {
+            match Self::load_encrypted_pem(text, password.as_ref()) {
+                Ok(key) => return Ok(key),
+                Err(LoadError::Pem { .. }) => { /* fall through to DER */ }
+                Err(other) => return Err(other),
             }
         }
 
@@ -301,17 +360,19 @@ impl PrivateKey {
     ///   - the key could not be decrypted
     ///   - the PKCS8 key could not be loaded
     pub fn load_encrypted_der(der: &[u8], password: impl AsRef<[u8]>) -> Result<Self, LoadError> {
-        if let Ok(info) = pkcs8::EncryptedPrivateKeyInfo::from_der(der) {
-            let decrypted = info.decrypt(password)?;
+        if let Ok(encrypted_info) = pkcs8::EncryptedPrivateKeyInfo::from_der(der) {
+            let decrypted = encrypted_info.decrypt(password)?;
             return Self::load_der(decrypted.as_bytes()).map_err(|inner| LoadError::InEncrypted {
                 inner: Box::new(inner),
             });
         }
 
-        if pkcs8::PrivateKeyInfo::from_der(der).is_ok()
+        // If we can parse the DER as any unencrypted format, report the mismatch.
+        let is_unencrypted = pkcs8::PrivateKeyInfo::from_der(der).is_ok()
             || sec1::EcPrivateKey::from_der(der).is_ok()
-            || pkcs1::RsaPrivateKey::from_der(der).is_ok()
-        {
+            || pkcs1::RsaPrivateKey::from_der(der).is_ok();
+
+        if is_unencrypted {
             return Err(LoadError::Unencrypted);
         }
 
@@ -330,21 +391,24 @@ impl PrivateKey {
     ///   - none of the formats could be decoded
     ///   - the PKCS8/SEC1/PKCS1 key could not be loaded
     pub fn load_der(der: &[u8]) -> Result<Self, LoadError> {
-        // Let's try evey known DER format one after the other
+        // Reject encrypted keys early.
         if pkcs8::EncryptedPrivateKeyInfo::from_der(der).is_ok() {
             return Err(LoadError::Encrypted);
         }
 
+        // Try PKCS#8 first (most general).
         if let Ok(info) = pkcs8::PrivateKeyInfo::from_der(der) {
-            return Self::from_private_key_info(info);
+            return parse_pkcs8_key_info(info);
         }
 
-        if let Ok(info) = sec1::EcPrivateKey::from_der(der) {
-            return Self::from_ec_private_key(info);
+        // Then SEC1 for EC keys.
+        if let Ok(ec_key) = sec1::EcPrivateKey::from_der(der) {
+            return parse_sec1_ec_key(ec_key);
         }
 
-        if let Ok(pkcs1_key) = pkcs1::RsaPrivateKey::from_der(der) {
-            return Self::from_pkcs1_private_key(&pkcs1_key);
+        // Finally PKCS#1 for RSA.
+        if let Ok(rsa_key) = pkcs1::RsaPrivateKey::from_der(der) {
+            return parse_pkcs1_rsa_key(&rsa_key);
         }
 
         Err(LoadError::UnsupportedFormat)
@@ -362,25 +426,30 @@ impl PrivateKey {
     ///   - the decryption failed
     ///   - the pkcs8 key could not be loaded
     pub fn load_encrypted_pem(pem: &str, password: impl AsRef<[u8]>) -> Result<Self, LoadError> {
-        let (label, doc) = pem_rfc7468::decode_vec(pem.as_bytes())?;
+        let (label, raw) = pem_rfc7468::decode_vec(pem.as_bytes())?;
 
-        match label {
-            pkcs8::EncryptedPrivateKeyInfo::PEM_LABEL => {
-                let info = pkcs8::EncryptedPrivateKeyInfo::from_der(&doc)?;
-                let decrypted = info.decrypt(password)?;
-                Self::load_der(decrypted.as_bytes()).map_err(|inner| LoadError::InEncrypted {
-                    inner: Box::new(inner),
-                })
-            }
-
-            pkcs1::RsaPrivateKey::PEM_LABEL
-            | pkcs8::PrivateKeyInfo::PEM_LABEL
-            | sec1::EcPrivateKey::PEM_LABEL => Err(LoadError::Unencrypted),
-
-            label => Err(LoadError::UnsupportedPemLabel {
-                label: label.to_owned(),
-            }),
+        if label == pkcs8::EncryptedPrivateKeyInfo::PEM_LABEL {
+            let encrypted_info = pkcs8::EncryptedPrivateKeyInfo::from_der(&raw)?;
+            let decrypted = encrypted_info.decrypt(password)?;
+            return Self::load_der(decrypted.as_bytes()).map_err(|inner| LoadError::InEncrypted {
+                inner: Box::new(inner),
+            });
         }
+
+        // Known unencrypted labels -> wrong function
+        let unencrypted_labels = [
+            pkcs1::RsaPrivateKey::PEM_LABEL,
+            pkcs8::PrivateKeyInfo::PEM_LABEL,
+            sec1::EcPrivateKey::PEM_LABEL,
+        ];
+
+        if unencrypted_labels.contains(&label) {
+            return Err(LoadError::Unencrypted);
+        }
+
+        Err(LoadError::UnsupportedPemLabel {
+            label: label.to_owned(),
+        })
     }
 
     /// Load an unencrypted key from a PEM-encode string
@@ -394,30 +463,30 @@ impl PrivateKey {
     ///     instead)
     ///   - the PKCS8/PKCS1/SEC1 key could not be loaded
     pub fn load_pem(pem: &str) -> Result<Self, LoadError> {
-        let (label, doc) = pem_rfc7468::decode_vec(pem.as_bytes())?;
+        let (label, raw) = pem_rfc7468::decode_vec(pem.as_bytes())?;
 
-        match label {
-            pkcs1::RsaPrivateKey::PEM_LABEL => {
-                let pkcs1_key = pkcs1::RsaPrivateKey::from_der(&doc)?;
-                Self::from_pkcs1_private_key(&pkcs1_key)
-            }
-
-            pkcs8::PrivateKeyInfo::PEM_LABEL => {
-                let info = pkcs8::PrivateKeyInfo::from_der(&doc)?;
-                Self::from_private_key_info(info)
-            }
-
-            sec1::EcPrivateKey::PEM_LABEL => {
-                let key = sec1::EcPrivateKey::from_der(&doc)?;
-                Self::from_ec_private_key(key)
-            }
-
-            pkcs8::EncryptedPrivateKeyInfo::PEM_LABEL => Err(LoadError::Encrypted),
-
-            label => Err(LoadError::UnsupportedPemLabel {
-                label: label.to_owned(),
-            }),
+        if label == pkcs1::RsaPrivateKey::PEM_LABEL {
+            let rsa_key = pkcs1::RsaPrivateKey::from_der(&raw)?;
+            return parse_pkcs1_rsa_key(&rsa_key);
         }
+
+        if label == pkcs8::PrivateKeyInfo::PEM_LABEL {
+            let info = pkcs8::PrivateKeyInfo::from_der(&raw)?;
+            return parse_pkcs8_key_info(info);
+        }
+
+        if label == sec1::EcPrivateKey::PEM_LABEL {
+            let ec_key = sec1::EcPrivateKey::from_der(&raw)?;
+            return parse_sec1_ec_key(ec_key);
+        }
+
+        if label == pkcs8::EncryptedPrivateKeyInfo::PEM_LABEL {
+            return Err(LoadError::Encrypted);
+        }
+
+        Err(LoadError::UnsupportedPemLabel {
+            label: label.to_owned(),
+        })
     }
 
     /// Get an [`AsymmetricVerifyingKey`] out of this key, for the specified
@@ -430,44 +499,49 @@ impl PrivateKey {
         &self,
         alg: &JsonWebSignatureAlg,
     ) -> Result<AsymmetricVerifyingKey, WrongAlgorithmError> {
-        let key = match (self, alg) {
-            (Self::Rsa(key), _) => {
-                let key: rsa::RsaPublicKey = key.to_public_key();
-                match alg {
-                    JsonWebSignatureAlg::Rs256 => AsymmetricVerifyingKey::rs256(key),
-                    JsonWebSignatureAlg::Rs384 => AsymmetricVerifyingKey::rs384(key),
-                    JsonWebSignatureAlg::Rs512 => AsymmetricVerifyingKey::rs512(key),
-                    JsonWebSignatureAlg::Ps256 => AsymmetricVerifyingKey::ps256(key),
-                    JsonWebSignatureAlg::Ps384 => AsymmetricVerifyingKey::ps384(key),
-                    JsonWebSignatureAlg::Ps512 => AsymmetricVerifyingKey::ps512(key),
-                    _ => return Err(WrongAlgorithmError),
-                }
+        self.try_build_verifier(alg).ok_or(WrongAlgorithmError)
+    }
+
+    /// Internal helper that returns `None` when the key/alg combination is
+    /// invalid, keeping the public API's error type unchanged.
+    fn try_build_verifier(&self, alg: &JsonWebSignatureAlg) -> Option<AsymmetricVerifyingKey> {
+        match self {
+            Self::Rsa(rsa_key) => {
+                let public = rsa_key.to_public_key();
+                let vk = match alg {
+                    JsonWebSignatureAlg::Rs256 => AsymmetricVerifyingKey::rs256(public),
+                    JsonWebSignatureAlg::Rs384 => AsymmetricVerifyingKey::rs384(public),
+                    JsonWebSignatureAlg::Rs512 => AsymmetricVerifyingKey::rs512(public),
+                    JsonWebSignatureAlg::Ps256 => AsymmetricVerifyingKey::ps256(public),
+                    JsonWebSignatureAlg::Ps384 => AsymmetricVerifyingKey::ps384(public),
+                    JsonWebSignatureAlg::Ps512 => AsymmetricVerifyingKey::ps512(public),
+                    _ => return None,
+                };
+                Some(vk)
             }
 
-            (Self::EcP256(key), JsonWebSignatureAlg::Es256) => {
-                AsymmetricVerifyingKey::es256(key.public_key())
+            Self::EcP256(k) if matches!(alg, JsonWebSignatureAlg::Es256) => {
+                Some(AsymmetricVerifyingKey::es256(k.public_key()))
             }
 
-            (Self::EcP384(key), JsonWebSignatureAlg::Es384) => {
-                AsymmetricVerifyingKey::es384(key.public_key())
+            Self::EcP384(k) if matches!(alg, JsonWebSignatureAlg::Es384) => {
+                Some(AsymmetricVerifyingKey::es384(k.public_key()))
             }
 
-            (Self::EcP521(key), JsonWebSignatureAlg::Es512) => {
-                AsymmetricVerifyingKey::es512(key.public_key())
+            Self::EcP521(k) if matches!(alg, JsonWebSignatureAlg::Es512) => {
+                Some(AsymmetricVerifyingKey::es512(k.public_key()))
             }
 
-            (Self::EcK256(key), JsonWebSignatureAlg::Es256K) => {
-                AsymmetricVerifyingKey::es256k(key.public_key())
+            Self::EcK256(k) if matches!(alg, JsonWebSignatureAlg::Es256K) => {
+                Some(AsymmetricVerifyingKey::es256k(k.public_key()))
             }
 
-            (Self::OkpEd25519(key), JsonWebSignatureAlg::EdDsa) => {
-                AsymmetricVerifyingKey::eddsa(key.verifying_key())
+            Self::OkpEd25519(k) if matches!(alg, JsonWebSignatureAlg::EdDsa) => {
+                Some(AsymmetricVerifyingKey::eddsa(k.verifying_key()))
             }
 
-            _ => return Err(WrongAlgorithmError),
-        };
-
-        Ok(key)
+            _ => None,
+        }
     }
 
     /// Get a [`AsymmetricSigningKey`] out of this key, for the specified
@@ -480,44 +554,49 @@ impl PrivateKey {
         &self,
         alg: &JsonWebSignatureAlg,
     ) -> Result<AsymmetricSigningKey, WrongAlgorithmError> {
-        let key = match (self, alg) {
-            (Self::Rsa(key), _) => {
-                let key: rsa::RsaPrivateKey = *key.clone();
-                match alg {
-                    JsonWebSignatureAlg::Rs256 => AsymmetricSigningKey::rs256(key),
-                    JsonWebSignatureAlg::Rs384 => AsymmetricSigningKey::rs384(key),
-                    JsonWebSignatureAlg::Rs512 => AsymmetricSigningKey::rs512(key),
-                    JsonWebSignatureAlg::Ps256 => AsymmetricSigningKey::ps256(key),
-                    JsonWebSignatureAlg::Ps384 => AsymmetricSigningKey::ps384(key),
-                    JsonWebSignatureAlg::Ps512 => AsymmetricSigningKey::ps512(key),
-                    _ => return Err(WrongAlgorithmError),
-                }
+        self.try_build_signer(alg).ok_or(WrongAlgorithmError)
+    }
+
+    /// Internal helper that returns `None` when the key/alg combination is
+    /// invalid.
+    fn try_build_signer(&self, alg: &JsonWebSignatureAlg) -> Option<AsymmetricSigningKey> {
+        match self {
+            Self::Rsa(rsa_key) => {
+                let cloned: rsa::RsaPrivateKey = *rsa_key.clone();
+                let sk = match alg {
+                    JsonWebSignatureAlg::Rs256 => AsymmetricSigningKey::rs256(cloned),
+                    JsonWebSignatureAlg::Rs384 => AsymmetricSigningKey::rs384(cloned),
+                    JsonWebSignatureAlg::Rs512 => AsymmetricSigningKey::rs512(cloned),
+                    JsonWebSignatureAlg::Ps256 => AsymmetricSigningKey::ps256(cloned),
+                    JsonWebSignatureAlg::Ps384 => AsymmetricSigningKey::ps384(cloned),
+                    JsonWebSignatureAlg::Ps512 => AsymmetricSigningKey::ps512(cloned),
+                    _ => return None,
+                };
+                Some(sk)
             }
 
-            (Self::EcP256(key), JsonWebSignatureAlg::Es256) => {
-                AsymmetricSigningKey::es256(*key.clone())
+            Self::EcP256(k) if matches!(alg, JsonWebSignatureAlg::Es256) => {
+                Some(AsymmetricSigningKey::es256(*k.clone()))
             }
 
-            (Self::EcP384(key), JsonWebSignatureAlg::Es384) => {
-                AsymmetricSigningKey::es384(*key.clone())
+            Self::EcP384(k) if matches!(alg, JsonWebSignatureAlg::Es384) => {
+                Some(AsymmetricSigningKey::es384(*k.clone()))
             }
 
-            (Self::EcP521(key), JsonWebSignatureAlg::Es512) => {
-                AsymmetricSigningKey::es512(*key.clone())
+            Self::EcP521(k) if matches!(alg, JsonWebSignatureAlg::Es512) => {
+                Some(AsymmetricSigningKey::es512(*k.clone()))
             }
 
-            (Self::EcK256(key), JsonWebSignatureAlg::Es256K) => {
-                AsymmetricSigningKey::es256k(*key.clone())
+            Self::EcK256(k) if matches!(alg, JsonWebSignatureAlg::Es256K) => {
+                Some(AsymmetricSigningKey::es256k(*k.clone()))
             }
 
-            (Self::OkpEd25519(key), JsonWebSignatureAlg::EdDsa) => {
-                AsymmetricSigningKey::eddsa(key.as_ref().clone())
+            Self::OkpEd25519(k) if matches!(alg, JsonWebSignatureAlg::EdDsa) => {
+                Some(AsymmetricSigningKey::eddsa(k.as_ref().clone()))
             }
 
-            _ => return Err(WrongAlgorithmError),
-        };
-
-        Ok(key)
+            _ => None,
+        }
     }
 
     /// Generate a RSA key with 2048 bit size
@@ -532,86 +611,39 @@ impl PrivateKey {
 
     /// Generate an Elliptic Curve key for the P-256 curve
     pub fn generate_ec_p256<R: RngCore + CryptoRng>(mut rng: R) -> Self {
-        let key = elliptic_curve::SecretKey::random(&mut rng);
-        Self::EcP256(Box::new(key))
+        Self::EcP256(Box::new(elliptic_curve::SecretKey::random(&mut rng)))
     }
 
     /// Generate an Elliptic Curve key for the P-384 curve
     pub fn generate_ec_p384<R: RngCore + CryptoRng>(mut rng: R) -> Self {
-        let key = elliptic_curve::SecretKey::random(&mut rng);
-        Self::EcP384(Box::new(key))
+        Self::EcP384(Box::new(elliptic_curve::SecretKey::random(&mut rng)))
     }
 
     /// Generate an Elliptic Curve key for the P-521 curve
     pub fn generate_ec_p521<R: RngCore + CryptoRng>(mut rng: R) -> Self {
-        let key = elliptic_curve::SecretKey::random(&mut rng);
-        Self::EcP521(Box::new(key))
+        Self::EcP521(Box::new(elliptic_curve::SecretKey::random(&mut rng)))
     }
 
     /// Generate an Elliptic Curve key for the secp256k1 curve
     pub fn generate_ec_k256<R: RngCore + CryptoRng>(mut rng: R) -> Self {
-        let key = elliptic_curve::SecretKey::random(&mut rng);
-        Self::EcK256(Box::new(key))
+        Self::EcK256(Box::new(elliptic_curve::SecretKey::random(&mut rng)))
     }
 
     /// Generate an Ed25519 key.
     pub fn generate_ed25519<R: RngCore + CryptoRng>(mut rng: R) -> Self {
-        let key = ed25519_dalek::SigningKey::generate(&mut rng);
-        Self::OkpEd25519(Box::new(key))
+        Self::OkpEd25519(Box::new(ed25519_dalek::SigningKey::generate(&mut rng)))
     }
 }
 
-// The default implementation of SecretKey::to_sec1_pem/der do not include the
-// named curve OID. This is a basic reimplementation of those two functions with
-// the OID included, so that it matches the implementation in OpenSSL.
-fn to_sec1_der<C>(key: &elliptic_curve::SecretKey<C>) -> Result<Zeroizing<Vec<u8>>, der::Error>
-where
-    C: elliptic_curve::Curve + elliptic_curve::CurveArithmetic + AssociatedOid,
-    elliptic_curve::PublicKey<C>: elliptic_curve::sec1::ToEncodedPoint<C>,
-    C::FieldBytesSize: elliptic_curve::sec1::ModulusSize,
-{
-    let private_key_bytes = Zeroizing::new(key.to_bytes());
-    let public_key_bytes = key.public_key().to_encoded_point(false);
-    Ok(Zeroizing::new(
-        sec1::EcPrivateKey {
-            private_key: &private_key_bytes,
-            parameters: Some(sec1::EcParameters::NamedCurve(C::OID)),
-            public_key: Some(public_key_bytes.as_bytes()),
-        }
-        .to_der()?,
-    ))
-}
-
-fn to_sec1_pem<C>(
-    key: &elliptic_curve::SecretKey<C>,
-    line_ending: pem_rfc7468::LineEnding,
-) -> Result<Zeroizing<String>, der::Error>
-where
-    C: elliptic_curve::Curve + elliptic_curve::CurveArithmetic + AssociatedOid,
-    elliptic_curve::PublicKey<C>: elliptic_curve::sec1::ToEncodedPoint<C>,
-    C::FieldBytesSize: elliptic_curve::sec1::ModulusSize,
-{
-    let private_key_bytes = Zeroizing::new(key.to_bytes());
-    let public_key_bytes = key.public_key().to_encoded_point(false);
-    Ok(Zeroizing::new(
-        sec1::EcPrivateKey {
-            private_key: &private_key_bytes,
-            parameters: Some(sec1::EcParameters::NamedCurve(C::OID)),
-            public_key: Some(public_key_bytes.as_bytes()),
-        }
-        .to_pem(line_ending)?,
-    ))
-}
-
 impl From<&PrivateKey> for JsonWebKeyPublicParameters {
-    fn from(val: &PrivateKey) -> Self {
-        match val {
-            PrivateKey::Rsa(key) => key.to_public_key().into(),
-            PrivateKey::EcP256(key) => key.public_key().into(),
-            PrivateKey::EcP384(key) => key.public_key().into(),
-            PrivateKey::EcP521(key) => key.public_key().into(),
-            PrivateKey::EcK256(key) => key.public_key().into(),
-            PrivateKey::OkpEd25519(key) => key.verifying_key().into(),
+    fn from(key: &PrivateKey) -> Self {
+        match key {
+            PrivateKey::Rsa(k) => k.to_public_key().into(),
+            PrivateKey::EcP256(k) => k.public_key().into(),
+            PrivateKey::EcP384(k) => k.public_key().into(),
+            PrivateKey::EcP521(k) => k.public_key().into(),
+            PrivateKey::EcK256(k) => k.public_key().into(),
+            PrivateKey::OkpEd25519(k) => k.verifying_key().into(),
         }
     }
 }
@@ -619,18 +651,17 @@ impl From<&PrivateKey> for JsonWebKeyPublicParameters {
 impl ParametersInfo for PrivateKey {
     fn kty(&self) -> JsonWebKeyType {
         match self {
-            PrivateKey::Rsa(_) => JsonWebKeyType::Rsa,
-            PrivateKey::EcP256(_)
-            | PrivateKey::EcP384(_)
-            | PrivateKey::EcP521(_)
-            | PrivateKey::EcK256(_) => JsonWebKeyType::Ec,
-            PrivateKey::OkpEd25519(_) => JsonWebKeyType::Okp,
+            Self::Rsa(_) => JsonWebKeyType::Rsa,
+            Self::EcP256(_) | Self::EcP384(_) | Self::EcP521(_) | Self::EcK256(_) => {
+                JsonWebKeyType::Ec
+            }
+            Self::OkpEd25519(_) => JsonWebKeyType::Okp,
         }
     }
 
     fn possible_algs(&self) -> &'static [JsonWebSignatureAlg] {
         match self {
-            PrivateKey::Rsa(_) => &[
+            Self::Rsa(_) => &[
                 JsonWebSignatureAlg::Rs256,
                 JsonWebSignatureAlg::Rs384,
                 JsonWebSignatureAlg::Rs512,
@@ -638,11 +669,11 @@ impl ParametersInfo for PrivateKey {
                 JsonWebSignatureAlg::Ps384,
                 JsonWebSignatureAlg::Ps512,
             ],
-            PrivateKey::EcP256(_) => &[JsonWebSignatureAlg::Es256],
-            PrivateKey::EcP384(_) => &[JsonWebSignatureAlg::Es384],
-            PrivateKey::EcP521(_) => &[JsonWebSignatureAlg::Es512],
-            PrivateKey::EcK256(_) => &[JsonWebSignatureAlg::Es256K],
-            PrivateKey::OkpEd25519(_) => &[JsonWebSignatureAlg::EdDsa],
+            Self::EcP256(_) => &[JsonWebSignatureAlg::Es256],
+            Self::EcP384(_) => &[JsonWebSignatureAlg::Es384],
+            Self::EcP521(_) => &[JsonWebSignatureAlg::Es512],
+            Self::EcK256(_) => &[JsonWebSignatureAlg::Es256K],
+            Self::OkpEd25519(_) => &[JsonWebSignatureAlg::EdDsa],
         }
     }
 }
@@ -658,25 +689,24 @@ impl Thumbprint for PrivateKey {
 /// cloning
 #[derive(Clone, Default)]
 pub struct Keystore {
-    keys: Arc<JsonWebKeySet<PrivateKey>>,
+    inner: Arc<JsonWebKeySet<PrivateKey>>,
 }
 
 impl Keystore {
     /// Create a keystore out of a JSON Web Key Set
     #[must_use]
     pub fn new(keys: JsonWebKeySet<PrivateKey>) -> Self {
-        let keys = Arc::new(keys);
-        Self { keys }
+        Self {
+            inner: Arc::new(keys),
+        }
     }
 
     /// Get the public JSON Web Key Set for the keys stored in this [`Keystore`]
     #[must_use]
     pub fn public_jwks(&self) -> PublicJsonWebKeySet {
-        self.keys
+        self.inner
             .iter()
-            .map(|key| {
-                key.cloned_map(|params: &PrivateKey| JsonWebKeyPublicParameters::from(params))
-            })
+            .map(|jwk| jwk.cloned_map(|priv_params: &PrivateKey| priv_params.into()))
             .collect()
     }
 }
@@ -685,6 +715,6 @@ impl Deref for Keystore {
     type Target = JsonWebKeySet<PrivateKey>;
 
     fn deref(&self) -> &Self::Target {
-        &self.keys
+        &self.inner
     }
 }

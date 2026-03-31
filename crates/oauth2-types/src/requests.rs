@@ -1,6 +1,16 @@
-//! Requests and response types to interact with the [OAuth 2.0] specification.
+// Copyright 2025 Taidge Ltd.
+//
+// SPDX-License-Identifier: Apache-2.0
+
+//! OAuth 2.0 and OpenID Connect request/response message types.
 //!
-//! [OAuth 2.0]: https://oauth.net/2/
+//! Implements the wire format for endpoints defined across:
+//! - [RFC 6749 - The OAuth 2.0 Authorization Framework](https://www.rfc-editor.org/rfc/rfc6749)
+//! - [RFC 7009 - Token Revocation](https://www.rfc-editor.org/rfc/rfc7009)
+//! - [RFC 7662 - Token Introspection](https://www.rfc-editor.org/rfc/rfc7662)
+//! - [RFC 8628 - Device Authorization Grant](https://www.rfc-editor.org/rfc/rfc8628)
+//! - [RFC 9126 - Pushed Authorization Requests](https://datatracker.ietf.org/doc/html/rfc9126)
+//! - [OpenID Connect Core 1.0](https://openid.net/specs/openid-connect-core-1_0.html)
 
 use std::{collections::HashSet, fmt, hash::Hash, num::NonZeroU32};
 
@@ -18,185 +28,221 @@ use crate::{response_type::ResponseType, scope::Scope};
 
 // ref: https://www.iana.org/assignments/oauth-parameters/oauth-parameters.xhtml
 
-/// The mechanism to be used for returning Authorization Response parameters
-/// from the Authorization Endpoint.
-///
-/// Defined in [OAuth 2.0 Multiple Response Type Encoding Practices](https://openid.net/specs/oauth-v2-multiple-response-types-1_0.html#ResponseModes).
-#[derive(
-    Debug, Hash, PartialEq, Eq, PartialOrd, Ord, Clone, SerializeDisplay, DeserializeFromStr,
-)]
-#[non_exhaustive]
-pub enum ResponseMode {
-    /// Authorization Response parameters are encoded in the query string added
-    /// to the `redirect_uri`.
-    Query,
+// ---------------------------------------------------------------------------
+// Macro: declaratively define an enum whose variants map to fixed strings,
+// plus a fallback `Unknown(String)` arm. Generates `Display` and `FromStr`.
+// ---------------------------------------------------------------------------
 
-    /// Authorization Response parameters are encoded in the fragment added to
-    /// the `redirect_uri`.
-    Fragment,
+/// Internal helper macro that generates `Display`, `FromStr`,
+/// `SerializeDisplay` and `DeserializeFromStr` for "string enums" used
+/// throughout the OAuth 2.0 / OIDC wire protocol.
+macro_rules! string_enum {
+    (
+        $(#[$outer:meta])*
+        $vis:vis enum $Enum:ident {
+            $(
+                $(#[$vmeta:meta])*
+                $Variant:ident => $wire:literal,
+            )*
+            @unknown
+            $(#[$umeta:meta])*
+            Unknown(String),
+        }
+    ) => {
+        $(#[$outer])*
+        #[derive(
+            Debug, Hash, PartialEq, Eq, PartialOrd, Ord, Clone,
+            SerializeDisplay, DeserializeFromStr,
+        )]
+        #[non_exhaustive]
+        $vis enum $Enum {
+            $(
+                $(#[$vmeta])*
+                $Variant,
+            )*
+            $(#[$umeta])*
+            Unknown(String),
+        }
 
-    /// Authorization Response parameters are encoded as HTML form values that
-    /// are auto-submitted in the User Agent, and thus are transmitted via the
-    /// HTTP `POST` method to the Client, with the result parameters being
-    /// encoded in the body using the `application/x-www-form-urlencoded`
-    /// format.
+        impl core::fmt::Display for $Enum {
+            fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+                let text = match self {
+                    $( Self::$Variant => $wire, )*
+                    Self::Unknown(s) => s.as_str(),
+                };
+                f.write_str(text)
+            }
+        }
+
+        impl core::str::FromStr for $Enum {
+            type Err = core::convert::Infallible;
+
+            fn from_str(input: &str) -> Result<Self, Self::Err> {
+                let variant = match input {
+                    $( $wire => Self::$Variant, )*
+                    other => Self::Unknown(other.to_owned()),
+                };
+                Ok(variant)
+            }
+        }
+    };
+}
+
+// ---------------------------------------------------------------------------
+// ResponseMode
+// ---------------------------------------------------------------------------
+
+string_enum! {
+    /// The mechanism to be used for returning Authorization Response parameters
+    /// from the Authorization Endpoint.
     ///
-    /// Defined in [OAuth 2.0 Form Post Response Mode](https://openid.net/specs/oauth-v2-form-post-response-mode-1_0.html).
-    FormPost,
+    /// Defined in [OAuth 2.0 Multiple Response Type Encoding Practices](https://openid.net/specs/oauth-v2-multiple-response-types-1_0.html#ResponseModes).
+    pub enum ResponseMode {
+        /// Authorization Response parameters are encoded in the query string added
+        /// to the `redirect_uri`.
+        Query => "query",
 
-    /// An unknown value.
-    Unknown(String),
-}
+        /// Authorization Response parameters are encoded in the fragment added to
+        /// the `redirect_uri`.
+        Fragment => "fragment",
 
-impl core::fmt::Display for ResponseMode {
-    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
-        match self {
-            ResponseMode::Query => f.write_str("query"),
-            ResponseMode::Fragment => f.write_str("fragment"),
-            ResponseMode::FormPost => f.write_str("form_post"),
-            ResponseMode::Unknown(s) => f.write_str(s),
-        }
+        /// Authorization Response parameters are encoded as HTML form values that
+        /// are auto-submitted in the User Agent, and thus are transmitted via the
+        /// HTTP `POST` method to the Client, with the result parameters being
+        /// encoded in the body using the `application/x-www-form-urlencoded`
+        /// format.
+        ///
+        /// Defined in [OAuth 2.0 Form Post Response Mode](https://openid.net/specs/oauth-v2-form-post-response-mode-1_0.html).
+        FormPost => "form_post",
+
+        @unknown
+        /// An unknown value.
+        Unknown(String),
     }
 }
 
-impl core::str::FromStr for ResponseMode {
-    type Err = core::convert::Infallible;
+// ---------------------------------------------------------------------------
+// Display (OIDC display mode)
+// ---------------------------------------------------------------------------
 
-    fn from_str(s: &str) -> Result<Self, Self::Err> {
-        match s {
-            "query" => Ok(ResponseMode::Query),
-            "fragment" => Ok(ResponseMode::Fragment),
-            "form_post" => Ok(ResponseMode::FormPost),
-            s => Ok(ResponseMode::Unknown(s.to_owned())),
-        }
-    }
-}
-
-/// Value that specifies how the Authorization Server displays the
-/// authentication and consent user interface pages to the End-User.
-///
-/// Defined in [OpenID Connect Core 1.0](https://openid.net/specs/openid-connect-core-1_0.html#AuthRequest).
-#[derive(
-    Debug, Hash, PartialEq, Eq, PartialOrd, Ord, Clone, SerializeDisplay, DeserializeFromStr,
-)]
-#[non_exhaustive]
-#[derive(Default)]
-pub enum Display {
-    /// The Authorization Server should display the authentication and consent
-    /// UI consistent with a full User Agent page view.
+string_enum! {
+    /// Value that specifies how the Authorization Server displays the
+    /// authentication and consent user interface pages to the End-User.
     ///
-    /// This is the default display mode.
-    #[default]
-    Page,
+    /// Defined in [OpenID Connect Core 1.0](https://openid.net/specs/openid-connect-core-1_0.html#AuthRequest).
+    pub enum Display {
+        /// The Authorization Server should display the authentication and consent
+        /// UI consistent with a full User Agent page view.
+        ///
+        /// This is the default display mode.
+        Page => "page",
 
-    /// The Authorization Server should display the authentication and consent
-    /// UI consistent with a popup User Agent window.
-    Popup,
+        /// The Authorization Server should display the authentication and consent
+        /// UI consistent with a popup User Agent window.
+        Popup => "popup",
 
-    /// The Authorization Server should display the authentication and consent
-    /// UI consistent with a device that leverages a touch interface.
-    Touch,
+        /// The Authorization Server should display the authentication and consent
+        /// UI consistent with a device that leverages a touch interface.
+        Touch => "touch",
 
-    /// The Authorization Server should display the authentication and consent
-    /// UI consistent with a "feature phone" type display.
-    Wap,
+        /// The Authorization Server should display the authentication and consent
+        /// UI consistent with a "feature phone" type display.
+        Wap => "wap",
 
-    /// An unknown value.
-    Unknown(String),
-}
-
-impl core::fmt::Display for Display {
-    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
-        match self {
-            Display::Page => f.write_str("page"),
-            Display::Popup => f.write_str("popup"),
-            Display::Touch => f.write_str("touch"),
-            Display::Wap => f.write_str("wap"),
-            Display::Unknown(s) => f.write_str(s),
-        }
+        @unknown
+        /// An unknown value.
+        Unknown(String),
     }
 }
 
-impl core::str::FromStr for Display {
-    type Err = core::convert::Infallible;
-
-    fn from_str(s: &str) -> Result<Self, Self::Err> {
-        match s {
-            "page" => Ok(Display::Page),
-            "popup" => Ok(Display::Popup),
-            "touch" => Ok(Display::Touch),
-            "wap" => Ok(Display::Wap),
-            s => Ok(Display::Unknown(s.to_owned())),
-        }
+impl Default for Display {
+    fn default() -> Self {
+        Self::Page
     }
 }
 
-/// Value that specifies whether the Authorization Server prompts the End-User
-/// for reauthentication and consent.
-///
-/// Defined in [OpenID Connect Core 1.0](https://openid.net/specs/openid-connect-core-1_0.html#AuthRequest).
-#[derive(
-    Debug, Hash, PartialEq, Eq, PartialOrd, Ord, Clone, SerializeDisplay, DeserializeFromStr,
-)]
-#[non_exhaustive]
-pub enum Prompt {
-    /// The Authorization Server must not display any authentication or consent
-    /// user interface pages.
-    None,
+// ---------------------------------------------------------------------------
+// Prompt
+// ---------------------------------------------------------------------------
 
-    /// The Authorization Server should prompt the End-User for
-    /// reauthentication.
-    Login,
-
-    /// The Authorization Server should prompt the End-User for consent before
-    /// returning information to the Client.
-    Consent,
-
-    /// The Authorization Server should prompt the End-User to select a user
-    /// account.
+string_enum! {
+    /// Value that specifies whether the Authorization Server prompts the End-User
+    /// for reauthentication and consent.
     ///
-    /// This enables an End-User who has multiple accounts at the Authorization
-    /// Server to select amongst the multiple accounts that they might have
-    /// current sessions for.
-    SelectAccount,
+    /// Defined in [OpenID Connect Core 1.0](https://openid.net/specs/openid-connect-core-1_0.html#AuthRequest).
+    pub enum Prompt {
+        /// The Authorization Server must not display any authentication or consent
+        /// user interface pages.
+        None => "none",
 
-    /// The Authorization Server should prompt the End-User to create a user
-    /// account.
-    ///
-    /// Defined in [Initiating User Registration via OpenID Connect](https://openid.net/specs/openid-connect-prompt-create-1_0.html).
-    Create,
+        /// The Authorization Server should prompt the End-User for
+        /// reauthentication.
+        Login => "login",
 
-    /// An unknown value.
-    Unknown(String),
-}
+        /// The Authorization Server should prompt the End-User for consent before
+        /// returning information to the Client.
+        Consent => "consent",
 
-impl core::fmt::Display for Prompt {
-    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
-        match self {
-            Prompt::None => f.write_str("none"),
-            Prompt::Login => f.write_str("login"),
-            Prompt::Consent => f.write_str("consent"),
-            Prompt::SelectAccount => f.write_str("select_account"),
-            Prompt::Create => f.write_str("create"),
-            Prompt::Unknown(s) => f.write_str(s),
-        }
+        /// The Authorization Server should prompt the End-User to select a user
+        /// account.
+        ///
+        /// This enables an End-User who has multiple accounts at the Authorization
+        /// Server to select amongst the multiple accounts that they might have
+        /// current sessions for.
+        SelectAccount => "select_account",
+
+        /// The Authorization Server should prompt the End-User to create a user
+        /// account.
+        ///
+        /// Defined in [Initiating User Registration via OpenID Connect](https://openid.net/specs/openid-connect-prompt-create-1_0.html).
+        Create => "create",
+
+        @unknown
+        /// An unknown value.
+        Unknown(String),
     }
 }
 
-impl core::str::FromStr for Prompt {
-    type Err = core::convert::Infallible;
+// ---------------------------------------------------------------------------
+// GrantType
+// ---------------------------------------------------------------------------
 
-    fn from_str(s: &str) -> Result<Self, Self::Err> {
-        match s {
-            "none" => Ok(Prompt::None),
-            "login" => Ok(Prompt::Login),
-            "consent" => Ok(Prompt::Consent),
-            "select_account" => Ok(Prompt::SelectAccount),
-            "create" => Ok(Prompt::Create),
-            s => Ok(Prompt::Unknown(s.to_owned())),
-        }
+string_enum! {
+    /// All possible values for the `grant_type` parameter.
+    pub enum GrantType {
+        /// [`authorization_code`](https://www.rfc-editor.org/rfc/rfc6749#section-4.1)
+        AuthorizationCode => "authorization_code",
+
+        /// [`refresh_token`](https://www.rfc-editor.org/rfc/rfc6749#section-6)
+        RefreshToken => "refresh_token",
+
+        /// [`implicit`](https://www.rfc-editor.org/rfc/rfc6749#section-4.2)
+        Implicit => "implicit",
+
+        /// [`client_credentials`](https://www.rfc-editor.org/rfc/rfc6749#section-4.4)
+        ClientCredentials => "client_credentials",
+
+        /// [`password`](https://www.rfc-editor.org/rfc/rfc6749#section-4.3)
+        Password => "password",
+
+        /// [`urn:ietf:params:oauth:grant-type:device_code`](https://www.rfc-editor.org/rfc/rfc8628)
+        DeviceCode => "urn:ietf:params:oauth:grant-type:device_code",
+
+        /// [`https://datatracker.ietf.org/doc/html/rfc7523#section-2.1`](https://www.rfc-editor.org/rfc/rfc7523#section-2.1)
+        JwtBearer => "urn:ietf:params:oauth:grant-type:jwt-bearer",
+
+        /// [`urn:openid:params:grant-type:ciba`](https://openid.net/specs/openid-client-initiated-backchannel-authentication-core-1_0.html)
+        ClientInitiatedBackchannelAuthentication => "urn:openid:params:grant-type:ciba",
+
+        @unknown
+        /// An unknown value.
+        Unknown(String),
     }
 }
+
+// ---------------------------------------------------------------------------
+// AuthorizationRequest
+// ---------------------------------------------------------------------------
 
 /// The body of a request to the [Authorization Endpoint].
 ///
@@ -305,8 +351,8 @@ impl AuthorizationRequest {
         Self {
             response_type,
             client_id,
-            redirect_uri: None,
             scope,
+            redirect_uri: None,
             state: None,
             response_mode: None,
             nonce: None,
@@ -326,6 +372,8 @@ impl AuthorizationRequest {
 
 impl fmt::Debug for AuthorizationRequest {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        // Sensitive fields (client_id, state, nonce, id_token_hint) are omitted
+        // from the Debug representation to prevent accidental logging.
         f.debug_struct("AuthorizationRequest")
             .field("response_type", &self.response_type)
             .field("redirect_uri", &self.redirect_uri)
@@ -343,6 +391,10 @@ impl fmt::Debug for AuthorizationRequest {
             .finish_non_exhaustive()
     }
 }
+
+// ---------------------------------------------------------------------------
+// AuthorizationResponse
+// ---------------------------------------------------------------------------
 
 /// A successful response from the [Authorization Endpoint].
 ///
@@ -370,6 +422,7 @@ pub struct AuthorizationResponse {
 
 impl fmt::Debug for AuthorizationResponse {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        // Tokens and codes are sensitive -- expose only the metadata fields.
         f.debug_struct("AuthorizationResponse")
             .field("token_type", &self.token_type)
             .field("id_token", &self.id_token)
@@ -377,6 +430,10 @@ impl fmt::Debug for AuthorizationResponse {
             .finish_non_exhaustive()
     }
 }
+
+// ---------------------------------------------------------------------------
+// Device Authorization (RFC 8628)
+// ---------------------------------------------------------------------------
 
 /// A request to the [Device Authorization Endpoint].
 ///
@@ -389,7 +446,8 @@ pub struct DeviceAuthorizationRequest {
 
 /// The default value of the `interval` between polling requests, if it is not
 /// set.
-pub const DEFAULT_DEVICE_AUTHORIZATION_INTERVAL: Duration = Duration::microseconds(5 * 1000 * 1000);
+pub const DEFAULT_DEVICE_AUTHORIZATION_INTERVAL: Duration =
+    Duration::microseconds(5 * 1_000 * 1_000);
 
 /// A successful response from the [Device Authorization Endpoint].
 ///
@@ -441,6 +499,7 @@ impl DeviceAuthorizationResponse {
 
 impl fmt::Debug for DeviceAuthorizationResponse {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        // Hide device_code and user_code -- only show timing/URI info.
         f.debug_struct("DeviceAuthorizationResponse")
             .field("verification_uri", &self.verification_uri)
             .field("expires_in", &self.expires_in)
@@ -448,6 +507,10 @@ impl fmt::Debug for DeviceAuthorizationResponse {
             .finish_non_exhaustive()
     }
 }
+
+// ---------------------------------------------------------------------------
+// Token endpoint grant payloads
+// ---------------------------------------------------------------------------
 
 /// A request to the [Token Endpoint] for the [Authorization Code] grant type.
 ///
@@ -532,76 +595,9 @@ impl fmt::Debug for DeviceCodeGrant {
     }
 }
 
-/// All possible values for the `grant_type` parameter.
-#[derive(
-    Debug, Hash, PartialEq, Eq, PartialOrd, Ord, Clone, SerializeDisplay, DeserializeFromStr,
-)]
-pub enum GrantType {
-    /// [`authorization_code`](https://www.rfc-editor.org/rfc/rfc6749#section-4.1)
-    AuthorizationCode,
-
-    /// [`refresh_token`](https://www.rfc-editor.org/rfc/rfc6749#section-6)
-    RefreshToken,
-
-    /// [`implicit`](https://www.rfc-editor.org/rfc/rfc6749#section-4.2)
-    Implicit,
-
-    /// [`client_credentials`](https://www.rfc-editor.org/rfc/rfc6749#section-4.4)
-    ClientCredentials,
-
-    /// [`password`](https://www.rfc-editor.org/rfc/rfc6749#section-4.3)
-    Password,
-
-    /// [`urn:ietf:params:oauth:grant-type:device_code`](https://www.rfc-editor.org/rfc/rfc8628)
-    DeviceCode,
-
-    /// [`https://datatracker.ietf.org/doc/html/rfc7523#section-2.1`](https://www.rfc-editor.org/rfc/rfc7523#section-2.1)
-    JwtBearer,
-
-    /// [`urn:openid:params:grant-type:ciba`](https://openid.net/specs/openid-client-initiated-backchannel-authentication-core-1_0.html)
-    ClientInitiatedBackchannelAuthentication,
-
-    /// An unknown value.
-    Unknown(String),
-}
-
-impl core::fmt::Display for GrantType {
-    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
-        match self {
-            GrantType::AuthorizationCode => f.write_str("authorization_code"),
-            GrantType::RefreshToken => f.write_str("refresh_token"),
-            GrantType::Implicit => f.write_str("implicit"),
-            GrantType::ClientCredentials => f.write_str("client_credentials"),
-            GrantType::Password => f.write_str("password"),
-            GrantType::DeviceCode => f.write_str("urn:ietf:params:oauth:grant-type:device_code"),
-            GrantType::JwtBearer => f.write_str("urn:ietf:params:oauth:grant-type:jwt-bearer"),
-            GrantType::ClientInitiatedBackchannelAuthentication => {
-                f.write_str("urn:openid:params:grant-type:ciba")
-            }
-            GrantType::Unknown(s) => f.write_str(s),
-        }
-    }
-}
-
-impl core::str::FromStr for GrantType {
-    type Err = core::convert::Infallible;
-
-    fn from_str(s: &str) -> Result<Self, Self::Err> {
-        match s {
-            "authorization_code" => Ok(GrantType::AuthorizationCode),
-            "refresh_token" => Ok(GrantType::RefreshToken),
-            "implicit" => Ok(GrantType::Implicit),
-            "client_credentials" => Ok(GrantType::ClientCredentials),
-            "password" => Ok(GrantType::Password),
-            "urn:ietf:params:oauth:grant-type:device_code" => Ok(GrantType::DeviceCode),
-            "urn:ietf:params:oauth:grant-type:jwt-bearer" => Ok(GrantType::JwtBearer),
-            "urn:openid:params:grant-type:ciba" => {
-                Ok(GrantType::ClientInitiatedBackchannelAuthentication)
-            }
-            s => Ok(GrantType::Unknown(s.to_owned())),
-        }
-    }
-}
+// ---------------------------------------------------------------------------
+// AccessTokenRequest (tagged union over grant_type)
+// ---------------------------------------------------------------------------
 
 /// An enum representing the possible requests to the [Token Endpoint].
 ///
@@ -641,6 +637,10 @@ impl AccessTokenRequest {
         }
     }
 }
+
+// ---------------------------------------------------------------------------
+// AccessTokenResponse (with builder)
+// ---------------------------------------------------------------------------
 
 /// A successful response from the [Token Endpoint].
 ///
@@ -723,6 +723,10 @@ impl fmt::Debug for AccessTokenResponse {
     }
 }
 
+// ---------------------------------------------------------------------------
+// Introspection (RFC 7662)
+// ---------------------------------------------------------------------------
+
 /// A request to the [Introspection Endpoint].
 ///
 /// [Introspection Endpoint]: https://www.rfc-editor.org/rfc/rfc7662#section-2
@@ -801,6 +805,10 @@ pub struct IntrospectionResponse {
     pub device_id: Option<String>,
 }
 
+// ---------------------------------------------------------------------------
+// Revocation (RFC 7009)
+// ---------------------------------------------------------------------------
+
 /// A request to the [Revocation Endpoint].
 ///
 /// [Revocation Endpoint]: https://www.rfc-editor.org/rfc/rfc7009#section-2
@@ -822,6 +830,10 @@ impl fmt::Debug for RevocationRequest {
     }
 }
 
+// ---------------------------------------------------------------------------
+// Pushed Authorization Request (RFC 9126)
+// ---------------------------------------------------------------------------
+
 /// A successful response from the [Pushed Authorization Request Endpoint].
 ///
 /// Note that there is no request type because it is by definition the same as
@@ -840,6 +852,10 @@ pub struct PushedAuthorizationResponse {
     pub expires_in: Duration,
 }
 
+// ---------------------------------------------------------------------------
+// Tests
+// ---------------------------------------------------------------------------
+
 #[cfg(test)]
 mod tests {
     use serde_json::json;
@@ -847,208 +863,157 @@ mod tests {
     use super::*;
     use crate::{scope::OPENID, test_utils::assert_serde_json};
 
-    #[test]
-    fn serde_refresh_token_grant() {
-        let expected = json!({
-            "grant_type": "refresh_token",
-            "refresh_token": "abcd",
-            "scope": "openid",
-        });
+    // -- Fixtures -----------------------------------------------------------
 
-        // TODO: insert multiple scopes and test it. It's a bit tricky to test since
-        // HashSet have no guarantees regarding the ordering of items, so right
-        // now the output is unstable.
+    const FIXTURE_CODE: &str = "abcd";
+    const FIXTURE_REDIRECT: &str = "https://example.com/redirect";
+
+    // -- Grant round-trip tests ---------------------------------------------
+
+    #[test]
+    fn refresh_token_grant_roundtrip() {
         let scope: Option<Scope> = Some(vec![OPENID].into_iter().collect());
 
         let req = AccessTokenRequest::RefreshToken(RefreshTokenGrant {
-            refresh_token: "abcd".into(),
+            refresh_token: FIXTURE_CODE.into(),
             scope,
         });
 
+        let expected = json!({
+            "grant_type": "refresh_token",
+            "refresh_token": FIXTURE_CODE,
+            "scope": "openid",
+        });
+
         assert_serde_json(&req, expected);
     }
 
     #[test]
-    fn serde_authorization_code_grant() {
-        let expected = json!({
-            "grant_type": "authorization_code",
-            "code": "abcd",
-            "redirect_uri": "https://example.com/redirect",
-        });
+    fn authorization_code_grant_roundtrip() {
+        let redirect: Url = FIXTURE_REDIRECT.parse().expect("valid URL");
 
         let req = AccessTokenRequest::AuthorizationCode(AuthorizationCodeGrant {
-            code: "abcd".into(),
-            redirect_uri: Some("https://example.com/redirect".parse().unwrap()),
+            code: FIXTURE_CODE.into(),
+            redirect_uri: Some(redirect),
             code_verifier: None,
         });
 
+        let expected = json!({
+            "grant_type": "authorization_code",
+            "code": FIXTURE_CODE,
+            "redirect_uri": FIXTURE_REDIRECT,
+        });
+
         assert_serde_json(&req, expected);
     }
 
+    // -- GrantType serialization --------------------------------------------
+
     #[test]
-    fn serialize_grant_type() {
-        assert_eq!(
-            serde_json::to_string(&GrantType::AuthorizationCode).unwrap(),
-            "\"authorization_code\""
-        );
-        assert_eq!(
-            serde_json::to_string(&GrantType::RefreshToken).unwrap(),
-            "\"refresh_token\""
-        );
-        assert_eq!(
-            serde_json::to_string(&GrantType::Implicit).unwrap(),
-            "\"implicit\""
-        );
-        assert_eq!(
-            serde_json::to_string(&GrantType::ClientCredentials).unwrap(),
-            "\"client_credentials\""
-        );
-        assert_eq!(
-            serde_json::to_string(&GrantType::Password).unwrap(),
-            "\"password\""
-        );
-        assert_eq!(
-            serde_json::to_string(&GrantType::DeviceCode).unwrap(),
-            "\"urn:ietf:params:oauth:grant-type:device_code\""
-        );
-        assert_eq!(
-            serde_json::to_string(&GrantType::ClientInitiatedBackchannelAuthentication).unwrap(),
-            "\"urn:openid:params:grant-type:ciba\""
-        );
+    fn grant_type_serializes_correctly() {
+        let cases: &[(GrantType, &str)] = &[
+            (GrantType::AuthorizationCode, "\"authorization_code\""),
+            (GrantType::RefreshToken, "\"refresh_token\""),
+            (GrantType::Implicit, "\"implicit\""),
+            (GrantType::ClientCredentials, "\"client_credentials\""),
+            (GrantType::Password, "\"password\""),
+            (
+                GrantType::DeviceCode,
+                "\"urn:ietf:params:oauth:grant-type:device_code\"",
+            ),
+            (
+                GrantType::ClientInitiatedBackchannelAuthentication,
+                "\"urn:openid:params:grant-type:ciba\"",
+            ),
+        ];
+
+        for (variant, expected_json) in cases {
+            let serialized = serde_json::to_string(variant).unwrap();
+            assert_eq!(&serialized, expected_json, "serialize {variant:?}");
+        }
     }
 
     #[test]
-    fn deserialize_grant_type() {
-        assert_eq!(
-            serde_json::from_str::<GrantType>("\"authorization_code\"").unwrap(),
-            GrantType::AuthorizationCode
-        );
-        assert_eq!(
-            serde_json::from_str::<GrantType>("\"refresh_token\"").unwrap(),
-            GrantType::RefreshToken
-        );
-        assert_eq!(
-            serde_json::from_str::<GrantType>("\"implicit\"").unwrap(),
-            GrantType::Implicit
-        );
-        assert_eq!(
-            serde_json::from_str::<GrantType>("\"client_credentials\"").unwrap(),
-            GrantType::ClientCredentials
-        );
-        assert_eq!(
-            serde_json::from_str::<GrantType>("\"password\"").unwrap(),
-            GrantType::Password
-        );
-        assert_eq!(
-            serde_json::from_str::<GrantType>("\"urn:ietf:params:oauth:grant-type:device_code\"")
-                .unwrap(),
-            GrantType::DeviceCode
-        );
-        assert_eq!(
-            serde_json::from_str::<GrantType>("\"urn:openid:params:grant-type:ciba\"").unwrap(),
-            GrantType::ClientInitiatedBackchannelAuthentication
-        );
+    fn grant_type_deserializes_correctly() {
+        let cases: &[(&str, GrantType)] = &[
+            ("\"authorization_code\"", GrantType::AuthorizationCode),
+            ("\"refresh_token\"", GrantType::RefreshToken),
+            ("\"implicit\"", GrantType::Implicit),
+            ("\"client_credentials\"", GrantType::ClientCredentials),
+            ("\"password\"", GrantType::Password),
+            (
+                "\"urn:ietf:params:oauth:grant-type:device_code\"",
+                GrantType::DeviceCode,
+            ),
+            (
+                "\"urn:openid:params:grant-type:ciba\"",
+                GrantType::ClientInitiatedBackchannelAuthentication,
+            ),
+        ];
+
+        for (json_str, expected_variant) in cases {
+            let deserialized: GrantType = serde_json::from_str(json_str).unwrap();
+            assert_eq!(&deserialized, expected_variant, "deserialize {json_str}");
+        }
     }
 
-    #[test]
-    fn serialize_response_mode() {
-        assert_eq!(
-            serde_json::to_string(&ResponseMode::Query).unwrap(),
-            "\"query\""
-        );
-        assert_eq!(
-            serde_json::to_string(&ResponseMode::Fragment).unwrap(),
-            "\"fragment\""
-        );
-        assert_eq!(
-            serde_json::to_string(&ResponseMode::FormPost).unwrap(),
-            "\"form_post\""
-        );
-    }
+    // -- ResponseMode serialization -----------------------------------------
 
     #[test]
-    fn deserialize_response_mode() {
-        assert_eq!(
-            serde_json::from_str::<ResponseMode>("\"query\"").unwrap(),
-            ResponseMode::Query
-        );
-        assert_eq!(
-            serde_json::from_str::<ResponseMode>("\"fragment\"").unwrap(),
-            ResponseMode::Fragment
-        );
-        assert_eq!(
-            serde_json::from_str::<ResponseMode>("\"form_post\"").unwrap(),
-            ResponseMode::FormPost
-        );
+    fn response_mode_serde() {
+        let cases: &[(ResponseMode, &str)] = &[
+            (ResponseMode::Query, "\"query\""),
+            (ResponseMode::Fragment, "\"fragment\""),
+            (ResponseMode::FormPost, "\"form_post\""),
+        ];
+
+        for (variant, json_str) in cases {
+            assert_eq!(serde_json::to_string(variant).unwrap(), *json_str);
+            assert_eq!(
+                serde_json::from_str::<ResponseMode>(json_str).unwrap(),
+                *variant,
+            );
+        }
     }
 
-    #[test]
-    fn serialize_display() {
-        assert_eq!(serde_json::to_string(&Display::Page).unwrap(), "\"page\"");
-        assert_eq!(serde_json::to_string(&Display::Popup).unwrap(), "\"popup\"");
-        assert_eq!(serde_json::to_string(&Display::Touch).unwrap(), "\"touch\"");
-        assert_eq!(serde_json::to_string(&Display::Wap).unwrap(), "\"wap\"");
-    }
+    // -- Display serialization ----------------------------------------------
 
     #[test]
-    fn deserialize_display() {
-        assert_eq!(
-            serde_json::from_str::<Display>("\"page\"").unwrap(),
-            Display::Page
-        );
-        assert_eq!(
-            serde_json::from_str::<Display>("\"popup\"").unwrap(),
-            Display::Popup
-        );
-        assert_eq!(
-            serde_json::from_str::<Display>("\"touch\"").unwrap(),
-            Display::Touch
-        );
-        assert_eq!(
-            serde_json::from_str::<Display>("\"wap\"").unwrap(),
-            Display::Wap
-        );
+    fn display_enum_serde() {
+        let cases: &[(Display, &str)] = &[
+            (Display::Page, "\"page\""),
+            (Display::Popup, "\"popup\""),
+            (Display::Touch, "\"touch\""),
+            (Display::Wap, "\"wap\""),
+        ];
+
+        for (variant, json_str) in cases {
+            assert_eq!(serde_json::to_string(variant).unwrap(), *json_str);
+            assert_eq!(
+                serde_json::from_str::<Display>(json_str).unwrap(),
+                *variant,
+            );
+        }
     }
 
-    #[test]
-    fn serialize_prompt() {
-        assert_eq!(serde_json::to_string(&Prompt::None).unwrap(), "\"none\"");
-        assert_eq!(serde_json::to_string(&Prompt::Login).unwrap(), "\"login\"");
-        assert_eq!(
-            serde_json::to_string(&Prompt::Consent).unwrap(),
-            "\"consent\""
-        );
-        assert_eq!(
-            serde_json::to_string(&Prompt::SelectAccount).unwrap(),
-            "\"select_account\""
-        );
-        assert_eq!(
-            serde_json::to_string(&Prompt::Create).unwrap(),
-            "\"create\""
-        );
-    }
+    // -- Prompt serialization -----------------------------------------------
 
     #[test]
-    fn deserialize_prompt() {
-        assert_eq!(
-            serde_json::from_str::<Prompt>("\"none\"").unwrap(),
-            Prompt::None
-        );
-        assert_eq!(
-            serde_json::from_str::<Prompt>("\"login\"").unwrap(),
-            Prompt::Login
-        );
-        assert_eq!(
-            serde_json::from_str::<Prompt>("\"consent\"").unwrap(),
-            Prompt::Consent
-        );
-        assert_eq!(
-            serde_json::from_str::<Prompt>("\"select_account\"").unwrap(),
-            Prompt::SelectAccount
-        );
-        assert_eq!(
-            serde_json::from_str::<Prompt>("\"create\"").unwrap(),
-            Prompt::Create
-        );
+    fn prompt_enum_serde() {
+        let cases: &[(Prompt, &str)] = &[
+            (Prompt::None, "\"none\""),
+            (Prompt::Login, "\"login\""),
+            (Prompt::Consent, "\"consent\""),
+            (Prompt::SelectAccount, "\"select_account\""),
+            (Prompt::Create, "\"create\""),
+        ];
+
+        for (variant, json_str) in cases {
+            assert_eq!(serde_json::to_string(variant).unwrap(), *json_str);
+            assert_eq!(
+                serde_json::from_str::<Prompt>(json_str).unwrap(),
+                *variant,
+            );
+        }
     }
 }

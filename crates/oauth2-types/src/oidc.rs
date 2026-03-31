@@ -1,6 +1,11 @@
-//! Types to interact with the [OpenID Connect] specification.
+// Copyright 2026 Taidge Contributors
+// SPDX-License-Identifier: Apache-2.0
+
+//! OpenID Connect Discovery 1.0 and RFC 8414 types.
 //!
-//! [OpenID Connect]: https://openid.net/connect/
+//! This module provides Rust types for working with OpenID Connect provider
+//! metadata as defined in OpenID Connect Discovery 1.0 Section 3 and
+//! OAuth 2.0 Authorization Server Metadata (RFC 8414).
 
 use std::{fmt, ops::Deref};
 
@@ -11,8 +16,8 @@ use pasion_iana::{
 };
 use serde::{Deserialize, Serialize};
 use serde_with::{
-    DeserializeFromStr, SerializeDisplay, StringWithSeparator, formats::SpaceSeparator, serde_as,
-    skip_serializing_none,
+    formats::SpaceSeparator, serde_as, skip_serializing_none, DeserializeFromStr, SerializeDisplay,
+    StringWithSeparator,
 };
 use thiserror::Error;
 use url::Url;
@@ -21,6 +26,62 @@ use crate::{
     requests::{Display, GrantType, Prompt, ResponseMode},
     response_type::ResponseType,
 };
+
+// ---------------------------------------------------------------------------
+// Macro: string_enum!
+//
+// Generates Display, FromStr, Serialize (via SerializeDisplay), and
+// Deserialize (via DeserializeFromStr) for simple string-backed enums that
+// carry an Unknown(String) catch-all variant.
+// ---------------------------------------------------------------------------
+macro_rules! string_enum {
+    (
+        $(#[$outer_meta:meta])*
+        $vis:vis enum $name:ident {
+            $(
+                $(#[$variant_meta:meta])*
+                $variant:ident => $wire:literal,
+            )*
+        }
+    ) => {
+        $(#[$outer_meta])*
+        #[derive(SerializeDisplay, DeserializeFromStr, Clone, PartialEq, Eq, Hash, Debug)]
+        $vis enum $name {
+            $(
+                $(#[$variant_meta])*
+                $variant,
+            )*
+            /// An unknown value.
+            Unknown(String),
+        }
+
+        impl core::fmt::Display for $name {
+            fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+                let repr = match self {
+                    $( Self::$variant => $wire, )*
+                    Self::Unknown(raw) => raw.as_str(),
+                };
+                f.write_str(repr)
+            }
+        }
+
+        impl core::str::FromStr for $name {
+            type Err = core::convert::Infallible;
+
+            fn from_str(input: &str) -> Result<Self, Self::Err> {
+                let parsed = match input {
+                    $( $wire => Self::$variant, )*
+                    other => Self::Unknown(other.to_owned()),
+                };
+                Ok(parsed)
+            }
+        }
+    };
+}
+
+// ---------------------------------------------------------------------------
+// AuthenticationMethodOrAccessTokenType
+// ---------------------------------------------------------------------------
 
 /// An enum for types that accept either an [`OAuthClientAuthenticationMethod`]
 /// or an [`OAuthAccessTokenType`].
@@ -43,9 +104,9 @@ pub enum AuthenticationMethodOrAccessTokenType {
 impl core::fmt::Display for AuthenticationMethodOrAccessTokenType {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            Self::AuthenticationMethod(m) => m.fmt(f),
-            Self::AccessTokenType(t) => t.fmt(f),
-            Self::Unknown(s) => s.fmt(f),
+            Self::AuthenticationMethod(method) => write!(f, "{method}"),
+            Self::AccessTokenType(tok) => write!(f, "{tok}"),
+            Self::Unknown(raw) => f.write_str(raw),
         }
     }
 }
@@ -53,15 +114,19 @@ impl core::fmt::Display for AuthenticationMethodOrAccessTokenType {
 impl core::str::FromStr for AuthenticationMethodOrAccessTokenType {
     type Err = core::convert::Infallible;
 
+    /// Parse the string, trying access token types first, then authentication
+    /// methods, falling back to Unknown.
     fn from_str(s: &str) -> Result<Self, Self::Err> {
-        match OAuthClientAuthenticationMethod::from_str(s) {
-            Ok(OAuthClientAuthenticationMethod::Unknown(_)) | Err(_) => {}
-            Ok(m) => return Ok(m.into()),
+        // Attempt access token type resolution first.
+        let tok = OAuthAccessTokenType::from_str(s)?;
+        if !matches!(tok, OAuthAccessTokenType::Unknown(_)) {
+            return Ok(Self::AccessTokenType(tok));
         }
 
-        match OAuthAccessTokenType::from_str(s) {
-            Ok(OAuthAccessTokenType::Unknown(_)) | Err(_) => {}
-            Ok(m) => return Ok(m.into()),
+        // Then try authentication method.
+        let method = OAuthClientAuthenticationMethod::from_str(s)?;
+        if !matches!(method, OAuthClientAuthenticationMethod::Unknown(_)) {
+            return Ok(Self::AuthenticationMethod(method));
         }
 
         Ok(Self::Unknown(s.to_owned()))
@@ -91,206 +156,105 @@ impl AuthenticationMethodOrAccessTokenType {
 }
 
 impl From<OAuthClientAuthenticationMethod> for AuthenticationMethodOrAccessTokenType {
-    fn from(t: OAuthClientAuthenticationMethod) -> Self {
-        Self::AuthenticationMethod(t)
+    fn from(method: OAuthClientAuthenticationMethod) -> Self {
+        Self::AuthenticationMethod(method)
     }
 }
 
 impl From<OAuthAccessTokenType> for AuthenticationMethodOrAccessTokenType {
-    fn from(t: OAuthAccessTokenType) -> Self {
-        Self::AccessTokenType(t)
+    fn from(tok: OAuthAccessTokenType) -> Self {
+        Self::AccessTokenType(tok)
     }
 }
 
-/// The kind of an application.
-#[derive(SerializeDisplay, DeserializeFromStr, Clone, PartialEq, Eq, Hash, Debug)]
-pub enum ApplicationType {
-    /// A web application.
-    Web,
+// ---------------------------------------------------------------------------
+// Simple string enums generated via the macro
+// ---------------------------------------------------------------------------
 
-    /// A native application.
-    Native,
-
-    /// An unknown value.
-    Unknown(String),
-}
-
-impl core::fmt::Display for ApplicationType {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self {
-            Self::Web => f.write_str("web"),
-            Self::Native => f.write_str("native"),
-            Self::Unknown(s) => f.write_str(s),
-        }
+string_enum! {
+    /// The kind of an application.
+    pub enum ApplicationType {
+        /// A web application.
+        Web => "web",
+        /// A native application.
+        Native => "native",
     }
 }
 
-impl core::str::FromStr for ApplicationType {
-    type Err = core::convert::Infallible;
-
-    fn from_str(s: &str) -> Result<Self, Self::Err> {
-        match s {
-            "web" => Ok(Self::Web),
-            "native" => Ok(Self::Native),
-            s => Ok(Self::Unknown(s.to_owned())),
-        }
-    }
-}
-
-/// Subject Identifier types.
-///
-/// A Subject Identifier is a locally unique and never reassigned identifier
-/// within the Issuer for the End-User, which is intended to be consumed by the
-/// Client.
-#[derive(SerializeDisplay, DeserializeFromStr, Clone, PartialEq, Eq, Hash, Debug)]
-pub enum SubjectType {
-    /// This provides the same `sub` (subject) value to all Clients.
-    Public,
-
-    /// This provides a different `sub` value to each Client, so as not to
-    /// enable Clients to correlate the End-User's activities without
-    /// permission.
-    Pairwise,
-
-    /// An unknown value.
-    Unknown(String),
-}
-
-impl core::fmt::Display for SubjectType {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self {
-            Self::Public => f.write_str("public"),
-            Self::Pairwise => f.write_str("pairwise"),
-            Self::Unknown(s) => f.write_str(s),
-        }
-    }
-}
-
-impl core::str::FromStr for SubjectType {
-    type Err = core::convert::Infallible;
-
-    fn from_str(s: &str) -> Result<Self, Self::Err> {
-        match s {
-            "public" => Ok(Self::Public),
-            "pairwise" => Ok(Self::Pairwise),
-            s => Ok(Self::Unknown(s.to_owned())),
-        }
-    }
-}
-
-/// Claim types.
-#[derive(SerializeDisplay, DeserializeFromStr, Clone, PartialEq, Eq, Hash, Debug)]
-pub enum ClaimType {
-    /// Claims that are directly asserted by the OpenID Provider.
-    Normal,
-
-    /// Claims that are asserted by a Claims Provider other than the OpenID
-    /// Provider but are returned by OpenID Provider.
-    Aggregated,
-
-    /// Claims that are asserted by a Claims Provider other than the OpenID
-    /// Provider but are returned as references by the OpenID Provider.
-    Distributed,
-
-    /// An unknown value.
-    Unknown(String),
-}
-
-impl core::fmt::Display for ClaimType {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self {
-            Self::Normal => f.write_str("normal"),
-            Self::Aggregated => f.write_str("aggregated"),
-            Self::Distributed => f.write_str("distributed"),
-            Self::Unknown(s) => f.write_str(s),
-        }
-    }
-}
-
-impl core::str::FromStr for ClaimType {
-    type Err = core::convert::Infallible;
-
-    fn from_str(s: &str) -> Result<Self, Self::Err> {
-        match s {
-            "normal" => Ok(Self::Normal),
-            "aggregated" => Ok(Self::Aggregated),
-            "distributed" => Ok(Self::Distributed),
-            s => Ok(Self::Unknown(s.to_owned())),
-        }
-    }
-}
-
-/// An account management action that a user can take.
-///
-/// Source: <https://github.com/matrix-org/matrix-spec-proposals/pull/2965>
-#[derive(
-    SerializeDisplay, DeserializeFromStr, Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash,
-)]
-#[non_exhaustive]
-pub enum AccountManagementAction {
-    /// `org.matrix.profile`
+string_enum! {
+    /// Subject Identifier types.
     ///
-    /// The user wishes to view their profile (name, avatar, contact details).
-    Profile,
-
-    /// `org.matrix.sessions_list`
-    ///
-    /// The user wishes to view a list of their sessions.
-    SessionsList,
-
-    /// `org.matrix.session_view`
-    ///
-    /// The user wishes to view the details of a specific session.
-    SessionView,
-
-    /// `org.matrix.session_end`
-    ///
-    /// The user wishes to end/log out of a specific session.
-    SessionEnd,
-
-    /// `org.matrix.account_deactivate`
-    ///
-    /// The user wishes to deactivate their account.
-    AccountDeactivate,
-
-    /// `org.matrix.cross_signing_reset`
-    ///
-    /// The user wishes to reset their cross-signing keys.
-    CrossSigningReset,
-
-    /// An unknown value.
-    Unknown(String),
-}
-
-impl core::fmt::Display for AccountManagementAction {
-    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
-        match self {
-            Self::Profile => write!(f, "org.matrix.profile"),
-            Self::SessionsList => write!(f, "org.matrix.sessions_list"),
-            Self::SessionView => write!(f, "org.matrix.session_view"),
-            Self::SessionEnd => write!(f, "org.matrix.session_end"),
-            Self::AccountDeactivate => write!(f, "org.matrix.account_deactivate"),
-            Self::CrossSigningReset => write!(f, "org.matrix.cross_signing_reset"),
-            Self::Unknown(value) => write!(f, "{value}"),
-        }
+    /// A Subject Identifier is a locally unique and never reassigned identifier
+    /// within the Issuer for the End-User, which is intended to be consumed by the
+    /// Client.
+    pub enum SubjectType {
+        /// This provides the same `sub` (subject) value to all Clients.
+        Public => "public",
+        /// This provides a different `sub` value to each Client, so as not to
+        /// enable Clients to correlate the End-User's activities without
+        /// permission.
+        Pairwise => "pairwise",
     }
 }
 
-impl core::str::FromStr for AccountManagementAction {
-    type Err = core::convert::Infallible;
-
-    fn from_str(s: &str) -> Result<Self, Self::Err> {
-        match s {
-            "org.matrix.profile" => Ok(Self::Profile),
-            "org.matrix.sessions_list" => Ok(Self::SessionsList),
-            "org.matrix.session_view" => Ok(Self::SessionView),
-            "org.matrix.session_end" => Ok(Self::SessionEnd),
-            "org.matrix.account_deactivate" => Ok(Self::AccountDeactivate),
-            "org.matrix.cross_signing_reset" => Ok(Self::CrossSigningReset),
-            value => Ok(Self::Unknown(value.to_owned())),
-        }
+string_enum! {
+    /// Claim types.
+    pub enum ClaimType {
+        /// Claims that are directly asserted by the OpenID Provider.
+        Normal => "normal",
+        /// Claims that are asserted by a Claims Provider other than the OpenID
+        /// Provider but are returned by OpenID Provider.
+        Aggregated => "aggregated",
+        /// Claims that are asserted by a Claims Provider other than the OpenID
+        /// Provider but are returned as references by the OpenID Provider.
+        Distributed => "distributed",
     }
 }
+
+// AccountManagementAction has extra derives, so we use the macro but add them
+// via the outer_meta.
+string_enum! {
+    /// An account management action that a user can take.
+    ///
+    /// Source: <https://github.com/matrix-org/matrix-spec-proposals/pull/2965>
+    #[non_exhaustive]
+    #[derive(PartialOrd, Ord)]
+    pub enum AccountManagementAction {
+        /// `org.matrix.profile`
+        ///
+        /// The user wishes to view their profile (name, avatar, contact details).
+        Profile => "org.matrix.profile",
+
+        /// `org.matrix.sessions_list`
+        ///
+        /// The user wishes to view a list of their sessions.
+        SessionsList => "org.matrix.sessions_list",
+
+        /// `org.matrix.session_view`
+        ///
+        /// The user wishes to view the details of a specific session.
+        SessionView => "org.matrix.session_view",
+
+        /// `org.matrix.session_end`
+        ///
+        /// The user wishes to end/log out of a specific session.
+        SessionEnd => "org.matrix.session_end",
+
+        /// `org.matrix.account_deactivate`
+        ///
+        /// The user wishes to deactivate their account.
+        AccountDeactivate => "org.matrix.account_deactivate",
+
+        /// `org.matrix.cross_signing_reset`
+        ///
+        /// The user wishes to reset their cross-signing keys.
+        CrossSigningReset => "org.matrix.cross_signing_reset",
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Default static arrays (per OIDC Discovery 1.0 Section 3)
+// ---------------------------------------------------------------------------
 
 /// The default value of `response_modes_supported` if it is not set.
 pub static DEFAULT_RESPONSE_MODES_SUPPORTED: &[ResponseMode] =
@@ -308,6 +272,16 @@ pub static DEFAULT_AUTH_METHODS_SUPPORTED: &[OAuthClientAuthenticationMethod] =
 /// The default value of `claim_types_supported` if it is not set.
 pub static DEFAULT_CLAIM_TYPES_SUPPORTED: &[ClaimType] = &[ClaimType::Normal];
 
+// ---------------------------------------------------------------------------
+// ProviderMetadata
+//
+// Fields are grouped by specification section:
+//   1. Core OAuth 2.0 AS metadata (RFC 8414)
+//   2. OpenID Connect Discovery 1.0 extensions
+//   3. Additional protocol extensions (PAR, RP-Initiated Logout, etc.)
+//   4. Matrix-specific extensions (MSC 2965)
+// ---------------------------------------------------------------------------
+
 /// Authorization server metadata, as described by the [IANA registry].
 ///
 /// All the fields with a default value are accessible via methods.
@@ -316,6 +290,7 @@ pub static DEFAULT_CLAIM_TYPES_SUPPORTED: &[ClaimType] = &[ClaimType::Normal];
 #[skip_serializing_none]
 #[derive(Debug, Serialize, Deserialize, Clone, Default)]
 pub struct ProviderMetadata {
+    // -- Section 1: Core OAuth 2.0 Authorization Server Metadata (RFC 8414) --
     /// Authorization server's issuer identifier URL.
     ///
     /// This field is required. The URL must use a `https` scheme, and must not
@@ -475,6 +450,7 @@ pub struct ProviderMetadata {
     /// [PKCE code challenge]: https://www.rfc-editor.org/rfc/rfc7636
     pub code_challenge_methods_supported: Option<Vec<PkceCodeChallengeMethod>>,
 
+    // -- Section 2: OpenID Connect Discovery 1.0 extensions --
     /// URL of the OP's [UserInfo Endpoint].
     ///
     /// [UserInfo Endpoint]: https://openid.net/specs/openid-connect-core-1_0.html#UserInfo
@@ -570,6 +546,7 @@ pub struct ProviderMetadata {
     /// Defaults to `false`.
     pub require_request_uri_registration: Option<bool>,
 
+    // -- Section 3: Additional protocol extensions --
     /// Indicates where authorization request needs to be protected as [Request
     /// Object] and provided through either request or `request_uri` parameter.
     ///
@@ -608,6 +585,7 @@ pub struct ProviderMetadata {
     /// [RP-Initiated Logout endpoint]: https://openid.net/specs/openid-connect-rpinitiated-1_0.html
     pub end_session_endpoint: Option<Url>,
 
+    // -- Section 4: Matrix-specific extensions (MSC 2965) --
     /// URL where the user is able to access the account management capabilities
     /// of this OP.
     ///
@@ -619,6 +597,97 @@ pub struct ProviderMetadata {
     /// This is a Matrix extension introduced in [MSC2965](https://github.com/matrix-org/matrix-spec-proposals/pull/2965).
     pub account_management_actions_supported: Option<Vec<AccountManagementAction>>,
 }
+
+// ---------------------------------------------------------------------------
+// URL validation — builder-style UrlValidator
+// ---------------------------------------------------------------------------
+
+/// Fluent URL constraint checker used during provider metadata validation.
+///
+/// By default only the HTTPS scheme requirement is enforced. Call
+/// [`UrlValidator::forbid_fragment`] and/or [`UrlValidator::forbid_query`] to
+/// tighten the constraints before calling [`UrlValidator::check`].
+struct UrlValidator {
+    field_name: &'static str,
+    allow_query: bool,
+    allow_fragment: bool,
+}
+
+impl UrlValidator {
+    /// Create a new validator for the given metadata field name.
+    fn new(field_name: &'static str) -> Self {
+        Self {
+            field_name,
+            allow_query: true,
+            allow_fragment: true,
+        }
+    }
+
+    /// Forbid the URL from containing a fragment component.
+    fn forbid_fragment(mut self) -> Self {
+        self.allow_fragment = false;
+        self
+    }
+
+    /// Forbid the URL from containing a query component.
+    fn forbid_query(mut self) -> Self {
+        self.allow_query = false;
+        self
+    }
+
+    /// Validate `url` against the accumulated constraints.
+    fn check(self, url: &Url) -> Result<(), ProviderMetadataVerificationError> {
+        if url.scheme() != "https" {
+            return Err(ProviderMetadataVerificationError::UrlNonHttpsScheme(
+                self.field_name,
+                url.clone(),
+            ));
+        }
+
+        if !self.allow_query && url.query().is_some() {
+            return Err(ProviderMetadataVerificationError::UrlWithQuery(
+                self.field_name,
+                url.clone(),
+            ));
+        }
+
+        if !self.allow_fragment && url.fragment().is_some() {
+            return Err(ProviderMetadataVerificationError::UrlWithFragment(
+                self.field_name,
+                url.clone(),
+            ));
+        }
+
+        Ok(())
+    }
+}
+
+/// Ensure that none of the provided JWS algorithm values is
+/// [`JsonWebSignatureAlg::None`].
+fn reject_none_signing_alg<'a>(
+    endpoint: &'static str,
+    alg_values: impl Iterator<Item = &'a JsonWebSignatureAlg>,
+) -> Result<(), ProviderMetadataVerificationError> {
+    for alg in alg_values {
+        if *alg == JsonWebSignatureAlg::None {
+            return Err(ProviderMetadataVerificationError::SigningAlgValuesWithNone(
+                endpoint,
+            ));
+        }
+    }
+    Ok(())
+}
+
+// ---------------------------------------------------------------------------
+// ProviderMetadata — impl
+// ---------------------------------------------------------------------------
+
+/// A single validation rule applied during [`ProviderMetadata::validate`].
+///
+/// Each closure receives a reference to the already-verified metadata and
+/// returns `Ok(())` when the rule passes.
+type ValidationRule =
+    Box<dyn FnOnce(&VerifiedProviderMetadata) -> Result<(), ProviderMetadataVerificationError>>;
 
 impl ProviderMetadata {
     /// Validate this `ProviderMetadata` according to the [OpenID Connect
@@ -638,97 +707,135 @@ impl ProviderMetadata {
         self,
         issuer: &str,
     ) -> Result<VerifiedProviderMetadata, ProviderMetadataVerificationError> {
-        let metadata = self.insecure_verify_metadata()?;
+        // First, verify required fields are present.
+        let verified = self.insecure_verify_metadata()?;
 
-        if metadata.issuer() != issuer {
-            return Err(ProviderMetadataVerificationError::IssuerUrlsDontMatch {
-                expected: issuer.to_owned(),
-                actual: metadata.issuer().to_owned(),
-            });
+        // Collect all validation rules into a list and run them sequentially.
+        let expected_issuer = issuer.to_owned();
+        let rules: Vec<ValidationRule> = vec![
+            // Rule: issuer must match the expected value.
+            Box::new(move |m| {
+                if m.issuer() != expected_issuer {
+                    return Err(ProviderMetadataVerificationError::IssuerUrlsDontMatch {
+                        expected: expected_issuer,
+                        actual: m.issuer().to_owned(),
+                    });
+                }
+                Ok(())
+            }),
+            // Rule: issuer URL must be https, no query, no fragment.
+            Box::new(|m| {
+                let issuer_url: Url = m
+                    .issuer()
+                    .parse()
+                    .map_err(|_| ProviderMetadataVerificationError::IssuerNotUrl)?;
+                UrlValidator::new("issuer")
+                    .forbid_query()
+                    .forbid_fragment()
+                    .check(&issuer_url)
+            }),
+            // Rule: authorization_endpoint — https, no fragment.
+            Box::new(|m| {
+                UrlValidator::new("authorization_endpoint")
+                    .forbid_fragment()
+                    .check(m.authorization_endpoint())
+            }),
+            // Rule: token_endpoint — https, no fragment.
+            Box::new(|m| {
+                UrlValidator::new("token_endpoint")
+                    .forbid_fragment()
+                    .check(m.token_endpoint())
+            }),
+            // Rule: jwks_uri — https only.
+            Box::new(|m| UrlValidator::new("jwks_uri").check(m.jwks_uri())),
+            // Rule: registration_endpoint (optional) — https only.
+            Box::new(|m| {
+                if let Some(url) = &m.registration_endpoint {
+                    UrlValidator::new("registration_endpoint").check(url)?;
+                }
+                Ok(())
+            }),
+            // Rule: scopes_supported must include "openid" when present.
+            Box::new(|m| {
+                if let Some(scopes) = &m.scopes_supported {
+                    let has_openid = scopes.iter().any(|s| s == "openid");
+                    if !has_openid {
+                        return Err(ProviderMetadataVerificationError::ScopesMissingOpenid);
+                    }
+                }
+                Ok(())
+            }),
+            // Rule: token endpoint signing alg values must not contain "none".
+            Box::new(|m| {
+                reject_none_signing_alg(
+                    "token_endpoint",
+                    m.token_endpoint_auth_signing_alg_values_supported
+                        .iter()
+                        .flatten(),
+                )
+            }),
+            // Rule: revocation_endpoint (optional) — https, no fragment.
+            Box::new(|m| {
+                if let Some(url) = &m.revocation_endpoint {
+                    UrlValidator::new("revocation_endpoint")
+                        .forbid_fragment()
+                        .check(url)?;
+                }
+                Ok(())
+            }),
+            // Rule: revocation endpoint signing alg values must not contain "none".
+            Box::new(|m| {
+                reject_none_signing_alg(
+                    "revocation_endpoint",
+                    m.revocation_endpoint_auth_signing_alg_values_supported
+                        .iter()
+                        .flatten(),
+                )
+            }),
+            // Rule: introspection_endpoint (optional) — https only.
+            Box::new(|m| {
+                if let Some(url) = &m.introspection_endpoint {
+                    UrlValidator::new("introspection_endpoint").check(url)?;
+                }
+                Ok(())
+            }),
+            // Rule: introspection endpoint signing alg values must not contain "none".
+            Box::new(|m| {
+                reject_none_signing_alg(
+                    "introspection_endpoint",
+                    m.introspection_endpoint_auth_signing_alg_values_supported
+                        .iter()
+                        .flatten(),
+                )
+            }),
+            // Rule: userinfo_endpoint (optional) — https only.
+            Box::new(|m| {
+                if let Some(url) = &m.userinfo_endpoint {
+                    UrlValidator::new("userinfo_endpoint").check(url)?;
+                }
+                Ok(())
+            }),
+            // Rule: pushed_authorization_request_endpoint (optional) — https only.
+            Box::new(|m| {
+                if let Some(url) = &m.pushed_authorization_request_endpoint {
+                    UrlValidator::new("pushed_authorization_request_endpoint").check(url)?;
+                }
+                Ok(())
+            }),
+            // Rule: end_session_endpoint (optional) — https only.
+            Box::new(|m| {
+                if let Some(url) = &m.end_session_endpoint {
+                    UrlValidator::new("end_session_endpoint").check(url)?;
+                }
+                Ok(())
+            }),
+        ];
+
+        for rule in rules {
+            rule(&verified)?;
         }
 
-        validate_url(
-            "issuer",
-            &metadata
-                .issuer()
-                .parse()
-                .map_err(|_| ProviderMetadataVerificationError::IssuerNotUrl)?,
-            ExtraUrlRestrictions::NoQueryOrFragment,
-        )?;
-
-        validate_url(
-            "authorization_endpoint",
-            metadata.authorization_endpoint(),
-            ExtraUrlRestrictions::NoFragment,
-        )?;
-
-        validate_url(
-            "token_endpoint",
-            metadata.token_endpoint(),
-            ExtraUrlRestrictions::NoFragment,
-        )?;
-
-        validate_url("jwks_uri", metadata.jwks_uri(), ExtraUrlRestrictions::None)?;
-
-        if let Some(url) = &metadata.registration_endpoint {
-            validate_url("registration_endpoint", url, ExtraUrlRestrictions::None)?;
-        }
-
-        if let Some(scopes) = &metadata.scopes_supported
-            && !scopes.iter().any(|s| s == "openid")
-        {
-            return Err(ProviderMetadataVerificationError::ScopesMissingOpenid);
-        }
-
-        validate_signing_alg_values_supported(
-            "token_endpoint",
-            metadata
-                .token_endpoint_auth_signing_alg_values_supported
-                .iter()
-                .flatten(),
-        )?;
-
-        if let Some(url) = &metadata.revocation_endpoint {
-            validate_url("revocation_endpoint", url, ExtraUrlRestrictions::NoFragment)?;
-        }
-
-        validate_signing_alg_values_supported(
-            "revocation_endpoint",
-            metadata
-                .revocation_endpoint_auth_signing_alg_values_supported
-                .iter()
-                .flatten(),
-        )?;
-
-        if let Some(url) = &metadata.introspection_endpoint {
-            validate_url("introspection_endpoint", url, ExtraUrlRestrictions::None)?;
-        }
-
-        validate_signing_alg_values_supported(
-            "introspection_endpoint",
-            metadata
-                .introspection_endpoint_auth_signing_alg_values_supported
-                .iter()
-                .flatten(),
-        )?;
-
-        if let Some(url) = &metadata.userinfo_endpoint {
-            validate_url("userinfo_endpoint", url, ExtraUrlRestrictions::None)?;
-        }
-
-        if let Some(url) = &metadata.pushed_authorization_request_endpoint {
-            validate_url(
-                "pushed_authorization_request_endpoint",
-                url,
-                ExtraUrlRestrictions::None,
-            )?;
-        }
-
-        if let Some(url) = &metadata.end_session_endpoint {
-            validate_url("end_session_endpoint", url, ExtraUrlRestrictions::None)?;
-        }
-
-        Ok(metadata)
+        Ok(verified)
     }
 
     /// Verify this `ProviderMetadata`.
@@ -755,33 +862,25 @@ impl ProviderMetadata {
     pub fn insecure_verify_metadata(
         self,
     ) -> Result<VerifiedProviderMetadata, ProviderMetadataVerificationError> {
-        self.issuer
-            .as_ref()
-            .ok_or(ProviderMetadataVerificationError::MissingIssuer)?;
+        // Use a helper macro to reduce repetition when checking required fields.
+        macro_rules! require_field {
+            ($field:ident, $err:ident) => {
+                if self.$field.is_none() {
+                    return Err(ProviderMetadataVerificationError::$err);
+                }
+            };
+        }
 
-        self.authorization_endpoint
-            .as_ref()
-            .ok_or(ProviderMetadataVerificationError::MissingAuthorizationEndpoint)?;
-
-        self.token_endpoint
-            .as_ref()
-            .ok_or(ProviderMetadataVerificationError::MissingTokenEndpoint)?;
-
-        self.jwks_uri
-            .as_ref()
-            .ok_or(ProviderMetadataVerificationError::MissingJwksUri)?;
-
-        self.response_types_supported
-            .as_ref()
-            .ok_or(ProviderMetadataVerificationError::MissingResponseTypesSupported)?;
-
-        self.subject_types_supported
-            .as_ref()
-            .ok_or(ProviderMetadataVerificationError::MissingSubjectTypesSupported)?;
-
-        self.id_token_signing_alg_values_supported
-            .as_ref()
-            .ok_or(ProviderMetadataVerificationError::MissingIdTokenSigningAlgValuesSupported)?;
+        require_field!(issuer, MissingIssuer);
+        require_field!(authorization_endpoint, MissingAuthorizationEndpoint);
+        require_field!(token_endpoint, MissingTokenEndpoint);
+        require_field!(jwks_uri, MissingJwksUri);
+        require_field!(response_types_supported, MissingResponseTypesSupported);
+        require_field!(subject_types_supported, MissingSubjectTypesSupported);
+        require_field!(
+            id_token_signing_alg_values_supported,
+            MissingIdTokenSigningAlgValuesSupported
+        );
 
         Ok(VerifiedProviderMetadata { inner: self })
     }
@@ -896,6 +995,10 @@ impl ProviderMetadata {
     }
 }
 
+// ---------------------------------------------------------------------------
+// VerifiedProviderMetadata
+// ---------------------------------------------------------------------------
+
 /// The verified authorization server metadata.
 ///
 /// All the fields required by the [OpenID Connect Discovery Spec 1.0] or with
@@ -913,76 +1016,68 @@ impl VerifiedProviderMetadata {
     /// Authorization server's issuer identifier URL.
     #[must_use]
     pub fn issuer(&self) -> &str {
-        match &self.issuer {
-            Some(u) => u,
-            None => unreachable!(),
-        }
+        self.issuer
+            .as_ref()
+            .expect("issuer was verified to be present")
     }
 
     /// URL of the authorization server's authorization endpoint.
     #[must_use]
     pub fn authorization_endpoint(&self) -> &Url {
-        match &self.authorization_endpoint {
-            Some(u) => u,
-            None => unreachable!(),
-        }
+        self.authorization_endpoint
+            .as_ref()
+            .expect("authorization_endpoint was verified to be present")
     }
 
     /// URL of the authorization server's userinfo endpoint.
     #[must_use]
     pub fn userinfo_endpoint(&self) -> &Url {
-        match &self.userinfo_endpoint {
-            Some(u) => u,
-            None => unreachable!(),
-        }
+        self.userinfo_endpoint
+            .as_ref()
+            .expect("userinfo_endpoint was verified to be present")
     }
 
     /// URL of the authorization server's token endpoint.
     #[must_use]
     pub fn token_endpoint(&self) -> &Url {
-        match &self.token_endpoint {
-            Some(u) => u,
-            None => unreachable!(),
-        }
+        self.token_endpoint
+            .as_ref()
+            .expect("token_endpoint was verified to be present")
     }
 
     /// URL of the authorization server's JWK Set document.
     #[must_use]
     pub fn jwks_uri(&self) -> &Url {
-        match &self.jwks_uri {
-            Some(u) => u,
-            None => unreachable!(),
-        }
+        self.jwks_uri
+            .as_ref()
+            .expect("jwks_uri was verified to be present")
     }
 
     /// JSON array containing a list of the OAuth 2.0 `response_type` values
     /// that this authorization server supports.
     #[must_use]
     pub fn response_types_supported(&self) -> &[ResponseType] {
-        match &self.response_types_supported {
-            Some(u) => u,
-            None => unreachable!(),
-        }
+        self.response_types_supported
+            .as_ref()
+            .expect("response_types_supported was verified to be present")
     }
 
     /// JSON array containing a list of the Subject Identifier types that this
     /// OP supports.
     #[must_use]
     pub fn subject_types_supported(&self) -> &[SubjectType] {
-        match &self.subject_types_supported {
-            Some(u) => u,
-            None => unreachable!(),
-        }
+        self.subject_types_supported
+            .as_ref()
+            .expect("subject_types_supported was verified to be present")
     }
 
     /// JSON array containing a list of the JWS `alg` values supported by the OP
     /// for the ID Token.
     #[must_use]
     pub fn id_token_signing_alg_values_supported(&self) -> &[JsonWebSignatureAlg] {
-        match &self.id_token_signing_alg_values_supported {
-            Some(u) => u,
-            None => unreachable!(),
-        }
+        self.id_token_signing_alg_values_supported
+            .as_ref()
+            .expect("id_token_signing_alg_values_supported was verified to be present")
     }
 }
 
@@ -993,6 +1088,10 @@ impl Deref for VerifiedProviderMetadata {
         &self.inner
     }
 }
+
+// ---------------------------------------------------------------------------
+// ProviderMetadataVerificationError
+// ---------------------------------------------------------------------------
 
 /// All errors that can happen when verifying [`ProviderMetadata`]
 #[derive(Debug, Error)]
@@ -1080,81 +1179,9 @@ pub enum ProviderMetadataVerificationError {
     SigningAlgValuesWithNone(&'static str),
 }
 
-/// Possible extra restrictions on a URL.
-#[derive(Debug, Copy, Clone, PartialEq, Eq)]
-enum ExtraUrlRestrictions {
-    /// No extra restrictions.
-    None,
-
-    /// The URL must not contain a fragment.
-    NoFragment,
-
-    /// The URL must not contain a query or a fragment.
-    NoQueryOrFragment,
-}
-
-impl ExtraUrlRestrictions {
-    fn can_have_fragment(self) -> bool {
-        self == Self::None
-    }
-
-    fn can_have_query(self) -> bool {
-        self != Self::NoQueryOrFragment
-    }
-}
-
-/// Validate the URL of the field with the given extra restrictions.
-///
-/// The basic restriction is that the URL must use the `https` scheme.
-fn validate_url(
-    field: &'static str,
-    url: &Url,
-    restrictions: ExtraUrlRestrictions,
-) -> Result<(), ProviderMetadataVerificationError> {
-    if url.scheme() != "https" {
-        return Err(ProviderMetadataVerificationError::UrlNonHttpsScheme(
-            field,
-            url.clone(),
-        ));
-    }
-
-    if !restrictions.can_have_query() && url.query().is_some() {
-        return Err(ProviderMetadataVerificationError::UrlWithQuery(
-            field,
-            url.clone(),
-        ));
-    }
-
-    if !restrictions.can_have_fragment() && url.fragment().is_some() {
-        return Err(ProviderMetadataVerificationError::UrlWithFragment(
-            field,
-            url.clone(),
-        ));
-    }
-
-    Ok(())
-}
-
-/// Validate the algorithm values of the endpoint according to the
-/// authentication methods.
-///
-/// The restrictions are:
-/// - The algorithm values must not contain `none`,
-/// - If the `client_secret_jwt` or `private_key_jwt` authentication methods are
-///   supported, the values must be present.
-fn validate_signing_alg_values_supported<'a>(
-    endpoint: &'static str,
-    values: impl Iterator<Item = &'a JsonWebSignatureAlg>,
-) -> Result<(), ProviderMetadataVerificationError> {
-    for value in values {
-        if *value == JsonWebSignatureAlg::None {
-            return Err(ProviderMetadataVerificationError::SigningAlgValuesWithNone(
-                endpoint,
-            ));
-        }
-    }
-    Ok(())
-}
+// ---------------------------------------------------------------------------
+// RpInitiatedLogoutRequest
+// ---------------------------------------------------------------------------
 
 /// The body of a request to the [RP-Initiated Logout Endpoint].
 ///
@@ -1163,6 +1190,16 @@ fn validate_signing_alg_values_supported<'a>(
 #[serde_as]
 #[derive(Default, Serialize, Deserialize, Clone)]
 pub struct RpInitiatedLogoutRequest {
+    /// OAuth 2.0 Client Identifier valid at the Authorization Server.
+    ///
+    /// The most common use case for this parameter is to specify the Client
+    /// Identifier when `post_logout_redirect_uri` is used but `id_token_hint`
+    /// is not. Another use is for symmetrically encrypted ID Tokens used as
+    /// `id_token_hint` values that require the Client Identifier to be
+    /// specified by other means, so that the ID Tokens can be decrypted by
+    /// the OP.
+    pub client_id: Option<String>,
+
     /// ID Token previously issued by the OP to the RP.
     ///
     /// Recommended, used as a hint about the End-User's current authenticated
@@ -1176,16 +1213,6 @@ pub struct RpInitiatedLogoutRequest {
     /// phone number, username, or session identifier pertaining to the RP's
     /// session with the OP for the End-User.
     pub logout_hint: Option<String>,
-
-    /// OAuth 2.0 Client Identifier valid at the Authorization Server.
-    ///
-    /// The most common use case for this parameter is to specify the Client
-    /// Identifier when `post_logout_redirect_uri` is used but `id_token_hint`
-    /// is not. Another use is for symmetrically encrypted ID Tokens used as
-    /// `id_token_hint` values that require the Client Identifier to be
-    /// specified by other means, so that the ID Tokens can be decrypted by
-    /// the OP.
-    pub client_id: Option<String>,
 
     /// URI to which the RP is requesting that the End-User's User Agent be
     /// redirected after a logout has been performed.
@@ -1216,6 +1243,10 @@ impl fmt::Debug for RpInitiatedLogoutRequest {
     }
 }
 
+// ---------------------------------------------------------------------------
+// Tests
+// ---------------------------------------------------------------------------
+
 #[cfg(test)]
 mod tests {
     use assert_matches::assert_matches;
@@ -1227,23 +1258,59 @@ mod tests {
 
     use super::*;
 
-    fn valid_provider_metadata() -> (ProviderMetadata, String) {
-        let issuer = "https://localhost".to_owned();
-        let metadata = ProviderMetadata {
-            issuer: Some(issuer.clone()),
-            authorization_endpoint: Some(Url::parse("https://localhost/auth").unwrap()),
-            token_endpoint: Some(Url::parse("https://localhost/token").unwrap()),
-            jwks_uri: Some(Url::parse("https://localhost/jwks").unwrap()),
-            response_types_supported: Some(vec![
-                OAuthAuthorizationEndpointResponseType::Code.into(),
-            ]),
-            subject_types_supported: Some(vec![SubjectType::Public]),
-            id_token_signing_alg_values_supported: Some(vec![JsonWebSignatureAlg::Rs256]),
-            ..Default::default()
-        };
+    // -- Test metadata builder -----------------------------------------------
 
-        (metadata, issuer)
+    /// Builder for constructing [`ProviderMetadata`] in tests with sensible
+    /// defaults that satisfy all required-field checks.
+    struct TestMetadataBuilder {
+        base_url: String,
+        metadata: ProviderMetadata,
     }
+
+    impl TestMetadataBuilder {
+        /// Create a builder pre-populated with the minimal valid metadata
+        /// pointing at the given base URL.
+        fn new(base_url: &str) -> Self {
+            let metadata = ProviderMetadata {
+                issuer: Some(base_url.to_owned()),
+                authorization_endpoint: Some(Url::parse(&format!("{base_url}/authorize")).unwrap()),
+                token_endpoint: Some(Url::parse(&format!("{base_url}/token")).unwrap()),
+                jwks_uri: Some(Url::parse(&format!("{base_url}/jwks")).unwrap()),
+                response_types_supported: Some(vec![
+                    OAuthAuthorizationEndpointResponseType::Code.into()
+                ]),
+                subject_types_supported: Some(vec![SubjectType::Public]),
+                id_token_signing_alg_values_supported: Some(vec![JsonWebSignatureAlg::Rs256]),
+                ..Default::default()
+            };
+            Self {
+                base_url: base_url.to_owned(),
+                metadata,
+            }
+        }
+
+        /// Return the issuer string that this builder uses.
+        fn issuer_str(&self) -> &str {
+            &self.base_url
+        }
+
+        /// Consume the builder, returning the metadata and its issuer string.
+        fn build(self) -> (ProviderMetadata, String) {
+            (self.metadata, self.base_url)
+        }
+
+        /// Obtain a mutable reference to the inner metadata for ad-hoc tweaks.
+        fn metadata_mut(&mut self) -> &mut ProviderMetadata {
+            &mut self.metadata
+        }
+    }
+
+    /// Shorthand: build the default valid provider metadata pair.
+    fn valid_provider_metadata() -> (ProviderMetadata, String) {
+        TestMetadataBuilder::new("https://localhost").build()
+    }
+
+    // -- Required-field tests ------------------------------------------------
 
     #[test]
     fn validate_required_metadata() {
@@ -1251,66 +1318,71 @@ mod tests {
         metadata.validate(&issuer).unwrap();
     }
 
+    // -- Issuer tests --------------------------------------------------------
+
     #[test]
     fn validate_issuer() {
-        let (mut metadata, issuer) = valid_provider_metadata();
+        let mut b = TestMetadataBuilder::new("https://localhost");
+        let issuer = b.issuer_str().to_owned();
 
         // Err - Missing
-        metadata.issuer = None;
+        b.metadata_mut().issuer = None;
         assert_matches!(
-            metadata.clone().validate(&issuer),
+            b.metadata.clone().validate(&issuer),
             Err(ProviderMetadataVerificationError::MissingIssuer)
         );
 
         // Err - Not an url
-        metadata.issuer = Some("not-an-url".to_owned());
+        b.metadata_mut().issuer = Some("not-an-url".to_owned());
         assert_matches!(
-            metadata.clone().validate("not-an-url"),
+            b.metadata.clone().validate("not-an-url"),
             Err(ProviderMetadataVerificationError::IssuerNotUrl)
         );
 
         // Err - Wrong issuer
-        metadata.issuer = Some("https://example.com/".to_owned());
+        b.metadata_mut().issuer = Some("https://example.com/".to_owned());
         assert_matches!(
-            metadata.clone().validate(&issuer),
+            b.metadata.clone().validate(&issuer),
             Err(ProviderMetadataVerificationError::IssuerUrlsDontMatch { .. })
         );
 
         // Err - Not https
-        let issuer = "http://localhost/".to_owned();
-        metadata.issuer = Some(issuer.clone());
+        let bad_issuer = "http://localhost/".to_owned();
+        b.metadata_mut().issuer = Some(bad_issuer.clone());
         let (field, url) = assert_matches!(
-            metadata.clone().validate(&issuer),
+            b.metadata.clone().validate(&bad_issuer),
             Err(ProviderMetadataVerificationError::UrlNonHttpsScheme(field, url)) => (field, url)
         );
         assert_eq!(field, "issuer");
-        assert_eq!(url.as_str(), issuer);
+        assert_eq!(url.as_str(), bad_issuer);
 
         // Err - Query
-        let issuer = "https://localhost/?query".to_owned();
-        metadata.issuer = Some(issuer.clone());
+        let q_issuer = "https://localhost/?query".to_owned();
+        b.metadata_mut().issuer = Some(q_issuer.clone());
         let (field, url) = assert_matches!(
-            metadata.clone().validate(&issuer),
+            b.metadata.clone().validate(&q_issuer),
             Err(ProviderMetadataVerificationError::UrlWithQuery(field, url)) => (field, url)
         );
         assert_eq!(field, "issuer");
-        assert_eq!(url.as_str(), issuer);
+        assert_eq!(url.as_str(), q_issuer);
 
         // Err - Fragment
-        let issuer = "https://localhost/#fragment".to_owned();
-        metadata.issuer = Some(issuer.clone());
+        let f_issuer = "https://localhost/#fragment".to_owned();
+        b.metadata_mut().issuer = Some(f_issuer.clone());
         let (field, url) = assert_matches!(
-            metadata.clone().validate(&issuer),
+            b.metadata.clone().validate(&f_issuer),
             Err(ProviderMetadataVerificationError::UrlWithFragment(field, url)) => (field, url)
         );
         assert_eq!(field, "issuer");
-        assert_eq!(url.as_str(), issuer);
+        assert_eq!(url.as_str(), f_issuer);
 
         // Ok - Path
-        let issuer = "https://localhost/issuer1".to_owned();
-        metadata.issuer = Some(issuer.clone());
-        metadata.validate(&issuer).unwrap();
+        let path_issuer = "https://localhost/issuer1".to_owned();
+        b.metadata_mut().issuer = Some(path_issuer.clone());
+        b.metadata.validate(&path_issuer).unwrap();
     }
+
+    // -- authorization_endpoint tests ----------------------------------------
 
     #[test]
     fn validate_authorization_endpoint() {
@@ -1348,6 +1420,8 @@ mod tests {
         metadata.validate(&issuer).unwrap();
     }
 
+    // -- token_endpoint tests ------------------------------------------------
+
     #[test]
     fn validate_token_endpoint() {
         let (mut metadata, issuer) = valid_provider_metadata();
@@ -1384,6 +1458,8 @@ mod tests {
         metadata.validate(&issuer).unwrap();
     }
 
+    // -- jwks_uri tests ------------------------------------------------------
+
     #[test]
     fn validate_jwks_uri() {
         let (mut metadata, issuer) = valid_provider_metadata();
@@ -1410,6 +1486,8 @@ mod tests {
         metadata.validate(&issuer).unwrap();
     }
 
+    // -- registration_endpoint tests -----------------------------------------
+
     #[test]
     fn validate_registration_endpoint() {
         let (mut metadata, issuer) = valid_provider_metadata();
@@ -1434,6 +1512,8 @@ mod tests {
         metadata.validate(&issuer).unwrap();
     }
 
+    // -- scopes_supported tests ----------------------------------------------
+
     #[test]
     fn validate_scopes_supported() {
         let (mut metadata, issuer) = valid_provider_metadata();
@@ -1454,6 +1534,8 @@ mod tests {
         metadata.validate(&issuer).unwrap();
     }
 
+    // -- response_types_supported tests --------------------------------------
+
     #[test]
     fn validate_response_types_supported() {
         let (mut metadata, issuer) = valid_provider_metadata();
@@ -1470,6 +1552,8 @@ mod tests {
             Some(vec![OAuthAuthorizationEndpointResponseType::Code.into()]);
         metadata.validate(&issuer).unwrap();
     }
+
+    // -- token endpoint signing alg tests ------------------------------------
 
     #[test]
     fn validate_token_endpoint_signing_alg_values_supported() {
@@ -1529,6 +1613,8 @@ mod tests {
         metadata.validate(&issuer).unwrap();
     }
 
+    // -- revocation_endpoint tests -------------------------------------------
+
     #[test]
     fn validate_revocation_endpoint() {
         let (mut metadata, issuer) = valid_provider_metadata();
@@ -1563,6 +1649,8 @@ mod tests {
         metadata.validate(&issuer).unwrap();
     }
 
+    // -- revocation endpoint signing alg tests -------------------------------
+
     #[test]
     fn validate_revocation_endpoint_signing_alg_values_supported() {
         let (mut metadata, issuer) = valid_provider_metadata();
@@ -1584,6 +1672,8 @@ mod tests {
         );
         assert_eq!(endpoint, "revocation_endpoint");
     }
+
+    // -- introspection_endpoint tests ----------------------------------------
 
     #[test]
     fn validate_introspection_endpoint() {
@@ -1609,6 +1699,8 @@ mod tests {
         metadata.validate(&issuer).unwrap();
     }
 
+    // -- introspection endpoint signing alg tests ----------------------------
+
     #[test]
     fn validate_introspection_endpoint_signing_alg_values_supported() {
         let (mut metadata, issuer) = valid_provider_metadata();
@@ -1630,6 +1722,8 @@ mod tests {
         );
         assert_eq!(endpoint, "introspection_endpoint");
     }
+
+    // -- userinfo_endpoint tests ---------------------------------------------
 
     #[test]
     fn validate_userinfo_endpoint() {
@@ -1655,6 +1749,8 @@ mod tests {
         metadata.validate(&issuer).unwrap();
     }
 
+    // -- subject_types_supported tests ---------------------------------------
+
     #[test]
     fn validate_subject_types_supported() {
         let (mut metadata, issuer) = valid_provider_metadata();
@@ -1670,6 +1766,8 @@ mod tests {
         metadata.subject_types_supported = Some(vec![SubjectType::Public, SubjectType::Pairwise]);
         metadata.validate(&issuer).unwrap();
     }
+
+    // -- id_token_signing_alg tests ------------------------------------------
 
     #[test]
     fn validate_id_token_signing_alg_values_supported() {
@@ -1687,6 +1785,8 @@ mod tests {
             Some(vec![JsonWebSignatureAlg::Rs256, JsonWebSignatureAlg::EdDsa]);
         metadata.validate(&issuer).unwrap();
     }
+
+    // -- pushed_authorization_request_endpoint tests -------------------------
 
     #[test]
     fn validate_pushed_authorization_request_endpoint() {
@@ -1711,6 +1811,8 @@ mod tests {
             Some(Url::parse("https://localhost/par?query#fragment").unwrap());
         metadata.validate(&issuer).unwrap();
     }
+
+    // -- Enum serialization round-trip tests ---------------------------------
 
     #[test]
     fn serialize_application_type() {

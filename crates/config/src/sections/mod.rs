@@ -1,8 +1,15 @@
+// ── Root Configuration Module ──
+//
+// Aggregates all configuration sections and provides the top-level
+// config structs used throughout the application.
+
 use anyhow::bail;
 use camino::Utf8PathBuf;
 use rand::Rng;
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
+
+// ── Sub-module declarations ──
 
 mod account;
 mod branding;
@@ -21,6 +28,8 @@ pub mod sms;
 mod telemetry;
 mod templates;
 mod upstream_oauth2;
+
+// ── Re-exports ──
 
 pub use self::{
     account::AccountConfig,
@@ -59,7 +68,87 @@ pub use self::{
 };
 use crate::util::ConfigurationSection;
 
-/// Application configuration root
+// ── Client Secret ──
+
+/// Represents a client secret that can be provided inline or loaded from a file.
+#[derive(Clone, Debug)]
+pub enum ClientSecret {
+    /// Path to the file containing the client secret.
+    File(Utf8PathBuf),
+
+    /// Client secret value.
+    Value(String),
+}
+
+impl ClientSecret {
+    /// Resolves and returns the secret string.
+    ///
+    /// When the secret references a file, the contents are read asynchronously.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the file cannot be read.
+    pub async fn value(&self) -> anyhow::Result<String> {
+        match self {
+            Self::File(path) => Ok(tokio::fs::read_to_string(path).await?),
+            Self::Value(val) => Ok(val.clone()),
+        }
+    }
+}
+
+/// Serialization helper for client secret fields (inline value or file path)
+#[derive(JsonSchema, Serialize, Deserialize, Clone, Debug)]
+pub struct ClientSecretRaw {
+    /// Path to the file containing the client secret. The client secret is used
+    /// by the `client_secret_basic`, `client_secret_post` and
+    /// `client_secret_jwt` authentication methods.
+    #[schemars(with = "Option<String>")]
+    #[serde(skip_serializing_if = "Option::is_none")]
+    client_secret_file: Option<Utf8PathBuf>,
+
+    /// Alternative to `client_secret_file`: Reads the client secret directly
+    /// from the config.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    client_secret: Option<String>,
+}
+
+impl TryFrom<ClientSecretRaw> for Option<ClientSecret> {
+    type Error = anyhow::Error;
+
+    fn try_from(raw: ClientSecretRaw) -> Result<Self, Self::Error> {
+        match (raw.client_secret, raw.client_secret_file) {
+            (None, None) => Ok(None),
+            (Some(val), None) => Ok(Some(ClientSecret::Value(val))),
+            (None, Some(path)) => Ok(Some(ClientSecret::File(path))),
+            (Some(_), Some(_)) => {
+                bail!("Cannot specify both `client_secret` and `client_secret_file`")
+            }
+        }
+    }
+}
+
+impl From<Option<ClientSecret>> for ClientSecretRaw {
+    fn from(secret: Option<ClientSecret>) -> Self {
+        match secret {
+            None => ClientSecretRaw {
+                client_secret: None,
+                client_secret_file: None,
+            },
+            Some(ClientSecret::Value(val)) => ClientSecretRaw {
+                client_secret: Some(val),
+                client_secret_file: None,
+            },
+            Some(ClientSecret::File(path)) => ClientSecretRaw {
+                client_secret: None,
+                client_secret_file: Some(path),
+            },
+        }
+    }
+}
+
+// ── Root Configuration ──
+
+/// Top-level application configuration encompassing all sections
 #[derive(Debug, Serialize, Deserialize, JsonSchema)]
 pub struct RootConfig {
     /// List of OAuth 2.0/OIDC clients config
@@ -138,23 +227,30 @@ impl ConfigurationSection for RootConfig {
         &self,
         figment: &figment::Figment,
     ) -> Result<(), Box<dyn std::error::Error + Send + Sync + 'static>> {
-        self.clients.validate(figment)?;
-        self.http.validate(figment)?;
-        self.database.validate(figment)?;
-        self.telemetry.validate(figment)?;
-        self.templates.validate(figment)?;
-        self.email.validate(figment)?;
-        self.sms.validate(figment)?;
-        self.passwords.validate(figment)?;
-        self.secrets.validate(figment)?;
-        self.matrix.validate(figment)?;
-        self.policy.validate(figment)?;
-        self.rate_limiting.validate(figment)?;
-        self.upstream_oauth2.validate(figment)?;
-        self.branding.validate(figment)?;
-        self.captcha.validate(figment)?;
-        self.account.validate(figment)?;
-        self.experimental.validate(figment)?;
+        // Validate each sub-section in a deterministic order
+        let sections: &[&dyn Fn(&figment::Figment) -> Result<(), Box<dyn std::error::Error + Send + Sync + 'static>>] = &[
+            &|f| self.clients.validate(f),
+            &|f| self.http.validate(f),
+            &|f| self.database.validate(f),
+            &|f| self.telemetry.validate(f),
+            &|f| self.templates.validate(f),
+            &|f| self.email.validate(f),
+            &|f| self.sms.validate(f),
+            &|f| self.passwords.validate(f),
+            &|f| self.secrets.validate(f),
+            &|f| self.matrix.validate(f),
+            &|f| self.policy.validate(f),
+            &|f| self.rate_limiting.validate(f),
+            &|f| self.upstream_oauth2.validate(f),
+            &|f| self.branding.validate(f),
+            &|f| self.captcha.validate(f),
+            &|f| self.account.validate(f),
+            &|f| self.experimental.validate(f),
+        ];
+
+        for validate_fn in sections {
+            validate_fn(figment)?;
+        }
 
         Ok(())
     }
@@ -170,7 +266,12 @@ impl RootConfig {
     where
         R: Rng + Send,
     {
+        let secrets = SecretsConfig::generate(&mut rng).await?;
+        let matrix = MatrixConfig::generate(&mut rng);
+
         Ok(Self {
+            secrets,
+            matrix,
             clients: ClientsConfig::default(),
             http: HttpConfig::default(),
             database: DatabaseConfig::default(),
@@ -179,8 +280,6 @@ impl RootConfig {
             email: EmailConfig::default(),
             sms: SmsConfig::default(),
             passwords: PasswordsConfig::default(),
-            secrets: SecretsConfig::generate(&mut rng).await?,
-            matrix: MatrixConfig::generate(&mut rng),
             policy: PolicyConfig::default(),
             rate_limiting: RateLimitingConfig::default(),
             upstream_oauth2: UpstreamOAuth2Config::default(),
@@ -195,6 +294,8 @@ impl RootConfig {
     #[must_use]
     pub fn test() -> Self {
         Self {
+            secrets: SecretsConfig::test(),
+            matrix: MatrixConfig::test(),
             clients: ClientsConfig::default(),
             http: HttpConfig::default(),
             database: DatabaseConfig::default(),
@@ -203,8 +304,6 @@ impl RootConfig {
             passwords: PasswordsConfig::default(),
             email: EmailConfig::default(),
             sms: SmsConfig::default(),
-            secrets: SecretsConfig::test(),
-            matrix: MatrixConfig::test(),
             policy: PolicyConfig::default(),
             rate_limiting: RateLimitingConfig::default(),
             upstream_oauth2: UpstreamOAuth2Config::default(),
@@ -215,6 +314,8 @@ impl RootConfig {
         }
     }
 }
+
+// ── App Configuration (server subset) ──
 
 /// Partial configuration actually used by the server
 #[allow(missing_docs)]
@@ -287,6 +388,8 @@ impl ConfigurationSection for AppConfig {
     }
 }
 
+// ── Sync Configuration (config sync subset) ──
+
 /// Partial config used by the `pasion config sync` command
 #[allow(missing_docs)]
 #[derive(Debug, Deserialize)]
@@ -316,84 +419,5 @@ impl ConfigurationSection for SyncConfig {
         self.upstream_oauth2.validate(figment)?;
 
         Ok(())
-    }
-}
-
-/// Client secret config option.
-///
-/// It either holds the client secret value directly or references a file where
-/// the client secret is stored.
-#[derive(Clone, Debug)]
-pub enum ClientSecret {
-    /// Path to the file containing the client secret.
-    File(Utf8PathBuf),
-
-    /// Client secret value.
-    Value(String),
-}
-
-/// Client secret fields as serialized in JSON.
-#[derive(JsonSchema, Serialize, Deserialize, Clone, Debug)]
-pub struct ClientSecretRaw {
-    /// Path to the file containing the client secret. The client secret is used
-    /// by the `client_secret_basic`, `client_secret_post` and
-    /// `client_secret_jwt` authentication methods.
-    #[schemars(with = "Option<String>")]
-    #[serde(skip_serializing_if = "Option::is_none")]
-    client_secret_file: Option<Utf8PathBuf>,
-
-    /// Alternative to `client_secret_file`: Reads the client secret directly
-    /// from the config.
-    #[serde(skip_serializing_if = "Option::is_none")]
-    client_secret: Option<String>,
-}
-
-impl ClientSecret {
-    /// Returns the client secret.
-    ///
-    /// If `client_secret_file` was given, the secret is read from that file.
-    ///
-    /// # Errors
-    ///
-    /// Returns an error when the client secret could not be read from file.
-    pub async fn value(&self) -> anyhow::Result<String> {
-        Ok(match self {
-            ClientSecret::File(path) => tokio::fs::read_to_string(path).await?,
-            ClientSecret::Value(client_secret) => client_secret.clone(),
-        })
-    }
-}
-
-impl TryFrom<ClientSecretRaw> for Option<ClientSecret> {
-    type Error = anyhow::Error;
-
-    fn try_from(value: ClientSecretRaw) -> Result<Self, Self::Error> {
-        match (value.client_secret, value.client_secret_file) {
-            (None, None) => Ok(None),
-            (None, Some(path)) => Ok(Some(ClientSecret::File(path))),
-            (Some(client_secret), None) => Ok(Some(ClientSecret::Value(client_secret))),
-            (Some(_), Some(_)) => {
-                bail!("Cannot specify both `client_secret` and `client_secret_file`")
-            }
-        }
-    }
-}
-
-impl From<Option<ClientSecret>> for ClientSecretRaw {
-    fn from(value: Option<ClientSecret>) -> Self {
-        match value {
-            Some(ClientSecret::File(path)) => ClientSecretRaw {
-                client_secret_file: Some(path),
-                client_secret: None,
-            },
-            Some(ClientSecret::Value(client_secret)) => ClientSecretRaw {
-                client_secret_file: None,
-                client_secret: Some(client_secret),
-            },
-            None => ClientSecretRaw {
-                client_secret_file: None,
-                client_secret: None,
-            },
-        }
     }
 }

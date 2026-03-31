@@ -1,254 +1,177 @@
-// Copyright 2024 New Vector Ltd.
-// Copyright 2023, 2024 The Matrix.org Foundation C.I.C.
+// Copyright 2025 Taidge contributors
 //
 // SPDX-License-Identifier: Apache-2.0
-//
-// Licensed under the Apache License, Version 2.0 (the "License");
-// you may not use this file except in compliance with the License.
-// You may obtain a copy of the License at
-//
-//     http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the License is distributed on an "AS IS" BASIS,
-// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-// See the License for the specific language governing permissions and
-// limitations under the License.
+
+//! Rust source code generation from IANA registry entries.
+//!
+//! Each public function emits one piece of the generated enum:
+//! the type definition, trait implementations, or schema helpers.
 
 use crate::traits::{EnumMember, Section};
 
-fn raw_string(string: &str) -> String {
-    if string.contains('"') {
-        format!(r##"r#"{string}"#"##)
-    } else {
-        format!(r#"r"{string}""#)
-    }
-}
-
+/// Emit the `pub enum` definition with doc-comments and optional `#[non_exhaustive]`.
 pub fn struct_def(
-    f: &mut std::fmt::Formatter<'_>,
+    out: &mut std::fmt::Formatter<'_>,
     section: &Section,
-    list: &[EnumMember],
-    is_exhaustive: bool,
+    members: &[EnumMember],
+    exhaustive: bool,
 ) -> std::fmt::Result {
-    write!(
-        f,
-        r"/// {}
-///
-/// Source: <{}>
-#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]",
-        section.doc,
-        section.url.unwrap(),
-    )?;
+    // Doc header
+    writeln!(out)?;
+    writeln!(out, "/// {}", section.doc)?;
+    if let Some(url) = section.url {
+        writeln!(out, "///")?;
+        writeln!(out, "/// Source: <{url}>")?;
+    }
+    writeln!(out, "#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]")?;
+    if !exhaustive {
+        writeln!(out, "#[non_exhaustive]")?;
+    }
+    writeln!(out, "pub enum {} {{", section.key)?;
 
-    if !is_exhaustive {
-        write!(
-            f,
-            r"
-#[non_exhaustive]"
-        )?;
+    for m in members {
+        let doc = m.description.as_deref().unwrap_or(&m.value);
+        writeln!(out, "    /// {doc}")?;
+        writeln!(out, "    {},", m.enum_name)?;
     }
 
-    write!(
-        f,
-        r"
-pub enum {} {{",
-        section.key,
-    )?;
-    for member in list {
-        writeln!(f)?;
-        if let Some(description) = &member.description {
-            writeln!(f, "    /// {description}")?;
-        } else {
-            writeln!(f, "    /// `{}`", member.value)?;
-        }
-        writeln!(f, "    {},", member.enum_name)?;
+    if !exhaustive {
+        writeln!(out)?;
+        writeln!(out, "    /// An unknown value.")?;
+        writeln!(out, "    Unknown(String),")?;
     }
 
-    if !is_exhaustive {
-        // Add a variant for custom enums
-        writeln!(f)?;
-        writeln!(f, "    /// An unknown value.")?;
-        writeln!(f, "    Unknown(String),")?;
-    }
-
-    writeln!(f, "}}")
+    writeln!(out, "}}")
 }
 
+/// Emit `impl Display`.
 pub fn display_impl(
-    f: &mut std::fmt::Formatter<'_>,
+    out: &mut std::fmt::Formatter<'_>,
     section: &Section,
-    list: &[EnumMember],
-    is_exhaustive: bool,
+    members: &[EnumMember],
+    exhaustive: bool,
 ) -> std::fmt::Result {
-    write!(
-        f,
-        r"impl core::fmt::Display for {} {{
-    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {{
-        match self {{",
-        section.key,
-    )?;
+    writeln!(out, "impl core::fmt::Display for {} {{", section.key)?;
+    writeln!(out, "    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {{")?;
+    writeln!(out, "        match self {{")?;
 
-    for member in list {
-        write!(
-            f,
-            r#"
-            Self::{} => write!(f, "{}"),"#,
-            member.enum_name, member.value
-        )?;
+    for m in members {
+        writeln!(out, r#"            Self::{} => f.write_str("{}"),"#, m.enum_name, m.value)?;
+    }
+    if !exhaustive {
+        writeln!(out, "            Self::Unknown(v) => f.write_str(v),")?;
     }
 
-    if !is_exhaustive {
-        write!(
-            f,
-            r#"
-            Self::Unknown(value) => write!(f, "{{value}}"),"#
-        )?;
-    }
-
-    writeln!(
-        f,
-        r"
-        }}
-    }}
-}}",
-    )
+    writeln!(out, "        }}")?;
+    writeln!(out, "    }}")?;
+    writeln!(out, "}}")
 }
 
+/// Emit `impl FromStr`.
 pub fn from_str_impl(
-    f: &mut std::fmt::Formatter<'_>,
+    out: &mut std::fmt::Formatter<'_>,
     section: &Section,
-    list: &[EnumMember],
-    is_exhaustive: bool,
+    members: &[EnumMember],
+    exhaustive: bool,
 ) -> std::fmt::Result {
-    let err_ty = if is_exhaustive {
+    let err_type = if exhaustive {
         "crate::ParseError"
     } else {
         "core::convert::Infallible"
     };
-    write!(
-        f,
-        r"impl core::str::FromStr for {} {{
-    type Err = {err_ty};
 
-    fn from_str(s: &str) -> Result<Self, Self::Err> {{
-        match s {{",
-        section.key,
-    )?;
+    writeln!(out, "impl core::str::FromStr for {} {{", section.key)?;
+    writeln!(out, "    type Err = {err_type};")?;
+    writeln!(out)?;
+    writeln!(out, "    fn from_str(s: &str) -> Result<Self, Self::Err> {{")?;
+    writeln!(out, "        match s {{")?;
 
-    for member in list {
-        write!(
-            f,
-            r#"
-            "{}" => Ok(Self::{}),"#,
-            member.value, member.enum_name
-        )?;
+    for m in members {
+        writeln!(out, r#"            "{}" => Ok(Self::{}),"#, m.value, m.enum_name)?;
     }
 
-    if is_exhaustive {
-        write!(
-            f,
-            r"
-            _ => Err(crate::ParseError::new()),"
-        )?;
+    if exhaustive {
+        writeln!(out, "            _ => Err(crate::ParseError::new()),")?;
     } else {
-        write!(
-            f,
-            r"
-            value => Ok(Self::Unknown(value.to_owned())),",
-        )?;
+        writeln!(out, "            other => Ok(Self::Unknown(other.to_owned())),")?;
     }
 
-    writeln!(
-        f,
-        r"
-        }}
-    }}
-}}",
-    )
+    writeln!(out, "        }}")?;
+    writeln!(out, "    }}")?;
+    writeln!(out, "}}")
 }
 
-pub fn json_schema_impl(
-    f: &mut std::fmt::Formatter<'_>,
+/// Emit `impl Serialize` and `impl Deserialize` via the string representation.
+pub fn serde_impl(
+    out: &mut std::fmt::Formatter<'_>,
     section: &Section,
-    list: &[EnumMember],
 ) -> std::fmt::Result {
-    write!(
-        f,
-        r#"impl schemars::JsonSchema for {} {{
-    fn schema_name() -> std::borrow::Cow<'static, str> {{
-        std::borrow::Cow::Borrowed("{}")
-    }}
+    let name = section.key;
 
-    #[allow(clippy::too_many_lines)]
-    fn json_schema(_gen: &mut schemars::SchemaGenerator) -> schemars::Schema {{
-        let enums = vec!["#,
-        section.key, section.key,
-    )?;
+    // Deserialize: parse from string
+    writeln!(out, "impl<'de> serde::Deserialize<'de> for {name} {{")?;
+    writeln!(out, "    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>")?;
+    writeln!(out, "    where")?;
+    writeln!(out, "        D: serde::de::Deserializer<'de>,")?;
+    writeln!(out, "    {{")?;
+    writeln!(out, "        let s = String::deserialize(deserializer)?;")?;
+    writeln!(out, "        core::str::FromStr::from_str(&s).map_err(serde::de::Error::custom)")?;
+    writeln!(out, "    }}")?;
+    writeln!(out, "}}")?;
+    writeln!(out)?;
 
-    for member in list {
-        write!(
-            f,
-            r"
-            // ---
-            schemars::json_schema!({{",
-        )?;
-
-        if let Some(description) = &member.description {
-            write!(
-                f,
-                r#"
-                "description": {},"#,
-                raw_string(description),
-            )?;
-        }
-
-        write!(
-            f,
-            r#"
-                "const": "{}",
-            }}),"#,
-            member.value
-        )?;
-    }
-
-    writeln!(
-        f,
-        r#"
-        ];
-
-        let description = {};
-        schemars::json_schema!({{
-            "description": description,
-            "anyOf": enums,
-        }})
-    }}
-}}"#,
-        raw_string(section.doc),
-    )
+    // Serialize: write as string
+    writeln!(out, "impl serde::Serialize for {name} {{")?;
+    writeln!(out, "    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>")?;
+    writeln!(out, "    where")?;
+    writeln!(out, "        S: serde::ser::Serializer,")?;
+    writeln!(out, "    {{")?;
+    writeln!(out, "        serializer.serialize_str(&self.to_string())")?;
+    writeln!(out, "    }}")?;
+    writeln!(out, "}}")
 }
 
-pub fn serde_impl(f: &mut std::fmt::Formatter<'_>, section: &Section) -> std::fmt::Result {
-    writeln!(
-        f,
-        r"impl<'de> serde::Deserialize<'de> for {} {{
-    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
-    where
-        D: serde::de::Deserializer<'de>,
-    {{
-        let s = String::deserialize(deserializer)?;
-        core::str::FromStr::from_str(&s).map_err(serde::de::Error::custom)
-    }}
-}}
+/// Helper: produce a Rust raw-string literal for a value that may contain quotes.
+fn raw_str_literal(s: &str) -> String {
+    if s.contains('"') {
+        format!(r##"r#"{s}"#"##)
+    } else {
+        format!(r#"r"{s}""#)
+    }
+}
 
-impl serde::Serialize for {} {{
-    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
-    where
-        S: serde::ser::Serializer,
-    {{
-        serializer.serialize_str(&self.to_string())
-    }}
-}}",
-        section.key, section.key,
-    )
+/// Emit `impl JsonSchema` using `schemars`.
+pub fn json_schema_impl(
+    out: &mut std::fmt::Formatter<'_>,
+    section: &Section,
+    members: &[EnumMember],
+) -> std::fmt::Result {
+    let name = section.key;
+
+    writeln!(out, "impl schemars::JsonSchema for {name} {{")?;
+    writeln!(out, "    fn schema_name() -> std::borrow::Cow<'static, str> {{")?;
+    writeln!(out, "        std::borrow::Cow::Borrowed(\"{name}\")")?;
+    writeln!(out, "    }}")?;
+    writeln!(out)?;
+    writeln!(out, "    #[allow(clippy::too_many_lines)]")?;
+    writeln!(out, "    fn json_schema(_gen: &mut schemars::SchemaGenerator) -> schemars::Schema {{")?;
+    writeln!(out, "        let variants = vec![")?;
+
+    for m in members {
+        writeln!(out, "            schemars::json_schema!({{")?;
+        if let Some(desc) = &m.description {
+            writeln!(out, "                \"description\": {},", raw_str_literal(desc))?;
+        }
+        writeln!(out, "                \"const\": \"{}\",", m.value)?;
+        writeln!(out, "            }}),")?;
+    }
+
+    writeln!(out, "        ];")?;
+    writeln!(out)?;
+    writeln!(out, "        schemars::json_schema!({{")?;
+    writeln!(out, "            \"description\": {},", raw_str_literal(section.doc))?;
+    writeln!(out, "            \"anyOf\": variants,")?;
+    writeln!(out, "        }})")?;
+    writeln!(out, "    }}")?;
+    writeln!(out, "}}")
 }
