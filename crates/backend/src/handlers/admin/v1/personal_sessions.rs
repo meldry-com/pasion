@@ -3,14 +3,12 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 
 use std::str::FromStr as _;
-use std::sync::Arc;
 
 use anyhow::Context;
 use chrono::DateTime;
 use chrono::Duration;
 use chrono::Utc;
 use oauth2_types::scope::{Scope, ScopeToken};
-use pasion_data::BoxRng;
 use pasion_data::TokenType;
 use pasion_data::personal::PersonalSessionFilter;
 use pasion_data::queue::{QueueJobRepositoryExt as _, SyncDevicesJob};
@@ -26,7 +24,6 @@ use crate::CreatedJsonResult;
 use crate::JsonResult;
 use crate::handlers::{
     admin::call_context::extract_call_context,
-    admin::model::InconsistentPersonalSession,
     admin::model::PersonalSession,
     admin::model::Resource,
     admin::params::IncludeCount,

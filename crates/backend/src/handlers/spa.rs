@@ -4,10 +4,9 @@
 //! frontend. The client-side router then handles all page routing.
 
 use crate::salvo_utils::InternalError;
-use pasion_templates::{AppContext, TemplateContext, Templates};
+use pasion_templates::{AppContext, TemplateContext};
 use salvo::{prelude::*, writing::Text};
 
-use crate::handlers::account;
 use crate::handlers::account::DepotExt;
 
 /// Serve the SPA shell for anonymous (public) pages.

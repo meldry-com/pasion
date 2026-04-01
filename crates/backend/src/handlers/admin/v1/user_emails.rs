@@ -4,8 +4,6 @@
 
 use std::str::FromStr as _;
 
-use pasion_data::BoxRng;
-use pasion_data::Page;
 use pasion_data::RepositoryAccess;
 use pasion_data::audit::AdminOperation;
 use pasion_data::queue::{ProvisionUserJob, QueueJobRepositoryExt as _};

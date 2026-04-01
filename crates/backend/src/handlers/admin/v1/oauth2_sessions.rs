@@ -5,7 +5,6 @@
 use std::str::FromStr;
 
 use oauth2_types::scope::{Scope, ScopeToken};
-use pasion_data::Page;
 use pasion_data::RepositoryAccess;
 use pasion_data::audit::AdminOperation;
 use pasion_data::oauth2::OAuth2SessionFilter;

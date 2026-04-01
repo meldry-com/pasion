@@ -1,5 +1,5 @@
 use crate::salvo_utils::{
-    GenericError, InternalError, SessionInfoExt, cookies::CookieJar, sentry::SentryEventID,
+    SessionInfoExt, cookies::CookieJar,
 };
 use oauth2_types::{
     errors::{ClientError, ClientErrorCode},

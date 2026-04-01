@@ -4,7 +4,6 @@
 
 use pasion_data::RepositoryAccess;
 use pasion_data::audit::AdminOperation;
-use pasion_data::pagination::Page;
 use pasion_data::user::BrowserSessionFilter;
 use salvo::prelude::*;
 use schemars::JsonSchema;

@@ -5,14 +5,13 @@
 
 use std::sync::LazyLock;
 
-use crate::salvo_utils::SessionInfoExt;
 use opentelemetry::{Key, KeyValue, metrics::Counter};
 use salvo::oapi::ToSchema;
 use salvo::prelude::*;
 use serde::{Deserialize, Serialize};
 
 use super::{
-    DepotExt, NodeType, RouteError, extract_bound_activity_tracker, extract_session_info,
+    DepotExt, NodeType, RouteError, extract_bound_activity_tracker,
     make_clock, make_rng,
 };
 use crate::handlers::{
@@ -95,7 +94,7 @@ pub async fn login(req: &mut Request, depot: &Depot, res: &mut Response) -> Resu
     let site_config = depot.site_config()?;
     let limiter = depot.limiter()?;
     let homeserver = depot.homeserver()?;
-    let mut repo = depot.repo_factory()?.create().await?;
+    let repo = depot.repo_factory()?.create().await?;
     let activity_tracker = extract_bound_activity_tracker(req, depot);
     let requester = activity_tracker
         .ip()

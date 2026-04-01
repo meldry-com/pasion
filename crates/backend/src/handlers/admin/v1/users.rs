@@ -3,8 +3,6 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 
 use chrono::Duration;
-use pasion_data::BoxRng;
-use pasion_data::Page;
 use pasion_data::audit::{AdminOperation, NewAdminOperationLog};
 use pasion_data::user::UserFilter;
 use pasion_matrix::ProvisionRequest;
@@ -16,7 +14,6 @@ use schemars::JsonSchema;
 use serde::Deserialize;
 use serde::Serialize;
 use tracing::warn;
-use ulid::Ulid;
 use zeroize::Zeroizing;
 
 use crate::AppError;
@@ -33,7 +30,6 @@ use crate::handlers::{
     admin::params::extract_ulid_param,
     admin::response::PaginatedResponse,
     admin::response::SingleResponse,
-    passwords::PasswordManager,
     common::DepotExt,
 };
 use crate::util::username_valid;

@@ -843,8 +843,9 @@ pub fn build_listeners(
             HttpBindConfig::Unix { socket } => {
                 let listener = UnixListener::bind(&socket)
                     .with_context(|| format!("could not bind {bind_description}"))?;
+                listener.set_nonblocking(true)?;
                 UnixOrTcpListener::Unix {
-                    listener,
+                    listener: tokio::net::UnixListener::from_std(listener)?,
                     path: Some(socket.into()),
                 }
             }

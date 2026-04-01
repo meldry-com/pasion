@@ -3,7 +3,7 @@ use std::{collections::HashMap, sync::LazyLock};
 use crate::oidc_client::{
     requests::jose::JwtVerificationData, types::client_credentials::ClientCredentials,
 };
-use crate::salvo_utils::{GenericError, InternalError, cookies::CookieJar};
+use crate::salvo_utils::{GenericError, InternalError};
 use oauth2_types::{errors::ClientErrorCode, requests::AccessTokenRequest};
 use opentelemetry::{Key, KeyValue, metrics::Counter};
 use pasion_data::upstream_oauth2::{

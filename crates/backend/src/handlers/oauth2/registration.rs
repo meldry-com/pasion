@@ -1,7 +1,5 @@
 use std::sync::{Arc, LazyLock};
 
-use crate::record_error;
-use crate::salvo_utils::sentry::SentryEventID;
 use oauth2_types::{
     errors::{ClientError, ClientErrorCode},
     registration::{

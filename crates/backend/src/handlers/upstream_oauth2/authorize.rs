@@ -1,5 +1,5 @@
 use crate::oidc_client::requests::authorization_code::AuthorizationRequestData;
-use crate::salvo_utils::{GenericError, InternalError, cookies::CookieJar};
+use crate::salvo_utils::{GenericError, InternalError};
 use pasion_data::PostAuthAction;
 use pasion_data::UpstreamOAuthProvider;
 use pasion_data::upstream_oauth2::{

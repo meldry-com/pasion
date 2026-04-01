@@ -21,7 +21,7 @@ pub enum SocketAddr {
 #[cfg(unix)]
 impl From<tokio::net::unix::SocketAddr> for SocketAddr {
     fn from(value: tokio::net::unix::SocketAddr) -> Self {
-        Self::Unix { listener: value, path: None }
+        Self::Unix(value)
     }
 }
 
@@ -35,7 +35,7 @@ impl std::fmt::Debug for SocketAddr {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             #[cfg(unix)]
-            Self::Unix { listener: l, .. } => std::fmt::Debug::fmt(l, f),
+            Self::Unix(l) => std::fmt::Debug::fmt(l, f),
             Self::Net(l) => std::fmt::Debug::fmt(l, f),
         }
     }
@@ -101,7 +101,7 @@ impl Drop for UnixOrTcpListener {
 #[cfg(unix)]
 impl From<UnixListener> for UnixOrTcpListener {
     fn from(listener: UnixListener) -> Self {
-        Self::Unix { listener, path: None }
+        Self::Unix { listener, .. }
     }
 }
 
@@ -140,7 +140,7 @@ impl UnixOrTcpListener {
     pub fn local_addr(&self) -> Result<SocketAddr, std::io::Error> {
         match self {
             #[cfg(unix)]
-            Self::Unix { listener, path: None } => listener.local_addr().map(SocketAddr::from),
+            Self::Unix { listener, .. } => listener.local_addr().map(SocketAddr::from),
             Self::Tcp(listener) => listener.local_addr().map(SocketAddr::from),
         }
     }
@@ -167,7 +167,7 @@ impl UnixOrTcpListener {
     pub async fn accept(&self) -> Result<(SocketAddr, UnixOrTcpConnection), std::io::Error> {
         match self {
             #[cfg(unix)]
-            Self::Unix { listener, path: None } => {
+            Self::Unix { listener, .. } => {
                 let (stream, remote_addr) = listener.accept().await?;
 
                 let socket = socket2::SockRef::from(&stream);
@@ -203,7 +203,7 @@ impl UnixOrTcpListener {
     ) -> Poll<Result<(SocketAddr, UnixOrTcpConnection), std::io::Error>> {
         match self {
             #[cfg(unix)]
-            Self::Unix { listener, path: None } => {
+            Self::Unix { listener, .. } => {
                 let (stream, remote_addr) = ready!(listener.poll_accept(cx)?);
 
                 let socket = socket2::SockRef::from(&stream);

@@ -2,7 +2,6 @@
 //
 // SPDX-License-Identifier: AGPL-3.0-only
 
-use pasion_data::Page;
 use pasion_data::RepositoryAccess;
 use pasion_data::upstream_oauth2::{UpstreamOAuthProviderFilter, UpstreamOAuthProviderRepository};
 use salvo::prelude::*;

@@ -1,7 +1,6 @@
 use crate::record_error;
 use crate::salvo_utils::{
     client_authorization::{ClientAuthorization, CredentialsVerificationError},
-    sentry::SentryEventID,
 };
 use chrono::Duration;
 use oauth2_types::{

@@ -9,7 +9,7 @@ use anyhow::Context;
 use argon2::{Argon2, PasswordHash, PasswordHasher, PasswordVerifier, password_hash::SaltString};
 use futures_util::future::OptionFuture;
 use pbkdf2::Pbkdf2;
-use rand::{CryptoRng, Rng, RngCore, SeedableRng};
+use rand::{CryptoRng, RngCore, SeedableRng};
 use thiserror::Error;
 use zeroize::Zeroizing;
 use zxcvbn::zxcvbn;

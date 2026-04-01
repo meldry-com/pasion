@@ -8,7 +8,6 @@
 
 use chrono::{DateTime, Utc};
 use pasion_data::{BoxRepository, Clock};
-use salvo::prelude::*;
 use serde::{Deserialize, Serialize};
 use ulid::Ulid;
 
@@ -48,7 +47,7 @@ pub async fn get_requester(
     mut repo: BoxRepository,
     session_info: &SessionInfo,
 ) -> Result<(Requester, BoxRepository), RouteError> {
-    use crate::salvo_utils::SessionInfoExt;
+    use crate::salvo_utils::SessionInfoExt as _;
 
     let maybe_session = session_info.load_active_session(&mut repo).await?;
 

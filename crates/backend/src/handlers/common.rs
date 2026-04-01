@@ -16,8 +16,8 @@ use crate::handlers::{
 use crate::salvo_utils::{SessionInfo, SessionInfoExt, cookies::CookieJar};
 use pasion_data::UrlBuilder;
 use pasion_data::{
-    BoxClock, BoxRng, BoxRepository, BoxRepositoryFactory, BrowserSession,
-    Clock, RepositoryError, Session, SiteConfig, SystemClock, User,
+    BoxClock, BoxRng, BoxRepositoryFactory, BrowserSession,
+    RepositoryError, Session, SiteConfig, SystemClock, User,
 };
 use pasion_matrix::HomeserverAdmin;
 use pasion_policy::PolicyFactory;

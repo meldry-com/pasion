@@ -1,6 +1,4 @@
-use crate::record_error;
 use crate::salvo_utils::{
-    sentry::SentryEventID,
     user_authorization::{AuthorizationVerificationError, UserAuthorization},
 };
 use pasion_data::UrlBuilder;
