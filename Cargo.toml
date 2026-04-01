@@ -720,7 +720,7 @@ features = ["futures"]
 # Web platform bindings
 [workspace.dependencies.web-sys]
 version = "0.3"
-features = ["Window", "Location", "Url", "UrlSearchParams"]
+features = ["Window", "Document", "Element", "HtmlElement", "Location", "Storage", "Url", "UrlSearchParams", "MediaQueryList"]
 
 # JavaScript interop
 [workspace.dependencies.js-sys]
