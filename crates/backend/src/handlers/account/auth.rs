@@ -8,6 +8,8 @@ use std::sync::LazyLock;
 use opentelemetry::{Key, KeyValue, metrics::Counter};
 use salvo::oapi::ToSchema;
 use salvo::prelude::*;
+
+use crate::salvo_utils::session::SessionInfoExt;
 use serde::{Deserialize, Serialize};
 
 use super::{

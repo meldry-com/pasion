@@ -101,7 +101,7 @@ impl Drop for UnixOrTcpListener {
 #[cfg(unix)]
 impl From<UnixListener> for UnixOrTcpListener {
     fn from(listener: UnixListener) -> Self {
-        Self::Unix { listener, .. }
+        Self::Unix { listener, path: None }
     }
 }
 
