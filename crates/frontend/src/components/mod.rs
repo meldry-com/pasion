@@ -16,6 +16,7 @@ pub mod pagination;
 pub mod password_input;
 pub mod separator;
 pub mod session_card;
+pub mod theme;
 pub mod user_email;
 pub mod user_greeting;
 pub mod user_profile;
