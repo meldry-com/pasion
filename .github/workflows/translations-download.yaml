@@ -40,7 +40,7 @@ jobs:
 
       - name: Open pull request with translation updates
         id: translation-pr
-        uses: peter-evans/create-pull-request@v8.0.0
+        uses: peter-evans/create-pull-request@v8.1.0
         with:
           branch: actions/localazy-download/${{ steps.localazy-branch.outputs.name }}
           branch-token: ${{ secrets.GITHUB_TOKEN }}
