@@ -251,10 +251,11 @@ pub async fn policy_factory_from_config(
         PolicyEngine::Cedar => {
             #[cfg(feature = "cedar")]
             {
+                let default_path = camino::Utf8PathBuf::from("/share/cedar/default.cedar");
                 let path = config
                     .cedar_policy_file
                     .as_ref()
-                    .context("cedar_policy_file must be set when using the Cedar engine")?;
+                    .unwrap_or(&default_path);
                 PolicyFactory::load_cedar_from_file(path.as_str())
                     .await
                     .context("failed to load Cedar policy")
