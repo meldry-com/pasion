@@ -1,243 +1,65 @@
-use std::{collections::HashMap, sync::Arc};
-
-use async_trait::async_trait;
-use chrono::{DateTime, Duration, Utc};
+use chrono::{DateTime, Utc};
 use cron::Schedule;
-use diesel::sql_query;
-use diesel::sql_types::Bool;
-use diesel_async::RunQueryDsl;
-use opentelemetry::{
-    KeyValue,
-    metrics::{Counter, Histogram, UpDownCounter},
-};
-use pasion_context::LogContext;
-use pasion_data_model::Clock;
-use pasion_storage::{
-    RepositoryAccess, RepositoryError,
-    queue::{InsertableJob, Job, JobMetadata, Worker},
-};
-use pasion_storage_pg::{DatabaseError, PgRepository};
-use rand::{Rng, RngCore, distributions::Uniform};
-use serde::de::DeserializeOwned;
-use thiserror::Error;
-use tokio_postgres::NoTls;
-use tokio::{task::JoinSet, time::Instant};
+use opentelemetry::metrics::{Counter, Histogram};
+use pasion_data::queue::{InsertableJob, Worker};
+use tokio::time::Instant;
 use tokio_util::sync::CancellationToken;
-use tracing::{Instrument as _, Span};
-use tracing_opentelemetry::OpenTelemetrySpanExt as _;
-use ulid::Ulid;
 
-use crate::{METER, State};
+use crate::State;
 
-type JobPayload = serde_json::Value;
+mod job_types;
+mod leader;
+mod repository;
+mod runtime;
+mod shared;
+mod tracker;
 
-#[derive(Clone)]
-pub struct JobContext {
-    pub id: Ulid,
-    pub metadata: JobMetadata,
-    pub queue_name: String,
-    pub attempt: usize,
-    pub start: Instant,
+pub(crate) use self::job_types::{FromJob, JobContext, JobError, JobErrorDecision, RunnableJob};
+pub use self::shared::QueueRunnerError;
+use self::{
+    leader::ScheduleDefinition,
+    repository as repo_runtime,
+    runtime::{ListenerRuntime, WorkerMetrics},
+    shared::{retry_delay, MAX_ATTEMPTS},
+    tracker::JobTracker,
+};
 
-    #[expect(
-        dead_code,
-        reason = "we're not yet using this, but will be in the future"
-    )]
-    pub cancellation_token: CancellationToken,
-}
-
-impl JobContext {
-    pub fn span(&self) -> Span {
-        let span = tracing::info_span!(
-            parent: Span::none(),
-            "job.run",
-            job.id = %self.id,
-            job.queue.name = self.queue_name,
-            job.attempt = self.attempt,
-        );
-
-        span.add_link(self.metadata.span_context());
-
-        span
-    }
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
-pub enum JobErrorDecision {
-    Retry,
-
-    #[default]
-    Fail,
-}
-
-impl std::fmt::Display for JobErrorDecision {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            Self::Retry => f.write_str("retry"),
-            Self::Fail => f.write_str("fail"),
-        }
-    }
-}
-
-#[derive(Debug, Error)]
-#[error("Job failed to run, will {decision}")]
-pub struct JobError {
-    decision: JobErrorDecision,
-    #[source]
-    error: anyhow::Error,
-}
-
-impl JobError {
-    pub fn retry<T: Into<anyhow::Error>>(error: T) -> Self {
-        Self {
-            decision: JobErrorDecision::Retry,
-            error: error.into(),
-        }
-    }
-
-    pub fn fail<T: Into<anyhow::Error>>(error: T) -> Self {
-        Self {
-            decision: JobErrorDecision::Fail,
-            error: error.into(),
-        }
-    }
-}
-
-pub trait FromJob {
-    fn from_job(payload: JobPayload) -> Result<Self, anyhow::Error>
-    where
-        Self: Sized;
-}
-
-impl<T> FromJob for T
-where
-    T: DeserializeOwned,
-{
-    fn from_job(payload: JobPayload) -> Result<Self, anyhow::Error> {
-        serde_json::from_value(payload).map_err(Into::into)
-    }
-}
-
-#[async_trait]
-pub trait RunnableJob: Send + 'static {
-    async fn run(&self, state: &State, context: JobContext) -> Result<(), JobError>;
-
-    /// Allows the job to set a timeout for its execution. Jobs should then look
-    /// at the cancellation token passed in the [`JobContext`] to handle
-    /// graceful shutdowns.
-    fn timeout(&self) -> Option<std::time::Duration> {
-        None
-    }
-}
-
-fn box_runnable_job<T: RunnableJob + 'static>(job: T) -> Box<dyn RunnableJob> {
-    Box::new(job)
-}
-
-#[derive(Debug, Error)]
-pub enum QueueRunnerError {
-    #[error("Failed to setup listener")]
-    SetupListener(#[source] tokio_postgres::Error),
-
-    #[error("Failed to get connection from pool")]
-    Pool(#[source] Box<dyn std::error::Error + Send + Sync>),
-
-    #[error(transparent)]
-    Repository(#[from] RepositoryError),
-
-    #[error(transparent)]
-    Database(#[from] DatabaseError),
-
-    #[error("Invalid schedule expression")]
-    InvalidSchedule(#[from] cron::error::Error),
-
-    #[error("Worker is not the leader")]
-    NotLeader,
-}
-
-/// Result of a `pg_try_advisory_lock` query
-#[derive(diesel::QueryableByName)]
-struct AdvisoryLockResult {
-    #[diesel(sql_type = Bool)]
-    acquired: bool,
-}
-
-/// Compute a stable advisory lock key from a string (same algorithm as sqlx)
-fn advisory_lock_key(name: &str) -> i64 {
-    const CRC_IEEE: crc::Crc<u32> = crc::Crc::<u32>::new(&crc::CRC_32_ISO_HDLC);
-    i64::from(CRC_IEEE.checksum(name.as_bytes()))
-}
-
-// When the worker waits for a notification, we still want to wake it up every
-// second. Because we don't want all the workers to wake up at the same time, we
-// add a random jitter to the sleep duration, so they effectively sleep between
-// 0.9 and 1.1 seconds.
-const MIN_SLEEP_DURATION: std::time::Duration = std::time::Duration::from_millis(900);
-const MAX_SLEEP_DURATION: std::time::Duration = std::time::Duration::from_millis(1100);
-
-// How many jobs can we run concurrently
-const MAX_CONCURRENT_JOBS: usize = 10;
-
-// How many jobs can we fetch at once
-const MAX_JOBS_TO_FETCH: usize = 5;
-
-// How many attempts a job should be retried
-const MAX_ATTEMPTS: usize = 10;
-
-/// Returns the delay to wait before retrying a job
+/// The main queue worker.
 ///
-/// Uses an exponential backoff: 5s, 10s, 20s, 40s, 1m20s, 2m40s, 5m20s, 10m50s,
-/// 21m40s, 43m20s
-fn retry_delay(attempt: usize) -> Duration {
-    let attempt = u32::try_from(attempt).unwrap_or(u32::MAX);
-    Duration::milliseconds(2_i64.saturating_pow(attempt) * 5_000)
-}
-
-type JobResult = (std::time::Duration, Result<(), JobError>);
-type JobFactory = Arc<dyn Fn(JobPayload) -> Box<dyn RunnableJob> + Send + Sync>;
-
-/// This is a fake job we use to consume jobs from deprecated queues
-struct DeprecatedJob;
-
-#[async_trait]
-impl RunnableJob for DeprecatedJob {
-    async fn run(&self, _state: &State, context: JobContext) -> Result<(), JobError> {
-        tracing::warn!(
-            job.id = %context.id,
-            job.queue.name = context.queue_name,
-            "Consumed a job from a deprecated queue, which can happen after version upgrades. This did nothing other than removing the job from the queue."
-        );
-
-        Ok(())
-    }
-}
-
-struct ScheduleDefinition {
-    schedule_name: &'static str,
-    expression: Schedule,
-    queue_name: &'static str,
-    payload: serde_json::Value,
-}
-
+/// It connects to PostgreSQL via LISTEN/NOTIFY to be woken up when new jobs
+/// arrive, fetches available jobs, and dispatches them to a bounded set of
+/// Tokio tasks.
 pub struct QueueWorker {
+    /// Receives LISTEN/NOTIFY messages from PostgreSQL.
     notification_rx: tokio::sync::mpsc::UnboundedReceiver<tokio_postgres::Notification>,
-    /// Kept alive to maintain the underlying connection for LISTEN/NOTIFY.
-    #[expect(dead_code, reason = "Dropping this would close the notification connection")]
+    /// Kept alive so the underlying LISTEN connection stays open.
     _pg_client: tokio_postgres::Client,
+    /// Our registration record in the `queue_workers` table.
     registration: Worker,
+    /// Whether this worker currently holds the leader lease.
     am_i_leader: bool,
+    /// Timestamp of the last heartbeat we sent.
     last_heartbeat: DateTime<Utc>,
+    /// Top-level cancellation token for graceful shutdown.
     cancellation_token: CancellationToken,
+    /// Ensures the token is cancelled when this struct is dropped.
     #[expect(dead_code, reason = "This is used on Drop")]
     cancellation_guard: tokio_util::sync::DropGuard,
+    /// Shared application state (DB pool, clock, etc.).
     state: State,
+    /// Cron schedule definitions evaluated by the leader.
     schedules: Vec<ScheduleDefinition>,
+    /// Tracks in-flight job tasks and their results.
     tracker: JobTracker,
+    /// Counts why the worker woke up (sleep / task / notification).
     wakeup_reason: Counter<u64>,
+    /// Measures total tick duration including leader duties.
     tick_time: Histogram<u64>,
 }
 
 impl QueueWorker {
+    /// Create a new worker, register it in the database, and set up
+    /// LISTEN/NOTIFY on the PostgreSQL connection.
     #[tracing::instrument(
         name = "worker.init",
         skip_all,
@@ -247,80 +69,20 @@ impl QueueWorker {
         state: State,
         cancellation_token: CancellationToken,
     ) -> Result<Self, QueueRunnerError> {
-        let mut rng = state.rng();
-        let clock = state.clock();
+        let ListenerRuntime {
+            client: pg_client,
+            notifications: notification_rx,
+        } = runtime::connect_listener(&state).await?;
 
-        // Connect via tokio-postgres for LISTEN/NOTIFY
-        let (pg_client, mut pg_connection) =
-            tokio_postgres::connect(state.database_url(), NoTls)
-                .await
-                .map_err(QueueRunnerError::SetupListener)?;
-
-        // Set up a channel to forward notifications from the connection task
-        let (notification_tx, notification_rx) = tokio::sync::mpsc::unbounded_channel();
-
-        // Spawn connection handler that forwards notifications
-        tokio::spawn(async move {
-            loop {
-                // Poll the connection and forward any notifications
-                match std::future::poll_fn(|cx| pg_connection.poll_message(cx)).await {
-                    Some(Ok(tokio_postgres::AsyncMessage::Notification(n))) => {
-                        let _ = notification_tx.send(n);
-                    }
-                    Some(Ok(_)) => {} // ignore notices, etc.
-                    Some(Err(e)) => {
-                        tracing::error!(error = %e, "PostgreSQL notification connection error");
-                        break;
-                    }
-                    None => {
-                        tracing::warn!("PostgreSQL notification connection closed");
-                        break;
-                    }
-                }
-            }
-        });
-
-        // Subscribe to notification channels
-        tokio_postgres::Client::execute(&pg_client, "LISTEN queue_leader_stepdown", &[])
-            .await
-            .map_err(QueueRunnerError::SetupListener)?;
-
-        tokio_postgres::Client::execute(&pg_client, "LISTEN queue_available", &[])
-            .await
-            .map_err(QueueRunnerError::SetupListener)?;
-
-        let conn = state
-            .pool()
-            .get()
-            .await
-            .map_err(|e| QueueRunnerError::Pool(Box::new(e)))?;
-        let mut repo = PgRepository::new(conn);
-
-        let registration = repo.queue_worker().register(&mut rng, clock).await?;
+        let (registration, now) = repo_runtime::register_worker(&state).await?;
         tracing::Span::current().record("worker.id", tracing::field::display(registration.id));
-
         tracing::info!(worker.id = %registration.id, "Registered worker");
-        let now = clock.now();
 
-        let wakeup_reason = METER
-            .u64_counter("job.worker.wakeups")
-            .with_description("Counts how many time the worker has been woken up, for which reason")
-            .build();
+        let WorkerMetrics {
+            wakeups: wakeup_reason,
+            tick_time,
+        } = runtime::build_worker_metrics();
 
-        // Pre-create the reasons on the counter
-        wakeup_reason.add(0, &[KeyValue::new("reason", "sleep")]);
-        wakeup_reason.add(0, &[KeyValue::new("reason", "task")]);
-        wakeup_reason.add(0, &[KeyValue::new("reason", "notification")]);
-
-        let tick_time = METER
-            .u64_histogram("job.worker.tick_duration")
-            .with_description(
-                "How much time the worker took to tick, including performing leader duties",
-            )
-            .build();
-
-        // We put a cancellation drop guard in the structure, so that when it gets
-        // dropped, we're sure to cancel the token
         let cancellation_guard = cancellation_token.clone().drop_guard();
 
         Ok(Self {
@@ -339,46 +101,36 @@ impl QueueWorker {
         })
     }
 
+    /// Register a concrete job type so the worker knows how to deserialize and
+    /// run it.
     pub(crate) fn register_handler<T: RunnableJob + InsertableJob + FromJob>(
         &mut self,
     ) -> &mut Self {
-        // There is a potential panic here, which is fine as it's going to be caught
-        // within the job task
-        let factory = |payload: JobPayload| {
-            box_runnable_job(T::from_job(payload).expect("Failed to deserialize job"))
-        };
-
-        self.tracker
-            .factories
-            .insert(T::QUEUE_NAME, Arc::new(factory));
+        self.tracker.register_handler::<T>();
         self
     }
 
-    /// Register a queue name as deprecated, which will consume leftover jobs
+    /// Register a queue name whose jobs should simply be consumed and discarded.
     pub(crate) fn register_deprecated_queue(&mut self, queue_name: &'static str) -> &mut Self {
-        let factory = |_payload: JobPayload| box_runnable_job(DeprecatedJob);
-        self.tracker.factories.insert(queue_name, Arc::new(factory));
+        self.tracker.register_deprecated_queue(queue_name);
         self
     }
 
+    /// Add a cron schedule that the leader will evaluate each tick.
     pub(crate) fn add_schedule<T: InsertableJob>(
         &mut self,
         schedule_name: &'static str,
         expression: Schedule,
         job: T,
     ) -> &mut Self {
-        let payload = serde_json::to_value(job).expect("failed to serialize job payload");
-
-        self.schedules.push(ScheduleDefinition {
-            schedule_name,
-            expression,
-            queue_name: T::QUEUE_NAME,
-            payload,
-        });
+        self.schedules
+            .push(ScheduleDefinition::new(schedule_name, expression, job));
 
         self
     }
 
+    /// Run the worker until the cancellation token fires. Logs errors and
+    /// returns.
     pub(crate) async fn run(mut self) {
         if let Err(e) = self.run_inner().await {
             tracing::error!(
@@ -391,10 +143,12 @@ impl QueueWorker {
     async fn run_inner(&mut self) -> Result<(), QueueRunnerError> {
         self.setup_schedules().await?;
 
-        while !self.cancellation_token.is_cancelled() {
-            LogContext::new("worker-run-loop")
-                .run(|| self.run_loop())
-                .await?;
+        loop {
+            if self.cancellation_token.is_cancelled() {
+                break;
+            }
+
+            self.run_loop().await?;
         }
 
         self.shutdown().await?;
@@ -402,25 +156,13 @@ impl QueueWorker {
         Ok(())
     }
 
+    /// Ensure all schedule names are present in the `queue_schedules` table.
     #[tracing::instrument(name = "worker.setup_schedules", skip_all)]
     pub(crate) async fn setup_schedules(&mut self) -> Result<(), QueueRunnerError> {
-        let schedules: Vec<_> = self.schedules.iter().map(|s| s.schedule_name).collect();
-
-        let conn = self
-            .state
-            .pool()
-            .get()
-            .await
-            .map_err(|e| QueueRunnerError::Pool(Box::new(e)))?;
-
-        let mut repo = PgRepository::new(conn);
-
-        // Setup the entries in the queue_schedules table
-        repo.queue_schedule().setup(&schedules).await?;
-
-        Ok(())
+        repo_runtime::setup_schedules(&self.state, &self.schedules).await
     }
 
+    /// One iteration of the main loop: wait, tick, leader duties.
     #[tracing::instrument(name = "worker.run_loop", skip_all)]
     async fn run_loop(&mut self) -> Result<(), QueueRunnerError> {
         self.wait_until_wakeup().await?;
@@ -436,100 +178,45 @@ impl QueueWorker {
             self.perform_leader_duties().await?;
         }
 
-        let elapsed = start.elapsed().as_millis().try_into().unwrap_or(u64::MAX);
-        self.tick_time.record(elapsed, &[]);
+        self.record_tick_duration(start);
 
         Ok(())
     }
 
+    fn record_tick_duration(&self, started_at: Instant) {
+        let elapsed_ms = started_at
+            .elapsed()
+            .as_millis()
+            .try_into()
+            .unwrap_or(u64::MAX);
+        self.tick_time.record(elapsed_ms, &[]);
+    }
+
+    /// Drain running jobs and deregister the worker.
     #[tracing::instrument(name = "worker.shutdown", skip_all)]
     async fn shutdown(&mut self) -> Result<(), QueueRunnerError> {
         tracing::info!("Shutting down worker");
 
-        let clock = self.state.clock();
-        let mut rng = self.state.rng();
-
-        let conn = self
-            .state
-            .pool()
-            .get()
-            .await
-            .map_err(|e| QueueRunnerError::Pool(Box::new(e)))?;
-
-        let mut repo = PgRepository::new(conn);
-
-        // Log about any job still running
-        match self.tracker.running_jobs() {
-            0 => {}
-            1 => tracing::warn!("There is one job still running, waiting for it to finish"),
-            n => tracing::warn!("There are {n} jobs still running, waiting for them to finish"),
-        }
-
-        // TODO: we may want to introduce a timeout here, and abort the tasks if they
-        // take too long. It's fine for now, as we don't have long-running
-        // tasks, most of them are idempotent, and the only effect might be that
-        // the worker would 'dirtily' shutdown, meaning that its tasks would be
-        // considered, later retried by another worker
-
-        // Wait for all the jobs to finish
-        self.tracker
-            .process_jobs(&mut rng, clock, &mut repo, true)
-            .await?;
-
-        // Tell the other workers we're shutting down
-        // This also releases the leader election lease
-        repo.queue_worker()
-            .shutdown(clock, &self.registration)
-            .await?;
-
-        Ok(())
+        repo_runtime::shutdown_worker(&self.state, &self.registration, &mut self.tracker).await
     }
 
+    /// Block until one of: cancellation, sleep timer, task completion, or
+    /// PostgreSQL notification.
     #[tracing::instrument(name = "worker.wait_until_wakeup", skip_all)]
     async fn wait_until_wakeup(&mut self) -> Result<(), QueueRunnerError> {
-        let mut rng = self.state.rng();
-
-        // This is to make sure we wake up every second to do the maintenance tasks
-        // We add a little bit of random jitter to the duration, so that we don't get
-        // fully synced workers waking up at the same time after each notification
-        let sleep_duration = rng.sample(Uniform::new(MIN_SLEEP_DURATION, MAX_SLEEP_DURATION));
-        let wakeup_sleep = tokio::time::sleep(sleep_duration);
-
-        tokio::select! {
-            () = self.cancellation_token.cancelled() => {
-                tracing::debug!("Woke up from cancellation");
-            },
-
-            () = wakeup_sleep => {
-                tracing::debug!("Woke up from sleep");
-                self.wakeup_reason.add(1, &[KeyValue::new("reason", "sleep")]);
-            },
-
-            () = self.tracker.collect_next_job(), if self.tracker.has_jobs() => {
-                tracing::debug!("Joined job task");
-                self.wakeup_reason.add(1, &[KeyValue::new("reason", "task")]);
-            },
-
-            notification = self.notification_rx.recv() => {
-                self.wakeup_reason.add(1, &[KeyValue::new("reason", "notification")]);
-                match notification {
-                    Some(notification) => {
-                        tracing::debug!(
-                            notification.channel = notification.channel(),
-                            notification.payload = notification.payload(),
-                            "Woke up from notification"
-                        );
-                    },
-                    None => {
-                        tracing::error!("Notification channel closed unexpectedly");
-                    },
-                }
-            },
-        }
+        runtime::wait_until_wakeup(
+            &self.state,
+            &self.cancellation_token,
+            &mut self.tracker,
+            &mut self.notification_rx,
+            &self.wakeup_reason,
+        )
+        .await;
 
         Ok(())
     }
 
+    /// Heartbeat, leader election, process finished tasks, fetch new jobs.
     #[tracing::instrument(
         name = "worker.tick",
         skip_all,
@@ -537,641 +224,56 @@ impl QueueWorker {
     )]
     async fn tick(&mut self) -> Result<(), QueueRunnerError> {
         tracing::debug!("Tick");
-        let clock = self.state.clock();
-        let mut rng = self.state.rng();
-        let now = clock.now();
-
-        let conn = self
-            .state
-            .pool()
-            .get()
-            .await
-            .map_err(|e| QueueRunnerError::Pool(Box::new(e)))?;
-        let mut repo = PgRepository::new(conn);
-
-        // We send a heartbeat every minute, to avoid writing to the database too often
-        // on a logged table
-        if now - self.last_heartbeat >= chrono::Duration::minutes(1) {
-            tracing::info!("Sending heartbeat");
-            repo.queue_worker()
-                .heartbeat(clock, &self.registration)
-                .await?;
-            self.last_heartbeat = now;
-        }
-
-        // Remove any dead worker leader leases
-        repo.queue_worker()
-            .remove_leader_lease_if_expired(clock)
-            .await?;
-
-        // Try to become (or stay) the leader
-        let leader = repo
-            .queue_worker()
-            .try_get_leader_lease(clock, &self.registration)
-            .await?;
-
-        // Process any job task which finished
-        self.tracker
-            .process_jobs(&mut rng, clock, &mut repo, false)
-            .await?;
-
-        // Compute how many jobs we should fetch at most
-        let max_jobs_to_fetch = MAX_CONCURRENT_JOBS
-            .saturating_sub(self.tracker.running_jobs())
-            .max(MAX_JOBS_TO_FETCH);
-
-        if max_jobs_to_fetch == 0 {
-            tracing::warn!("Internal job queue is full, not fetching any new jobs");
-        } else {
-            // Grab a few jobs in the queue
-            let queues = self.tracker.queues();
-            let jobs = repo
-                .queue_job()
-                .reserve(clock, &self.registration, &queues, max_jobs_to_fetch)
-                .await?;
-
-            for Job {
-                id,
-                queue_name,
-                payload,
-                metadata,
-                attempt,
-            } in jobs
-            {
-                let cancellation_token = self.cancellation_token.child_token();
-                let start = Instant::now();
-                let context = JobContext {
-                    id,
-                    metadata,
-                    queue_name,
-                    attempt,
-                    start,
-                    cancellation_token,
-                };
-
-                self.tracker.spawn_job(self.state.clone(), context, payload);
-            }
-        }
-
-        // Connection is returned to the pool when repo is dropped
-        drop(repo);
-
-        // Save the new leader state to log any change
-        if leader != self.am_i_leader {
-            // If we flipped state, log it
-            self.am_i_leader = leader;
-            if self.am_i_leader {
-                tracing::info!("I'm the leader now");
-            } else {
-                tracing::warn!("I am no longer the leader");
-            }
-        }
-
-        Ok(())
-    }
-
-    #[tracing::instrument(name = "worker.perform_leader_duties", skip_all)]
-    async fn perform_leader_duties(&mut self) -> Result<(), QueueRunnerError> {
-        // This should have been checked by the caller, but better safe than sorry
-        if !self.am_i_leader {
-            return Err(QueueRunnerError::NotLeader);
-        }
-
-        let clock = self.state.clock();
-        let mut rng = self.state.rng();
-
-        let mut conn = self
-            .state
-            .pool()
-            .get()
-            .await
-            .map_err(|e| QueueRunnerError::Pool(Box::new(e)))?;
-
-        // The thing with the leader election is that it locks the table during the
-        // election, preventing other workers from going through the loop.
-        //
-        // Ideally, we would do the leader duties in the same transaction so that we
-        // make sure only one worker is doing the leader duties, but that
-        // would mean we would lock all the workers for the duration of the
-        // duties, which is not ideal.
-        //
-        // So we do the duties in a separate connection, in which we take an advisory
-        // lock, so that in the very rare case where two workers think they are the
-        // leader, we still don't have two workers doing the duties at the same time.
-        let lock_key = advisory_lock_key("leader-duties");
-        let lock_result: AdvisoryLockResult = sql_query(
-            format!("SELECT pg_try_advisory_lock({lock_key}) AS acquired")
+        let leader = repo_runtime::tick_worker(
+            &self.state,
+            &self.registration,
+            &mut self.last_heartbeat,
+            &mut self.tracker,
+            &self.cancellation_token,
         )
-            .get_result(&mut *conn)
-            .await
-            .map_err(DatabaseError::from)?;
+        .await?;
 
-        if !lock_result.acquired {
-            tracing::error!("Another worker has the leader lock, aborting");
-            return Ok(());
-        }
-
-        let mut repo = PgRepository::new(conn);
-
-        // Look at the state of schedules in the database
-        let schedules_status = repo.queue_schedule().list().await?;
-
-        let now = clock.now();
-        for schedule in &self.schedules {
-            // Find the schedule status from the database
-            let Some(status) = schedules_status
-                .iter()
-                .find(|s| s.schedule_name == schedule.schedule_name)
-            else {
-                tracing::error!(
-                    "Schedule {} was not found in the database",
-                    schedule.schedule_name
-                );
-                continue;
-            };
-
-            // Figure out if we should schedule a new job
-            if let Some(next_time) = status.last_scheduled_at {
-                if next_time > now {
-                    // We already have a job scheduled in the future, skip
-                    continue;
-                }
-
-                if status.last_scheduled_job_completed == Some(false) {
-                    // The last scheduled job has not completed yet, skip
-                    continue;
-                }
-            }
-
-            let next_tick = schedule.expression.after(&now).next().unwrap();
-
-            tracing::info!(
-                "Scheduling job for {}, next run at {}",
-                schedule.schedule_name,
-                next_tick
-            );
-
-            repo.queue_job()
-                .schedule_later(
-                    &mut rng,
-                    clock,
-                    schedule.queue_name,
-                    schedule.payload.clone(),
-                    serde_json::json!({}),
-                    next_tick,
-                    Some(schedule.schedule_name),
-                )
-                .await?;
-        }
-
-        // We also check if the worker is dead, and if so, we shutdown all the dead
-        // workers that haven't checked in the last two minutes
-        repo.queue_worker()
-            .shutdown_dead_workers(clock, Duration::minutes(2))
-            .await?;
-
-        // TODO: mark tasks those workers had as lost
-
-        // Mark all the scheduled jobs as available
-        let scheduled = repo.queue_job().schedule_available_jobs(clock).await?;
-        match scheduled {
-            0 => {}
-            1 => tracing::info!("One scheduled job marked as available"),
-            n => tracing::info!("{n} scheduled jobs marked as available"),
-        }
-
-        // Release the advisory lock (it's session-level, so release explicitly)
-        let mut conn = repo.into_inner();
-        let _ = sql_query(format!("SELECT pg_advisory_unlock({lock_key})"))
-            .execute(&mut *conn)
-            .await;
+        self.update_leader_state(leader);
 
         Ok(())
     }
 
-    /// Process all the pending jobs in the queue.
-    /// This should only be called in tests!
-    ///
-    /// # Errors
-    ///
-    /// This function can fail if the database connection fails.
-    pub async fn process_all_jobs_in_tests(&mut self) -> Result<(), QueueRunnerError> {
-        // I swear, I'm the leader!
-        self.am_i_leader = true;
-
-        // First, perform the leader duties. This will make sure that we schedule
-        // recurring jobs.
-        self.perform_leader_duties().await?;
-
-        let clock = self.state.clock();
-        let mut rng = self.state.rng();
-
-        let conn = self
-            .state
-            .pool()
-            .get()
-            .await
-            .map_err(|e| QueueRunnerError::Pool(Box::new(e)))?;
-        let mut repo = PgRepository::new(conn);
-
-        // Spawn all the jobs in the database
-        let queues = self.tracker.queues();
-        let jobs = repo
-            .queue_job()
-            // I really hope that we don't spawn more than 10k jobs in tests
-            .reserve(clock, &self.registration, &queues, 10_000)
-            .await?;
-
-        for Job {
-            id,
-            queue_name,
-            payload,
-            metadata,
-            attempt,
-        } in jobs
-        {
-            let cancellation_token = self.cancellation_token.child_token();
-            let start = Instant::now();
-            let context = JobContext {
-                id,
-                metadata,
-                queue_name,
-                attempt,
-                start,
-                cancellation_token,
-            };
-
-            self.tracker.spawn_job(self.state.clone(), context, payload);
-        }
-
-        self.tracker
-            .process_jobs(&mut rng, clock, &mut repo, true)
-            .await?;
-
-        Ok(())
-    }
-}
-
-/// Tracks running jobs
-///
-/// This is a separate structure to be able to borrow it mutably at the same
-/// time as the connection to the database is borrowed
-struct JobTracker {
-    /// Stores a mapping from the job queue name to the job factory
-    factories: HashMap<&'static str, JobFactory>,
-
-    /// A join set of all the currently running jobs
-    running_jobs: JoinSet<JobResult>,
-
-    /// Stores a mapping from the Tokio task ID to the job context
-    job_contexts: HashMap<tokio::task::Id, JobContext>,
-
-    /// Stores the last `join_next_with_id` result for processing, in case we
-    /// got woken up in `collect_next_job`
-    last_join_result: Option<Result<(tokio::task::Id, JobResult), tokio::task::JoinError>>,
-
-    /// An histogram which records the time it takes to process a job
-    job_processing_time: Histogram<u64>,
-
-    /// A counter which records the number of jobs currently in flight
-    in_flight_jobs: UpDownCounter<i64>,
-}
-
-impl JobTracker {
-    fn new() -> Self {
-        let job_processing_time = METER
-            .u64_histogram("job.process.duration")
-            .with_description("The time it takes to process a job in milliseconds")
-            .with_unit("ms")
-            .build();
-
-        let in_flight_jobs = METER
-            .i64_up_down_counter("job.active_tasks")
-            .with_description("The number of jobs currently in flight")
-            .with_unit("{job}")
-            .build();
-
-        Self {
-            factories: HashMap::new(),
-            running_jobs: JoinSet::new(),
-            job_contexts: HashMap::new(),
-            last_join_result: None,
-            job_processing_time,
-            in_flight_jobs,
-        }
-    }
-
-    /// Returns the queue names that are currently being tracked
-    fn queues(&self) -> Vec<&'static str> {
-        self.factories.keys().copied().collect()
-    }
-
-    /// Spawn a job on the job tracker
-    fn spawn_job(&mut self, state: State, context: JobContext, payload: JobPayload) {
-        let factory = self.factories.get(context.queue_name.as_str()).cloned();
-        let task = {
-            let log_context = LogContext::new(format!("job-{}", context.queue_name));
-            let context = context.clone();
-            let span = context.span();
-            log_context
-                .run(async move || {
-                    // We should never crash, but in case we do, we do that in the task and
-                    // don't crash the worker
-                    let job = factory.expect("unknown job factory")(payload);
-                    tracing::info!(
-                        job.id = %context.id,
-                        job.queue.name = %context.queue_name,
-                        job.attempt = %context.attempt,
-                        "Running job"
-                    );
-                    let result = job.run(&state, context.clone()).await;
-
-                    let Some(context_stats) =
-                        LogContext::maybe_with(pasion_context::LogContext::stats)
-                    else {
-                        // This should never happen, but if it does it's fine: we're recovering fine
-                        // from panics in those tasks
-                        panic!("Missing log context, this should never happen");
-                    };
-
-                    // We log the result here so that it's attached to the right span & log context
-                    match &result {
-                        Ok(()) => {
-                            tracing::info!(
-                                job.id = %context.id,
-                                job.queue.name = %context.queue_name,
-                                job.attempt = %context.attempt,
-                                "Job completed [{context_stats}]"
-                            );
-                        }
-
-                        Err(JobError {
-                            decision: JobErrorDecision::Fail,
-                            error,
-                        }) => {
-                            tracing::error!(
-                                error = &**error as &dyn std::error::Error,
-                                job.id = %context.id,
-                                job.queue.name = %context.queue_name,
-                                job.attempt = %context.attempt,
-                                "Job failed, not retrying [{context_stats}]"
-                            );
-                        }
-
-                        Err(JobError {
-                            decision: JobErrorDecision::Retry,
-                            error,
-                        }) if context.attempt < MAX_ATTEMPTS => {
-                            let delay = retry_delay(context.attempt);
-                            tracing::warn!(
-                                error = &**error as &dyn std::error::Error,
-                                job.id = %context.id,
-                                job.queue.name = %context.queue_name,
-                                job.attempt = %context.attempt,
-                                "Job failed, will retry in {}s [{context_stats}]",
-                                delay.num_seconds()
-                            );
-                        }
-
-                        Err(JobError {
-                            decision: JobErrorDecision::Retry,
-                            error,
-                        }) => {
-                            tracing::error!(
-                                error = &**error as &dyn std::error::Error,
-                                job.id = %context.id,
-                                job.queue.name = %context.queue_name,
-                                job.attempt = %context.attempt,
-                                "Job failed too many times, abandonning [{context_stats}]"
-                            );
-                        }
-                    }
-
-                    (context_stats.elapsed, result)
-                })
-                .instrument(span)
-        };
-
-        self.in_flight_jobs.add(
-            1,
-            &[KeyValue::new("job.queue.name", context.queue_name.clone())],
-        );
-
-        let handle = self.running_jobs.spawn(task);
-        self.job_contexts.insert(handle.id(), context);
-    }
-
-    /// Returns `true` if there are currently running jobs
-    fn has_jobs(&self) -> bool {
-        !self.running_jobs.is_empty()
-    }
-
-    /// Returns the number of currently running jobs
-    ///
-    /// This also includes the job result which may be stored for processing
-    fn running_jobs(&self) -> usize {
-        self.running_jobs.len() + usize::from(self.last_join_result.is_some())
-    }
-
-    async fn collect_next_job(&mut self) {
-        // Double-check that we don't have a job result stored
-        if self.last_join_result.is_some() {
-            tracing::error!(
-                "Job tracker already had a job result stored, this should never happen!"
-            );
+    fn update_leader_state(&mut self, leader: bool) {
+        if leader == self.am_i_leader {
             return;
         }
 
-        self.last_join_result = self.running_jobs.join_next_with_id().await;
+        self.am_i_leader = leader;
+        match leader {
+            true => tracing::info!("I'm the leader now"),
+            false => tracing::warn!("I am no longer the leader"),
+        }
     }
 
-    /// Process all the jobs which are currently running
-    ///
-    /// If `blocking` is `true`, this function will block until all the jobs
-    /// are finished. Otherwise, it will return as soon as it processed the
-    /// already finished jobs.
-    async fn process_jobs<E: std::error::Error + Send + Sync + 'static>(
-        &mut self,
-        rng: &mut (dyn RngCore + Send),
-        clock: &dyn Clock,
-        repo: &mut dyn RepositoryAccess<Error = E>,
-        blocking: bool,
-    ) -> Result<(), E> {
-        if self.last_join_result.is_none() {
-            if blocking {
-                self.last_join_result = self.running_jobs.join_next_with_id().await;
-            } else {
-                self.last_join_result = self.running_jobs.try_join_next_with_id();
-            }
-        }
+    /// Leader-only duties: evaluate cron schedules, clean up dead workers,
+    /// mark scheduled jobs as available.
+    #[tracing::instrument(name = "worker.perform_leader_duties", skip_all)]
+    async fn perform_leader_duties(&mut self) -> Result<(), QueueRunnerError> {
+        self.am_i_leader
+            .then_some(())
+            .ok_or(QueueRunnerError::NotLeader)?;
 
-        while let Some(result) = self.last_join_result.take() {
-            match result {
-                // The job succeeded. The logging and time measurement is already done in the task
-                Ok((id, (elapsed, Ok(())))) => {
-                    let context = self
-                        .job_contexts
-                        .remove(&id)
-                        .expect("Job context not found");
+        leader::run_leader_duties(&self.state, &self.schedules).await
+    }
 
-                    self.in_flight_jobs.add(
-                        -1,
-                        &[KeyValue::new("job.queue.name", context.queue_name.clone())],
-                    );
+    /// Helper for integration tests: performs one full pass of leader duties
+    /// then runs every available job to completion.
+    pub async fn process_all_jobs_in_tests(&mut self) -> Result<(), QueueRunnerError> {
+        self.am_i_leader = true;
+        self.perform_leader_duties().await?;
 
-                    let elapsed_ms = elapsed.as_millis().try_into().unwrap_or(u64::MAX);
-                    self.job_processing_time.record(
-                        elapsed_ms,
-                        &[
-                            KeyValue::new("job.queue.name", context.queue_name),
-                            KeyValue::new("job.result", "success"),
-                        ],
-                    );
-
-                    repo.queue_job()
-                        .mark_as_completed(clock, context.id)
-                        .await?;
-                }
-
-                // The job failed. The logging and time measurement is already done in the task
-                Ok((id, (elapsed, Err(e)))) => {
-                    let context = self
-                        .job_contexts
-                        .remove(&id)
-                        .expect("Job context not found");
-
-                    self.in_flight_jobs.add(
-                        -1,
-                        &[KeyValue::new("job.queue.name", context.queue_name.clone())],
-                    );
-
-                    let reason = format!("{:?}", e.error);
-                    repo.queue_job()
-                        .mark_as_failed(clock, context.id, &reason)
-                        .await?;
-
-                    let elapsed_ms = elapsed.as_millis().try_into().unwrap_or(u64::MAX);
-                    match e.decision {
-                        JobErrorDecision::Fail => {
-                            self.job_processing_time.record(
-                                elapsed_ms,
-                                &[
-                                    KeyValue::new("job.queue.name", context.queue_name),
-                                    KeyValue::new("job.result", "failed"),
-                                    KeyValue::new("job.decision", "fail"),
-                                ],
-                            );
-                        }
-
-                        JobErrorDecision::Retry if context.attempt < MAX_ATTEMPTS => {
-                            self.job_processing_time.record(
-                                elapsed_ms,
-                                &[
-                                    KeyValue::new("job.queue.name", context.queue_name),
-                                    KeyValue::new("job.result", "failed"),
-                                    KeyValue::new("job.decision", "retry"),
-                                ],
-                            );
-
-                            let delay = retry_delay(context.attempt);
-                            repo.queue_job()
-                                .retry(&mut *rng, clock, context.id, delay)
-                                .await?;
-                        }
-
-                        JobErrorDecision::Retry => {
-                            self.job_processing_time.record(
-                                elapsed_ms,
-                                &[
-                                    KeyValue::new("job.queue.name", context.queue_name),
-                                    KeyValue::new("job.result", "failed"),
-                                    KeyValue::new("job.decision", "abandon"),
-                                ],
-                            );
-                        }
-                    }
-                }
-
-                // The job crashed (or was aborted)
-                Err(e) => {
-                    let id = e.id();
-                    let context = self
-                        .job_contexts
-                        .remove(&id)
-                        .expect("Job context not found");
-
-                    self.in_flight_jobs.add(
-                        -1,
-                        &[KeyValue::new("job.queue.name", context.queue_name.clone())],
-                    );
-
-                    // This measurement is not accurate as it includes the time processing the jobs,
-                    // but it's fine, it's only for panicked tasks
-                    let elapsed = context
-                        .start
-                        .elapsed()
-                        .as_millis()
-                        .try_into()
-                        .unwrap_or(u64::MAX);
-
-                    let reason = e.to_string();
-                    repo.queue_job()
-                        .mark_as_failed(clock, context.id, &reason)
-                        .await?;
-
-                    if context.attempt < MAX_ATTEMPTS {
-                        let delay = retry_delay(context.attempt);
-                        tracing::error!(
-                            error = &e as &dyn std::error::Error,
-                            job.id = %context.id,
-                            job.queue.name = %context.queue_name,
-                            job.attempt = %context.attempt,
-                            job.elapsed = format!("{elapsed}ms"),
-                            "Job crashed, will retry in {}s",
-                            delay.num_seconds()
-                        );
-
-                        self.job_processing_time.record(
-                            elapsed,
-                            &[
-                                KeyValue::new("job.queue.name", context.queue_name),
-                                KeyValue::new("job.result", "crashed"),
-                                KeyValue::new("job.decision", "retry"),
-                            ],
-                        );
-
-                        repo.queue_job()
-                            .retry(&mut *rng, clock, context.id, delay)
-                            .await?;
-                    } else {
-                        tracing::error!(
-                            error = &e as &dyn std::error::Error,
-                            job.id = %context.id,
-                            job.queue.name = %context.queue_name,
-                            job.attempt = %context.attempt,
-                            job.elapsed = format!("{elapsed}ms"),
-                            "Job crashed too many times, abandonning"
-                        );
-
-                        self.job_processing_time.record(
-                            elapsed,
-                            &[
-                                KeyValue::new("job.queue.name", context.queue_name),
-                                KeyValue::new("job.result", "crashed"),
-                                KeyValue::new("job.decision", "abandon"),
-                            ],
-                        );
-                    }
-                }
-            }
-
-            if blocking {
-                self.last_join_result = self.running_jobs.join_next_with_id().await;
-            } else {
-                self.last_join_result = self.running_jobs.try_join_next_with_id();
-            }
-        }
-
-        Ok(())
+        repo_runtime::process_all_jobs_in_tests(
+            &self.state,
+            &self.registration,
+            &mut self.tracker,
+            &self.cancellation_token,
+        )
+        .await
     }
 }
+

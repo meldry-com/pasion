@@ -1,186 +1,262 @@
+// Integration tests for the pasion-keystore crate.
+//
+// Covers: loading keys from various PEM/DER formats (plain and encrypted),
+// round-trip serialisation, key generation, JWT signing + verification via
+// the Keystore / JWKS API, and thumbprint consistency.
+
 use der::pem::LineEnding;
 use pasion_iana::jose::JsonWebSignatureAlg;
 use pasion_jose::{
-    jwk::ParametersInfo,
+    jwk::{ParametersInfo, Thumbprint},
     jwt::{JsonWebSignatureHeader, Jwt},
 };
 use pasion_keystore::{JsonWebKey, JsonWebKeySet, Keystore, PrivateKey};
 use rand::SeedableRng;
 
-static PASSWORD: &str = "hunter2";
+/// Shared password used for encrypted-key tests.
+static TEST_PASSPHRASE: &str = "hunter2";
 
-/// Generate a test which loads a key, and then tries signing and verifying a
-/// JWT for each available algorithm
-macro_rules! plain_test {
-    ($name:ident, $kind:ident, $path:literal) => {
+// ---------------------------------------------------------------------------
+// Helpers
+// ---------------------------------------------------------------------------
+
+/// Sign and verify a JWT for every algorithm the key supports.
+fn sign_verify_all_algs(private: &PrivateKey) {
+    let supported = private.possible_algs();
+    assert!(
+        !supported.is_empty(),
+        "key should support at least one algorithm"
+    );
+
+    for alg in supported {
+        let hdr = JsonWebSignatureHeader::new(alg.clone());
+        let signing = private.signing_key_for_alg(alg).unwrap();
+        let token = Jwt::sign(hdr, "hello", &signing).unwrap();
+        let verifying = private.verifying_key_for_alg(alg).unwrap();
+        token.verify(&verifying).unwrap();
+    }
+}
+
+/// Macro that generates a sign/verify test from an unencrypted key fixture.
+/// Delegates to the shared helper above.
+macro_rules! plain_key_test {
+    ($test_name:ident, $variant:ident, $fixture:literal) => {
         #[test]
-        fn $name() {
-            let bytes = include_bytes!(concat!("./keys/", $path));
-            let key = PrivateKey::load(bytes).unwrap();
-            assert!(matches!(key, PrivateKey::$kind(_)), "wrong key type");
-
-            let algs = key.possible_algs();
-            assert_ne!(algs.len(), 0);
-
-            for alg in algs {
-                let header = JsonWebSignatureHeader::new(alg.clone());
-                let payload = "hello";
-                let signer = key.signing_key_for_alg(alg).unwrap();
-                let jwt = Jwt::sign(header, payload, &signer).unwrap();
-                let verifier = key.verifying_key_for_alg(alg).unwrap();
-                jwt.verify(&verifier).unwrap();
-            }
+        fn $test_name() {
+            let data = include_bytes!(concat!("./keys/", $fixture));
+            let pk = PrivateKey::load(data).unwrap();
+            assert!(matches!(pk, PrivateKey::$variant(_)), "unexpected key variant");
+            sign_verify_all_algs(&pk);
         }
     };
 }
 
-/// Generate a test which loads an encrypted key, and then tries signing and
-/// verifying a JWT for each available algorithm
-macro_rules! enc_test {
-    ($name:ident, $kind:ident, $path:literal) => {
+/// Macro for encrypted-key tests.
+macro_rules! encrypted_key_test {
+    ($test_name:ident, $variant:ident, $fixture:literal) => {
         #[test]
-        fn $name() {
-            let bytes = include_bytes!(concat!("./keys/", $path));
-            let key = PrivateKey::load_encrypted(bytes, PASSWORD).unwrap();
-            assert!(matches!(key, PrivateKey::$kind(_)), "wrong key type");
-
-            let algs = key.possible_algs();
-            assert_ne!(algs.len(), 0);
-
-            for alg in algs {
-                let header = JsonWebSignatureHeader::new(alg.clone());
-                let payload = "hello";
-                let signer = key.signing_key_for_alg(alg).unwrap();
-                let jwt = Jwt::sign(header, payload, &signer).unwrap();
-                let verifier = key.verifying_key_for_alg(alg).unwrap();
-                jwt.verify(&verifier).unwrap();
-            }
+        fn $test_name() {
+            let data = include_bytes!(concat!("./keys/", $fixture));
+            let pk = PrivateKey::load_encrypted(data, TEST_PASSPHRASE).unwrap();
+            assert!(matches!(pk, PrivateKey::$variant(_)), "unexpected key variant");
+            sign_verify_all_algs(&pk);
         }
     };
 }
 
-/// Generate a PEM decoding and encoding test
-macro_rules! pem_test {
-    ($name:ident, $path:literal) => {
+/// PEM round-trip test: load PEM, re-encode, compare.
+macro_rules! pem_roundtrip {
+    ($test_name:ident, $fixture:literal) => {
         #[test]
-        fn $name() {
-            let pem = include_str!(concat!("./keys/", $path, ".pem"));
-            let key = PrivateKey::load_pem(pem).unwrap();
-            let pem2 = key.to_pem(pem_rfc7468::LineEnding::LF).unwrap();
-
-            assert_eq!(pem, pem2.as_str());
+        fn $test_name() {
+            let original = include_str!(concat!("./keys/", $fixture, ".pem"));
+            let pk = PrivateKey::load_pem(original).unwrap();
+            let re_encoded = pk.to_pem(pem_rfc7468::LineEnding::LF).unwrap();
+            assert_eq!(original, re_encoded.as_str());
         }
     };
 }
 
-/// Generate a DER decoding and encoding test
-macro_rules! der_test {
-    ($name:ident, $path:literal) => {
+/// DER round-trip test: load DER, re-encode, compare.
+macro_rules! der_roundtrip {
+    ($test_name:ident, $fixture:literal) => {
         #[test]
-        fn $name() {
-            let der = include_bytes!(concat!("./keys/", $path, ".der"));
-            let key = PrivateKey::load_der(der).unwrap();
-            let der2 = key.to_der().unwrap();
-
-            assert_eq!(der, der2.as_slice());
+        fn $test_name() {
+            let original = include_bytes!(concat!("./keys/", $fixture, ".der"));
+            let pk = PrivateKey::load_der(original).unwrap();
+            let re_encoded = pk.to_der().unwrap();
+            assert_eq!(original, re_encoded.as_slice());
         }
     };
 }
 
-plain_test!(plain_rsa_pkcs1_pem, Rsa, "rsa.pkcs1.pem");
-plain_test!(plain_rsa_pkcs1_der, Rsa, "rsa.pkcs1.der");
-plain_test!(plain_rsa_pkcs8_pem, Rsa, "rsa.pkcs8.pem");
-plain_test!(plain_rsa_pkcs8_der, Rsa, "rsa.pkcs8.der");
-plain_test!(plain_ec_p256_sec1_pem, EcP256, "ec-p256.sec1.pem");
-plain_test!(plain_ec_p256_sec1_der, EcP256, "ec-p256.sec1.der");
-plain_test!(plain_ec_p256_pkcs8_pem, EcP256, "ec-p256.pkcs8.pem");
-plain_test!(plain_ec_p256_pkcs8_der, EcP256, "ec-p256.pkcs8.der");
-plain_test!(plain_ec_p384_sec1_pem, EcP384, "ec-p384.sec1.pem");
-plain_test!(plain_ec_p384_sec1_der, EcP384, "ec-p384.sec1.der");
-plain_test!(plain_ec_p384_pkcs8_pem, EcP384, "ec-p384.pkcs8.pem");
-plain_test!(plain_ec_p384_pkcs8_der, EcP384, "ec-p384.pkcs8.der");
-plain_test!(plain_ec_k256_sec1_pem, EcK256, "ec-k256.sec1.pem");
-plain_test!(plain_ec_k256_sec1_der, EcK256, "ec-k256.sec1.der");
-plain_test!(plain_ec_k256_pkcs8_pem, EcK256, "ec-k256.pkcs8.pem");
-plain_test!(plain_ec_k256_pkcs8_der, EcK256, "ec-k256.pkcs8.der");
+// ---------------------------------------------------------------------------
+// Plaintext key loading + sign/verify
+// ---------------------------------------------------------------------------
 
-enc_test!(enc_rsa_pkcs8_pem, Rsa, "rsa.pkcs8.encrypted.pem");
-enc_test!(enc_rsa_pkcs8_der, Rsa, "rsa.pkcs8.encrypted.der");
-enc_test!(enc_ec_p256_pkcs8_pem, EcP256, "ec-p256.pkcs8.encrypted.pem");
-enc_test!(enc_ec_p256_pkcs8_der, EcP256, "ec-p256.pkcs8.encrypted.der");
-enc_test!(enc_ec_p384_pkcs8_pem, EcP384, "ec-p384.pkcs8.encrypted.pem");
-enc_test!(enc_ec_p384_pkcs8_der, EcP384, "ec-p384.pkcs8.encrypted.der");
-enc_test!(enc_ec_k256_pkcs8_pem, EcK256, "ec-k256.pkcs8.encrypted.pem");
-enc_test!(enc_ec_k256_pkcs8_der, EcK256, "ec-k256.pkcs8.encrypted.der");
+plain_key_test!(plain_rsa_pkcs1_pem, Rsa, "rsa.pkcs1.pem");
+plain_key_test!(plain_rsa_pkcs1_der, Rsa, "rsa.pkcs1.der");
+plain_key_test!(plain_rsa_pkcs8_pem, Rsa, "rsa.pkcs8.pem");
+plain_key_test!(plain_rsa_pkcs8_der, Rsa, "rsa.pkcs8.der");
+plain_key_test!(plain_ec_p256_sec1_pem, EcP256, "ec-p256.sec1.pem");
+plain_key_test!(plain_ec_p256_sec1_der, EcP256, "ec-p256.sec1.der");
+plain_key_test!(plain_ec_p256_pkcs8_pem, EcP256, "ec-p256.pkcs8.pem");
+plain_key_test!(plain_ec_p256_pkcs8_der, EcP256, "ec-p256.pkcs8.der");
+plain_key_test!(plain_ec_p384_sec1_pem, EcP384, "ec-p384.sec1.pem");
+plain_key_test!(plain_ec_p384_sec1_der, EcP384, "ec-p384.sec1.der");
+plain_key_test!(plain_ec_p384_pkcs8_pem, EcP384, "ec-p384.pkcs8.pem");
+plain_key_test!(plain_ec_p384_pkcs8_der, EcP384, "ec-p384.pkcs8.der");
+plain_key_test!(plain_ec_k256_sec1_pem, EcK256, "ec-k256.sec1.pem");
+plain_key_test!(plain_ec_k256_sec1_der, EcK256, "ec-k256.sec1.der");
+plain_key_test!(plain_ec_k256_pkcs8_pem, EcK256, "ec-k256.pkcs8.pem");
+plain_key_test!(plain_ec_k256_pkcs8_der, EcK256, "ec-k256.pkcs8.der");
 
-// Test PEM/DER serialization
-pem_test!(serialize_rsa_pkcs1_pem, "rsa.pkcs1");
-der_test!(serialize_rsa_pkcs1_der, "rsa.pkcs1");
-pem_test!(serialize_ec_p256_sec1_pem, "ec-p256.sec1");
-der_test!(serialize_ec_p256_sec1_der, "ec-p256.sec1");
-pem_test!(serialize_ec_p384_sec1_pem, "ec-p384.sec1");
-der_test!(serialize_ec_p384_sec1_der, "ec-p384.sec1");
-pem_test!(serialize_ec_k256_sec1_pem, "ec-k256.sec1");
-der_test!(serialize_ec_k256_sec1_der, "ec-k256.sec1");
+// ---------------------------------------------------------------------------
+// Encrypted key loading + sign/verify
+// ---------------------------------------------------------------------------
+
+encrypted_key_test!(enc_rsa_pkcs8_pem, Rsa, "rsa.pkcs8.encrypted.pem");
+encrypted_key_test!(enc_rsa_pkcs8_der, Rsa, "rsa.pkcs8.encrypted.der");
+encrypted_key_test!(enc_ec_p256_pkcs8_pem, EcP256, "ec-p256.pkcs8.encrypted.pem");
+encrypted_key_test!(enc_ec_p256_pkcs8_der, EcP256, "ec-p256.pkcs8.encrypted.der");
+encrypted_key_test!(enc_ec_p384_pkcs8_pem, EcP384, "ec-p384.pkcs8.encrypted.pem");
+encrypted_key_test!(enc_ec_p384_pkcs8_der, EcP384, "ec-p384.pkcs8.encrypted.der");
+encrypted_key_test!(enc_ec_k256_pkcs8_pem, EcK256, "ec-k256.pkcs8.encrypted.pem");
+encrypted_key_test!(enc_ec_k256_pkcs8_der, EcK256, "ec-k256.pkcs8.encrypted.der");
+
+// ---------------------------------------------------------------------------
+// PEM / DER round-trip serialisation
+// ---------------------------------------------------------------------------
+
+pem_roundtrip!(serialize_rsa_pkcs1_pem, "rsa.pkcs1");
+der_roundtrip!(serialize_rsa_pkcs1_der, "rsa.pkcs1");
+pem_roundtrip!(serialize_ec_p256_sec1_pem, "ec-p256.sec1");
+der_roundtrip!(serialize_ec_p256_sec1_der, "ec-p256.sec1");
+pem_roundtrip!(serialize_ec_p384_sec1_pem, "ec-p384.sec1");
+der_roundtrip!(serialize_ec_p384_sec1_der, "ec-p384.sec1");
+pem_roundtrip!(serialize_ec_k256_sec1_pem, "ec-k256.sec1");
+der_roundtrip!(serialize_ec_k256_sec1_der, "ec-k256.sec1");
+
+// ---------------------------------------------------------------------------
+// Key generation round-trips (P-521, Ed25519)
+// ---------------------------------------------------------------------------
+
+/// Helper: generate a key, serialise it to PEM / DER / PKCS8-DER, reload each
+/// form, and sign-verify with every supported algorithm.
+fn roundtrip_generated_key(
+    key: &PrivateKey,
+    expected_variant: &str,
+) {
+    // PEM round-trip
+    let pem_str = key.to_pem(pem_rfc7468::LineEnding::LF).unwrap();
+    let from_pem = PrivateKey::load_pem(&pem_str).unwrap();
+    let dbg_pem = format!("{from_pem:?}");
+    assert!(dbg_pem.starts_with(expected_variant), "PEM: {dbg_pem}");
+    sign_verify_all_algs(&from_pem);
+
+    // DER round-trip
+    let der_bytes = key.to_der().unwrap();
+    let from_der = PrivateKey::load_der(&der_bytes).unwrap();
+    let dbg_der = format!("{from_der:?}");
+    assert!(dbg_der.starts_with(expected_variant), "DER: {dbg_der}");
+    sign_verify_all_algs(&from_der);
+
+    // PKCS#8 DER round-trip
+    let pkcs8_bytes = key.to_pkcs8_der().unwrap();
+    let from_pkcs8 = PrivateKey::load_der(&pkcs8_bytes).unwrap();
+    let dbg_p8 = format!("{from_pkcs8:?}");
+    assert!(dbg_p8.starts_with(expected_variant), "PKCS8: {dbg_p8}");
+    sign_verify_all_algs(&from_pkcs8);
+}
+
+#[test]
+fn generated_ec_p521_roundtrip_sign_and_verify() {
+    let mut rng = rand_chacha::ChaCha8Rng::seed_from_u64(7);
+    let p521 = PrivateKey::generate_ec_p521(&mut rng);
+    roundtrip_generated_key(&p521, "EcP521");
+}
+
+#[test]
+fn generated_ed25519_roundtrip_sign_and_verify() {
+    let mut rng = rand_chacha::ChaCha8Rng::seed_from_u64(8);
+    let ed = PrivateKey::generate_ed25519(&mut rng);
+    roundtrip_generated_key(&ed, "OkpEd25519");
+}
+
+// ---------------------------------------------------------------------------
+// Error cases: encrypted / unencrypted mismatch
+// ---------------------------------------------------------------------------
 
 #[test]
 fn load_encrypted_as_unencrypted_error() {
-    let pem = include_str!("./keys/rsa.pkcs8.encrypted.pem");
-    assert!(PrivateKey::load_pem(pem).unwrap_err().is_encrypted());
+    let pem_content = include_str!("./keys/rsa.pkcs8.encrypted.pem");
+    assert!(PrivateKey::load_pem(pem_content).unwrap_err().is_encrypted());
 
-    let der = include_bytes!("./keys/rsa.pkcs8.encrypted.der");
-    assert!(PrivateKey::load_der(der).unwrap_err().is_encrypted());
+    let der_content = include_bytes!("./keys/rsa.pkcs8.encrypted.der");
+    assert!(PrivateKey::load_der(der_content).unwrap_err().is_encrypted());
 }
 
 #[test]
 fn load_unencrypted_as_encrypted_error() {
-    let pem = include_str!("./keys/rsa.pkcs8.pem");
+    let pem_content = include_str!("./keys/rsa.pkcs8.pem");
     assert!(
-        PrivateKey::load_encrypted_pem(pem, PASSWORD)
+        PrivateKey::load_encrypted_pem(pem_content, TEST_PASSPHRASE)
             .unwrap_err()
             .is_unencrypted()
     );
 
-    let der = include_bytes!("./keys/rsa.pkcs8.der");
+    let der_content = include_bytes!("./keys/rsa.pkcs8.der");
     assert!(
-        PrivateKey::load_encrypted_der(der, PASSWORD)
+        PrivateKey::load_encrypted_der(der_content, TEST_PASSPHRASE)
             .unwrap_err()
             .is_unencrypted()
     );
 }
 
+// ---------------------------------------------------------------------------
+// Full keystore: generate several key types, build a Keystore + JWKS, and
+// sign/verify for every standard algorithm.
+// ---------------------------------------------------------------------------
+
 #[allow(clippy::similar_names)]
 #[test]
 fn generate_sign_and_verify() {
-    // Use a seeded RNG to keep the snapshot stable
     let mut rng = rand_chacha::ChaCha8Rng::seed_from_u64(42);
 
-    let rsa = PrivateKey::generate_rsa(&mut rng).expect("Failed to generate RSA key");
-    insta::assert_snapshot!(&*rsa.to_pem(LineEnding::LF).unwrap());
+    // Generate one key of each flavour.
+    let rsa_key = PrivateKey::generate_rsa(&mut rng).expect("RSA generation failed");
+    insta::assert_snapshot!(&*rsa_key.to_pem(LineEnding::LF).unwrap());
 
-    let ec_p256 = PrivateKey::generate_ec_p256(&mut rng);
-    insta::assert_snapshot!(&*ec_p256.to_pem(LineEnding::LF).unwrap());
+    let p256_key = PrivateKey::generate_ec_p256(&mut rng);
+    insta::assert_snapshot!(&*p256_key.to_pem(LineEnding::LF).unwrap());
 
-    let ec_p384 = PrivateKey::generate_ec_p384(&mut rng);
-    insta::assert_snapshot!(&*ec_p384.to_pem(LineEnding::LF).unwrap());
+    let p384_key = PrivateKey::generate_ec_p384(&mut rng);
+    insta::assert_snapshot!(&*p384_key.to_pem(LineEnding::LF).unwrap());
 
-    let ec_k256 = PrivateKey::generate_ec_k256(&mut rng);
-    insta::assert_snapshot!(&*ec_k256.to_pem(LineEnding::LF).unwrap());
+    let k256_key = PrivateKey::generate_ec_k256(&mut rng);
+    insta::assert_snapshot!(&*k256_key.to_pem(LineEnding::LF).unwrap());
 
-    // Create a keystore out of the keys
-    let keyset = Keystore::new(JsonWebKeySet::new(vec![
-        JsonWebKey::new(rsa),
-        JsonWebKey::new(ec_p256),
-        JsonWebKey::new(ec_p384),
-        JsonWebKey::new(ec_k256),
+    // Use a separate seed so that earlier key-gen changes don't cascade.
+    let mut aux_rng = rand_chacha::ChaCha8Rng::seed_from_u64(1337);
+    let p521_key = PrivateKey::generate_ec_p521(&mut aux_rng);
+    let ed_key = PrivateKey::generate_ed25519(&mut aux_rng);
+
+    // Assemble a Keystore from all six keys.
+    let store = Keystore::new(JsonWebKeySet::new(vec![
+        JsonWebKey::new(rsa_key),
+        JsonWebKey::new(p256_key),
+        JsonWebKey::new(p384_key),
+        JsonWebKey::new(p521_key),
+        JsonWebKey::new(k256_key),
+        JsonWebKey::new(ed_key),
     ]));
 
-    // And extract the public JWKS
-    let jwks = keyset.public_jwks();
-    insta::assert_yaml_snapshot!(jwks);
+    let public_jwks = store.public_jwks();
+    insta::assert_yaml_snapshot!(public_jwks);
 
-    // Try signing for each supported algorithm
-    for alg in [
+    // Sign a token for every supported algorithm and verify against the
+    // public JWKS.
+    let all_algs = [
         JsonWebSignatureAlg::Rs256,
         JsonWebSignatureAlg::Rs384,
         JsonWebSignatureAlg::Rs512,
@@ -190,15 +266,40 @@ fn generate_sign_and_verify() {
         JsonWebSignatureAlg::Es256,
         JsonWebSignatureAlg::Es384,
         JsonWebSignatureAlg::Es256K,
-    ] {
-        // Find a matching key and sign with it
-        let key = keyset.signing_key_for_algorithm(&alg).unwrap();
-        let signer = key.params().signing_key_for_alg(&alg).unwrap();
-        let header = JsonWebSignatureHeader::new(alg.clone());
-        let token = Jwt::sign_with_rng(&mut rng, header, "", &signer).unwrap();
+        JsonWebSignatureAlg::Es512,
+        JsonWebSignatureAlg::EdDsa,
+    ];
+
+    for alg in all_algs {
+        let matched = store.signing_key_for_algorithm(&alg).unwrap();
+        let signer = matched.params().signing_key_for_alg(&alg).unwrap();
+        let hdr = JsonWebSignatureHeader::new(alg.clone());
+        let token = Jwt::sign_with_rng(&mut rng, hdr, "", &signer).unwrap();
         insta::assert_snapshot!(format!("jwt_{alg}"), token.as_str());
 
-        // Then try to verify from the public JWKS
-        token.verify_with_jwks(&jwks).unwrap();
+        // Verify from the public side only.
+        token.verify_with_jwks(&public_jwks).unwrap();
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Thumbprint consistency: private key thumbprint must match the public JWKS
+// ---------------------------------------------------------------------------
+
+#[test]
+fn generated_private_key_thumbprints_match_public_jwks() {
+    let mut rng = rand_chacha::ChaCha8Rng::seed_from_u64(2026);
+
+    // Check each generated key type individually.
+    for private_key in [
+        PrivateKey::generate_ec_p521(&mut rng),
+        PrivateKey::generate_ed25519(&mut rng),
+    ] {
+        let expected = private_key.thumbprint_sha256_base64();
+        let pub_jwks =
+            Keystore::new(JsonWebKeySet::new(vec![JsonWebKey::new(private_key)])).public_jwks();
+
+        assert_eq!(pub_jwks.len(), 1, "JWKS should contain exactly one key");
+        assert_eq!(pub_jwks[0].thumbprint_sha256_base64(), expected);
     }
 }

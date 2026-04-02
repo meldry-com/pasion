@@ -37,10 +37,18 @@ pub fn AccountPage() -> Element {
                     };
                 }
             };
+            let profile = user
+                .profile
+                .clone()
+                .unwrap_or(crate::api::types::UserProfile {
+                    display_name: matrix.display_name.clone(),
+                    avatar_url: None,
+                    preferred_locale: None,
+                    updated_at: String::new(),
+                });
 
             let has_plan = result.site_config.plan_management_iframe_uri.is_some();
             let display_name_change_allowed = result.site_config.display_name_change_allowed;
-            let user_id = user.id.clone();
 
             rsx! {
                 Layout { wide: true,
@@ -49,12 +57,18 @@ pub fn AccountPage() -> Element {
                         div { class: "flex flex-col gap-4",
                             UserGreeting {
                                 matrix: matrix,
-                                user_id: user_id,
+                                profile: profile,
                                 display_name_change_allowed: display_name_change_allowed,
                             }
                             NavBar {
+                                NavItem { to: Route::AccountOverview {}, "Overview" }
                                 NavItem { to: Route::AccountSettings {}, "Settings" }
+                                NavItem { to: Route::SecurityCenter {}, "Security" }
+                                NavItem { to: Route::ContactManagement {}, "Contacts" }
+                                NavItem { to: Route::IdentityBindings {}, "Identities" }
+                                NavItem { to: Route::NotificationPreferences {}, "Notifications" }
                                 NavItem { to: Route::Sessions {}, "Devices" }
+                                NavItem { to: Route::WorkflowInbox {}, "Workflows" }
                                 if has_plan {
                                     NavItem { to: Route::Plan {}, "Plan" }
                                 }

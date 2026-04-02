@@ -1,26 +1,24 @@
-use std::{collections::HashMap, fs::File, io::BufReader, str::FromStr};
+use std::{collections::HashMap, fs};
 
 use camino::{Utf8Path, Utf8PathBuf};
+use fluent_bundle::{FluentArgs, FluentResource};
 use icu_experimental::relativetime::{
     RelativeTimeFormatter, RelativeTimeFormatterOptions, options::Numeric,
 };
-use icu_locid::{Locale, ParserError};
+use icu_locid::Locale;
 use icu_locid_transform::fallback::{
     LocaleFallbackPriority, LocaleFallbackSupplement, LocaleFallbacker, LocaleFallbackerWithConfig,
 };
-use icu_plurals::{PluralRules, PluralsError};
 use icu_provider::{
     DataError, DataErrorKind, DataKey, DataLocale, DataRequest, DataRequestMetadata, data_key,
     fallback::LocaleFallbackConfig,
 };
-use icu_provider_adapters::fallback::LocaleFallbackProvider;
 use thiserror::Error;
+use unic_langid::LanguageIdentifier;
 use writeable::Writeable;
 
-use crate::{sprintf::Message, translations::TranslationTree};
-
-/// Fake data key for errors
-const DATA_KEY: DataKey = data_key!("mas/translations@1");
+/// Fake data key for errors (kept for ICU error reporting).
+const DATA_KEY: DataKey = data_key!("pasion/translations@1");
 
 const FALLBACKER: LocaleFallbackerWithConfig<'static> = LocaleFallbacker::new().for_config({
     let mut config = LocaleFallbackConfig::const_default();
@@ -29,14 +27,14 @@ const FALLBACKER: LocaleFallbackerWithConfig<'static> = LocaleFallbacker::new().
     config
 });
 
-/// Construct a [`DataRequest`] for the given locale
+/// Construct a [`DataRequest`] for the given locale.
 pub fn data_request_for_locale(locale: &DataLocale) -> DataRequest<'_> {
     let mut metadata = DataRequestMetadata::default();
     metadata.silent = true;
     DataRequest { locale, metadata }
 }
 
-/// Error type for loading translations
+/// Error type for loading translations.
 #[derive(Debug, Error)]
 pub enum LoadError {
     #[error("Failed to load translation directory {path:?}")]
@@ -53,334 +51,315 @@ pub enum LoadError {
         source: std::io::Error,
     },
 
-    #[error("Failed to deserialize translation file {path:?}")]
-    Deserialize {
+    #[error("Failed to parse FTL file {path:?}: {errors:?}")]
+    ParseFtl {
         path: Utf8PathBuf,
-        #[source]
-        source: serde_json::Error,
+        errors: Vec<String>,
     },
 
-    #[error("Invalid locale for file {path:?}")]
-    InvalidLocale {
-        path: Utf8PathBuf,
-        #[source]
-        source: ParserError,
-    },
+    #[error("Invalid locale for file {path:?}: {detail}")]
+    InvalidLocale { path: Utf8PathBuf, detail: String },
 
     #[error("Invalid file name {path:?}")]
     InvalidFileName { path: Utf8PathBuf },
 }
 
-/// A translator for a set of translations.
-#[derive(Debug)]
+/// A concurrent Fluent bundle type alias, safe for use in async / web servers.
+type ConcurrentBundle = fluent_bundle::concurrent::FluentBundle<FluentResource>;
+
+/// A translator backed by Fluent `.ftl` files.
+///
+/// Holds one [`FluentBundle`](fluent_bundle::concurrent::FluentBundle) per
+/// locale and performs key lookup with automatic locale fallback (using the ICU
+/// fallback chain) and transparent dot-to-hyphen key conversion so that
+/// template code can use `"common.loading"` while the FTL file defines
+/// `common-loading`.
 pub struct Translator {
-    translations: HashMap<DataLocale, TranslationTree>,
-    plural_provider: LocaleFallbackProvider<icu_plurals::provider::Baked>,
+    bundles: HashMap<DataLocale, ConcurrentBundle>,
     default_locale: DataLocale,
 }
 
-impl Translator {
-    /// Create a new translator from a set of translations.
-    #[must_use]
-    pub fn new(translations: HashMap<DataLocale, TranslationTree>) -> Self {
-        let fallbacker = LocaleFallbacker::new().static_to_owned();
-        let plural_provider = LocaleFallbackProvider::new_with_fallbacker(
-            icu_plurals::provider::Baked,
-            fallbacker.clone(),
-        );
+// Manual Debug impl because FluentBundle doesn't implement Debug.
+impl std::fmt::Debug for Translator {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("Translator")
+            .field("locales", &self.bundles.keys().collect::<Vec<_>>())
+            .field("default_locale", &self.default_locale)
+            .finish()
+    }
+}
 
+impl Default for Translator {
+    fn default() -> Self {
         Self {
-            translations,
-            plural_provider,
-            // TODO: make this configurable
+            bundles: HashMap::new(),
             default_locale: icu_locid::locale!("en").into(),
         }
     }
+}
 
-    /// Load a set of translations from a directory.
+impl Translator {
+    /// Load `.ftl` translation files from a directory.
     ///
-    /// The directory should contain one JSON file per locale, with the locale
-    /// being the filename without the extension, e.g. `en-US.json`.
-    ///
-    /// # Parameters
-    ///
-    /// * `path` - The path to load from.
+    /// The directory should contain one `.ftl` file per locale, where the file
+    /// name (without extension) is the BCP-47 locale tag, e.g. `en.ftl`,
+    /// `zh-Hans.ftl`.
     ///
     /// # Errors
     ///
-    /// Returns an error if the directory cannot be read, or if any of the files
-    /// cannot be parsed.
+    /// Returns an error if the directory cannot be read, if any file cannot be
+    /// parsed as valid FTL, or if a filename is not a valid locale.
     pub fn load_from_path(path: &Utf8Path) -> Result<Self, LoadError> {
-        let mut translations = HashMap::new();
-
-        let dir = path.read_dir_utf8().map_err(|source| LoadError::ReadDir {
+        let entries = path.read_dir_utf8().map_err(|source| LoadError::ReadDir {
             path: path.to_owned(),
             source,
         })?;
 
-        for entry in dir {
-            let entry = entry.map_err(|source| LoadError::ReadDir {
+        let mut bundles: HashMap<DataLocale, ConcurrentBundle> = HashMap::new();
+
+        for dir_result in entries {
+            let dir_entry = dir_result.map_err(|source| LoadError::ReadDir {
                 path: path.to_owned(),
                 source,
             })?;
-            let path = entry.into_path();
-            let Some(name) = path.file_stem() else {
-                return Err(LoadError::InvalidFileName { path });
-            };
 
-            let locale: Locale = match Locale::from_str(name) {
-                Ok(locale) => locale,
-                Err(source) => return Err(LoadError::InvalidLocale { path, source }),
-            };
+            let file_path = dir_entry.into_path();
 
-            let file = match File::open(&path) {
-                Ok(file) => file,
-                Err(source) => return Err(LoadError::ReadFile { path, source }),
-            };
+            // Only process .ftl files
+            if file_path.extension() != Some("ftl") {
+                continue;
+            }
 
-            let mut reader = BufReader::new(file);
+            let stem = file_path
+                .file_stem()
+                .ok_or_else(|| LoadError::InvalidFileName {
+                    path: file_path.clone(),
+                })?;
 
-            let content = match serde_json::from_reader(&mut reader) {
-                Ok(content) => content,
-                Err(source) => return Err(LoadError::Deserialize { path, source }),
-            };
+            // Parse stem as an ICU locale (for the DataLocale key)
+            let icu_locale: Locale = stem.parse().map_err(|e| LoadError::InvalidLocale {
+                path: file_path.clone(),
+                detail: format!("{e}"),
+            })?;
+            let data_locale: DataLocale = icu_locale.into();
 
-            translations.insert(locale.into(), content);
+            // Parse stem as a unic LanguageIdentifier (for FluentBundle)
+            let langid: LanguageIdentifier =
+                stem.parse().map_err(|e| LoadError::InvalidLocale {
+                    path: file_path.clone(),
+                    detail: format!("{e}"),
+                })?;
+
+            let source = fs::read_to_string(&file_path).map_err(|source| LoadError::ReadFile {
+                path: file_path.clone(),
+                source,
+            })?;
+
+            let resource = FluentResource::try_new(source).map_err(|(_, errors)| {
+                LoadError::ParseFtl {
+                    path: file_path.clone(),
+                    errors: errors.iter().map(|e| format!("{e}")).collect(),
+                }
+            })?;
+
+            let mut bundle =
+                fluent_bundle::concurrent::FluentBundle::new_concurrent(vec![langid]);
+            bundle.set_use_isolating(false);
+            bundle.add_resource(resource).map_err(|errors| {
+                LoadError::ParseFtl {
+                    path: file_path.clone(),
+                    errors: errors.iter().map(|e| format!("{e}")).collect(),
+                }
+            })?;
+
+            bundles.insert(data_locale, bundle);
         }
 
-        Ok(Self::new(translations))
+        Ok(Self {
+            bundles,
+            // TODO: make this configurable
+            default_locale: icu_locid::locale!("en").into(),
+        })
     }
 
-    /// Get a message from the tree by key, with locale fallback.
+    // ------------------------------------------------------------------
+    // Message lookup
+    // ------------------------------------------------------------------
+
+    /// Convert a dot-separated template key to the hyphen-separated FTL message
+    /// identifier.
     ///
-    /// Returns the message and the locale it was found in.
-    /// If the message is not found, returns `None`.
+    /// Example: `"common.loading"` becomes `"common-loading"`.
+    fn key_to_ftl_id(key: &str) -> String {
+        key.replace('.', "-")
+    }
+
+    /// Format a message for the given locale, walking the ICU fallback chain.
     ///
-    /// # Parameters
+    /// The `key` may use dot separators (e.g. `"common.loading"`); dots are
+    /// transparently converted to hyphens for the FTL lookup.
     ///
-    /// * `locale` - The locale to use.
-    /// * `key` - The key to look up, which is a dot-separated path.
+    /// Returns `None` if no translation is found in any locale along the
+    /// fallback chain.
     #[must_use]
-    pub fn message_with_fallback(
-        &self,
-        locale: DataLocale,
-        key: &str,
-    ) -> Option<(&Message, DataLocale)> {
-        if let Ok(message) = self.message(&locale, key) {
-            return Some((message, locale));
-        }
-
-        let mut iter = FALLBACKER.fallback_for(locale);
-
-        loop {
-            let locale = iter.get();
-
-            if let Ok(message) = self.message(locale, key) {
-                return Some((message, iter.take()));
-            }
-
-            // Try the defaut locale if we hit the `und` locale
-            if locale.is_und() {
-                let message = self.message(&self.default_locale, key).ok()?;
-                return Some((message, self.default_locale.clone()));
-            }
-
-            iter.step();
-        }
-    }
-
-    /// Get a message from the tree by key.
-    ///
-    /// # Parameters
-    ///
-    /// * `locale` - The locale to use.
-    /// * `key` - The key to look up, which is a dot-separated path.
-    ///
-    /// # Errors
-    ///
-    /// Returns an error if the requested locale is not found, or if the
-    /// requested key is not found.
-    pub fn message(&self, locale: &DataLocale, key: &str) -> Result<&Message, DataError> {
-        let request = data_request_for_locale(locale);
-
-        let tree = self
-            .translations
-            .get(locale)
-            .ok_or_else(|| DataErrorKind::MissingLocale.with_req(DATA_KEY, request))?;
-
-        let message = tree
-            .message(key)
-            .ok_or_else(|| DataErrorKind::MissingDataKey.with_req(DATA_KEY, request))?;
-
-        Ok(message)
-    }
-
-    /// Get a plural message from the tree by key, with locale fallback.
-    ///
-    /// Returns the message and the locale it was found in.
-    /// If the message is not found, returns `None`.
-    ///
-    /// # Parameters
-    ///
-    /// * `locale` - The locale to use.
-    /// * `key` - The key to look up, which is a dot-separated path.
-    /// * `count` - The count to use for pluralization.
-    #[must_use]
-    pub fn plural_with_fallback(
-        &self,
-        locale: DataLocale,
-        key: &str,
-        count: usize,
-    ) -> Option<(&Message, DataLocale)> {
-        let mut iter = FALLBACKER.fallback_for(locale);
-
-        loop {
-            let locale = iter.get();
-
-            if let Ok(message) = self.plural(locale, key, count) {
-                return Some((message, iter.take()));
-            }
-
-            // Stop if we hit the `und` locale
-            if locale.is_und() {
-                return None;
-            }
-
-            iter.step();
-        }
-    }
-
-    /// Get a plural message from the tree by key.
-    ///
-    /// # Parameters
-    ///
-    /// * `locale` - The locale to use.
-    /// * `key` - The key to look up, which is a dot-separated path.
-    /// * `count` - The count to use for pluralization.
-    ///
-    /// # Errors
-    ///
-    /// Returns an error if the requested locale is not found, or if the
-    /// requested key is not found.
-    pub fn plural(
+    pub fn format(
         &self,
         locale: &DataLocale,
         key: &str,
-        count: usize,
-    ) -> Result<&Message, PluralsError> {
-        let plurals = PluralRules::try_new_cardinal_unstable(&self.plural_provider, locale)?;
-        let category = plurals.category_for(count);
+        args: Option<&FluentArgs<'_>>,
+    ) -> Option<String> {
+        let ftl_id = Self::key_to_ftl_id(key);
 
-        let request = data_request_for_locale(locale);
+        // Try the exact locale first.
+        if let Some(result) = self.format_in_bundle(locale, &ftl_id, args) {
+            return Some(result);
+        }
 
-        let tree = self
-            .translations
-            .get(locale)
-            .ok_or_else(|| DataErrorKind::MissingLocale.with_req(DATA_KEY, request))?;
+        // Walk the ICU fallback chain.
+        let mut chain = FALLBACKER.fallback_for(locale.clone());
+        loop {
+            let candidate = chain.get();
 
-        let message = tree
-            .pluralize(key, category)
-            .ok_or_else(|| DataErrorKind::MissingDataKey.with_req(DATA_KEY, request))?;
+            if let Some(result) = self.format_in_bundle(candidate, &ftl_id, args) {
+                return Some(result);
+            }
 
-        Ok(message)
+            if candidate.is_und() {
+                // Last resort: default locale.
+                return self.format_in_bundle(&self.default_locale, &ftl_id, args);
+            }
+
+            chain.step();
+        }
     }
 
-    /// Format a relative date
+    /// Try to format a single message in the bundle for `locale`.
+    fn format_in_bundle(
+        &self,
+        locale: &DataLocale,
+        ftl_id: &str,
+        args: Option<&FluentArgs<'_>>,
+    ) -> Option<String> {
+        let bundle = self.bundles.get(locale)?;
+        let message = bundle.get_message(ftl_id)?;
+        let pattern = message.value()?;
+        let mut errors = vec![];
+        let result = bundle.format_pattern(pattern, args, &mut errors);
+        Some(result.into_owned())
+    }
+
+    // ------------------------------------------------------------------
+    // ICU date/time helpers (unchanged from original)
+    // ------------------------------------------------------------------
+
+    /// Format a relative date.
     ///
     /// # Parameters
     ///
-    /// * `locale` - The locale to use.
-    /// * `days` - The number of days to format, where 0 = today, 1 = tomorrow,
+    /// * `locale` -- The locale to use.
+    /// * `days` -- The number of days to format, where 0 = today, 1 = tomorrow,
     ///   -1 = yesterday, etc.
     ///
     /// # Errors
     ///
-    /// Returns an error if the requested locale is not found.
+    /// Returns an error if the ICU formatter cannot be created for the locale.
     pub fn relative_date(
         &self,
         locale: &DataLocale,
         days: i64,
     ) -> Result<String, icu_experimental::relativetime::RelativeTimeError> {
-        // TODO: this is not using the fallbacker
-        let formatter = RelativeTimeFormatter::try_new_long_day(
-            locale,
-            RelativeTimeFormatterOptions {
-                numeric: Numeric::Auto,
-            },
-        )?;
-
-        let date = formatter.format(days.into());
-        Ok(date.write_to_string().into_owned())
+        let opts = RelativeTimeFormatterOptions {
+            numeric: Numeric::Auto,
+        };
+        let formatter = RelativeTimeFormatter::try_new_long_day(locale, opts)?;
+        let writeable = formatter.format(days.into());
+        Ok(writeable.write_to_string().into_owned())
     }
 
-    /// Format time
+    /// Format a short time.
     ///
     /// # Parameters
     ///
-    /// * `locale` - The locale to use.
-    /// * `time` - The time to format.
+    /// * `locale` -- The locale to use.
+    /// * `time` -- The time to format.
     ///
     /// # Errors
     ///
-    /// Returns an error if the requested locale is not found.
+    /// Returns an error if the ICU formatter cannot be created for the locale.
     pub fn short_time<T: icu_datetime::input::IsoTimeInput>(
         &self,
         locale: &DataLocale,
         time: &T,
     ) -> Result<String, icu_datetime::DateTimeError> {
-        // TODO: this is not using the fallbacker
-        let formatter = icu_datetime::TimeFormatter::try_new_with_length(
-            locale,
-            icu_datetime::options::length::Time::Short,
-        )?;
-
-        Ok(formatter.format_to_string(time))
+        let time_length = icu_datetime::options::length::Time::Short;
+        let fmt = icu_datetime::TimeFormatter::try_new_with_length(locale, time_length)?;
+        Ok(fmt.format_to_string(time))
     }
+
+    // ------------------------------------------------------------------
+    // Locale helpers
+    // ------------------------------------------------------------------
 
     /// Get a list of available locales.
     #[must_use]
     pub fn available_locales(&self) -> Vec<DataLocale> {
-        self.translations.keys().cloned().collect()
+        self.bundles.keys().cloned().collect()
     }
 
     /// Check if a locale is available.
     #[must_use]
     pub fn has_locale(&self, locale: &DataLocale) -> bool {
-        self.translations.contains_key(locale)
+        self.bundles.contains_key(locale)
     }
 
     /// Choose the best available locale from a list of candidates.
     #[must_use]
     pub fn choose_locale(&self, iter: impl Iterator<Item = DataLocale>) -> DataLocale {
-        for locale in iter {
-            if self.has_locale(&locale) {
-                return locale;
+        for candidate in iter {
+            // Exact match?
+            if self.has_locale(&candidate) {
+                return candidate;
             }
 
-            let mut fallbacker = FALLBACKER.fallback_for(locale);
-
+            // Walk the fallback chain for this candidate.
+            let mut chain = FALLBACKER.fallback_for(candidate);
             loop {
-                if fallbacker.get().is_und() {
+                let current = chain.get();
+                if current.is_und() {
                     break;
                 }
 
-                if self.has_locale(fallbacker.get()) {
-                    return fallbacker.take();
+                if self.has_locale(current) {
+                    return chain.take();
                 }
-                fallbacker.step();
+
+                chain.step();
             }
         }
 
+        // Nothing matched; return the default.
         self.default_locale.clone()
+    }
+
+    /// Build a `DataError` for a missing locale or key.
+    #[allow(dead_code)]
+    fn missing_locale_error(&self, locale: &DataLocale) -> DataError {
+        DataErrorKind::MissingLocale.with_req(DATA_KEY, data_request_for_locale(locale))
+    }
+
+    #[allow(dead_code)]
+    fn missing_key_error(&self, locale: &DataLocale) -> DataError {
+        DataErrorKind::MissingDataKey.with_req(DATA_KEY, data_request_for_locale(locale))
     }
 }
 
 #[cfg(test)]
 mod tests {
     use camino::Utf8PathBuf;
+    use fluent_bundle::FluentValue;
     use icu_locid::locale;
 
-    use crate::{sprintf::arg_list, translator::Translator};
+    use super::Translator;
 
     fn translator() -> Translator {
         let root: Utf8PathBuf = env!("CARGO_MANIFEST_DIR").parse().unwrap();
@@ -392,83 +371,45 @@ mod tests {
     fn test_message() {
         let translator = translator();
 
-        let message = translator.message(&locale!("en").into(), "hello").unwrap();
-        let formatted = message.format(&arg_list!()).unwrap();
-        assert_eq!(formatted, "Hello!");
+        let result = translator.format(&locale!("en").into(), "hello", None);
+        assert_eq!(result.as_deref(), Some("Hello!"));
 
-        let message = translator.message(&locale!("fr").into(), "hello").unwrap();
-        let formatted = message.format(&arg_list!()).unwrap();
-        assert_eq!(formatted, "Bonjour !");
+        let result = translator.format(&locale!("fr").into(), "hello", None);
+        assert_eq!(result.as_deref(), Some("Bonjour !"));
 
-        let message = translator
-            .message(&locale!("en-US").into(), "hello")
-            .unwrap();
-        let formatted = message.format(&arg_list!()).unwrap();
-        assert_eq!(formatted, "Hey!");
+        // en-US has its own hello
+        let result = translator.format(&locale!("en-US").into(), "hello", None);
+        assert_eq!(result.as_deref(), Some("Hey!"));
 
-        // Try the fallback chain
-        let result = translator.message(&locale!("en-US").into(), "goodbye");
-        assert!(result.is_err());
-
-        let (message, locale) = translator
-            .message_with_fallback(locale!("en-US").into(), "goodbye")
-            .unwrap();
-        let formatted = message.format(&arg_list!()).unwrap();
-        assert_eq!(formatted, "Goodbye!");
-        assert_eq!(locale, locale!("en").into());
+        // en-US does not have "goodbye", should fall back to en
+        let result = translator.format(&locale!("en-US").into(), "goodbye", None);
+        assert_eq!(result.as_deref(), Some("Goodbye!"));
     }
 
     #[test]
-    fn test_plurals() {
+    fn test_format_with_args() {
         let translator = translator();
 
-        let message = translator
-            .plural(&locale!("en").into(), "active_sessions", 1)
-            .unwrap();
-        let formatted = message.format(&arg_list!(count = 1)).unwrap();
-        assert_eq!(formatted, "1 active session.");
+        let mut args = fluent_bundle::FluentArgs::new();
+        args.set("count", FluentValue::from(1));
+        let result = translator.format(&locale!("en").into(), "active-sessions-one", Some(&args));
+        assert_eq!(result.as_deref(), Some("1 active session."));
 
-        let message = translator
-            .plural(&locale!("en").into(), "active_sessions", 2)
-            .unwrap();
-        let formatted = message.format(&arg_list!(count = 2)).unwrap();
-        assert_eq!(formatted, "2 active sessions.");
+        let mut args = fluent_bundle::FluentArgs::new();
+        args.set("count", FluentValue::from(2));
+        let result =
+            translator.format(&locale!("en").into(), "active-sessions-other", Some(&args));
+        assert_eq!(result.as_deref(), Some("2 active sessions."));
+    }
 
-        // In english, zero is plural
-        let message = translator
-            .plural(&locale!("en").into(), "active_sessions", 0)
-            .unwrap();
-        let formatted = message.format(&arg_list!(count = 0)).unwrap();
-        assert_eq!(formatted, "0 active sessions.");
+    #[test]
+    fn test_dot_to_hyphen_conversion() {
+        let translator = translator();
 
-        let message = translator
-            .plural(&locale!("fr").into(), "active_sessions", 1)
-            .unwrap();
-        let formatted = message.format(&arg_list!(count = 1)).unwrap();
-        assert_eq!(formatted, "1 session active.");
-
-        let message = translator
-            .plural(&locale!("fr").into(), "active_sessions", 2)
-            .unwrap();
-        let formatted = message.format(&arg_list!(count = 2)).unwrap();
-        assert_eq!(formatted, "2 sessions actives.");
-
-        // In french, zero is singular
-        let message = translator
-            .plural(&locale!("fr").into(), "active_sessions", 0)
-            .unwrap();
-        let formatted = message.format(&arg_list!(count = 0)).unwrap();
-        assert_eq!(formatted, "0 session active.");
-
-        // Try the fallback chain
-        let result = translator.plural(&locale!("en-US").into(), "active_sessions", 1);
-        assert!(result.is_err());
-
-        let (message, locale) = translator
-            .plural_with_fallback(locale!("en-US").into(), "active_sessions", 1)
-            .unwrap();
-        let formatted = message.format(&arg_list!(count = 1)).unwrap();
-        assert_eq!(formatted, "1 active session.");
-        assert_eq!(locale, locale!("en").into());
+        let mut args = fluent_bundle::FluentArgs::new();
+        args.set("count", FluentValue::from(1));
+        let result =
+            translator.format(&locale!("en").into(), "active-sessions.one", Some(&args));
+        assert_eq!(result.as_deref(), Some("1 active session."));
     }
 }

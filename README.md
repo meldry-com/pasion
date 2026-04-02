@@ -1,20 +1,25 @@
 # Pasion
 
-An OAuth 2.0 / OpenID Connect authentication and user management service for [Palpo](https://palpo.im/) Matrix homeservers.
+An identity, notification, operations, and integration platform for [Palpo](https://palpo.im/) Matrix homeservers.
 
 ## Overview
 
-Pasion handles authentication for Matrix homeservers using the industry-standard OpenID Connect protocol. It replaces the legacy Matrix login system with a modern, standards-based approach as defined by [MSC3861](https://github.com/matrix-org/matrix-doc/pull/3861).
+Pasion is a comprehensive user operations platform built for Palpo. While it implements OAuth 2.0 and OpenID Connect for standards-based authentication ([MSC3861](https://github.com/matrix-org/matrix-doc/pull/3861)), Pasion goes well beyond a conventional auth service. It provides a workflow engine for managing user lifecycle operations, a unified notification center for multi-channel dispatch, a connector platform for external system integration, and a dual policy engine for fine-grained access control.
 
 ### Key Features
 
-- **OAuth 2.0 & OpenID Connect** — Full-featured OIDC Provider with authorization code, client credentials, and device code grant flows
-- **Upstream SSO** — Federate with external identity providers (Google, GitHub, GitLab, Apple, Keycloak, LDAP via Dex, QQ, WeChat, WeCom, Feishu, Lark, DingTalk, and more)
-- **Admin API** — RESTful JSON API for managing users, sessions, and OAuth 2.0 clients
-- **Policy Engine** — Extensible OPA-based (WebAssembly) policy engine for fine-grained access control
+- **Workflow Engine** — Registration, recovery, and verification flows managed as state machines with step tracking, deadlines, retry logic, and audit snapshots
+- **Unified Notification Center** — Email + SMS dispatch with provider abstraction (SMTP/Sendmail for email; Twilio, Aliyun SMS, and Tencent Cloud SMS for messaging)
+- **Connector Platform** — Pluggable external system integration: Palpo Matrix homeserver provisioning and upstream OAuth 2.0 identity provider federation
+- **Chinese Ecosystem SSO** — Native support for QQ, WeChat, WeCom, Feishu, Lark, and DingTalk with their non-standard OAuth2 flows
+- **Cedar + OPA Policy Engine** — Dual policy backend: Amazon Cedar policies evaluated natively in Rust, OPA/Rego compiled to WebAssembly, or remote HTTP delegation
+- **Dioxus Frontend** — Full-Rust SPA built with Dioxus (no TypeScript or React)
+- **Admin Operational API** — User management, session oversight, OAuth 2.0 client administration, upstream provider management, and policy data control
+- **Multi-Channel Verification** — Email and SMS verification codes with configurable templates, language selection, and background job dispatch
+- **OAuth 2.0 & OpenID Connect** — Full OIDC Provider with authorization code, client credentials, and device code grant flows
 - **Security** — Argon2id password hashing, encrypted cookies, rate limiting, CAPTCHA support
-- **Internationalization** — Multi-language UI with configurable templates
 - **Observability** — OpenTelemetry tracing and Prometheus metrics export
+- **Internationalization** — Multi-language UI with configurable templates
 
 ## Quick Start
 
@@ -132,7 +137,7 @@ See the [full configuration reference](docs/en/reference/configuration.md) for a
 
 ## Architecture
 
-Pasion is deployed alongside a Matrix homeserver behind a reverse proxy. It handles all authentication flows while the homeserver handles Matrix protocol operations (messaging, rooms, etc.).
+Pasion is deployed alongside a Palpo Matrix homeserver behind a reverse proxy. Internally, HTTP requests flow through handler layers into workflow services, which coordinate across storage repositories, external connectors (Palpo Matrix, upstream OAuth 2.0 providers), and the notification center (email/SMS). The policy engine evaluates access decisions at each control point.
 
 ```
               ┌───────────────┐
@@ -143,9 +148,24 @@ Pasion is deployed alongside a Matrix homeserver behind a reverse proxy. It hand
          │            │            │
     ┌────▼────┐  ┌────▼─────┐  ┌──▼──────────┐
     │ Pasion  │  │  Palpo   │  │   Static    │
-    │ (auth)  │  │ (Matrix) │  │   Assets    │
-    │  :8080  │  │  :8008   │  │             │
-    └────┬────┘  └──────────┘  └─────────────┘
+    │  :8080  │  │ (Matrix) │  │   Assets    │
+    └────┬────┘  │  :8008   │  └─────────────┘
+         │       └──────────┘
+         │
+         │  ┌─────────────────────────────────────┐
+         │  │          Pasion Internals            │
+         │  │                                     │
+         │  │  HTTP Handlers                      │
+         │  │    ├── Workflow Engine               │
+         │  │    │     (registration, recovery,    │
+         │  │    │      verification state machines)│
+         │  │    ├── Notification Center           │
+         │  │    │     (email + SMS dispatch)       │
+         │  │    ├── Connectors                    │
+         │  │    │     (Palpo Matrix, upstream SSO) │
+         │  │    └── Policy Engine                 │
+         │  │          (Cedar / OPA / Remote)       │
+         │  └─────────────────────────────────────┘
          │
     ┌────▼──────┐
     │ PostgreSQL │

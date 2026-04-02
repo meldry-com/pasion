@@ -41,10 +41,9 @@
 use std::sync::Arc;
 
 use async_trait::async_trait;
-use cedar_policy::{
-    Authorizer, Context, Decision, Entities, EntityUid, PolicySet, Request,
-};
-use pasion_data_model::PolicyData;
+use cedar_policy::{Authorizer, Context, Decision, Entities, EntityUid, PolicySet, Request};
+use chrono::{Datelike, Timelike, Utc};
+use pasion_data::PolicyData;
 
 use crate::model::{
     AuthorizationGrantInput, ClientRegistrationInput, EmailInput, EvaluationResult, RegisterInput,
@@ -133,16 +132,41 @@ impl CedarEvaluator {
         action_name: &str,
         input: &impl serde::Serialize,
     ) -> Result<EvaluationResult, EvaluationError> {
-        let context_json =
+        let mut context_json =
             serde_json::to_value(input).map_err(EvaluationError::Serialization)?;
+
+        // Inject time context fields for time-based policy evaluation.
+        let now = Utc::now();
+        let day_of_week = match now.weekday() {
+            chrono::Weekday::Mon => "monday",
+            chrono::Weekday::Tue => "tuesday",
+            chrono::Weekday::Wed => "wednesday",
+            chrono::Weekday::Thu => "thursday",
+            chrono::Weekday::Fri => "friday",
+            chrono::Weekday::Sat => "saturday",
+            chrono::Weekday::Sun => "sunday",
+        };
+        if let serde_json::Value::Object(ref mut map) = context_json {
+            map.insert(
+                "current_hour".to_owned(),
+                serde_json::Value::from(now.hour()),
+            );
+            map.insert(
+                "current_day_of_week".to_owned(),
+                serde_json::Value::from(day_of_week),
+            );
+            map.insert(
+                "current_timestamp".to_owned(),
+                serde_json::Value::from(now.timestamp()),
+            );
+        }
 
         let principal: EntityUid = r#"Requester::"anonymous""#.parse().map_err(|e| {
             EvaluationError::Evaluation(anyhow::anyhow!("Failed to parse principal: {e}"))
         })?;
-        let action: EntityUid =
-            format!(r#"Action::"{action_name}""#).parse().map_err(|e| {
-                EvaluationError::Evaluation(anyhow::anyhow!("Failed to parse action: {e}"))
-            })?;
+        let action: EntityUid = format!(r#"Action::"{action_name}""#).parse().map_err(|e| {
+            EvaluationError::Evaluation(anyhow::anyhow!("Failed to parse action: {e}"))
+        })?;
         let resource: EntityUid = r#"Resource::"default""#.parse().map_err(|e| {
             EvaluationError::Evaluation(anyhow::anyhow!("Failed to parse resource: {e}"))
         })?;
@@ -151,14 +175,13 @@ impl CedarEvaluator {
             EvaluationError::Evaluation(anyhow::anyhow!("Failed to build Cedar context: {e}"))
         })?;
 
-        let request =
-            Request::new(principal, action, resource, context, None).map_err(|e| {
-                EvaluationError::Evaluation(anyhow::anyhow!("Failed to build Cedar request: {e}"))
-            })?;
+        let request = Request::new(principal, action, resource, context, None).map_err(|e| {
+            EvaluationError::Evaluation(anyhow::anyhow!("Failed to build Cedar request: {e}"))
+        })?;
 
-        let response =
-            self.authorizer
-                .is_authorized(&request, &self.policy_set, &self.entities);
+        let response = self
+            .authorizer
+            .is_authorized(&request, &self.policy_set, &self.entities);
 
         let violations = match response.decision() {
             Decision::Allow => vec![],

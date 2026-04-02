@@ -55,7 +55,7 @@ http:
           port: 8081
 
         # Third option: listen on the given UNIX socket
-        - socket: /tmp/mas.sock
+        - socket: /tmp/pasion.sock
 
         # Fourth option: grab an already open file descriptor given by the parent process
         # This is useful when using systemd socket activation
@@ -394,125 +394,8 @@ The policy engine backend to use. Defaults to `opa`.
 
 | Value | Description | Feature Flag |
 |-------|-------------|--------------|
-| `opa` | OPA Rego policies compiled to WASM (default) | *(always available)* |
-| `cedar` | Amazon Cedar policies evaluated natively | `cedar` |
+| `cedar` | Amazon Cedar policies evaluated natively (default) | `cedar` |
 | `remote` | Delegate to an external HTTP service | `remote` |
-
-### OPA backend configuration
-
-```yaml
-policy:
-  engine: opa  # default, can be omitted
-
-  # Path to the WASM module
-  # Default in Docker distribution: `/usr/local/share/pasion/policy.wasm`
-  # Default in pre-built binaries: `./share/policy.wasm`
-  # Default in locally-built binaries: `./policies/policy.wasm`
-  wasm_module: ./policies/policy.wasm
-  # Entrypoint to use when evaluating client registrations
-  client_registration_entrypoint: client_registration/violation
-  # Entrypoint to use when evaluating user registrations
-  register_entrypoint: register/violation
-  # Entrypoint to use when evaluating authorization grants
-  authorization_grant_entrypoint: authorization_grant/violation
-  # Entrypoint to use when changing password
-  password_entrypoint: password/violation
-  # Entrypoint to use when adding an email address
-  email_entrypoint: email/violation
-
-  # This data is being passed to the policy
-  data:
-    # Users which are allowed to ask for admin access. If possible, use the
-    # can_request_admin flag on users instead.
-    admin_users:
-      - person1
-      - person2
-
-    # Client IDs which are allowed to ask for admin access with a
-    # client_credentials grant
-    admin_clients:
-      - 01H8PKNWKKRPCBW4YGH1RWV279
-      - 01HWQCPA5KF10FNCETY9402WGF
-
-    # Dynamic Client Registration
-    client_registration:
-      # don't require URIs to be on the same host. default: false
-      allow_host_mismatch: false
-      # allow non-SSL and localhost URIs. default: false
-      allow_insecure_uris: false
-      # don't require clients to provide a client_uri. default: false
-      allow_missing_client_uri: false
-
-    # Restrictions on user registration
-    registration:
-      # If specified, the username (localpart) *must* match one of the allowed
-      # usernames. If unspecified, all usernames are allowed.
-      allowed_usernames:
-        # Exact usernames that are allowed
-        literals: ["alice", "bob"]
-        # Substrings that match allowed usernames
-        substrings: ["user"]
-        # Regular expressions that match allowed usernames
-        regexes: ["^[a-z]+$"]
-        # Prefixes that match allowed usernames
-        prefixes: ["user-"]
-        # Suffixes that match allowed usernames
-        suffixes: ["-corp"]
-      # If specified, the username (localpart) *must not* match one of the
-      # banned usernames. If unspecified, all usernames are allowed.
-      banned_usernames:
-        # Exact usernames that are banned
-        literals: ["admin", "root"]
-        # Substrings that match banned usernames
-        substrings: ["admin", "root"]
-        # Regular expressions that match banned usernames
-        regexes: ["^admin$", "^root$"]
-        # Prefixes that match banned usernames
-        prefixes: ["admin-", "root-"]
-        # Suffixes that match banned usernames
-        suffixes: ["-admin", "-root"]
-
-    # Restrict what email addresses can be added to a user
-    emails:
-      # If specified, the email address *must* match one of the allowed addresses.
-      # If unspecified, all email addresses are allowed.
-      allowed_addresses:
-        # Exact emails that are allowed
-        literals: ["alice@example.com", "bob@example.com"]
-        # Regular expressions that match allowed emails
-        regexes: ["@example\\.com$"]
-        # Suffixes that match allowed emails
-        suffixes: ["@example.com"]
-
-      # If specified, the email address *must not* match one of the banned addresses.
-      # If unspecified, all email addresses are allowed.
-      banned_addresses:
-        # Exact emails that are banned
-        literals: ["alice@evil.corp", "bob@evil.corp"]
-        # Emails that contains those substrings are banned
-        substrings: ["evil"]
-        # Regular expressions that match banned emails
-        regexes: ["@evil\\.corp$"]
-        # Suffixes that match banned emails
-        suffixes: ["@evil.corp"]
-        # Prefixes that match banned emails
-        prefixes: ["alice@"]
-
-    requester:
-      # List of IP addresses and CIDRs that are not allowed to register
-      banned_ips:
-        - 192.168.0.1
-        - 192.168.1.0/24
-        - fe80::/64
-
-      # User agent patterns that are not allowed to register
-      banned_user_agents:
-        literals: ["Pretend this is Real;"]
-        substrings: ["Chrome"]
-        regexes: ["Chrome 1.*;"]
-        prefixes: ["Mozilla/"]
-        suffixes: ["Safari/605.1.15"]
-```
 
 ### Cedar backend configuration
 

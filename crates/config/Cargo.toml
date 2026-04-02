@@ -11,32 +11,41 @@ publish.workspace = true
 workspace = true
 
 [dependencies]
+# Configuration framework
+figment.workspace = true
+schemars.workspace = true
+
+# Serialization
+serde.workspace = true
+serde_json.workspace = true
+serde_with.workspace = true
+
+# Core utilities
 anyhow.workspace = true
 camino.workspace = true
 chrono.workspace = true
-figment.workspace = true
-futures-util.workspace = true
-governor.workspace = true
 hex.workspace = true
 indoc.workspace = true
-ipnetwork.workspace = true
-lettre.workspace = true
-pem-rfc7468.workspace = true
-rand_chacha.workspace = true
-rand.workspace = true
-rustls-pki-types.workspace = true
-schemars.workspace = true
-serde_json.workspace = true
-serde_with.workspace = true
-serde.workspace = true
-tokio.workspace = true
 tracing.workspace = true
 ulid.workspace = true
 url.workspace = true
 
+# Network & security
+ipnetwork.workspace = true
+lettre.workspace = true
+pem-rfc7468.workspace = true
+rustls-pki-types.workspace = true
+
+# Async & randomness
+futures-util.workspace = true
+rand.workspace = true
+rand_chacha.workspace = true
+tokio.workspace = true
+
+# Pasion workspace crates
+pasion-iana.workspace = true
 pasion-jose.workspace = true
 pasion-keystore.workspace = true
-pasion-iana.workspace = true
 
 [features]
 docker = []

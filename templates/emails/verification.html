@@ -6,6 +6,6 @@
   {%- set username = user_registration.username -%}
 {%- endif -%}
 
-{{ _("mas.emails.greeting", username=(username|default("user"))) }}<br />
+{{ _("pasion.emails.greeting", username=(username|default("user"))) }}<br />
 <br />
-{{ _("mas.emails.verify.body_html", code=authentication_code.code) }}<br />
+{{ _("pasion.emails.verify.body_html", code=authentication_code.code) }}<br />

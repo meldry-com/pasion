@@ -5,67 +5,65 @@ use url::Url;
 
 use super::ConfigurationSection;
 
-/// Propagation format for incoming and outgoing requests
+/// Trace-context propagation format for distributed tracing
 #[derive(Clone, Copy, Debug, Serialize, Deserialize, PartialEq, Eq, JsonSchema)]
 #[serde(rename_all = "lowercase")]
 pub enum Propagator {
-    /// Propagate according to the W3C Trace Context specification
+    /// W3C Trace Context specification
     TraceContext,
-
-    /// Propagate according to the W3C Baggage specification
+    /// W3C Baggage specification
     Baggage,
-
-    /// Propagate trace context with Jaeger compatible headers
+    /// Jaeger-native propagation headers
     Jaeger,
 }
 
+/// Default OTLP collector endpoint used when none is explicitly configured
 #[allow(clippy::unnecessary_wraps)]
-fn otlp_endpoint_default() -> Option<String> {
+fn otlp_endpoint_fallback() -> Option<String> {
     Some("https://localhost:4318".to_owned())
 }
 
-/// Exporter to use when exporting traces
+// ---------------------------------------------------------------------------
+// Tracing
+// ---------------------------------------------------------------------------
+
+/// Destination for distributed trace spans
 #[skip_serializing_none]
 #[derive(Clone, Copy, Debug, Serialize, Deserialize, JsonSchema, Default)]
 #[serde(rename_all = "lowercase")]
 pub enum TracingExporterKind {
-    /// Don't export traces
+    /// Disable trace export
     #[default]
     None,
-
-    /// Export traces to the standard output. Only useful for debugging
+    /// Write traces to stdout (debugging only)
     Stdout,
-
-    /// Export traces to an OpenTelemetry protocol compatible endpoint
+    /// Ship traces via OTLP/HTTP
     Otlp,
 }
 
-/// Configuration related to exporting traces
+/// Settings for distributed trace collection
 #[derive(Clone, Debug, Default, Serialize, Deserialize, JsonSchema)]
 pub struct TracingConfig {
-    /// Exporter to use when exporting traces
+    /// Where to send trace data
     #[serde(default)]
     pub exporter: TracingExporterKind,
 
-    /// OTLP exporter: OTLP over HTTP compatible endpoint
+    /// OTLP/HTTP collector URL
     #[serde(skip_serializing_if = "Option::is_none")]
-    #[schemars(url, default = "otlp_endpoint_default")]
+    #[schemars(url, default = "otlp_endpoint_fallback")]
     pub endpoint: Option<Url>,
 
-    /// List of propagation formats to use for incoming and outgoing requests
+    /// Propagation formats attached to outgoing / parsed from incoming requests
     #[serde(default)]
     pub propagators: Vec<Propagator>,
 
-    /// Sample rate for traces
-    ///
-    /// Defaults to `1.0` if not set.
+    /// Fraction of traces to keep (0.0 -- 1.0). Defaults to `1.0`.
     #[serde(skip_serializing_if = "Option::is_none")]
     #[schemars(example = 0.5, range(min = 0.0, max = 1.0))]
     pub sample_rate: Option<f64>,
 }
 
 impl TracingConfig {
-    /// Returns true if all fields are at their default values
     fn is_default(&self) -> bool {
         matches!(self.exporter, TracingExporterKind::None)
             && self.endpoint.is_none()
@@ -73,104 +71,124 @@ impl TracingConfig {
     }
 }
 
-/// Exporter to use when exporting metrics
+// ---------------------------------------------------------------------------
+// Metrics
+// ---------------------------------------------------------------------------
+
+/// Destination for runtime metrics
 #[skip_serializing_none]
 #[derive(Clone, Copy, Debug, Serialize, Deserialize, JsonSchema, Default)]
 #[serde(rename_all = "lowercase")]
 pub enum MetricsExporterKind {
-    /// Don't export metrics
+    /// Disable metric export
     #[default]
     None,
-
-    /// Export metrics to stdout. Only useful for debugging
+    /// Dump metrics to stdout (debugging only)
     Stdout,
-
-    /// Export metrics to an OpenTelemetry protocol compatible endpoint
+    /// Ship metrics via OTLP/HTTP
     Otlp,
-
-    /// Export metrics via Prometheus. An HTTP listener with the `prometheus`
-    /// resource must be setup to expose the Promethes metrics.
+    /// Expose a Prometheus scrape endpoint (requires a `prometheus` HTTP
+    /// resource)
     Prometheus,
 }
 
-/// Configuration related to exporting metrics
+/// Settings for runtime metric collection
 #[derive(Clone, Debug, Default, Serialize, Deserialize, JsonSchema)]
 pub struct MetricsConfig {
-    /// Exporter to use when exporting metrics
+    /// Where to send metric data
     #[serde(default)]
     pub exporter: MetricsExporterKind,
 
-    /// OTLP exporter: OTLP over HTTP compatible endpoint
+    /// OTLP/HTTP collector URL
     #[serde(skip_serializing_if = "Option::is_none")]
-    #[schemars(url, default = "otlp_endpoint_default")]
+    #[schemars(url, default = "otlp_endpoint_fallback")]
     pub endpoint: Option<Url>,
 }
 
 impl MetricsConfig {
-    /// Returns true if all fields are at their default values
     fn is_default(&self) -> bool {
         matches!(self.exporter, MetricsExporterKind::None) && self.endpoint.is_none()
     }
 }
 
-/// Configuration related to the Sentry integration
+// ---------------------------------------------------------------------------
+// Sentry
+// ---------------------------------------------------------------------------
+
+/// Sentry error-tracking integration
 #[derive(Clone, Debug, Default, Serialize, Deserialize, JsonSchema)]
 pub struct SentryConfig {
-    /// Sentry DSN
+    /// Sentry Data Source Name (DSN)
     #[schemars(url, example = &"https://public@host:port/1")]
     #[serde(skip_serializing_if = "Option::is_none")]
     pub dsn: Option<String>,
 
-    /// Environment to use when sending events to Sentry
-    ///
-    /// Defaults to `production` if not set.
+    /// Sentry environment tag (defaults to `production`)
     #[schemars(example = &"production")]
     #[serde(skip_serializing_if = "Option::is_none")]
     pub environment: Option<String>,
 
-    /// Sample rate for event submissions
-    ///
-    /// Defaults to `1.0` if not set.
+    /// Fraction of events forwarded to Sentry (0.0 -- 1.0). Default: `1.0`.
     #[serde(skip_serializing_if = "Option::is_none")]
     #[schemars(example = 0.5, range(min = 0.0, max = 1.0))]
     pub sample_rate: Option<f32>,
 
-    /// Sample rate for tracing transactions
-    ///
-    /// Defaults to `0.0` if not set.
+    /// Fraction of tracing transactions sent to Sentry (0.0 -- 1.0). Default: `0.0`.
     #[serde(skip_serializing_if = "Option::is_none")]
     #[schemars(example = 0.5, range(min = 0.0, max = 1.0))]
     pub traces_sample_rate: Option<f32>,
 }
 
 impl SentryConfig {
-    /// Returns true if all fields are at their default values
     fn is_default(&self) -> bool {
         self.dsn.is_none()
     }
 }
 
-/// Configuration related to sending monitoring data
+// ---------------------------------------------------------------------------
+// Top-level telemetry
+// ---------------------------------------------------------------------------
+
+/// Observability and monitoring knobs
 #[derive(Clone, Debug, Default, Serialize, Deserialize, JsonSchema)]
 pub struct TelemetryConfig {
-    /// Configuration related to exporting traces
+    /// Distributed tracing settings
     #[serde(default, skip_serializing_if = "TracingConfig::is_default")]
     pub tracing: TracingConfig,
 
-    /// Configuration related to exporting metrics
+    /// Runtime metrics settings
     #[serde(default, skip_serializing_if = "MetricsConfig::is_default")]
     pub metrics: MetricsConfig,
 
-    /// Configuration related to the Sentry integration
+    /// Sentry error-reporting settings
     #[serde(default, skip_serializing_if = "SentryConfig::is_default")]
     pub sentry: SentryConfig,
 }
 
 impl TelemetryConfig {
-    /// Returns true if all fields are at their default values
+    /// `true` when every sub-section is still at its default values
     pub(crate) fn is_default(&self) -> bool {
         self.tracing.is_default() && self.metrics.is_default() && self.sentry.is_default()
     }
+}
+
+/// Validates sample-rate ranges across all sub-sections
+fn check_sample_rate_bounds(
+    value: Option<impl Into<f64> + Copy>,
+    label: &str,
+    path: &str,
+) -> Result<(), Box<dyn std::error::Error + Send + Sync + 'static>> {
+    if let Some(rate) = value {
+        let r: f64 = rate.into();
+        if !(0.0..=1.0).contains(&r) {
+            return Err(figment::error::Error::custom(format!(
+                "{label} sample rate must be between 0.0 and 1.0"
+            ))
+            .with_path(path)
+            .into());
+        }
+    }
+    Ok(())
 }
 
 impl ConfigurationSection for TelemetryConfig {
@@ -180,36 +198,21 @@ impl ConfigurationSection for TelemetryConfig {
         &self,
         _figment: &figment::Figment,
     ) -> Result<(), Box<dyn std::error::Error + Send + Sync + 'static>> {
-        if let Some(sample_rate) = self.sentry.sample_rate
-            && !(0.0..=1.0).contains(&sample_rate)
-        {
-            return Err(figment::error::Error::custom(
-                "Sentry sample rate must be between 0.0 and 1.0",
-            )
-            .with_path("sentry.sample_rate")
-            .into());
-        }
-
-        if let Some(sample_rate) = self.sentry.traces_sample_rate
-            && !(0.0..=1.0).contains(&sample_rate)
-        {
-            return Err(figment::error::Error::custom(
-                "Sentry sample rate must be between 0.0 and 1.0",
-            )
-            .with_path("sentry.traces_sample_rate")
-            .into());
-        }
-
-        if let Some(sample_rate) = self.tracing.sample_rate
-            && !(0.0..=1.0).contains(&sample_rate)
-        {
-            return Err(figment::error::Error::custom(
-                "Tracing sample rate must be between 0.0 and 1.0",
-            )
-            .with_path("tracing.sample_rate")
-            .into());
-        }
-
+        check_sample_rate_bounds(
+            self.sentry.sample_rate,
+            "Sentry",
+            "sentry.sample_rate",
+        )?;
+        check_sample_rate_bounds(
+            self.sentry.traces_sample_rate,
+            "Sentry",
+            "sentry.traces_sample_rate",
+        )?;
+        check_sample_rate_bounds(
+            self.tracing.sample_rate.map(|v| v as f64),
+            "Tracing",
+            "tracing.sample_rate",
+        )?;
         Ok(())
     }
 }

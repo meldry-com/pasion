@@ -1,13 +1,30 @@
 mod mock;
 mod readonly;
+pub mod registry;
 
 use std::{collections::HashSet, sync::Arc};
 
 use ruma_common::UserId;
 
 pub use self::{
-    mock::HomeserverConnection as MockHomeserverConnection, readonly::ReadOnlyHomeserverConnection,
+    mock::HomeserverAdmin as MockHomeserverAdmin, readonly::ReadOnlyHomeserverAdmin,
+    registry::ConnectorRegistry,
 };
+
+/// Describes what operations a connector provider supports.
+#[derive(Debug, Clone, Default)]
+pub struct ConnectorCapabilities {
+    /// Whether the connector can provision new users.
+    pub can_provision_users: bool,
+    /// Whether the connector can delete/deactivate users.
+    pub can_delete_users: bool,
+    /// Whether the connector can manage devices.
+    pub can_manage_devices: bool,
+    /// Whether the connector can set display names.
+    pub can_set_displayname: bool,
+    /// Whether the connector supports cross-signing reset.
+    pub can_cross_signing_reset: bool,
+}
 
 #[derive(Debug)]
 pub struct MatrixUser {
@@ -16,20 +33,42 @@ pub struct MatrixUser {
     pub deactivated: bool,
 }
 
-#[derive(Debug, Default)]
-enum FieldAction<T> {
-    #[default]
-    DoNothing,
-    Set(T),
-    Unset,
+/// Represents an optional mutation for a user profile field during
+/// provisioning. Each variant captures whether the caller wants to
+/// leave the field alone, assign a value, or clear it.
+#[derive(Debug)]
+enum FieldUpdate<T> {
+    Unchanged,
+    Assign(T),
+    Clear,
+}
+
+impl<T> Default for FieldUpdate<T> {
+    fn default() -> Self {
+        Self::Unchanged
+    }
+}
+
+impl<T> FieldUpdate<T> {
+    /// Invoke `handler` when the field should be mutated (assigned or cleared).
+    fn apply<F>(&self, handler: F)
+    where
+        F: FnOnce(Option<&T>),
+    {
+        match self {
+            Self::Assign(val) => handler(Some(val)),
+            Self::Clear => handler(None),
+            Self::Unchanged => {}
+        }
+    }
 }
 
 pub struct ProvisionRequest {
     localpart: String,
     sub: String,
-    displayname: FieldAction<String>,
-    avatar_url: FieldAction<String>,
-    emails: FieldAction<Vec<String>>,
+    displayname: FieldUpdate<String>,
+    avatar_url: FieldUpdate<String>,
+    emails: FieldUpdate<Vec<String>>,
 }
 
 impl ProvisionRequest {
@@ -44,22 +83,22 @@ impl ProvisionRequest {
         Self {
             localpart: localpart.into(),
             sub: sub.into(),
-            displayname: FieldAction::DoNothing,
-            avatar_url: FieldAction::DoNothing,
-            emails: FieldAction::DoNothing,
+            displayname: FieldUpdate::default(),
+            avatar_url: FieldUpdate::default(),
+            emails: FieldUpdate::default(),
         }
     }
 
     /// Get the `sub` of the user to provision, aka the internal ID.
     #[must_use]
     pub fn sub(&self) -> &str {
-        &self.sub
+        self.sub.as_str()
     }
 
     /// Get the localpart of the user to provision.
     #[must_use]
     pub fn localpart(&self) -> &str {
-        &self.localpart
+        self.localpart.as_str()
     }
 
     /// Ask to set the displayname of the user.
@@ -69,14 +108,14 @@ impl ProvisionRequest {
     /// * `displayname` - The displayname to set.
     #[must_use]
     pub fn set_displayname(mut self, displayname: String) -> Self {
-        self.displayname = FieldAction::Set(displayname);
+        self.displayname = FieldUpdate::Assign(displayname);
         self
     }
 
     /// Ask to unset the displayname of the user.
     #[must_use]
     pub fn unset_displayname(mut self) -> Self {
-        self.displayname = FieldAction::Unset;
+        self.displayname = FieldUpdate::Clear;
         self
     }
 
@@ -89,12 +128,8 @@ impl ProvisionRequest {
     where
         F: FnOnce(Option<&str>),
     {
-        match &self.displayname {
-            FieldAction::Unset => callback(None),
-            FieldAction::Set(displayname) => callback(Some(displayname)),
-            FieldAction::DoNothing => {}
-        }
-
+        self.displayname
+            .apply(|opt| callback(opt.map(String::as_str)));
         self
     }
 
@@ -105,14 +140,14 @@ impl ProvisionRequest {
     /// * `avatar_url` - The avatar URL to set.
     #[must_use]
     pub fn set_avatar_url(mut self, avatar_url: String) -> Self {
-        self.avatar_url = FieldAction::Set(avatar_url);
+        self.avatar_url = FieldUpdate::Assign(avatar_url);
         self
     }
 
     /// Ask to unset the avatar URL of the user.
     #[must_use]
     pub fn unset_avatar_url(mut self) -> Self {
-        self.avatar_url = FieldAction::Unset;
+        self.avatar_url = FieldUpdate::Clear;
         self
     }
 
@@ -125,12 +160,8 @@ impl ProvisionRequest {
     where
         F: FnOnce(Option<&str>),
     {
-        match &self.avatar_url {
-            FieldAction::Unset => callback(None),
-            FieldAction::Set(avatar_url) => callback(Some(avatar_url)),
-            FieldAction::DoNothing => {}
-        }
-
+        self.avatar_url
+            .apply(|opt| callback(opt.map(String::as_str)));
         self
     }
 
@@ -141,14 +172,14 @@ impl ProvisionRequest {
     /// * `emails` - The list of emails to set.
     #[must_use]
     pub fn set_emails(mut self, emails: Vec<String>) -> Self {
-        self.emails = FieldAction::Set(emails);
+        self.emails = FieldUpdate::Assign(emails);
         self
     }
 
     /// Ask to unset the emails of the user.
     #[must_use]
     pub fn unset_emails(mut self) -> Self {
-        self.emails = FieldAction::Unset;
+        self.emails = FieldUpdate::Clear;
         self
     }
 
@@ -161,18 +192,18 @@ impl ProvisionRequest {
     where
         F: FnOnce(Option<&[String]>),
     {
-        match &self.emails {
-            FieldAction::Unset => callback(None),
-            FieldAction::Set(emails) => callback(Some(emails)),
-            FieldAction::DoNothing => {}
-        }
-
+        self.emails
+            .apply(|opt| callback(opt.map(Vec::as_slice)));
         self
     }
 }
 
+/// Trait defining operations against a Matrix homeserver.
+///
+/// Implementations can target real homeservers (e.g. via the admin API) or
+/// in-memory fakes for testing.
 #[async_trait::async_trait]
-pub trait HomeserverConnection: Send + Sync {
+pub trait HomeserverAdmin: Send + Sync {
     /// Get the homeserver URL.
     fn homeserver(&self) -> &str;
 
@@ -194,11 +225,11 @@ pub trait HomeserverConnection: Send + Sync {
     ///
     /// * `mxid` - The MXID of the user
     fn localpart<'a>(&self, mxid: &'a str) -> Option<&'a str> {
-        let mxid = <&UserId>::try_from(mxid).ok()?;
-        if mxid.server_name() != self.homeserver() {
+        let parsed = <&UserId>::try_from(mxid).ok()?;
+        if parsed.server_name() != self.homeserver() {
             return None;
         }
-        Some(mxid.localpart())
+        Some(parsed.localpart())
     }
 
     /// Verify a bearer token coming from the homeserver for homeserver to
@@ -386,108 +417,56 @@ pub trait HomeserverConnection: Send + Sync {
     async fn allow_cross_signing_reset(&self, localpart: &str) -> Result<(), anyhow::Error>;
 }
 
-#[async_trait::async_trait]
-impl<T: HomeserverConnection + Send + Sync + ?Sized> HomeserverConnection for &T {
-    fn homeserver(&self) -> &str {
-        (**self).homeserver()
-    }
+/// Helper trait: obtain a reference to the inner `HomeserverAdmin`
+/// from a wrapper type. Used to de-duplicate the two blanket impls below.
+trait AsAdmin {
+    type Target: HomeserverAdmin + ?Sized;
+    fn as_admin(&self) -> &Self::Target;
+}
 
-    async fn verify_token(&self, token: &str) -> Result<bool, anyhow::Error> {
-        (**self).verify_token(token).await
-    }
-
-    async fn query_user(&self, localpart: &str) -> Result<MatrixUser, anyhow::Error> {
-        (**self).query_user(localpart).await
-    }
-
-    async fn provision_user(&self, request: &ProvisionRequest) -> Result<bool, anyhow::Error> {
-        (**self).provision_user(request).await
-    }
-
-    async fn is_localpart_available(&self, localpart: &str) -> Result<bool, anyhow::Error> {
-        (**self).is_localpart_available(localpart).await
-    }
-
-    async fn upsert_device(
-        &self,
-        localpart: &str,
-        device_id: &str,
-        initial_display_name: Option<&str>,
-    ) -> Result<(), anyhow::Error> {
-        (**self)
-            .upsert_device(localpart, device_id, initial_display_name)
-            .await
-    }
-
-    async fn update_device_display_name(
-        &self,
-        localpart: &str,
-        device_id: &str,
-        display_name: &str,
-    ) -> Result<(), anyhow::Error> {
-        (**self)
-            .update_device_display_name(localpart, device_id, display_name)
-            .await
-    }
-
-    async fn delete_device(&self, localpart: &str, device_id: &str) -> Result<(), anyhow::Error> {
-        (**self).delete_device(localpart, device_id).await
-    }
-
-    async fn sync_devices(
-        &self,
-        localpart: &str,
-        devices: HashSet<String>,
-    ) -> Result<(), anyhow::Error> {
-        (**self).sync_devices(localpart, devices).await
-    }
-
-    async fn delete_user(&self, localpart: &str, erase: bool) -> Result<(), anyhow::Error> {
-        (**self).delete_user(localpart, erase).await
-    }
-
-    async fn reactivate_user(&self, localpart: &str) -> Result<(), anyhow::Error> {
-        (**self).reactivate_user(localpart).await
-    }
-
-    async fn set_displayname(
-        &self,
-        localpart: &str,
-        displayname: &str,
-    ) -> Result<(), anyhow::Error> {
-        (**self).set_displayname(localpart, displayname).await
-    }
-
-    async fn unset_displayname(&self, localpart: &str) -> Result<(), anyhow::Error> {
-        (**self).unset_displayname(localpart).await
-    }
-
-    async fn allow_cross_signing_reset(&self, localpart: &str) -> Result<(), anyhow::Error> {
-        (**self).allow_cross_signing_reset(localpart).await
+impl<T: HomeserverAdmin + ?Sized> AsAdmin for &T {
+    type Target = T;
+    fn as_admin(&self) -> &T {
+        *self
     }
 }
 
-// Implement for Arc<T> where T: HomeserverConnection
+impl<T: HomeserverAdmin + ?Sized> AsAdmin for Arc<T> {
+    type Target = T;
+    fn as_admin(&self) -> &T {
+        self.as_ref()
+    }
+}
+
+/// Blanket implementation: anything that can produce a `&dyn HomeserverAdmin`
+/// via [`AsAdmin`] is itself a valid admin handle.
 #[async_trait::async_trait]
-impl<T: HomeserverConnection + ?Sized> HomeserverConnection for Arc<T> {
+impl<W> HomeserverAdmin for W
+where
+    W: AsAdmin + Send + Sync,
+    W::Target: HomeserverAdmin,
+{
     fn homeserver(&self) -> &str {
-        (**self).homeserver()
+        self.as_admin().homeserver()
     }
 
     async fn verify_token(&self, token: &str) -> Result<bool, anyhow::Error> {
-        (**self).verify_token(token).await
+        self.as_admin().verify_token(token).await
     }
 
     async fn query_user(&self, localpart: &str) -> Result<MatrixUser, anyhow::Error> {
-        (**self).query_user(localpart).await
+        self.as_admin().query_user(localpart).await
     }
 
-    async fn provision_user(&self, request: &ProvisionRequest) -> Result<bool, anyhow::Error> {
-        (**self).provision_user(request).await
+    async fn provision_user(
+        &self,
+        request: &ProvisionRequest,
+    ) -> Result<bool, anyhow::Error> {
+        self.as_admin().provision_user(request).await
     }
 
     async fn is_localpart_available(&self, localpart: &str) -> Result<bool, anyhow::Error> {
-        (**self).is_localpart_available(localpart).await
+        self.as_admin().is_localpart_available(localpart).await
     }
 
     async fn upsert_device(
@@ -496,7 +475,7 @@ impl<T: HomeserverConnection + ?Sized> HomeserverConnection for Arc<T> {
         device_id: &str,
         initial_display_name: Option<&str>,
     ) -> Result<(), anyhow::Error> {
-        (**self)
+        self.as_admin()
             .upsert_device(localpart, device_id, initial_display_name)
             .await
     }
@@ -507,13 +486,17 @@ impl<T: HomeserverConnection + ?Sized> HomeserverConnection for Arc<T> {
         device_id: &str,
         display_name: &str,
     ) -> Result<(), anyhow::Error> {
-        (**self)
+        self.as_admin()
             .update_device_display_name(localpart, device_id, display_name)
             .await
     }
 
-    async fn delete_device(&self, localpart: &str, device_id: &str) -> Result<(), anyhow::Error> {
-        (**self).delete_device(localpart, device_id).await
+    async fn delete_device(
+        &self,
+        localpart: &str,
+        device_id: &str,
+    ) -> Result<(), anyhow::Error> {
+        self.as_admin().delete_device(localpart, device_id).await
     }
 
     async fn sync_devices(
@@ -521,15 +504,19 @@ impl<T: HomeserverConnection + ?Sized> HomeserverConnection for Arc<T> {
         localpart: &str,
         devices: HashSet<String>,
     ) -> Result<(), anyhow::Error> {
-        (**self).sync_devices(localpart, devices).await
+        self.as_admin().sync_devices(localpart, devices).await
     }
 
-    async fn delete_user(&self, localpart: &str, erase: bool) -> Result<(), anyhow::Error> {
-        (**self).delete_user(localpart, erase).await
+    async fn delete_user(
+        &self,
+        localpart: &str,
+        erase: bool,
+    ) -> Result<(), anyhow::Error> {
+        self.as_admin().delete_user(localpart, erase).await
     }
 
     async fn reactivate_user(&self, localpart: &str) -> Result<(), anyhow::Error> {
-        (**self).reactivate_user(localpart).await
+        self.as_admin().reactivate_user(localpart).await
     }
 
     async fn set_displayname(
@@ -537,14 +524,33 @@ impl<T: HomeserverConnection + ?Sized> HomeserverConnection for Arc<T> {
         localpart: &str,
         displayname: &str,
     ) -> Result<(), anyhow::Error> {
-        (**self).set_displayname(localpart, displayname).await
+        self.as_admin()
+            .set_displayname(localpart, displayname)
+            .await
     }
 
     async fn unset_displayname(&self, localpart: &str) -> Result<(), anyhow::Error> {
-        (**self).unset_displayname(localpart).await
+        self.as_admin().unset_displayname(localpart).await
     }
 
     async fn allow_cross_signing_reset(&self, localpart: &str) -> Result<(), anyhow::Error> {
-        (**self).allow_cross_signing_reset(localpart).await
+        self.as_admin()
+            .allow_cross_signing_reset(localpart)
+            .await
+    }
+}
+
+/// A connector provider represents an external system that Pasion can
+/// provision users into, query state from, and synchronize with.
+///
+/// [`HomeserverAdmin`] is the primary implementation of this trait
+/// for Matrix homeserver backends like Palpo.
+pub trait ConnectorProvider: HomeserverAdmin {
+    /// A human-readable name for this connector (e.g. "Palpo", "Synapse").
+    fn provider_name(&self) -> &str;
+
+    /// Returns the set of capabilities this connector supports.
+    fn capabilities(&self) -> ConnectorCapabilities {
+        ConnectorCapabilities::default()
     }
 }

@@ -5,12 +5,12 @@ use camino::Utf8PathBuf;
 use clap::Parser;
 use figment::Figment;
 use pasion_config::{ConfigurationSection, RootConfig, SyncConfig};
-use pasion_data_model::{Clock as _, SystemClock};
+use pasion_data::SystemClock;
 use rand::SeedableRng;
 use tokio::io::AsyncWriteExt;
 use tracing::{info, info_span};
 
-use crate::util::{database_url_from_config, diesel_pool_from_config};
+use pasion_backend::util::{database_url_from_config, diesel_pool_from_config};
 
 #[derive(Parser, Debug)]
 pub(super) struct Options {
@@ -20,35 +20,30 @@ pub(super) struct Options {
 
 #[derive(Parser, Debug)]
 enum Subcommand {
-    /// Dump the current config as YAML
+    /// Dump the current configuration as YAML
     Dump {
-        /// The path to the config file to dump
-        ///
-        /// If not specified, the config will be written to stdout
+        /// Destination file path; defaults to stdout when omitted
         #[clap(short, long)]
         output: Option<Utf8PathBuf>,
     },
 
-    /// Check a config file
+    /// Validate the configuration file
     Check,
 
-    /// Generate a new config file
+    /// Produce a fresh configuration file with generated secrets
     Generate {
-        /// The path to the config file to generate
-        ///
-        /// If not specified, the config will be written to stdout
+        /// Destination file path; defaults to stdout when omitted
         #[clap(short, long)]
         output: Option<Utf8PathBuf>,
     },
 
-    /// Sync the clients and providers from the config file to the database
+    /// Synchronise clients and providers from the config into the database
     Sync {
-        /// Prune elements that are in the database but not in the config file
-        /// anymore
+        /// Remove database entries that are no longer present in the config
         #[clap(long)]
         prune: bool,
 
-        /// Do not actually write to the database
+        /// Preview changes without writing to the database
         #[clap(long)]
         dry_run: bool,
     },
@@ -56,77 +51,98 @@ enum Subcommand {
 
 impl Options {
     pub async fn run(self, figment: &Figment) -> anyhow::Result<ExitCode> {
-        use Subcommand as SC;
         match self.subcommand {
-            SC::Dump { output } => {
-                let _span = info_span!("cli.config.dump").entered();
-
-                let config = RootConfig::extract(figment).map_err(anyhow::Error::from_boxed)?;
-                let config = serde_yaml::to_string(&config)?;
-
-                if let Some(output) = output {
-                    info!("Writing configuration to {output:?}");
-                    let mut file = tokio::fs::File::create(output).await?;
-                    file.write_all(config.as_bytes()).await?;
-                } else {
-                    info!("Writing configuration to standard output");
-                    tokio::io::stdout().write_all(config.as_bytes()).await?;
-                }
-            }
-
-            SC::Check => {
-                let _span = info_span!("cli.config.check").entered();
-
-                let _config = RootConfig::extract(figment).map_err(anyhow::Error::from_boxed)?;
-                info!("Configuration file looks good");
-            }
-
-            SC::Generate { output } => {
-                let _span = info_span!("cli.config.generate").entered();
-
-                // XXX: we should disallow SeedableRng::from_entropy
-                let mut rng = rand_chacha::ChaChaRng::from_entropy();
-                let config = RootConfig::generate(&mut rng).await?;
-
-                let config = serde_yaml::to_string(&config)?;
-                if let Some(output) = output {
-                    info!("Writing configuration to {output:?}");
-                    let mut file = tokio::fs::File::create(output).await?;
-                    file.write_all(config.as_bytes()).await?;
-                } else {
-                    info!("Writing configuration to standard output");
-                    tokio::io::stdout().write_all(config.as_bytes()).await?;
-                }
-            }
-
-            SC::Sync { prune, dry_run } => {
-                let config = SyncConfig::extract(figment).map_err(anyhow::Error::from_boxed)?;
-                let clock = SystemClock::default();
-                let encrypter = config.secrets.encrypter().await?;
-
-                let db_url = database_url_from_config(&config.database)?;
-                let pool = diesel_pool_from_config(&config.database).await?;
-
-                pasion_storage_pg::migrate(&pool, &db_url)
-                    .await
-                    .context("could not run migrations")?;
-
-                let conn = pool.get().await.context("could not get connection from pool")?;
-
-                crate::sync::config_sync(
-                    config.upstream_oauth2,
-                    config.clients,
-                    conn,
-                    &encrypter,
-                    &clock,
-                    prune,
-                    dry_run,
-                )
-                .await
-                .context("could not sync the configuration with the database")?;
+            Subcommand::Dump { output } => Self::handle_dump(figment, output).await,
+            Subcommand::Check => Self::handle_check(figment),
+            Subcommand::Generate { output } => Self::handle_generate(figment, output).await,
+            Subcommand::Sync { prune, dry_run } => {
+                Self::handle_sync(figment, prune, dry_run).await
             }
         }
+    }
+
+    async fn handle_dump(
+        figment: &Figment,
+        dest: Option<Utf8PathBuf>,
+    ) -> anyhow::Result<ExitCode> {
+        let _span = info_span!("cli.config.dump").entered();
+
+        let root = RootConfig::extract(figment).map_err(anyhow::Error::from_boxed)?;
+        let yaml = serde_yaml::to_string(&root)?;
+
+        write_output(&yaml, dest.as_deref()).await?;
+        Ok(ExitCode::SUCCESS)
+    }
+
+    fn handle_check(figment: &Figment) -> anyhow::Result<ExitCode> {
+        let _span = info_span!("cli.config.check").entered();
+
+        let _validated = RootConfig::extract(figment).map_err(anyhow::Error::from_boxed)?;
+        info!("Configuration file looks good");
 
         Ok(ExitCode::SUCCESS)
     }
+
+    async fn handle_generate(
+        _figment: &Figment,
+        dest: Option<Utf8PathBuf>,
+    ) -> anyhow::Result<ExitCode> {
+        let _span = info_span!("cli.config.generate").entered();
+
+        let mut rng = rand_chacha::ChaChaRng::from_entropy();
+        let generated = RootConfig::generate(&mut rng).await?;
+        let yaml = serde_yaml::to_string(&generated)?;
+
+        write_output(&yaml, dest.as_deref()).await?;
+        Ok(ExitCode::SUCCESS)
+    }
+
+    async fn handle_sync(
+        figment: &Figment,
+        prune: bool,
+        dry_run: bool,
+    ) -> anyhow::Result<ExitCode> {
+        let cfg = SyncConfig::extract(figment).map_err(anyhow::Error::from_boxed)?;
+        let clock = SystemClock::default();
+        let encrypter = cfg.secrets.encrypter().await?;
+
+        let db_url = database_url_from_config(&cfg.database)?;
+        let pool = diesel_pool_from_config(&cfg.database).await?;
+
+        pasion_data::migrate(&pool, &db_url)
+            .await
+            .context("could not run migrations")?;
+
+        let conn = pool
+            .get()
+            .await
+            .context("could not get connection from pool")?;
+
+        pasion_backend::sync::config_sync(
+            cfg.upstream_oauth2,
+            cfg.clients,
+            conn,
+            &encrypter,
+            &clock,
+            prune,
+            dry_run,
+        )
+        .await
+        .context("could not sync the configuration with the database")?;
+
+        Ok(ExitCode::SUCCESS)
+    }
+}
+
+/// Write `content` to the given file path, or to stdout when no path is given.
+async fn write_output(content: &str, dest: Option<&camino::Utf8Path>) -> anyhow::Result<()> {
+    if let Some(path) = dest {
+        info!("Writing configuration to {path:?}");
+        let mut file = tokio::fs::File::create(path.as_std_path()).await?;
+        file.write_all(content.as_bytes()).await?;
+    } else {
+        info!("Writing configuration to standard output");
+        tokio::io::stdout().write_all(content.as_bytes()).await?;
+    }
+    Ok(())
 }

@@ -1,6 +1,12 @@
 [workspace]
 default-members = ["crates/cli"]
 members = ["crates/*"]
+exclude = [
+    "crates/data-model",
+    "crates/iana-codegen",
+    "crates/storage",
+    "crates/storage-pg",
+]
 resolver = "3"
 
 # Updated in the CI with a `sed` command
@@ -28,29 +34,20 @@ broken_intra_doc_links = "deny"
 [workspace.dependencies]
 
 # Workspace crates
-pasion-salvo-utils = { path = "./crates/salvo-utils/", version = "=1.8.0" }
 pasion = { path = "./crates/cli/", version = "=1.8.0" }
+pasion-backend = { path = "./crates/backend/", version = "=1.8.0" }
 pasion-config = { path = "./crates/config/", version = "=1.8.0" }
-pasion-context = { path = "./crates/context/", version = "=1.8.0" }
-pasion-data-model = { path = "./crates/data-model/", version = "=1.8.0" }
-pasion-email = { path = "./crates/email/", version = "=1.8.0" }
-pasion-sms = { path = "./crates/sms/", version = "=1.8.0" }
-pasion-handlers = { path = "./crates/handlers/", version = "=1.8.0" }
-pasion-http = { path = "./crates/http/", version = "=1.8.0" }
+pasion-data = { path = "./crates/data/", version = "=1.8.0" }
+pasion-messaging = { path = "./crates/messaging/", version = "=1.8.0" }
 pasion-i18n = { path = "./crates/i18n/", version = "=1.8.0" }
 pasion-i18n-scan = { path = "./crates/i18n-scan/", version = "=1.8.0" }
 pasion-iana = { path = "./crates/iana/", version = "=1.8.0" }
 pasion-iana-codegen = { path = "./crates/iana-codegen/", version = "=1.8.0" }
 pasion-jose = { path = "./crates/jose/", version = "=1.8.0" }
 pasion-keystore = { path = "./crates/keystore/", version = "=1.8.0" }
-pasion-listener = { path = "./crates/listener/", version = "=1.8.0" }
 pasion-matrix = { path = "./crates/matrix/", version = "=1.8.0" }
 pasion-matrix-palpo = { path = "./crates/matrix-palpo/", version = "=1.8.0" }
-pasion-oidc-client = { path = "./crates/oidc-client/", version = "=1.8.0" }
 pasion-policy = { path = "./crates/policy/", version = "=1.8.0" }
-pasion-router = { path = "./crates/router/", version = "=1.8.0" }
-pasion-storage = { path = "./crates/storage/", version = "=1.8.0" }
-pasion-storage-pg = { path = "./crates/storage-pg/", version = "=1.8.0" }
 pasion-tasks = { path = "./crates/tasks/", version = "=1.8.0" }
 pasion-templates = { path = "./crates/templates/", version = "=1.8.0" }
 oauth2-types = { path = "./crates/oauth2-types/", version = "=1.8.0" }
@@ -60,7 +57,7 @@ pasion-frontend = { path = "./crates/frontend/", version = "=1.8.0" }
 # Salvo web framework
 [workspace.dependencies.salvo]
 version = "0.89"
-features = ["oapi", "cors", "cookie", "serve-static", "logging", "test"]
+features = ["oapi", "cors", "cookie", "serve-static", "logging", "test", "rate-limiter"]
 
 # An `Arc` that can be atomically updated
 [workspace.dependencies.arc-swap]
@@ -122,6 +119,10 @@ version = "1.11.1"
 [workspace.dependencies.camino]
 version = "1.2.2"
 features = ["serde1"]
+
+# Base32/Base64 encoding (used for TOTP secret encoding)
+[workspace.dependencies.data-encoding]
+version = "2.6"
 
 # ChaCha20Poly1305 AEAD
 [workspace.dependencies.chacha20poly1305]
@@ -198,10 +199,27 @@ version = "0.15.7"
 version = "0.16.9"
 features = ["signing", "verifying"]
 
+# Ed25519 signature implementation
+[workspace.dependencies.ed25519-dalek]
+version = "2.1.1"
+features = ["rand_core", "pkcs8"]
+
 # Elliptic curve cryptography
 [workspace.dependencies.elliptic-curve]
 version = "0.13.8"
 features = ["std", "pem", "sec1"]
+
+# Fluent internationalization
+[workspace.dependencies.fluent-bundle]
+version = "0.15"
+[workspace.dependencies.fluent-syntax]
+version = "0.11"
+[workspace.dependencies.fluent-langneg]
+version = "0.14"
+[workspace.dependencies.unic-langid]
+version = "0.9"
+[workspace.dependencies.intl-memoizer]
+version = "0.5"
 
 # Configuration loading
 [workspace.dependencies.figment]
@@ -220,11 +238,7 @@ version = "0.3.32"
 [workspace.dependencies.generic-array]
 version = "0.14.9"
 
-# Rate-limiting
-[workspace.dependencies.governor]
-version = "0.10.4"
-default-features = false
-features = ["std", "dashmap", "quanta"]
+# Rate-limiting (using Salvo's built-in rate-limiter instead of governor)
 
 # HMAC calculation
 [workspace.dependencies.hmac]
@@ -292,6 +306,7 @@ version = "1.5.0"
 features = ["compiled_data", "std"]
 [workspace.dependencies.icu_normalizer]
 version = "1.5.0"
+features = ["compiled_data", "std"]
 [workspace.dependencies.icu_plurals]
 version = "1.5.0"
 features = ["compiled_data", "std"]
@@ -377,10 +392,6 @@ version = "0.3.0"
 [workspace.dependencies.cedar-policy]
 version = "4"
 
-# Open Policy Agent support through WASM
-[workspace.dependencies.opa-wasm]
-version = "0.1.9"
-
 # OpenTelemetry
 [workspace.dependencies.opentelemetry]
 version = "0.31.0"
@@ -429,6 +440,11 @@ features = ["std"]
 version = "0.13.1"
 features = ["std"]
 
+# P521 elliptic curve
+[workspace.dependencies.p521]
+version = "0.13.3"
+features = ["std", "ecdsa"]
+
 # Text padding utilities
 [workspace.dependencies.pad]
 version = "0.1.6"
@@ -463,7 +479,7 @@ features = ["std"]
 # PKCS#8 encoding
 [workspace.dependencies.pkcs8]
 version = "0.10.2"
-features = ["std", "pkcs5", "encryption"]
+features = ["std", "pkcs5", "encryption", "pem"]
 
 # Public Suffix List
 [workspace.dependencies.psl]
@@ -595,6 +611,10 @@ features = ["hex", "chrono"]
 [workspace.dependencies.serde_yaml]
 version = "0.9.34"
 
+# SHA-1 cryptographic hash algorithm
+[workspace.dependencies.sha1]
+version = "0.10"
+
 # SHA-2 cryptographic hash algorithm
 [workspace.dependencies.sha2]
 version = "0.10.9"
@@ -671,6 +691,7 @@ features = ["serde", "uuid"]
 # UUID support
 [workspace.dependencies.uuid]
 version = "1.22.0"
+features = ["v7"]
 
 # HTML escaping
 [workspace.dependencies.v_htmlescape]

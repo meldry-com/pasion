@@ -13,7 +13,11 @@ use url::Url;
 
 use super::ConfigurationSection;
 
-fn default_public_base() -> Url {
+// ---------------------------------------------------------------------------
+// Defaults
+// ---------------------------------------------------------------------------
+
+fn wellknown_public_base() -> Url {
     "http://[::]:8090".parse().unwrap()
 }
 
@@ -36,7 +40,8 @@ fn is_default_http_listener_assets_path(value: &Utf8PathBuf) -> bool {
     *value == http_listener_assets_path_default()
 }
 
-fn default_trusted_proxies() -> Vec<IpNetwork> {
+/// RFC 1918 / RFC 4193 ranges commonly found behind reverse proxies
+fn rfc_private_networks() -> Vec<IpNetwork> {
     vec![
         IpNetwork::new([192, 168, 0, 0].into(), 16).unwrap(),
         IpNetwork::new([172, 16, 0, 0].into(), 12).unwrap(),
@@ -47,50 +52,54 @@ fn default_trusted_proxies() -> Vec<IpNetwork> {
     ]
 }
 
-/// Kind of socket
+// ---------------------------------------------------------------------------
+// Socket kind
+// ---------------------------------------------------------------------------
+
+/// Protocol family for a listening socket
 #[derive(Debug, Serialize, Deserialize, JsonSchema, Clone, Copy)]
 #[serde(rename_all = "lowercase")]
 pub enum UnixOrTcp {
     /// UNIX domain socket
     Unix,
-
-    /// TCP socket
+    /// TCP/IP socket
     Tcp,
 }
 
 impl UnixOrTcp {
-    /// UNIX domain socket
+    /// Construct the UNIX variant
     #[must_use]
     pub const fn unix() -> Self {
         Self::Unix
     }
 
-    /// TCP socket
+    /// Construct the TCP variant
     #[must_use]
     pub const fn tcp() -> Self {
         Self::Tcp
     }
 }
 
-/// Configuration of a single listener
+// ---------------------------------------------------------------------------
+// Bind configuration
+// ---------------------------------------------------------------------------
+
+/// How a listener should bind to the network
 #[derive(Debug, Serialize, Deserialize, JsonSchema, Clone)]
 #[serde(untagged)]
 pub enum BindConfig {
-    /// Listen on the specified host and port
+    /// Bind to host + port (host defaults to all interfaces)
     Listen {
-        /// Host on which to listen.
-        ///
-        /// Defaults to listening on all addresses
+        /// Optional hostname to restrict listening on
         #[serde(skip_serializing_if = "Option::is_none")]
         host: Option<String>,
-
-        /// Port on which to listen.
+        /// TCP port number
         port: u16,
     },
 
-    /// Listen on the specified address
+    /// Bind to a complete address string
     Address {
-        /// Host and port on which to listen
+        /// Socket address, e.g. `[::]:8090` or `127.0.0.1:8090`
         #[schemars(
             example = &"[::1]:8090",
             example = &"[::]:8090",
@@ -100,186 +109,158 @@ pub enum BindConfig {
         address: String,
     },
 
-    /// Listen on a UNIX domain socket
+    /// Bind to a UNIX domain socket path
     Unix {
-        /// Path to the socket
+        /// Filesystem path for the socket
         #[schemars(with = "String")]
         socket: Utf8PathBuf,
     },
 
-    /// Accept connections on file descriptors passed by the parent process.
-    ///
-    /// This is useful for grabbing sockets passed by systemd.
-    ///
-    /// See <https://www.freedesktop.org/software/systemd/man/sd_listen_fds.html>
+    /// Inherit a file descriptor from the parent process (e.g. systemd socket
+    /// activation). The fd index is offset by 3 (stdin/stdout/stderr).
     FileDescriptor {
-        /// Index of the file descriptor. Note that this is offseted by 3
-        /// because of the standard input/output sockets, so setting
-        /// here a value of `0` will grab the file descriptor `3`
+        /// Logical fd index (0 = actual fd 3)
         #[serde(default)]
         fd: usize,
-
-        /// Whether the socket is a TCP socket or a UNIX domain socket. Defaults
-        /// to TCP.
+        /// Whether the inherited socket is TCP or UNIX
         #[serde(default = "UnixOrTcp::tcp")]
         kind: UnixOrTcp,
     },
 }
 
-/// Configuration related to TLS on a listener
+// ---------------------------------------------------------------------------
+// TLS
+// ---------------------------------------------------------------------------
+
+/// TLS termination settings for a listener
 #[derive(Debug, Serialize, Deserialize, JsonSchema, Clone)]
 pub struct TlsConfig {
-    /// PEM-encoded X509 certificate chain
-    ///
-    /// Exactly one of `certificate` or `certificate_file` must be set.
+    /// PEM certificate chain (inline). Mutually exclusive with
+    /// `certificate_file`.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub certificate: Option<String>,
 
-    /// File containing the PEM-encoded X509 certificate chain
-    ///
-    /// Exactly one of `certificate` or `certificate_file` must be set.
+    /// Path to a PEM certificate chain. Mutually exclusive with `certificate`.
     #[serde(skip_serializing_if = "Option::is_none")]
     #[schemars(with = "Option<String>")]
     pub certificate_file: Option<Utf8PathBuf>,
 
-    /// PEM-encoded private key
-    ///
-    /// Exactly one of `key` or `key_file` must be set.
+    /// PEM private key (inline). Mutually exclusive with `key_file`.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub key: Option<String>,
 
-    /// File containing a PEM or DER-encoded private key
-    ///
-    /// Exactly one of `key` or `key_file` must be set.
+    /// Path to PEM/DER private key. Mutually exclusive with `key`.
     #[serde(skip_serializing_if = "Option::is_none")]
     #[schemars(with = "Option<String>")]
     pub key_file: Option<Utf8PathBuf>,
 
-    /// Password used to decode the private key
-    ///
-    /// One of `password` or `password_file` must be set if the key is
-    /// encrypted.
+    /// Passphrase for an encrypted private key (inline). Mutually exclusive
+    /// with `password_file`.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub password: Option<String>,
 
-    /// Password file used to decode the private key
-    ///
-    /// One of `password` or `password_file` must be set if the key is
-    /// encrypted.
+    /// Path to key passphrase file. Mutually exclusive with `password`.
     #[serde(skip_serializing_if = "Option::is_none")]
     #[schemars(with = "Option<String>")]
     pub password_file: Option<Utf8PathBuf>,
 }
 
 impl TlsConfig {
-    /// Load the TLS certificate chain and key file from disk
+    /// Read certificate chain and private key, returning material ready for
+    /// `rustls`.
     ///
     /// # Errors
     ///
-    /// Returns an error if an error was encountered either while:
-    ///   - reading the certificate, key or password files
-    ///   - decoding the key as PEM or DER
-    ///   - decrypting the key if encrypted
-    ///   - a password was provided but the key was not encrypted
-    ///   - decoding the certificate chain as PEM
-    ///   - the certificate chain is empty
+    /// Propagates I/O failures, PEM/DER parse errors, decryption mismatches,
+    /// and empty certificate chains.
     pub fn load(
         &self,
     ) -> Result<(PrivateKeyDer<'static>, Vec<CertificateDer<'static>>), anyhow::Error> {
-        let password = match (&self.password, &self.password_file) {
+        // -- password --
+        let pw = match (&self.password, &self.password_file) {
             (None, None) => None,
-            (Some(_), Some(_)) => {
-                bail!("Only one of `password` or `password_file` can be set at a time")
-            }
-            (Some(password), None) => Some(Cow::Borrowed(password)),
+            (Some(_), Some(_)) => bail!("Only one of `password` or `password_file` can be set at a time"),
+            (Some(p), None) => Some(Cow::Borrowed(p)),
             (None, Some(path)) => Some(Cow::Owned(std::fs::read_to_string(path)?)),
         };
 
-        // Read the key either embedded in the config file or on disk
-        let key = match (&self.key, &self.key_file) {
+        // -- private key --
+        let pk = match (&self.key, &self.key_file) {
             (None, None) => bail!("Either `key` or `key_file` must be set"),
             (Some(_), Some(_)) => bail!("Only one of `key` or `key_file` can be set at a time"),
-            (Some(key), None) => {
-                // If the key was embedded in the config file, assume it is formatted as PEM
-                if let Some(password) = password {
-                    PrivateKey::load_encrypted_pem(key, password.as_bytes())?
+            (Some(pem), None) => {
+                if let Some(ref p) = pw {
+                    PrivateKey::load_encrypted_pem(pem, p.as_bytes())?
                 } else {
-                    PrivateKey::load_pem(key)?
+                    PrivateKey::load_pem(pem)?
                 }
             }
             (None, Some(path)) => {
-                // When reading from disk, it might be either PEM or DER. `PrivateKey::load*`
-                // will try both.
-                let key = std::fs::read(path)?;
-                if let Some(password) = password {
-                    PrivateKey::load_encrypted(&key, password.as_bytes())?
+                let raw = std::fs::read(path)?;
+                if let Some(ref p) = pw {
+                    PrivateKey::load_encrypted(&raw, p.as_bytes())?
                 } else {
-                    PrivateKey::load(&key)?
+                    PrivateKey::load(&raw)?
                 }
             }
         };
 
-        // Re-serialize the key to PKCS#8 DER, so rustls can consume it
-        let key = key.to_pkcs8_der()?;
-        let key = PrivatePkcs8KeyDer::from(key.to_vec()).into();
+        let der_bytes = pk.to_pkcs8_der()?;
+        let key_der = PrivatePkcs8KeyDer::from(der_bytes.to_vec()).into();
 
-        let certificate_chain_pem = match (&self.certificate, &self.certificate_file) {
+        // -- certificate chain --
+        let cert_pem = match (&self.certificate, &self.certificate_file) {
             (None, None) => bail!("Either `certificate` or `certificate_file` must be set"),
-            (Some(_), Some(_)) => {
-                bail!("Only one of `certificate` or `certificate_file` can be set at a time")
-            }
-            (Some(certificate), None) => Cow::Borrowed(certificate),
+            (Some(_), Some(_)) => bail!("Only one of `certificate` or `certificate_file` can be set at a time"),
+            (Some(c), None) => Cow::Borrowed(c),
             (None, Some(path)) => Cow::Owned(std::fs::read_to_string(path)?),
         };
 
-        let certificate_chain = CertificateDer::pem_slice_iter(certificate_chain_pem.as_bytes())
-            .collect::<Result<Vec<_>, _>>()?;
+        let chain: Vec<CertificateDer<'static>> =
+            CertificateDer::pem_slice_iter(cert_pem.as_bytes())
+                .collect::<Result<Vec<_>, _>>()?;
 
-        if certificate_chain.is_empty() {
-            bail!("TLS certificate chain is empty (or invalid)")
+        if chain.is_empty() {
+            bail!("TLS certificate chain is empty (or invalid)");
         }
 
-        Ok((key, certificate_chain))
+        Ok((key_der, chain))
     }
 }
 
-/// HTTP resources to mount
+// ---------------------------------------------------------------------------
+// HTTP resources
+// ---------------------------------------------------------------------------
+
+/// A mountable HTTP resource (endpoint group)
 #[derive(Debug, Serialize, Deserialize, JsonSchema, Clone)]
 #[serde(tag = "name", rename_all = "lowercase")]
 pub enum Resource {
-    /// Healthcheck endpoint (/health)
+    /// Liveness / readiness probe (`/health`)
     Health,
-
-    /// Prometheus metrics endpoint (/metrics)
+    /// Prometheus metrics scrape endpoint (`/metrics`)
     Prometheus,
-
-    /// OIDC discovery endpoints
+    /// OpenID Connect discovery documents
     Discovery,
-
-    /// Pages destined to be viewed by humans
+    /// Browser-facing HTML pages
     Human,
-
-    /// REST API endpoint used by the frontend
+    /// REST API consumed by the frontend
     #[serde(alias = "graphql")]
     RestApi {
-        /// Deprecated, no longer used
+        /// Deprecated -- no longer used
         #[serde(default, skip_serializing_if = "std::ops::Not::not")]
         playground: bool,
-
-        /// Deprecated, no longer used
+        /// Deprecated -- no longer used
         #[serde(default, skip_serializing_if = "std::ops::Not::not")]
         undocumented_oauth2_access: bool,
     },
-
-    /// OAuth-related APIs
+    /// OAuth 2.0 / OIDC protocol endpoints
     OAuth,
-
-    /// Matrix compatibility API
+    /// Matrix compatibility layer
     Compat,
-
-    /// Static files
+    /// Static frontend assets
     Assets {
-        /// Path to the directory to serve.
+        /// Directory from which to serve files
         #[serde(
             default = "http_listener_assets_path_default",
             skip_serializing_if = "is_default_http_listener_assets_path"
@@ -287,66 +268,70 @@ pub enum Resource {
         #[schemars(with = "String")]
         path: Utf8PathBuf,
     },
-
-    /// Admin API, served at `/api/admin/v1`
+    /// Administrative REST API (`/api/admin/v1`)
     AdminApi,
-
-    /// Mount a "/connection-info" handler which helps debugging informations on
-    /// the upstream connection
+    /// Debug handler exposing upstream connection metadata
     #[serde(rename = "connection-info")]
     ConnectionInfo,
 }
 
-/// Configuration of a listener
+// ---------------------------------------------------------------------------
+// Listener
+// ---------------------------------------------------------------------------
+
+/// A named HTTP listener with its resource set and bind points
 #[derive(Debug, Serialize, Deserialize, JsonSchema, Clone)]
 pub struct ListenerConfig {
-    /// A unique name for this listener which will be shown in traces and in
-    /// metrics labels
+    /// Human-readable label (appears in traces and metric tags)
     #[serde(skip_serializing_if = "Option::is_none")]
     pub name: Option<String>,
 
-    /// List of resources to mount
+    /// Endpoint groups exposed on this listener
     pub resources: Vec<Resource>,
 
-    /// HTTP prefix to mount the resources on
+    /// Optional URL prefix for all resources on this listener
     #[serde(skip_serializing_if = "Option::is_none")]
     pub prefix: Option<String>,
 
-    /// List of sockets to bind
+    /// Network addresses / sockets this listener binds to
     pub binds: Vec<BindConfig>,
 
-    /// Accept `HAProxy`'s Proxy Protocol V1
+    /// Enable HAProxy PROXY protocol v1 on accepted connections
     #[serde(default)]
     pub proxy_protocol: bool,
 
-    /// If set, makes the listener use TLS with the provided certificate and key
+    /// TLS termination settings (omit for plain HTTP)
     #[serde(skip_serializing_if = "Option::is_none")]
     pub tls: Option<TlsConfig>,
 }
 
-/// Configuration related to the web server
+// ---------------------------------------------------------------------------
+// Top-level HTTP config
+// ---------------------------------------------------------------------------
+
+/// Web server and reverse-proxy integration
 #[derive(Debug, Serialize, Deserialize, JsonSchema)]
 pub struct HttpConfig {
-    /// List of listeners to run
+    /// Ordered list of listeners to start
     #[serde(default)]
     pub listeners: Vec<ListenerConfig>,
 
-    /// List of trusted reverse proxies that can set the `X-Forwarded-For`
-    /// header
-    #[serde(default = "default_trusted_proxies")]
+    /// CIDR ranges of reverse proxies trusted to set `X-Forwarded-For`
+    #[serde(default = "rfc_private_networks")]
     #[schemars(with = "Vec<String>", inner(ip))]
     pub trusted_proxies: Vec<IpNetwork>,
 
-    /// Public URL base from where the authentication service is reachable
+    /// Externally reachable base URL of the authentication service
     pub public_base: Url,
 
-    /// OIDC issuer URL. Defaults to `public_base` if not set.
+    /// OIDC issuer identifier. Falls back to `public_base` when omitted.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub issuer: Option<Url>,
 }
 
 impl Default for HttpConfig {
     fn default() -> Self {
+        let base = wellknown_public_base();
         Self {
             listeners: vec![
                 ListenerConfig {
@@ -383,12 +368,16 @@ impl Default for HttpConfig {
                     }],
                 },
             ],
-            trusted_proxies: default_trusted_proxies(),
-            issuer: Some(default_public_base()),
-            public_base: default_public_base(),
+            trusted_proxies: rfc_private_networks(),
+            issuer: Some(base.clone()),
+            public_base: base,
         }
     }
 }
+
+// ---------------------------------------------------------------------------
+// Validation
+// ---------------------------------------------------------------------------
 
 impl ConfigurationSection for HttpConfig {
     const PATH: &'static str = "http";
@@ -397,65 +386,67 @@ impl ConfigurationSection for HttpConfig {
         &self,
         figment: &figment::Figment,
     ) -> Result<(), Box<dyn std::error::Error + Send + Sync + 'static>> {
-        for (index, listener) in self.listeners.iter().enumerate() {
-            let annotate = |mut error: figment::Error| {
-                error.metadata = figment
+        for (idx, listener) in self.listeners.iter().enumerate() {
+            let annotate_err = |mut e: figment::Error| {
+                e.metadata = figment
                     .find_metadata(&format!("{root}.listeners", root = Self::PATH))
                     .cloned();
-                error.profile = Some(figment::Profile::Default);
-                error.path = vec![
+                e.profile = Some(figment::Profile::Default);
+                e.path = vec![
                     Self::PATH.to_owned(),
                     "listeners".to_owned(),
-                    index.to_string(),
+                    idx.to_string(),
                 ];
-                error
+                e
             };
 
             if listener.resources.is_empty() {
-                return Err(
-                    annotate(figment::Error::from("listener has no resources".to_owned())).into(),
-                );
+                return Err(annotate_err(figment::Error::from(
+                    "listener has no resources".to_owned(),
+                ))
+                .into());
             }
 
             if listener.binds.is_empty() {
-                return Err(annotate(figment::Error::from(
+                return Err(annotate_err(figment::Error::from(
                     "listener does not bind to any address".to_owned(),
                 ))
                 .into());
             }
 
-            if let Some(tls_config) = &listener.tls {
-                if tls_config.certificate.is_some() && tls_config.certificate_file.is_some() {
-                    return Err(annotate(figment::Error::from(
+            if let Some(tls) = &listener.tls {
+                // certificate
+                if tls.certificate.is_some() && tls.certificate_file.is_some() {
+                    return Err(annotate_err(figment::Error::from(
                         "Only one of `certificate` or `certificate_file` can be set at a time"
                             .to_owned(),
                     ))
                     .into());
                 }
-
-                if tls_config.certificate.is_none() && tls_config.certificate_file.is_none() {
-                    return Err(annotate(figment::Error::from(
+                if tls.certificate.is_none() && tls.certificate_file.is_none() {
+                    return Err(annotate_err(figment::Error::from(
                         "TLS configuration is missing a certificate".to_owned(),
                     ))
                     .into());
                 }
 
-                if tls_config.key.is_some() && tls_config.key_file.is_some() {
-                    return Err(annotate(figment::Error::from(
+                // private key
+                if tls.key.is_some() && tls.key_file.is_some() {
+                    return Err(annotate_err(figment::Error::from(
                         "Only one of `key` or `key_file` can be set at a time".to_owned(),
                     ))
                     .into());
                 }
-
-                if tls_config.key.is_none() && tls_config.key_file.is_none() {
-                    return Err(annotate(figment::Error::from(
+                if tls.key.is_none() && tls.key_file.is_none() {
+                    return Err(annotate_err(figment::Error::from(
                         "TLS configuration is missing a private key".to_owned(),
                     ))
                     .into());
                 }
 
-                if tls_config.password.is_some() && tls_config.password_file.is_some() {
-                    return Err(annotate(figment::Error::from(
+                // password
+                if tls.password.is_some() && tls.password_file.is_some() {
+                    return Err(annotate_err(figment::Error::from(
                         "Only one of `password` or `password_file` can be set at a time".to_owned(),
                     ))
                     .into());

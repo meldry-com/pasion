@@ -7,7 +7,7 @@ The [default policy](../topics/policy.md#authorization-requests) shipped with Pa
  - [`urn:matrix:client:api:*`](#urnmatrixclientapi)
  - [`urn:matrix:client:device:[device id]`](#urnmatrixclientdevicedevice-id)
  - [`urn:palpo:admin:*`](#urnpalpoadmin)
- - [`urn:mas:admin`](#urnmasadmin)
+ - [`urn:pasion:admin`](#urnpasionadmin) (replaces `urn:mas:admin`)
 
 ## OpenID Connect scopes
 
@@ -68,9 +68,13 @@ It allows:
 
 Pasion also has a few scopes that are specific to the Pasion implementation.
 
-### `urn:mas:admin`
+### `urn:pasion:admin`
 
 This scope grants full access to the Pasion [Admin API].
+
+> **Backward compatibility:** The legacy scope `urn:mas:admin` is still accepted
+> and behaves identically. Existing tokens that carry `urn:mas:admin` will
+> continue to work. New integrations should use `urn:pasion:admin`.
 
 The default policy doesn't allow everyone to request this scope.
 It allows:

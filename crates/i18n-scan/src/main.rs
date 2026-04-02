@@ -1,27 +1,26 @@
+// Copyright 2025 Taidge Ltd.
+// Copyright 2023, 2024 The Matrix.org Foundation C.I.C.
+//
+// SPDX-License-Identifier: Apache-2.0
+
 // Without the custom_syntax feature, the `SyntaxConfig` is a unit struct
 // which is annoying with this clippy lint
 #![allow(clippy::default_constructed_unit_structs)]
-
-use std::{fs::File, io::BufReader};
 
 use ::minijinja::{machinery::WhitespaceConfig, syntax::SyntaxConfig};
 use camino::Utf8PathBuf;
 use clap::Parser;
 use key::Context;
-use pasion_i18n::translations::TranslationTree;
 
 mod key;
 mod minijinja;
 
 /// Scan a directory of templates for usage of the translation function and
-/// output a translation tree.
+/// output the list of translation keys (as FTL message identifiers).
 #[derive(Parser)]
 struct Options {
     /// The directory containing the templates
     templates: Utf8PathBuf,
-
-    /// Path of the existing translation file
-    existing: Option<Utf8PathBuf>,
 
     /// The extensions of the templates
     #[clap(long, default_value = "html,txt,subject")]
@@ -30,26 +29,12 @@ struct Options {
     /// The name of the translation function
     #[clap(long, default_value = "_")]
     function: String,
-
-    /// Whether the existing translation file should be updated with missing
-    /// keys in-place
-    #[clap(long)]
-    update: bool,
 }
 
 fn main() {
     tracing_subscriber::fmt::init();
 
     let options = Options::parse();
-
-    // Open the existing translation file if one was provided
-    let mut tree = if let Some(path) = &options.existing {
-        let file = File::open(path).expect("Failed to open existing translation file");
-        let mut reader = BufReader::new(file);
-        serde_json::from_reader(&mut reader).expect("Failed to parse existing translation file")
-    } else {
-        TranslationTree::default()
-    };
 
     let mut context = Context::new(options.function);
 
@@ -86,32 +71,17 @@ fn main() {
         }
     }
 
-    let count = context.add_missing(&mut tree);
+    let keys = context.ftl_keys();
 
-    match count {
-        0 => tracing::debug!("No missing keys"),
-        1 => tracing::info!("Added 1 missing key"),
-        count => tracing::info!("Added {} missing keys", count),
+    match keys.len() {
+        0 => tracing::debug!("No translation keys found"),
+        1 => tracing::info!("Found 1 translation key"),
+        n => tracing::info!("Found {} translation keys", n),
     }
 
-    if options.update {
-        let mut file = File::options()
-            .write(true)
-            .read(false)
-            .truncate(true)
-            .open(
-                options
-                    .existing
-                    .expect("--update requires an existing translation file"),
-            )
-            .expect("Failed to open existing translation file");
+    serde_json::to_writer_pretty(std::io::stdout(), &keys)
+        .expect("Failed to write key list");
 
-        serde_json::to_writer_pretty(&mut file, &tree).expect("Failed to write translation tree");
-    } else {
-        serde_json::to_writer_pretty(std::io::stdout(), &tree)
-            .expect("Failed to write translation tree");
-    }
-
-    // Just to make sure we don't end up with a trailing newline
+    // Just to make sure we don't end up without a trailing newline
     println!();
 }

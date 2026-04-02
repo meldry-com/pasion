@@ -29,11 +29,11 @@ Then, create a postgres user and a database with:
 
 ```sh
 # this will prompt for a password for the new user
-createuser --pwprompt mas_user
-createdb --owner=mas_user mas
+createuser --pwprompt pasion
+createdb --owner=pasion pasion
 ```
 
-The above will create a user called `mas_user` with a password of your choice, and a database called `mas` owned by the `mas_user` user.
+The above will create a user called `pasion` with a password of your choice, and a database called `pasion` owned by the `pasion` user.
 
 ## Service configuration
 

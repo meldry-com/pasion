@@ -601,8 +601,8 @@ pub fn RegisterFinish(id: String) -> Element {
 
     match &*binding {
         Some(Ok(resp)) if resp.status == "success" => {
-            // Auto-navigate to account page after successful registration
-            nav.push(Route::AccountSettings {});
+            // Auto-navigate to account overview after successful registration
+            nav.push(Route::AccountOverview {});
             rsx! {
                 Layout {
                     div { class: "login-page",

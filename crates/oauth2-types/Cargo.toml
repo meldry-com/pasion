@@ -1,6 +1,6 @@
 [package]
 name = "oauth2-types"
-description = "OAuth 2.0 types used by the Pasion"
+description = "OAuth 2.0 and OpenID Connect wire types for Pasion"
 version.workspace = true
 authors.workspace = true
 edition.workspace = true
@@ -12,17 +12,21 @@ publish.workspace = true
 workspace = true
 
 [dependencies]
+# Serialization & encoding
+serde.workspace = true
+serde_json.workspace = true
+serde_with.workspace = true
 base64ct.workspace = true
+
+# Data structures & utilities
 chrono.workspace = true
 indexmap.workspace = true
 language-tags.workspace = true
-serde_json.workspace = true
-serde_with.workspace = true
-serde.workspace = true
 sha2.workspace = true
 thiserror.workspace = true
 url.workspace = true
 
+# Workspace crates
 pasion-iana.workspace = true
 pasion-jose.workspace = true
 

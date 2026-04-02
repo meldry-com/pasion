@@ -1,6 +1,6 @@
 [package]
 name = "pasion-keystore"
-description = "Secret keys store used by the Pasion"
+description = "Secret key storage and management for Pasion"
 version.workspace = true
 authors.workspace = true
 edition.workspace = true
@@ -12,25 +12,35 @@ publish.workspace = true
 workspace = true
 
 [dependencies]
+# Cryptographic primitives
 aead.workspace = true
-base64ct.workspace = true
 chacha20poly1305.workspace = true
-const-oid.workspace = true
-der.workspace = true
+ed25519-dalek.workspace = true
 elliptic-curve.workspace = true
 generic-array.workspace = true
+rand.workspace = true
+rsa.workspace = true
+
+# Elliptic curves
 k256.workspace = true
 p256.workspace = true
 p384.workspace = true
+p521.workspace = true
+sec1.workspace = true
+
+# Key encoding formats
+base64ct.workspace = true
+const-oid.workspace = true
+der.workspace = true
 pem-rfc7468.workspace = true
 pkcs1.workspace = true
 pkcs8.workspace = true
-rand.workspace = true
-rsa.workspace = true
-sec1.workspace = true
 spki.workspace = true
+
+# Error handling
 thiserror.workspace = true
 
+# Workspace crates
 pasion-iana.workspace = true
 pasion-jose.workspace = true
 

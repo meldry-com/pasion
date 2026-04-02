@@ -28,7 +28,7 @@ pub fn AccountSettings() -> Element {
                 }
             };
 
-            let user = match &session.user {
+            let user = match result.viewer.as_user() {
                 Some(u) => u,
                 None => {
                     return rsx! { p { "User data unavailable." } };
@@ -42,15 +42,12 @@ pub fn AccountSettings() -> Element {
                 .unwrap_or_default();
             let email_count = user.emails.as_ref().map(|ec| ec.total_count).unwrap_or(0);
             let has_password = user.has_password.unwrap_or(false);
-            let linked_accounts: Vec<LinkedAccount> = user
-                .linked_accounts
-                .clone()
-                .unwrap_or_default();
+            let linked_accounts: Vec<LinkedAccount> =
+                user.linked_accounts.clone().unwrap_or_default();
             let email_change_allowed = result.site_config.email_change_allowed;
             let password_login_enabled = result.site_config.password_login_enabled;
             let account_deactivation_allowed = result.site_config.account_deactivation_allowed;
             let session_id = session.id.clone();
-            let user_id = user.id.clone();
             let user_mxid = user
                 .matrix
                 .as_ref()
@@ -68,7 +65,6 @@ pub fn AccountSettings() -> Element {
                             }
                             if email_change_allowed {
                                 AddEmailForm {
-                                    user_id: user_id.clone(),
                                     on_add: move |id: String| {
                                         nav.push(Route::EmailVerify { id });
                                     },
@@ -110,7 +106,6 @@ pub fn AccountSettings() -> Element {
                     if account_deactivation_allowed {
                         Separator {}
                         AccountDeleteButton {
-                            user_id: user_id.clone(),
                             mxid: user_mxid.clone(),
                             has_password: has_password,
                             password_login_enabled: password_login_enabled,
@@ -130,6 +125,7 @@ pub fn AccountSettings() -> Element {
 
 #[component]
 fn SignOutButton(session_id: String) -> Element {
+    let nav = navigator();
     let mut show_dialog = use_signal(|| false);
     let mut signing_out = use_signal(|| false);
     let session_id_clone = session_id.clone();
@@ -156,19 +152,16 @@ fn SignOutButton(session_id: String) -> Element {
                         disabled: signing_out(),
                         onclick: {
                             let sid = session_id_clone.clone();
+                            let nav = nav.clone();
                             move |_| {
                                 let sid = sid.clone();
+                                let nav = nav.clone();
                                 signing_out.set(true);
                                 spawn(async move {
                                     let _ = crate::api::api_delete::<crate::api::types::EndSessionPayload>(
                                         &format!("/browser-sessions/{}", sid),
                                     ).await;
-                                    #[cfg(target_arch = "wasm32")]
-                                    {
-                                        if let Some(win) = web_sys::window() {
-                                            let _ = win.location().reload();
-                                        }
-                                    }
+                                    nav.push(Route::Login {});
                                 });
                             }
                         },
@@ -304,12 +297,8 @@ fn LinkedAccountsSection(accounts: Vec<LinkedAccount>) -> Element {
 }
 
 #[component]
-fn AccountDeleteButton(
-    user_id: String,
-    mxid: String,
-    has_password: bool,
-    password_login_enabled: bool,
-) -> Element {
+fn AccountDeleteButton(mxid: String, has_password: bool, password_login_enabled: bool) -> Element {
+    let nav = navigator();
     let mut show_dialog = use_signal(|| false);
     let mut deactivating = use_signal(|| false);
     let mut error = use_signal(|| None::<String>);
@@ -428,6 +417,7 @@ fn AccountDeleteButton(
                         class: "btn btn-destructive",
                         disabled: deactivating() || !confirm_enabled() || !form_valid,
                         onclick: {
+                            let nav = nav.clone();
                             move |_| {
                                 let hs_erase = erase_data();
                                 let pw = if use_password_mode {
@@ -435,6 +425,7 @@ fn AccountDeleteButton(
                                 } else {
                                     None
                                 };
+                                let nav = nav.clone();
                                 deactivating.set(true);
                                 error.set(None);
                                 spawn(async move {
@@ -455,12 +446,7 @@ fn AccountDeleteButton(
                                     match result {
                                         Ok(data) => match data.status {
                                             crate::api::types::DeactivateUserStatus::Deactivated => {
-                                                #[cfg(target_arch = "wasm32")]
-                                                {
-                                                    if let Some(win) = web_sys::window() {
-                                                        let _ = win.location().reload();
-                                                    }
-                                                }
+                                                nav.push(Route::Login {});
                                             }
                                             crate::api::types::DeactivateUserStatus::NotFound => {
                                                 error.set(Some("Account not found.".to_string()));

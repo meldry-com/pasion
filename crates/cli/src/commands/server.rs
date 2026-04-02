@@ -4,26 +4,25 @@ use anyhow::Context;
 use clap::Parser;
 use figment::Figment;
 use itertools::Itertools;
+use pasion_backend::handlers::{ActivityTracker, CookieManager, Limiter, MetadataCache};
+use pasion_backend::listener::server::Server;
 use pasion_config::{
-    AppConfig, ClientsConfig, ConfigurationSection, ConfigurationSectionExt,
-    HttpResource, UpstreamOAuth2Config,
+    AppConfig, ClientsConfig, ConfigurationSection, ConfigurationSectionExt, HttpResource,
+    UpstreamOAuth2Config,
 };
-use pasion_context::LogContext;
-use pasion_data_model::SystemClock;
-use pasion_handlers::{ActivityTracker, CookieManager, Limiter, MetadataCache};
-use pasion_listener::server::Server;
-use pasion_router::UrlBuilder;
-use pasion_storage_pg::PgRepositoryFactory;
+use pasion_data::PgRepositoryFactory;
+use pasion_data::SystemClock;
+use pasion_data::UrlBuilder;
 use tracing::{info, info_span, warn};
 
-use crate::{
+use pasion_backend::{
     app_state::AppState,
     lifecycle::LifecycleManager,
     util::{
-        database_url_from_config, diesel_pool_from_config,
-        homeserver_connection_from_config, load_policy_factory_dynamic_data_continuously,
-        mailer_from_config, password_manager_from_config, policy_factory_from_config,
-        site_config_from_config, templates_from_config, test_mailer_in_background,
+        database_url_from_config, diesel_pool_from_config, homeserver_connection_from_config,
+        load_policy_factory_dynamic_data_continuously, notification_center_from_config,
+        password_manager_from_config, policy_factory_from_config, site_config_from_config,
+        templates_from_config, test_mailer_in_background,
     },
 };
 
@@ -68,7 +67,7 @@ impl Options {
         let pool = diesel_pool_from_config(&config.database).await?;
 
         if self.no_migrate {
-            if pasion_storage_pg::has_pending_migrations(&db_url).await? {
+            if pasion_data::has_pending_migrations(&db_url).await? {
                 // Refuse to start if there are pending migrations
                 return Err(anyhow::anyhow!(
                     "The server is running with `--no-migrate` but there are pending migrations. Please run them first with `pasion database migrate`, or omit the `--no-migrate` flag to apply them automatically on startup."
@@ -76,7 +75,7 @@ impl Options {
             }
         } else {
             info!("Running pending database migrations");
-            pasion_storage_pg::migrate(&pool, &db_url)
+            pasion_data::migrate(&pool, &db_url)
                 .await
                 .context("could not run migrations")?;
         }
@@ -87,13 +86,16 @@ impl Options {
             info!("Skipping configuration sync");
         } else {
             // Sync the configuration with the database
-            let conn = pool.get().await.context("could not get connection from pool")?;
+            let conn = pool
+                .get()
+                .await
+                .context("could not get connection from pool")?;
             let clients_config =
                 ClientsConfig::extract_or_default(figment).map_err(anyhow::Error::from_boxed)?;
             let upstream_oauth2_config = UpstreamOAuth2Config::extract_or_default(figment)
                 .map_err(anyhow::Error::from_boxed)?;
 
-            crate::sync::config_sync(
+            pasion_backend::sync::config_sync(
                 upstream_oauth2_config,
                 clients_config,
                 conn,
@@ -160,14 +162,17 @@ impl Options {
         .await?;
         shutdown.register_reloadable(&templates);
 
-        let http_client = pasion_http::reqwest_client();
+        let http_client = pasion_backend::reqwest_client();
 
-        let homeserver_connection =
+        let (homeserver_admin, connector_registry) =
             homeserver_connection_from_config(&config.matrix, http_client.clone()).await?;
 
         if !self.no_worker {
-            let mailer = mailer_from_config(&config.email, &templates)?;
-            test_mailer_in_background(&mailer, Duration::from_secs(30));
+            let notifications =
+                notification_center_from_config(&config.email, &config.sms, &templates)?;
+            if let Some(mailer) = notifications.email() {
+                test_mailer_in_background(mailer, Duration::from_secs(30));
+            }
 
             info!("Starting task worker");
             let database_url = database_url_from_config(&config.database)?;
@@ -175,8 +180,8 @@ impl Options {
                 PgRepositoryFactory::new(pool.clone()),
                 database_url,
                 SystemClock::default(),
-                &mailer,
-                homeserver_connection.clone(),
+                &notifications,
+                homeserver_admin.clone(),
                 url_builder.clone(),
                 &site_config,
                 shutdown.soft_shutdown_token(),
@@ -193,7 +198,7 @@ impl Options {
             .flat_map(|l| &l.resources)
             .find_map(|r| {
                 if let HttpResource::Assets { path } = r {
-                    crate::server::discover_frontend_script(path)
+                    pasion_backend::server::discover_frontend_script(path)
                 } else {
                     None
                 }
@@ -238,7 +243,8 @@ impl Options {
                 cookie_manager,
                 encrypter,
                 url_builder,
-                homeserver_connection,
+                homeserver_admin,
+                connector_registry,
                 policy_factory,
                 http_client,
                 password_manager,
@@ -264,19 +270,19 @@ impl Options {
             let listener_label = listener_name.as_deref().unwrap_or("<unnamed>");
 
             // Let's first grab all the listeners
-            let listeners = crate::server::build_listeners(&mut fd_manager, &config.binds)
+            let listeners = pasion_backend::server::build_listeners(&mut fd_manager, &config.binds)
                 .with_context(|| format!("could not initialize listener `{listener_label}`"))?;
 
             // Load the TLS config
             let tls_config = if let Some(tls_config) = config.tls.as_ref() {
-                let tls_config = crate::server::build_tls_server_config(tls_config)?;
+                let tls_config = pasion_backend::server::build_tls_server_config(tls_config)?;
                 Some(Arc::new(tls_config))
             } else {
                 None
             };
 
             // and build the router
-            let router = crate::server::build_router(
+            let router = pasion_backend::server::build_router(
                 state.clone(),
                 &config.resources,
                 config.prefix.as_deref(),
@@ -349,13 +355,11 @@ impl Options {
 
         shutdown
             .task_tracker()
-            .spawn(LogContext::new("run-servers").run(|| {
-                pasion_listener::server::run_servers(
-                    servers,
-                    shutdown.soft_shutdown_token(),
-                    shutdown.hard_shutdown_token(),
-                )
-            }));
+            .spawn(pasion_backend::listener::server::run_servers(
+                servers,
+                shutdown.soft_shutdown_token(),
+                shutdown.hard_shutdown_token(),
+            ));
 
         let exit_code = shutdown.run().await;
 

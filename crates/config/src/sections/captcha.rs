@@ -3,42 +3,64 @@ use serde::{Deserialize, Serialize, de::Error};
 
 use crate::ConfigurationSection;
 
-/// Which service should be used for CAPTCHA protection
+/// Supported CAPTCHA provider services
 #[derive(Clone, Copy, Debug, Deserialize, JsonSchema, Serialize)]
 pub enum CaptchaServiceKind {
-    /// Use Google's reCAPTCHA v2 API
+    /// Google reCAPTCHA v2
     #[serde(rename = "recaptcha_v2")]
     RecaptchaV2,
 
-    /// Use Cloudflare Turnstile
+    /// Cloudflare Turnstile verification
     #[serde(rename = "cloudflare_turnstile")]
     CloudflareTurnstile,
 
-    /// Use ``HCaptcha``
+    /// ``HCaptcha`` verification service
     #[serde(rename = "hcaptcha")]
     HCaptcha,
 }
 
-/// Configuration section to setup CAPTCHA protection on a few operations
+/// Controls CAPTCHA-based bot protection for sensitive operations
 #[derive(Clone, Debug, Deserialize, JsonSchema, Serialize, Default)]
 pub struct CaptchaConfig {
-    /// Which service should be used for CAPTCHA protection
+    /// The CAPTCHA provider to use, if any
     #[serde(skip_serializing_if = "Option::is_none")]
     pub service: Option<CaptchaServiceKind>,
 
-    /// The site key to use
+    /// Public-facing site key provided by the CAPTCHA service
     #[serde(skip_serializing_if = "Option::is_none")]
     pub site_key: Option<String>,
 
-    /// The secret key to use
+    /// Server-side secret key for verifying CAPTCHA responses
     #[serde(skip_serializing_if = "Option::is_none")]
     pub secret_key: Option<String>,
 }
 
 impl CaptchaConfig {
-    /// Returns true if the configuration is the default one
+    /// Checks whether every field holds its zero/default state
     pub(crate) fn is_default(&self) -> bool {
         self.service.is_none() && self.site_key.is_none() && self.secret_key.is_none()
+    }
+
+    /// Ensures that required keys are present when a service is selected
+    fn check_required_keys(
+        &self,
+        figment_meta: Option<&figment::Metadata>,
+    ) -> Result<(), Box<dyn std::error::Error + Send + Sync + 'static>> {
+        let make_error = |field: &'static str| {
+            let mut err = figment::error::Error::missing_field(field);
+            err.metadata = figment_meta.cloned();
+            err.profile = Some(figment::Profile::Default);
+            err.path = vec![Self::PATH.to_owned(), field.to_owned()];
+            err
+        };
+
+        if self.site_key.is_none() {
+            return Err(make_error("site_key").into());
+        }
+        if self.secret_key.is_none() {
+            return Err(make_error("secret_key").into());
+        }
+        Ok(())
     }
 }
 
@@ -49,27 +71,11 @@ impl ConfigurationSection for CaptchaConfig {
         &self,
         figment: &figment::Figment,
     ) -> Result<(), Box<dyn std::error::Error + Send + Sync + 'static>> {
-        let metadata = figment.find_metadata(Self::PATH);
+        let figment_meta = figment.find_metadata(Self::PATH);
 
-        let error_on_field = |mut error: figment::error::Error, field: &'static str| {
-            error.metadata = metadata.cloned();
-            error.profile = Some(figment::Profile::Default);
-            error.path = vec![Self::PATH.to_owned(), field.to_owned()];
-            error
-        };
-
-        let missing_field = |field: &'static str| {
-            error_on_field(figment::error::Error::missing_field(field), field)
-        };
-
-        if let Some(CaptchaServiceKind::RecaptchaV2) = self.service {
-            if self.site_key.is_none() {
-                return Err(missing_field("site_key").into());
-            }
-
-            if self.secret_key.is_none() {
-                return Err(missing_field("secret_key").into());
-            }
+        // Only reCAPTCHA v2 currently mandates both keys during validation
+        if matches!(self.service, Some(CaptchaServiceKind::RecaptchaV2)) {
+            self.check_required_keys(figment_meta)?;
         }
 
         Ok(())

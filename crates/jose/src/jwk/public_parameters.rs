@@ -1,3 +1,8 @@
+// JWK public parameters for RSA, EC, and OKP key types.
+//
+// Each key type has its own parameter struct that implements
+// `ParametersInfo` to report the key type and compatible algorithms.
+
 use pasion_iana::jose::{
     JsonWebKeyEcEllipticCurve, JsonWebKeyOkpEllipticCurve, JsonWebKeyType, JsonWebSignatureAlg,
 };
@@ -7,87 +12,39 @@ use serde::{Deserialize, Serialize};
 use super::ParametersInfo;
 use crate::{base64::Base64UrlNoPad, jwk::Thumbprint};
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
-#[serde(tag = "kty")]
-pub enum JsonWebKeyPublicParameters {
-    #[serde(rename = "RSA")]
-    Rsa(RsaPublicParameters),
+// ---------------------------------------------------------------------------
+// RSA parameters
+// ---------------------------------------------------------------------------
 
-    #[serde(rename = "EC")]
-    Ec(EcPublicParameters),
-
-    #[serde(rename = "OKP")]
-    Okp(OkpPublicParameters),
-}
-
-impl JsonWebKeyPublicParameters {
-    #[must_use]
-    pub const fn rsa(&self) -> Option<&RsaPublicParameters> {
-        match self {
-            Self::Rsa(params) => Some(params),
-            _ => None,
-        }
-    }
-
-    #[must_use]
-    pub const fn ec(&self) -> Option<&EcPublicParameters> {
-        match self {
-            Self::Ec(params) => Some(params),
-            _ => None,
-        }
-    }
-
-    #[must_use]
-    pub const fn okp(&self) -> Option<&OkpPublicParameters> {
-        match self {
-            Self::Okp(params) => Some(params),
-            _ => None,
-        }
-    }
-}
-
-impl Thumbprint for JsonWebKeyPublicParameters {
-    fn thumbprint_prehashed(&self) -> String {
-        match self {
-            JsonWebKeyPublicParameters::Rsa(RsaPublicParameters { n, e }) => {
-                format!("{{\"e\":\"{e}\",\"kty\":\"RSA\",\"n\":\"{n}\"}}")
-            }
-            JsonWebKeyPublicParameters::Ec(EcPublicParameters { crv, x, y }) => {
-                format!("{{\"crv\":\"{crv}\",\"kty\":\"EC\",\"x\":\"{x}\",\"y\":\"{y}\"}}")
-            }
-            JsonWebKeyPublicParameters::Okp(OkpPublicParameters { crv, x }) => {
-                format!("{{\"crv\":\"{crv}\",\"kty\":\"OKP\",\"x\":\"{x}\"}}")
-            }
-        }
-    }
-}
-
-impl ParametersInfo for JsonWebKeyPublicParameters {
-    fn kty(&self) -> JsonWebKeyType {
-        match self {
-            Self::Rsa(_) => JsonWebKeyType::Rsa,
-            Self::Ec(_) => JsonWebKeyType::Ec,
-            Self::Okp(_) => JsonWebKeyType::Okp,
-        }
-    }
-
-    fn possible_algs(&self) -> &[JsonWebSignatureAlg] {
-        match self {
-            JsonWebKeyPublicParameters::Rsa(p) => p.possible_algs(),
-            JsonWebKeyPublicParameters::Ec(p) => p.possible_algs(),
-            JsonWebKeyPublicParameters::Okp(p) => p.possible_algs(),
-        }
-    }
-}
-
+/// Public parameters for an RSA key (modulus `n` and exponent `e`).
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 pub struct RsaPublicParameters {
+    /// RSA modulus
     #[schemars(with = "String")]
     n: Base64UrlNoPad,
 
+    /// RSA public exponent
     #[schemars(with = "String")]
     e: Base64UrlNoPad,
 }
+
+impl RsaPublicParameters {
+    /// Create a new set of RSA public parameters from the raw
+    /// base64url-encoded modulus and exponent.
+    pub const fn new(n: Base64UrlNoPad, e: Base64UrlNoPad) -> Self {
+        Self { n, e }
+    }
+}
+
+/// All RSA signature algorithms that are compatible with any RSA key.
+const RSA_COMPATIBLE_ALGS: &[JsonWebSignatureAlg] = &[
+    JsonWebSignatureAlg::Rs256,
+    JsonWebSignatureAlg::Rs384,
+    JsonWebSignatureAlg::Rs512,
+    JsonWebSignatureAlg::Ps256,
+    JsonWebSignatureAlg::Ps384,
+    JsonWebSignatureAlg::Ps512,
+];
 
 impl ParametersInfo for RsaPublicParameters {
     fn kty(&self) -> JsonWebKeyType {
@@ -95,46 +52,44 @@ impl ParametersInfo for RsaPublicParameters {
     }
 
     fn possible_algs(&self) -> &[JsonWebSignatureAlg] {
-        &[
-            JsonWebSignatureAlg::Rs256,
-            JsonWebSignatureAlg::Rs384,
-            JsonWebSignatureAlg::Rs512,
-            JsonWebSignatureAlg::Ps256,
-            JsonWebSignatureAlg::Ps384,
-            JsonWebSignatureAlg::Ps512,
-        ]
+        RSA_COMPATIBLE_ALGS
     }
 }
 
-impl RsaPublicParameters {
-    pub const fn new(n: Base64UrlNoPad, e: Base64UrlNoPad) -> Self {
-        Self { n, e }
-    }
-}
+// ---------------------------------------------------------------------------
+// Elliptic Curve (EC) parameters
+// ---------------------------------------------------------------------------
 
+/// Public parameters for an Elliptic Curve key, consisting of the
+/// curve identifier and the affine coordinates (`x`, `y`).
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 pub struct EcPublicParameters {
+    /// The named curve this key belongs to
     pub(crate) crv: JsonWebKeyEcEllipticCurve,
 
+    /// X coordinate of the public point
     #[schemars(with = "String")]
     x: Base64UrlNoPad,
 
+    /// Y coordinate of the public point
     #[schemars(with = "String")]
     y: Base64UrlNoPad,
 }
 
 impl EcPublicParameters {
-    pub const fn new(crv: JsonWebKeyEcEllipticCurve, x: Base64UrlNoPad, y: Base64UrlNoPad) -> Self {
+    /// Construct EC public parameters from the curve identifier
+    /// and the base64url-encoded coordinates.
+    pub const fn new(
+        crv: JsonWebKeyEcEllipticCurve,
+        x: Base64UrlNoPad,
+        y: Base64UrlNoPad,
+    ) -> Self {
         Self { crv, x, y }
     }
-}
 
-impl ParametersInfo for EcPublicParameters {
-    fn kty(&self) -> JsonWebKeyType {
-        JsonWebKeyType::Ec
-    }
-
-    fn possible_algs(&self) -> &[JsonWebSignatureAlg] {
+    /// Determine which signature algorithms are usable with this
+    /// key based on the curve.
+    fn algs_for_curve(&self) -> &[JsonWebSignatureAlg] {
         match &self.crv {
             JsonWebKeyEcEllipticCurve::P256 => &[JsonWebSignatureAlg::Es256],
             JsonWebKeyEcEllipticCurve::P384 => &[JsonWebSignatureAlg::Es384],
@@ -145,12 +100,38 @@ impl ParametersInfo for EcPublicParameters {
     }
 }
 
+impl ParametersInfo for EcPublicParameters {
+    fn kty(&self) -> JsonWebKeyType {
+        JsonWebKeyType::Ec
+    }
+
+    fn possible_algs(&self) -> &[JsonWebSignatureAlg] {
+        self.algs_for_curve()
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Octet Key Pair (OKP) parameters
+// ---------------------------------------------------------------------------
+
+/// Public parameters for an Octet Key Pair (OKP) key, such as
+/// Ed25519 or X25519.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 pub struct OkpPublicParameters {
-    crv: JsonWebKeyOkpEllipticCurve,
+    /// The named curve for this OKP key
+    pub(crate) crv: JsonWebKeyOkpEllipticCurve,
 
+    /// The public key value
     #[schemars(with = "String")]
     x: Base64UrlNoPad,
+}
+
+impl OkpPublicParameters {
+    /// Construct OKP public parameters from the curve identifier
+    /// and the base64url-encoded public key.
+    pub const fn new(crv: JsonWebKeyOkpEllipticCurve, x: Base64UrlNoPad) -> Self {
+        Self { crv, x }
+    }
 }
 
 impl ParametersInfo for OkpPublicParameters {
@@ -163,11 +144,98 @@ impl ParametersInfo for OkpPublicParameters {
     }
 }
 
-impl OkpPublicParameters {
-    pub const fn new(crv: JsonWebKeyOkpEllipticCurve, x: Base64UrlNoPad) -> Self {
-        Self { crv, x }
+// ---------------------------------------------------------------------------
+// Top-level enum combining all key types
+// ---------------------------------------------------------------------------
+
+/// Tagged union of public parameters for all supported JWK key types.
+/// The `kty` field in the serialized form determines which variant is used.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(tag = "kty")]
+pub enum JsonWebKeyPublicParameters {
+    /// RSA key parameters
+    #[serde(rename = "RSA")]
+    Rsa(RsaPublicParameters),
+
+    /// Elliptic Curve key parameters
+    #[serde(rename = "EC")]
+    Ec(EcPublicParameters),
+
+    /// Octet Key Pair parameters
+    #[serde(rename = "OKP")]
+    Okp(OkpPublicParameters),
+}
+
+impl JsonWebKeyPublicParameters {
+    /// Try to extract RSA parameters, returning `None` for other key types.
+    #[must_use]
+    pub const fn rsa(&self) -> Option<&RsaPublicParameters> {
+        match self {
+            Self::Rsa(params) => Some(params),
+            _ => None,
+        }
+    }
+
+    /// Try to extract EC parameters, returning `None` for other key types.
+    #[must_use]
+    pub const fn ec(&self) -> Option<&EcPublicParameters> {
+        match self {
+            Self::Ec(params) => Some(params),
+            _ => None,
+        }
+    }
+
+    /// Try to extract OKP parameters, returning `None` for other key types.
+    #[must_use]
+    pub const fn okp(&self) -> Option<&OkpPublicParameters> {
+        match self {
+            Self::Okp(params) => Some(params),
+            _ => None,
+        }
     }
 }
+
+// ---------------------------------------------------------------------------
+// Trait implementations for the top-level enum
+// ---------------------------------------------------------------------------
+
+impl ParametersInfo for JsonWebKeyPublicParameters {
+    fn kty(&self) -> JsonWebKeyType {
+        match self {
+            Self::Rsa(_) => JsonWebKeyType::Rsa,
+            Self::Ec(_) => JsonWebKeyType::Ec,
+            Self::Okp(_) => JsonWebKeyType::Okp,
+        }
+    }
+
+    fn possible_algs(&self) -> &[JsonWebSignatureAlg] {
+        match self {
+            Self::Rsa(p) => p.possible_algs(),
+            Self::Ec(p) => p.possible_algs(),
+            Self::Okp(p) => p.possible_algs(),
+        }
+    }
+}
+
+impl Thumbprint for JsonWebKeyPublicParameters {
+    fn thumbprint_prehashed(&self) -> String {
+        match self {
+            Self::Rsa(RsaPublicParameters { n, e }) => {
+                format!("{{\"e\":\"{e}\",\"kty\":\"RSA\",\"n\":\"{n}\"}}")
+            }
+            Self::Ec(EcPublicParameters { crv, x, y }) => {
+                format!("{{\"crv\":\"{crv}\",\"kty\":\"EC\",\"x\":\"{x}\",\"y\":\"{y}\"}}")
+            }
+            Self::Okp(OkpPublicParameters { crv, x }) => {
+                format!("{{\"crv\":\"{crv}\",\"kty\":\"OKP\",\"x\":\"{x}\"}}")
+            }
+        }
+    }
+}
+
+// ---------------------------------------------------------------------------
+// RSA conversion implementations
+// ---------------------------------------------------------------------------
 
 mod rsa_impls {
     use rsa::{BigUint, RsaPublicKey, traits::PublicKeyParts};
@@ -195,30 +263,37 @@ mod rsa_impls {
 
     impl From<&RsaPublicKey> for RsaPublicParameters {
         fn from(key: &RsaPublicKey) -> Self {
+            let modulus = Base64UrlNoPad::new(key.n().to_bytes_be());
+            let exponent = Base64UrlNoPad::new(key.e().to_bytes_be());
             Self {
-                n: Base64UrlNoPad::new(key.n().to_bytes_be()),
-                e: Base64UrlNoPad::new(key.e().to_bytes_be()),
+                n: modulus,
+                e: exponent,
             }
         }
     }
 
     impl TryFrom<RsaPublicParameters> for RsaPublicKey {
         type Error = rsa::errors::Error;
-        fn try_from(value: RsaPublicParameters) -> Result<Self, Self::Error> {
-            (&value).try_into()
+
+        fn try_from(params: RsaPublicParameters) -> Result<Self, Self::Error> {
+            Self::try_from(&params)
         }
     }
 
     impl TryFrom<&RsaPublicParameters> for RsaPublicKey {
         type Error = rsa::errors::Error;
-        fn try_from(value: &RsaPublicParameters) -> Result<Self, Self::Error> {
-            let n = BigUint::from_bytes_be(value.n.as_bytes());
-            let e = BigUint::from_bytes_be(value.e.as_bytes());
-            let key = RsaPublicKey::new(n, e)?;
-            Ok(key)
+
+        fn try_from(params: &RsaPublicParameters) -> Result<Self, Self::Error> {
+            let modulus = BigUint::from_bytes_be(params.n.as_bytes());
+            let exponent = BigUint::from_bytes_be(params.e.as_bytes());
+            RsaPublicKey::new(modulus, exponent)
         }
     }
 }
+
+// ---------------------------------------------------------------------------
+// Elliptic Curve conversion implementations
+// ---------------------------------------------------------------------------
 
 mod ec_impls {
     use digest::typenum::Unsigned;
@@ -238,23 +313,27 @@ mod ec_impls {
         C::FieldBytesSize: ModulusSize + Unsigned,
     {
         type Error = elliptic_curve::Error;
-        fn try_from(value: &EcPublicParameters) -> Result<Self, Self::Error> {
-            let x = value
+
+        fn try_from(params: &EcPublicParameters) -> Result<Self, Self::Error> {
+            let field_size = C::FieldBytesSize::USIZE;
+
+            let x_bytes = params
                 .x
                 .as_bytes()
-                .get(..C::FieldBytesSize::USIZE)
+                .get(..field_size)
                 .ok_or(elliptic_curve::Error)?;
-            let y = value
+            let y_bytes = params
                 .y
                 .as_bytes()
-                .get(..C::FieldBytesSize::USIZE)
+                .get(..field_size)
                 .ok_or(elliptic_curve::Error)?;
 
-            let x = FieldBytes::<C>::from_slice(x);
-            let y = FieldBytes::<C>::from_slice(y);
-            let pubkey = EncodedPoint::<C>::from_affine_coordinates(x, y, false);
-            let pubkey: Option<_> = PublicKey::from_encoded_point(&pubkey).into();
-            pubkey.ok_or(elliptic_curve::Error)
+            let x_field = FieldBytes::<C>::from_slice(x_bytes);
+            let y_field = FieldBytes::<C>::from_slice(y_bytes);
+
+            let encoded = EncodedPoint::<C>::from_affine_coordinates(x_field, y_field, false);
+            let maybe_key: Option<_> = PublicKey::from_encoded_point(&encoded).into();
+            maybe_key.ok_or(elliptic_curve::Error)
         }
     }
 
@@ -265,7 +344,7 @@ mod ec_impls {
         C::FieldBytesSize: ModulusSize,
     {
         fn from(key: PublicKey<C>) -> Self {
-            (&key).into()
+            Self::from(&key)
         }
     }
 
@@ -287,7 +366,7 @@ mod ec_impls {
         C::FieldBytesSize: ModulusSize,
     {
         fn from(key: PublicKey<C>) -> Self {
-            (&key).into()
+            Self::from(&key)
         }
     }
 
@@ -298,8 +377,8 @@ mod ec_impls {
         C::FieldBytesSize: ModulusSize,
     {
         fn from(key: &PublicKey<C>) -> Self {
-            let point = key.to_encoded_point(false);
-            let Coordinates::Uncompressed { x, y } = point.coordinates() else {
+            let uncompressed_point = key.to_encoded_point(false);
+            let Coordinates::Uncompressed { x, y } = uncompressed_point.coordinates() else {
                 unreachable!()
             };
             EcPublicParameters {
@@ -311,13 +390,85 @@ mod ec_impls {
     }
 }
 
+// ---------------------------------------------------------------------------
+// OKP (Ed25519) conversion implementations
+// ---------------------------------------------------------------------------
+
+mod okp_impls {
+    use ed25519_dalek::VerifyingKey;
+    use pasion_iana::jose::JsonWebKeyOkpEllipticCurve;
+
+    use super::{JsonWebKeyPublicParameters, OkpPublicParameters};
+    use crate::{base64::Base64UrlNoPad, jwk::InvalidOkpParameters};
+
+    impl TryFrom<OkpPublicParameters> for VerifyingKey {
+        type Error = InvalidOkpParameters;
+
+        fn try_from(params: OkpPublicParameters) -> Result<Self, Self::Error> {
+            Self::try_from(&params)
+        }
+    }
+
+    impl TryFrom<&OkpPublicParameters> for VerifyingKey {
+        type Error = InvalidOkpParameters;
+
+        fn try_from(params: &OkpPublicParameters) -> Result<Self, Self::Error> {
+            // Only Ed25519 is supported for OKP signature verification
+            if params.crv != JsonWebKeyOkpEllipticCurve::Ed25519 {
+                return Err(InvalidOkpParameters);
+            }
+
+            let raw_bytes = params
+                .x
+                .as_bytes()
+                .try_into()
+                .map_err(|_| InvalidOkpParameters)?;
+
+            VerifyingKey::from_bytes(&raw_bytes).map_err(|_| InvalidOkpParameters)
+        }
+    }
+
+    impl From<VerifyingKey> for JsonWebKeyPublicParameters {
+        fn from(key: VerifyingKey) -> Self {
+            Self::from(&key)
+        }
+    }
+
+    impl From<&VerifyingKey> for JsonWebKeyPublicParameters {
+        fn from(key: &VerifyingKey) -> Self {
+            Self::Okp(key.into())
+        }
+    }
+
+    impl From<VerifyingKey> for OkpPublicParameters {
+        fn from(key: VerifyingKey) -> Self {
+            Self::from(&key)
+        }
+    }
+
+    impl From<&VerifyingKey> for OkpPublicParameters {
+        fn from(key: &VerifyingKey) -> Self {
+            let public_bytes = key.to_bytes().to_vec();
+            Self {
+                crv: JsonWebKeyOkpEllipticCurve::Ed25519,
+                x: Base64UrlNoPad::new(public_bytes),
+            }
+        }
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Tests
+// ---------------------------------------------------------------------------
+
 #[cfg(test)]
 mod tests {
     use super::*;
 
+    /// Verify the JWK thumbprint computation against the example
+    /// from RFC 7638 Section 3.1.
     #[test]
     fn test_thumbprint_rfc_example() {
-        // From https://www.rfc-editor.org/rfc/rfc7638.html#section-3.1
         let n = Base64UrlNoPad::parse(
             "\
             0vx7agoebGcQSuuPiLJXZptN9nndrQmbXEps2aiAFbWhM78LhWx4cbbfAAt\
@@ -330,10 +481,11 @@ mod tests {
         .unwrap();
         let e = Base64UrlNoPad::parse("AQAB").unwrap();
 
-        let jwkpps = JsonWebKeyPublicParameters::Rsa(RsaPublicParameters { n, e });
+        let rsa_params = RsaPublicParameters { n, e };
+        let public_key = JsonWebKeyPublicParameters::Rsa(rsa_params);
 
         assert_eq!(
-            jwkpps.thumbprint_sha256_base64(),
+            public_key.thumbprint_sha256_base64(),
             "NzbLsXh8uDCcd-6MNwXF4W_7noWXFZAfHkxZsRGC9Xs"
         );
     }

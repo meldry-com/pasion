@@ -1,19 +1,9 @@
-//! Pasion CLI — the main entry point for the authentication service.
+//! Pasion CLI -- entry point for the authentication service binary.
 //!
-//! This binary provides sub-commands for running the HTTP server, the
-//! background worker, managing users, and performing database operations.
-//! See `pasion --help` for the full list.
+//! Provides sub-commands for the HTTP server, background worker, user
+//! management, database operations, and diagnostics.
 //!
-//! # Architecture
-//!
-//! - [`app_state`] — Shared application state injected into every HTTP request
-//! - [`commands`] — CLI sub-command implementations (`server`, `config`,
-//!   `manage`, …)
-//! - [`server`] — Salvo router construction, middleware, and listener setup
-//! - [`telemetry`] — OpenTelemetry tracing + Prometheus metrics
-//! - [`lifecycle`] — Graceful shutdown and signal handling
-//! - [`sync`] — Sync configuration (clients, providers) to the database
-//! - [`util`] — Shared helpers for building service dependencies
+//! Backend and server infrastructure live in the `pasion-backend` crate.
 
 #![allow(clippy::module_name_repetitions)]
 
@@ -30,40 +20,51 @@ use tracing_subscriber::{
     util::SubscriberInitExt,
 };
 
-mod app_state;
 mod commands;
-mod lifecycle;
-mod server;
-mod sync;
-mod telemetry;
-mod util;
 
-/// The application version, as reported by `git describe` at build time
+/// Application version reported by `git describe` at build time
 static VERSION: &str = env!("VERGEN_GIT_DESCRIBE");
 
+// ---------------------------------------------------------------------------
+// Sentry transport adapter
+// ---------------------------------------------------------------------------
+
 #[derive(Debug)]
-struct SentryTransportFactory {
-    client: reqwest::Client,
+struct SentryTransportAdapter {
+    http: reqwest::Client,
 }
 
-impl SentryTransportFactory {
-    fn new() -> Self {
+impl SentryTransportAdapter {
+    fn create() -> Self {
         Self {
-            client: pasion_http::reqwest_client(),
+            http: pasion_backend::reqwest_client(),
         }
     }
 }
 
-impl sentry::TransportFactory for SentryTransportFactory {
-    fn create_transport(&self, options: &sentry::ClientOptions) -> Arc<dyn sentry::Transport> {
-        let transport =
-            sentry::transports::ReqwestHttpTransport::with_client(options, self.client.clone());
-
-        Arc::new(transport)
+impl sentry::TransportFactory for SentryTransportAdapter {
+    fn create_transport(&self, opts: &sentry::ClientOptions) -> Arc<dyn sentry::Transport> {
+        let inner =
+            sentry::transports::ReqwestHttpTransport::with_client(opts, self.http.clone());
+        Arc::new(inner)
     }
 }
 
+// ---------------------------------------------------------------------------
+// Entrypoint
+// ---------------------------------------------------------------------------
+
 fn main() -> anyhow::Result<ExitCode> {
+    // Publish the version so that `pasion-backend` can use it for telemetry,
+    // the AppVersion depot entry, etc.
+    pasion_backend::set_version(VERSION);
+
+    let runtime = build_tokio_runtime()?;
+    runtime.block_on(run_async())
+}
+
+/// Construct the Tokio runtime with all features enabled.
+fn build_tokio_runtime() -> anyhow::Result<tokio::runtime::Runtime> {
     let mut builder = tokio::runtime::Builder::new_multi_thread();
     builder.enable_all();
 
@@ -74,81 +75,73 @@ fn main() -> anyhow::Result<ExitCode> {
             tokio::runtime::LogHistogram::default(),
         ));
 
-    let runtime = builder.build()?;
-
-    runtime.block_on(async_main())
+    Ok(builder.build()?)
 }
 
-async fn async_main() -> anyhow::Result<ExitCode> {
-    // We're splitting the "fallible" part of main in another function to have a
-    // chance to shutdown the telemetry exporters regardless of if there was an
-    // error or not
-    let res = try_main().await;
-    if let Err(err) = self::telemetry::shutdown() {
+/// Top-level async wrapper that ensures telemetry is shut down regardless
+/// of whether the command succeeded.
+async fn run_async() -> anyhow::Result<ExitCode> {
+    let outcome = execute_command().await;
+
+    if let Err(err) = pasion_backend::telemetry::shutdown() {
         eprintln!("Failed to shutdown telemetry exporters: {err}");
     }
-    res
+
+    outcome
 }
 
-async fn try_main() -> anyhow::Result<ExitCode> {
-    // Load environment variables from .env files
-    // We keep the path to log it afterwards
-    let dotenv_path: Result<Option<_>, _> = dotenvy::dotenv()
+/// The core async logic: env loading, logging, tracing, and command dispatch.
+async fn execute_command() -> anyhow::Result<ExitCode> {
+    // Attempt to load environment variables from .env files
+    let dotenv_result: Result<Option<_>, _> = dotenvy::dotenv()
         .map(Some)
-        // Display the error if it is something other than the .env file not existing
         .or_else(|e| if e.not_found() { Ok(None) } else { Err(e) });
 
-    // Setup logging
-    // This writes logs to stderr
-    let output = std::io::stderr();
-    let with_ansi = output.is_terminal();
-    let (log_writer, _guard) = tracing_appender::non_blocking(output);
+    // Logging setup -- writes to stderr
+    let stderr = std::io::stderr();
+    let use_ansi = stderr.is_terminal();
+    let (writer, _guard) = tracing_appender::non_blocking(stderr);
     let fmt_layer = tracing_subscriber::fmt::layer()
-        .with_writer(log_writer)
-        .event_format(pasion_context::EventFormatter)
-        .with_ansi(with_ansi);
-    let filter_layer = EnvFilter::try_from_default_env()
+        .with_writer(writer)
+        .with_ansi(use_ansi);
+    let env_filter = EnvFilter::try_from_default_env()
         .or_else(|_| EnvFilter::try_new("info"))
         .context("could not setup logging filter")?;
 
-    // Suppress the following warning from the Jaeger propagator:
-    //   Invalid jaeger header format header_value=""
-    let suppress_layer = filter_fn(|metadata| metadata.name() != "JaegerPropagator.InvalidHeader");
+    // Filter out noisy Jaeger propagator warnings about empty header values
+    let jaeger_suppression =
+        filter_fn(|meta| meta.name() != "JaegerPropagator.InvalidHeader");
 
-    // Setup the rustls crypto provider
+    // Install the default rustls crypto provider
     rustls::crypto::aws_lc_rs::default_provider()
         .install_default()
         .map_err(|_| anyhow::anyhow!("could not install the AWS LC crypto provider"))?;
 
-    // Parse the CLI arguments
-    let opts = self::commands::Options::parse();
+    // Parse CLI arguments and load configuration
+    let cli_opts = self::commands::Options::parse();
+    let figment = cli_opts.figment();
 
-    // Load the base configuration files
-    let figment = opts.figment();
-
-    let telemetry_config = TelemetryConfig::extract_or_default(&figment)
+    let tel_cfg = TelemetryConfig::extract_or_default(&figment)
         .map_err(anyhow::Error::from_boxed)
         .context("Failed to load telemetry config")?;
 
-    // Setup Sentry
-    let sentry = sentry::init((
-        telemetry_config.sentry.dsn.as_deref(),
+    // Sentry initialisation
+    let sentry_guard = sentry::init((
+        tel_cfg.sentry.dsn.as_deref(),
         sentry::ClientOptions {
-            transport: Some(Arc::new(SentryTransportFactory::new())),
-            environment: telemetry_config.sentry.environment.clone().map(Into::into),
+            transport: Some(Arc::new(SentryTransportAdapter::create())),
+            environment: tel_cfg.sentry.environment.clone().map(Into::into),
             release: Some(VERSION.into()),
-            sample_rate: telemetry_config.sentry.sample_rate.unwrap_or(1.0),
-            traces_sample_rate: telemetry_config.sentry.traces_sample_rate.unwrap_or(0.0),
+            sample_rate: tel_cfg.sentry.sample_rate.unwrap_or(1.0),
+            traces_sample_rate: tel_cfg.sentry.traces_sample_rate.unwrap_or(0.0),
             ..Default::default()
         },
     ));
 
-    let sentry_layer = sentry.is_enabled().then(|| {
+    let sentry_layer = sentry_guard.is_enabled().then(|| {
         sentry_tracing::layer().event_filter(|md| {
-            // By default, Sentry records all events as breadcrumbs, except errors.
-            //
-            // Because we're emitting error events for 5xx responses, we need to exclude
-            // them and also record them as breadcrumbs.
+            // Record 5xx response events as breadcrumbs rather than standalone
+            // Sentry events to keep the noise level manageable.
             if md.name() == "http.server.response" {
                 EventFilter::Breadcrumb
             } else {
@@ -157,36 +150,35 @@ async fn try_main() -> anyhow::Result<ExitCode> {
         })
     });
 
-    // Setup OpenTelemetry tracing and metrics
-    self::telemetry::setup(&telemetry_config).context("failed to setup OpenTelemetry")?;
+    // OpenTelemetry tracing and metrics
+    pasion_backend::telemetry::setup(&tel_cfg).context("failed to setup OpenTelemetry")?;
 
-    let tracer = self::telemetry::TRACER
+    let otel_tracer = pasion_backend::telemetry::TRACER
         .get()
         .context("TRACER was not set")?;
 
-    let telemetry_layer = tracing_opentelemetry::layer()
-        .with_tracer(tracer.clone())
+    let otel_layer = tracing_opentelemetry::layer()
+        .with_tracer(otel_tracer.clone())
         .with_tracked_inactivity(false)
         .with_filter(LevelFilter::INFO);
 
-    let subscriber = Registry::default()
-        .with(suppress_layer)
+    // Assemble and install the subscriber
+    Registry::default()
+        .with(jaeger_suppression)
         .with(sentry_layer)
-        .with(telemetry_layer)
-        .with(filter_layer)
-        .with(fmt_layer);
-    subscriber
+        .with(otel_layer)
+        .with(env_filter)
+        .with(fmt_layer)
         .try_init()
         .context("could not initialize logging")?;
 
-    // Log about the .env loading
-    match dotenv_path {
+    // Report .env loading status
+    match dotenv_result {
         Ok(Some(path)) => tracing::info!(?path, "Loaded environment variables from .env file"),
         Ok(None) => {}
         Err(e) => tracing::warn!(?e, "Failed to load .env file"),
     }
 
-    // And run the command
-    tracing::trace!(?opts, "Running command");
-    opts.run(&figment).await
+    tracing::trace!(?cli_opts, "Running command");
+    cli_opts.run(&figment).await
 }

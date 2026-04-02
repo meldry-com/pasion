@@ -108,9 +108,10 @@ macro_rules! asymetric_jwt_test {
                         hello: "world".to_owned(),
                     };
                     let header = JsonWebSignatureHeader::new(alg.clone());
+                    let template: Jwt<'_, Payload> = Jwt::try_from($jwt).unwrap();
 
                     let jwks = private_jwks();
-                    let key = jwks.signing_key_for_algorithm(&alg).unwrap();
+                    let key = jwks.find_key(&template.header().into()).unwrap();
 
                     let key = pasion_jose::jwa::AsymmetricSigningKey::from_jwk_and_alg(key.params(), &alg)
                         .unwrap();
@@ -126,9 +127,10 @@ macro_rules! asymetric_jwt_test {
                         hello: "world".to_owned(),
                     };
                     let header = JsonWebSignatureHeader::new(alg.clone());
+                    let template: Jwt<'_, Payload> = Jwt::try_from($jwt).unwrap();
 
                     let jwks = private_jwks();
-                    let key = jwks.signing_key_for_algorithm(&alg).unwrap();
+                    let key = jwks.find_key(&template.header().into()).unwrap();
 
                     let key = pasion_jose::jwa::AsymmetricSigningKey::from_jwk_and_alg(key.params(), &alg)
                         .unwrap();
@@ -137,7 +139,7 @@ macro_rules! asymetric_jwt_test {
                     let jwt: Jwt<'_, Payload> = Jwt::try_from(jwt.as_str()).unwrap();
 
                     let jwks = public_jwks();
-                    let key = jwks.find_key(&jwt.header().into()).unwrap();
+                    let key = jwks.find_key(&template.header().into()).unwrap();
 
                     let key =
                         pasion_jose::jwa::AsymmetricVerifyingKey::from_jwk_and_alg(key.params(), &alg)
@@ -207,9 +209,9 @@ asymetric_jwt_test!(ps384, Ps384, PS384_JWT);
 asymetric_jwt_test!(ps512, Ps512, PS512_JWT);
 asymetric_jwt_test!(es256, Es256, ES256_JWT);
 asymetric_jwt_test!(es384, Es384, ES384_JWT);
-asymetric_jwt_test!(es512, Es512, ES512_JWT, supported = false);
+asymetric_jwt_test!(es512, Es512, ES512_JWT);
 asymetric_jwt_test!(es256k, Es256K, ES256K_JWT);
-asymetric_jwt_test!(eddsa_ed25519, EdDsa, EDDSA_ED25519_JWT, supported = false);
+asymetric_jwt_test!(eddsa_ed25519, EdDsa, EDDSA_ED25519_JWT);
 asymetric_jwt_test!(eddsa_ed448, EdDsa, EDDSA_ED448_JWT, supported = false);
 
 #[test]

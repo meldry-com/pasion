@@ -1,82 +1,38 @@
 //! Miscellaneous cleanup tasks
 
-use std::time::Duration;
+use pasion_data::queue::{CleanupQueueJobsJob, PruneStalePolicyDataJob};
 
-use async_trait::async_trait;
-use pasion_storage::queue::{CleanupQueueJobsJob, PruneStalePolicyDataJob};
-use tracing::{debug, info};
-use ulid::Ulid;
-
-use super::BATCH_SIZE;
 use crate::{
     State,
     new_queue::{JobContext, JobError, RunnableJob},
 };
 
-#[async_trait]
-impl RunnableJob for CleanupQueueJobsJob {
-    #[tracing::instrument(name = "job.cleanup_queue_jobs", skip_all)]
-    async fn run(&self, state: &State, context: JobContext) -> Result<(), JobError> {
-        // Remove completed and failed queue jobs after 30 days.
-        // Keep them for debugging purposes.
-        let until = state.clock().now() - chrono::Duration::days(30);
-        let until = Ulid::from_parts(
-            u64::try_from(until.timestamp_millis()).unwrap_or(u64::MIN),
-            u128::MAX,
-        );
-        let mut total = 0;
+cleanup_ulid_cursor_job!(
+    job = CleanupQueueJobsJob,
+    span = "job.cleanup_queue_jobs",
+    repo = queue_job,
+    method = cleanup,
+    cutoff = |state: &crate::State| state.clock().now() - chrono::Duration::days(30),
+    timeout_secs = 10 * 60,
+    empty = "no queue jobs to clean up",
+    done = "cleaned up queue jobs",
+);
 
-        let mut since = None;
-        while !context.cancellation_token.is_cancelled() {
-            let mut repo = state.repository().await.map_err(JobError::retry)?;
-            let (count, cursor) = repo
-                .queue_job()
-                .cleanup(since, until, BATCH_SIZE)
-                .await
-                .map_err(JobError::retry)?;
-            repo.save().await.map_err(JobError::retry)?;
-            since = cursor;
-            total += count;
-
-            if count != BATCH_SIZE {
-                break;
-            }
-        }
-
-        if total == 0 {
-            debug!("no queue jobs to clean up");
-        } else {
-            info!(count = total, "cleaned up queue jobs");
-        }
-
-        Ok(())
-    }
-
-    fn timeout(&self) -> Option<Duration> {
-        Some(Duration::from_secs(10 * 60))
-    }
-}
-
-#[async_trait]
+#[async_trait::async_trait]
 impl RunnableJob for PruneStalePolicyDataJob {
     #[tracing::instrument(name = "job.prune_stale_policy_data", skip_all)]
     async fn run(&self, state: &State, _context: JobContext) -> Result<(), JobError> {
         let mut repo = state.repository().await.map_err(JobError::retry)?;
+        let retained_snapshots = 10;
 
-        // Keep the last 10 policy data
-        let count = repo
+        let removed = repo
             .policy_data()
-            .prune(10)
+            .prune(retained_snapshots)
             .await
             .map_err(JobError::retry)?;
 
         repo.save().await.map_err(JobError::retry)?;
-
-        if count == 0 {
-            debug!("no stale policy data to prune");
-        } else {
-            info!(count, "pruned stale policy data");
-        }
+        super::log_cleanup_result(removed, "no stale policy data to prune", "pruned stale policy data");
 
         Ok(())
     }

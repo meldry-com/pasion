@@ -8,10 +8,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>{{ _("app.name") }}</title>
     <script>
-      window.PASION_CONFIG = JSON.parse("{{ {
-        'apiEndpoint': app_config.apiEndpoint,
-        'root': app_config.root,
-      } | tojson | add_slashes | safe }}");
+      window.APP_CONFIG = JSON.parse("{{ app_config | tojson | add_slashes | safe }}");
     </script>
   </head>
 

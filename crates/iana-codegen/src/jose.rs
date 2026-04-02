@@ -1,3 +1,12 @@
+// Copyright 2025 Taidge contributors
+//
+// SPDX-License-Identifier: Apache-2.0
+
+//! IANA JOSE registry CSV parsers.
+//!
+//! Each struct maps to one IANA CSV file and implements [`EnumEntry`] so
+//! the code-generator can turn them into Rust enums.
+
 use serde::Deserialize;
 
 use crate::{
@@ -5,8 +14,11 @@ use crate::{
     traits::{Section, s},
 };
 
+// ── Shared helpers ───────────────────────────────────────────────────
+
+/// Algorithm usage column values.
 #[derive(Debug, Deserialize, PartialEq, Eq)]
-enum Usage {
+enum AlgUsage {
     #[serde(rename = "alg")]
     Alg,
     #[serde(rename = "enc")]
@@ -15,8 +27,9 @@ enum Usage {
     Jwk,
 }
 
+/// JOSE implementation-requirement levels (RFC 7518 §3).
 #[derive(Debug, Deserialize)]
-enum Requirements {
+enum ImplRequirement {
     Required,
     #[serde(rename = "Recommended+")]
     RecommendedPlus,
@@ -28,6 +41,10 @@ enum Requirements {
     Deprecated,
 }
 
+// ── JWA: signature / encryption algorithms ───────────────────────────
+
+/// Row from the IANA "JSON Web Signature and Encryption Algorithms"
+/// registry.
 #[allow(dead_code)]
 #[derive(Debug, Deserialize)]
 pub struct WebEncryptionSignatureAlgorithm {
@@ -36,9 +53,9 @@ pub struct WebEncryptionSignatureAlgorithm {
     #[serde(rename = "Algorithm Description")]
     description: String,
     #[serde(rename = "Algorithm Usage Location(s)")]
-    usage: Usage,
+    usage: AlgUsage,
     #[serde(rename = "JOSE Implementation Requirements")]
-    requirements: Requirements,
+    requirements: ImplRequirement,
     #[serde(rename = "Change Controller")]
     change_controller: String,
     #[serde(rename = "Reference")]
@@ -50,50 +67,18 @@ pub struct WebEncryptionSignatureAlgorithm {
 impl EnumEntry for WebEncryptionSignatureAlgorithm {
     const URL: &'static str =
         "http://www.iana.org/assignments/jose/web-signature-encryption-algorithms.csv";
+
     const SECTIONS: &'static [Section] = &[
-        s(
-            "JsonWebSignatureAlg",
-            r#"JSON Web Signature "alg" parameter"#,
-        ),
-        s(
-            "JsonWebEncryptionAlg",
-            r#"JSON Web Encryption "alg" parameter"#,
-        ),
-        s(
-            "JsonWebEncryptionEnc",
-            r#"JSON Web Encryption "enc" parameter"#,
-        ),
+        s("JsonWebSignatureAlg", r#"JSON Web Signature "alg" parameter"#),
+        s("JsonWebEncryptionAlg", r#"JSON Web Encryption "alg" parameter"#),
+        s("JsonWebEncryptionEnc", r#"JSON Web Encryption "enc" parameter"#),
     ];
 
     fn key(&self) -> Option<&'static str> {
         match self.usage {
-            Usage::Alg => {
-                // RFC7518 has one for signature algs and one for encryption algs. The other two
-                // RFCs are additional Elliptic curve signature algs
-                if self.reference.contains("RFC7518, Section 3")
-                    || self.reference.contains("RFC8037")
-                    || self.reference.contains("RFC8812")
-                    || (self
-                        .reference
-                        .contains("RFC-ietf-jose-fully-specified-algorithms")
-                        && self.reference.contains("Section 2"))
-                {
-                    Some("JsonWebSignatureAlg")
-                } else if self.reference.contains("RFC7518, Section 4")
-                    || self.reference.contains("WebCryptoAPI")
-                    || (self
-                        .reference
-                        .contains("RFC-ietf-jose-fully-specified-algorithms")
-                        && self.reference.contains("Section 3"))
-                {
-                    Some("JsonWebEncryptionAlg")
-                } else {
-                    tracing::warn!("Unknown reference {} for JWA", self.reference);
-                    None
-                }
-            }
-            Usage::Enc => Some("JsonWebEncryptionEnc"),
-            Usage::Jwk => None,
+            AlgUsage::Enc => Some("JsonWebEncryptionEnc"),
+            AlgUsage::Jwk => None,
+            AlgUsage::Alg => self.classify_alg_by_reference(),
         }
     }
 
@@ -105,6 +90,40 @@ impl EnumEntry for WebEncryptionSignatureAlgorithm {
         Some(&self.description)
     }
 }
+
+impl WebEncryptionSignatureAlgorithm {
+    /// Distinguish JWS vs JWE `alg` entries by looking at the Reference
+    /// column.
+    fn classify_alg_by_reference(&self) -> Option<&'static str> {
+        let r = &self.reference;
+
+        // Signature algorithms: RFC 7518 §3, RFC 8037 (EdDSA),
+        // RFC 8812 (secp256k1), and Fully-Specified Algorithms §2.
+        let is_signature = r.contains("RFC7518, Section 3")
+            || r.contains("RFC8037")
+            || r.contains("RFC8812")
+            || (r.contains("RFC-ietf-jose-fully-specified-algorithms") && r.contains("Section 2"));
+
+        if is_signature {
+            return Some("JsonWebSignatureAlg");
+        }
+
+        // Encryption algorithms: RFC 7518 §4, WebCryptoAPI,
+        // and Fully-Specified Algorithms §3.
+        let is_encryption = r.contains("RFC7518, Section 4")
+            || r.contains("WebCryptoAPI")
+            || (r.contains("RFC-ietf-jose-fully-specified-algorithms") && r.contains("Section 3"));
+
+        if is_encryption {
+            return Some("JsonWebEncryptionAlg");
+        }
+
+        tracing::warn!(reference = %r, "unable to classify JWA algorithm");
+        None
+    }
+}
+
+// ── JWE compression ──────────────────────────────────────────────────
 
 #[allow(dead_code)]
 #[derive(Debug, Deserialize)]
@@ -122,6 +141,7 @@ pub struct WebEncryptionCompressionAlgorithm {
 impl EnumEntry for WebEncryptionCompressionAlgorithm {
     const URL: &'static str =
         "http://www.iana.org/assignments/jose/web-encryption-compression-algorithms.csv";
+
     const SECTIONS: &'static [Section] = &[s(
         "JsonWebEncryptionCompressionAlgorithm",
         "JSON Web Encryption Compression Algorithm",
@@ -140,6 +160,8 @@ impl EnumEntry for WebEncryptionCompressionAlgorithm {
     }
 }
 
+// ── JWK key types ────────────────────────────────────────────────────
+
 #[allow(dead_code)]
 #[derive(Debug, Deserialize)]
 pub struct WebKeyType {
@@ -148,7 +170,7 @@ pub struct WebKeyType {
     #[serde(rename = "Key Type Description")]
     description: String,
     #[serde(rename = "JOSE Implementation Requirements")]
-    requirements: Requirements,
+    requirements: ImplRequirement,
     #[serde(rename = "Change Controller")]
     change_controller: String,
     #[serde(rename = "Reference")]
@@ -172,6 +194,8 @@ impl EnumEntry for WebKeyType {
     }
 }
 
+// ── JWK elliptic curves ──────────────────────────────────────────────
+
 #[allow(dead_code)]
 #[derive(Debug, Deserialize)]
 pub struct WebKeyEllipticCurve {
@@ -180,7 +204,7 @@ pub struct WebKeyEllipticCurve {
     #[serde(rename = "Curve Description")]
     description: String,
     #[serde(rename = "JOSE Implementation Requirements")]
-    requirements: Requirements,
+    requirements: ImplRequirement,
     #[serde(rename = "Change Controller")]
     change_controller: String,
     #[serde(rename = "Reference")]
@@ -189,18 +213,15 @@ pub struct WebKeyEllipticCurve {
 
 impl EnumEntry for WebKeyEllipticCurve {
     const URL: &'static str = "http://www.iana.org/assignments/jose/web-key-elliptic-curve.csv";
+
     const SECTIONS: &'static [Section] = &[
-        s(
-            "JsonWebKeyEcEllipticCurve",
-            "JSON Web Key EC Elliptic Curve",
-        ),
-        s(
-            "JsonWebKeyOkpEllipticCurve",
-            "JSON Web Key OKP Elliptic Curve",
-        ),
+        s("JsonWebKeyEcEllipticCurve", "JSON Web Key EC Elliptic Curve"),
+        s("JsonWebKeyOkpEllipticCurve", "JSON Web Key OKP Elliptic Curve"),
     ];
 
     fn key(&self) -> Option<&'static str> {
+        // P-256, P-384, P-521, secp256k1 are NIST / Weierstrass curves (kty = EC).
+        // Everything else (Ed25519, Ed448, X25519, X448) goes to OKP.
         if self.name.starts_with("P-") || self.name == "secp256k1" {
             Some("JsonWebKeyEcEllipticCurve")
         } else {
@@ -216,6 +237,8 @@ impl EnumEntry for WebKeyEllipticCurve {
         Some(&self.description)
     }
 }
+
+// ── JWK use ──────────────────────────────────────────────────────────
 
 #[allow(dead_code)]
 #[derive(Debug, Deserialize)]
@@ -246,6 +269,8 @@ impl EnumEntry for WebKeyUse {
         Some(&self.description)
     }
 }
+
+// ── JWK operations ───────────────────────────────────────────────────
 
 #[allow(dead_code)]
 #[derive(Debug, Deserialize)]

@@ -79,7 +79,7 @@ It is useful for automated machine-to-machine communication, and is often referr
 Palpo doesn't yet support this concept, and as such requesting any Palpo API, even the admin API, requires a user attached to the session.
 
 This isn't the case with Pasion's Admin API, which can be accessed with a client-only session:
-the API can be requested by a session which has the [`urn:mas:admin`] scope without being backed by a user.
+the API can be requested by a session which has the [`urn:pasion:admin`] scope without being backed by a user.
 
 ### Supported authorization grants
 
@@ -165,5 +165,5 @@ Personal sessions can be used so long as:
 [`urn:matrix:org.matrix.msc2967.client:api:*`]: ../reference/scopes.md#urnmatrixorgmatrixmsc2967clientapi
 [`urn:matrix:org.matrix.msc2967.client:device:AABBCC`]: ../reference/scopes.md#urnmatrixorgmatrixmsc2967clientdevicedevice-id
 [`urn:palpo:admin:*`]: ../reference/scopes.md#urnpalpoadmin
-[`urn:mas:admin`]: ../reference/scopes.md#urnmasadmin
+[`urn:pasion:admin`]: ../reference/scopes.md#urnmasadmin
 [Admin API]: ./admin-api.md

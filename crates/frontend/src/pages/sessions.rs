@@ -3,7 +3,6 @@ use dioxus::prelude::*;
 use crate::{
     api::types::{AppSession, ViewerResponse},
     components::{
-        compat_session::CompatSessionCard,
         empty_state::EmptyState,
         loading::LoadingScreen,
         oauth2_session::OAuth2SessionCard,
@@ -116,9 +115,6 @@ pub fn Sessions() -> Element {
                         match &edge.node {
                             AppSession::Oauth2Session(session) => rsx! {
                                 OAuth2SessionCard { key: "{edge.cursor}", session: session.clone() }
-                            },
-                            AppSession::CompatSession(session) => rsx! {
-                                CompatSessionCard { key: "{edge.cursor}", session: session.clone() }
                             },
                         }
                     }

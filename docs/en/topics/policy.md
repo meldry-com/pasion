@@ -11,45 +11,16 @@ Pasion supports multiple policy engine backends through an abstraction layer, al
 
 | Backend | Language | Performance | Flexibility | Feature Flag |
 |---------|----------|-------------|-------------|--------------|
-| **OPA/WASM** (default) | Rego | Excellent (native WASM) | High | *(always available)* |
-| **Cedar** | Cedar | Excellent (native Rust) | Medium | `cedar` |
+| **Cedar** (default) | Cedar | Excellent (native Rust) | Medium | `cedar` |
 | **Remote HTTP** | Any | Depends on network | Maximum | `remote` |
 
-## OPA/WASM backend (default)
-
-The default backend uses [Open Policy Agent (OPA)](https://www.openpolicyagent.org/) policies compiled into WebAssembly.
-Pasion ships with a default OPA policy which should be sufficient for most deployments.
-It can be replaced with a custom policy if needed, which can be useful to implement custom authorization logic without recompiling the service.
-
-### Configuration
-
-```yaml
-policy:
-  engine: opa  # This is the default, can be omitted
-  wasm_module: ./policies/policy.wasm
-  data:
-    admin_users:
-      - person1
-```
-
-## Cedar backend
+## Cedar backend (default)
 
 [Amazon Cedar](https://www.cedarpolicy.com/) is a policy language designed for simplicity and performance. Since Cedar is natively written in Rust, it integrates directly into Pasion with no WebAssembly overhead.
 
 Cedar is a good choice when:
-- You want a simpler, more readable policy language than Rego
-- Your team is already familiar with Cedar from AWS services
+- You want a simple, readable policy language
 - You prefer a purely declarative approach to authorization
-
-### Enabling Cedar
-
-Cedar requires the `cedar` feature flag at compile time:
-
-```bash
-cargo build --features cedar
-# Or in Docker:
-cargo build --features cedar,docker
-```
 
 ### Configuration
 
@@ -201,18 +172,18 @@ As such, they usually can be bypassed through the admin API or the CLI if needed
 
 The policy is evaluated in the following different scenarios:
 
- - [`register.rego`]: During user registration, either with password credentials or with an upstream OAuth 2.0 provider. This calls the [`email.rego`] policy as well.
- - [`email.rego`]: When a user adds a new email address to their account.
+ - During user registration, either with password credentials or with an upstream OAuth 2.0 provider. This calls the email policy as well.
+ - When a user adds a new email address to their account.
 
 ### Client registration
 
-The policy ([`client_registration.rego`]) is evaluated when a client sends their metadata through the OAuth 2.0 dynamic client registration API.
+The policy is evaluated when a client sends their metadata through the OAuth 2.0 dynamic client registration API.
 By default, it enforces a set of strict rules to make sure clients provide enough information about themselves, with coherent URLs.
 This is useful in production environments, but can be relaxed in development environments.
 
 ### Authorization requests
 
-The policy ([`authorization_grant.rego`]) is evaluated when a client requests an access token.
+The policy is evaluated when a client requests an access token.
 This only covers OAuth 2.0 sessions, not compatibility sessions.
 It is evaluated for the authorization code grant, the client credentials grant and the device authorization grant.
 

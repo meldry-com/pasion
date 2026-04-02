@@ -11,32 +11,40 @@ publish.workspace = true
 workspace = true
 
 [dependencies]
-anyhow.workspace = true
-arc-swap.workspace = true
-camino.workspace = true
-chrono.workspace = true
-http.workspace = true
-minijinja-contrib.workspace = true
+# Template engine
 minijinja.workspace = true
-rand.workspace = true
-rand_chacha.workspace = true
-serde_json.workspace = true
-serde_urlencoded.workspace = true
-serde.workspace = true
-thiserror.workspace = true
-tokio.workspace = true
-tracing.workspace = true
-ulid.workspace = true
-url.workspace = true
+minijinja-contrib.workspace = true
 v_htmlescape.workspace = true
 walkdir.workspace = true
 
+# Serialization
+serde.workspace = true
+serde_json.workspace = true
+serde_urlencoded.workspace = true
+
+# Async runtime
+tokio.workspace = true
+arc-swap.workspace = true
+
+# Core utilities
+anyhow.workspace = true
+camino.workspace = true
+chrono.workspace = true
+http.workspace = true
+rand.workspace = true
+rand_chacha.workspace = true
+thiserror.workspace = true
+tracing.workspace = true
+ulid.workspace = true
+url.workspace = true
+
+# Pasion workspace crates
+fluent-bundle.workspace = true
 oauth2-types.workspace = true
-pasion-data-model.workspace = true
+pasion-data.workspace = true
 pasion-i18n.workspace = true
 pasion-iana.workspace = true
 pasion-policy.workspace = true
-pasion-router.workspace = true
 
 [dev-dependencies]
 rand_chacha.workspace = true

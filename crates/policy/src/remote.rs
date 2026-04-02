@@ -40,7 +40,7 @@
 //! An empty `violations` array means the request is allowed.
 
 use async_trait::async_trait;
-use pasion_data_model::PolicyData;
+use pasion_data::PolicyData;
 use serde::Deserialize;
 
 use crate::model::{
@@ -144,12 +144,11 @@ impl RemoteEvaluator {
             )));
         }
 
-        let remote_response: RemoteResponse =
-            response.json().await.map_err(|e| {
-                EvaluationError::Evaluation(anyhow::anyhow!(
-                    "Failed to parse remote policy response: {e}"
-                ))
-            })?;
+        let remote_response: RemoteResponse = response.json().await.map_err(|e| {
+            EvaluationError::Evaluation(anyhow::anyhow!(
+                "Failed to parse remote policy response: {e}"
+            ))
+        })?;
 
         Ok(EvaluationResult {
             violations: remote_response.violations,

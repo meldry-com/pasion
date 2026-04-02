@@ -88,6 +88,29 @@ pub async fn api_put<T: for<'de> Deserialize<'de>>(path: &str, body: Value) -> R
         .map_err(|e| format!("Failed to parse API response: {e}"))
 }
 
+/// Execute a PATCH request to the REST API.
+pub async fn api_patch<T: for<'de> Deserialize<'de>>(path: &str, body: Value) -> Result<T, String> {
+    let url = format!("{}{}", api_base_url(), path);
+    let client = Client::new();
+
+    let response = client
+        .patch(&url)
+        .header("Content-Type", "application/json")
+        .json(&body)
+        .send()
+        .await
+        .map_err(|e| format!("API request failed: {e}"))?;
+
+    if !response.status().is_success() {
+        return Err(extract_error(response).await);
+    }
+
+    response
+        .json()
+        .await
+        .map_err(|e| format!("Failed to parse API response: {e}"))
+}
+
 /// Execute a DELETE request to the REST API.
 pub async fn api_delete<T: for<'de> Deserialize<'de>>(path: &str) -> Result<T, String> {
     let url = format!("{}{}", api_base_url(), path);

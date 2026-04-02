@@ -6,7 +6,7 @@ This API is intended to build tools on top of Pasion, and is only available to a
 ## Enabling the API
 
 The API isn't exposed by default, and must be added to either a public or a private HTTP listener.
-It is considered safe to expose the API to the public, as access to it is gated by the `urn:mas:admin` scope.
+It is considered safe to expose the API to the public, as access to it is gated by the `urn:pasion:admin` scope (the legacy `urn:mas:admin` scope is also accepted for backward compatibility).
 
 To enable the API, tweak the [`http.listeners`](../reference/configuration.md#httplisteners) configuration section to add the `adminapi` resource:
 
@@ -47,7 +47,7 @@ If admin API is enabled, Pasion will also serve the specification at `/api/spec.
 All requests to the admin API are gated either using access tokens obtained using OAuth 2.0 grants,
 or using personal access tokens (which must currently be issued through the Admin API).
 
-They must have the [`urn:mas:admin`](../reference/scopes.md#urnmasadmin) scope.
+They must have the [`urn:pasion:admin`](../reference/scopes.md#urnpasionadmin) scope (or the legacy [`urn:mas:admin`](../reference/scopes.md#urnmasadmin) scope).
 
 ### User-interactive tools
 
@@ -67,11 +67,11 @@ clients:
       # The Swagger UI callback in the hosted documentation
       - https://palpo-im.github.io/pasion/api/oauth2-redirect.html
       # The Swagger UI callback hosted by the service
-      - https://mas.example.com/api/doc/oauth2-callback
+      - https://auth.example.com/api/doc/oauth2-callback
 ```
 
 Then, in Swagger UI, click on the "Authorize" button.
-In the modal, enter the client ID and client secret **in the `authorizationCode` section**, select the `urn:mas:admin` scope and click on the "Authorize" button.
+In the modal, enter the client ID and client secret **in the `authorizationCode` section**, select the `urn:pasion:admin` scope and click on the "Authorize" button.
 
 ### Automated tools
 
@@ -97,7 +97,7 @@ clients:
 ```
 
 Then, in Swagger UI, click on the "Authorize" button.
-In the modal, enter the client ID and client secret **in the `clientCredentials` section**, select the `urn:mas:admin` scope and click on the "Authorize" button.
+In the modal, enter the client ID and client secret **in the `clientCredentials` section**, select the `urn:pasion:admin` scope and click on the "Authorize" button.
 
 
 ## General API shape
@@ -205,8 +205,8 @@ CLIENT_SECRET=phoo8ahneir3ohY2eigh4xuu6Oodaewi
 # Get an access token
 curl \
   -u "$CLIENT_ID:$CLIENT_SECRET" \
-  -d "grant_type=client_credentials&scope=urn:mas:admin" \
-  https://mas.example.com/oauth2/token \
+  -d "grant_type=client_credentials&scope=urn:pasion:admin" \
+  https://auth.example.com/oauth2/token \
   | jq -r '.access_token' \
   | read -r ACCESS_TOKEN
 
@@ -214,7 +214,7 @@ curl \
 curl \
   -g \
   -H "Authorization: Bearer $ACCESS_TOKEN" \
-  'https://mas.example.com/api/admin/v1/users?filter[can_request_admin]=true&filter[status]=active&page[first]=100' \
+  'https://auth.example.com/api/admin/v1/users?filter[can_request_admin]=true&filter[status]=active&page[first]=100' \
   | jq
 ```
 

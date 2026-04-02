@@ -1,31 +1,62 @@
-use vergen_gitcl::{Emitter, GitclBuilder, RustcBuilder};
+use std::{
+    env,
+    path::{Path, PathBuf},
+    process::Command,
+};
 
-fn main() -> anyhow::Result<()> {
-    // Instruct rustc that we'll be using #[cfg(tokio_unstable)]
+fn main() {
     println!("cargo::rustc-check-cfg=cfg(tokio_unstable)");
+    println!("cargo:rerun-if-env-changed=VERGEN_GIT_DESCRIBE");
+    println!("cargo:rerun-if-env-changed=CARGO_PKG_VERSION");
 
-    // At build time, we override the version through the environment variable
-    // VERGEN_GIT_DESCRIBE. In some contexts, it means this variable is set but
-    // empty, so we unset it here.
-    if let Ok(ver) = std::env::var("VERGEN_GIT_DESCRIBE")
-        && ver.is_empty()
-    {
-        #[allow(unsafe_code)]
-        // SAFETY: This is safe because the build script is running a single thread
-        unsafe {
-            std::env::remove_var("VERGEN_GIT_DESCRIBE");
+    if let Some(root) = workspace_root() {
+        let git_head = root.join(".git").join("HEAD");
+        if git_head.exists() {
+            println!("cargo:rerun-if-changed={}", git_head.display());
         }
     }
 
-    let gitcl = GitclBuilder::default()
-        .describe(true, false, Some("v*.*.*"))
-        .build()?;
-    let rustc = RustcBuilder::default().semver(true).build()?;
+    let describe = env_override()
+        .or_else(git_describe)
+        .unwrap_or_else(package_version_fallback);
 
-    Emitter::default()
-        .add_instructions(&gitcl)?
-        .add_instructions(&rustc)?
-        .emit()?;
+    println!("cargo:rustc-env=VERGEN_GIT_DESCRIBE={describe}");
+}
 
-    Ok(())
+fn env_override() -> Option<String> {
+    env::var("VERGEN_GIT_DESCRIBE")
+        .ok()
+        .map(|value| value.trim().to_owned())
+        .filter(|value| !value.is_empty())
+}
+
+fn git_describe() -> Option<String> {
+    let root = workspace_root()?;
+    let output = Command::new("git")
+        .args(["describe", "--tags", "--dirty", "--always", "--match", "v*.*.*"])
+        .current_dir(root)
+        .output()
+        .ok()?;
+
+    if !output.status.success() {
+        return None;
+    }
+
+    let describe = String::from_utf8(output.stdout).ok()?;
+    let describe = describe.trim().to_owned();
+    (!describe.is_empty()).then_some(describe)
+}
+
+fn package_version_fallback() -> String {
+    let version = env::var("CARGO_PKG_VERSION").unwrap_or_else(|_| "0.0.0".to_owned());
+    format!("v{version}")
+}
+
+fn workspace_root() -> Option<PathBuf> {
+    let manifest_dir = PathBuf::from(env::var("CARGO_MANIFEST_DIR").ok()?);
+    ancestor_path(&manifest_dir, 2)
+}
+
+fn ancestor_path(path: &Path, depth: usize) -> Option<PathBuf> {
+    path.ancestors().nth(depth).map(PathBuf::from)
 }

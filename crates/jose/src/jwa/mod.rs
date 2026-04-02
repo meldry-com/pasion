@@ -33,11 +33,15 @@ pub type Es256SigningKey = ecdsa::SigningKey<p256::NistP256>;
 pub type Es256VerifyingKey = ecdsa::VerifyingKey<p256::NistP256>;
 pub type Es384SigningKey = ecdsa::SigningKey<p384::NistP384>;
 pub type Es384VerifyingKey = ecdsa::VerifyingKey<p384::NistP384>;
+pub type Es512SigningKey = p521::ecdsa::SigningKey;
+pub type Es512VerifyingKey = p521::ecdsa::VerifyingKey;
 pub type Es256KSigningKey = ecdsa::SigningKey<k256::Secp256k1>;
 pub type Es256KVerifyingKey = ecdsa::VerifyingKey<k256::Secp256k1>;
+pub type EdDsaSigningKey = ed25519_dalek::SigningKey;
+pub type EdDsaVerifyingKey = ed25519_dalek::VerifyingKey;
 
 /// All the signing algorithms supported by this crate.
-pub const SUPPORTED_SIGNING_ALGORITHMS: [JsonWebSignatureAlg; 12] = [
+pub const SUPPORTED_SIGNING_ALGORITHMS: [JsonWebSignatureAlg; 14] = [
     JsonWebSignatureAlg::Hs256,
     JsonWebSignatureAlg::Hs384,
     JsonWebSignatureAlg::Hs512,
@@ -50,4 +54,6 @@ pub const SUPPORTED_SIGNING_ALGORITHMS: [JsonWebSignatureAlg; 12] = [
     JsonWebSignatureAlg::Es256,
     JsonWebSignatureAlg::Es384,
     JsonWebSignatureAlg::Es256K,
+    JsonWebSignatureAlg::Es512,
+    JsonWebSignatureAlg::EdDsa,
 ];

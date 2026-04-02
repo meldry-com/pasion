@@ -3,4 +3,4 @@
     @{{ user.username }}:{{ branding.server_name }}
 {%- endset -%}
 
-{{ _("mas.emails.recovery.subject", mxid=mxid) }}
+{{ _("pasion.emails.recovery.subject", mxid=mxid) }}

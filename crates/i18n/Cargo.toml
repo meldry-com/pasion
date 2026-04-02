@@ -1,5 +1,6 @@
 [package]
 name = "pasion-i18n"
+description = "Internationalization support for Pasion"
 version.workspace = true
 authors.workspace = true
 edition.workspace = true
@@ -12,18 +13,17 @@ workspace = true
 
 [dependencies]
 camino.workspace = true
+fluent-bundle.workspace = true
+fluent-syntax.workspace = true
+fluent-langneg.workspace = true
+unic-langid.workspace = true
+intl-memoizer.workspace = true
 icu_calendar.workspace = true
 icu_datetime.workspace = true
 icu_experimental.workspace = true
-icu_locid_transform.workspace = true
 icu_locid.workspace = true
-icu_plurals.workspace = true
-icu_provider_adapters.workspace = true
+icu_locid_transform.workspace = true
 icu_provider.workspace = true
-pad.workspace = true
-pest_derive.workspace = true
-pest.workspace = true
-serde_json.workspace = true
-serde.workspace = true
+icu_provider_adapters.workspace = true
 thiserror.workspace = true
 writeable.workspace = true

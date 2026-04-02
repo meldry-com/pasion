@@ -166,7 +166,9 @@ fn scope_description(scope: &str) -> String {
             "Access the Matrix API on your behalf".to_string()
         }
         "urn:matrix:org.matrix.msc2967.client:device:*" => "Manage your devices".to_string(),
-        other if other.starts_with("urn:mas:admin") => "Administrative access".to_string(),
+        other if other.starts_with("urn:pasion:admin") || other.starts_with("urn:mas:admin") => {
+            "Administrative access".to_string()
+        }
         other => other.to_string(),
     }
 }

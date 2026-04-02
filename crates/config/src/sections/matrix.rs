@@ -11,43 +11,50 @@ use url::Url;
 
 use super::ConfigurationSection;
 
-fn default_homeserver() -> String {
-    "localhost:8008".to_owned()
+// ---------------------------------------------------------------------------
+// Defaults
+// ---------------------------------------------------------------------------
+
+const DEFAULT_HOMESERVER: &str = "localhost:8008";
+const DEFAULT_ENDPOINT: &str = "http://localhost:8008/";
+
+fn homeserver_fallback() -> String {
+    DEFAULT_HOMESERVER.to_owned()
 }
 
-fn default_endpoint() -> Url {
-    Url::parse("http://localhost:8008/").unwrap()
+fn endpoint_fallback() -> Url {
+    Url::parse(DEFAULT_ENDPOINT).unwrap()
 }
 
-/// The kind of homeserver it is.
+// ---------------------------------------------------------------------------
+// Homeserver variant
+// ---------------------------------------------------------------------------
+
+/// Variant of the Matrix homeserver backing this deployment
 #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema, Default)]
 #[serde(rename_all = "snake_case")]
 pub enum HomeserverKind {
-    /// Homeserver is Palpo
+    /// Full read-write integration with Palpo
     #[default]
     Palpo,
-
-    /// Homeserver is Palpo, in read-only mode
-    ///
-    /// This is meant for testing rolling out Pasion with
-    /// no risk of writing data to the homeserver.
+    /// Read-only mode against Palpo (safe for rolling-out evaluations)
     PalpoReadOnly,
-
-    /// Homeserver is Palpo, with the modern API
+    /// Palpo using the newer (modern) admin API surface
     PalpoModern,
 }
 
-/// Shared secret between Pasion and the homeserver.
-///
-/// It either holds the secret value directly or references a file where the
-/// secret is stored.
+// ---------------------------------------------------------------------------
+// Shared secret helper
+// ---------------------------------------------------------------------------
+
+/// A shared secret that can be stored inline or referenced via an external file
 #[derive(Clone, Debug)]
 pub enum Secret {
     File(Utf8PathBuf),
     Value(String),
 }
 
-/// Secret fields as serialized in JSON.
+/// Wire representation for [`Secret`] (two mutually-exclusive fields)
 #[derive(JsonSchema, Serialize, Deserialize, Clone, Debug)]
 struct SecretRaw {
     #[schemars(with = "Option<String>")]
@@ -60,51 +67,55 @@ struct SecretRaw {
 impl TryFrom<SecretRaw> for Secret {
     type Error = anyhow::Error;
 
-    fn try_from(value: SecretRaw) -> Result<Self, Self::Error> {
-        match (value.secret, value.secret_file) {
+    fn try_from(raw: SecretRaw) -> Result<Self, Self::Error> {
+        match (raw.secret, raw.secret_file) {
+            (Some(v), None) => Ok(Self::Value(v)),
+            (None, Some(p)) => Ok(Self::File(p)),
             (None, None) => bail!("Missing `secret` or `secret_file`"),
-            (None, Some(path)) => Ok(Secret::File(path)),
-            (Some(secret), None) => Ok(Secret::Value(secret)),
             (Some(_), Some(_)) => bail!("Cannot specify both `secret` and `secret_file`"),
         }
     }
 }
 
 impl From<Secret> for SecretRaw {
-    fn from(value: Secret) -> Self {
-        match value {
-            Secret::File(path) => SecretRaw {
-                secret_file: Some(path),
-                secret: None,
-            },
-            Secret::Value(secret) => SecretRaw {
+    fn from(s: Secret) -> Self {
+        match s {
+            Secret::Value(v) => Self {
+                secret: Some(v),
                 secret_file: None,
-                secret: Some(secret),
+            },
+            Secret::File(p) => Self {
+                secret: None,
+                secret_file: Some(p),
             },
         }
     }
 }
 
-/// Configuration related to the Matrix homeserver
+// ---------------------------------------------------------------------------
+// MatrixConfig
+// ---------------------------------------------------------------------------
+
+/// Connection details for the Matrix homeserver
 #[serde_as]
 #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
 pub struct MatrixConfig {
-    /// The kind of homeserver it is.
+    /// Which homeserver variant is running
     #[serde(default)]
     pub kind: HomeserverKind,
 
-    /// The server name of the homeserver.
-    #[serde(default = "default_homeserver")]
+    /// The Matrix server name (e.g. `matrix.example.com:8448`)
+    #[serde(default = "homeserver_fallback")]
     pub homeserver: String,
 
-    /// Shared secret to use for calls to the admin API
+    /// Shared admin-API secret (inline value or path to a file)
     #[schemars(with = "SecretRaw")]
     #[serde_as(as = "serde_with::TryFromInto<SecretRaw>")]
     #[serde(flatten)]
     pub secret: Secret,
 
-    /// The base URL of the homeserver's client API
-    #[serde(default = "default_endpoint")]
+    /// Base URL of the homeserver's client-server API
+    #[serde(default = "endpoint_fallback")]
     pub endpoint: Url,
 }
 
@@ -113,22 +124,22 @@ impl ConfigurationSection for MatrixConfig {
 }
 
 impl MatrixConfig {
-    /// Returns the shared secret.
+    /// Resolve the shared secret, reading from disk when a file path was
+    /// configured.
     ///
-    /// If `secret_file` was given, the secret is read from that file.
+    /// File contents are trimmed to stay compatible with Palpo's behaviour.
     ///
     /// # Errors
     ///
-    /// Returns an error when the shared secret could not be read from file.
+    /// Returns an error if the referenced file cannot be read.
     pub async fn secret(&self) -> anyhow::Result<String> {
-        Ok(match &self.secret {
+        match &self.secret {
+            Secret::Value(v) => Ok(v.clone()),
             Secret::File(path) => {
                 let raw = tokio::fs::read_to_string(path).await?;
-                // Trim the secret when read from file to match Palpo's behaviour
-                raw.trim().to_string()
+                Ok(raw.trim().to_string())
             }
-            Secret::Value(secret) => secret.clone(),
-        })
+        }
     }
 
     pub(crate) fn generate<R>(mut rng: R) -> Self
@@ -137,18 +148,18 @@ impl MatrixConfig {
     {
         Self {
             kind: HomeserverKind::default(),
-            homeserver: default_homeserver(),
+            homeserver: homeserver_fallback(),
             secret: Secret::Value(Alphanumeric.sample_string(&mut rng, 32)),
-            endpoint: default_endpoint(),
+            endpoint: endpoint_fallback(),
         }
     }
 
     pub(crate) fn test() -> Self {
         Self {
             kind: HomeserverKind::default(),
-            homeserver: default_homeserver(),
+            homeserver: homeserver_fallback(),
             secret: Secret::Value("test".to_owned()),
-            endpoint: default_endpoint(),
+            endpoint: endpoint_fallback(),
         }
     }
 }

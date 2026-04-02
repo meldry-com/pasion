@@ -65,21 +65,15 @@ opentelemetry_sdk.workspace = true
 sentry.workspace = true
 sentry-tracing.workspace = true
 
+pasion-backend.workspace = true
 pasion-config.workspace = true
-pasion-context.workspace = true
-pasion-data-model.workspace = true
-pasion-email.workspace = true
-pasion-handlers.workspace = true
-pasion-http.workspace = true
+pasion-data.workspace = true
+pasion-messaging.workspace = true
 pasion-i18n.workspace = true
 pasion-keystore.workspace = true
-pasion-listener.workspace = true
 pasion-matrix.workspace = true
 pasion-matrix-palpo.workspace = true
 pasion-policy.workspace = true
-pasion-router.workspace = true
-pasion-storage.workspace = true
-pasion-storage-pg.workspace = true
 pasion-tasks.workspace = true
 pasion-templates.workspace = true
 
@@ -91,7 +85,6 @@ sd-notify.workspace = true
 
 [build-dependencies]
 anyhow.workspace = true
-vergen-gitcl.workspace = true
 
 [features]
 # Features used for the prebuilt binaries
@@ -101,5 +94,5 @@ dist = ["pasion-config/dist"]
 docker = ["pasion-config/docker"]
 
 # Policy engine backends
-cedar = ["pasion-policy/cedar"]
-remote = ["pasion-policy/remote"]
+cedar = ["pasion-backend/cedar"]
+remote = ["pasion-backend/remote"]

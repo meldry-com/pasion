@@ -1,78 +1,78 @@
-//! [Response types] in the OpenID Connect specification.
+// Copyright 2025 Taidge contributors
+//
+// SPDX-License-Identifier: Apache-2.0
+
+//! OAuth 2.0 / OpenID Connect response type handling.
 //!
-//! [Response types]: https://openid.net/specs/openid-connect-core-1_0.html#Authentication
+//! A response type is a space-separated set of tokens that determines which
+//! artifacts the authorization endpoint returns.
+//!
+//! See [OpenID Connect Core 1.0 §3] and [RFC 6749 §3.1.1].
+//!
+//! [OpenID Connect Core 1.0 §3]: https://openid.net/specs/openid-connect-core-1_0.html#Authentication
+//! [RFC 6749 §3.1.1]: https://www.rfc-editor.org/rfc/rfc6749.html#section-3.1.1
 
 #![allow(clippy::module_name_repetitions)]
 
-use std::{collections::BTreeSet, fmt, iter::FromIterator, str::FromStr};
+use std::{collections::BTreeSet, fmt, str::FromStr};
 
 use pasion_iana::oauth::OAuthAuthorizationEndpointResponseType;
 use serde_with::{DeserializeFromStr, SerializeDisplay};
 use thiserror::Error;
 
-/// An error encountered when trying to parse an invalid [`ResponseType`].
+/// Returned when a response type string cannot be parsed.
 #[derive(Debug, Error, Clone, PartialEq, Eq)]
 #[error("invalid response type")]
 pub struct InvalidResponseType;
 
-/// The accepted tokens in a [`ResponseType`].
+/// Individual tokens that can appear inside a [`ResponseType`].
 ///
-/// `none` is not in this enum because it is represented by an empty
-/// [`ResponseType`].
-///
-/// This type also accepts unknown tokens that can be constructed via it's
-/// `FromStr` implementation or used via its `Display` implementation.
+/// The special value `none` is not represented here; instead an empty
+/// [`ResponseType`] set models the `none` response type.
 #[derive(
     Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash, SerializeDisplay, DeserializeFromStr,
 )]
 #[non_exhaustive]
 pub enum ResponseTypeToken {
-    /// `code`
+    /// `code` — authorization code flow.
     Code,
-
-    /// `id_token`
+    /// `id_token` — implicit flow returning an ID token.
     IdToken,
-
-    /// `token`
+    /// `token` — implicit flow returning an access token.
     Token,
-
-    /// Unknown token.
+    /// Unrecognized token preserved verbatim.
     Unknown(String),
 }
 
-impl core::fmt::Display for ResponseTypeToken {
-    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+impl fmt::Display for ResponseTypeToken {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            ResponseTypeToken::Code => f.write_str("code"),
-            ResponseTypeToken::IdToken => f.write_str("id_token"),
-            ResponseTypeToken::Token => f.write_str("token"),
-            ResponseTypeToken::Unknown(s) => f.write_str(s),
+            Self::Code => f.write_str("code"),
+            Self::IdToken => f.write_str("id_token"),
+            Self::Token => f.write_str("token"),
+            Self::Unknown(v) => f.write_str(v),
         }
     }
 }
 
-impl core::str::FromStr for ResponseTypeToken {
+impl FromStr for ResponseTypeToken {
     type Err = core::convert::Infallible;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
-        match s {
-            "code" => Ok(Self::Code),
-            "id_token" => Ok(Self::IdToken),
-            "token" => Ok(Self::Token),
-            s => Ok(Self::Unknown(s.to_owned())),
-        }
+        Ok(match s {
+            "code" => Self::Code,
+            "id_token" => Self::IdToken,
+            "token" => Self::Token,
+            other => Self::Unknown(other.to_owned()),
+        })
     }
 }
 
-/// An [OAuth 2.0 `response_type` value] that the client can use
-/// at the [authorization endpoint].
+/// A set of response type tokens.
 ///
-/// It is recommended to construct this type from an
-/// [`OAuthAuthorizationEndpointResponseType`].
-///
-/// [OAuth 2.0 `response_type` value]: https://www.rfc-editor.org/rfc/rfc7591#page-9
-/// [authorization endpoint]: https://www.rfc-editor.org/rfc/rfc6749.html#section-3.1
-#[derive(Debug, Clone, PartialEq, Eq, SerializeDisplay, DeserializeFromStr, PartialOrd, Ord)]
+/// Serialized as a space-separated string (e.g. `"code id_token"`).
+/// An empty set serializes as `"none"`.
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, SerializeDisplay, DeserializeFromStr)]
 pub struct ResponseType(BTreeSet<ResponseTypeToken>);
 
 impl std::ops::Deref for ResponseType {
@@ -84,19 +84,19 @@ impl std::ops::Deref for ResponseType {
 }
 
 impl ResponseType {
-    /// Whether this response type requests a code.
+    /// Whether the set contains the `code` token.
     #[must_use]
     pub fn has_code(&self) -> bool {
         self.0.contains(&ResponseTypeToken::Code)
     }
 
-    /// Whether this response type requests an ID token.
+    /// Whether the set contains the `id_token` token.
     #[must_use]
     pub fn has_id_token(&self) -> bool {
         self.0.contains(&ResponseTypeToken::IdToken)
     }
 
-    /// Whether this response type requests a token.
+    /// Whether the set contains the `token` token.
     #[must_use]
     pub fn has_token(&self) -> bool {
         self.0.contains(&ResponseTypeToken::Token)
@@ -107,114 +107,89 @@ impl FromStr for ResponseType {
     type Err = InvalidResponseType;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
-        let s = s.trim();
-
-        if s.is_empty() {
-            Err(InvalidResponseType)
-        } else if s == "none" {
-            Ok(Self(BTreeSet::new()))
-        } else {
-            s.split_ascii_whitespace()
-                .map(|t| ResponseTypeToken::from_str(t).or(Err(InvalidResponseType)))
-                .collect::<Result<_, _>>()
+        let trimmed = s.trim();
+        if trimmed.is_empty() {
+            return Err(InvalidResponseType);
         }
+        if trimmed == "none" {
+            return Ok(Self(BTreeSet::new()));
+        }
+        let tokens: Result<BTreeSet<_>, _> = trimmed
+            .split_ascii_whitespace()
+            .map(|part| ResponseTypeToken::from_str(part).or(Err(InvalidResponseType)))
+            .collect();
+        Ok(Self(tokens?))
     }
 }
 
 impl fmt::Display for ResponseType {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        let mut iter = self.iter();
-
-        // First item shouldn't have a leading space
-        if let Some(first) = iter.next() {
-            first.fmt(f)?;
-        } else {
-            // If the whole iterator is empty, write 'none' instead
-            write!(f, "none")?;
-            return Ok(());
+        if self.0.is_empty() {
+            return f.write_str("none");
         }
-
-        // Write the other items with a leading space
-        for item in iter {
-            write!(f, " {item}")?;
+        let mut first = true;
+        for token in &self.0 {
+            if !first {
+                f.write_str(" ")?;
+            }
+            first = false;
+            fmt::Display::fmt(token, f)?;
         }
-
         Ok(())
     }
 }
 
 impl FromIterator<ResponseTypeToken> for ResponseType {
-    fn from_iter<T: IntoIterator<Item = ResponseTypeToken>>(iter: T) -> Self {
-        Self(BTreeSet::from_iter(iter))
+    fn from_iter<I: IntoIterator<Item = ResponseTypeToken>>(iter: I) -> Self {
+        Self(iter.into_iter().collect())
     }
 }
 
+// ── Conversions to/from IANA registry type ────────────────────────────
+
 impl From<OAuthAuthorizationEndpointResponseType> for ResponseType {
-    fn from(response_type: OAuthAuthorizationEndpointResponseType) -> Self {
-        match response_type {
-            OAuthAuthorizationEndpointResponseType::Code => Self([ResponseTypeToken::Code].into()),
-            OAuthAuthorizationEndpointResponseType::CodeIdToken => {
-                Self([ResponseTypeToken::Code, ResponseTypeToken::IdToken].into())
-            }
-            OAuthAuthorizationEndpointResponseType::CodeIdTokenToken => Self(
-                [
-                    ResponseTypeToken::Code,
-                    ResponseTypeToken::IdToken,
-                    ResponseTypeToken::Token,
-                ]
-                .into(),
-            ),
-            OAuthAuthorizationEndpointResponseType::CodeToken => {
-                Self([ResponseTypeToken::Code, ResponseTypeToken::Token].into())
-            }
-            OAuthAuthorizationEndpointResponseType::IdToken => {
-                Self([ResponseTypeToken::IdToken].into())
-            }
-            OAuthAuthorizationEndpointResponseType::IdTokenToken => {
-                Self([ResponseTypeToken::IdToken, ResponseTypeToken::Token].into())
-            }
-            OAuthAuthorizationEndpointResponseType::None => Self(BTreeSet::new()),
-            OAuthAuthorizationEndpointResponseType::Token => {
-                Self([ResponseTypeToken::Token].into())
-            }
-        }
+    fn from(iana: OAuthAuthorizationEndpointResponseType) -> Self {
+        use OAuthAuthorizationEndpointResponseType as I;
+        use ResponseTypeToken::*;
+
+        let tokens: &[ResponseTypeToken] = match iana {
+            I::Code => &[Code],
+            I::IdToken => &[IdToken],
+            I::Token => &[Token],
+            I::CodeIdToken => &[Code, IdToken],
+            I::CodeToken => &[Code, Token],
+            I::IdTokenToken => &[IdToken, Token],
+            I::CodeIdTokenToken => &[Code, IdToken, Token],
+            I::None => &[],
+        };
+        Self(tokens.iter().cloned().collect())
     }
 }
 
 impl TryFrom<ResponseType> for OAuthAuthorizationEndpointResponseType {
     type Error = InvalidResponseType;
 
-    fn try_from(response_type: ResponseType) -> Result<Self, Self::Error> {
-        if response_type
-            .iter()
-            .any(|t| matches!(t, ResponseTypeToken::Unknown(_)))
-        {
+    fn try_from(rt: ResponseType) -> Result<Self, Self::Error> {
+        use OAuthAuthorizationEndpointResponseType as O;
+        use ResponseTypeToken::*;
+
+        // Reject if any unknown tokens are present
+        if rt.iter().any(|t| matches!(t, Unknown(_))) {
             return Err(InvalidResponseType);
         }
 
-        let tokens = response_type.iter().collect::<Vec<_>>();
-        let res = match *tokens {
-            [ResponseTypeToken::Code] => OAuthAuthorizationEndpointResponseType::Code,
-            [ResponseTypeToken::IdToken] => OAuthAuthorizationEndpointResponseType::IdToken,
-            [ResponseTypeToken::Token] => OAuthAuthorizationEndpointResponseType::Token,
-            [ResponseTypeToken::Code, ResponseTypeToken::IdToken] => {
-                OAuthAuthorizationEndpointResponseType::CodeIdToken
-            }
-            [ResponseTypeToken::Code, ResponseTypeToken::Token] => {
-                OAuthAuthorizationEndpointResponseType::CodeToken
-            }
-            [ResponseTypeToken::IdToken, ResponseTypeToken::Token] => {
-                OAuthAuthorizationEndpointResponseType::IdTokenToken
-            }
-            [
-                ResponseTypeToken::Code,
-                ResponseTypeToken::IdToken,
-                ResponseTypeToken::Token,
-            ] => OAuthAuthorizationEndpointResponseType::CodeIdTokenToken,
-            _ => OAuthAuthorizationEndpointResponseType::None,
-        };
-
-        Ok(res)
+        let sorted: Vec<_> = rt.iter().collect();
+        Ok(match sorted.as_slice() {
+            [] => O::None,
+            [Code] => O::Code,
+            [IdToken] => O::IdToken,
+            [Token] => O::Token,
+            [Code, IdToken] => O::CodeIdToken,
+            [Code, Token] => O::CodeToken,
+            [IdToken, Token] => O::IdTokenToken,
+            [Code, IdToken, Token] => O::CodeIdTokenToken,
+            _ => O::None,
+        })
     }
 }
 
@@ -222,278 +197,146 @@ impl TryFrom<ResponseType> for OAuthAuthorizationEndpointResponseType {
 mod tests {
     use super::*;
 
-    #[test]
-    fn deserialize_response_type_token() {
-        assert_eq!(
-            serde_json::from_str::<ResponseTypeToken>("\"code\"").unwrap(),
-            ResponseTypeToken::Code
-        );
-        assert_eq!(
-            serde_json::from_str::<ResponseTypeToken>("\"id_token\"").unwrap(),
-            ResponseTypeToken::IdToken
-        );
-        assert_eq!(
-            serde_json::from_str::<ResponseTypeToken>("\"token\"").unwrap(),
-            ResponseTypeToken::Token
-        );
-        assert_eq!(
-            serde_json::from_str::<ResponseTypeToken>("\"something_unsupported\"").unwrap(),
-            ResponseTypeToken::Unknown("something_unsupported".to_owned())
-        );
-    }
+    // ── Token parsing ────────────────────────────────────────────────
 
     #[test]
-    fn serialize_response_type_token() {
-        assert_eq!(
-            serde_json::to_string(&ResponseTypeToken::Code).unwrap(),
-            "\"code\""
-        );
-        assert_eq!(
-            serde_json::to_string(&ResponseTypeToken::IdToken).unwrap(),
-            "\"id_token\""
-        );
-        assert_eq!(
-            serde_json::to_string(&ResponseTypeToken::Token).unwrap(),
-            "\"token\""
-        );
-        assert_eq!(
-            serde_json::to_string(&ResponseTypeToken::Unknown(
-                "something_unsupported".to_owned()
-            ))
-            .unwrap(),
-            "\"something_unsupported\""
-        );
+    fn token_round_trip() {
+        for (json, expected) in [
+            ("\"code\"", ResponseTypeToken::Code),
+            ("\"id_token\"", ResponseTypeToken::IdToken),
+            ("\"token\"", ResponseTypeToken::Token),
+            (
+                "\"something_unsupported\"",
+                ResponseTypeToken::Unknown("something_unsupported".into()),
+            ),
+        ] {
+            let parsed: ResponseTypeToken = serde_json::from_str(json).unwrap();
+            assert_eq!(parsed, expected);
+            assert_eq!(serde_json::to_string(&expected).unwrap(), json);
+        }
     }
 
+    // ── Composite response type parsing ──────────────────────────────
+
     #[test]
-    fn deserialize_response_type() {
+    fn reject_empty() {
         serde_json::from_str::<ResponseType>("\"\"").unwrap_err();
+    }
 
-        let res_type = serde_json::from_str::<ResponseType>("\"none\"").unwrap();
-        let mut iter = res_type.iter();
-        assert_eq!(iter.next(), None);
+    #[test]
+    fn parse_none() {
+        let rt = serde_json::from_str::<ResponseType>("\"none\"").unwrap();
+        assert!(rt.is_empty());
         assert_eq!(
-            OAuthAuthorizationEndpointResponseType::try_from(res_type).unwrap(),
-            OAuthAuthorizationEndpointResponseType::None
-        );
-
-        let res_type = serde_json::from_str::<ResponseType>("\"code\"").unwrap();
-        let mut iter = res_type.iter();
-        assert_eq!(iter.next(), Some(&ResponseTypeToken::Code));
-        assert_eq!(iter.next(), None);
-        assert_eq!(
-            OAuthAuthorizationEndpointResponseType::try_from(res_type).unwrap(),
-            OAuthAuthorizationEndpointResponseType::Code
-        );
-
-        let res_type = serde_json::from_str::<ResponseType>("\"code\"").unwrap();
-        let mut iter = res_type.iter();
-        assert_eq!(iter.next(), Some(&ResponseTypeToken::Code));
-        assert_eq!(iter.next(), None);
-        assert_eq!(
-            OAuthAuthorizationEndpointResponseType::try_from(res_type).unwrap(),
-            OAuthAuthorizationEndpointResponseType::Code
-        );
-
-        let res_type = serde_json::from_str::<ResponseType>("\"id_token\"").unwrap();
-        let mut iter = res_type.iter();
-        assert_eq!(iter.next(), Some(&ResponseTypeToken::IdToken));
-        assert_eq!(iter.next(), None);
-        assert_eq!(
-            OAuthAuthorizationEndpointResponseType::try_from(res_type).unwrap(),
-            OAuthAuthorizationEndpointResponseType::IdToken
-        );
-
-        let res_type = serde_json::from_str::<ResponseType>("\"token\"").unwrap();
-        let mut iter = res_type.iter();
-        assert_eq!(iter.next(), Some(&ResponseTypeToken::Token));
-        assert_eq!(iter.next(), None);
-        assert_eq!(
-            OAuthAuthorizationEndpointResponseType::try_from(res_type).unwrap(),
-            OAuthAuthorizationEndpointResponseType::Token
-        );
-
-        let res_type = serde_json::from_str::<ResponseType>("\"something_unsupported\"").unwrap();
-        let mut iter = res_type.iter();
-        assert_eq!(
-            iter.next(),
-            Some(&ResponseTypeToken::Unknown(
-                "something_unsupported".to_owned()
-            ))
-        );
-        assert_eq!(iter.next(), None);
-        OAuthAuthorizationEndpointResponseType::try_from(res_type).unwrap_err();
-
-        let res_type = serde_json::from_str::<ResponseType>("\"code id_token\"").unwrap();
-        let mut iter = res_type.iter();
-        assert_eq!(iter.next(), Some(&ResponseTypeToken::Code));
-        assert_eq!(iter.next(), Some(&ResponseTypeToken::IdToken));
-        assert_eq!(iter.next(), None);
-        assert_eq!(
-            OAuthAuthorizationEndpointResponseType::try_from(res_type).unwrap(),
-            OAuthAuthorizationEndpointResponseType::CodeIdToken
-        );
-
-        let res_type = serde_json::from_str::<ResponseType>("\"code token\"").unwrap();
-        let mut iter = res_type.iter();
-        assert_eq!(iter.next(), Some(&ResponseTypeToken::Code));
-        assert_eq!(iter.next(), Some(&ResponseTypeToken::Token));
-        assert_eq!(iter.next(), None);
-        assert_eq!(
-            OAuthAuthorizationEndpointResponseType::try_from(res_type).unwrap(),
-            OAuthAuthorizationEndpointResponseType::CodeToken
-        );
-
-        let res_type = serde_json::from_str::<ResponseType>("\"id_token token\"").unwrap();
-        let mut iter = res_type.iter();
-        assert_eq!(iter.next(), Some(&ResponseTypeToken::IdToken));
-        assert_eq!(iter.next(), Some(&ResponseTypeToken::Token));
-        assert_eq!(iter.next(), None);
-        assert_eq!(
-            OAuthAuthorizationEndpointResponseType::try_from(res_type).unwrap(),
-            OAuthAuthorizationEndpointResponseType::IdTokenToken
-        );
-
-        let res_type = serde_json::from_str::<ResponseType>("\"code id_token token\"").unwrap();
-        let mut iter = res_type.iter();
-        assert_eq!(iter.next(), Some(&ResponseTypeToken::Code));
-        assert_eq!(iter.next(), Some(&ResponseTypeToken::IdToken));
-        assert_eq!(iter.next(), Some(&ResponseTypeToken::Token));
-        assert_eq!(iter.next(), None);
-        assert_eq!(
-            OAuthAuthorizationEndpointResponseType::try_from(res_type).unwrap(),
-            OAuthAuthorizationEndpointResponseType::CodeIdTokenToken
-        );
-
-        let res_type =
-            serde_json::from_str::<ResponseType>("\"code id_token token something_unsupported\"")
-                .unwrap();
-        let mut iter = res_type.iter();
-        assert_eq!(iter.next(), Some(&ResponseTypeToken::Code));
-        assert_eq!(iter.next(), Some(&ResponseTypeToken::IdToken));
-        assert_eq!(iter.next(), Some(&ResponseTypeToken::Token));
-        assert_eq!(
-            iter.next(),
-            Some(&ResponseTypeToken::Unknown(
-                "something_unsupported".to_owned()
-            ))
-        );
-        assert_eq!(iter.next(), None);
-        OAuthAuthorizationEndpointResponseType::try_from(res_type).unwrap_err();
-
-        // Order doesn't matter
-        let res_type = serde_json::from_str::<ResponseType>("\"token code id_token\"").unwrap();
-        let mut iter = res_type.iter();
-        assert_eq!(iter.next(), Some(&ResponseTypeToken::Code));
-        assert_eq!(iter.next(), Some(&ResponseTypeToken::IdToken));
-        assert_eq!(iter.next(), Some(&ResponseTypeToken::Token));
-        assert_eq!(iter.next(), None);
-        assert_eq!(
-            OAuthAuthorizationEndpointResponseType::try_from(res_type).unwrap(),
-            OAuthAuthorizationEndpointResponseType::CodeIdTokenToken
-        );
-
-        let res_type =
-            serde_json::from_str::<ResponseType>("\"id_token token id_token code\"").unwrap();
-        let mut iter = res_type.iter();
-        assert_eq!(iter.next(), Some(&ResponseTypeToken::Code));
-        assert_eq!(iter.next(), Some(&ResponseTypeToken::IdToken));
-        assert_eq!(iter.next(), Some(&ResponseTypeToken::Token));
-        assert_eq!(iter.next(), None);
-        assert_eq!(
-            OAuthAuthorizationEndpointResponseType::try_from(res_type).unwrap(),
-            OAuthAuthorizationEndpointResponseType::CodeIdTokenToken
+            OAuthAuthorizationEndpointResponseType::try_from(rt).unwrap(),
+            OAuthAuthorizationEndpointResponseType::None,
         );
     }
 
     #[test]
-    fn serialize_response_type() {
-        assert_eq!(
-            serde_json::to_string(&ResponseType::from(
-                OAuthAuthorizationEndpointResponseType::None
-            ))
-            .unwrap(),
-            "\"none\""
-        );
-        assert_eq!(
-            serde_json::to_string(&ResponseType::from(
-                OAuthAuthorizationEndpointResponseType::Code
-            ))
-            .unwrap(),
-            "\"code\""
-        );
-        assert_eq!(
-            serde_json::to_string(&ResponseType::from(
-                OAuthAuthorizationEndpointResponseType::IdToken
-            ))
-            .unwrap(),
-            "\"id_token\""
-        );
-        assert_eq!(
-            serde_json::to_string(&ResponseType::from(
-                OAuthAuthorizationEndpointResponseType::CodeIdToken
-            ))
-            .unwrap(),
-            "\"code id_token\""
-        );
-        assert_eq!(
-            serde_json::to_string(&ResponseType::from(
-                OAuthAuthorizationEndpointResponseType::CodeToken
-            ))
-            .unwrap(),
-            "\"code token\""
-        );
-        assert_eq!(
-            serde_json::to_string(&ResponseType::from(
-                OAuthAuthorizationEndpointResponseType::IdTokenToken
-            ))
-            .unwrap(),
-            "\"id_token token\""
-        );
-        assert_eq!(
-            serde_json::to_string(&ResponseType::from(
-                OAuthAuthorizationEndpointResponseType::CodeIdTokenToken
-            ))
-            .unwrap(),
-            "\"code id_token token\""
-        );
+    fn parse_single_tokens() {
+        for (json, iana) in [
+            ("\"code\"", OAuthAuthorizationEndpointResponseType::Code),
+            (
+                "\"id_token\"",
+                OAuthAuthorizationEndpointResponseType::IdToken,
+            ),
+            ("\"token\"", OAuthAuthorizationEndpointResponseType::Token),
+        ] {
+            let rt = serde_json::from_str::<ResponseType>(json).unwrap();
+            assert_eq!(
+                OAuthAuthorizationEndpointResponseType::try_from(rt).unwrap(),
+                iana,
+            );
+        }
+    }
 
-        assert_eq!(
-            serde_json::to_string(
-                &[
-                    ResponseTypeToken::Unknown("something_unsupported".to_owned()),
-                    ResponseTypeToken::Code
-                ]
-                .into_iter()
-                .collect::<ResponseType>()
-            )
-            .unwrap(),
-            "\"code something_unsupported\""
-        );
+    #[test]
+    fn unknown_token_blocks_iana_conversion() {
+        let rt = serde_json::from_str::<ResponseType>("\"something_unsupported\"").unwrap();
+        assert!(OAuthAuthorizationEndpointResponseType::try_from(rt).is_err());
+    }
 
-        // Order doesn't matter.
-        let res = [
-            ResponseTypeToken::IdToken,
-            ResponseTypeToken::Token,
+    #[test]
+    fn parse_multi_tokens() {
+        let cases = [
+            (
+                "\"code id_token\"",
+                OAuthAuthorizationEndpointResponseType::CodeIdToken,
+            ),
+            (
+                "\"code token\"",
+                OAuthAuthorizationEndpointResponseType::CodeToken,
+            ),
+            (
+                "\"id_token token\"",
+                OAuthAuthorizationEndpointResponseType::IdTokenToken,
+            ),
+            (
+                "\"code id_token token\"",
+                OAuthAuthorizationEndpointResponseType::CodeIdTokenToken,
+            ),
+        ];
+        for (json, iana) in cases {
+            let rt = serde_json::from_str::<ResponseType>(json).unwrap();
+            assert_eq!(
+                OAuthAuthorizationEndpointResponseType::try_from(rt).unwrap(),
+                iana,
+            );
+        }
+    }
+
+    #[test]
+    fn order_is_normalized() {
+        let a = serde_json::from_str::<ResponseType>("\"token code id_token\"").unwrap();
+        let b = serde_json::from_str::<ResponseType>("\"code id_token token\"").unwrap();
+        assert_eq!(a, b);
+        assert_eq!(serde_json::to_string(&a).unwrap(), "\"code id_token token\"");
+    }
+
+    #[test]
+    fn duplicates_are_ignored() {
+        let rt =
+            serde_json::from_str::<ResponseType>("\"id_token token id_token code\"").unwrap();
+        assert_eq!(rt.len(), 3);
+        assert_eq!(
+            OAuthAuthorizationEndpointResponseType::try_from(rt).unwrap(),
+            OAuthAuthorizationEndpointResponseType::CodeIdTokenToken,
+        );
+    }
+
+    // ── Serialization ────────────────────────────────────────────────
+
+    #[test]
+    fn serialize_all_iana_variants() {
+        use OAuthAuthorizationEndpointResponseType as O;
+        let cases = [
+            (O::None, "\"none\""),
+            (O::Code, "\"code\""),
+            (O::IdToken, "\"id_token\""),
+            (O::Token, "\"token\""),
+            (O::CodeIdToken, "\"code id_token\""),
+            (O::CodeToken, "\"code token\""),
+            (O::IdTokenToken, "\"id_token token\""),
+            (O::CodeIdTokenToken, "\"code id_token token\""),
+        ];
+        for (variant, expected) in cases {
+            let rt = ResponseType::from(variant);
+            assert_eq!(serde_json::to_string(&rt).unwrap(), expected);
+        }
+    }
+
+    #[test]
+    fn serialize_with_unknown() {
+        let rt: ResponseType = [
+            ResponseTypeToken::Unknown("something_unsupported".into()),
             ResponseTypeToken::Code,
         ]
         .into_iter()
-        .collect::<ResponseType>();
+        .collect();
         assert_eq!(
-            serde_json::to_string(&res).unwrap(),
-            "\"code id_token token\""
-        );
-
-        let res = [
-            ResponseTypeToken::Code,
-            ResponseTypeToken::Token,
-            ResponseTypeToken::IdToken,
-        ]
-        .into_iter()
-        .collect::<ResponseType>();
-        assert_eq!(
-            serde_json::to_string(&res).unwrap(),
-            "\"code id_token token\""
+            serde_json::to_string(&rt).unwrap(),
+            "\"code something_unsupported\"",
         );
     }
 }
