@@ -251,7 +251,7 @@ pub async fn policy_factory_from_config(
         PolicyEngine::Cedar => {
             #[cfg(feature = "cedar")]
             {
-                let default_path = camino::Utf8PathBuf::from("/share/cedar/default.cedar");
+                let default_path = camino::Utf8PathBuf::from("/usr/local/share/pasion/cedar/default.cedar");
                 let path = config
                     .cedar_policy_file
                     .as_ref()
