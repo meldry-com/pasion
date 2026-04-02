@@ -94,7 +94,7 @@ RUN --network=default \
     --release \
     --bin pasion \
     --no-default-features \
-    --features docker \
+    --features docker,cedar \
   && mv "target/release/pasion" /usr/local/bin/pasion-amd64
 
 #######################################

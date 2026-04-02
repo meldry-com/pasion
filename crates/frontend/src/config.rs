@@ -68,7 +68,7 @@ pub fn get_config() -> AppConfig {
 
 /// Try to read the optional `error` object from the JS config.
 #[cfg(target_arch = "wasm32")]
-fn read_error_from_js(config: &wasm_bindgen::JsValue) -> Option<AppError> {
+fn read_error_from_js(config: &web_sys::wasm_bindgen::JsValue) -> Option<AppError> {
     let err = js_sys::Reflect::get(config, &"error".into()).ok()?;
     if err.is_undefined() || err.is_null() {
         return None;
