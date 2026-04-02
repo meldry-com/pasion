@@ -236,7 +236,7 @@ version = "0.3.32"
 
 # Fixed-size arrays with trait implementations
 [workspace.dependencies.generic-array]
-version = "0.14.9"
+version = "1.3.5"
 
 # Rate-limiting (using Salvo's built-in rate-limiter instead of governor)
 
