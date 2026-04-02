@@ -3498,6 +3498,7 @@ checksum = "edba7861004dd3714265b4db54a3c390e880ab658fec5f7db895fae2046b5bb6"
 dependencies = [
  "displaydoc",
  "litemap 0.8.1",
+ "serde",
  "tinystr 0.8.2",
  "writeable 0.6.2",
  "zerovec 0.11.5",
@@ -3679,6 +3680,8 @@ checksum = "85962cf0ce02e1e0a629cc34e7ca3e373ce20dda4c4d7294bbd0bf1fdb59e614"
 dependencies = [
  "displaydoc",
  "icu_locale_core",
+ "serde",
+ "stable_deref_trait",
  "writeable 0.6.2",
  "yoke 0.8.1",
  "zerofrom",
@@ -5512,7 +5515,7 @@ dependencies = [
  "icu_experimental",
  "icu_locid",
  "icu_locid_transform",
- "icu_provider 1.5.0",
+ "icu_provider 2.1.1",
  "icu_provider_adapters",
  "intl-memoizer",
  "thiserror 2.0.18",
