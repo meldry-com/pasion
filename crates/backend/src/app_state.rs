@@ -16,7 +16,7 @@ use pasion_keystore::{Encrypter, Keystore};
 use pasion_matrix::{ConnectorRegistry, HomeserverAdmin};
 use pasion_policy::{Policy, PolicyFactory};
 use pasion_templates::Templates;
-use rand::SeedableRng;
+use rand_core::SeedableRng;
 use salvo::prelude::*;
 use tracing::Instrument;
 
@@ -278,11 +278,7 @@ pub fn extract_clock() -> BoxClock {
 
 /// Extract BoxRng from request
 pub fn extract_rng() -> BoxRng {
-    // This rng is used to source the local rng
-    #[allow(clippy::disallowed_methods)]
-    let rng = rand::thread_rng();
-
-    let rng = rand_chacha::ChaChaRng::from_rng(rng).expect("Failed to seed RNG");
+    let rng = rand_chacha::ChaChaRng::from_rng(rand_core::OsRng).expect("Failed to seed RNG");
     Box::new(rng)
 }
 

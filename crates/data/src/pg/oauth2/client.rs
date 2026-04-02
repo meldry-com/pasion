@@ -8,7 +8,7 @@ use pasion_data::oauth2::OAuth2ClientRepository;
 use pasion_data::{Client, Clock, JwksOrJwksUri, new_id};
 use pasion_iana::{jose::JsonWebSignatureAlg, oauth::OAuthClientAuthenticationMethod};
 use pasion_jose::jwk::PublicJsonWebKeySet;
-use rand::RngCore;
+use rand_core::RngCore;
 use ulid::Ulid;
 use url::Url;
 use uuid::Uuid;

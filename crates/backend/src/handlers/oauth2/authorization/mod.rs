@@ -14,7 +14,7 @@ use pasion_data::{
 };
 use pasion_data::{PostAuthAction, UrlBuilder};
 use pasion_templates::Templates;
-use rand::{Rng, SeedableRng, distributions::Alphanumeric, thread_rng};
+use rand_core::SeedableRng;
 use rand_chacha::ChaChaRng;
 use salvo::prelude::*;
 use serde::Deserialize;
@@ -129,8 +129,7 @@ async fn handle_get(req: &mut Request, depot: &Depot) -> Result<(Response, Cooki
     let activity_tracker = crate::handlers::account::extract_bound_activity_tracker(req, depot);
 
     let clock: BoxClock = Box::new(SystemClock::default());
-    #[allow(clippy::disallowed_methods)]
-    let mut rng: BoxRng = Box::new(ChaChaRng::from_rng(thread_rng()).expect("Failed to seed rng"));
+    let mut rng: BoxRng = Box::new(ChaChaRng::from_rng(rand_core::OsRng).expect("Failed to seed rng"));
 
     let mut repo: BoxRepository = repo_factory.create().await?;
 
@@ -245,11 +244,12 @@ async fn handle_get(req: &mut Request, depot: &Depot) -> Result<(Response, Cooki
                 }
 
                 // 32 random alphanumeric characters, about 190bit of entropy
-                let code: String = (&mut rng)
-                    .sample_iter(&Alphanumeric)
-                    .take(32)
-                    .map(char::from)
-                    .collect();
+                let code: String = {
+                    const CHARSET: &[u8] = b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789";
+                    let mut buf = [0u8; 32];
+                    rng.fill_bytes(&mut buf);
+                    buf.iter().map(|b| CHARSET[(*b as usize) % CHARSET.len()] as char).collect()
+                };
 
                 let pkce = params.pkce.map(|p| Pkce {
                     challenge: p.code_challenge,

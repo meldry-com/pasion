@@ -12,7 +12,7 @@ use pasion_data::{
     oauth2::{OAuth2SessionFilter, OAuth2SessionRepository},
     pagination::{Node, PaginationDirection},
 };
-use rand::RngCore;
+use rand_core::RngCore;
 use ulid::Ulid;
 use uuid::Uuid;
 

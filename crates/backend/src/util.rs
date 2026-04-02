@@ -545,7 +545,7 @@ pub async fn homeserver_connection_from_config(
 
 #[cfg(test)]
 mod tests {
-    use rand::SeedableRng;
+    use rand_core::SeedableRng;
     use zeroize::Zeroizing;
 
     use super::*;

@@ -6,7 +6,7 @@ use oauth2_types::{
 };
 use pasion_iana::{jose::JsonWebSignatureAlg, oauth::OAuthClientAuthenticationMethod};
 use pasion_jose::jwk::PublicJsonWebKeySet;
-use rand::RngCore;
+use rand_core::RngCore;
 use serde::Serialize;
 use thiserror::Error;
 use ulid::Ulid;

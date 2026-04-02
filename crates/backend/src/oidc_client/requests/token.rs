@@ -18,7 +18,7 @@ use chrono::{DateTime, Utc};
 use http::header::ACCEPT;
 use mime::APPLICATION_JSON;
 use oauth2_types::requests::{AccessTokenRequest, AccessTokenResponse};
-use rand::Rng;
+use rand_core::RngCore as Rng;
 use url::Url;
 
 use crate::outbound_http::RequestBuilderExt;

@@ -15,7 +15,7 @@ use pasion_templates::{
     AppContext, AppErrorState, FieldError, FormError, FormState, LoginContext, LoginFormField,
     PostAuthContext, PostAuthContextInner, TemplateContext, Templates, ToFormState,
 };
-use rand::Rng;
+use rand_core::RngCore as Rng;
 use salvo::{prelude::*, writing::Text};
 use serde::{Deserialize, Serialize};
 use zeroize::Zeroizing;

@@ -3,7 +3,7 @@
 use std::collections::BTreeMap;
 
 use pasion_data::{User, UserRecoverySession};
-use rand::Rng;
+use rand_core::RngCore as Rng;
 use serde::{Deserialize, Serialize};
 
 use super::wrappers::{SampleIdentifier, TemplateContext, sample_list};

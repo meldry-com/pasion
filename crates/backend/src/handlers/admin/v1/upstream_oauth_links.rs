@@ -507,7 +507,7 @@ mod tests {
     use pasion_data::UpstreamOAuthAuthorizationSessionState;
     use pasion_data::upstream_oauth2::{UpstreamOAuthLinkRepository, UpstreamOAuthProviderRepository};
     use pasion_data::user::UserRepository;
-    use rand::SeedableRng;
+    use rand_core::SeedableRng;
     use rand_chacha::ChaChaRng;
     use super::test_utils;
     use ulid::Ulid;

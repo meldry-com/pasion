@@ -2,7 +2,7 @@ use std::net::IpAddr;
 
 use chrono::{DateTime, Utc};
 use diesel::{Queryable, deserialize, pg::Pg, sql_types};
-use rand::Rng;
+use rand_core::RngCore;
 use serde::{Deserialize, Serialize};
 use ulid::Ulid;
 
@@ -141,7 +141,7 @@ impl User {
 impl User {
     #[doc(hidden)]
     #[must_use]
-    pub fn samples(now: chrono::DateTime<Utc>, rng: &mut impl Rng) -> Vec<Self> {
+    pub fn samples(now: chrono::DateTime<Utc>, rng: &mut (impl RngCore + ?Sized)) -> Vec<Self> {
         vec![User {
             id: new_id(now, rng),
             username: "john".to_owned(),
@@ -361,7 +361,7 @@ impl BrowserSession {
 
 impl BrowserSession {
     #[must_use]
-    pub fn samples(now: chrono::DateTime<Utc>, rng: &mut impl Rng) -> Vec<Self> {
+    pub fn samples(now: chrono::DateTime<Utc>, rng: &mut (impl RngCore + ?Sized)) -> Vec<Self> {
         User::samples(now, rng)
             .into_iter()
             .map(|user| BrowserSession {
@@ -392,7 +392,7 @@ pub struct UserEmail {
 
 impl UserEmail {
     #[must_use]
-    pub fn samples(now: chrono::DateTime<Utc>, rng: &mut impl Rng) -> Vec<Self> {
+    pub fn samples(now: chrono::DateTime<Utc>, rng: &mut (impl RngCore + ?Sized)) -> Vec<Self> {
         vec![
             Self {
                 id: new_id(now, rng),

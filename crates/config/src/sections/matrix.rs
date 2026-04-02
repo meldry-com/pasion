@@ -1,9 +1,6 @@
 use anyhow::bail;
 use camino::Utf8PathBuf;
-use rand::{
-    Rng,
-    distributions::{Alphanumeric, DistString},
-};
+use rand_core::RngCore as Rng;
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use serde_with::serde_as;
@@ -149,7 +146,12 @@ impl MatrixConfig {
         Self {
             kind: HomeserverKind::default(),
             homeserver: homeserver_fallback(),
-            secret: Secret::Value(Alphanumeric.sample_string(&mut rng, 32)),
+            secret: Secret::Value({
+                const CHARSET: &[u8] = b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789";
+                let mut bytes = [0u8; 32];
+                rng.fill_bytes(&mut bytes);
+                bytes.iter().map(|b| CHARSET[*b as usize % CHARSET.len()] as char).collect()
+            }),
             endpoint: endpoint_fallback(),
         }
     }

@@ -9,7 +9,7 @@ use pasion_jose::{
     jwt::{JsonWebSignatureHeader, Jwt},
 };
 use pasion_keystore::Keystore;
-use rand::{SeedableRng, thread_rng};
+use rand_core::SeedableRng;
 use rand_chacha::ChaChaRng;
 use salvo::{Extractible, prelude::*};
 use serde::Serialize;
@@ -128,8 +128,7 @@ async fn handle_get(req: &mut Request, depot: &mut Depot) -> Result<UserinfoResp
     let activity_tracker = crate::handlers::account::extract_bound_activity_tracker(req, depot);
 
     let clock: BoxClock = Box::new(SystemClock::default());
-    #[allow(clippy::disallowed_methods)]
-    let mut rng: BoxRng = Box::new(ChaChaRng::from_rng(thread_rng()).expect("Failed to seed rng"));
+    let mut rng: BoxRng = Box::new(ChaChaRng::from_rng(rand_core::OsRng).expect("Failed to seed rng"));
 
     let mut repo: BoxRepository = repo_factory.create().await?;
     let session = user_authorization.protected(&mut repo, &clock).await?;

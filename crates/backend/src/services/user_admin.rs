@@ -13,7 +13,7 @@ use pasion_data::{
     user::{UserEmailRepository, UserRepository},
 };
 use pasion_matrix::HomeserverAdmin;
-use rand::RngCore;
+use rand_core::RngCore;
 use thiserror::Error;
 use ulid::Ulid;
 

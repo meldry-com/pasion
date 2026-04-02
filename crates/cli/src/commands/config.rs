@@ -6,7 +6,7 @@ use clap::Parser;
 use figment::Figment;
 use pasion_config::{ConfigurationSection, RootConfig, SyncConfig};
 use pasion_data::SystemClock;
-use rand::SeedableRng;
+use rand_core::SeedableRng;
 use tokio::io::AsyncWriteExt;
 use tracing::{info, info_span};
 

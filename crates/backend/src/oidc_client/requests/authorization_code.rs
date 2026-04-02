@@ -32,10 +32,7 @@ use oauth2_types::{
 };
 use pasion_iana::oauth::{OAuthAuthorizationEndpointResponseType, PkceCodeChallengeMethod};
 use pasion_jose::claims::{self, TokenHash};
-use rand::{
-    distributions::{Alphanumeric, DistString},
-    Rng,
-};
+use rand_core::RngCore as Rng;
 use serde::Serialize;
 use url::Url;
 
@@ -223,6 +220,16 @@ struct FullAuthorizationRequest {
     pkce: Option<pkce::AuthorizationRequest>,
 }
 
+/// Generate a random alphanumeric string of the given length.
+fn rand_alphanumeric_string(rng: &mut impl Rng, len: usize) -> String {
+    const CHARSET: &[u8] = b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789";
+    let mut buf = vec![0u8; len];
+    rng.fill_bytes(&mut buf);
+    buf.iter()
+        .map(|b| CHARSET[(*b as usize) % CHARSET.len()] as char)
+        .collect()
+}
+
 /// Build the authorization request.
 fn build_authorization_request(
     authorization_data: AuthorizationRequestData,
@@ -247,11 +254,11 @@ fn build_authorization_request(
     let is_openid = scope.contains(&OPENID);
 
     // Generate a random CSRF "state" token.
-    let state = Alphanumeric.sample_string(rng, 16);
+    let state = rand_alphanumeric_string(rng, 16);
 
     // Only generate a nonce when operating in OpenID Connect mode.
     let nonce = if is_openid {
-        Some(Alphanumeric.sample_string(rng, 16))
+        Some(rand_alphanumeric_string(rng, 16))
     } else {
         None
     };
@@ -262,7 +269,7 @@ fn build_authorization_request(
         .any(|methods| methods.contains(&PkceCodeChallengeMethod::S256))
     {
         let mut verifier = [0u8; 32];
-        rng.fill(&mut verifier);
+        rng.fill_bytes(&mut verifier);
 
         let method = PkceCodeChallengeMethod::S256;
         let verifier = Base64UrlUnpadded::encode_string(&verifier);

@@ -14,7 +14,7 @@ use pasion_data::{
     user::{UserEmailRepository, UserPasswordRepository, UserRecoveryRepository, UserRepository},
 };
 use pasion_data::{Clock, UserRecoverySession, UserRecoveryTicket};
-use rand::RngCore;
+use rand_core::RngCore;
 use rand_chacha::rand_core::CryptoRngCore;
 use thiserror::Error;
 use ulid::Ulid;

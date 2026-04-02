@@ -247,7 +247,7 @@ mod tests {
         user::{BrowserSessionRepository, UserRepository},
     };
     use pasion_matrix::{HomeserverAdmin, ProvisionRequest};
-    use rand::SeedableRng;
+    use rand_core::SeedableRng;
     use rand_chacha::ChaChaRng;
     use ulid::Ulid;
 

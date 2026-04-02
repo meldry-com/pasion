@@ -14,11 +14,8 @@ use pasion_iana::oauth::OAuthClientAuthenticationMethod;
 use pasion_keystore::Encrypter;
 use pasion_policy::{EvaluationResult, Policy, PolicyFactory};
 use psl::Psl;
-use rand::{
-    SeedableRng,
-    distributions::{Alphanumeric, DistString},
-    thread_rng,
-};
+use rand::distr::{Alphanumeric, SampleString};
+use rand_core::SeedableRng;
 use rand_chacha::ChaChaRng;
 use salvo::prelude::*;
 use serde::Serialize;
@@ -215,8 +212,7 @@ async fn handle_post(req: &mut Request, depot: &Depot) -> Result<RouteResponse, 
     let activity_tracker = crate::handlers::account::extract_bound_activity_tracker(req, depot);
 
     let clock: BoxClock = Box::new(SystemClock::default());
-    #[allow(clippy::disallowed_methods)]
-    let mut rng: BoxRng = Box::new(ChaChaRng::from_rng(thread_rng()).expect("Failed to seed rng"));
+    let mut rng: BoxRng = Box::new(ChaChaRng::from_rng(rand_core::OsRng).expect("Failed to seed rng"));
 
     let mut repo: BoxRepository = repo_factory.create().await?;
     let mut policy: Policy = policy_factory
@@ -302,7 +298,7 @@ async fn handle_post(req: &mut Request, depot: &Depot) -> Result<RouteResponse, 
             | OAuthClientAuthenticationMethod::ClientSecretBasic,
         ) => {
             // Let's generate a random client secret
-            let client_secret = Alphanumeric.sample_string(&mut rng, 20);
+            let client_secret = Alphanumeric.sample_string(&mut rand::rng(), 20);
             let encrypted_client_secret = encrypter.encrypt_to_string(client_secret.as_bytes())?;
             (Some(client_secret), Some(encrypted_client_secret))
         }

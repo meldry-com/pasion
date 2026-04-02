@@ -6,7 +6,7 @@ use chrono::Duration;
 use pasion_data::audit::{AdminOperation, NewAdminOperationLog};
 use pasion_data::user::UserFilter;
 use pasion_matrix::ProvisionRequest;
-use rand::distributions::{Alphanumeric, DistString};
+use rand::distr::{Alphanumeric, SampleString};
 use salvo::http::StatusCode;
 use salvo::oapi::ToSchema;
 use salvo::prelude::*;
@@ -172,7 +172,7 @@ pub async fn batch_invite(
     let mut tokens = Vec::with_capacity(params.count as usize);
 
     for _ in 0..params.count {
-        let token_string = Alphanumeric.sample_string(&mut rng, 12);
+        let token_string = Alphanumeric.sample_string(&mut rand::rng(), 12);
 
         let registration_token = repo
             .user_registration_token()
@@ -702,7 +702,7 @@ mod tests {
     use pasion_data::user::{UserPasswordRepository, UserRepository};
     use pasion_matrix::HomeserverAdmin;
     use pasion_matrix::ProvisionRequest;
-    use rand::SeedableRng;
+    use rand_core::SeedableRng;
     use rand_chacha::ChaChaRng;
     use ulid::Ulid;
     use zeroize::Zeroizing;

@@ -19,10 +19,7 @@ use pasion_data::{
 use pasion_i18n::DataLocale;
 use pasion_messaging::{Address, Mailbox, NotificationError, NotificationRequest};
 use pasion_templates::{EmailRecoveryContext, EmailVerificationContext, TemplateContext as _};
-use rand::{
-    Rng,
-    distributions::{Alphanumeric, DistString, Uniform},
-};
+use rand_core::RngCore;
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
 use tracing::{error, info, warn};
@@ -65,7 +62,7 @@ enum PreparedDelivery {
 
 async fn append_event(
     repo: &mut BoxRepository,
-    rng: &mut (dyn rand::RngCore + Send),
+    rng: &mut (dyn rand_core::RngCore + Send),
     clock: &dyn pasion_data::Clock,
     notification_request: &PersistedNotificationRequest,
     notification_delivery: Option<&NotificationDelivery>,
@@ -97,7 +94,7 @@ async fn append_event(
 
 async fn enqueue_notification_request(
     repo: &mut BoxRepository,
-    rng: &mut (dyn rand::RngCore + Send),
+    rng: &mut (dyn rand_core::RngCore + Send),
     clock: &dyn pasion_data::Clock,
     template_key: &str,
     locale: &str,
@@ -165,7 +162,7 @@ async fn enqueue_notification_request(
 
 async fn schedule_processing_job(
     repo: &mut BoxRepository,
-    rng: &mut (dyn rand::RngCore + Send),
+    rng: &mut (dyn rand_core::RngCore + Send),
     clock: &dyn pasion_data::Clock,
 ) -> Result<(), JobError> {
     repo.queue_job()
@@ -199,8 +196,7 @@ pub(crate) async fn send_email_authentication_code(
         return Ok(());
     }
 
-    let range = Uniform::<u32>::from(0..1_000_000);
-    let code = format!("{:06}", rng.sample(range));
+    let code = format!("{:06}", rng.next_u32() % 1_000_000);
     let code = repo
         .user_email()
         .add_authentication_code(
@@ -266,8 +262,7 @@ pub(crate) async fn send_sms_authentication_code(
         return Ok(());
     }
 
-    let range = Uniform::<u32>::from(0..1_000_000);
-    let code = format!("{:06}", rng.sample(range));
+    let code = format!("{:06}", rng.next_u32() % 1_000_000);
     let code = repo
         .user_phone()
         .add_authentication_code(
@@ -344,7 +339,12 @@ pub(crate) async fn send_account_recovery(
             .map_err(JobError::retry)?;
 
         for edge in &page.edges {
-            let ticket = Alphanumeric.sample_string(&mut rng, 32);
+            let ticket = {
+                const CHARSET: &[u8] = b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789";
+                let mut bytes = [0u8; 32];
+                rng.fill_bytes(&mut bytes);
+                bytes.iter().map(|b| CHARSET[*b as usize % CHARSET.len()] as char).collect::<String>()
+            };
             let ticket = repo
                 .user_recovery()
                 .add_ticket(&mut rng, clock, &session, &edge.node, ticket)
@@ -669,7 +669,7 @@ async fn prepare_delivery(
 
 async fn complete_delivery_with_failure(
     repo: &mut BoxRepository,
-    rng: &mut (dyn rand::RngCore + Send),
+    rng: &mut (dyn rand_core::RngCore + Send),
     clock: &dyn pasion_data::Clock,
     mut request: PersistedNotificationRequest,
     delivery: NotificationDelivery,

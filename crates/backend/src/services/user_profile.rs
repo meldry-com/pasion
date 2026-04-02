@@ -10,7 +10,7 @@ use pasion_data::{
     Clock, NotificationChannel, SiteConfig, User, UserEmail, UserProfile, UserProfilePatch,
 };
 use pasion_matrix::HomeserverAdmin;
-use rand::RngCore;
+use rand_core::RngCore;
 use thiserror::Error;
 
 use crate::handlers::account::Requester;

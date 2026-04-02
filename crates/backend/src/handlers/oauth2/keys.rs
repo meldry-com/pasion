@@ -19,7 +19,7 @@ fn get_inner(depot: &Depot) -> Json<PublicJsonWebKeySet> {
 #[cfg(test)]
 mod tests {
     use pasion_keystore::{JsonWebKey, JsonWebKeySet, PrivateKey};
-    use rand::SeedableRng;
+    use rand_core::SeedableRng;
     use rand_chacha::ChaChaRng;
 
     use super::*;

@@ -2,7 +2,7 @@ use base64ct::{Base64UrlUnpadded, Encoding};
 use chrono::{DateTime, Utc};
 use crc::{CRC_32_ISO_HDLC, Crc};
 use pasion_iana::oauth::OAuthTokenTypeHint;
-use rand::{Rng, RngCore, distributions::Alphanumeric};
+use rand_core::RngCore;
 use thiserror::Error;
 use ulid::Ulid;
 
@@ -269,11 +269,7 @@ impl TokenType {
 
     /// Generate a token for the given type
     pub fn generate(self, rng: &mut (impl RngCore + ?Sized)) -> String {
-        let random_part: String = rng
-            .sample_iter(&Alphanumeric)
-            .take(30)
-            .map(char::from)
-            .collect();
+        let random_part = generate_alphanumeric(rng, 30);
 
         let base = format!("{prefix}_{random_part}", prefix = self.prefix());
         let crc = CRC.checksum(base.as_bytes());
@@ -349,6 +345,16 @@ fn is_likely_palpo_macaroon(token: &str) -> bool {
     decoded.get(4..13) == Some(b"location ")
 }
 
+fn generate_alphanumeric(rng: &mut (impl RngCore + ?Sized), len: usize) -> String {
+    const CHARSET: &[u8] = b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789";
+    let mut bytes = vec![0u8; len];
+    rng.fill_bytes(&mut bytes);
+    bytes
+        .iter()
+        .map(|b| CHARSET[*b as usize % CHARSET.len()] as char)
+        .collect()
+}
+
 const NUM: [u8; 62] = *b"0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz";
 
 fn base62_encode(mut num: u32) -> String {
@@ -390,8 +396,6 @@ pub enum TokenFormatError {
 #[cfg(test)]
 mod tests {
     use std::collections::HashSet;
-
-    use rand::thread_rng;
 
     use super::*;
 
@@ -446,8 +450,7 @@ mod tests {
     fn test_generate_and_check() {
         const COUNT: usize = 500; // Generate 500 of each token type
 
-        #[allow(clippy::disallowed_methods)]
-        let mut rng = thread_rng();
+        let mut rng = rand_core::OsRng;
 
         for t in [
             TokenType::AccessToken,

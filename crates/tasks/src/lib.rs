@@ -15,6 +15,8 @@
 
 use std::sync::{Arc, LazyLock};
 
+use rand_core::SeedableRng;
+
 use diesel_async::AsyncPgConnection;
 use diesel_async::pooled_connection::deadpool::Pool as DieselPool;
 use new_queue::QueueRunnerError;
@@ -25,7 +27,6 @@ use pasion_data::{BoxRepository, RepositoryError, RepositoryFactory};
 use pasion_data::{Clock, SiteConfig};
 use pasion_matrix::HomeserverAdmin;
 use pasion_messaging::NotificationCenter;
-use rand::SeedableRng;
 use tokio_util::{sync::CancellationToken, task::TaskTracker};
 
 pub use crate::new_queue::QueueWorker;
@@ -108,9 +109,9 @@ impl State {
     }
 
     /// Seed a fresh CSPRNG from the OS entropy source.
-    #[allow(clippy::unused_self, clippy::disallowed_methods)]
+    #[allow(clippy::unused_self)]
     pub fn rng(&self) -> rand_chacha::ChaChaRng {
-        rand_chacha::ChaChaRng::from_rng(rand::thread_rng()).expect("failed to seed rng")
+        rand_chacha::ChaChaRng::from_rng(rand_core::OsRng).expect("failed to seed rng")
     }
 
     pub async fn repository(&self) -> Result<BoxRepository, RepositoryError> {

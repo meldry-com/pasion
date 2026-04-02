@@ -8,7 +8,7 @@ use diesel::sql_types::{Timestamptz, Uuid as DieselUuid};
 use diesel_async::RunQueryDsl;
 use pasion_data::queue::{QueueWorkerRepository, Worker};
 use pasion_data::{Clock, new_id};
-use rand::RngCore;
+use rand_core::RngCore;
 use uuid::Uuid;
 
 use crate::DatabaseError;

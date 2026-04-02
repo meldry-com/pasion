@@ -16,7 +16,7 @@ use pasion_config::{
     ExperimentalConfig, MatrixConfig, PasswordsConfig, TemplatesConfig,
 };
 use pasion_data::{Clock, SystemClock};
-use rand::SeedableRng;
+use rand_core::SeedableRng;
 use tracing::info_span;
 
 use pasion_backend::util::{site_config_from_config, templates_from_config};

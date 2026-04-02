@@ -9,7 +9,7 @@ use pasion_data::{
     Clock, RepositoryAccess,
     queue::InsertableJob,
 };
-use rand::RngCore;
+use rand_core::RngCore;
 use tokio::task::JoinSet;
 use tracing::Instrument as _;
 

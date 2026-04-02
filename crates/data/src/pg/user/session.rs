@@ -13,7 +13,7 @@ use pasion_data::{
     pagination::{Node, PaginationDirection},
     user::{BrowserSessionFilter, BrowserSessionRepository},
 };
-use rand::RngCore;
+use rand_core::RngCore;
 use ulid::Ulid;
 use uuid::Uuid;
 

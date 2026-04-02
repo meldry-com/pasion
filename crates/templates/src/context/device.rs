@@ -8,14 +8,21 @@ use std::{
 use chrono::Duration;
 use oauth2_types::scope::OPENID;
 use pasion_data::{Client, DeviceCodeGrant, MatrixUser};
-use rand::{
-    Rng,
-    distributions::{Alphanumeric, DistString},
-};
+use rand_core::RngCore as Rng;
 use serde::{Deserialize, Serialize};
 
 use super::wrappers::{SampleIdentifier, TemplateContext, sample_list};
 use crate::{FieldError, FormField, FormState};
+
+/// Generate a random alphanumeric string of the given length.
+fn rand_alphanumeric_string(rng: &mut impl Rng, len: usize) -> String {
+    const CHARSET: &[u8] = b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789";
+    let mut buf = vec![0u8; len];
+    rng.fill_bytes(&mut buf);
+    buf.iter()
+        .map(|b| CHARSET[(*b as usize) % CHARSET.len()] as char)
+        .collect()
+}
 
 // -- Device link form -------------------------------------------------------
 
@@ -107,8 +114,8 @@ impl TemplateContext for DeviceConsentContext {
                         state: pasion_data::DeviceCodeGrantState::Pending,
                         client_id: client.id,
                         scope: [OPENID].into_iter().collect(),
-                        user_code: Alphanumeric.sample_string(rng, 6).to_uppercase(),
-                        device_code: Alphanumeric.sample_string(rng, 32),
+                        user_code: rand_alphanumeric_string(rng, 6).to_uppercase(),
+                        device_code: rand_alphanumeric_string(rng, 32),
                         created_at: now - Duration::try_minutes(5).unwrap(),
                         expires_at: now + Duration::try_minutes(25).unwrap(),
                         ip_address: Some(IpAddr::V4(Ipv4Addr::LOCALHOST)),

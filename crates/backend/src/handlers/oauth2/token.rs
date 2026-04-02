@@ -13,7 +13,7 @@ use pasion_keystore::Keystore;
 use pasion_matrix::HomeserverAdmin;
 use pasion_policy::Policy;
 use pasion_templates::Templates;
-use rand::{SeedableRng, thread_rng};
+use rand_core::SeedableRng;
 use rand_chacha::ChaChaRng;
 use salvo::{Extractible, prelude::*};
 use thiserror::Error;
@@ -384,8 +384,7 @@ async fn handle_post(
         .expect("PolicyFactory not found in depot");
 
     let clock: BoxClock = Box::new(SystemClock::default());
-    #[allow(clippy::disallowed_methods)]
-    let mut rng: BoxRng = Box::new(ChaChaRng::from_rng(thread_rng()).expect("Failed to seed rng"));
+    let mut rng: BoxRng = Box::new(ChaChaRng::from_rng(rand_core::OsRng).expect("Failed to seed rng"));
 
     let mut repo: BoxRepository = repo_factory.create().await?;
     let policy: Policy = policy_factory

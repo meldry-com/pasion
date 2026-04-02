@@ -90,6 +90,12 @@ impl From<pasion_i18n::DataError> for AuthorizationCodeExchangeError {
     }
 }
 
+impl From<pasion_i18n::icu_locid::ParserError> for AuthorizationCodeExchangeError {
+    fn from(e: pasion_i18n::icu_locid::ParserError) -> Self {
+        Self::Internal(Box::new(e))
+    }
+}
+
 impl From<pasion_templates::TemplateError> for AuthorizationCodeExchangeError {
     fn from(e: pasion_templates::TemplateError) -> Self {
         Self::Internal(Box::new(e))
@@ -222,7 +228,7 @@ impl From<IdTokenSignatureError> for DeviceCodeExchangeError {
 /// metrics / activity.
 #[allow(clippy::too_many_arguments)]
 pub async fn exchange_authorization_code(
-    rng: &mut (impl rand::RngCore + rand::CryptoRng + Send),
+    rng: &mut (impl rand_core::RngCore + rand_core::CryptoRng + Send),
     clock: &impl Clock,
     activity_tracker: &BoundActivityTracker,
     grant: &AuthorizationCodeGrant,
@@ -424,7 +430,7 @@ pub async fn exchange_authorization_code(
 /// replacements.
 #[allow(clippy::too_many_arguments)]
 pub async fn handle_refresh_token(
-    rng: &mut (impl rand::RngCore + Send),
+    rng: &mut (impl rand_core::RngCore + Send),
     clock: &impl Clock,
     activity_tracker: &BoundActivityTracker,
     grant: &RefreshTokenGrant,
@@ -590,7 +596,7 @@ pub async fn handle_refresh_token(
 /// token (no refresh token for this grant type).
 #[allow(clippy::too_many_arguments)]
 pub async fn handle_client_credentials(
-    rng: &mut (impl rand::RngCore + Send),
+    rng: &mut (impl rand_core::RngCore + Send),
     clock: &impl Clock,
     activity_tracker: &BoundActivityTracker,
     grant: &ClientCredentialsGrant,
@@ -675,7 +681,7 @@ pub async fn handle_client_credentials(
 /// and provisions the Matrix device.
 #[allow(clippy::too_many_arguments)]
 pub async fn exchange_device_code(
-    rng: &mut (impl rand::RngCore + rand::CryptoRng + Send),
+    rng: &mut (impl rand_core::RngCore + rand_core::CryptoRng + Send),
     clock: &impl Clock,
     activity_tracker: &BoundActivityTracker,
     grant: &DeviceCodeGrant,

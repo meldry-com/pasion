@@ -6,7 +6,7 @@ use diesel::prelude::*;
 use diesel_async::RunQueryDsl;
 use pasion_data::notification::{NotificationChannel, NotificationTemplateVersion};
 use pasion_data::{Clock, new_id};
-use rand::RngCore;
+use rand_core::RngCore;
 use uuid::Uuid;
 
 use crate::storage::notification_template::NotificationTemplateRepository;

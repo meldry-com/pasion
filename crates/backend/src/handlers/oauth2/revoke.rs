@@ -6,7 +6,7 @@ use oauth2_types::{
 use pasion_data::{BoxClock, BoxRng, SystemClock};
 use pasion_data::{BoxRepository, BoxRepositoryFactory};
 use pasion_keystore::Encrypter;
-use rand::{SeedableRng, thread_rng};
+use rand_core::SeedableRng;
 use rand_chacha::ChaChaRng;
 use salvo::{Extractible, prelude::*};
 use thiserror::Error;
@@ -132,8 +132,7 @@ async fn handle_post(req: &mut Request, depot: &mut Depot) -> Result<(), RouteEr
     let activity_tracker = crate::handlers::account::extract_bound_activity_tracker(req, depot);
 
     let clock: BoxClock = Box::new(SystemClock::default());
-    #[allow(clippy::disallowed_methods)]
-    let mut rng: BoxRng = Box::new(ChaChaRng::from_rng(thread_rng()).expect("Failed to seed rng"));
+    let mut rng: BoxRng = Box::new(ChaChaRng::from_rng(rand_core::OsRng).expect("Failed to seed rng"));
 
     let mut repo: BoxRepository = repo_factory.create().await?;
 

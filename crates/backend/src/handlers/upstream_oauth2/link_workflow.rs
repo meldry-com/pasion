@@ -21,7 +21,7 @@ use pasion_data::{PostAuthAction, UrlBuilder};
 use pasion_jose::jwt::Jwt;
 use pasion_matrix::HomeserverAdmin;
 use pasion_policy::{Policy, RegisterInput, RegistrationMethod, Requester as PolicyRequester};
-use rand::RngCore;
+use rand_core::RngCore;
 use serde_json::{Map as JsonMap, Value as JsonValue};
 use thiserror::Error;
 use ulid::Ulid;

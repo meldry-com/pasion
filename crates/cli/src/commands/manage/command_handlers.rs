@@ -21,10 +21,7 @@ use pasion_data::{
     },
     user::{BrowserSessionFilter, UserEmailRepository, UserFilter, UserPasswordRepository, UserRepository},
 };
-use rand::{
-    SeedableRng,
-    distributions::{Alphanumeric, DistString as _},
-};
+use rand_core::{RngCore, SeedableRng};
 use tracing::{error, info, info_span, warn};
 use zeroize::Zeroizing;
 
@@ -264,7 +261,12 @@ pub(super) async fn handle_issue_registration_token(
     let expires_at = expires_in.map(|seconds| clock.now() + Duration::seconds(seconds.into()));
 
     // Generate a token if not provided
-    let token_str = token.unwrap_or_else(|| Alphanumeric.sample_string(&mut rng, 12));
+    let token_str = token.unwrap_or_else(|| {
+        const CHARSET: &[u8] = b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789";
+        let mut bytes = [0u8; 12];
+        rng.fill_bytes(&mut bytes);
+        bytes.iter().map(|b| CHARSET[*b as usize % CHARSET.len()] as char).collect()
+    });
 
     // Create the token
     let registration_token = repo

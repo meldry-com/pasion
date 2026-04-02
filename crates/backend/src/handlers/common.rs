@@ -21,7 +21,7 @@ use pasion_data::{
 };
 use pasion_matrix::HomeserverAdmin;
 use pasion_policy::PolicyFactory;
-use rand::{SeedableRng, thread_rng};
+use rand_core::SeedableRng;
 use rand_chacha::ChaChaRng;
 use salvo::prelude::*;
 use serde::Serialize;
@@ -328,9 +328,7 @@ pub fn make_clock() -> BoxClock {
 }
 
 pub fn make_rng() -> BoxRng {
-    #[allow(clippy::disallowed_methods)]
-    let rng = thread_rng();
-    let rng = ChaChaRng::from_rng(rng).expect("Failed to seed rng");
+    let rng = ChaChaRng::from_rng(rand_core::OsRng).expect("Failed to seed rng");
     Box::new(rng)
 }
 

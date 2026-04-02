@@ -5,7 +5,7 @@ use minijinja::{
     value::{Enumerator, Object},
 };
 use pasion_i18n::DataLocale;
-use rand::Rng;
+use rand_core::RngCore as Rng;
 use serde::Serialize;
 
 use crate::{TemplateContext, context::SampleIdentifier};

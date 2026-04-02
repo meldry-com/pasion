@@ -8,7 +8,7 @@
 use pasion_data::Clock;
 use pasion_data::flow::{StageOutcome, StageValidationError};
 use pasion_data::{BoxRepository, RepositoryAccess};
-use rand::RngCore;
+use rand_core::RngCore;
 
 use super::StageExecutionError;
 

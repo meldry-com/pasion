@@ -9,7 +9,7 @@ use pasion_data::{
     queue::{ContactVerificationTarget, DispatchNotificationJob, QueueJobRepositoryExt as _},
 };
 use pasion_data::{Clock, UserEmailAuthentication, UserPhoneAuthentication, UserRecoverySession};
-use rand::RngCore;
+use rand_core::RngCore;
 
 /// User-facing notification intent expressed by the business layer.
 pub enum NotificationIntent<'a> {

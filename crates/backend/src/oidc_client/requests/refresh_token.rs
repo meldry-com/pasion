@@ -22,7 +22,7 @@ use oauth2_types::{
     scope::Scope,
 };
 use pasion_jose::claims::{self, TokenHash};
-use rand::Rng;
+use rand_core::RngCore as Rng;
 use url::Url;
 
 use super::jose::JwtVerificationData;

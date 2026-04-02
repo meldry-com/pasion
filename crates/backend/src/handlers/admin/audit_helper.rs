@@ -6,7 +6,7 @@
 
 use pasion_data::audit::AdminOperation;
 use pasion_data::{BoxRepository, RepositoryAccess, RepositoryError, audit::NewAdminOperationLog};
-use rand::RngCore;
+use rand_core::RngCore;
 use ulid::Ulid;
 
 /// Record an admin operation in the audit log, if the caller is an

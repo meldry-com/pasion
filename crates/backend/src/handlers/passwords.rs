@@ -9,7 +9,8 @@ use anyhow::Context;
 use argon2::{Argon2, PasswordHash, PasswordHasher, PasswordVerifier, password_hash::SaltString};
 use futures_util::future::OptionFuture;
 use pbkdf2::Pbkdf2;
-use rand::{CryptoRng, RngCore, SeedableRng};
+use rand_core::SeedableRng;
+use rand_core::{CryptoRng, RngCore};
 use thiserror::Error;
 use zeroize::Zeroizing;
 use zxcvbn::zxcvbn;
@@ -450,7 +451,7 @@ impl Algorithm {
 
 #[cfg(test)]
 mod tests {
-    use rand::SeedableRng;
+    use rand_core::SeedableRng;
 
     use super::*;
 

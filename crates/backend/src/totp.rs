@@ -84,7 +84,7 @@ pub fn verify(secret_base32: &str, code: &str, period: u64, digits: u32) -> bool
 }
 
 /// Generate a random base32-encoded TOTP secret (160 bits / 20 bytes).
-pub fn generate_secret(rng: &mut (impl rand::RngCore + ?Sized)) -> String {
+pub fn generate_secret(rng: &mut (impl rand_core::RngCore + ?Sized)) -> String {
     let mut key = [0u8; 20];
     rng.fill_bytes(&mut key);
     data_encoding::BASE32_NOPAD.encode(&key)
@@ -137,7 +137,7 @@ mod tests {
 
     #[test]
     fn test_generate_secret_length() {
-        let mut rng = rand::thread_rng();
+        let mut rng = rand_core::OsRng;
         let secret = generate_secret(&mut rng);
         // 20 bytes = 160 bits, base32 encodes to 32 chars (no padding)
         assert_eq!(secret.len(), 32);

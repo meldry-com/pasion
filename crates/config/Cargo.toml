@@ -40,6 +40,7 @@ rustls-pki-types.workspace = true
 futures-util.workspace = true
 rand.workspace = true
 rand_chacha.workspace = true
+rand_core.workspace = true
 tokio.workspace = true
 
 # Pasion workspace crates

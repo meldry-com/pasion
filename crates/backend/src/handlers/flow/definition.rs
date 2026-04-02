@@ -119,7 +119,7 @@ impl FlowDefinitionFile {
     /// [`FlowStageBinding`] using the provided RNG.
     pub fn into_flow(
         self,
-        rng: &mut (dyn rand::RngCore + Send),
+        rng: &mut (dyn rand_core::RngCore + Send),
     ) -> (FlowDefinition, Vec<FlowStageBinding>) {
         let now = Utc::now();
         let flow_id = new_id(now, rng);
@@ -243,7 +243,7 @@ impl StageDefinition {
 mod tests {
     use super::*;
     use pasion_data::flow::FlowDesignation;
-    use rand::SeedableRng;
+    use rand_core::SeedableRng;
 
     fn test_rng() -> rand_chacha::ChaCha8Rng {
         rand_chacha::ChaCha8Rng::seed_from_u64(42)

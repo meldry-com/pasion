@@ -8,7 +8,7 @@ use pasion_data::{
     Clock, UpstreamOAuthAuthorizationSession, UserEmailAuthentication, UserPhoneAuthentication,
     UserRegistration, UserRegistrationPassword, UserRegistrationToken, new_id,
 };
-use rand::RngCore;
+use rand_core::RngCore;
 use ulid::Ulid;
 use uuid::Uuid;
 

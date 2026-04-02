@@ -7,18 +7,12 @@ use icu_experimental::relativetime::{
 };
 use icu_locid::Locale;
 use icu_locid_transform::fallback::{
-    LocaleFallbackPriority, LocaleFallbackSupplement, LocaleFallbacker, LocaleFallbackerWithConfig,
-};
-use icu_provider::{
-    DataError, DataErrorKind, DataKey, DataLocale, DataRequest, DataRequestMetadata, data_key,
-    fallback::LocaleFallbackConfig,
+    LocaleFallbackConfig, LocaleFallbackPriority, LocaleFallbackSupplement, LocaleFallbacker,
+    LocaleFallbackerWithConfig,
 };
 use thiserror::Error;
 use unic_langid::LanguageIdentifier;
 use writeable::Writeable;
-
-/// Fake data key for errors (kept for ICU error reporting).
-const DATA_KEY: DataKey = data_key!("pasion/translations@1");
 
 const FALLBACKER: LocaleFallbackerWithConfig<'static> = LocaleFallbacker::new().for_config({
     let mut config = LocaleFallbackConfig::const_default();
@@ -26,13 +20,6 @@ const FALLBACKER: LocaleFallbackerWithConfig<'static> = LocaleFallbacker::new().
     config.fallback_supplement = Some(LocaleFallbackSupplement::Collation);
     config
 });
-
-/// Construct a [`DataRequest`] for the given locale.
-pub fn data_request_for_locale(locale: &DataLocale) -> DataRequest<'_> {
-    let mut metadata = DataRequestMetadata::default();
-    metadata.silent = true;
-    DataRequest { locale, metadata }
-}
 
 /// Error type for loading translations.
 #[derive(Debug, Error)]
@@ -75,8 +62,8 @@ type ConcurrentBundle = fluent_bundle::concurrent::FluentBundle<FluentResource>;
 /// template code can use `"common.loading"` while the FTL file defines
 /// `common-loading`.
 pub struct Translator {
-    bundles: HashMap<DataLocale, ConcurrentBundle>,
-    default_locale: DataLocale,
+    bundles: HashMap<Locale, ConcurrentBundle>,
+    default_locale: Locale,
 }
 
 // Manual Debug impl because FluentBundle doesn't implement Debug.
@@ -93,7 +80,7 @@ impl Default for Translator {
     fn default() -> Self {
         Self {
             bundles: HashMap::new(),
-            default_locale: icu_locid::locale!("en").into(),
+            default_locale: icu_locid::locale!("en"),
         }
     }
 }
@@ -115,7 +102,7 @@ impl Translator {
             source,
         })?;
 
-        let mut bundles: HashMap<DataLocale, ConcurrentBundle> = HashMap::new();
+        let mut bundles: HashMap<Locale, ConcurrentBundle> = HashMap::new();
 
         for dir_result in entries {
             let dir_entry = dir_result.map_err(|source| LoadError::ReadDir {
@@ -136,12 +123,11 @@ impl Translator {
                     path: file_path.clone(),
                 })?;
 
-            // Parse stem as an ICU locale (for the DataLocale key)
+            // Parse stem as an ICU locale
             let icu_locale: Locale = stem.parse().map_err(|e| LoadError::InvalidLocale {
                 path: file_path.clone(),
                 detail: format!("{e}"),
             })?;
-            let data_locale: DataLocale = icu_locale.into();
 
             // Parse stem as a unic LanguageIdentifier (for FluentBundle)
             let langid: LanguageIdentifier =
@@ -172,13 +158,13 @@ impl Translator {
                 }
             })?;
 
-            bundles.insert(data_locale, bundle);
+            bundles.insert(icu_locale, bundle);
         }
 
         Ok(Self {
             bundles,
             // TODO: make this configurable
-            default_locale: icu_locid::locale!("en").into(),
+            default_locale: icu_locid::locale!("en"),
         })
     }
 
@@ -204,7 +190,7 @@ impl Translator {
     #[must_use]
     pub fn format(
         &self,
-        locale: &DataLocale,
+        locale: &Locale,
         key: &str,
         args: Option<&FluentArgs<'_>>,
     ) -> Option<String> {
@@ -216,11 +202,12 @@ impl Translator {
         }
 
         // Walk the ICU fallback chain.
-        let mut chain = FALLBACKER.fallback_for(locale.clone());
+        let mut chain = FALLBACKER.fallback_for(locale.into());
         loop {
             let candidate = chain.get();
 
-            if let Some(result) = self.format_in_bundle(candidate, &ftl_id, args) {
+            let candidate_locale = candidate.clone().into_locale();
+            if let Some(result) = self.format_in_bundle(&candidate_locale, &ftl_id, args) {
                 return Some(result);
             }
 
@@ -236,7 +223,7 @@ impl Translator {
     /// Try to format a single message in the bundle for `locale`.
     fn format_in_bundle(
         &self,
-        locale: &DataLocale,
+        locale: &Locale,
         ftl_id: &str,
         args: Option<&FluentArgs<'_>>,
     ) -> Option<String> {
@@ -265,13 +252,14 @@ impl Translator {
     /// Returns an error if the ICU formatter cannot be created for the locale.
     pub fn relative_date(
         &self,
-        locale: &DataLocale,
+        locale: &Locale,
         days: i64,
     ) -> Result<String, icu_experimental::relativetime::RelativeTimeError> {
         let opts = RelativeTimeFormatterOptions {
             numeric: Numeric::Auto,
         };
-        let formatter = RelativeTimeFormatter::try_new_long_day(locale, opts)?;
+        let dl = locale.into();
+        let formatter = RelativeTimeFormatter::try_new_long_day(&dl, opts)?;
         let writeable = formatter.format(days.into());
         Ok(writeable.write_to_string().into_owned())
     }
@@ -288,11 +276,12 @@ impl Translator {
     /// Returns an error if the ICU formatter cannot be created for the locale.
     pub fn short_time<T: icu_datetime::input::IsoTimeInput>(
         &self,
-        locale: &DataLocale,
+        locale: &Locale,
         time: &T,
     ) -> Result<String, icu_datetime::DateTimeError> {
         let time_length = icu_datetime::options::length::Time::Short;
-        let fmt = icu_datetime::TimeFormatter::try_new_with_length(locale, time_length)?;
+        let dl = locale.into();
+        let fmt = icu_datetime::TimeFormatter::try_new_with_length(&dl, time_length)?;
         Ok(fmt.format_to_string(time))
     }
 
@@ -302,19 +291,19 @@ impl Translator {
 
     /// Get a list of available locales.
     #[must_use]
-    pub fn available_locales(&self) -> Vec<DataLocale> {
+    pub fn available_locales(&self) -> Vec<Locale> {
         self.bundles.keys().cloned().collect()
     }
 
     /// Check if a locale is available.
     #[must_use]
-    pub fn has_locale(&self, locale: &DataLocale) -> bool {
+    pub fn has_locale(&self, locale: &Locale) -> bool {
         self.bundles.contains_key(locale)
     }
 
     /// Choose the best available locale from a list of candidates.
     #[must_use]
-    pub fn choose_locale(&self, iter: impl Iterator<Item = DataLocale>) -> DataLocale {
+    pub fn choose_locale(&self, iter: impl Iterator<Item = Locale>) -> Locale {
         for candidate in iter {
             // Exact match?
             if self.has_locale(&candidate) {
@@ -322,15 +311,16 @@ impl Translator {
             }
 
             // Walk the fallback chain for this candidate.
-            let mut chain = FALLBACKER.fallback_for(candidate);
+            let mut chain = FALLBACKER.fallback_for(candidate.into());
             loop {
                 let current = chain.get();
                 if current.is_und() {
                     break;
                 }
 
-                if self.has_locale(current) {
-                    return chain.take();
+                let current_locale = current.clone().into_locale();
+                if self.has_locale(&current_locale) {
+                    return current_locale;
                 }
 
                 chain.step();
@@ -339,17 +329,6 @@ impl Translator {
 
         // Nothing matched; return the default.
         self.default_locale.clone()
-    }
-
-    /// Build a `DataError` for a missing locale or key.
-    #[allow(dead_code)]
-    fn missing_locale_error(&self, locale: &DataLocale) -> DataError {
-        DataErrorKind::MissingLocale.with_req(DATA_KEY, data_request_for_locale(locale))
-    }
-
-    #[allow(dead_code)]
-    fn missing_key_error(&self, locale: &DataLocale) -> DataError {
-        DataErrorKind::MissingDataKey.with_req(DATA_KEY, data_request_for_locale(locale))
     }
 }
 
@@ -371,18 +350,18 @@ mod tests {
     fn test_message() {
         let translator = translator();
 
-        let result = translator.format(&locale!("en").into(), "hello", None);
+        let result = translator.format(&locale!("en"), "hello", None);
         assert_eq!(result.as_deref(), Some("Hello!"));
 
-        let result = translator.format(&locale!("fr").into(), "hello", None);
+        let result = translator.format(&locale!("fr"), "hello", None);
         assert_eq!(result.as_deref(), Some("Bonjour !"));
 
         // en-US has its own hello
-        let result = translator.format(&locale!("en-US").into(), "hello", None);
+        let result = translator.format(&locale!("en-US"), "hello", None);
         assert_eq!(result.as_deref(), Some("Hey!"));
 
         // en-US does not have "goodbye", should fall back to en
-        let result = translator.format(&locale!("en-US").into(), "goodbye", None);
+        let result = translator.format(&locale!("en-US"), "goodbye", None);
         assert_eq!(result.as_deref(), Some("Goodbye!"));
     }
 
@@ -392,13 +371,13 @@ mod tests {
 
         let mut args = fluent_bundle::FluentArgs::new();
         args.set("count", FluentValue::from(1));
-        let result = translator.format(&locale!("en").into(), "active-sessions-one", Some(&args));
+        let result = translator.format(&locale!("en"), "active-sessions-one", Some(&args));
         assert_eq!(result.as_deref(), Some("1 active session."));
 
         let mut args = fluent_bundle::FluentArgs::new();
         args.set("count", FluentValue::from(2));
         let result =
-            translator.format(&locale!("en").into(), "active-sessions-other", Some(&args));
+            translator.format(&locale!("en"), "active-sessions-other", Some(&args));
         assert_eq!(result.as_deref(), Some("2 active sessions."));
     }
 
@@ -409,7 +388,7 @@ mod tests {
         let mut args = fluent_bundle::FluentArgs::new();
         args.set("count", FluentValue::from(1));
         let result =
-            translator.format(&locale!("en").into(), "active-sessions.one", Some(&args));
+            translator.format(&locale!("en"), "active-sessions.one", Some(&args));
         assert_eq!(result.as_deref(), Some("1 active session."));
     }
 }

@@ -458,7 +458,7 @@ impl Limiter {
 #[cfg(test)]
 mod tests {
     use pasion_data::{Clock, User, UserPhoneAuthentication, clock::MockClock};
-    use rand::SeedableRng;
+    use rand_core::SeedableRng;
 
     use super::*;
 

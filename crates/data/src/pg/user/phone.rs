@@ -7,7 +7,7 @@ use pasion_data::{
     Clock, User, UserPhone, UserPhoneAuthentication, UserPhoneAuthenticationCode, UserRegistration,
     new_id,
 };
-use rand::RngCore;
+use rand_core::RngCore;
 use ulid::Ulid;
 use uuid::Uuid;
 

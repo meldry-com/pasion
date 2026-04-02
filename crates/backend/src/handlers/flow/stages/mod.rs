@@ -17,7 +17,7 @@ pub mod user_write;
 use pasion_data::BoxRepository;
 use pasion_data::Clock;
 use pasion_data::flow::{StageKind, StageOutcome, StageResponse};
-use rand::RngCore;
+use rand_core::RngCore;
 use thiserror::Error;
 
 /// Errors that can occur during stage side-effect execution.

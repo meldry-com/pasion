@@ -17,7 +17,7 @@ use pasion_data::{
     pagination::{Node, PaginationDirection},
     personal::{PersonalSessionFilter, PersonalSessionRepository, PersonalSessionState},
 };
-use rand::RngCore;
+use rand_core::RngCore;
 use ulid::Ulid;
 use uuid::Uuid;
 

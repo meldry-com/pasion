@@ -9,7 +9,7 @@ use chrono::Duration;
 use pasion_data::{
     BrowserSession, User, UserEmailAuthenticationCode, UserRecoverySession, UserRegistration,
 };
-use rand::Rng;
+use rand_core::RngCore as Rng;
 use serde::Serialize;
 
 use super::wrappers::{SampleIdentifier, TemplateContext, sample_list};

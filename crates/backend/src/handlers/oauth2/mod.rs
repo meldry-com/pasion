@@ -76,7 +76,7 @@ pub(crate) enum IdTokenSignatureError {
 /// and optional claims (`nonce`, `auth_time`, `at_hash`, `c_hash`) depending
 /// on the grant context.
 pub(crate) fn generate_id_token(
-    rng: &mut (impl rand::RngCore + rand::CryptoRng),
+    rng: &mut (impl rand_core::RngCore + rand_core::CryptoRng),
     clock: &impl Clock,
     url_builder: &UrlBuilder,
     key_store: &Keystore,
@@ -129,7 +129,7 @@ pub(crate) fn generate_id_token(
 /// Generate a new access-token / refresh-token pair for an OAuth 2.0 session
 /// and persist them in the repository.
 pub(crate) async fn generate_token_pair<R: RepositoryAccess>(
-    rng: &mut (impl rand::RngCore + Send),
+    rng: &mut (impl rand_core::RngCore + Send),
     clock: &impl Clock,
     repo: &mut R,
     session: &Session,
@@ -159,7 +159,7 @@ mod tests {
     use pasion_data::{AccessTokenState, AuthenticationMethod, clock::MockClock};
     use pasion_jose::{claims::hash_token, jwt::Jwt};
     use pasion_keystore::{JsonWebKey, JsonWebKeySet, PrivateKey};
-    use rand::SeedableRng;
+    use rand_core::SeedableRng;
     use rand_chacha::ChaChaRng;
     use serde_json::Value;
     use ulid::Ulid;

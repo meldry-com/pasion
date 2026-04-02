@@ -5,7 +5,7 @@
 
 use anyhow::Context;
 use pasion_keystore::PrivateKey;
-use rand::{Rng, SeedableRng, distributions::Standard, prelude::Distribution as _};
+use rand_core::{RngCore, SeedableRng};
 use tokio::task;
 use tracing::info;
 
@@ -21,7 +21,7 @@ impl SecretsConfig {
     #[tracing::instrument(skip_all)]
     pub(crate) async fn generate<R>(mut rng: R) -> anyhow::Result<Self>
     where
-        R: Rng + Send,
+        R: RngCore + Send,
     {
         info!("Generating keys...");
 
@@ -45,7 +45,11 @@ impl SecretsConfig {
         let ed25519_key = spawn_ec_keygen(&mut rng, "ed25519", PrivateKey::generate_ed25519).await?;
 
         Ok(Self {
-            encryption: EncryptionKey::Value(Standard.sample(&mut rng)),
+            encryption: EncryptionKey::Value({
+                let mut key = [0u8; 32];
+                rng.fill_bytes(&mut key);
+                key
+            }),
             keys: Some(vec![
                 into_key_config(rsa_key)?,
                 into_key_config(ec_p256_key)?,
@@ -112,7 +116,7 @@ async fn spawn_ec_keygen<R, F>(
     gen_fn: F,
 ) -> anyhow::Result<PrivateKey>
 where
-    R: Rng,
+    R: RngCore,
     F: FnOnce(rand_chacha::ChaChaRng) -> PrivateKey + Send + 'static,
 {
     let span = tracing::info_span!(target: "secrets_keygen", "keygen", algorithm = label);

@@ -152,7 +152,7 @@ impl UpstreamSessions {
 #[cfg(test)]
 mod tests {
     use chrono::TimeZone;
-    use rand::SeedableRng;
+    use rand_core::SeedableRng;
     use rand_chacha::ChaChaRng;
 
     use super::*;

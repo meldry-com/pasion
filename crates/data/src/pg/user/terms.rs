@@ -5,7 +5,7 @@ use diesel::prelude::*;
 use diesel_async::RunQueryDsl;
 use pasion_data::user::UserTermsRepository;
 use pasion_data::{Clock, User, new_id};
-use rand::RngCore;
+use rand_core::RngCore;
 use url::Url;
 use uuid::Uuid;
 

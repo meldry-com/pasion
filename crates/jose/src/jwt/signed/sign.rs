@@ -4,7 +4,6 @@
 // a dot, signed, and then the signature is appended as a third segment.
 
 use base64ct::{Base64UrlUnpadded, Encoding};
-use rand::thread_rng;
 use serde::Serialize;
 use signature::{RandomizedSigner, SignatureEncoding, rand_core::CryptoRngCore};
 use thiserror::Error;
@@ -78,8 +77,7 @@ impl<T> Jwt<'static, T> {
         S: SignatureEncoding,
         T: Serialize,
     {
-        #[allow(clippy::disallowed_methods)]
-        Self::sign_with_rng(&mut thread_rng(), header, payload, key)
+        Self::sign_with_rng(&mut signature::rand_core::OsRng, header, payload, key)
     }
 
     /// Sign `payload` under `header` using the supplied RNG.

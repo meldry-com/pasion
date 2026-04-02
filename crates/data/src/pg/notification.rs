@@ -12,7 +12,7 @@ use pasion_data::{
     NotificationDeliveryStatus, NotificationEventKind, NotificationEventLog,
     NotificationPreference, NotificationRequest, NotificationRequestStatus, User, new_id,
 };
-use rand::RngCore;
+use rand_core::RngCore;
 use serde::de::DeserializeOwned;
 use ulid::Ulid;
 use uuid::Uuid;

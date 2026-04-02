@@ -387,7 +387,7 @@ mod tests {
     use insta::assert_json_snapshot;
     use pasion_data::RepositoryAccess;
     use pasion_data::user::{UserEmailRepository, UserRepository};
-    use rand::SeedableRng;
+    use rand_core::SeedableRng;
     use rand_chacha::ChaChaRng;
     use ulid::Ulid;
     

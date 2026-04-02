@@ -7,7 +7,7 @@ use chrono::Utc;
 use pasion_data::RepositoryAccess;
 use pasion_data::audit::AdminOperation;
 use pasion_data::user::UserRegistrationTokenFilter;
-use rand::distributions::{Alphanumeric, DistString};
+use rand::distr::{Alphanumeric, SampleString};
 use salvo::prelude::*;
 use schemars::JsonSchema;
 use serde::Deserialize;
@@ -65,7 +65,7 @@ pub async fn add_token(
     // Fall back to a randomly generated token string
     let token_str = body
         .token
-        .unwrap_or_else(|| Alphanumeric.sample_string(&mut rng, 12));
+        .unwrap_or_else(|| Alphanumeric.sample_string(&mut rand::rng(), 12));
 
     // Guard against duplicate token values
     let duplicate = repo

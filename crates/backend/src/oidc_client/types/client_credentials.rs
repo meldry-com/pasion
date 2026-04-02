@@ -26,7 +26,7 @@ use pasion_jose::{
     jwt::{JsonWebSignatureHeader, Jwt},
 };
 use pasion_keystore::Keystore;
-use rand::Rng;
+use rand_core::RngCore as Rng;
 use serde::Serialize;
 use serde_json::Value;
 use url::Url;
@@ -484,7 +484,7 @@ fn prepare_jwt_bearer_claims(
     )?;
 
     let mut jti = [0u8; 16];
-    rng.fill(&mut jti);
+    rng.fill_bytes(&mut jti);
     let jti = Base64UrlUnpadded::encode_string(&jti);
     claims::JTI.insert(&mut claims, jti)?;
 

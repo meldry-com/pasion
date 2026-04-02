@@ -8,7 +8,7 @@ use diesel::sql_types::{Array, BigInt, Jsonb, Nullable, Text, Timestamptz, Uuid 
 use diesel_async::RunQueryDsl;
 use pasion_data::queue::{Job, QueueJobRepository, Worker};
 use pasion_data::{Clock, new_id};
-use rand::RngCore;
+use rand_core::RngCore;
 use ulid::Ulid;
 use uuid::Uuid;
 

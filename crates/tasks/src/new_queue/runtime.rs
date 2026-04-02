@@ -2,7 +2,7 @@ use opentelemetry::{
     KeyValue,
     metrics::{Counter, Histogram},
 };
-use rand::{Rng, distributions::Uniform};
+use rand_core::RngCore;
 use tokio_postgres::{Client, NoTls, Notification};
 
 use crate::{METER, State};
@@ -85,7 +85,8 @@ pub(super) async fn wait_until_wakeup(
     wakeups: &Counter<u64>,
 ) {
     let mut rng = state.rng();
-    let sleep_duration = rng.sample(Uniform::new(MIN_SLEEP_DURATION, MAX_SLEEP_DURATION));
+    let jitter_ms = (rng.next_u64() % (MAX_SLEEP_DURATION.as_millis() as u64 - MIN_SLEEP_DURATION.as_millis() as u64)) + MIN_SLEEP_DURATION.as_millis() as u64;
+    let sleep_duration = std::time::Duration::from_millis(jitter_ms);
     let wakeup_sleep = tokio::time::sleep(sleep_duration);
 
     tokio::select! {

@@ -10,7 +10,7 @@ use pasion_data::{
     pagination::{Node, PaginationDirection},
     upstream_oauth2::{UpstreamOAuthLinkFilter, UpstreamOAuthLinkRepository},
 };
-use rand::RngCore;
+use rand_core::RngCore;
 use ulid::Ulid;
 use uuid::Uuid;
 

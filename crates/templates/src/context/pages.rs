@@ -5,7 +5,7 @@ use std::{collections::BTreeMap, fmt::Formatter};
 
 use http::{Method, Uri, Version};
 use pasion_data::{UrlBuilder, User};
-use rand::Rng;
+use rand_core::RngCore as Rng;
 use serde::Serialize;
 
 use super::wrappers::{SampleIdentifier, TemplateContext, sample_list};

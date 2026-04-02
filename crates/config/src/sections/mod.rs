@@ -5,7 +5,7 @@
 
 use anyhow::bail;
 use camino::Utf8PathBuf;
-use rand::Rng;
+use rand_core::RngCore as Rng;
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 

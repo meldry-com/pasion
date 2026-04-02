@@ -330,7 +330,7 @@ pub struct RespondInput {
 /// flow.
 fn resolve_flow_by_slug(
     slug: &str,
-    rng: &mut (dyn rand::RngCore + Send),
+    rng: &mut (dyn rand_core::RngCore + Send),
 ) -> Option<(
     pasion_data::flow::FlowDefinition,
     Vec<pasion_data::flow::FlowStageBinding>,

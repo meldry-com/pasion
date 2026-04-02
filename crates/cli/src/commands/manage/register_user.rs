@@ -24,7 +24,8 @@ use pasion_data::{
 };
 use pasion_matrix::HomeserverAdmin;
 use pasion_messaging::Address;
-use rand::{RngCore, SeedableRng};
+use rand_core::SeedableRng;
+use rand_core::RngCore;
 use tracing::{info, warn};
 use zeroize::Zeroizing;
 

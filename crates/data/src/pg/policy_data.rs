@@ -7,7 +7,7 @@ use diesel::prelude::*;
 use diesel_async::RunQueryDsl;
 use pasion_data::policy_data::PolicyDataRepository;
 use pasion_data::{Clock, PolicyData, new_id};
-use rand::RngCore;
+use rand_core::RngCore;
 use serde_json::Value;
 use uuid::Uuid;
 

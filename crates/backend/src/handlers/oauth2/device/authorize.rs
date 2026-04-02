@@ -9,7 +9,7 @@ use oauth2_types::{
     scope::ScopeToken,
 };
 use pasion_data::oauth2::OAuth2DeviceCodeGrantParams;
-use rand::distributions::{Alphanumeric, DistString};
+use rand::distr::{Alphanumeric, SampleString};
 use salvo::{Extractible, prelude::*};
 use thiserror::Error;
 use ulid::Ulid;
@@ -155,8 +155,8 @@ async fn handle_post(
 
     let ip_address = activity_tracker.ip();
 
-    let device_code = Alphanumeric.sample_string(&mut rng, 32);
-    let user_code = Alphanumeric.sample_string(&mut rng, 6).to_uppercase();
+    let device_code = Alphanumeric.sample_string(&mut rand::rng(), 32);
+    let user_code = Alphanumeric.sample_string(&mut rand::rng(), 6).to_uppercase();
 
     let device_code = repo
         .oauth2_device_code_grant()

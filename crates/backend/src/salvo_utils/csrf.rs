@@ -1,7 +1,7 @@
 use base64ct::{Base64UrlUnpadded, Encoding};
 use chrono::{DateTime, Duration, Utc};
 use pasion_data::Clock;
-use rand::{Rng, RngCore, distributions::Standard, prelude::Distribution as _};
+use rand_core::RngCore;
 use serde::{Deserialize, Serialize};
 use serde_with::{TimestampSeconds, serde_as};
 use thiserror::Error;
@@ -49,8 +49,9 @@ impl CsrfToken {
     }
 
     /// Generate a new random token valid for a specified duration
-    fn generate(now: DateTime<Utc>, mut rng: impl Rng, ttl: Duration) -> Self {
-        let token = Standard.sample(&mut rng);
+    fn generate(now: DateTime<Utc>, mut rng: impl RngCore, ttl: Duration) -> Self {
+        let mut token = [0u8; 32];
+        rng.fill_bytes(&mut token);
         Self::new(token, now, ttl)
     }
 

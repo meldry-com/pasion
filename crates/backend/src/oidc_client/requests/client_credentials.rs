@@ -21,7 +21,7 @@ use oauth2_types::{
     requests::{AccessTokenRequest, AccessTokenResponse, ClientCredentialsGrant},
     scope::Scope,
 };
-use rand::Rng;
+use rand_core::RngCore as Rng;
 use url::Url;
 
 use super::super::{

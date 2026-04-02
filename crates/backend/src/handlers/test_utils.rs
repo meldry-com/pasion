@@ -42,7 +42,7 @@ use pasion_messaging::{MailTransport, Mailer, NotificationCenter};
 use pasion_policy::{InstantiateError, Policy, PolicyFactory};
 use pasion_tasks::QueueWorker;
 use pasion_templates::{SiteConfigExt, Templates};
-use rand::SeedableRng;
+use rand_core::SeedableRng;
 use rand_chacha::ChaChaRng;
 use salvo::{prelude::*, test::ResponseExt as SalvoResponseExt, test::TestClient};
 use serde::{Serialize, de::DeserializeOwned};

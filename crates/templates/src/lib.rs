@@ -18,7 +18,7 @@ use camino::{Utf8Path, Utf8PathBuf};
 use minijinja::{UndefinedBehavior, Value};
 use pasion_data::UrlBuilder;
 use pasion_i18n::Translator;
-use rand::Rng;
+use rand_core::RngCore as Rng;
 use serde::Serialize;
 use thiserror::Error;
 use tokio::task::JoinError;

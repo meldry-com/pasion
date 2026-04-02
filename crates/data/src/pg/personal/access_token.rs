@@ -7,7 +7,7 @@ use pasion_data::{
     Clock, new_id,
     personal::{PersonalAccessToken, session::PersonalSession},
 };
-use rand::RngCore;
+use rand_core::RngCore;
 use sha2::{Digest, Sha256};
 use ulid::Ulid;
 use uuid::Uuid;

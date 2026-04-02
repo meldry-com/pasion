@@ -206,7 +206,7 @@ mod tests {
         RepositoryAccess,
         user::{BrowserSessionRepository, UserRepository},
     };
-    use rand::SeedableRng;
+    use rand_core::SeedableRng;
     use rand_chacha::ChaChaRng;
     use ulid::Ulid;
 

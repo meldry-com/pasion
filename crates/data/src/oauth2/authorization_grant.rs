@@ -7,10 +7,7 @@ use oauth2_types::{
     scope::{OPENID, PROFILE, Scope},
 };
 use pasion_iana::oauth::PkceCodeChallengeMethod;
-use rand::{
-    RngCore,
-    distributions::{Alphanumeric, DistString},
-};
+use rand_core::RngCore;
 use ruma_common::UserId;
 use serde::Serialize;
 use ulid::Ulid;
@@ -18,6 +15,16 @@ use url::Url;
 
 use super::session::Session;
 use crate::InvalidTransitionError;
+
+fn generate_alphanumeric(rng: &mut (impl RngCore + ?Sized), len: usize) -> String {
+    const CHARSET: &[u8] = b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789";
+    let mut bytes = vec![0u8; len];
+    rng.fill_bytes(&mut bytes);
+    bytes
+        .iter()
+        .map(|b| CHARSET[*b as usize % CHARSET.len()] as char)
+        .collect()
+}
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 pub struct Pkce {
@@ -247,14 +254,14 @@ impl AuthorizationGrant {
             id: crate::new_id(now, rng),
             stage: AuthorizationGrantStage::Pending,
             code: Some(AuthorizationCode {
-                code: Alphanumeric.sample_string(rng, 10),
+                code: generate_alphanumeric(rng, 10),
                 pkce: None,
             }),
             client_id: crate::new_id(now, rng),
             redirect_uri: Url::parse("http://localhost:8080").unwrap(),
             scope: Scope::from_iter([OPENID, PROFILE]),
-            state: Some(Alphanumeric.sample_string(rng, 10)),
-            nonce: Some(Alphanumeric.sample_string(rng, 10)),
+            state: Some(generate_alphanumeric(rng, 10)),
+            nonce: Some(generate_alphanumeric(rng, 10)),
             response_mode: ResponseMode::Query,
             response_type_id_token: false,
             created_at: now,

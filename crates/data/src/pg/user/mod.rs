@@ -8,7 +8,7 @@ use diesel_async::RunQueryDsl;
 use pasion_data::user::{UserFilter, UserRepository, UserState};
 use pasion_data::{Clock, User, UserPatch, UserProfilePatch, new_id};
 use pasion_data::{Pagination, pagination::PaginationDirection};
-use rand::RngCore;
+use rand_core::RngCore;
 use ulid::Ulid;
 use uuid::Uuid;
 

@@ -22,7 +22,7 @@ pub fn preferred_language(req: &Request, depot: &Depot) -> DataLocale {
         .iter()
         .flat_map(AcceptLanguage::iter)
         .flat_map(|lang| {
-            let lang = DataLocale::from(lang);
+            let lang = lang.clone();
             // XXX: this is hacky as we may want to actually maintain proper language
             // aliases at some point, but `zh-CN` doesn't fallback
             // automatically to `zh-Hans`, so we insert it manually here.

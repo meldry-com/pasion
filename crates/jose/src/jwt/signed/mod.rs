@@ -96,9 +96,7 @@ impl<'a, T> Jwt<'a, T> {
 
 #[cfg(test)]
 mod tests {
-    #![allow(clippy::disallowed_methods)]
     use pasion_iana::jose::JsonWebSignatureAlg;
-    use rand::thread_rng;
 
     use super::*;
 
@@ -132,7 +130,7 @@ mod tests {
         let hdr = JsonWebSignatureHeader::new(JsonWebSignatureAlg::Es256);
         let body = serde_json::json!({"hello": "world"});
 
-        let sk = ecdsa::SigningKey::<p256::NistP256>::random(&mut thread_rng());
+        let sk = ecdsa::SigningKey::<p256::NistP256>::random(&mut signature::rand_core::OsRng);
         let signed = Jwt::sign::<_, ecdsa::Signature<_>>(hdr, body, &sk).unwrap();
 
         signed

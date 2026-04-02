@@ -24,6 +24,7 @@ listenfd.workspace = true
 pin-project-lite.workspace = true
 rand.workspace = true
 rand_chacha.workspace = true
+rand_core.workspace = true
 reqwest.workspace = true
 rustls.workspace = true
 rustls-platform-verifier.workspace = true

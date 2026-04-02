@@ -9,7 +9,7 @@ use pasion_data::{
     new_id,
 };
 use pasion_iana::oauth::PkceCodeChallengeMethod;
-use rand::RngCore;
+use rand_core::RngCore;
 use ulid::Ulid;
 use url::Url;
 use uuid::Uuid;

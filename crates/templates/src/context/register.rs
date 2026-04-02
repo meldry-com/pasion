@@ -4,7 +4,7 @@
 use std::collections::BTreeMap;
 
 use pasion_data::{PostAuthAction, UpstreamOAuthProvider, UserEmailAuthentication};
-use rand::Rng;
+use rand_core::RngCore as Rng;
 use serde::{Deserialize, Serialize};
 use ulid::Ulid;
 
