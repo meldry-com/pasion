@@ -311,7 +311,7 @@ features = ["compiled_data", "std"]
 version = "1.5.0"
 features = ["compiled_data", "std"]
 [workspace.dependencies.icu_provider]
-version = "1.5.0"
+version = "2.1.1"
 features = ["std", "sync"]
 [workspace.dependencies.icu_provider_adapters]
 version = "1.5.0"
