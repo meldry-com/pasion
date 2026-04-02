@@ -111,37 +111,6 @@ impl TemplateContext for AppContext {
     }
 }
 
-// -- Swagger / API docs -----------------------------------------------------
-
-/// Data passed to the `swagger/doc.html` template.
-#[derive(Serialize)]
-pub struct ApiDocContext {
-    openapi_url: url::Url,
-    callback_url: url::Url,
-}
-
-impl ApiDocContext {
-    /// Build the context from a [`UrlBuilder`].
-    #[must_use]
-    pub fn from_url_builder(url_builder: &UrlBuilder) -> Self {
-        Self {
-            openapi_url: url_builder.absolute_url("/api/spec.json"),
-            callback_url: url_builder.absolute_url("/api/doc/oauth2-callback"),
-        }
-    }
-}
-
-impl TemplateContext for ApiDocContext {
-    fn sample<R: Rng>(
-        _now: chrono::DateTime<chrono::Utc>,
-        _rng: &mut R,
-        _locales: &[pasion_i18n::DataLocale],
-    ) -> BTreeMap<SampleIdentifier, Self> {
-        let builder = UrlBuilder::new("https://example.com/".parse().unwrap(), None, None);
-        sample_list(vec![Self::from_url_builder(&builder)])
-    }
-}
-
 // -- Error pages ------------------------------------------------------------
 
 /// Data for the `error.html` template.

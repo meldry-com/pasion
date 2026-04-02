@@ -35,7 +35,7 @@ pub use self::{
     login::{LoginContext, LoginFormField, PostAuthContext, PostAuthContextInner},
     oauth::FormPostContext,
     pages::{
-        ApiDocContext, AppContext, AppErrorState, ErrorContext, IndexContext, NotFoundContext,
+        AppContext, AppErrorState, ErrorContext, IndexContext, NotFoundContext,
     },
     recovery::{
         RecoveryExpiredContext, RecoveryFinishContext, RecoveryFinishFormField,

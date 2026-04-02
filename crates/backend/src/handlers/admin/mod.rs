@@ -10,7 +10,6 @@
 
 use crate::handlers::account::DepotExt;
 use crate::salvo_utils::InternalError;
-use pasion_templates::{ApiDocContext, Templates};
 use salvo::prelude::*;
 use serde::Serialize;
 
@@ -55,28 +54,6 @@ pub const ADMIN_SCOPE_LEGACY: &str = "urn:mas:admin";
 /// legacy admin scope.
 pub fn has_admin_scope(scope: &oauth2_types::scope::Scope) -> bool {
     scope.contains(ADMIN_SCOPE) || scope.contains(ADMIN_SCOPE_LEGACY)
-}
-
-/// Render the Swagger UI page for the Admin API documentation.
-
-#[endpoint]
-pub async fn swagger(depot: &Depot, res: &mut Response) -> Result<(), InternalError> {
-    let url_builder = depot.url_builder()?;
-    let templates = depot.templates()?;
-    let ctx = ApiDocContext::from_url_builder(&url_builder);
-    let content = templates.render_swagger(&ctx)?;
-    res.render(salvo::writing::Text::Html(content));
-    Ok(())
-}
-
-#[endpoint]
-pub async fn swagger_callback(depot: &Depot, res: &mut Response) -> Result<(), InternalError> {
-    let url_builder = depot.url_builder()?;
-    let templates = depot.templates()?;
-    let ctx = ApiDocContext::from_url_builder(&url_builder);
-    let content = templates.render_swagger_callback(&ctx)?;
-    res.render(salvo::writing::Text::Html(content));
-    Ok(())
 }
 
 /// JSON response wrapper that sets HTTP 201 Created status code.

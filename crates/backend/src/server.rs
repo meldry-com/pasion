@@ -578,9 +578,6 @@ fn build_admin_router(router: Router) -> Router {
     use crate::handlers::admin::v1::*;
 
     let admin_router = Router::with_path("/api/admin/v1")
-            // Documentation
-            .push(Router::with_path("doc").get(admin::swagger))
-            .push(Router::with_path("doc/callback").get(admin::swagger_callback))
             // Version
             .push(Router::with_path("version").get(version::handler))
             // Site config

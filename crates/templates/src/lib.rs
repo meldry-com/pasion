@@ -34,7 +34,7 @@ mod macros;
 
 pub use self::{
     context::{
-        ApiDocContext, AppContext, AppErrorState, ConsentContext, DeviceConsentContext,
+        AppContext, AppErrorState, ConsentContext, DeviceConsentContext,
         DeviceLinkContext, DeviceLinkFormField, DeviceNameContext, EmailRecoveryContext,
         EmailVerificationContext, EmptyContext, ErrorContext, FormPostContext, IndexContext,
         LoginContext, LoginFormField, NotFoundContext, PasswordRegisterContext,
@@ -373,12 +373,6 @@ impl Templates {
 register_templates! {
     /// Render the frontend app (Dioxus SPA shell)
     pub fn render_app(WithLanguage<AppContext>) { "app.html" }
-
-    /// Render the Swagger API reference
-    pub fn render_swagger(ApiDocContext) { "swagger/doc.html" }
-
-    /// Render the Swagger OAuth callback page
-    pub fn render_swagger_callback(ApiDocContext) { "swagger/oauth2-redirect.html" }
 
     /// Render the form used by the `form_post` response mode (OAuth2 protocol)
     pub fn render_form_post<#[sample(EmptyContext)] T: Serialize>(WithLanguage<FormPostContext<T>>) { "form_post.html" }
