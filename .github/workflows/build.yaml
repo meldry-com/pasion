@@ -76,7 +76,7 @@ jobs:
           chmod -R u=rwX,go=rX assets-dist/
 
       - name: Store asset artifact
-        uses: actions/upload-artifact@v6.0.0
+        uses: actions/upload-artifact@v7.0.0
         with:
           name: assets
           path: assets-dist
@@ -136,7 +136,7 @@ jobs:
             -p pasion
 
       - name: Store compiled binary
-        uses: actions/upload-artifact@v6.0.0
+        uses: actions/upload-artifact@v7.0.0
         with:
           name: binary-${{ matrix.target }}
           path: target/${{ matrix.target }}/release/pasion
@@ -185,13 +185,13 @@ jobs:
           done
 
       - name: Store aarch64 archive
-        uses: actions/upload-artifact@v6.0.0
+        uses: actions/upload-artifact@v7.0.0
         with:
           name: pasion-aarch64-linux
           path: pasion-aarch64-linux.tar.gz
 
       - name: Store x86_64 archive
-        uses: actions/upload-artifact@v6.0.0
+        uses: actions/upload-artifact@v7.0.0
         with:
           name: pasion-x86_64-linux
           path: pasion-x86_64-linux.tar.gz
