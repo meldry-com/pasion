@@ -155,7 +155,7 @@ pkcs8 = { version = "0.10.2", features = ["std", "pkcs5", "encryption", "pem"] }
 psl = "2.1.199"
 quanta = "0.12.6"
 rand = "0.10"
-rand_chacha = "0.3"
+rand_chacha = "0.9"
 rand_core = { version = "0.6", features = ["std", "getrandom"] }
 regex = "1.12.3"
 reqwest = { version = "0.13.2", default-features = false, features = ["http2", "rustls-no-provider", "charset", "json", "form", "socks"] }
