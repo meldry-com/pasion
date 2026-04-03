@@ -371,6 +371,7 @@ fn build_human_router(router: Router, _templates: Templates) -> Router {
             Router::with_path("/.well-known/change-password").get(change_password_redirect_handler),
         )
         // ── SPA shell ──
+        // Root & auth pages
         .push(Router::with_path("/").get(spa::get))
         .push(Router::with_path("/login").get(spa::get))
         .push(Router::with_path("/register").get(spa::get))
@@ -380,9 +381,26 @@ fn build_human_router(router: Router, _templates: Templates) -> Router {
         .push(Router::with_path("/consent/{**rest}").get(spa::get))
         .push(Router::with_path("/link").get(spa::get))
         .push(Router::with_path("/device/{**rest}").get(spa::get))
+        // Account pages (root-level frontend routes)
+        .push(Router::with_path("/settings").get(spa::get))
+        .push(Router::with_path("/sessions").get(spa::get))
+        .push(Router::with_path("/sessions/{**rest}").get(spa::get))
+        .push(Router::with_path("/security").get(spa::get))
+        .push(Router::with_path("/notifications").get(spa::get))
+        .push(Router::with_path("/identities").get(spa::get))
+        .push(Router::with_path("/contacts").get(spa::get))
+        .push(Router::with_path("/workflows").get(spa::get))
+        .push(Router::with_path("/plan").get(spa::get))
+        // Standalone pages
+        .push(Router::with_path("/password/{**rest}").get(spa::get))
+        .push(Router::with_path("/emails/{**rest}").get(spa::get))
+        .push(Router::with_path("/reset-cross-signing").get(spa::get))
+        .push(Router::with_path("/clients/{**rest}").get(spa::get))
+        .push(Router::with_path("/devices/{**rest}").get(spa::get))
+        // Legacy /account redirect
         .push(Router::with_path("/account").get(account_redirect_handler))
         .push(Router::with_path("/account/").get(spa::get))
-        .push(Router::with_path("/account/{*rest}").get(spa::get))
+        .push(Router::with_path("/account/{**rest}").get(spa::get))
 }
 
 fn build_oauth_router(router: Router) -> Router {
