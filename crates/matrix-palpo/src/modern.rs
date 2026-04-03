@@ -51,6 +51,10 @@ impl PalpoAdmin {
         self.builder(Method::POST, url)
     }
 
+    fn put(&self, url: &str) -> reqwest::RequestBuilder {
+        self.builder(Method::PUT, url)
+    }
+
     fn get(&self, url: &str) -> reqwest::RequestBuilder {
         self.builder(Method::GET, url)
     }

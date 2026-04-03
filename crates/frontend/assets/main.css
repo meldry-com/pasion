@@ -257,7 +257,7 @@ a:hover {
 }
 
 .layout-container.full {
-    --target-width: 960px;
+    --target-width: 1200px;
 }
 
 @media screen and (min-width: 768px) {
@@ -270,17 +270,71 @@ a:hover {
 
 .account-layout {
     display: flex;
-    gap: var(--space-8x);
+    gap: 0;
     flex: 1;
     min-height: 0;
 }
 
 .account-sidebar {
-    width: 200px;
+    width: 260px;
     flex-shrink: 0;
     display: flex;
     flex-direction: column;
+    gap: var(--space-2x);
+    padding: var(--space-6x) var(--space-5x);
+    background: var(--color-bg-subtle);
+    border-right: 1px solid var(--color-border);
+    border-radius: var(--radius-lg) 0 0 var(--radius-lg);
+    position: sticky;
+    top: var(--space-4x);
+    align-self: flex-start;
+    max-height: calc(100vh - var(--space-16x));
+    overflow-y: auto;
+}
+
+.sidebar-profile {
+    padding-bottom: var(--space-5x);
+    margin-bottom: var(--space-2x);
+    border-bottom: 1px solid var(--color-border);
+}
+
+.sidebar-profile .user-greeting {
+    flex-direction: column;
+    text-align: center;
+    gap: var(--space-3x);
+}
+
+.sidebar-profile .user-avatar {
+    width: 72px;
+    height: 72px;
+    font-size: 28px;
+    align-self: center;
+}
+
+.sidebar-profile .user-meta {
+    align-items: center;
+}
+
+.sidebar-nav-group {
+    display: flex;
+    flex-direction: column;
     gap: var(--space-1x);
+}
+
+.sidebar-nav-group + .sidebar-nav-group {
+    margin-top: var(--space-3x);
+    padding-top: var(--space-3x);
+    border-top: 1px solid var(--color-border);
+}
+
+.sidebar-group-label {
+    font-size: var(--font-size-xs);
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: var(--color-text-tertiary);
+    padding: var(--space-1x) var(--space-3x);
+    margin-bottom: var(--space-1x);
 }
 
 .account-sidebar .sidebar-item {
@@ -288,7 +342,7 @@ a:hover {
     align-items: center;
     gap: var(--space-3x);
     padding: var(--space-2x) var(--space-3x);
-    border-radius: var(--radius-md);
+    border-radius: var(--radius-sm);
     font-size: var(--font-size-sm);
     font-weight: 500;
     color: var(--color-text-secondary);
@@ -311,6 +365,7 @@ a:hover {
 .account-content {
     flex: 1;
     min-width: 0;
+    padding: var(--space-8x) var(--space-10x);
 }
 
 /* On small screens the sidebar stacks above the content as a horizontal
@@ -318,21 +373,63 @@ a:hover {
 @media screen and (max-width: 767px) {
     .account-layout {
         flex-direction: column;
-        gap: var(--space-4x);
+        gap: 0;
     }
 
     .account-sidebar {
         width: 100%;
         flex-direction: row;
+        flex-wrap: wrap;
         overflow-x: auto;
         gap: var(--space-2x);
-        padding-bottom: var(--space-2x);
+        padding: var(--space-4x) var(--space-4x) var(--space-3x);
+        border-right: none;
         border-bottom: 1px solid var(--color-border);
+        border-radius: var(--radius-lg) var(--radius-lg) 0 0;
+        position: static;
+        max-height: none;
+    }
+
+    .sidebar-profile {
+        width: 100%;
+        padding-bottom: var(--space-3x);
+        margin-bottom: var(--space-1x);
+    }
+
+    .sidebar-profile .user-greeting {
+        flex-direction: row;
+        text-align: left;
+    }
+
+    .sidebar-profile .user-avatar {
+        width: var(--space-12x);
+        height: var(--space-12x);
+        font-size: 20px;
+    }
+
+    .sidebar-nav-group {
+        flex-direction: row;
+        flex-wrap: wrap;
+        gap: var(--space-1x);
+    }
+
+    .sidebar-nav-group + .sidebar-nav-group {
+        margin-top: 0;
+        padding-top: 0;
+        border-top: none;
+    }
+
+    .sidebar-group-label {
+        display: none;
     }
 
     .account-sidebar .sidebar-item {
         white-space: nowrap;
         padding: var(--space-2x) var(--space-3x);
+    }
+
+    .account-content {
+        padding: var(--space-6x) var(--space-4x);
     }
 }
 

@@ -63,29 +63,39 @@ pub fn AccountPage() -> Element {
 
             rsx! {
                 Layout { width: LayoutWidth::Full,
-                    // Header row: title + user greeting
-                    div { class: "flex items-center justify-between gap-4",
-                        h1 { class: "heading-lg", "Account" }
-                        UserGreeting {
-                            matrix: matrix,
-                            profile: profile,
-                            display_name_change_allowed: display_name_change_allowed,
-                        }
-                    }
-
-                    // Sidebar + content
                     div { class: "account-layout",
                         nav { class: "account-sidebar",
-                            SidebarItem { to: Route::AccountOverview {}, "Overview" }
-                            SidebarItem { to: Route::AccountSettings {}, "Settings" }
-                            SidebarItem { to: Route::SecurityCenter {}, "Security" }
-                            SidebarItem { to: Route::ContactManagement {}, "Contacts" }
-                            SidebarItem { to: Route::IdentityBindings {}, "Identities" }
-                            SidebarItem { to: Route::NotificationPreferences {}, "Notifications" }
-                            SidebarItem { to: Route::Sessions {}, "Devices" }
-                            SidebarItem { to: Route::WorkflowInbox {}, "Workflows" }
-                            if has_plan {
-                                SidebarItem { to: Route::Plan {}, "Plan" }
+                            // Profile card at top of sidebar
+                            div { class: "sidebar-profile",
+                                UserGreeting {
+                                    matrix: matrix,
+                                    profile: profile,
+                                    display_name_change_allowed: display_name_change_allowed,
+                                }
+                            }
+
+                            // Navigation group
+                            div { class: "sidebar-nav-group",
+                                span { class: "sidebar-group-label", "Account" }
+                                SidebarItem { to: Route::AccountOverview {}, "Overview" }
+                                SidebarItem { to: Route::AccountSettings {}, "Settings" }
+                                SidebarItem { to: Route::ContactManagement {}, "Contacts" }
+                                SidebarItem { to: Route::IdentityBindings {}, "Identities" }
+                            }
+
+                            div { class: "sidebar-nav-group",
+                                span { class: "sidebar-group-label", "Security" }
+                                SidebarItem { to: Route::SecurityCenter {}, "Security" }
+                                SidebarItem { to: Route::Sessions {}, "Devices" }
+                            }
+
+                            div { class: "sidebar-nav-group",
+                                span { class: "sidebar-group-label", "Preferences" }
+                                SidebarItem { to: Route::NotificationPreferences {}, "Notifications" }
+                                SidebarItem { to: Route::WorkflowInbox {}, "Workflows" }
+                                if has_plan {
+                                    SidebarItem { to: Route::Plan {}, "Plan" }
+                                }
                             }
                         }
 
