@@ -109,7 +109,7 @@ pub async fn post_register(
         BeginPasswordRegistrationRequest {
             username: input.username,
             email: input.email,
-            phone: input.phone,
+            phone: if site_config.phone_verification_enabled { input.phone } else { None },
             password: input.password,
             password_confirm: input.password_confirm,
             user_agent,

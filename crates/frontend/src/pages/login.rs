@@ -264,7 +264,26 @@ fn LoginForm(providers: ProvidersResponse) -> Element {
                 if registration_enabled {
                     div { class: "login-register",
                         span { "Don't have an account? " }
-                        Link { class: "link", to: Route::Register {},
+                        Link {
+                            class: "link",
+                            to: Route::Register {},
+                            onclick: move |_| {
+                                // Carry forward any OAuth continuation so the
+                                // registration finish step can redirect to
+                                // the consent page instead of the account
+                                // overview.
+                                let continuation =
+                                    get_query_param("kind").zip(get_query_param("id"));
+                                if let Some((kind, id)) = continuation {
+                                    #[cfg(target_arch = "wasm32")]
+                                    if let Some(storage) = web_sys::window()
+                                        .and_then(|w| w.session_storage().ok().flatten())
+                                    {
+                                        let _ = storage.set_item("post_auth_kind", &kind);
+                                        let _ = storage.set_item("post_auth_id", &id);
+                                    }
+                                }
+                            },
                             "Create account"
                         }
                     }

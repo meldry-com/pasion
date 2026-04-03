@@ -324,6 +324,7 @@ pub fn site_config_from_config(
     password_config: &PasswordsConfig,
     account_config: &AccountConfig,
     captcha_config: &CaptchaConfig,
+    sms_config: &SmsConfig,
 ) -> Result<SiteConfig, anyhow::Error> {
     let captcha = captcha_config_from_config(captcha_config)?;
     let session_expiration = experimental_config
@@ -366,6 +367,7 @@ pub fn site_config_from_config(
                 hard_limit: c.hard_limit,
             }),
         flow_engine_enabled: false,
+        phone_verification_enabled: !matches!(sms_config.transport, SmsTransportKind::Blackhole),
     })
 }
 

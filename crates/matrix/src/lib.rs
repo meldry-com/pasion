@@ -69,6 +69,7 @@ pub struct ProvisionRequest {
     displayname: FieldUpdate<String>,
     avatar_url: FieldUpdate<String>,
     emails: FieldUpdate<Vec<String>>,
+    admin: bool,
 }
 
 impl ProvisionRequest {
@@ -86,6 +87,7 @@ impl ProvisionRequest {
             displayname: FieldUpdate::default(),
             avatar_url: FieldUpdate::default(),
             emails: FieldUpdate::default(),
+            admin: false,
         }
     }
 
@@ -195,6 +197,19 @@ impl ProvisionRequest {
         self.emails
             .apply(|opt| callback(opt.map(Vec::as_slice)));
         self
+    }
+
+    /// Mark the user as a homeserver admin.
+    #[must_use]
+    pub fn set_admin(mut self) -> Self {
+        self.admin = true;
+        self
+    }
+
+    /// Whether the user should be a homeserver admin.
+    #[must_use]
+    pub fn is_admin(&self) -> bool {
+        self.admin
     }
 }
 

@@ -601,8 +601,30 @@ pub fn RegisterFinish(id: String) -> Element {
 
     match &*binding {
         Some(Ok(resp)) if resp.status == "success" => {
-            // Auto-navigate to account overview after successful registration
-            nav.push(Route::AccountOverview {});
+            // Check if there is a pending OAuth authorization flow to resume.
+            let mut redirected_to_consent = false;
+            #[cfg(target_arch = "wasm32")]
+            {
+                if let Some(storage) = web_sys::window()
+                    .and_then(|w| w.session_storage().ok().flatten())
+                {
+                    let kind = storage.get_item("post_auth_kind").ok().flatten();
+                    let id = storage.get_item("post_auth_id").ok().flatten();
+                    // Clean up regardless
+                    let _ = storage.remove_item("post_auth_kind");
+                    let _ = storage.remove_item("post_auth_id");
+
+                    if kind.as_deref() == Some("continue_authorization_grant") {
+                        if let Some(grant_id) = id {
+                            nav.push(Route::Consent { grant_id });
+                            redirected_to_consent = true;
+                        }
+                    }
+                }
+            }
+            if !redirected_to_consent {
+                nav.push(Route::AccountOverview {});
+            }
             rsx! {
                 Layout {
                     div { class: "login-page",

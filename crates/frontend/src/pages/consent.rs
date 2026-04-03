@@ -126,10 +126,21 @@ fn ConsentForm(data: ConsentDataResponse, grant_id: String) -> Element {
                                                 #[cfg(target_arch = "wasm32")]
                                                 {
                                                     if let Some(win) = web_sys::window() {
-                                                        let _ = win.location().set_href(&url);
+                                                        // Use assign() for a full navigation
+                                                        // (more reliable than set_href in some
+                                                        // WASM scenarios).
+                                                        let _ = win.location().assign(&url);
                                                     }
                                                 }
+                                            } else {
+                                                error.set(Some("No redirect URL in response.".to_string()));
                                             }
+                                        }
+                                        Ok(resp) if resp.error.as_deref() == Some("not_authenticated") => {
+                                            // Session expired — redirect to login so
+                                            // the user can re-authenticate and retry.
+                                            let nav = navigator();
+                                            nav.push(Route::Login {});
                                         }
                                         Ok(resp) => {
                                             error.set(Some(resp.error.unwrap_or_else(|| "Authorization failed.".to_string())));

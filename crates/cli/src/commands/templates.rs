@@ -13,7 +13,7 @@ use clap::Parser;
 use figment::Figment;
 use pasion_config::{
     AccountConfig, BrandingConfig, CaptchaConfig, ConfigurationSection, ConfigurationSectionExt,
-    ExperimentalConfig, MatrixConfig, PasswordsConfig, TemplatesConfig,
+    ExperimentalConfig, MatrixConfig, PasswordsConfig, SmsConfig, TemplatesConfig,
 };
 use pasion_data::{Clock, SystemClock};
 use rand_core::SeedableRng;
@@ -65,6 +65,8 @@ impl Options {
             .map_err(anyhow::Error::from_boxed)?;
         let captcha_cfg = CaptchaConfig::extract_or_default(figment)
             .map_err(anyhow::Error::from_boxed)?;
+        let sms_cfg = SmsConfig::extract_or_default(figment)
+            .map_err(anyhow::Error::from_boxed)?;
 
         // ── Deterministic clock / RNG when stabilising ───────────────
         let now = if stabilise {
@@ -90,6 +92,7 @@ impl Options {
             &pw_cfg,
             &acct_cfg,
             &captcha_cfg,
+            &sms_cfg,
         )?;
 
         let templates = templates_from_config(

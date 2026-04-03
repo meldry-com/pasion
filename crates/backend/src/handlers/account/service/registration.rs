@@ -1911,6 +1911,9 @@ pub async fn complete_registration(
     if let Some(display_name) = registration.display_name.clone() {
         job = job.set_display_name(display_name);
     }
+    if user.can_request_admin {
+        job = job.set_admin();
+    }
     repo.queue_job().schedule_job(rng, clock, job).await?;
 
     repo.save().await?;

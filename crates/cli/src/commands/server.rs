@@ -149,6 +149,7 @@ impl Options {
             &config.passwords,
             &config.account,
             &config.captcha,
+            &config.sms,
         )?;
 
         // Load and compile the templates

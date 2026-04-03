@@ -3,13 +3,24 @@ use dioxus::prelude::*;
 use crate::{
     api::types::ViewerResponse,
     components::{
-        layout::Layout,
+        layout::{Layout, LayoutWidth},
         loading::LoadingScreen,
-        nav_bar::{NavBar, NavItem},
         user_greeting::UserGreeting,
     },
     pages::Route,
 };
+
+/// A sidebar navigation item for the account layout.
+#[component]
+fn SidebarItem(to: Route, children: Element) -> Element {
+    let current_route = use_route::<Route>();
+    let is_active = std::mem::discriminant(&current_route) == std::mem::discriminant(&to);
+    let active_class = if is_active { " active" } else { "" };
+
+    rsx! {
+        Link { class: "sidebar-item{active_class}", to: to, {children} }
+    }
+}
 
 #[component]
 pub fn AccountPage() -> Element {
@@ -51,31 +62,37 @@ pub fn AccountPage() -> Element {
             let display_name_change_allowed = result.site_config.display_name_change_allowed;
 
             rsx! {
-                Layout { wide: true,
-                    div { class: "flex flex-col gap-10",
-                        h1 { class: "heading-md", "Account" }
-                        div { class: "flex flex-col gap-4",
-                            UserGreeting {
-                                matrix: matrix,
-                                profile: profile,
-                                display_name_change_allowed: display_name_change_allowed,
-                            }
-                            NavBar {
-                                NavItem { to: Route::AccountOverview {}, "Overview" }
-                                NavItem { to: Route::AccountSettings {}, "Settings" }
-                                NavItem { to: Route::SecurityCenter {}, "Security" }
-                                NavItem { to: Route::ContactManagement {}, "Contacts" }
-                                NavItem { to: Route::IdentityBindings {}, "Identities" }
-                                NavItem { to: Route::NotificationPreferences {}, "Notifications" }
-                                NavItem { to: Route::Sessions {}, "Devices" }
-                                NavItem { to: Route::WorkflowInbox {}, "Workflows" }
-                                if has_plan {
-                                    NavItem { to: Route::Plan {}, "Plan" }
-                                }
-                            }
+                Layout { width: LayoutWidth::Full,
+                    // Header row: title + user greeting
+                    div { class: "flex items-center justify-between gap-4",
+                        h1 { class: "heading-lg", "Account" }
+                        UserGreeting {
+                            matrix: matrix,
+                            profile: profile,
+                            display_name_change_allowed: display_name_change_allowed,
                         }
                     }
-                    Outlet::<Route> {}
+
+                    // Sidebar + content
+                    div { class: "account-layout",
+                        nav { class: "account-sidebar",
+                            SidebarItem { to: Route::AccountOverview {}, "Overview" }
+                            SidebarItem { to: Route::AccountSettings {}, "Settings" }
+                            SidebarItem { to: Route::SecurityCenter {}, "Security" }
+                            SidebarItem { to: Route::ContactManagement {}, "Contacts" }
+                            SidebarItem { to: Route::IdentityBindings {}, "Identities" }
+                            SidebarItem { to: Route::NotificationPreferences {}, "Notifications" }
+                            SidebarItem { to: Route::Sessions {}, "Devices" }
+                            SidebarItem { to: Route::WorkflowInbox {}, "Workflows" }
+                            if has_plan {
+                                SidebarItem { to: Route::Plan {}, "Plan" }
+                            }
+                        }
+
+                        div { class: "account-content",
+                            Outlet::<Route> {}
+                        }
+                    }
                 }
             }
         }

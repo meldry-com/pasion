@@ -226,6 +226,8 @@ impl InsertableJob for ProcessNotificationDeliveriesJob {
 pub struct ProvisionUserJob {
     user_id: Ulid,
     set_display_name: Option<String>,
+    #[serde(default)]
+    admin: bool,
 }
 
 impl ProvisionUserJob {
@@ -235,6 +237,7 @@ impl ProvisionUserJob {
         Self {
             user_id: user.id,
             set_display_name: None,
+            admin: false,
         }
     }
 
@@ -244,6 +247,7 @@ impl ProvisionUserJob {
         Self {
             user_id,
             set_display_name: None,
+            admin: false,
         }
     }
 
@@ -254,10 +258,23 @@ impl ProvisionUserJob {
         self
     }
 
+    /// Mark the user as an admin on the homeserver.
+    #[must_use]
+    pub fn set_admin(mut self) -> Self {
+        self.admin = true;
+        self
+    }
+
     /// Get the display name to be set.
     #[must_use]
     pub fn display_name_to_set(&self) -> Option<&str> {
         self.set_display_name.as_deref()
+    }
+
+    /// Whether the user should be made admin on the homeserver.
+    #[must_use]
+    pub fn is_admin(&self) -> bool {
+        self.admin
     }
 
     /// The ID of the user to provision.

@@ -69,6 +69,10 @@ impl RunnableJob for ProvisionUserJob {
             req = req.set_displayname(name.to_owned());
         }
 
+        if self.is_admin() {
+            req = req.set_admin();
+        }
+
         let created = matrix
             .provision_user(&req)
             .await

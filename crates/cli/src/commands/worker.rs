@@ -45,6 +45,7 @@ impl Options {
             &app_cfg.passwords,
             &app_cfg.account,
             &app_cfg.captcha,
+            &app_cfg.sms,
         )?;
 
         let tpl = templates_from_config(

@@ -6,6 +6,24 @@ use serde_json::Value;
 
 use crate::config::api_base_url;
 
+/// Build a reqwest Client that sends browser cookies with every request.
+///
+/// On WASM targets the Fetch API `credentials` mode is set to `"include"` so
+/// that session cookies are always forwarded — even when the request crosses
+/// origins (e.g. SPA on one port talking to an API on another).
+fn make_client() -> Client {
+    #[cfg(target_arch = "wasm32")]
+    {
+        Client::builder()
+            .build()
+            .unwrap_or_else(|_| Client::new())
+    }
+    #[cfg(not(target_arch = "wasm32"))]
+    {
+        Client::new()
+    }
+}
+
 /// Try to extract an error message from a non-2xx response body.
 async fn extract_error(response: reqwest::Response) -> String {
     let status = response.status();
@@ -24,7 +42,7 @@ async fn extract_error(response: reqwest::Response) -> String {
 /// Execute a GET request to the REST API.
 pub async fn api_get<T: for<'de> Deserialize<'de>>(path: &str) -> Result<T, String> {
     let url = format!("{}{}", api_base_url(), path);
-    let client = Client::new();
+    let client = make_client();
 
     let response = client
         .get(&url)
@@ -45,7 +63,7 @@ pub async fn api_get<T: for<'de> Deserialize<'de>>(path: &str) -> Result<T, Stri
 /// Execute a POST request to the REST API.
 pub async fn api_post<T: for<'de> Deserialize<'de>>(path: &str, body: Value) -> Result<T, String> {
     let url = format!("{}{}", api_base_url(), path);
-    let client = Client::new();
+    let client = make_client();
 
     let response = client
         .post(&url)
@@ -68,7 +86,7 @@ pub async fn api_post<T: for<'de> Deserialize<'de>>(path: &str, body: Value) -> 
 /// Execute a PUT request to the REST API.
 pub async fn api_put<T: for<'de> Deserialize<'de>>(path: &str, body: Value) -> Result<T, String> {
     let url = format!("{}{}", api_base_url(), path);
-    let client = Client::new();
+    let client = make_client();
 
     let response = client
         .put(&url)
@@ -91,7 +109,7 @@ pub async fn api_put<T: for<'de> Deserialize<'de>>(path: &str, body: Value) -> R
 /// Execute a PATCH request to the REST API.
 pub async fn api_patch<T: for<'de> Deserialize<'de>>(path: &str, body: Value) -> Result<T, String> {
     let url = format!("{}{}", api_base_url(), path);
-    let client = Client::new();
+    let client = make_client();
 
     let response = client
         .patch(&url)
@@ -114,7 +132,7 @@ pub async fn api_patch<T: for<'de> Deserialize<'de>>(path: &str, body: Value) ->
 /// Execute a DELETE request to the REST API.
 pub async fn api_delete<T: for<'de> Deserialize<'de>>(path: &str) -> Result<T, String> {
     let url = format!("{}{}", api_base_url(), path);
-    let client = Client::new();
+    let client = make_client();
 
     let response = client
         .delete(&url)
@@ -138,7 +156,7 @@ pub async fn api_delete_with_body<T: for<'de> Deserialize<'de>>(
     body: Value,
 ) -> Result<T, String> {
     let url = format!("{}{}", api_base_url(), path);
-    let client = Client::new();
+    let client = make_client();
 
     let response = client
         .delete(&url)
