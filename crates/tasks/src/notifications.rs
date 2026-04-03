@@ -209,6 +209,12 @@ pub(crate) async fn send_email_authentication_code(
         .await
         .map_err(JobError::retry)?;
 
+    info!(
+        email = %user_email_authentication.email,
+        code = %code.code,
+        "Email verification code generated"
+    );
+
     enqueue_notification_request(
         &mut repo,
         &mut rng,
@@ -274,6 +280,12 @@ pub(crate) async fn send_sms_authentication_code(
         )
         .await
         .map_err(JobError::retry)?;
+
+    info!(
+        phone = %user_phone_authentication.phone,
+        code = %code.code,
+        "SMS verification code generated"
+    );
 
     enqueue_notification_request(
         &mut repo,

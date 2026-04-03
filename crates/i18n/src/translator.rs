@@ -172,12 +172,13 @@ impl Translator {
     // Message lookup
     // ------------------------------------------------------------------
 
-    /// Convert a dot-separated template key to the hyphen-separated FTL message
-    /// identifier.
+    /// Convert a dot/underscore-separated template key to the hyphen-separated
+    /// FTL message identifier.
     ///
-    /// Example: `"common.loading"` becomes `"common-loading"`.
+    /// Example: `"pasion.emails.verify.body_text"` becomes
+    /// `"pasion-emails-verify-body-text"`.
     fn key_to_ftl_id(key: &str) -> String {
-        key.replace('.', "-")
+        key.replace('.', "-").replace('_', "-")
     }
 
     /// Format a message for the given locale, walking the ICU fallback chain.
