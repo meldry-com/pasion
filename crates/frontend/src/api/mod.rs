@@ -6,22 +6,8 @@ use serde_json::Value;
 
 use crate::config::api_base_url;
 
-/// Build a reqwest Client that sends browser cookies with every request.
-///
-/// On WASM targets the Fetch API `credentials` mode is set to `"include"` so
-/// that session cookies are always forwarded — even when the request crosses
-/// origins (e.g. SPA on one port talking to an API on another).
 fn make_client() -> Client {
-    #[cfg(target_arch = "wasm32")]
-    {
-        Client::builder()
-            .build()
-            .unwrap_or_else(|_| Client::new())
-    }
-    #[cfg(not(target_arch = "wasm32"))]
-    {
-        Client::new()
-    }
+    Client::new()
 }
 
 /// Try to extract an error message from a non-2xx response body.

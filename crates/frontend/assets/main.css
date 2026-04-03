@@ -328,10 +328,10 @@ a:hover {
 }
 
 .sidebar-group-label {
-    font-size: var(--font-size-xs);
-    font-weight: 700;
+    font-size: 0.7rem;
+    font-weight: 800;
     text-transform: uppercase;
-    letter-spacing: 0.06em;
+    letter-spacing: 0.12em;
     color: var(--color-text-tertiary);
     padding: var(--space-1x) var(--space-3x);
     margin-bottom: var(--space-1x);
@@ -341,23 +341,35 @@ a:hover {
     display: flex;
     align-items: center;
     gap: var(--space-3x);
-    padding: var(--space-2x) var(--space-3x);
-    border-radius: var(--radius-sm);
+    padding: 0.6rem 0.9rem;
+    border-radius: var(--radius-md);
+    border: 1px solid transparent;
     font-size: var(--font-size-sm);
     font-weight: 500;
     color: var(--color-text-secondary);
     text-decoration: none;
-    transition: background 0.15s ease, color 0.15s ease;
+    background: rgba(255, 255, 255, 0.5);
+    transition: background 0.15s ease, color 0.15s ease, border-color 0.15s ease;
     cursor: pointer;
 }
 
+html[data-theme="dark"] .account-sidebar .sidebar-item {
+    background: rgba(255, 255, 255, 0.06);
+}
+
 .account-sidebar .sidebar-item:hover {
-    background: var(--color-bg-tint);
+    background: rgba(255, 255, 255, 0.72);
     color: var(--color-text-primary);
+    text-decoration: none;
+}
+
+html[data-theme="dark"] .account-sidebar .sidebar-item:hover {
+    background: rgba(255, 255, 255, 0.12);
 }
 
 .account-sidebar .sidebar-item.active {
-    background: var(--color-bg-tint);
+    background: linear-gradient(135deg, var(--color-primary-glow), var(--color-secondary-glow));
+    border-color: var(--color-secondary-border);
     color: var(--color-primary);
     font-weight: 600;
 }
@@ -425,7 +437,8 @@ a:hover {
 
     .account-sidebar .sidebar-item {
         white-space: nowrap;
-        padding: var(--space-2x) var(--space-3x);
+        padding: 0.45rem 0.75rem;
+        border-radius: var(--radius-full);
     }
 
     .account-content {
@@ -613,12 +626,13 @@ a:hover {
     align-items: center;
     justify-content: center;
     gap: var(--space-2x);
-    padding: 10px var(--space-5x);
+    min-height: 2.75rem;
+    padding: 0.62rem 1.1rem;
     border: 1px solid transparent;
-    border-radius: var(--radius-md);
+    border-radius: var(--radius-full);
     font-family: var(--font-family);
     font-size: var(--font-size-md);
-    font-weight: 600;
+    font-weight: 700;
     line-height: 1.5;
     cursor: pointer;
     transition: all 0.2s ease;
@@ -640,6 +654,7 @@ a:hover {
 .btn-primary {
     background: var(--color-bg-action-primary-rest);
     color: var(--color-text-on-solid-primary);
+    border-color: transparent;
     box-shadow: var(--shadow-sm), 0 10px 24px var(--color-primary-glow);
 }
 
@@ -655,23 +670,31 @@ a:hover {
 }
 
 .btn-secondary {
-    background-color: var(--color-bg-elevated);
+    background: rgba(255, 255, 255, 0.56);
     color: var(--color-text-primary);
     border-color: var(--color-border);
     box-shadow: var(--shadow-sm);
     backdrop-filter: blur(16px);
 }
 
+html[data-theme="dark"] .btn-secondary {
+    background: rgba(255, 255, 255, 0.08);
+}
+
 .btn-secondary:hover:not(:disabled) {
-    background-color: var(--color-bg-subtle);
+    background: rgba(255, 255, 255, 0.72);
     border-color: var(--color-border-hover);
     box-shadow: var(--shadow-md);
+}
+
+html[data-theme="dark"] .btn-secondary:hover:not(:disabled) {
+    background: rgba(255, 255, 255, 0.14);
 }
 
 .btn-tertiary {
     background-color: transparent;
     color: var(--color-primary);
-    border: none;
+    border-color: transparent;
 }
 
 .btn-tertiary:hover:not(:disabled) {
@@ -695,13 +718,15 @@ a:hover {
 }
 
 .btn-sm {
-    padding: 6px var(--space-3x);
+    min-height: 2rem;
+    padding: 0.38rem 0.75rem;
     font-size: var(--font-size-sm);
-    border-radius: var(--radius-sm);
+    border-radius: var(--radius-full);
 }
 
 .btn-lg {
-    padding: 14px var(--space-8x);
+    min-height: 3.25rem;
+    padding: 0.82rem 2rem;
     font-size: var(--font-size-lg);
 }
 
@@ -823,7 +848,7 @@ a:hover {
     color: var(--color-text-secondary);
     text-decoration: none;
     font-size: var(--font-size-sm);
-    font-weight: 600;
+    font-weight: 700;
     transition: color 0.15s;
 }
 
@@ -1043,16 +1068,21 @@ a:hover {
     display: inline-flex;
     align-items: center;
     gap: var(--space-2x);
-    padding: 6px var(--space-4x);
+    padding: 0.48rem 0.78rem;
     border: 1.5px solid var(--color-border);
     border-radius: var(--radius-full);
     font-size: var(--font-size-sm);
-    font-weight: 500;
+    font-weight: 700;
     color: var(--color-text-secondary);
     cursor: pointer;
-    background: var(--color-bg-elevated);
+    background: rgba(255, 255, 255, 0.56);
     text-decoration: none;
     transition: all 0.2s;
+    backdrop-filter: blur(16px);
+}
+
+html[data-theme="dark"] .filter-toggle {
+    background: rgba(255, 255, 255, 0.08);
 }
 
 .filter-toggle:hover {
@@ -1112,7 +1142,7 @@ a:hover {
 
 .alert {
     padding: var(--space-3x) var(--space-4x);
-    border-radius: var(--radius-md);
+    border-radius: var(--radius-lg);
     font-size: var(--font-size-sm);
     line-height: 1.5;
 }
