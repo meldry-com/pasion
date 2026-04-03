@@ -137,9 +137,11 @@ impl std::fmt::Display for EvaluationResult {
 #[serde(rename_all = "snake_case")]
 pub struct Requester {
     /// IP address of the entity making the request, when available
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub ip_address: Option<IpAddr>,
 
     /// HTTP User-Agent header value, when available
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub user_agent: Option<String>,
 
     /// ISO 3166-1 alpha-2 country code derived from the IP address
@@ -236,10 +238,12 @@ pub struct SessionCounts {
 pub struct AuthorizationGrantInput<'a> {
     /// The user requesting the grant, if applicable
     #[schemars(with = "Option<std::collections::HashMap<String, serde_json::Value>>")]
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub user: Option<&'a User>,
 
     /// Current session counts for the user. Only populated
     /// when an authenticated user is involved in the grant.
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub session_counts: Option<SessionCounts>,
 
     /// The OAuth 2.0 client requesting the grant

@@ -9,7 +9,7 @@ ARG DEBIAN_VERSION=12
 ARG DEBIAN_VERSION_NAME=bookworm
 ARG RUSTC_VERSION=1.93.0
 ARG CARGO_AUDITABLE_VERSION=0.7.0
-ARG DIOXUS_CLI_VERSION=0.7.3
+ARG DIOXUS_CLI_VERSION=0.7.4
 
 ############################################
 ## Build stage that builds the frontend   ##
@@ -24,10 +24,11 @@ ENV CARGO_NET_RETRY=10
 ENV CARGO_NET_GIT_FETCH_WITH_CLI=true
 ENV CARGO_REGISTRIES_CRATES_IO_PROTOCOL=sparse
 
-# Install wasm target and Dioxus CLI
+# Install wasm target (with retries for flaky networks) and Dioxus CLI
 # Network access: to fetch dependencies
+ENV RUSTUP_HTTP_TIMEOUT=600
 RUN --network=default \
-  rustup target add wasm32-unknown-unknown && \
+  for i in 1 2 3 4 5; do rustup target add wasm32-unknown-unknown && break || sleep 10; done && \
   cargo install --locked dioxus-cli@${DIOXUS_CLI_VERSION}
 
 WORKDIR /app
@@ -35,18 +36,18 @@ COPY ./ /app
 
 # Pre-install binaryen (wasm-opt) so dx build doesn't need to download from GitHub
 RUN --network=default \
-  apt-get update && apt-get install -y binaryen && rm -rf /var/lib/apt/lists/*
+  apt-get update && apt-get install -y binaryen && rm -rf /var/lib/apt/lists/* || true
 
 # Pre-fetch dependencies so dx build doesn't time out on cargo-metadata
 RUN --network=default \
   --mount=type=cache,id=frontend-registry,target=/root/.cargo/registry \
   cargo fetch
 
-# Build the WASM frontend
+# Build the WASM frontend (retry for flaky esbuild downloads)
 RUN --network=default \
   --mount=type=cache,id=frontend-registry,target=/root/.cargo/registry \
   --mount=type=cache,id=frontend-target,target=/app/target \
-  dx build -p pasion-frontend --release \
+  for i in 1 2 3; do dx build -p pasion-frontend --release && break || echo "Retry $i..." && sleep 10; done \
   && cp -r target/dx/pasion-frontend/release/web/public /frontend-dist
 
 ########################################

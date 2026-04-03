@@ -41,7 +41,7 @@ impl VerifiedClientMetadata {
     pub fn redirect_uris(&self) -> &[Url] {
         self.redirect_uris
             .as_deref()
-            .expect("validated")
+            .unwrap_or(&[])
     }
 }
 

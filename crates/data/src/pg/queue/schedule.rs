@@ -76,7 +76,7 @@ impl QueueScheduleRepository for PgQueueScheduleRepository<'_> {
                     queue_jobs.status IN ('completed', 'failed') as last_scheduled_job_completed
                 FROM queue_schedules
                 LEFT JOIN queue_jobs
-                    ON queue_jobs.queue_job_id = queue_schedules.last_scheduled_job_id
+                    ON queue_jobs.id = queue_schedules.last_scheduled_job_id
             ",
         )
         .get_results(self.conn)

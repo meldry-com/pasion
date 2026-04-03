@@ -171,7 +171,18 @@ impl CedarEvaluator {
             EvaluationError::Evaluation(anyhow::anyhow!("Failed to parse resource: {e}"))
         })?;
 
-        let context = Context::from_json_value(context_json, None).map_err(|e| {
+        // Cedar does not support JSON null values; strip them before building
+        // the context so that Optional fields serialised as null do not cause
+        // a parse error.
+        strip_json_nulls(&mut context_json);
+
+        let context = Context::from_json_value(context_json.clone(), None).map_err(|e| {
+            tracing::error!(
+                action = action_name,
+                error = %e,
+                context = %context_json,
+                "Failed to build Cedar context"
+            );
             EvaluationError::Evaluation(anyhow::anyhow!("Failed to build Cedar context: {e}"))
         })?;
 
@@ -254,5 +265,24 @@ impl PolicyEvaluator for CedarEvaluator {
         input: AuthorizationGrantInput<'_>,
     ) -> Result<EvaluationResult, EvaluationError> {
         self.evaluate_action("authorize", &input)
+    }
+}
+
+/// Recursively remove JSON `null` values from objects so they do not trip
+/// Cedar's context parser, which rejects `null`.
+fn strip_json_nulls(value: &mut serde_json::Value) {
+    match value {
+        serde_json::Value::Object(map) => {
+            map.retain(|_, v| !v.is_null());
+            for v in map.values_mut() {
+                strip_json_nulls(v);
+            }
+        }
+        serde_json::Value::Array(arr) => {
+            for v in arr.iter_mut() {
+                strip_json_nulls(v);
+            }
+        }
+        _ => {}
     }
 }

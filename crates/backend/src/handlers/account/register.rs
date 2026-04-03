@@ -125,9 +125,12 @@ pub async fn post_register(
         },
     )
     .await
-    .map_err(|error| match error {
-        BeginPasswordRegistrationError::Repository(error) => RouteError::from(error),
-        BeginPasswordRegistrationError::Internal(error) => RouteError::Internal(error.into()),
+    .map_err(|error| {
+        tracing::error!(error = &error as &dyn std::error::Error, "Registration failed");
+        match error {
+            BeginPasswordRegistrationError::Repository(error) => RouteError::from(error),
+            BeginPasswordRegistrationError::Internal(error) => RouteError::Internal(error.into()),
+        }
     })? {
         BeginPasswordRegistrationResult::Started(started) => started,
         BeginPasswordRegistrationResult::Rejected { issues } => {
