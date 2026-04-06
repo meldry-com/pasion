@@ -9,8 +9,8 @@ use oauth2_types::{
 };
 use pasion_data::{AuthorizationCode, BoxClock, BoxRng, Pkce, SystemClock};
 use pasion_data::{
-    BoxRepository, BoxRepositoryFactory,
-    oauth2::{OAuth2AuthorizationGrantRepository, OAuth2ClientRepository},
+    BoxRepository, BoxRepositoryFactory, RepositoryAccess,
+    oauth2::{OAuth2AuthorizationGrantRepository, OAuth2ClientRepository, OAuth2SessionFilter, OAuth2SessionRepository},
 };
 use pasion_data::{PostAuthAction, UrlBuilder};
 use pasion_templates::Templates;
@@ -340,16 +340,58 @@ async fn handle_get(req: &mut Request, depot: &Depot) -> Result<(Response, Cooki
                     }
                 }
 
-                Some(user_session) => {
-                    // We have a session and no special prompt, show consent
+                Some(_) if prompt.contains(&Prompt::Login) => {
+                    // Client explicitly requested re-authentication.
+                    // Redirect to the login page even though we have a session.
                     repo.save().await?;
 
-                    activity_tracker
-                        .record_browser_session(&clock, &user_session)
-                        .await;
-                    salvo::writing::Redirect::other(
-                        &url_builder.relative_url(&format!("/consent/{}", grant.id)),
-                    )
+                    {
+                        let query_str =
+                            serde_urlencoded::to_string(&continue_grant).unwrap_or_default();
+                        let path = if query_str.is_empty() {
+                            "/login".to_owned()
+                        } else {
+                            format!("/login?{query_str}")
+                        };
+                        salvo::writing::Redirect::other(&url_builder.relative_url(&path))
+                    }
+                }
+
+                Some(user_session) => {
+                    // We have a session.  Before auto-consenting, check
+                    // whether it still has active OAuth2 sessions.  If all
+                    // sessions have been finished (user logged out), redirect
+                    // to login instead of silently reusing the stale browser
+                    // session.
+                    let filter = OAuth2SessionFilter::default()
+                        .for_browser_session(&user_session);
+                    let total = repo.oauth2_session().count(filter).await?;
+                    let active = repo
+                        .oauth2_session()
+                        .count(filter.active_only())
+                        .await?;
+
+                    repo.save().await?;
+
+                    if total > 0 && active == 0 {
+                        // Every prior OAuth2 session was revoked/finished —
+                        // the user has logged out; require fresh credentials.
+                        let query_str =
+                            serde_urlencoded::to_string(&continue_grant).unwrap_or_default();
+                        let path = if query_str.is_empty() {
+                            "/login".to_owned()
+                        } else {
+                            format!("/login?{query_str}")
+                        };
+                        salvo::writing::Redirect::other(&url_builder.relative_url(&path))
+                    } else {
+                        activity_tracker
+                            .record_browser_session(&clock, &user_session)
+                            .await;
+                        salvo::writing::Redirect::other(
+                            &url_builder.relative_url(&format!("/consent/{}", grant.id)),
+                        )
+                    }
                 }
             };
 
