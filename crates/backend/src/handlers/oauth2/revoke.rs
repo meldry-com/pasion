@@ -1,3 +1,5 @@
+use std::sync::Arc;
+
 use crate::salvo_utils::client_authorization::{ClientAuthorization, CredentialsVerificationError};
 use oauth2_types::{
     errors::{ClientError, ClientErrorCode},
@@ -6,6 +8,7 @@ use oauth2_types::{
 use pasion_data::{BoxClock, BoxRng, SystemClock};
 use pasion_data::{BoxRepository, BoxRepositoryFactory};
 use pasion_keystore::Encrypter;
+use pasion_matrix::HomeserverAdmin;
 use rand_core::SeedableRng;
 use rand_chacha::ChaChaRng;
 use salvo::{Extractible, prelude::*};
@@ -126,6 +129,9 @@ async fn handle_post(req: &mut Request, depot: &mut Depot) -> Result<(), RouteEr
     let encrypter = depot
         .get::<Encrypter>("encrypter")
         .expect("Encrypter not found in depot");
+    let homeserver = depot
+        .get::<Arc<dyn HomeserverAdmin>>("homeserver_admin")
+        .expect("HomeserverAdmin not found in depot");
     let repo_factory = depot
         .get::<BoxRepositoryFactory>("box_repository_factory")
         .expect("BoxRepositoryFactory not found in depot");
@@ -136,34 +142,54 @@ async fn handle_post(req: &mut Request, depot: &mut Depot) -> Result<(), RouteEr
 
     let mut repo: BoxRepository = repo_factory.create().await?;
 
-    let client = client_authorization
-        .credentials
-        .fetch(&mut repo)
-        .await?
-        .ok_or(RouteError::ClientNotFound)?;
+    // Check if the caller authenticated with the homeserver admin secret
+    // (bearer token).  When that is the case, skip the client-ownership
+    // check so that the homeserver can revoke any token on behalf of a
+    // client (e.g. during Matrix /logout).
+    let admin_mode = if let Some(token) = client_authorization.credentials.bearer_token() {
+        homeserver
+            .verify_token(token)
+            .await
+            .map_err(|e| RouteError::Internal(e.into()))?
+    } else {
+        false
+    };
 
-    let method = client
-        .token_endpoint_auth_method
-        .as_ref()
-        .ok_or(RouteError::ClientNotAllowed)?;
+    let client_id = if admin_mode {
+        // Admin-secret authenticated: no client-ownership check needed.
+        None
+    } else {
+        let client = client_authorization
+            .credentials
+            .fetch(&mut repo)
+            .await?
+            .ok_or(RouteError::ClientNotFound)?;
 
-    client_authorization
-        .credentials
-        .verify(http_client, encrypter, method, &client)
-        .await
-        .map_err(|err| {
-            if err.is_internal() {
-                RouteError::ClientCredentialsVerification {
-                    client_id: client.id,
-                    source: err,
+        let method = client
+            .token_endpoint_auth_method
+            .as_ref()
+            .ok_or(RouteError::ClientNotAllowed)?;
+
+        client_authorization
+            .credentials
+            .verify(http_client, encrypter, method, &client)
+            .await
+            .map_err(|err| {
+                if err.is_internal() {
+                    RouteError::ClientCredentialsVerification {
+                        client_id: client.id,
+                        source: err,
+                    }
+                } else {
+                    RouteError::InvalidClientCredentials {
+                        client_id: client.id,
+                        source: err,
+                    }
                 }
-            } else {
-                RouteError::InvalidClientCredentials {
-                    client_id: client.id,
-                    source: err,
-                }
-            }
-        })?;
+            })?;
+
+        Some(client.id)
+    };
 
     let Some(form) = client_authorization.form else {
         return Err(RouteError::BadRequest);
@@ -178,7 +204,7 @@ async fn handle_post(req: &mut Request, depot: &mut Depot) -> Result<(), RouteEr
         &activity_tracker,
         &form.token,
         form.token_type_hint,
-        client.id,
+        client_id,
     )
     .await?;
 

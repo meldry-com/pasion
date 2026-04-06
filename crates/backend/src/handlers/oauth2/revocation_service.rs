@@ -39,7 +39,7 @@ pub async fn revoke_token(
     activity_tracker: &BoundActivityTracker,
     token_str: &str,
     token_type_hint: Option<OAuthTokenTypeHint>,
-    client_id: Ulid,
+    client_id: Option<Ulid>,
 ) -> Result<(), RevocationError> {
     let token_type = TokenType::check(token_str).map_err(|_| RevocationError::UnknownToken)?;
 
@@ -92,9 +92,12 @@ pub async fn revoke_token(
     }
 
     // Check that the client ending the session is the same as the client that
-    // created it.
-    if client_id != session.client_id {
-        return Err(RevocationError::UnauthorizedClient);
+    // created it.  When client_id is None (admin-secret auth), skip this
+    // check so that the homeserver can revoke tokens on behalf of any client.
+    if let Some(client_id) = client_id {
+        if client_id != session.client_id {
+            return Err(RevocationError::UnauthorizedClient);
+        }
     }
 
     activity_tracker
