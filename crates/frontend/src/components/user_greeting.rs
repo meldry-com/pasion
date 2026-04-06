@@ -7,71 +7,66 @@ pub fn UserGreeting(
     matrix: MatrixUser,
     profile: UserProfile,
     display_name_change_allowed: bool,
+    on_edit: EventHandler,
 ) -> Element {
-    let mut show_edit_dialog = use_signal(|| false);
-    let mut current_profile = use_signal(|| profile.clone());
-    let mut current_matrix = use_signal(|| matrix.clone());
-
-    let display_name = current_profile
-        .read()
+    let display_name = profile
         .display_name
         .clone()
-        .or_else(|| current_matrix.read().display_name.clone());
+        .or_else(|| matrix.display_name.clone());
     let initial = display_name
         .as_ref()
         .and_then(|name| name.chars().next())
-        .or_else(|| current_matrix.read().mxid.chars().nth(1))
+        .or_else(|| matrix.mxid.chars().nth(1))
         .unwrap_or('?')
         .to_uppercase()
         .to_string();
 
+    let avatar_url = profile.avatar_url.clone();
+
     rsx! {
         div { class: "user-greeting",
-            div { class: "user-avatar", "{initial}" }
+            if let Some(ref url) = avatar_url {
+                img {
+                    class: "user-avatar",
+                    src: "{url}",
+                    alt: "Avatar",
+                }
+            } else {
+                div { class: "user-avatar", "{initial}" }
+            }
             div { class: "user-meta",
                 if let Some(display_name) = display_name {
                     span { class: "text-lg font-semibold", "{display_name}" }
-                    span { class: "user-mxid", "{current_matrix.read().mxid}" }
+                    span { class: "user-mxid", "{matrix.mxid}" }
                 } else {
-                    span { class: "text-lg font-semibold", "{current_matrix.read().mxid}" }
+                    span { class: "text-lg font-semibold", "{matrix.mxid}" }
                 }
             }
             if display_name_change_allowed {
                 button {
                     class: "btn btn-tertiary btn-sm",
-                    onclick: move |_| show_edit_dialog.set(true),
+                    onclick: move |_| on_edit.call(()),
                     "Edit"
                 }
-            }
-        }
-
-        if show_edit_dialog() {
-            EditProfileDialog {
-                open: show_edit_dialog,
-                profile: current_profile.read().clone(),
-                matrix: current_matrix.read().clone(),
-                on_saved: move |response: PatchViewerProfileResponse| {
-                    current_profile.set(response.profile);
-                    current_matrix.set(response.matrix);
-                },
             }
         }
     }
 }
 
 #[component]
-fn EditProfileDialog(
+pub fn EditProfileDialog(
     open: Signal<bool>,
     profile: UserProfile,
     matrix: MatrixUser,
     on_saved: EventHandler<PatchViewerProfileResponse>,
 ) -> Element {
     let mut display_name_value = use_signal(|| profile.display_name.clone().unwrap_or_default());
-    let mut avatar_url_value = use_signal(|| profile.avatar_url.clone().unwrap_or_default());
     let mut preferred_locale_value =
         use_signal(|| profile.preferred_locale.clone().unwrap_or_default());
     let mut saving = use_signal(|| false);
+    let mut uploading_avatar = use_signal(|| false);
     let mut error = use_signal(|| None::<String>);
+    let mut current_avatar_url = use_signal(|| profile.avatar_url.clone());
 
     let avatar_initial = profile
         .display_name
@@ -93,9 +88,83 @@ fn EditProfileDialog(
 
                 h3 { class: "dialog-title", "Edit profile" }
 
-                div { class: "user-avatar self-center",
-                    style: "width: 88px; height: 88px; font-size: 32px;",
-                    "{avatar_initial}"
+                // Avatar section with upload
+                div { class: "flex flex-col items-center gap-3",
+                    if let Some(ref url) = *current_avatar_url.read() {
+                        img {
+                            class: "user-avatar self-center",
+                            style: "width: 88px; height: 88px; object-fit: cover;",
+                            src: "{url}",
+                            alt: "Avatar",
+                        }
+                    } else {
+                        div { class: "user-avatar self-center",
+                            style: "width: 88px; height: 88px; font-size: 32px;",
+                            "{avatar_initial}"
+                        }
+                    }
+                    button {
+                        class: "btn btn-secondary btn-sm",
+                        r#type: "button",
+                        disabled: uploading_avatar(),
+                        onclick: move |_| {
+                            uploading_avatar.set(true);
+                            error.set(None);
+                            spawn(async move {
+                                let js = r#"
+                                    return await new Promise((resolve, reject) => {
+                                        const input = document.createElement('input');
+                                        input.type = 'file';
+                                        input.accept = 'image/png,image/jpeg,image/gif,image/webp';
+                                        input.onchange = async () => {
+                                            try {
+                                                const file = input.files[0];
+                                                if (!file) { resolve(null); return; }
+                                                if (file.size > 5 * 1024 * 1024) {
+                                                    reject('File too large (max 5 MB)');
+                                                    return;
+                                                }
+                                                const formData = new FormData();
+                                                formData.append('avatar', file);
+                                                const response = await fetch('/api/v1/viewer/avatar', {
+                                                    method: 'POST',
+                                                    body: formData,
+                                                    credentials: 'same-origin',
+                                                });
+                                                if (!response.ok) {
+                                                    const text = await response.text();
+                                                    reject(text);
+                                                    return;
+                                                }
+                                                const result = await response.json();
+                                                resolve(result.avatarUrl);
+                                            } catch (e) {
+                                                reject(e.message || 'Upload failed');
+                                            }
+                                        };
+                                        input.click();
+                                    });
+                                "#;
+                                match document::eval(js).await {
+                                    Ok(val) => {
+                                        if let Some(url) = val.as_str() {
+                                            current_avatar_url.set(Some(url.to_string()));
+                                        }
+                                    }
+                                    Err(e) => {
+                                        error.set(Some(format!("Avatar upload failed: {e}")));
+                                    }
+                                }
+                                uploading_avatar.set(false);
+                            });
+                        },
+                        if uploading_avatar() {
+                            span { class: "loading-spinner inline" }
+                            "Uploading..."
+                        } else {
+                            "Upload avatar"
+                        }
+                    }
                 }
 
                 if let Some(err) = error.read().clone() {
@@ -110,8 +179,8 @@ fn EditProfileDialog(
                     onsubmit: move |e| {
                         e.stop_propagation();
                         let display_name = display_name_value.to_string();
-                        let avatar_url = avatar_url_value.to_string();
                         let preferred_locale = preferred_locale_value.to_string();
+                        let avatar_url = current_avatar_url.read().clone();
                         saving.set(true);
                         error.set(None);
                         spawn(async move {
@@ -119,7 +188,10 @@ fn EditProfileDialog(
                                 "/viewer/profile",
                                 serde_json::json!({
                                     "displayName": if display_name.is_empty() { serde_json::Value::Null } else { serde_json::Value::String(display_name) },
-                                    "avatarUrl": if avatar_url.is_empty() { serde_json::Value::Null } else { serde_json::Value::String(avatar_url) },
+                                    "avatarUrl": match avatar_url {
+                                        Some(url) => serde_json::Value::String(url),
+                                        None => serde_json::Value::Null,
+                                    },
                                     "preferredLocale": if preferred_locale.is_empty() { serde_json::Value::Null } else { serde_json::Value::String(preferred_locale) },
                                 }),
                             ).await;
@@ -145,18 +217,6 @@ fn EditProfileDialog(
                             oninput: move |e| display_name_value.set(e.value()),
                         }
                         span { class: "form-help", "Your display name is shown to other users." }
-                    }
-
-                    div { class: "form-field",
-                        label { class: "form-label", "Avatar URL" }
-                        input {
-                            class: "form-input",
-                            r#type: "url",
-                            placeholder: "https://example.com/avatar.png",
-                            value: "{avatar_url_value}",
-                            oninput: move |e| avatar_url_value.set(e.value()),
-                        }
-                        span { class: "form-help", "Optional avatar image URL stored by Pasion." }
                     }
 
                     div { class: "form-field",

@@ -231,6 +231,10 @@ impl Options {
         let limiter = Limiter::new(&config.rate_limiting)
             .context("rate-limiting configuration is not valid")?;
 
+        // Initialize the storage backend
+        pasion_backend::storage::init(&config.storage)
+            .context("failed to initialize storage backend")?;
+
         // Explicitly the config to properly zeroize secret keys
         drop(config);
 

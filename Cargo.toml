@@ -128,6 +128,7 @@ mime = "0.3.17"
 minijinja = { version = "2.18.0", features = ["urlencode", "loader", "json", "speedups", "unstable_machinery"] }
 minijinja-contrib = { version = "2.18.0", features = ["pycompat"] }
 nonzero_ext = "0.3.0"
+opendal = { version = "0.55", features = ["services-fs", "services-s3"] }
 cedar-policy = "4"
 opentelemetry = { version = "0.31.0", features = ["trace", "metrics"] }
 opentelemetry-http = { version = "0.31.0", features = ["reqwest"] }

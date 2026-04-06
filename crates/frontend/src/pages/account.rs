@@ -1,11 +1,11 @@
 use dioxus::prelude::*;
 
 use crate::{
-    api::types::ViewerResponse,
+    api::types::{PatchViewerProfileResponse, ViewerResponse},
     components::{
         layout::{Layout, LayoutWidth},
         loading::LoadingScreen,
-        user_greeting::UserGreeting,
+        user_greeting::{EditProfileDialog, UserGreeting},
     },
     pages::Route,
 };
@@ -61,20 +61,23 @@ pub fn AccountPage() -> Element {
             let has_plan = result.site_config.plan_management_iframe_uri.is_some();
             let display_name_change_allowed = result.site_config.display_name_change_allowed;
 
+            let mut show_edit_dialog = use_signal(|| false);
+            let mut current_profile = use_signal(|| profile.clone());
+            let mut current_matrix = use_signal(|| matrix.clone());
+
             rsx! {
                 Layout { width: LayoutWidth::Full,
                     div { class: "account-layout",
                         nav { class: "account-sidebar",
-                            // Profile card at top of sidebar
                             div { class: "sidebar-profile",
                                 UserGreeting {
-                                    matrix: matrix,
-                                    profile: profile,
+                                    matrix: current_matrix.read().clone(),
+                                    profile: current_profile.read().clone(),
                                     display_name_change_allowed: display_name_change_allowed,
+                                    on_edit: move |_| show_edit_dialog.set(true),
                                 }
                             }
 
-                            // Navigation group
                             div { class: "sidebar-nav-group",
                                 span { class: "sidebar-group-label", "Account" }
                                 SidebarItem { to: Route::AccountOverview {}, "Overview" }
@@ -101,6 +104,17 @@ pub fn AccountPage() -> Element {
 
                         div { class: "account-content",
                             Outlet::<Route> {}
+                            if show_edit_dialog() {
+                                EditProfileDialog {
+                                    open: show_edit_dialog,
+                                    profile: current_profile.read().clone(),
+                                    matrix: current_matrix.read().clone(),
+                                    on_saved: move |response: PatchViewerProfileResponse| {
+                                        current_profile.set(response.profile);
+                                        current_matrix.set(response.matrix);
+                                    },
+                                }
+                            }
                         }
                     }
                 }

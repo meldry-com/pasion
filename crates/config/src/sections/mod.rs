@@ -25,6 +25,7 @@ mod policy;
 mod rate_limiting;
 mod secrets;
 pub mod sms;
+mod storage;
 mod telemetry;
 mod templates;
 mod upstream_oauth2;
@@ -51,6 +52,7 @@ pub use self::{
     rate_limiting::{RateLimiterConfiguration, RateLimitingConfig},
     secrets::SecretsConfig,
     sms::{SmsConfig, SmsTransportKind},
+    storage::StorageConfig,
     telemetry::{
         MetricsConfig, MetricsExporterKind, Propagator, TelemetryConfig, TracingConfig,
         TracingExporterKind,
@@ -218,6 +220,10 @@ pub struct RootConfig {
     /// Experimental configuration options
     #[serde(default, skip_serializing_if = "ExperimentalConfig::is_default")]
     pub experimental: ExperimentalConfig,
+
+    /// Configuration for file/media storage backend
+    #[serde(default, skip_serializing_if = "StorageConfig::is_default")]
+    pub storage: StorageConfig,
 }
 
 impl ConfigurationSection for RootConfig {
@@ -246,6 +252,7 @@ impl ConfigurationSection for RootConfig {
             &|f| self.captcha.validate(f),
             &|f| self.account.validate(f),
             &|f| self.experimental.validate(f),
+            &|f| self.storage.validate(f),
         ];
 
         for validate_fn in sections {
@@ -287,6 +294,7 @@ impl RootConfig {
             captcha: CaptchaConfig::default(),
             account: AccountConfig::default(),
             experimental: ExperimentalConfig::default(),
+            storage: StorageConfig::default(),
         })
     }
 
@@ -311,6 +319,7 @@ impl RootConfig {
             captcha: CaptchaConfig::default(),
             account: AccountConfig::default(),
             experimental: ExperimentalConfig::default(),
+            storage: StorageConfig::default(),
         }
     }
 }
@@ -360,6 +369,9 @@ pub struct AppConfig {
 
     #[serde(default)]
     pub experimental: ExperimentalConfig,
+
+    #[serde(default)]
+    pub storage: StorageConfig,
 }
 
 impl ConfigurationSection for AppConfig {
@@ -383,6 +395,7 @@ impl ConfigurationSection for AppConfig {
         self.captcha.validate(figment)?;
         self.account.validate(figment)?;
         self.experimental.validate(figment)?;
+        self.storage.validate(figment)?;
 
         Ok(())
     }

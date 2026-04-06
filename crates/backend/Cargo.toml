@@ -88,6 +88,7 @@ indexmap.workspace = true
 language-tags.workspace = true
 lettre.workspace = true
 mime.workspace = true
+opendal.workspace = true
 minijinja.workspace = true
 minijinja-contrib.workspace = true
 p256.workspace = true

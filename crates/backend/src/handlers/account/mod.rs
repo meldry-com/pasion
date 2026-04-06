@@ -23,6 +23,7 @@ use crate::salvo_utils::SessionInfo;
 use pasion_data::{SiteConfig, User};
 
 pub mod auth;
+pub mod avatar;
 pub mod consent;
 pub mod emails;
 pub mod flow;

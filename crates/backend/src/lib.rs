@@ -16,6 +16,7 @@ mod outbound_http;
 pub mod salvo_utils;
 pub mod server;
 pub mod services;
+pub mod storage;
 pub mod sync;
 pub mod telemetry;
 pub mod totp;

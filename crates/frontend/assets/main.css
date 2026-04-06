@@ -893,6 +893,7 @@ html[data-theme="dark"] .btn-secondary:hover:not(:disabled) {
     font-weight: 700;
     flex-shrink: 0;
     box-shadow: var(--shadow-md);
+    object-fit: cover;
 }
 
 .user-meta {
@@ -1404,6 +1405,12 @@ html[data-theme="dark"] .filter-toggle {
 @keyframes slideUp {
     from { opacity: 0; transform: translateY(10px) scale(0.98); }
     to { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+/* Hide theme toggle behind dialog overlay */
+body:has(.dialog-overlay) .theme-toggle {
+    z-index: 0;
+    pointer-events: none;
 }
 
 /* ─── Footer ───────────────────────────────────────────────── */

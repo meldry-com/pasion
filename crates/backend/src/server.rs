@@ -467,6 +467,8 @@ fn build_account_api_router(router: Router) -> Router {
                     .push(Router::with_path("security").get(viewer::get_security_summary))
                     .push(Router::with_path("password").post(password::set_password))
                     .push(Router::with_path("profile").patch(users::patch_profile))
+                    .push(Router::with_path("avatar").post(avatar::upload_avatar))
+                    .push(Router::with_path("avatar/{user_id}").get(avatar::get_avatar))
                     .push(
                         Router::with_path("cross-signing-reset")
                             .post(users::allow_cross_signing_reset),
