@@ -601,7 +601,7 @@ impl BrowserSessionRepository for PgBrowserSessionRepository<'_> {
                     FROM UNNEST($1::uuid[], $2::timestamptz[], $3::inet[])
                         AS t(user_session_id, last_active_at, last_active_ip)
                 ) AS t
-                WHERE user_sessions.user_session_id = t.user_session_id
+                WHERE user_sessions.id = t.user_session_id
             "#,
         )
         .bind::<diesel::sql_types::Array<diesel::sql_types::Uuid>, _>(&ids)
@@ -637,7 +637,7 @@ impl BrowserSessionRepository for PgBrowserSessionRepository<'_> {
             r#"
                 WITH
                     to_delete AS (
-                        SELECT user_session_id, finished_at
+                        SELECT us.id AS user_session_id, us.finished_at
                         FROM user_sessions us
                         WHERE us.finished_at IS NOT NULL
                           AND ($1::timestamptz IS NULL OR us.finished_at >= $1)
@@ -645,7 +645,7 @@ impl BrowserSessionRepository for PgBrowserSessionRepository<'_> {
                           -- Only delete if no oauth2_sessions reference this user_session
                           AND NOT EXISTS (
                               SELECT 1 FROM oauth2_sessions os
-                              WHERE os.user_session_id = us.user_session_id
+                              WHERE os.user_session_id = us.id
                           )
                         ORDER BY us.finished_at ASC
                         LIMIT $3
@@ -657,7 +657,7 @@ impl BrowserSessionRepository for PgBrowserSessionRepository<'_> {
                     ),
                     deleted_sessions AS (
                         DELETE FROM user_sessions USING to_delete
-                        WHERE user_sessions.user_session_id = to_delete.user_session_id
+                        WHERE user_sessions.id = to_delete.user_session_id
                         RETURNING user_sessions.finished_at
                     )
                 SELECT COUNT(*) AS count, MAX(finished_at) AS last_ts FROM deleted_sessions
@@ -691,7 +691,7 @@ impl BrowserSessionRepository for PgBrowserSessionRepository<'_> {
         let res: CleanupResult = diesel::sql_query(
             r#"
                 WITH to_update AS (
-                    SELECT user_session_id, last_active_at
+                    SELECT id AS user_session_id, last_active_at
                     FROM user_sessions
                     WHERE last_active_ip IS NOT NULL
                       AND last_active_at IS NOT NULL
@@ -705,7 +705,7 @@ impl BrowserSessionRepository for PgBrowserSessionRepository<'_> {
                     UPDATE user_sessions
                     SET last_active_ip = NULL
                     FROM to_update
-                    WHERE user_sessions.user_session_id = to_update.user_session_id
+                    WHERE user_sessions.id = to_update.user_session_id
                     RETURNING user_sessions.last_active_at
                 )
                 SELECT COUNT(*) AS count, MAX(last_active_at) AS last_ts FROM updated

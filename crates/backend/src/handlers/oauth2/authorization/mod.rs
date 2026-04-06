@@ -323,8 +323,25 @@ async fn handle_get(req: &mut Request, depot: &Depot) -> Result<(Response, Cooki
                     }
                 }
 
+                Some(_) if prompt.contains(&Prompt::Create) => {
+                    // Client asked for registration even though a session exists.
+                    // Redirect to the registration page to create a new account.
+                    repo.save().await?;
+
+                    {
+                        let query_str =
+                            serde_urlencoded::to_string(&continue_grant).unwrap_or_default();
+                        let path = if query_str.is_empty() {
+                            "/register".to_owned()
+                        } else {
+                            format!("/register?{query_str}")
+                        };
+                        salvo::writing::Redirect::other(&url_builder.relative_url(&path))
+                    }
+                }
+
                 Some(user_session) => {
-                    // TODO: better support for prompt=create when we have a session
+                    // We have a session and no special prompt, show consent
                     repo.save().await?;
 
                     activity_tracker

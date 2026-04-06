@@ -667,7 +667,7 @@ impl PersonalSessionRepository for PgPersonalSessionRepository<'_> {
                     FROM UNNEST($1::uuid[], $2::timestamptz[], $3::inet[])
                         AS t(personal_session_id, last_active_at, last_active_ip)
                 ) AS t
-                WHERE personal_sessions.personal_session_id = t.personal_session_id
+                WHERE personal_sessions.id = t.personal_session_id
             "#,
         )
         .bind::<diesel::sql_types::Array<diesel::sql_types::Uuid>, _>(&ids)
