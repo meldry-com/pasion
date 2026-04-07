@@ -77,6 +77,13 @@ pub trait UserRegistrationRepository: Send + Sync {
         display_name: String,
     ) -> Result<UserRegistration, Self::Error>;
 
+    /// Set the avatar URL of a [`UserRegistration`]
+    async fn set_avatar_url(
+        &mut self,
+        user_registration: UserRegistration,
+        avatar_url: String,
+    ) -> Result<UserRegistration, Self::Error>;
+
     /// Set the terms URL of a [`UserRegistration`]
     ///
     /// Returns the updated [`UserRegistration`]
@@ -251,6 +258,11 @@ repository_impl!(UserRegistrationRepository:
         &mut self,
         user_registration: UserRegistration,
         display_name: String,
+    ) -> Result<UserRegistration, Self::Error>;
+    async fn set_avatar_url(
+        &mut self,
+        user_registration: UserRegistration,
+        avatar_url: String,
     ) -> Result<UserRegistration, Self::Error>;
     async fn set_terms_url(
         &mut self,

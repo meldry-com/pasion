@@ -30,6 +30,11 @@ pub async fn upload_avatar(
     let activity_tracker = extract_bound_activity_tracker(req, depot);
     let session_info = extract_session_info(req, depot);
 
+    // Salvo's default secure body size limit is 64 KB, which silently
+    // truncates any real avatar upload. Bump it to match the 5 MB cap we
+    // enforce on the client.
+    req.set_secure_max_size(5 * 1024 * 1024);
+
     // Parse multipart form first (before consuming the request body for session)
     let file = req
         .file("avatar")

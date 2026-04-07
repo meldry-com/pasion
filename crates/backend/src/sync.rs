@@ -90,6 +90,10 @@ fn map_claims_imports(
             action: map_import_action(config.email.action),
             template: config.email.template.clone(),
         },
+        avatar: pasion_data::UpstreamOAuthProviderImportPreference {
+            action: map_import_action(config.avatar.action),
+            template: config.avatar.template.clone(),
+        },
         account_name: pasion_data::UpstreamOAuthProviderSubjectPreference {
             template: config.account_name.template.clone(),
         },

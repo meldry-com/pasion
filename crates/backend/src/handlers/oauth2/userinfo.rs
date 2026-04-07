@@ -22,6 +22,10 @@ use ulid::Ulid;
 struct UserInfo {
     sub: String,
     username: String,
+    preferred_username: String,
+    name: Option<String>,
+    picture: Option<String>,
+    locale: Option<String>,
 }
 
 #[derive(Serialize)]
@@ -156,6 +160,10 @@ async fn handle_get(req: &mut Request, depot: &mut Depot) -> Result<UserinfoResp
     let user_info = UserInfo {
         sub: user.sub.clone(),
         username: user.username.clone(),
+        preferred_username: user.username.clone(),
+        name: user.display_name.clone(),
+        picture: user.avatar_url.clone(),
+        locale: user.preferred_locale.clone(),
     };
 
     let client = repo

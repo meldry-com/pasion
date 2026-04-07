@@ -534,6 +534,11 @@ pub struct FinishRegistrationResponse {
     pub status: &'static str,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub error: Option<String>,
+    /// If the registration was started as part of another flow (e.g. an
+    /// OAuth2 authorization grant continuation), the frontend uses this to
+    /// resume that flow after the account is created.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub post_auth_action: Option<serde_json::Value>,
 }
 
 #[endpoint]
@@ -592,6 +597,7 @@ pub async fn post_finish(
             return Ok(Json(FinishRegistrationResponse {
                 status: "error",
                 error: Some(error.into()),
+                post_auth_action: None,
             }));
         }
     };
@@ -605,8 +611,11 @@ pub async fn post_finish(
     let cookie_jar = cookie_jar.set_session(&completed.user_session);
     cookie_jar.write_to_response(res);
 
+    let post_auth_action = completed.registration.post_auth_action.clone();
+
     Ok(Json(FinishRegistrationResponse {
         status: "success",
         error: None,
+        post_auth_action,
     }))
 }

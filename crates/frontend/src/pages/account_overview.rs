@@ -80,8 +80,6 @@ pub fn AccountOverview() -> Element {
         Some(count) => format!("{count} workflow(s) still need attention. Review them before they expire or block follow-up actions."),
         None => "The workflow inbox could not be loaded. You can still open it directly and retry from there.".to_string(),
     };
-    let verified_contacts_total = summary.verified_emails_count + summary.verified_phones_count;
-
     rsx! {
         div { class: "overview-shell",
             div { class: "overview-hero",
@@ -132,18 +130,6 @@ pub fn AccountOverview() -> Element {
                     tone_class: "tone-neutral",
                 }
                 OverviewStatCard {
-                    title: "Verified contacts",
-                    value: verified_contacts_total.to_string(),
-                    note: format!(
-                        "{} email(s), {} phone(s) confirmed.",
-                        summary.verified_emails_count,
-                        summary.verified_phones_count
-                    ),
-                    action_label: "Manage contacts",
-                    action_to: Route::ContactManagement {},
-                    tone_class: "tone-neutral",
-                }
-                OverviewStatCard {
                     title: "Linked identities",
                     value: summary.linked_providers_count.to_string(),
                     note: "Connected upstream identity providers available for sign-in.".to_string(),
@@ -177,11 +163,6 @@ pub fn AccountOverview() -> Element {
                     title: "Security",
                     description: "Password health, session posture, and verified signals.",
                     to: Route::SecurityCenter {},
-                }
-                OverviewActionCard {
-                    title: "Contacts",
-                    description: "Manage verified emails, phones, and recovery channels.",
-                    to: Route::ContactManagement {},
                 }
                 OverviewActionCard {
                     title: "Identities",

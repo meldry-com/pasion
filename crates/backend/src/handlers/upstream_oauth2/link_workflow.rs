@@ -37,6 +37,7 @@ use crate::handlers::{
 const DEFAULT_LOCALPART_TEMPLATE: &str = "{{ user.preferred_username }}";
 const DEFAULT_DISPLAYNAME_TEMPLATE: &str = "{{ user.name }}";
 const DEFAULT_EMAIL_TEMPLATE: &str = "{{ user.email }}";
+const DEFAULT_AVATAR_TEMPLATE: &str = "{{ user.picture }}";
 
 #[derive(Debug, Error)]
 pub enum UpstreamLinkWorkflowError {
@@ -441,6 +442,7 @@ pub async fn submit_upstream_link_action(
                 attributes.username,
                 attributes.display_name,
                 attributes.email,
+                attributes.avatar_url,
                 ip_address,
                 user_agent,
                 post_auth_action.map(|value| serde_json::json!(value)),
@@ -563,6 +565,7 @@ async fn load_upstream_registration_screen(
             localpart.clone(),
             suggestions.suggested_display_name.clone(),
             suggestions.suggested_email.clone(),
+            suggestions.suggested_avatar_url.clone(),
             ip_address,
             user_agent,
             post_auth_action.map(|value| serde_json::json!(value)),
@@ -801,12 +804,14 @@ struct RegistrationSuggestions {
     suggested_username: Option<String>,
     suggested_display_name: Option<String>,
     suggested_email: Option<String>,
+    suggested_avatar_url: Option<String>,
 }
 
 struct SelectedRegistrationAttributes {
     username: String,
     display_name: Option<String>,
     email: Option<String>,
+    avatar_url: Option<String>,
 }
 
 fn resolve_registration_suggestions(
@@ -852,10 +857,23 @@ fn resolve_registration_suggestions(
         )?
     };
 
+    let suggested_avatar_url = if provider.claims_imports.avatar.ignore() {
+        None
+    } else {
+        render_imported_attribute(
+            &env,
+            provider.claims_imports.avatar.template.as_deref(),
+            DEFAULT_AVATAR_TEMPLATE,
+            &context,
+            provider.claims_imports.avatar.is_required(),
+        )?
+    };
+
     Ok(RegistrationSuggestions {
         suggested_username,
         suggested_display_name,
         suggested_email,
+        suggested_avatar_url,
     })
 }
 
@@ -912,10 +930,24 @@ fn resolve_registration_attributes(
     }
     .unwrap_or_default();
 
+    // Avatar URL is always imported when configured (not behind a user toggle).
+    let avatar_url = if provider.claims_imports.avatar.ignore() {
+        None
+    } else {
+        render_imported_attribute(
+            &env,
+            provider.claims_imports.avatar.template.as_deref(),
+            DEFAULT_AVATAR_TEMPLATE,
+            &context,
+            provider.claims_imports.avatar.is_required(),
+        )?
+    };
+
     Ok(SelectedRegistrationAttributes {
         username,
         display_name,
         email,
+        avatar_url,
     })
 }
 
@@ -1062,6 +1094,7 @@ async fn prepare_user_registration(
     localpart: String,
     displayname: Option<String>,
     email: Option<String>,
+    avatar_url: Option<String>,
     ip_address: Option<IpAddr>,
     user_agent: Option<String>,
     post_auth_action: Option<JsonValue>,
@@ -1098,6 +1131,13 @@ async fn prepare_user_registration(
         registration = repo
             .user_registration()
             .set_display_name(registration, name)
+            .await?;
+    }
+
+    if let Some(url) = avatar_url {
+        registration = repo
+            .user_registration()
+            .set_avatar_url(registration, url)
             .await?;
     }
 

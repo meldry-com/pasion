@@ -48,6 +48,8 @@ struct UserRegistrationLookupRow {
     #[diesel(sql_type = diesel::sql_types::Nullable<diesel::sql_types::Text>)]
     display_name: Option<String>,
     #[diesel(sql_type = diesel::sql_types::Nullable<diesel::sql_types::Text>)]
+    avatar_url: Option<String>,
+    #[diesel(sql_type = diesel::sql_types::Nullable<diesel::sql_types::Text>)]
     terms_url: Option<String>,
     #[diesel(sql_type = diesel::sql_types::Nullable<diesel::sql_types::Uuid>)]
     email_authentication_id: Option<Uuid>,
@@ -124,6 +126,7 @@ impl TryFrom<UserRegistrationLookupRow> for UserRegistration {
             post_auth_action: value.post_auth_action,
             username: value.username,
             display_name: value.display_name,
+            avatar_url: value.avatar_url,
             terms_url,
             email_authentication_id: value.email_authentication_id.map(Ulid::from),
             phone_authentication_id: value.phone_authentication_id.map(Ulid::from),
@@ -160,6 +163,7 @@ impl UserRegistrationRepository for PgUserRegistrationRepository<'_> {
                   , post_auth_action \
                   , username \
                   , display_name \
+                  , avatar_url \
                   , terms_url \
                   , email_authentication_id \
                   , phone_authentication_id \
@@ -234,6 +238,7 @@ impl UserRegistrationRepository for PgUserRegistrationRepository<'_> {
             completed_at: None,
             username,
             display_name: None,
+            avatar_url: None,
             terms_url: None,
             email_authentication_id: None,
             phone_authentication_id: None,
@@ -269,6 +274,35 @@ impl UserRegistrationRepository for PgUserRegistrationRepository<'_> {
         DatabaseError::ensure_affected_rows_usize(rows_affected, 1)?;
 
         user_registration.display_name = Some(display_name);
+
+        Ok(user_registration)
+    }
+
+    #[tracing::instrument(
+        name = "db.user_registration.set_avatar_url",
+        skip_all,
+        fields(
+            user_registration.id = %user_registration.id,
+        ),
+        err,
+    )]
+    async fn set_avatar_url(
+        &mut self,
+        mut user_registration: UserRegistration,
+        avatar_url: String,
+    ) -> Result<UserRegistration, Self::Error> {
+        let rows_affected = diesel::update(
+            user_registrations::table
+                .find(Uuid::from(user_registration.id))
+                .filter(user_registrations::completed_at.is_null()),
+        )
+        .set(user_registrations::avatar_url.eq(Some(&avatar_url)))
+        .execute(self.conn)
+        .await?;
+
+        DatabaseError::ensure_affected_rows_usize(rows_affected, 1)?;
+
+        user_registration.avatar_url = Some(avatar_url);
 
         Ok(user_registration)
     }

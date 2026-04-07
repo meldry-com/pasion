@@ -125,6 +125,7 @@ diesel::table! {
         post_auth_action -> Nullable<Jsonb>,
         username -> Text,
         display_name -> Nullable<Text>,
+        avatar_url -> Nullable<Text>,
         terms_url -> Nullable<Text>,
         email_authentication_id -> Nullable<Uuid>,
         hashed_password -> Nullable<Text>,

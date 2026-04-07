@@ -69,7 +69,7 @@ fn ConsentForm(data: ConsentDataResponse, grant_id: String) -> Element {
     let scopes: Vec<&str> = data.scope.split_whitespace().collect();
 
     rsx! {
-        div { class: "login-page",
+        div { class: "login-page consent-page",
             div { class: "login-container",
                 h1 { class: "heading-md login-title", "Authorize {client_name}" }
 

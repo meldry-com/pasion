@@ -58,6 +58,21 @@ fn get_query_param(name: &str) -> Option<String> {
     params.get(name)
 }
 
+/// Return the current page's query string (without leading `?`), falling
+/// back to the preserved one if Dioxus has already rewritten the URL.
+fn current_query_string() -> String {
+    if let Some(window) = web_sys::window()
+        && let Ok(search) = window.location().search()
+        && !search.is_empty()
+    {
+        return search.trim_start_matches('?').to_string();
+    }
+
+    preserved_login_query()
+        .map(|s| s.trim_start_matches('?').to_string())
+        .unwrap_or_default()
+}
+
 fn clear_preserved_login_query() {
     if let Some(window) = web_sys::window() {
         let _ = Reflect::delete_property(
@@ -246,10 +261,26 @@ fn LoginForm(providers: ProvidersResponse) -> Element {
                 if has_providers {
                     div { class: "login-providers",
                         for provider in providers.providers.iter() {
-                            a {
-                                class: "btn btn-secondary btn-block",
-                                href: "{provider.authorize_url}",
-                                {provider.human_name.clone().unwrap_or_else(|| format!("Sign in with {}", provider.id))}
+                            {
+                                // Propagate the current page's query string (e.g.
+                                // ?kind=continue_authorization_grant&id=...) to the
+                                // upstream authorize URL so that after the upstream
+                                // flow completes, pasion can continue the original
+                                // OAuth grant and redirect back to the originating
+                                // client.
+                                let query = current_query_string();
+                                let href = if query.is_empty() {
+                                    provider.authorize_url.clone()
+                                } else {
+                                    format!("{}?{}", provider.authorize_url, query)
+                                };
+                                rsx! {
+                                    a {
+                                        class: "btn btn-secondary btn-block",
+                                        href: "{href}",
+                                        {provider.human_name.clone().unwrap_or_else(|| format!("Sign in with {}", provider.id))}
+                                    }
+                                }
                             }
                         }
                     }

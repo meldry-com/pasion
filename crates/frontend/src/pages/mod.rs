@@ -4,7 +4,6 @@ pub mod account_settings;
 pub mod browser_sessions;
 pub mod client_detail;
 pub mod consent;
-pub mod contact_management;
 pub mod device_consent;
 pub mod device_link;
 pub mod device_redirect;
@@ -34,7 +33,6 @@ use account_settings::AccountSettings;
 use browser_sessions::BrowserSessions;
 use client_detail::ClientDetail;
 use consent::Consent;
-use contact_management::ContactManagement;
 use device_consent::DeviceConsent;
 use device_link::DeviceLink;
 use device_redirect::DeviceRedirect;
@@ -71,13 +69,13 @@ pub enum Route {
     Login {},
     #[route("/register")]
     Register {},
-    #[route("/register/:id/verify-email")]
+    #[route("/register/steps/:id/verify-email")]
     RegisterVerifyEmail { id: String },
-    #[route("/register/:id/verify-phone")]
+    #[route("/register/steps/:id/verify-phone")]
     RegisterVerifyPhone { id: String },
-    #[route("/register/:id/display-name")]
+    #[route("/register/steps/:id/display-name")]
     RegisterDisplayName { id: String },
-    #[route("/register/:id/finish")]
+    #[route("/register/steps/:id/finish")]
     RegisterFinish { id: String },
     #[route("/recover")]
     RecoveryStart {},
@@ -110,8 +108,6 @@ pub enum Route {
         NotificationPreferences {},
         #[route("/identities")]
         IdentityBindings {},
-        #[route("/contacts")]
-        ContactManagement {},
         #[route("/workflows")]
         WorkflowInbox {},
     #[end_layout]

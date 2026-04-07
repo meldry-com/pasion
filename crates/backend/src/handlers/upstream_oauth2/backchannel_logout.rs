@@ -121,7 +121,7 @@ const EVENTS: Claim<LogoutTokenEvents> = Claim::new("events");
 #[handler]
 #[tracing::instrument(name = "handlers.upstream_oauth2.backchannel_logout.post", skip_all)]
 pub async fn post(req: &mut Request, depot: &mut Depot) -> Result<(), RouteError> {
-    let provider_id: Ulid = req.param("id").ok_or(RouteError::ProviderNotFound)?;
+    let provider_id: Ulid = req.param("provider_id").ok_or(RouteError::ProviderNotFound)?;
     let clock = crate::handlers::account::make_clock();
     let mut rng = crate::handlers::account::make_rng();
     let mut repo = depot.repo_factory()?.create().await?;

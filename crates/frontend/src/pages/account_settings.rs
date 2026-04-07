@@ -148,7 +148,7 @@ fn SignOutButton(session_id: String) -> Element {
                     h3 { class: "dialog-title", "Sign out" }
 
                     button {
-                        class: "btn btn-destructive",
+                        class: "btn btn-destructive-solid",
                         disabled: signing_out(),
                         onclick: {
                             let sid = session_id_clone.clone();
@@ -414,7 +414,7 @@ fn AccountDeleteButton(mxid: String, has_password: bool, password_login_enabled:
                     }
 
                     button {
-                        class: "btn btn-destructive",
+                        class: "btn btn-destructive-solid",
                         disabled: deactivating() || !confirm_enabled() || !form_valid,
                         onclick: {
                             let nav = nav.clone();

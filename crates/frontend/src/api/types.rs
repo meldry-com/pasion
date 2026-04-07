@@ -681,6 +681,11 @@ pub struct StepResponse {
     pub next_step: Option<String>,
     #[serde(default)]
     pub error: Option<String>,
+    /// Set when the registration was started as part of another flow
+    /// (e.g. an OAuth2 authorization grant continuation). The frontend
+    /// uses this to resume the original flow after the account is created.
+    #[serde(default)]
+    pub post_auth_action: Option<serde_json::Value>,
 }
 
 // ── Recovery API types ────────────────────────────────────────

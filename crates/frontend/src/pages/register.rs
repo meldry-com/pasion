@@ -602,27 +602,45 @@ pub fn RegisterFinish(id: String) -> Element {
     match &*binding {
         Some(Ok(resp)) if resp.status == "success" => {
             // Check if there is a pending OAuth authorization flow to resume.
-            let mut redirected_to_consent = false;
-            #[cfg(target_arch = "wasm32")]
-            {
-                if let Some(storage) = web_sys::window()
-                    .and_then(|w| w.session_storage().ok().flatten())
-                {
-                    let kind = storage.get_item("post_auth_kind").ok().flatten();
-                    let id = storage.get_item("post_auth_id").ok().flatten();
-                    // Clean up regardless
-                    let _ = storage.remove_item("post_auth_kind");
-                    let _ = storage.remove_item("post_auth_id");
+            // The backend returns `post_auth_action` from the registration
+            // record if registration was started from an OAuth grant; for
+            // password registration we fall back to sessionStorage values
+            // saved by the manual register flow.
+            let mut redirected = false;
 
-                    if kind.as_deref() == Some("continue_authorization_grant") {
-                        if let Some(grant_id) = id {
-                            nav.push(Route::Consent { grant_id });
-                            redirected_to_consent = true;
-                        }
-                    }
+            // 1. API-returned post_auth_action (set during upstream OIDC
+            //    registration flows)
+            if let Some(action) = resp.post_auth_action.as_ref() {
+                let kind = action.get("kind").and_then(|v| v.as_str());
+                let id = action.get("id").and_then(|v| v.as_str()).map(String::from);
+                if kind == Some("continue_authorization_grant")
+                    && let Some(grant_id) = id
+                {
+                    nav.push(Route::Consent { grant_id });
+                    redirected = true;
                 }
             }
-            if !redirected_to_consent {
+
+            #[cfg(target_arch = "wasm32")]
+            if !redirected
+                && let Some(storage) = web_sys::window()
+                    .and_then(|w| w.session_storage().ok().flatten())
+            {
+                let kind = storage.get_item("post_auth_kind").ok().flatten();
+                let id = storage.get_item("post_auth_id").ok().flatten();
+                // Clean up regardless
+                let _ = storage.remove_item("post_auth_kind");
+                let _ = storage.remove_item("post_auth_id");
+
+                if kind.as_deref() == Some("continue_authorization_grant")
+                    && let Some(grant_id) = id
+                {
+                    nav.push(Route::Consent { grant_id });
+                    redirected = true;
+                }
+            }
+
+            if !redirected {
                 nav.push(Route::AccountOverview {});
             }
             rsx! {

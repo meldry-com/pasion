@@ -492,6 +492,7 @@ pub struct UserRegistration {
     pub id: Ulid,
     pub username: String,
     pub display_name: Option<String>,
+    pub avatar_url: Option<String>,
     pub terms_url: Option<url::Url>,
     pub email_authentication_id: Option<Ulid>,
     pub phone_authentication_id: Option<Ulid>,

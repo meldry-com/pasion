@@ -1848,6 +1848,24 @@ pub async fn complete_registration(
         user = repo.user().set_can_request_admin(user, true).await?;
     }
 
+    // Mirror the registration's display_name / avatar_url onto pasion's
+    // local user record so the account UI ("Edit profile") shows them
+    // immediately, before the async homeserver-provision job runs.
+    if registration.display_name.is_some() || registration.avatar_url.is_some() {
+        let profile_patch = pasion_data::UserProfilePatch {
+            display_name: registration
+                .display_name
+                .clone()
+                .map(Some),
+            avatar_url: registration
+                .avatar_url
+                .clone()
+                .map(Some),
+            preferred_locale: None,
+        };
+        user = repo.user().update_profile(clock, user, profile_patch).await?;
+    }
+
     let user_session = repo
         .browser_session()
         .add(rng, clock, &user, request.user_agent)
@@ -1910,6 +1928,9 @@ pub async fn complete_registration(
     let mut job = ProvisionUserJob::new(&user);
     if let Some(display_name) = registration.display_name.clone() {
         job = job.set_display_name(display_name);
+    }
+    if let Some(avatar_url) = registration.avatar_url.clone() {
+        job = job.set_avatar_url(avatar_url);
     }
     if user.can_request_admin {
         job = job.set_admin();
@@ -2076,6 +2097,7 @@ mod tests {
             id: Ulid::new(),
             username: "alice".into(),
             display_name: None,
+            avatar_url: None,
             terms_url: None,
             email_authentication_id: None,
             phone_authentication_id: None,

@@ -355,6 +355,9 @@ pub struct ClaimsImports {
     #[serde(default)]
     pub email: ImportPreference,
 
+    #[serde(default)]
+    pub avatar: ImportPreference,
+
     /// Pasion-original: template for computing a human-readable account name
     #[serde(default)]
     pub account_name: SubjectPreference,

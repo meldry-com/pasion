@@ -213,8 +213,10 @@ zxcvbn = "3.1.0"
 # --- Front-end (Dioxus WASM) dependencies ---
 dioxus = { version = "0.7.4", features = ["web", "router"] }
 gloo-timers = { version = "0.4", features = ["futures"] }
-web-sys = { version = "0.3", features = ["Window", "Document", "Element", "HtmlElement", "Location", "Storage", "Url", "UrlSearchParams", "MediaQueryList"] }
+web-sys = { version = "0.3", features = ["Window", "Document", "Element", "HtmlElement", "HtmlInputElement", "Event", "EventTarget", "File", "FileList", "FormData", "Blob", "Headers", "Request", "RequestInit", "RequestCredentials", "Response", "Location", "Storage", "Url", "UrlSearchParams", "MediaQueryList"] }
 js-sys = "0.3"
+wasm-bindgen = "0.2"
+wasm-bindgen-futures = "0.4"
 
 [profile.release]
 codegen-units = 1 # Reduce the number of codegen units to increase optimizations

@@ -155,7 +155,7 @@ pub async fn handler(
     depot: &mut Depot,
     res: &mut Response,
 ) -> Result<(), RouteError> {
-    let provider_id: Ulid = req.param("id").ok_or(RouteError::ProviderNotFound)?;
+    let provider_id: Ulid = req.param("provider_id").ok_or(RouteError::ProviderNotFound)?;
     let mut rng = crate::handlers::account::make_rng();
     let clock = crate::handlers::account::make_clock();
     let metadata_cache = depot.metadata_cache()?;

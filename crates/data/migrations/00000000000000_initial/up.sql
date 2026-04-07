@@ -105,6 +105,9 @@ CREATE TABLE IF NOT EXISTS upstream_oauth_authorization_sessions (
     completed_at TIMESTAMPTZ,
     consumed_at TIMESTAMPTZ,
     id_token_claims JSONB,
+    userinfo JSONB,
+    extra_callback_parameters JSONB,
+    unlinked_at TIMESTAMPTZ,
     user_session_id UUID REFERENCES user_sessions(id) ON DELETE SET NULL
 );
 
@@ -153,6 +156,7 @@ CREATE TABLE IF NOT EXISTS user_registrations (
     post_auth_action JSONB,
     username TEXT NOT NULL,
     display_name TEXT,
+    avatar_url TEXT,
     terms_url TEXT,
     email_authentication_id UUID REFERENCES user_email_authentications(id) ON DELETE SET NULL,
     hashed_password TEXT,

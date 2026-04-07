@@ -149,6 +149,28 @@ impl EmailImportPreference {
     }
 }
 
+// ── Avatar Import ──
+
+/// Controls how the avatar URL attribute is imported from upstream claims
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Default, JsonSchema)]
+pub struct AvatarImportPreference {
+    /// How to handle the avatar attribute
+    #[serde(default, skip_serializing_if = "ImportAction::is_default")]
+    pub action: ImportAction,
+
+    /// A Jinja2 template for the avatar URL attribute.
+    ///
+    /// Defaults to `{{ user.picture }}` when omitted.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub template: Option<String>,
+}
+
+impl AvatarImportPreference {
+    pub(crate) const fn is_default(&self) -> bool {
+        self.action.is_default() && self.template.is_none()
+    }
+}
+
 // ── Account Name Import ──
 
 /// Controls how the upstream account display name is derived
@@ -197,6 +219,10 @@ pub struct ClaimsImports {
     #[serde(default, skip_serializing_if = "EmailImportPreference::is_default")]
     pub email: EmailImportPreference,
 
+    /// Import the avatar URL of the user
+    #[serde(default, skip_serializing_if = "AvatarImportPreference::is_default")]
+    pub avatar: AvatarImportPreference,
+
     /// Set a human-readable name for the upstream account for display purposes
     #[serde(
         default,
@@ -212,6 +238,7 @@ impl ClaimsImports {
             && !self.skip_confirmation
             && self.displayname.is_default()
             && self.email.is_default()
+            && self.avatar.is_default()
             && self.account_name.is_default()
     }
 }

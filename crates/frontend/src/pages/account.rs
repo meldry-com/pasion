@@ -82,7 +82,6 @@ pub fn AccountPage() -> Element {
                                 span { class: "sidebar-group-label", "Account" }
                                 SidebarItem { to: Route::AccountOverview {}, "Overview" }
                                 SidebarItem { to: Route::AccountSettings {}, "Settings" }
-                                SidebarItem { to: Route::ContactManagement {}, "Contacts" }
                                 SidebarItem { to: Route::IdentityBindings {}, "Identities" }
                             }
 

@@ -227,6 +227,8 @@ pub struct ProvisionUserJob {
     user_id: Ulid,
     set_display_name: Option<String>,
     #[serde(default)]
+    set_avatar_url: Option<String>,
+    #[serde(default)]
     admin: bool,
 }
 
@@ -237,6 +239,7 @@ impl ProvisionUserJob {
         Self {
             user_id: user.id,
             set_display_name: None,
+            set_avatar_url: None,
             admin: false,
         }
     }
@@ -247,6 +250,7 @@ impl ProvisionUserJob {
         Self {
             user_id,
             set_display_name: None,
+            set_avatar_url: None,
             admin: false,
         }
     }
@@ -255,6 +259,13 @@ impl ProvisionUserJob {
     #[must_use]
     pub fn set_display_name(mut self, display_name: String) -> Self {
         self.set_display_name = Some(display_name);
+        self
+    }
+
+    /// Set the avatar URL of the user.
+    #[must_use]
+    pub fn set_avatar_url(mut self, avatar_url: String) -> Self {
+        self.set_avatar_url = Some(avatar_url);
         self
     }
 
@@ -269,6 +280,12 @@ impl ProvisionUserJob {
     #[must_use]
     pub fn display_name_to_set(&self) -> Option<&str> {
         self.set_display_name.as_deref()
+    }
+
+    /// Get the avatar URL to be set.
+    #[must_use]
+    pub fn avatar_url_to_set(&self) -> Option<&str> {
+        self.set_avatar_url.as_deref()
     }
 
     /// Whether the user should be made admin on the homeserver.

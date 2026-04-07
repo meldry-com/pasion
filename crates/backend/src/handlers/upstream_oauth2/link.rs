@@ -125,7 +125,7 @@ pub async fn get(
     depot: &mut Depot,
     res: &mut Response,
 ) -> Result<(), RouteError> {
-    let link_id: Ulid = req.param("id").ok_or(RouteError::LinkNotFound)?;
+    let link_id: Ulid = req.param("link_id").ok_or(RouteError::LinkNotFound)?;
     let mut rng = crate::handlers::account::make_rng();
     let clock = crate::handlers::account::make_clock();
     let mut repo = depot.repo_factory()?.create().await?;
@@ -406,7 +406,7 @@ pub async fn post(
     depot: &mut Depot,
     res: &mut Response,
 ) -> Result<(), RouteError> {
-    let link_id: Ulid = req.param("id").ok_or(RouteError::LinkNotFound)?;
+    let link_id: Ulid = req.param("link_id").ok_or(RouteError::LinkNotFound)?;
     let mut rng = crate::handlers::account::make_rng();
     let clock = crate::handlers::account::make_clock();
     let mut repo = depot.repo_factory()?.create().await?;
