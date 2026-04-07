@@ -115,7 +115,7 @@ icu_normalizer = { version = "1.5.0", features = ["compiled_data", "std"] }
 icu_plurals = { version = "1.5.0", features = ["compiled_data", "std"] }
 icu_provider = { version = "2.1.1", features = ["std", "sync"] }
 icu_provider_adapters = { version = "1.5.0", features = ["std"] }
-indexmap = { version = "2.13.0", features = ["serde"] }
+indexmap = { version = "2.13.1", features = ["serde"] }
 indoc = "2.0.7"
 insta = { version = "1.46.3", features = ["yaml", "json"] }
 ipnetwork = { version = "0.21", features = ["serde"] }
