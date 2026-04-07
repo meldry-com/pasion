@@ -182,7 +182,7 @@ serde_urlencoded = "0.7.1"
 serde_with = { version = "3.18.0", features = ["hex", "chrono"] }
 serde_yaml = "0.9.34"
 sha1 = "0.10"
-sha2 = { version = "0.10.9", features = ["oid"] }
+sha2 = { version = "0.11.0", features = ["oid"] }
 signature = "2.2.0"
 socket2 = "0.6.3"
 spki = { version = "0.7.3", features = ["std"] }
