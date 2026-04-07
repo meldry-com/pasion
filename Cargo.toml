@@ -83,7 +83,7 @@ cron = "0.16"
 csv = "1.4.0"
 der = { version = "0.7.10", features = ["std"] }
 dialoguer = { version = "0.12.0", default-features = false, features = ["fuzzy-select", "password"] }
-digest = "0.10.7"
+digest = "0.11.2"
 dotenvy = "0.15.7"
 ecdsa = { version = "0.16.9", features = ["signing", "verifying"] }
 ed25519-dalek = { version = "2.1.1", features = ["rand_core", "pkcs8"] }

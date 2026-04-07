@@ -5643,7 +5643,7 @@ version = "1.8.0"
 dependencies = [
  "base64ct",
  "chrono",
- "digest 0.10.7",
+ "digest 0.11.2",
  "ecdsa",
  "ed25519-dalek",
  "elliptic-curve",
