@@ -1,0 +1,58 @@
+[package]
+name = "pasion-tasks"
+version.workspace = true
+authors.workspace = true
+edition.workspace = true
+license.workspace = true
+homepage.workspace = true
+repository.workspace = true
+publish.workspace = true
+
+[lints]
+workspace = true
+
+[dependencies]
+# -- Async runtime & utilities --------------------------------------------
+tokio.workspace = true
+tokio-util.workspace = true
+tokio-postgres.workspace = true
+async-trait.workspace = true
+
+# -- Serialization & data formats -----------------------------------------
+serde.workspace = true
+serde_json.workspace = true
+
+# -- Database access -------------------------------------------------------
+diesel.workspace = true
+diesel-async.workspace = true
+
+# -- Error handling & diagnostics ------------------------------------------
+anyhow.workspace = true
+thiserror.workspace = true
+tracing.workspace = true
+tracing-opentelemetry.workspace = true
+
+# -- Observability ---------------------------------------------------------
+opentelemetry.workspace = true
+opentelemetry-semantic-conventions.workspace = true
+
+# -- Scheduling & time -----------------------------------------------------
+cron.workspace = true
+chrono.workspace = true
+
+# -- Cryptography & identifiers -------------------------------------------
+rand.workspace = true
+rand_chacha.workspace = true
+rand_core.workspace = true
+crc.workspace = true
+ulid.workspace = true
+
+# -- OAuth / OpenID Connect ------------------------------------------------
+oauth2-types.workspace = true
+
+# -- Internal crates -------------------------------------------------------
+pasion-data.workspace = true
+pasion-i18n.workspace = true
+pasion-matrix.workspace = true
+pasion-messaging.workspace = true
+pasion-templates.workspace = true

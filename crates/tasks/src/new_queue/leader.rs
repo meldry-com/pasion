@@ -1,0 +1,144 @@
+use chrono::Duration;
+use cron::Schedule;
+use diesel::sql_query;
+use diesel::sql_types::Bool;
+use diesel_async::RunQueryDsl;
+use pasion_data::{
+    DatabaseError, PgRepository,
+    RepositoryAccess,
+    queue::InsertableJob,
+};
+
+use crate::State;
+
+use super::QueueRunnerError;
+
+/// Result of a `pg_try_advisory_lock` query.
+#[derive(diesel::QueryableByName)]
+struct AdvisoryLockResult {
+    #[diesel(sql_type = Bool)]
+    acquired: bool,
+}
+
+/// Derive a stable i64 key from a human-readable lock name using CRC-32.
+fn advisory_lock_key(name: &str) -> i64 {
+    const CRC_IEEE: crc::Crc<u32> = crc::Crc::<u32>::new(&crc::CRC_32_ISO_HDLC);
+    i64::from(CRC_IEEE.checksum(name.as_bytes()))
+}
+
+/// A cron-like schedule definition that the leader evaluates every tick.
+pub(super) struct ScheduleDefinition {
+    pub(super) schedule_name: &'static str,
+    pub(super) expression: Schedule,
+    pub(super) queue_name: &'static str,
+    pub(super) payload: serde_json::Value,
+}
+
+impl ScheduleDefinition {
+    pub(super) fn new<T: InsertableJob>(
+        schedule_name: &'static str,
+        expression: Schedule,
+        job: T,
+    ) -> Self {
+        let payload = serde_json::to_value(job).expect("failed to serialize job payload");
+
+        Self {
+            schedule_name,
+            expression,
+            queue_name: T::QUEUE_NAME,
+            payload,
+        }
+    }
+}
+
+pub(super) async fn run_leader_duties(
+    state: &State,
+    schedules: &[ScheduleDefinition],
+) -> Result<(), QueueRunnerError> {
+    let clock = state.clock();
+    let mut rng = state.rng();
+
+    let mut conn = state
+        .pool()
+        .get()
+        .await
+        .map_err(|e| QueueRunnerError::Pool(Box::new(e)))?;
+
+    let lock_key = advisory_lock_key("leader-duties");
+    let lock_result: AdvisoryLockResult = sql_query(format!(
+        "SELECT pg_try_advisory_lock({lock_key}) AS acquired"
+    ))
+    .get_result(&mut *conn)
+    .await
+    .map_err(DatabaseError::from)?;
+
+    if !lock_result.acquired {
+        tracing::error!("Another worker has the leader lock, aborting");
+        return Ok(());
+    }
+
+    let mut repo = PgRepository::new(conn);
+    let schedules_status = repo.queue_schedule().list().await?;
+
+    let now = clock.now();
+    for schedule in schedules {
+        let Some(status) = schedules_status
+            .iter()
+            .find(|s| s.schedule_name == schedule.schedule_name)
+        else {
+            tracing::error!(
+                "Schedule {} was not found in the database",
+                schedule.schedule_name
+            );
+            continue;
+        };
+
+        if let Some(next_time) = status.last_scheduled_at {
+            if next_time > now {
+                continue;
+            }
+
+            if status.last_scheduled_job_completed == Some(false) {
+                continue;
+            }
+        }
+
+        let next_tick = schedule.expression.after(&now).next().unwrap();
+
+        tracing::info!(
+            "Scheduling job for {}, next run at {}",
+            schedule.schedule_name,
+            next_tick
+        );
+
+        repo.queue_job()
+            .schedule_later(
+                &mut rng,
+                clock,
+                schedule.queue_name,
+                schedule.payload.clone(),
+                serde_json::json!({}),
+                next_tick,
+                Some(schedule.schedule_name),
+            )
+            .await?;
+    }
+
+    repo.queue_worker()
+        .shutdown_dead_workers(clock, Duration::minutes(2))
+        .await?;
+
+    let scheduled = repo.queue_job().schedule_available_jobs(clock).await?;
+    match scheduled {
+        0 => {}
+        1 => tracing::info!("One scheduled job marked as available"),
+        n => tracing::info!("{n} scheduled jobs marked as available"),
+    }
+
+    let mut conn = repo.into_inner();
+    let _ = sql_query(format!("SELECT pg_advisory_unlock({lock_key})"))
+        .execute(&mut *conn)
+        .await;
+
+    Ok(())
+}
