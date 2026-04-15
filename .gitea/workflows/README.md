@@ -15,6 +15,9 @@ Notes:
 
 - Gitea artifact upload uses `christopherhx/gitea-upload-artifact@v4`
   instead of GitHub's `actions/upload-artifact@v4+`
+- Gitea workflows intentionally do not use `mozilla-actions/sccache-action`,
+  because that action expects GitHub cache token support that is not available
+  in standard Gitea Actions runners
 - The Gitea docs workflow validates and uploads the generated site artifact,
   but does not try to deploy GitHub Pages
 - The Gitea translation download workflow commits changes back to the current

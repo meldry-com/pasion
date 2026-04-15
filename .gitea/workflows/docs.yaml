@@ -29,9 +29,6 @@ jobs:
       - name: Set up Rust
         uses: dtolnay/rust-toolchain@stable
 
-      - name: Configure sccache
-        uses: mozilla-actions/sccache-action@v0.0.9
-
       - name: Set up mdbook
         uses: taiki-e/install-action@v2
         with:
