@@ -1,0 +1,264 @@
+name: Gitea Build Pipeline
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+      - "release/**"
+    tags:
+      - "v*"
+
+env:
+  CARGO_NET_GIT_FETCH_WITH_CLI: "true"
+  CARGO_TERM_COLOR: always
+  RUSTC_WRAPPER: "sccache"
+  SCCACHE_GHA_ENABLED: "true"
+
+concurrency:
+  group: gitea-build-${{ gitea.ref }}
+  cancel-in-progress: true
+
+jobs:
+  compute-version:
+    name: Derive version from git tags
+    runs-on: ubuntu-24.04
+
+    permissions:
+      contents: read
+
+    outputs:
+      describe: ${{ steps.version-info.outputs.describe }}
+      timestamp: ${{ steps.version-info.outputs.timestamp }}
+
+    steps:
+      - name: Fetch repository with full history
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Extract version and commit timestamp
+        id: version-info
+        run: |
+          echo "describe=$(git describe --tags --match 'v*.*.*' --always)" >> "$GITHUB_OUTPUT"
+          echo "timestamp=$(git log -1 --format=%ct)" >> "$GITHUB_OUTPUT"
+
+  build-archives:
+    name: Build release archives
+    runs-on: ubuntu-24.04
+    needs:
+      - compute-version
+
+    permissions:
+      contents: read
+
+    env:
+      VERGEN_GIT_DESCRIBE: ${{ needs.compute-version.outputs.describe }}
+      SOURCE_DATE_EPOCH: ${{ needs.compute-version.outputs.timestamp }}
+
+    steps:
+      - name: Fetch repository
+        uses: actions/checkout@v4
+
+      - name: Set up Rust with Linux targets
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: |
+            x86_64-unknown-linux-gnu
+            aarch64-unknown-linux-gnu
+
+      - name: Configure sccache
+        uses: mozilla-actions/sccache-action@v0.0.9
+
+      - name: Set up zig toolchain
+        uses: goto-bus-stop/setup-zig@v2
+        with:
+          version: 0.13.0
+
+      - name: Set up cargo-zigbuild
+        uses: taiki-e/install-action@v2
+        with:
+          tool: cargo-zigbuild
+
+      - name: Assemble asset directory
+        run: |
+          mkdir -p assets-dist/share
+          cp -r templates/ assets-dist/share/templates
+          cp -r translations/ assets-dist/share/translations
+          cp -r policies/cedar/ assets-dist/share/cedar
+          chmod -R u=rwX,go=rX assets-dist/
+
+      - name: Compile release binaries
+        run: |
+          cargo zigbuild \
+            --release \
+            --target x86_64-unknown-linux-gnu.2.17 \
+            --no-default-features \
+            --features dist \
+            -p pasion
+
+          cargo zigbuild \
+            --release \
+            --target aarch64-unknown-linux-gnu.2.17 \
+            --no-default-features \
+            --features dist \
+            -p pasion
+
+      - name: Build tarballs for each architecture
+        run: |
+          for arch in x86_64 aarch64; do
+            mkdir -p "dist/${arch}/share"
+            cp -r assets-dist/share/* "dist/${arch}/share/"
+            cp "target/${arch}-unknown-linux-gnu/release/pasion" "dist/${arch}/pasion"
+            chmod -R u=rwX,go=rX "dist/${arch}/"
+            chmod u=rwx,go=rx "dist/${arch}/pasion"
+            tar -czvf "pasion-${arch}-linux.tar.gz" --owner=0 --group=0 -C "dist/${arch}/" .
+          done
+
+      - name: Upload release archives
+        uses: christopherhx/gitea-upload-artifact@v4
+        with:
+          name: pasion-linux-archives
+          path: |
+            pasion-aarch64-linux.tar.gz
+            pasion-x86_64-linux.tar.gz
+
+  build-image:
+    name: Build Docker images
+    runs-on: ubuntu-24.04
+    needs:
+      - compute-version
+
+    permissions:
+      contents: read
+
+    env:
+      VERGEN_GIT_DESCRIBE: ${{ needs.compute-version.outputs.describe }}
+      SOURCE_DATE_EPOCH: ${{ needs.compute-version.outputs.timestamp }}
+
+    steps:
+      - name: Fetch repository
+        uses: actions/checkout@v4
+
+      - name: Resolve image configuration
+        id: image-config
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          image="${{ vars.CONTAINER_IMAGE }}"
+          if [ -z "$image" ]; then
+            image="ghcr.io/taidge/pasion"
+          fi
+
+          push="false"
+          if [ "${{ gitea.event_name }}" != "pull_request" ] && [ -n "${{ secrets.REGISTRY_USERNAME }}" ] && [ -n "${{ secrets.REGISTRY_PASSWORD }}" ]; then
+            push="true"
+          fi
+
+          echo "image=$image" >> "$GITHUB_OUTPUT"
+          echo "registry=${image%%/*}" >> "$GITHUB_OUTPUT"
+          echo "push=$push" >> "$GITHUB_OUTPUT"
+
+      - name: Compute Docker tags
+        id: tags
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          image="${{ steps.image-config.outputs.image }}"
+          ref_name="${{ gitea.ref_name }}"
+          ref_type="${{ gitea.ref_type }}"
+          short_sha="$(git rev-parse --short=12 HEAD)"
+          safe_ref="${ref_name//\//-}"
+
+          regular_tags=("${image}:sha-${short_sha}")
+          debug_tags=("${image}:sha-${short_sha}-debug")
+
+          if [ "$ref_type" = "branch" ]; then
+            regular_tags+=("${image}:${safe_ref}")
+            debug_tags+=("${image}:${safe_ref}-debug")
+
+            if [ "$safe_ref" = "main" ]; then
+              regular_tags+=("${image}:latest")
+              debug_tags+=("${image}:latest-debug")
+            fi
+          fi
+
+          if [ "$ref_type" = "tag" ] && [[ "$ref_name" == v* ]]; then
+            version="${ref_name#v}"
+            regular_tags+=("${image}:${version}")
+            debug_tags+=("${image}:${version}-debug")
+
+            if [[ "$version" =~ ^([0-9]+)\.([0-9]+)\.([0-9]+)$ ]]; then
+              major="${BASH_REMATCH[1]}"
+              minor="${BASH_REMATCH[2]}"
+              regular_tags+=("${image}:${major}.${minor}" "${image}:${major}" "${image}:latest")
+              debug_tags+=("${image}:${major}.${minor}-debug" "${image}:${major}-debug" "${image}:latest-debug")
+            fi
+          fi
+
+          {
+            echo "regular<<EOF"
+            printf "%s\n" "${regular_tags[@]}" | awk '!seen[$0]++'
+            echo "EOF"
+            echo "debug<<EOF"
+            printf "%s\n" "${debug_tags[@]}" | awk '!seen[$0]++'
+            echo "EOF"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Enable QEMU for arm64 builds
+        uses: docker/setup-qemu-action@v3
+        with:
+          platforms: arm64
+
+      - name: Configure Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Authenticate with container registry
+        if: steps.image-config.outputs.push == 'true'
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ steps.image-config.outputs.registry }}
+          username: ${{ secrets.REGISTRY_USERNAME }}
+          password: ${{ secrets.REGISTRY_PASSWORD }}
+
+      - name: Build release image
+        id: release-image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: Dockerfile
+          platforms: linux/amd64,linux/arm64
+          pull: true
+          push: ${{ steps.image-config.outputs.push == 'true' }}
+          provenance: false
+          sbom: false
+          build-args: |
+            VERGEN_GIT_DESCRIBE=${{ needs.compute-version.outputs.describe }}
+          tags: ${{ steps.tags.outputs.regular }}
+
+      - name: Build debug image
+        id: debug-image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: Dockerfile
+          target: debug
+          platforms: linux/amd64,linux/arm64
+          pull: true
+          push: ${{ steps.image-config.outputs.push == 'true' }}
+          provenance: false
+          sbom: false
+          build-args: |
+            VERGEN_GIT_DESCRIBE=${{ needs.compute-version.outputs.describe }}
+          tags: ${{ steps.tags.outputs.debug }}
+
+      - name: Summarize image result
+        shell: bash
+        run: |
+          if [ "${{ steps.image-config.outputs.push }}" = "true" ]; then
+            echo "Published multi-arch images for ${{ steps.image-config.outputs.image }}"
+          else
+            echo "Built multi-arch images locally. Set REGISTRY_USERNAME and REGISTRY_PASSWORD to enable pushes."
+          fi
