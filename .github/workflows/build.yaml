@@ -220,7 +220,7 @@ jobs:
     steps:
       - name: Compute Docker tags (standard)
         id: meta
-        uses: docker/metadata-action@v5.10.0
+        uses: docker/metadata-action@v6.0.0
         with:
           images: "${{ env.IMAGE }}"
           bake-target: docker-metadata-action
@@ -236,7 +236,7 @@ jobs:
 
       - name: Compute Docker tags (debug variant)
         id: meta-debug
-        uses: docker/metadata-action@v5.10.0
+        uses: docker/metadata-action@v6.0.0
         with:
           images: "${{ env.IMAGE }}"
           bake-target: docker-metadata-action-debug
