@@ -1,8 +1,8 @@
 # syntax = docker/dockerfile:1.7.1
-# Builds a minimal image with the binary only. It is multi-arch capable,
-# cross-building to aarch64 and x86_64. When cross-compiling, Docker sets two
-# implicit BUILDARG: BUILDPLATFORM being the host platform and TARGETPLATFORM
-# being the platform being built.
+# Builds a minimal image with the binary only. Buildx publishes amd64 and arm64
+# variants from this Dockerfile. Frontend assets are built once on the native
+# builder platform, while the server binary is compiled on the requested target
+# platform so it links against the correct native system libraries.
 
 # The Debian version and version name must be in sync
 ARG DEBIAN_VERSION=12
@@ -53,10 +53,11 @@ RUN --network=default \
 ########################################
 ## Build stage that builds the binary ##
 ########################################
-FROM --platform=${BUILDPLATFORM} docker.io/library/rust:${RUSTC_VERSION}-${DEBIAN_VERSION_NAME} AS builder
+FROM --platform=${TARGETPLATFORM} docker.io/library/rust:${RUSTC_VERSION}-${DEBIAN_VERSION_NAME} AS builder
 
 ARG CARGO_AUDITABLE_VERSION
 ARG RUSTC_VERSION
+ARG TARGETARCH
 
 ENV CARGO_HTTP_TIMEOUT=600
 ENV CARGO_HTTP_MULTIPLEXING=false
@@ -88,15 +89,15 @@ ENV VERGEN_GIT_DESCRIBE=${VERGEN_GIT_DESCRIBE}
 
 # Network access: cargo auditable needs it
 RUN --network=default \
-  --mount=type=cache,target=/root/.cargo/registry \
-  --mount=type=cache,target=/app/target \
+  --mount=type=cache,id=builder-registry,target=/root/.cargo/registry \
+  --mount=type=cache,id=builder-target-${TARGETARCH},target=/app/target \
   cargo auditable build \
     --locked \
     --release \
     --bin pasion \
     --no-default-features \
     --features docker,cedar \
-  && mv "target/release/pasion" /usr/local/bin/pasion-amd64
+  && mv "target/release/pasion" "/usr/local/bin/pasion-${TARGETARCH}"
 
 #######################################
 ## Prepare /usr/local/share/pasion/ ##
