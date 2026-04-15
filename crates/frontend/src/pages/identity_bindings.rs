@@ -122,31 +122,37 @@ pub fn IdentityBindings() -> Element {
                     // Link new provider — only shown when at least one configured
                     // provider is not yet linked to this account.
                     if let Some(Ok(providers)) = &*providers_data.read() {
-                        let linked_ids: Vec<String> = accounts
-                            .iter()
-                            .map(|a| a.provider_id.clone())
-                            .collect();
-                        let unlinked: Vec<_> = providers.providers.iter()
-                            .filter(|p| !linked_ids.contains(&p.id))
-                            .collect();
-                        if !unlinked.is_empty() {
-                            rsx! {
-                                div { class: "flex flex-col gap-2",
-                                    h4 { class: "text-md font-semibold", "Link a new provider" }
-                                    p { class: "text-md text-secondary",
-                                        "Connect an additional external account to enable more sign-in options."
-                                    }
-                                }
-                                div { class: "flex flex-wrap gap-2",
-                                    for provider in unlinked.iter() {
-                                        a {
-                                            class: "btn btn-secondary btn-sm",
-                                            href: "{provider.authorize_url}",
-                                            "Link {provider.human_name.clone().unwrap_or_else(|| provider.id.clone())}"
+                        {
+                            let linked_ids: Vec<String> = accounts
+                                .iter()
+                                .map(|a| a.provider_id.clone())
+                                .collect();
+                            let unlinked: Vec<_> = providers
+                                .providers
+                                .iter()
+                                .filter(|p| !linked_ids.contains(&p.id))
+                                .collect();
+                            if !unlinked.is_empty() {
+                                rsx! {
+                                    div { class: "flex flex-col gap-2",
+                                        h4 { class: "text-md font-semibold", "Link a new provider" }
+                                        p { class: "text-md text-secondary",
+                                            "Connect an additional external account to enable more sign-in options."
                                         }
                                     }
+                                    div { class: "flex flex-wrap gap-2",
+                                        for provider in unlinked.iter() {
+                                            a {
+                                                class: "btn btn-secondary btn-sm",
+                                                href: "{provider.authorize_url}",
+                                                "Link {provider.human_name.clone().unwrap_or_else(|| provider.id.clone())}"
+                                            }
+                                        }
+                                    }
+                                    Separator {}
                                 }
-                                Separator {}
+                            } else {
+                                rsx! {}
                             }
                         }
                     }

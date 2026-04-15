@@ -1,5 +1,5 @@
 use dioxus::prelude::*;
-use serde::{Deserialize, Serialize};
+use serde::Deserialize;
 
 use crate::{
     api::{api_get, api_post},
