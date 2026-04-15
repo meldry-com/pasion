@@ -64,7 +64,7 @@ salvo = { version = "0.90", features = [
     "test",
     "rate-limiter",
 ] }
-arc-swap = "1.9.0"
+arc-swap = "1.9.1"
 async-stream = "0.3.6"
 async-trait = "0.1.89"
 anyhow = "1.0.102"
