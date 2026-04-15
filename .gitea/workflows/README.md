@@ -15,8 +15,11 @@ Notes:
 
 - Gitea artifact upload uses `christopherhx/gitea-upload-artifact@v4`
   instead of GitHub's `actions/upload-artifact@v4+`
-- The Gitea image build now runs `amd64` and `arm64` in parallel, then publishes
-  a multi-arch manifest list after both per-architecture builds finish
+- The Gitea image build now runs the release `amd64` and `arm64` images in
+  parallel, then publishes a multi-arch manifest list after both
+  per-architecture builds finish
+- Each architecture also gets its own published tags such as `main-amd64`,
+  `main-arm64`, and `sha-<commit>-amd64`
 - The `arm64` image job uses a native runner labeled `ubuntu-24.04-arm64`
   instead of QEMU emulation
 - Gitea workflows intentionally do not use `mozilla-actions/sccache-action`,

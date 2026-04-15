@@ -133,9 +133,7 @@ jobs:
       gitea_registry_user: ${{ steps.image.outputs.gitea_registry_user }}
       use_dockerhub: ${{ steps.image.outputs.use_dockerhub }}
       regular_suffixes: ${{ steps.tags.outputs.regular_suffixes }}
-      debug_suffixes: ${{ steps.tags.outputs.debug_suffixes }}
-      release_staging_suffix: ${{ steps.tags.outputs.release_staging_suffix }}
-      debug_staging_suffix: ${{ steps.tags.outputs.debug_staging_suffix }}
+      source_suffix: ${{ steps.tags.outputs.source_suffix }}
 
     steps:
       - name: Resolve image names
@@ -212,28 +210,23 @@ jobs:
           safe_ref="${ref_name//\//-}"
 
           regular_suffixes=("sha-${short_sha}")
-          debug_suffixes=("sha-${short_sha}-debug")
 
           if [ "$ref_type" = "branch" ]; then
             regular_suffixes+=("$safe_ref")
-            debug_suffixes+=("${safe_ref}-debug")
 
             if [ "$safe_ref" = "main" ]; then
               regular_suffixes+=("latest")
-              debug_suffixes+=("latest-debug")
             fi
           fi
 
           if [ "$ref_type" = "tag" ] && [[ "$ref_name" == v* ]]; then
             version="${ref_name#v}"
             regular_suffixes+=("$version")
-            debug_suffixes+=("${version}-debug")
 
             if [[ "$version" =~ ^([0-9]+)\.([0-9]+)\.([0-9]+)$ ]]; then
               major="${BASH_REMATCH[1]}"
               minor="${BASH_REMATCH[2]}"
               regular_suffixes+=("${major}.${minor}" "${major}" "latest")
-              debug_suffixes+=("${major}.${minor}-debug" "${major}-debug" "latest-debug")
             fi
           fi
 
@@ -241,11 +234,7 @@ jobs:
             echo "regular_suffixes<<EOF"
             printf "%s\n" "${regular_suffixes[@]}" | awk '!seen[$0]++'
             echo "EOF"
-            echo "debug_suffixes<<EOF"
-            printf "%s\n" "${debug_suffixes[@]}" | awk '!seen[$0]++'
-            echo "EOF"
-            echo "release_staging_suffix=ci-${safe_ref}-${short_sha}-release"
-            echo "debug_staging_suffix=ci-${safe_ref}-${short_sha}-debug"
+            echo "source_suffix=sha-${short_sha}"
           } >> "$GITHUB_OUTPUT"
 
   build-image-arch:
@@ -300,24 +289,23 @@ jobs:
         shell: bash
         env:
           IMAGES: ${{ needs.prepare-image-build.outputs.images }}
+          FINAL_SUFFIXES: ${{ needs.prepare-image-build.outputs.regular_suffixes }}
         run: |
           set -euo pipefail
 
           release_tags=()
-          debug_tags=()
 
           while IFS= read -r image; do
             [ -n "$image" ] || continue
-            release_tags+=("${image}:${{ needs.prepare-image-build.outputs.release_staging_suffix }}-${{ matrix.arch }}")
-            debug_tags+=("${image}:${{ needs.prepare-image-build.outputs.debug_staging_suffix }}-${{ matrix.arch }}")
+            while IFS= read -r suffix; do
+              [ -n "$suffix" ] || continue
+              release_tags+=("${image}:${suffix}-${{ matrix.arch }}")
+            done <<< "$FINAL_SUFFIXES"
           done <<< "$IMAGES"
 
           {
             echo "release<<EOF"
             printf "%s\n" "${release_tags[@]}"
-            echo "EOF"
-            echo "debug<<EOF"
-            printf "%s\n" "${debug_tags[@]}"
             echo "EOF"
           } >> "$GITHUB_OUTPUT"
 
@@ -334,21 +322,6 @@ jobs:
           build-args: |
             VERGEN_GIT_DESCRIBE=${{ needs.compute-version.outputs.describe }}
           tags: ${{ steps.arch-tags.outputs.release }}
-
-      - name: Build debug image for ${{ matrix.arch }}
-        uses: docker/build-push-action@v6
-        with:
-          context: .
-          file: Dockerfile
-          target: debug
-          platforms: ${{ matrix.platform }}
-          pull: true
-          push: ${{ needs.prepare-image-build.outputs.push == 'true' }}
-          provenance: false
-          sbom: false
-          build-args: |
-            VERGEN_GIT_DESCRIBE=${{ needs.compute-version.outputs.describe }}
-          tags: ${{ steps.arch-tags.outputs.debug }}
 
   publish-image-manifests:
     name: Publish Docker image manifests
@@ -385,7 +358,7 @@ jobs:
         env:
           IMAGES: ${{ needs.prepare-image-build.outputs.images }}
           FINAL_SUFFIXES: ${{ needs.prepare-image-build.outputs.regular_suffixes }}
-          STAGING_SUFFIX: ${{ needs.prepare-image-build.outputs.release_staging_suffix }}
+          SOURCE_SUFFIX: ${{ needs.prepare-image-build.outputs.source_suffix }}
         run: |
           set -euo pipefail
 
@@ -400,32 +373,8 @@ jobs:
 
             docker buildx imagetools create \
               "${args[@]}" \
-              "${image}:${STAGING_SUFFIX}-amd64" \
-              "${image}:${STAGING_SUFFIX}-arm64"
-          done <<< "$IMAGES"
-
-      - name: Publish debug multi-arch manifests
-        shell: bash
-        env:
-          IMAGES: ${{ needs.prepare-image-build.outputs.images }}
-          FINAL_SUFFIXES: ${{ needs.prepare-image-build.outputs.debug_suffixes }}
-          STAGING_SUFFIX: ${{ needs.prepare-image-build.outputs.debug_staging_suffix }}
-        run: |
-          set -euo pipefail
-
-          while IFS= read -r image; do
-            [ -n "$image" ] || continue
-
-            args=()
-            while IFS= read -r suffix; do
-              [ -n "$suffix" ] || continue
-              args+=("-t" "${image}:${suffix}")
-            done <<< "$FINAL_SUFFIXES"
-
-            docker buildx imagetools create \
-              "${args[@]}" \
-              "${image}:${STAGING_SUFFIX}-amd64" \
-              "${image}:${STAGING_SUFFIX}-arm64"
+              "${image}:${SOURCE_SUFFIX}-amd64" \
+              "${image}:${SOURCE_SUFFIX}-arm64"
           done <<< "$IMAGES"
 
       - name: Summarize image result
@@ -451,5 +400,5 @@ jobs:
       - name: Summarize image result
         shell: bash
         run: |
-          echo "Built amd64 and arm64 images in parallel without pushing."
+          echo "Built amd64 and arm64 release images in parallel without pushing."
           echo "Set REGISTRY_USER / REGISTRY_TOKEN and optionally DOCKERHUB_USER / DOCKERHUB_TOKEN to publish manifests."
