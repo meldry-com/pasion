@@ -160,12 +160,49 @@ jobs:
             echo "source_suffix=sha-${short_sha}"
           } >> "$GITHUB_OUTPUT"
 
+  smoke-test-runtime:
+    name: Smoke test runtime image
+    runs-on: ubuntu-24.04
+    needs:
+      - compute-version
+
+    permissions:
+      contents: read
+
+    env:
+      VERGEN_GIT_DESCRIBE: ${{ needs.compute-version.outputs.describe }}
+      SOURCE_DATE_EPOCH: ${{ needs.compute-version.outputs.timestamp }}
+
+    steps:
+      - name: Fetch repository
+        uses: actions/checkout@v4
+
+      - name: Build debug runtime image
+        shell: bash
+        run: |
+          set -euo pipefail
+          docker build --target debug \
+            --build-arg VERGEN_GIT_DESCRIBE="${VERGEN_GIT_DESCRIBE}" \
+            -t pasion-runtime-smoke .
+
+      - name: Verify default storage root is writable
+        shell: bash
+        run: |
+          set -euo pipefail
+          docker run --rm --entrypoint=/busybox/sh pasion-runtime-smoke -c '
+            set -e
+            test "$PWD" = "/var/lib/pasion"
+            mkdir -p ./data/media
+            touch ./data/media/.write-test
+          '
+
   build-image-arch:
     name: Build Docker images (${{ matrix.arch }})
     runs-on: ${{ matrix.runner }}
     needs:
       - compute-version
       - prepare-image-build
+      - smoke-test-runtime
 
     strategy:
       fail-fast: false

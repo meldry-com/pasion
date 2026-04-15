@@ -110,6 +110,14 @@ COPY ./templates/ /share/templates
 COPY ./translations/ /share/translations
 COPY --from=frontend /frontend-dist/ /share/assets
 
+###############################################
+## Prepare writable runtime state directory ##
+###############################################
+FROM docker.io/library/debian:${DEBIAN_VERSION_NAME}-slim AS runtime-rootfs
+
+RUN mkdir -p /var/lib/pasion/data/media \
+  && chown -R 65532:65532 /var/lib/pasion
+
 ##################################
 ## Runtime stage, debug variant ##
 ##################################
@@ -118,8 +126,9 @@ FROM gcr.io/distroless/cc-debian${DEBIAN_VERSION}:debug-nonroot AS debug
 ARG TARGETARCH
 COPY --from=builder /usr/local/bin/pasion-${TARGETARCH} /usr/local/bin/pasion
 COPY --from=share /share /usr/local/share/pasion
+COPY --from=runtime-rootfs --chown=65532:65532 /var/lib/pasion /var/lib/pasion
 
-WORKDIR /
+WORKDIR /var/lib/pasion
 ENTRYPOINT ["/usr/local/bin/pasion"]
 
 ###################
@@ -130,6 +139,7 @@ FROM gcr.io/distroless/cc-debian${DEBIAN_VERSION}:nonroot
 ARG TARGETARCH
 COPY --from=builder /usr/local/bin/pasion-${TARGETARCH} /usr/local/bin/pasion
 COPY --from=share /share /usr/local/share/pasion
+COPY --from=runtime-rootfs --chown=65532:65532 /var/lib/pasion /var/lib/pasion
 
-WORKDIR /
+WORKDIR /var/lib/pasion
 ENTRYPOINT ["/usr/local/bin/pasion"]
