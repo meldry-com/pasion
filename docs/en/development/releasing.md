@@ -117,7 +117,7 @@ At this point, the releaser should check the changelog and ensure the "Set as pr
 [`translations-download` workflow]: https://github.com/taidge/pasion/actions/workflows/translations-download.yaml
 [`release-branch` workflow]: https://github.com/taidge/pasion/actions/workflows/release-branch.yaml
 [`release-bump` workflow]: https://github.com/taidge/pasion/actions/workflows/release-bump.yaml
-[`build` workflow]: https://github.com/taidge/pasion/actions/workflows/build.yaml
+[`release` workflow]: https://github.com/taidge/pasion/actions/workflows/release.yaml
 [translation download PR]: https://github.com/taidge/pasion/pulls?q=is%3Apr+label%3AA-I18n
-[CI to churn]: https://github.com/taidge/pasion/actions/workflows/build.yaml?query=event%3Apush+actor%3Amatrixbot
+[CI to churn]: https://github.com/taidge/pasion/actions/workflows/release.yaml?query=event%3Apush+actor%3Amatrixbot
 [draft release to appear]: https://github.com/taidge/pasion/releases

@@ -42,10 +42,21 @@ jobs:
           echo "timestamp=$(git log -1 --format=%ct)" >> "$GITHUB_OUTPUT"
 
   build-archives:
-    name: Build release archives
-    runs-on: ubuntu-24.04
+    name: Build release archives (${{ matrix.arch }})
+    runs-on: ${{ matrix.runner }}
     needs:
       - compute-version
+
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - arch: x86_64
+            rust_target: x86_64-unknown-linux-gnu
+            runner: ubuntu-24.04
+          - arch: aarch64
+            rust_target: aarch64-unknown-linux-gnu
+            runner: ubuntu-24.04-arm64
 
     permissions:
       contents: read
@@ -58,22 +69,11 @@ jobs:
       - name: Fetch repository
         uses: actions/checkout@v4
 
-      - name: Set up Rust with Linux targets
+      - name: Set up Rust with Linux target
         uses: dtolnay/rust-toolchain@stable
         with:
           targets: |
-            x86_64-unknown-linux-gnu
-            aarch64-unknown-linux-gnu
-
-      - name: Set up zig toolchain
-        uses: goto-bus-stop/setup-zig@v2
-        with:
-          version: 0.13.0
-
-      - name: Set up cargo-zigbuild
-        uses: taiki-e/install-action@v2
-        with:
-          tool: cargo-zigbuild
+            ${{ matrix.rust_target }}
 
       - name: Assemble asset directory
         run: |
@@ -83,40 +83,29 @@ jobs:
           cp -r policies/cedar/ assets-dist/share/cedar
           chmod -R u=rwX,go=rX assets-dist/
 
-      - name: Compile release binaries
+      - name: Compile release binary
         run: |
-          cargo zigbuild \
+          cargo build \
             --release \
-            --target x86_64-unknown-linux-gnu.2.17 \
+            --target ${{ matrix.rust_target }} \
             --no-default-features \
             --features dist \
             -p pasion
 
-          cargo zigbuild \
-            --release \
-            --target aarch64-unknown-linux-gnu.2.17 \
-            --no-default-features \
-            --features dist \
-            -p pasion
-
-      - name: Build tarballs for each architecture
+      - name: Build tarball for ${{ matrix.arch }}
         run: |
-          for arch in x86_64 aarch64; do
-            mkdir -p "dist/${arch}/share"
-            cp -r assets-dist/share/* "dist/${arch}/share/"
-            cp "target/${arch}-unknown-linux-gnu/release/pasion" "dist/${arch}/pasion"
-            chmod -R u=rwX,go=rX "dist/${arch}/"
-            chmod u=rwx,go=rx "dist/${arch}/pasion"
-            tar -czvf "pasion-${arch}-linux.tar.gz" --owner=0 --group=0 -C "dist/${arch}/" .
-          done
+          mkdir -p "dist/${{ matrix.arch }}/share"
+          cp -r assets-dist/share/* "dist/${{ matrix.arch }}/share/"
+          cp "target/${{ matrix.rust_target }}/release/pasion" "dist/${{ matrix.arch }}/pasion"
+          chmod -R u=rwX,go=rX "dist/${{ matrix.arch }}/"
+          chmod u=rwx,go=rx "dist/${{ matrix.arch }}/pasion"
+          tar -czvf "pasion-${{ matrix.arch }}-linux.tar.gz" --owner=0 --group=0 -C "dist/${{ matrix.arch }}/" .
 
-      - name: Upload release archives
+      - name: Upload release archive
         uses: christopherhx/gitea-upload-artifact@v4
         with:
-          name: pasion-linux-archives
-          path: |
-            pasion-aarch64-linux.tar.gz
-            pasion-x86_64-linux.tar.gz
+          name: pasion-${{ matrix.arch }}-linux
+          path: pasion-${{ matrix.arch }}-linux.tar.gz
 
   prepare-image-build:
     name: Resolve image names and tags

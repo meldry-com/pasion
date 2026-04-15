@@ -22,6 +22,8 @@ Notes:
   `main-arm64`, and `sha-<commit>-amd64`
 - The `arm64` image job uses a native runner labeled `ubuntu-24.04-arm64`
   instead of QEMU emulation
+- The release archive jobs also use native `amd64` / `arm64` runners and the
+  standard Rust toolchain instead of `cargo-zigbuild`
 - Gitea workflows intentionally do not use `mozilla-actions/sccache-action`,
   because that action expects GitHub cache token support that is not available
   in standard Gitea Actions runners

@@ -19,7 +19,6 @@ env:
   SCCACHE_GHA_ENABLED: "true"
   IMAGE: ghcr.io/palpo-im/pasion
   BUILDCACHE: ghcr.io/palpo-im/pasion/buildcache
-  DOCKER_METADATA_ANNOTATIONS_LEVELS: manifest,index
 
 concurrency:
   group: build-${{ github.ref }}
@@ -85,7 +84,7 @@ jobs:
 
   build-binaries:
     name: Compile release binaries
-    runs-on: ubuntu-24.04
+    runs-on: ${{ matrix.runner }}
     if: github.event_name == 'push' || github.event.label.name == 'Z-Build-Workflow'
     needs:
       - compute-version
@@ -94,7 +93,9 @@ jobs:
       matrix:
         include:
           - target: x86_64-unknown-linux-gnu
+            runner: ubuntu-24.04
           - target: aarch64-unknown-linux-gnu
+            runner: ubuntu-24.04-arm
 
     env:
       VERGEN_GIT_DESCRIBE: ${{ needs.compute-version.outputs.describe }}
@@ -116,21 +117,11 @@ jobs:
       - name: Configure sccache
         uses: mozilla-actions/sccache-action@v0.0.9
 
-      - name: Set up zig toolchain
-        uses: goto-bus-stop/setup-zig@v2
-        with:
-          version: 0.13.0
-
-      - name: Set up cargo-zigbuild
-        uses: taiki-e/install-action@v2
-        with:
-          tool: cargo-zigbuild
-
       - name: Compile pasion binary
         run: |
-          cargo zigbuild \
+          cargo build \
             --release \
-            --target ${{ matrix.target }}.2.17 \
+            --target ${{ matrix.target }} \
             --no-default-features \
             --features dist \
             -p pasion
@@ -198,66 +189,95 @@ jobs:
 
   # -- Container image --
 
-  build-image:
-    name: Build and publish container image
+  prepare-image-build:
+    name: Resolve container image tags
     runs-on: ubuntu-24.04
     if: github.event_name == 'push' || github.event.label.name == 'Z-Build-Workflow'
-    needs:
-      - compute-version
 
     outputs:
-      metadata: ${{ steps.extract-metadata.outputs.metadata }}
+      regular_suffixes: ${{ steps.tags.outputs.regular_suffixes }}
+      source_suffix: ${{ steps.tags.outputs.source_suffix }}
 
     permissions:
       contents: read
-      id-token: write
+
+    steps:
+      - name: Compute Docker tag suffixes
+        id: tags
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          GITHUB_SHA: ${{ github.sha }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+        run: |
+          set -euo pipefail
+
+          ref_name="${{ github.ref_name }}"
+          ref_type="${{ github.ref_type }}"
+          short_sha="${GITHUB_SHA:0:12}"
+          safe_ref="${ref_name//\//-}"
+
+          regular_suffixes=("sha-${short_sha}")
+
+          if [ "$EVENT_NAME" = "pull_request" ] && [ -n "${PR_NUMBER:-}" ]; then
+            regular_suffixes+=("pr-${PR_NUMBER}")
+          else
+            if [ "$ref_type" = "branch" ]; then
+              regular_suffixes+=("$safe_ref")
+
+              if [ "$safe_ref" = "main" ]; then
+                regular_suffixes+=("latest")
+              fi
+            fi
+
+            if [ "$ref_type" = "tag" ] && [[ "$ref_name" == v* ]]; then
+              version="${ref_name#v}"
+              regular_suffixes+=("$version")
+
+              if [[ "$version" =~ ^([0-9]+)\.([0-9]+)\.([0-9]+)$ ]]; then
+                major="${BASH_REMATCH[1]}"
+                minor="${BASH_REMATCH[2]}"
+                regular_suffixes+=("${major}.${minor}" "${major}" "latest")
+              fi
+            fi
+          fi
+
+          {
+            echo "regular_suffixes<<EOF"
+            printf "%s\n" "${regular_suffixes[@]}" | awk '!seen[$0]++'
+            echo "EOF"
+            echo "source_suffix=sha-${short_sha}"
+          } >> "$GITHUB_OUTPUT"
+
+  build-image-arch:
+    name: Build and publish container image (${{ matrix.arch }})
+    runs-on: ${{ matrix.runner }}
+    if: github.event_name == 'push' || github.event.label.name == 'Z-Build-Workflow'
+    needs:
+      - compute-version
+      - prepare-image-build
+
+    permissions:
+      contents: read
       packages: write
+
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - arch: amd64
+            platform: linux/amd64
+            runner: ubuntu-24.04
+          - arch: arm64
+            platform: linux/arm64
+            runner: ubuntu-24.04-arm
 
     env:
       VERGEN_GIT_DESCRIBE: ${{ needs.compute-version.outputs.describe }}
       SOURCE_DATE_EPOCH: ${{ needs.compute-version.outputs.timestamp }}
 
     steps:
-      - name: Compute Docker tags (standard)
-        id: meta
-        uses: docker/metadata-action@v5.10.0
-        with:
-          images: "${{ env.IMAGE }}"
-          bake-target: docker-metadata-action
-          flavor: |
-            latest=auto
-          tags: |
-            type=ref,event=branch
-            type=ref,event=pr
-            type=semver,pattern={{version}}
-            type=semver,pattern={{major}}.{{minor}}
-            type=semver,pattern={{major}}
-            type=sha
-
-      - name: Compute Docker tags (debug variant)
-        id: meta-debug
-        uses: docker/metadata-action@v5.10.0
-        with:
-          images: "${{ env.IMAGE }}"
-          bake-target: docker-metadata-action-debug
-          flavor: |
-            latest=auto
-            suffix=-debug,onlatest=true
-          tags: |
-            type=ref,event=branch
-            type=ref,event=pr
-            type=semver,pattern={{version}}
-            type=semver,pattern={{major}}.{{minor}}
-            type=semver,pattern={{major}}
-            type=sha
-
-      - name: Set up Cosign
-        uses: sigstore/cosign-installer@v4.0.0
-
-      - name: Enable QEMU for arm64 builds
-        uses: docker/setup-qemu-action@v3
-        with:
-          platforms: arm64
+      - name: Fetch repository
+        uses: actions/checkout@v6
 
       - name: Configure Docker Buildx
         uses: docker/setup-buildx-action@v3.11.1
@@ -273,39 +293,123 @@ jobs:
           username: ${{ github.repository_owner }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Execute Docker Bake build
-        id: bake
-        uses: docker/bake-action@v7.0.0
-        with:
-          files: |
-            ./docker-bake.hcl
-            cwd://${{ steps.meta.outputs.bake-file }}
-            cwd://${{ steps.meta-debug.outputs.bake-file }}
-          set: |
-            base.output=type=image,push=true
-            base.cache-from=type=registry,ref=${{ env.BUILDCACHE }}:buildcache
-            base.cache-to=type=registry,ref=${{ env.BUILDCACHE }}:buildcache,mode=max
-
-      - name: Normalize bake output to digest/tag map
-        id: extract-metadata
+      - name: Compute per-architecture tags
+        id: arch-tags
+        env:
+          FINAL_SUFFIXES: ${{ needs.prepare-image-build.outputs.regular_suffixes }}
         run: |
-          echo 'metadata<<EOF' >> $GITHUB_OUTPUT
-          echo '${{ steps.bake.outputs.metadata }}' | jq -c 'with_entries(select(.value | (type == "object" and has("containerimage.digest")))) | map_values({ digest: .["containerimage.digest"], tags: (.["image.name"] | split(",")) })' >> $GITHUB_OUTPUT
-          echo 'EOF' >> $GITHUB_OUTPUT
+          set -euo pipefail
 
-      - name: Cosign the published images
+          release_tags=()
+
+          while IFS= read -r suffix; do
+            [ -n "$suffix" ] || continue
+            release_tags+=("${IMAGE}:${suffix}-${{ matrix.arch }}")
+          done <<< "$FINAL_SUFFIXES"
+
+          {
+            echo "release<<EOF"
+            printf "%s\n" "${release_tags[@]}"
+            echo "EOF"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Build release image for ${{ matrix.arch }}
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: Dockerfile
+          platforms: ${{ matrix.platform }}
+          pull: true
+          push: true
+          provenance: false
+          sbom: false
+          build-args: |
+            VERGEN_GIT_DESCRIBE=${{ needs.compute-version.outputs.describe }}
+          tags: ${{ steps.arch-tags.outputs.release }}
+          cache-from: type=registry,ref=${{ env.BUILDCACHE }}:buildcache-${{ matrix.arch }}
+          cache-to: type=registry,ref=${{ env.BUILDCACHE }}:buildcache-${{ matrix.arch }},mode=max
+
+  build-image:
+    name: Publish container image manifests
+    runs-on: ubuntu-24.04
+    if: github.event_name == 'push' || github.event.label.name == 'Z-Build-Workflow'
+    needs:
+      - prepare-image-build
+      - build-image-arch
+
+    outputs:
+      digest: ${{ steps.publish.outputs.digest }}
+      tags_text: ${{ steps.publish.outputs.tags_text }}
+
+    permissions:
+      contents: read
+      id-token: write
+      packages: write
+
+    steps:
+      - name: Set up Cosign
+        uses: sigstore/cosign-installer@v4.0.0
+
+      - name: Configure Docker Buildx
+        uses: docker/setup-buildx-action@v3.11.1
+        with:
+          buildkitd-config-inline: |
+            [registry."docker.io"]
+              mirrors = ["mirror.gcr.io"]
+
+      - name: Authenticate with GitHub Container Registry
+        uses: docker/login-action@v3.6.0
+        with:
+          registry: ghcr.io
+          username: ${{ github.repository_owner }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Publish release multi-arch manifests
+        id: publish
+        env:
+          FINAL_SUFFIXES: ${{ needs.prepare-image-build.outputs.regular_suffixes }}
+          SOURCE_SUFFIX: ${{ needs.prepare-image-build.outputs.source_suffix }}
+        run: |
+          set -euo pipefail
+
+          args=()
+          while IFS= read -r suffix; do
+            [ -n "$suffix" ] || continue
+            args+=("-t" "${IMAGE}:${suffix}")
+          done <<< "$FINAL_SUFFIXES"
+
+          docker buildx imagetools create \
+            "${args[@]}" \
+            "${IMAGE}:${SOURCE_SUFFIX}-amd64" \
+            "${IMAGE}:${SOURCE_SUFFIX}-arm64"
+
+          digest="$(docker buildx imagetools inspect "${IMAGE}:${SOURCE_SUFFIX}" | awk '/Digest:/ { print $2; exit }')"
+          if [ -z "$digest" ]; then
+            echo "Failed to determine manifest digest for ${IMAGE}:${SOURCE_SUFFIX}" >&2
+            exit 1
+          fi
+
+          {
+            echo "digest=$digest"
+            echo "tags_text<<EOF"
+            while IFS= read -r suffix; do
+              [ -n "$suffix" ] || continue
+              echo "${IMAGE}:${suffix}"
+            done <<< "$FINAL_SUFFIXES"
+            echo "EOF"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Cosign the published image
         if: |
           github.event_name != 'pull_request'
           && (startsWith(github.ref, 'refs/tags/v') || github.ref == 'refs/heads/main')
 
         env:
-          REGULAR_DIGEST: ${{ steps.extract-metadata.outputs.metadata && fromJSON(steps.extract-metadata.outputs.metadata).regular.digest }}
-          DEBUG_DIGEST: ${{ steps.extract-metadata.outputs.metadata && fromJSON(steps.extract-metadata.outputs.metadata).debug.digest }}
+          REGULAR_DIGEST: ${{ steps.publish.outputs.digest }}
 
         run: |-
           cosign sign --yes \
-            "$IMAGE@$REGULAR_DIGEST" \
-            "$IMAGE@$DEBUG_DIGEST" \
+            "$IMAGE@$REGULAR_DIGEST"
 
   # -- Tagged release --
 
@@ -333,29 +437,16 @@ jobs:
           body: |
             ### Docker image
 
-            Regular image:
+            Release image:
 
-              - Digest:
-                ```
-                ${{ env.IMAGE }}@${{ fromJSON(needs.build-image.outputs.metadata).regular.digest }}
-                ```
-              - Tags:
-                ```
-                ${{ join(fromJSON(needs.build-image.outputs.metadata).regular.tags, '
-                ') }}
-                ```
-
-            Debug variant:
-
-              - Digest:
-                ```
-                ${{ env.IMAGE }}@${{ fromJSON(needs.build-image.outputs.metadata).debug.digest }}
-                ```
-              - Tags:
-                ```
-                ${{ join(fromJSON(needs.build-image.outputs.metadata).debug.tags, '
-                ') }}
-                ```
+            - Digest:
+              ```
+              ${{ env.IMAGE }}@${{ needs.build-image.outputs.digest }}
+              ```
+            - Tags:
+              ```
+              ${{ needs.build-image.outputs.tags_text }}
+              ```
 
           files: |
             artifacts/pasion-aarch64-linux.tar.gz
