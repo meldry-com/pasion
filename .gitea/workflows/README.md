@@ -5,9 +5,9 @@ while GitHub continues to use `.github/workflows/`.
 
 Optional variables and secrets:
 
-- `CONTAINER_IMAGE`: target image name for `.gitea/workflows/build.yaml`
-  - Default: `ghcr.io/taidge/pasion`
-- `REGISTRY_USERNAME` / `REGISTRY_PASSWORD`: enables Docker image pushes
+- `REGISTRY_USER` / `REGISTRY_TOKEN`: enables pushes to the Gitea container registry
+- `DOCKERHUB_USER` / `DOCKERHUB_TOKEN`: enables pushes to Docker Hub
+- `DOCKERHUB_NAMESPACE`: optional Docker Hub namespace override
 - `CODECOV_TOKEN`: enables coverage upload
 - `LOCALAZY_WRITE_KEY`: enables Localazy upload/download workflows
 
@@ -15,6 +15,10 @@ Notes:
 
 - Gitea artifact upload uses `christopherhx/gitea-upload-artifact@v4`
   instead of GitHub's `actions/upload-artifact@v4+`
+- The Gitea image build now runs `amd64` and `arm64` in parallel, then publishes
+  a multi-arch manifest list after both per-architecture builds finish
+- The `arm64` image job uses a native runner labeled `ubuntu-24.04-arm64`
+  instead of QEMU emulation
 - Gitea workflows intentionally do not use `mozilla-actions/sccache-action`,
   because that action expects GitHub cache token support that is not available
   in standard Gitea Actions runners
