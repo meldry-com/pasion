@@ -212,7 +212,7 @@ pest_derive = "2.8.6"
 pin-project-lite = "0.2.17"
 pkcs1 = { version = "0.7.5", features = ["std"] }
 pkcs8 = { version = "0.10.2", features = ["std", "pkcs5", "encryption", "pem"] }
-psl = "2.1.199"
+psl = "2.1.203"
 quanta = "0.12.6"
 rand = "0.10"
 rand_chacha = "0.3"
