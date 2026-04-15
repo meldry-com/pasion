@@ -132,6 +132,9 @@ jobs:
           - arch: amd64
             platform: linux/amd64
             runner: ubuntu-24.04
+          - arch: arm64
+            platform: linux/arm64
+            runner: ubuntu-24.04-arm
 
     env:
       VERGEN_GIT_DESCRIBE: ${{ needs.compute-version.outputs.describe }}
@@ -192,7 +195,7 @@ jobs:
           cache-to: type=registry,ref=${{ env.BUILDCACHE }}:buildcache-${{ matrix.arch }},mode=max
 
   build-image:
-    name: Publish container image tags
+    name: Publish container image manifests
     runs-on: ubuntu-24.04
     if: github.event_name == 'push' || github.event.label.name == 'Z-Build-Workflow'
     needs:
@@ -226,7 +229,7 @@ jobs:
           username: ${{ github.repository_owner }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Publish release image tags
+      - name: Publish release multi-arch manifests
         id: publish
         env:
           FINAL_SUFFIXES: ${{ needs.prepare-image-build.outputs.regular_suffixes }}
@@ -242,7 +245,8 @@ jobs:
 
           docker buildx imagetools create \
             "${args[@]}" \
-            "${IMAGE}:${SOURCE_SUFFIX}-amd64"
+            "${IMAGE}:${SOURCE_SUFFIX}-amd64" \
+            "${IMAGE}:${SOURCE_SUFFIX}-arm64"
 
           digest="$(docker buildx imagetools inspect "${IMAGE}:${SOURCE_SUFFIX}" | awk '/Digest:/ { print $2; exit }')"
           if [ -z "$digest" ]; then
