@@ -1,10 +1,9 @@
 use pasion_data::{
-    BoxRepository, RepositoryAccess, RepositoryError,
+    BoxRepository, BoxRng, Clock, RepositoryAccess, RepositoryError, TokenType,
     oauth2::{OAuth2AccessTokenRepository, OAuth2RefreshTokenRepository, OAuth2SessionRepository},
     queue::{QueueJobRepositoryExt as _, SyncDevicesJob},
     user::UserRepository,
 };
-use pasion_data::{BoxRng, Clock, TokenType};
 use pasion_iana::oauth::OAuthTokenTypeHint;
 use thiserror::Error;
 use ulid::Ulid;

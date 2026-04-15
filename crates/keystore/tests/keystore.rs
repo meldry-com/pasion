@@ -45,7 +45,10 @@ macro_rules! plain_key_test {
         fn $test_name() {
             let data = include_bytes!(concat!("./keys/", $fixture));
             let pk = PrivateKey::load(data).unwrap();
-            assert!(matches!(pk, PrivateKey::$variant(_)), "unexpected key variant");
+            assert!(
+                matches!(pk, PrivateKey::$variant(_)),
+                "unexpected key variant"
+            );
             sign_verify_all_algs(&pk);
         }
     };
@@ -58,7 +61,10 @@ macro_rules! encrypted_key_test {
         fn $test_name() {
             let data = include_bytes!(concat!("./keys/", $fixture));
             let pk = PrivateKey::load_encrypted(data, TEST_PASSPHRASE).unwrap();
-            assert!(matches!(pk, PrivateKey::$variant(_)), "unexpected key variant");
+            assert!(
+                matches!(pk, PrivateKey::$variant(_)),
+                "unexpected key variant"
+            );
             sign_verify_all_algs(&pk);
         }
     };
@@ -143,10 +149,7 @@ der_roundtrip!(serialize_ec_k256_sec1_der, "ec-k256.sec1");
 
 /// Helper: generate a key, serialise it to PEM / DER / PKCS8-DER, reload each
 /// form, and sign-verify with every supported algorithm.
-fn roundtrip_generated_key(
-    key: &PrivateKey,
-    expected_variant: &str,
-) {
+fn roundtrip_generated_key(key: &PrivateKey, expected_variant: &str) {
     // PEM round-trip
     let pem_str = key.to_pem(pem_rfc7468::LineEnding::LF).unwrap();
     let from_pem = PrivateKey::load_pem(&pem_str).unwrap();
@@ -190,10 +193,18 @@ fn generated_ed25519_roundtrip_sign_and_verify() {
 #[test]
 fn load_encrypted_as_unencrypted_error() {
     let pem_content = include_str!("./keys/rsa.pkcs8.encrypted.pem");
-    assert!(PrivateKey::load_pem(pem_content).unwrap_err().is_encrypted());
+    assert!(
+        PrivateKey::load_pem(pem_content)
+            .unwrap_err()
+            .is_encrypted()
+    );
 
     let der_content = include_bytes!("./keys/rsa.pkcs8.encrypted.der");
-    assert!(PrivateKey::load_der(der_content).unwrap_err().is_encrypted());
+    assert!(
+        PrivateKey::load_der(der_content)
+            .unwrap_err()
+            .is_encrypted()
+    );
 }
 
 #[test]

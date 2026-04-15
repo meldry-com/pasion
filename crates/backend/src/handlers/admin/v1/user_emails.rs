@@ -4,29 +4,25 @@
 
 use std::str::FromStr as _;
 
-use pasion_data::RepositoryAccess;
-use pasion_data::audit::AdminOperation;
-use pasion_data::queue::{ProvisionUserJob, QueueJobRepositoryExt as _};
-use pasion_data::user::UserEmailFilter;
-use salvo::http::StatusCode;
-use salvo::prelude::*;
+use pasion_data::{
+    RepositoryAccess,
+    audit::AdminOperation,
+    queue::{ProvisionUserJob, QueueJobRepositoryExt as _},
+    user::UserEmailFilter,
+};
+use salvo::{http::StatusCode, prelude::*};
 use schemars::JsonSchema;
 use serde::Deserialize;
 use ulid::Ulid;
 
-use crate::AppError;
-use crate::AppResult;
-use crate::CreatedJsonResult;
-use crate::JsonResult;
-use crate::handlers::admin::{
-    call_context::extract_call_context,
-    model::Resource,
-    model::UserEmail,
-    params::IncludeCount,
-    params::extract_pagination,
-    params::extract_ulid_param,
-    response::PaginatedResponse,
-    response::SingleResponse,
+use crate::{
+    AppError, AppResult, CreatedJsonResult, JsonResult,
+    handlers::admin::{
+        call_context::extract_call_context,
+        model::{Resource, UserEmail},
+        params::{IncludeCount, extract_pagination, extract_ulid_param},
+        response::{PaginatedResponse, SingleResponse},
+    },
 };
 
 /// JSON body accepted by `POST /api/admin/v1/user-emails`.
@@ -57,10 +53,7 @@ pub async fn add_email(
         ..
     } = ctx;
     let mut rng = crate::handlers::account::make_rng();
-    let body: AddRequest = req
-        .parse_json()
-        .await
-        .map_err(AppError::internal)?;
+    let body: AddRequest = req.parse_json().await.map_err(AppError::internal)?;
 
     // Resolve the target user
     let owner = repo
@@ -117,9 +110,9 @@ pub async fn add_email(
 
     repo.save().await?;
 
-    Ok(crate::handlers::admin::CreatedJson(SingleResponse::new_canonical(
-        entry.into(),
-    )))
+    Ok(crate::handlers::admin::CreatedJson(
+        SingleResponse::new_canonical(entry.into()),
+    ))
 }
 
 /// Remove a user email by its identifier.
@@ -148,7 +141,9 @@ pub async fn delete_email(req: &mut Request, depot: &Depot) -> AppResult<StatusC
     repo.user_email().remove(entry).await?;
 
     // Notify downstream systems about the change
-    repo.queue_job().schedule_job(&mut rng, &clock, provision_job).await?;
+    repo.queue_job()
+        .schedule_job(&mut rng, &clock, provision_job)
+        .await?;
 
     crate::handlers::admin::audit_helper::record_admin_operation(
         &mut repo,
@@ -170,10 +165,7 @@ pub async fn delete_email(req: &mut Request, depot: &Depot) -> AppResult<StatusC
 /// Retrieve a single user email record by its identifier.
 #[endpoint]
 #[tracing::instrument(name = "handler.admin.v1.user_emails.get", skip_all)]
-pub async fn get_email(
-    req: &mut Request,
-    depot: &Depot,
-) -> JsonResult<SingleResponse<UserEmail>> {
+pub async fn get_email(req: &mut Request, depot: &Depot) -> JsonResult<SingleResponse<UserEmail>> {
     let ctx = extract_call_context(req, depot).await?;
     let crate::handlers::admin::call_context::CallContext { mut repo, .. } = ctx;
     let email_id = extract_ulid_param(req)?;
@@ -382,21 +374,18 @@ fn map_service_error(error: crate::services::user_admin::UserAdminServiceError) 
 #[cfg(test)]
 mod tests {
     use chrono::Duration;
-    use hyper::Request;
-    use hyper::StatusCode;
+    use hyper::{Request, StatusCode};
     use insta::assert_json_snapshot;
-    use pasion_data::RepositoryAccess;
-    use pasion_data::user::{UserEmailRepository, UserRepository};
-    use rand_core::SeedableRng;
+    use pasion_data::{
+        RepositoryAccess,
+        user::{UserEmailRepository, UserRepository},
+    };
     use rand_chacha::ChaChaRng;
+    use rand_core::SeedableRng;
     use ulid::Ulid;
-    
+
     use crate::handlers::test_utils::{
-        RequestBuilderExt,
-        ResponseExt,
-        TestState,
-        setup,
-        unique_test_nonce,
+        RequestBuilderExt, ResponseExt, TestState, setup, unique_test_nonce,
     };
 
     #[tokio::test]

@@ -2,19 +2,16 @@ use anyhow::Context;
 use async_trait::async_trait;
 use chrono::{Duration, Utc};
 use pasion_data::{
-    BoxRepository, Pagination, RepositoryAccess,
+    BoxRepository, NotificationChannel, NotificationDelivery, NotificationDeliveryFailure,
+    NotificationDestination, NotificationEventActor, NotificationEventKind,
+    NotificationRequest as PersistedNotificationRequest, NotificationRequestSource,
+    NotificationRequestStatus, Pagination, RepositoryAccess,
     notification::{NewNotificationDelivery, NewNotificationEventLog, NewNotificationRequest},
     queue::{
         ContactVerificationTarget, DispatchNotificationJob, ProcessNotificationDeliveriesJob,
         QueueJobRepositoryExt as _,
     },
     user::UserEmailFilter,
-};
-use pasion_data::{
-    NotificationChannel, NotificationDelivery, NotificationDeliveryFailure,
-    NotificationDestination, NotificationEventActor, NotificationEventKind,
-    NotificationRequest as PersistedNotificationRequest, NotificationRequestSource,
-    NotificationRequestStatus,
 };
 use pasion_i18n::DataLocale;
 use pasion_messaging::{Address, Mailbox, NotificationError, NotificationRequest};
@@ -352,10 +349,14 @@ pub(crate) async fn send_account_recovery(
 
         for edge in &page.edges {
             let ticket = {
-                const CHARSET: &[u8] = b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789";
+                const CHARSET: &[u8] =
+                    b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789";
                 let mut bytes = [0u8; 32];
                 rng.fill_bytes(&mut bytes);
-                bytes.iter().map(|b| CHARSET[*b as usize % CHARSET.len()] as char).collect::<String>()
+                bytes
+                    .iter()
+                    .map(|b| CHARSET[*b as usize % CHARSET.len()] as char)
+                    .collect::<String>()
             };
             let ticket = repo
                 .user_recovery()

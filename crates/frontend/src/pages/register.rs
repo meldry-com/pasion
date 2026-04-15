@@ -608,8 +608,8 @@ pub fn RegisterFinish(id: String) -> Element {
             // saved by the manual register flow.
             let mut redirected = false;
 
-            // 1. API-returned post_auth_action (set during upstream OIDC
-            //    registration flows)
+            // 1. API-returned post_auth_action (set during upstream OIDC registration
+            //    flows)
             if let Some(action) = resp.post_auth_action.as_ref() {
                 let kind = action.get("kind").and_then(|v| v.as_str());
                 let id = action.get("id").and_then(|v| v.as_str()).map(String::from);
@@ -623,8 +623,8 @@ pub fn RegisterFinish(id: String) -> Element {
 
             #[cfg(target_arch = "wasm32")]
             if !redirected
-                && let Some(storage) = web_sys::window()
-                    .and_then(|w| w.session_storage().ok().flatten())
+                && let Some(storage) =
+                    web_sys::window().and_then(|w| w.session_storage().ok().flatten())
             {
                 let kind = storage.get_item("post_auth_kind").ok().flatten();
                 let id = storage.get_item("post_auth_id").ok().flatten();

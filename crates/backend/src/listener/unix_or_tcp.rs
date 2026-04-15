@@ -101,7 +101,10 @@ impl Drop for UnixOrTcpListener {
 #[cfg(unix)]
 impl From<UnixListener> for UnixOrTcpListener {
     fn from(listener: UnixListener) -> Self {
-        Self::Unix { listener, path: None }
+        Self::Unix {
+            listener,
+            path: None,
+        }
     }
 }
 
@@ -117,7 +120,10 @@ impl TryFrom<std::os::unix::net::UnixListener> for UnixOrTcpListener {
 
     fn try_from(listener: std::os::unix::net::UnixListener) -> Result<Self, Self::Error> {
         listener.set_nonblocking(true)?;
-        Ok(Self::Unix { listener: UnixListener::from_std(listener)?, path: None })
+        Ok(Self::Unix {
+            listener: UnixListener::from_std(listener)?,
+            path: None,
+        })
     }
 }
 
@@ -294,7 +300,8 @@ impl AsyncRead for UnixOrTcpConnection {
         cx: &mut Context<'_>,
         buf: &mut tokio::io::ReadBuf<'_>,
     ) -> Poll<std::io::Result<()>> {
-        // SAFETY: we only project to inner fields which are Unpin (TcpStream, UnixStream)
+        // SAFETY: we only project to inner fields which are Unpin (TcpStream,
+        // UnixStream)
         let inner = &mut self.get_mut().inner;
         match inner {
             #[cfg(unix)]

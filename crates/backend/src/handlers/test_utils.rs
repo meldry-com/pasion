@@ -12,11 +12,9 @@ use std::{
     time::{SystemTime, UNIX_EPOCH},
 };
 
-use crate::salvo_utils::cookies::{CookieJar, CookieManager};
 use chrono::Duration;
 use cookie_store::{CookieStore, RawCookie};
-use diesel_async::AsyncPgConnection;
-use diesel_async::pooled_connection::deadpool::Pool as DieselPool;
+use diesel_async::{AsyncPgConnection, pooled_connection::deadpool::Pool as DieselPool};
 use headers::{Authorization, ContentType, HeaderMapExt, HeaderName, HeaderValue};
 use hyper::{
     Request, Response, StatusCode,
@@ -24,15 +22,14 @@ use hyper::{
 };
 use oauth2_types::scope::Scope;
 use pasion_config::RateLimitingConfig;
-use pasion_data::PgRepositoryFactory;
-use pasion_data::UrlBuilder;
 use pasion_data::{
-    AppVersion, BoxClock, BoxRng, SiteConfig, SystemClock, TokenType, clock::MockClock,
-    personal::session::PersonalSessionOwner,
-};
-use pasion_data::{
-    BoxRepository, BoxRepositoryFactory, RepositoryAccess, RepositoryError, RepositoryFactory,
-    personal::{PersonalAccessTokenRepository, PersonalSessionRepository},
+    AppVersion, BoxClock, BoxRepository, BoxRepositoryFactory, BoxRng, PgRepositoryFactory,
+    RepositoryAccess, RepositoryError, RepositoryFactory, SiteConfig, SystemClock, TokenType,
+    UrlBuilder,
+    clock::MockClock,
+    personal::{
+        PersonalAccessTokenRepository, PersonalSessionRepository, session::PersonalSessionOwner,
+    },
     user::UserRepository,
 };
 use pasion_i18n::Translator;
@@ -42,9 +39,12 @@ use pasion_messaging::{MailTransport, Mailer, NotificationCenter};
 use pasion_policy::{InstantiateError, Policy, PolicyFactory};
 use pasion_tasks::QueueWorker;
 use pasion_templates::{SiteConfigExt, Templates};
-use rand_core::SeedableRng;
 use rand_chacha::ChaChaRng;
-use salvo::{prelude::*, test::ResponseExt as SalvoResponseExt, test::TestClient};
+use rand_core::SeedableRng;
+use salvo::{
+    prelude::*,
+    test::{ResponseExt as SalvoResponseExt, TestClient},
+};
 use serde::{Serialize, de::DeserializeOwned};
 use tokio_util::{
     sync::{CancellationToken, DropGuard},
@@ -53,10 +53,13 @@ use tokio_util::{
 use ulid::Ulid;
 use url::Url;
 
-use crate::handlers::{
-    ActivityTracker, BoundActivityTracker, Limiter, RequesterFingerprint,
-    passwords::{Hasher, PasswordManager},
-    upstream_oauth2::cache::MetadataCache,
+use crate::{
+    handlers::{
+        ActivityTracker, BoundActivityTracker, Limiter, RequesterFingerprint,
+        passwords::{Hasher, PasswordManager},
+        upstream_oauth2::cache::MetadataCache,
+    },
+    salvo_utils::cookies::{CookieJar, CookieManager},
 };
 
 static UNIQUE_TEST_NONCE: AtomicU64 = AtomicU64::new(0);
@@ -93,7 +96,10 @@ pub(crate) async fn policy_factory(
         .join("..")
         .join("..");
 
-    let cedar_path = workspace_root.join("policies").join("cedar").join("default.cedar");
+    let cedar_path = workspace_root
+        .join("policies")
+        .join("cedar")
+        .join("default.cedar");
 
     let policy_factory = PolicyFactory::load_cedar_from_file(cedar_path.as_str()).await?;
     let policy_factory = Arc::new(policy_factory);
@@ -265,8 +271,7 @@ impl TestState {
         let policy_factory =
             policy_factory(&site_config.server_name, serde_json::json!({})).await?;
 
-        let homeserver_admin =
-            Arc::new(MockHomeserverAdmin::new(&site_config.server_name));
+        let homeserver_admin = Arc::new(MockHomeserverAdmin::new(&site_config.server_name));
 
         let clock = Arc::new(MockClock::default());
         let rng = Arc::new(Mutex::new(ChaChaRng::seed_from_u64(42)));
@@ -358,9 +363,9 @@ impl TestState {
     fn build_test_router(&self) -> Router {
         use crate::handlers::admin::v1::{
             audit_feed, connector_health, notification_channels, notification_templates,
-            oauth2_sessions, personal_sessions, policy_data, site_config,
-            upstream_oauth_links, upstream_oauth_providers, user_emails,
-            user_registration_tokens, user_sessions, users, version,
+            oauth2_sessions, personal_sessions, policy_data, site_config, upstream_oauth_links,
+            upstream_oauth_providers, user_emails, user_registration_tokens, user_sessions, users,
+            version,
         };
 
         Router::new()
@@ -665,7 +670,8 @@ impl TestState {
         builder.body(body_str).unwrap()
     }
 
-    /// Create an OAuth 2.0 access token with the given scope for admin API tests.
+    /// Create an OAuth 2.0 access token with the given scope for admin API
+    /// tests.
     pub async fn token_with_scope(&mut self, scope: &str) -> String {
         let parsed_scope: Scope = if scope.is_empty() {
             std::iter::empty().collect()

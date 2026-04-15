@@ -12,7 +12,8 @@ use serde_with::serde_as;
 
 // ── Encryption Key ──
 
-/// A 32-byte encryption key, either given as a hex literal or loaded from a file
+/// A 32-byte encryption key, either given as a hex literal or loaded from a
+/// file
 #[derive(Debug, Clone)]
 pub enum EncryptionKey {
     /// Read the hex-encoded key from this file path
@@ -30,7 +31,8 @@ pub(crate) struct EncryptionKeyRaw {
     #[serde(skip_serializing_if = "Option::is_none")]
     encryption_file: Option<Utf8PathBuf>,
 
-    /// Hex-encoded encryption key for secure cookies (64 hex characters = 32 bytes).
+    /// Hex-encoded encryption key for secure cookies (64 hex characters = 32
+    /// bytes).
     #[schemars(
         with = "Option<String>",
         regex(pattern = r"[0-9a-fA-F]{64}"),

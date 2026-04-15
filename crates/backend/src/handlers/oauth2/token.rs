@@ -1,28 +1,30 @@
 use std::sync::{Arc, LazyLock};
 
-use crate::salvo_utils::client_authorization::{ClientAuthorization, CredentialsVerificationError};
 use oauth2_types::{
     errors::{ClientError, ClientErrorCode},
     requests::{AccessTokenRequest, AccessTokenResponse},
 };
 use opentelemetry::{Key, KeyValue, metrics::Counter};
-use pasion_data::UrlBuilder;
-use pasion_data::{BoxClock, BoxRng, SiteConfig, SystemClock};
-use pasion_data::{BoxRepository, BoxRepositoryFactory};
+use pasion_data::{
+    BoxClock, BoxRepository, BoxRepositoryFactory, BoxRng, SiteConfig, SystemClock, UrlBuilder,
+};
 use pasion_keystore::Keystore;
 use pasion_matrix::HomeserverAdmin;
 use pasion_policy::Policy;
 use pasion_templates::Templates;
-use rand_core::SeedableRng;
 use rand_chacha::ChaChaRng;
+use rand_core::SeedableRng;
 use salvo::{Extractible, prelude::*};
 use thiserror::Error;
 use ulid::Ulid;
 
-use crate::handlers::METER;
 use super::token_service::{
     self, AuthorizationCodeExchangeError, ClientCredentialsGrantError, DeviceCodeExchangeError,
     RefreshTokenExchangeError,
+};
+use crate::{
+    handlers::METER,
+    salvo_utils::client_authorization::{ClientAuthorization, CredentialsVerificationError},
 };
 
 static TOKEN_REQUEST_COUNTER: LazyLock<Counter<u64>> = LazyLock::new(|| {
@@ -384,7 +386,8 @@ async fn handle_post(
         .expect("PolicyFactory not found in depot");
 
     let clock: BoxClock = Box::new(SystemClock::default());
-    let mut rng: BoxRng = Box::new(ChaChaRng::from_rng(rand_core::OsRng).expect("Failed to seed rng"));
+    let mut rng: BoxRng =
+        Box::new(ChaChaRng::from_rng(rand_core::OsRng).expect("Failed to seed rng"));
 
     let mut repo: BoxRepository = repo_factory.create().await?;
     let policy: Policy = policy_factory

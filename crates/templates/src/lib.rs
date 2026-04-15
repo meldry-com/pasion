@@ -34,13 +34,13 @@ mod macros;
 
 pub use self::{
     context::{
-        AppContext, AppErrorState, ConsentContext, DeviceConsentContext,
-        DeviceLinkContext, DeviceLinkFormField, DeviceNameContext, EmailRecoveryContext,
-        EmailVerificationContext, EmptyContext, ErrorContext, FormPostContext, IndexContext,
-        LoginContext, LoginFormField, NotFoundContext, PasswordRegisterContext,
-        PolicyViolationContext, PostAuthContext, PostAuthContextInner, RecoveryExpiredContext,
-        RecoveryFinishContext, RecoveryFinishFormField, RecoveryProgressContext,
-        RecoveryStartContext, RecoveryStartFormField, RegisterContext, RegisterFormField,
+        AppContext, AppErrorState, ConsentContext, DeviceConsentContext, DeviceLinkContext,
+        DeviceLinkFormField, DeviceNameContext, EmailRecoveryContext, EmailVerificationContext,
+        EmptyContext, ErrorContext, FormPostContext, IndexContext, LoginContext, LoginFormField,
+        NotFoundContext, PasswordRegisterContext, PolicyViolationContext, PostAuthContext,
+        PostAuthContextInner, RecoveryExpiredContext, RecoveryFinishContext,
+        RecoveryFinishFormField, RecoveryProgressContext, RecoveryStartContext,
+        RecoveryStartFormField, RegisterContext, RegisterFormField,
         RegisterStepsDisplayNameContext, RegisterStepsDisplayNameFormField,
         RegisterStepsEmailInUseContext, RegisterStepsRegistrationTokenContext,
         RegisterStepsRegistrationTokenFormField, RegisterStepsVerifyEmailContext,
@@ -172,7 +172,11 @@ impl Templates {
         self.render_value(template, context)
     }
 
-    fn render_value(&self, template: &'static str, context: Value) -> Result<String, TemplateError> {
+    fn render_value(
+        &self,
+        template: &'static str,
+        context: Value,
+    ) -> Result<String, TemplateError> {
         let environment = self.environment.load();
         let tpl = environment
             .get_template(template)
@@ -304,10 +308,7 @@ impl Templates {
         let translations_path = translations_path.to_owned();
         let translator_default_locale = default_locale.clone();
         let translator = tokio::task::spawn_blocking(move || {
-            Translator::load_from_path_with_default(
-                &translations_path,
-                translator_default_locale,
-            )
+            Translator::load_from_path_with_default(&translations_path, translator_default_locale)
         })
         .await??;
         let translator = Arc::new(translator);

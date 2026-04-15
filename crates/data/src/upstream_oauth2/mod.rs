@@ -12,16 +12,17 @@ pub use self::{
         LocalpartPreference as UpstreamOAuthProviderLocalpartPreference,
         OnBackchannelLogout as UpstreamOAuthProviderOnBackchannelLogout,
         OnConflict as UpstreamOAuthProviderOnConflict, PkceMode as UpstreamOAuthProviderPkceMode,
+        ProviderSource as UpstreamOAuthProviderSource,
         ResponseMode as UpstreamOAuthProviderResponseMode,
         SubjectPreference as UpstreamOAuthProviderSubjectPreference,
-        ProviderSource as UpstreamOAuthProviderSource,
         TokenAuthMethod as UpstreamOAuthProviderTokenAuthMethod, UpstreamOAuthProvider,
     },
     session::{UpstreamOAuthAuthorizationSession, UpstreamOAuthAuthorizationSessionState},
 };
-
-pub use crate::pg::upstream_oauth2::{
-    PgUpstreamOAuthLinkRepository, PgUpstreamOAuthProviderRepository,
-    PgUpstreamOAuthSessionRepository,
+pub use crate::{
+    pg::upstream_oauth2::{
+        PgUpstreamOAuthLinkRepository, PgUpstreamOAuthProviderRepository,
+        PgUpstreamOAuthSessionRepository,
+    },
+    storage::upstream_oauth2::*,
 };
-pub use crate::storage::upstream_oauth2::*;

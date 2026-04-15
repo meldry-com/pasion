@@ -8,19 +8,23 @@ use chrono::Duration;
 use pasion_data::audit::{AdminOperation, NewAdminOperationLog};
 use pasion_matrix::ProvisionRequest;
 use rand::distr::{Alphanumeric, SampleString};
-use salvo::oapi::ToSchema;
-use salvo::prelude::*;
+use salvo::{oapi::ToSchema, prelude::*};
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use tracing::warn;
 
-use crate::AppError;
-use crate::CreatedJsonResult;
-use crate::handlers::admin::call_context::extract_call_context;
-use crate::handlers::admin::model::{User, UserRegistrationToken};
-use crate::handlers::admin::response::SingleResponse;
-use crate::handlers::common::DepotExt;
-use crate::util::username_valid;
+use crate::{
+    AppError, CreatedJsonResult,
+    handlers::{
+        admin::{
+            call_context::extract_call_context,
+            model::{User, UserRegistrationToken},
+            response::SingleResponse,
+        },
+        common::DepotExt,
+    },
+    util::username_valid,
+};
 
 /// # JSON payload for the `POST /api/admin/v1/users` endpoint
 #[derive(Deserialize, JsonSchema)]
@@ -40,10 +44,7 @@ pub struct AddRequest {
 
 #[endpoint]
 #[tracing::instrument(name = "handler.admin.v1.users.add", skip_all)]
-pub async fn add_user(
-    req: &mut Request,
-    depot: &Depot,
-) -> CreatedJsonResult<SingleResponse<User>> {
+pub async fn add_user(req: &mut Request, depot: &Depot) -> CreatedJsonResult<SingleResponse<User>> {
     let call_context = extract_call_context(req, depot).await?;
     let crate::handlers::admin::call_context::CallContext {
         mut repo,
@@ -53,10 +54,7 @@ pub async fn add_user(
     } = call_context;
     let mut rng = crate::handlers::account::make_rng();
     let homeserver = depot.homeserver()?;
-    let params: AddRequest = req
-        .parse_json()
-        .await
-        .map_err(AppError::internal)?;
+    let params: AddRequest = req.parse_json().await.map_err(AppError::internal)?;
 
     if repo.user().exists(&params.username).await? {
         return Err(AppError::conflict("User already exists"));
@@ -103,9 +101,9 @@ pub async fn add_user(
 
     repo.save().await?;
 
-    Ok(crate::handlers::admin::CreatedJson(SingleResponse::new_canonical(
-        User::from(user),
-    )))
+    Ok(crate::handlers::admin::CreatedJson(
+        SingleResponse::new_canonical(User::from(user)),
+    ))
 }
 
 /// # JSON payload for the `POST /api/admin/v1/users/batch-invite` endpoint
@@ -145,10 +143,7 @@ pub async fn batch_invite(
         ..
     } = call_context;
     let mut rng = crate::handlers::account::make_rng();
-    let params: BatchInviteRequest = req
-        .parse_json()
-        .await
-        .map_err(AppError::internal)?;
+    let params: BatchInviteRequest = req.parse_json().await.map_err(AppError::internal)?;
 
     if params.count == 0 || params.count > 100 {
         return Err(AppError::bad_request("Count must be between 1 and 100"));

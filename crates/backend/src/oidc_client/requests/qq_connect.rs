@@ -8,12 +8,12 @@
 
 use std::collections::HashMap;
 
-use crate::outbound_http::RequestBuilderExt;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use url::Url;
 
 use super::super::error::{TokenRequestError, UserInfoError};
+use crate::outbound_http::RequestBuilderExt;
 
 const QQ_ME_ENDPOINT: &str = "https://graph.qq.com/oauth2.0/me";
 const QQ_USERINFO_ENDPOINT: &str = "https://graph.qq.com/user/get_user_info";

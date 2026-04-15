@@ -291,13 +291,15 @@ mod tests {
         let a = serde_json::from_str::<ResponseType>("\"token code id_token\"").unwrap();
         let b = serde_json::from_str::<ResponseType>("\"code id_token token\"").unwrap();
         assert_eq!(a, b);
-        assert_eq!(serde_json::to_string(&a).unwrap(), "\"code id_token token\"");
+        assert_eq!(
+            serde_json::to_string(&a).unwrap(),
+            "\"code id_token token\""
+        );
     }
 
     #[test]
     fn duplicates_are_ignored() {
-        let rt =
-            serde_json::from_str::<ResponseType>("\"id_token token id_token code\"").unwrap();
+        let rt = serde_json::from_str::<ResponseType>("\"id_token token id_token code\"").unwrap();
         assert_eq!(rt.len(), 3);
         assert_eq!(
             OAuthAuthorizationEndpointResponseType::try_from(rt).unwrap(),

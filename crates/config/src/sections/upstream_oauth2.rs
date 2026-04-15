@@ -10,12 +10,13 @@ mod provider;
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize, de::Error as _};
 
-use crate::ConfigurationSection;
-
 // Re-export sub-module types so they remain accessible from the parent
 pub use self::claims::{ClaimsImports, EmailImportPreference, ImportAction, OnConflict};
-pub use self::discovery::{DiscoveryMode, OnBackchannelLogout, PkceMethod};
-pub use self::provider::{Provider, ResponseMode, TokenAuthMethod};
+pub use self::{
+    discovery::{DiscoveryMode, OnBackchannelLogout, PkceMethod},
+    provider::{Provider, ResponseMode, TokenAuthMethod},
+};
+use crate::ConfigurationSection;
 
 // ── Top-level Section ──
 

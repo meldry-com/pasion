@@ -25,11 +25,13 @@ use pasion_jose::claims::{self, TokenHash};
 use rand_core::RngCore as Rng;
 use url::Url;
 
-use super::jose::JwtVerificationData;
-use super::super::{
-    error::{IdTokenError, TokenRefreshError},
-    requests::{jose::verify_id_token, token::request_access_token},
-    types::{client_credentials::ClientCredentials, IdToken},
+use super::{
+    super::{
+        error::{IdTokenError, TokenRefreshError},
+        requests::{jose::verify_id_token, token::request_access_token},
+        types::{IdToken, client_credentials::ClientCredentials},
+    },
+    jose::JwtVerificationData,
 };
 
 /// Refresh an access token using a refresh token.

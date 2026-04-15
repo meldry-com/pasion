@@ -4,12 +4,10 @@ use async_trait::async_trait;
 use chrono::{DateTime, Utc};
 use diesel::prelude::*;
 use diesel_async::RunQueryDsl;
-use pasion_data::workflow::{
-    NewWorkflowEvent, NewWorkflowInstance, NewWorkflowStep, WorkflowRepository,
-};
 use pasion_data::{
     Clock, WorkflowEvent, WorkflowEventKind, WorkflowInstance, WorkflowInstanceStatus,
     WorkflowStep, WorkflowStepStatus, new_id,
+    workflow::{NewWorkflowEvent, NewWorkflowInstance, NewWorkflowStep, WorkflowRepository},
 };
 use rand_core::RngCore;
 use serde::de::DeserializeOwned;
@@ -27,7 +25,8 @@ pub struct PgWorkflowRepository<'c> {
 }
 
 impl<'c> PgWorkflowRepository<'c> {
-    /// Create a new [`PgWorkflowRepository`] from an active PostgreSQL connection.
+    /// Create a new [`PgWorkflowRepository`] from an active PostgreSQL
+    /// connection.
     #[must_use]
     pub fn new(conn: &'c mut diesel_async::AsyncPgConnection) -> Self {
         Self { conn }

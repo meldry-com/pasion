@@ -1,21 +1,22 @@
 use std::sync::Arc;
 
-use crate::salvo_utils::client_authorization::{ClientAuthorization, CredentialsVerificationError};
 use oauth2_types::{
     errors::{ClientError, ClientErrorCode},
     requests::RevocationRequest,
 };
-use pasion_data::{BoxClock, BoxRng, SystemClock};
-use pasion_data::{BoxRepository, BoxRepositoryFactory};
+use pasion_data::{BoxClock, BoxRepository, BoxRepositoryFactory, BoxRng, SystemClock};
 use pasion_keystore::Encrypter;
 use pasion_matrix::HomeserverAdmin;
-use rand_core::SeedableRng;
 use rand_chacha::ChaChaRng;
+use rand_core::SeedableRng;
 use salvo::{Extractible, prelude::*};
 use thiserror::Error;
 use ulid::Ulid;
 
-use crate::handlers::oauth2::revocation_service;
+use crate::{
+    handlers::oauth2::revocation_service,
+    salvo_utils::client_authorization::{ClientAuthorization, CredentialsVerificationError},
+};
 
 #[derive(Debug, Error)]
 pub(crate) enum RouteError {
@@ -138,7 +139,8 @@ async fn handle_post(req: &mut Request, depot: &mut Depot) -> Result<(), RouteEr
     let activity_tracker = crate::handlers::account::extract_bound_activity_tracker(req, depot);
 
     let clock: BoxClock = Box::new(SystemClock::default());
-    let mut rng: BoxRng = Box::new(ChaChaRng::from_rng(rand_core::OsRng).expect("Failed to seed rng"));
+    let mut rng: BoxRng =
+        Box::new(ChaChaRng::from_rng(rand_core::OsRng).expect("Failed to seed rng"));
 
     let mut repo: BoxRepository = repo_factory.create().await?;
 

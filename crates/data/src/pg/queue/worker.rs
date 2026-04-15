@@ -3,16 +3,22 @@
 
 use async_trait::async_trait;
 use chrono::Duration;
-use diesel::prelude::*;
-use diesel::sql_types::{Timestamptz, Uuid as DieselUuid};
+use diesel::{
+    prelude::*,
+    sql_types::{Timestamptz, Uuid as DieselUuid},
+};
 use diesel_async::RunQueryDsl;
-use pasion_data::queue::{QueueWorkerRepository, Worker};
-use pasion_data::{Clock, new_id};
+use pasion_data::{
+    Clock, new_id,
+    queue::{QueueWorkerRepository, Worker},
+};
 use rand_core::RngCore;
 use uuid::Uuid;
 
-use crate::DatabaseError;
-use crate::schema::{queue_leader, queue_workers};
+use crate::{
+    DatabaseError,
+    schema::{queue_leader, queue_workers},
+};
 
 /// An implementation of [`QueueWorkerRepository`] for a PostgreSQL connection.
 pub struct PgQueueWorkerRepository<'c> {

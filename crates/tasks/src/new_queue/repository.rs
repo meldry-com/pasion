@@ -1,17 +1,15 @@
 use chrono::{DateTime, Utc};
+use pasion_data::{PgRepository, RepositoryAccess, queue::Worker};
 use tokio_util::sync::CancellationToken;
 
-use pasion_data::{PgRepository, RepositoryAccess, queue::Worker};
-
-use crate::State;
-
 use super::{
+    QueueRunnerError,
     leader::ScheduleDefinition,
     runtime,
     shared::{MAX_CONCURRENT_JOBS, MAX_JOBS_TO_FETCH},
     tracker::JobTracker,
-    QueueRunnerError,
 };
+use crate::State;
 
 pub(super) async fn register_worker(
     state: &State,
@@ -34,7 +32,10 @@ pub(super) async fn setup_schedules(
     state: &State,
     schedules: &[ScheduleDefinition],
 ) -> Result<(), QueueRunnerError> {
-    let schedule_names: Vec<_> = schedules.iter().map(|schedule| schedule.schedule_name).collect();
+    let schedule_names: Vec<_> = schedules
+        .iter()
+        .map(|schedule| schedule.schedule_name)
+        .collect();
 
     let conn = state
         .pool()
@@ -68,7 +69,9 @@ pub(super) async fn shutdown_worker(
         count => tracing::warn!("There are {count} jobs still running, waiting for them to finish"),
     }
 
-    tracker.process_jobs(&mut rng, clock, &mut repo, true).await?;
+    tracker
+        .process_jobs(&mut rng, clock, &mut repo, true)
+        .await?;
     repo.queue_worker().shutdown(clock, registration).await?;
     Ok(())
 }
@@ -106,7 +109,9 @@ pub(super) async fn tick_worker(
         .try_get_leader_lease(clock, registration)
         .await?;
 
-    tracker.process_jobs(&mut rng, clock, &mut repo, false).await?;
+    tracker
+        .process_jobs(&mut rng, clock, &mut repo, false)
+        .await?;
 
     let max_jobs_to_fetch = MAX_CONCURRENT_JOBS
         .saturating_sub(tracker.running_jobs())
@@ -150,6 +155,8 @@ pub(super) async fn process_all_jobs_in_tests(
         .await?;
 
     runtime::spawn_reserved_jobs(tracker, state, cancellation_token, jobs);
-    tracker.process_jobs(&mut rng, clock, &mut repo, true).await?;
+    tracker
+        .process_jobs(&mut rng, clock, &mut repo, true)
+        .await?;
     Ok(())
 }

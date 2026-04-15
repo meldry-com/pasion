@@ -4,12 +4,13 @@
 //! implements the shared [`TimedCookie`] trait, which supplies `load`/`save`
 //! and centralises the expiry ceremony.
 
-use crate::salvo_utils::cookies::{CookieJar, TimedCookie, ulid_is_expired};
 use chrono::{DateTime, Duration, Utc};
 use pasion_data::PostAuthAction;
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 use ulid::Ulid;
+
+use crate::salvo_utils::cookies::{CookieJar, TimedCookie, ulid_is_expired};
 
 /// Sessions expire after 10 minutes.
 fn upstream_session_max_age() -> Duration {
@@ -131,8 +132,8 @@ impl UpstreamSessions {
 #[cfg(test)]
 mod tests {
     use chrono::TimeZone;
-    use rand_core::SeedableRng;
     use rand_chacha::ChaChaRng;
+    use rand_core::SeedableRng;
 
     use super::*;
 

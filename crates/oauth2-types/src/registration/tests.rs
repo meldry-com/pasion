@@ -282,8 +282,7 @@ fn validate_token_endpoint_auth_method() {
     );
     assert_eq!(field, "token_endpoint");
 
-    metadata.token_endpoint_auth_method =
-        Some(OAuthClientAuthenticationMethod::ClientSecretJwt);
+    metadata.token_endpoint_auth_method = Some(OAuthClientAuthenticationMethod::ClientSecretJwt);
     metadata.jwks = None;
 
     let field = assert_matches!(

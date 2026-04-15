@@ -25,8 +25,7 @@ use rand_core::RngCore as Rng;
 use url::Url;
 
 use super::super::{
-    error::TokenRequestError,
-    requests::token::request_access_token,
+    error::TokenRequestError, requests::token::request_access_token,
     types::client_credentials::ClientCredentials,
 };
 

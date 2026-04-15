@@ -1,7 +1,8 @@
 use async_trait::async_trait;
-use diesel_async::AsyncPgConnection;
-use diesel_async::RunQueryDsl as _;
-use diesel_async::pooled_connection::deadpool::{Object as PooledConnection, Pool};
+use diesel_async::{
+    AsyncPgConnection, RunQueryDsl as _,
+    pooled_connection::deadpool::{Object as PooledConnection, Pool},
+};
 use futures_util::{FutureExt, future::BoxFuture};
 use pasion_data::{
     BoxRepository, BoxRepositoryFactory, MapErr, Repository, RepositoryAccess, RepositoryError,
@@ -69,7 +70,8 @@ pub struct PgRepositoryFactory {
 }
 
 impl PgRepositoryFactory {
-    /// Create a new [`PgRepositoryFactory`] from a diesel-async connection pool.
+    /// Create a new [`PgRepositoryFactory`] from a diesel-async connection
+    /// pool.
     #[must_use]
     pub fn new(pool: Pool<AsyncPgConnection>) -> Self {
         Self { pool }

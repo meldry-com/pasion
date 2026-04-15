@@ -71,7 +71,11 @@ impl HomeserverAdmin {
     }
 
     pub async fn reserve_localpart(&self, localpart: &'static str) {
-        self.state.write().await.blocked_localparts.insert(localpart);
+        self.state
+            .write()
+            .await
+            .blocked_localparts
+            .insert(localpart);
     }
 }
 
@@ -165,10 +169,7 @@ impl crate::HomeserverAdmin for HomeserverAdmin {
         let full_id = self.mxid(localpart);
         let mut guard = self.state.write().await;
         let record = guard.account_mut(&full_id)?;
-        anyhow::ensure!(
-            record.device_ids.contains(device_id),
-            "Device not found"
-        );
+        anyhow::ensure!(record.device_ids.contains(device_id), "Device not found");
         Ok(())
     }
 

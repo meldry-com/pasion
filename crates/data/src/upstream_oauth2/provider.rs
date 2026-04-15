@@ -161,7 +161,8 @@ impl std::str::FromStr for ResponseMode {
     }
 }
 
-/// Pasion-original: token endpoint authentication method for upstream providers.
+/// Pasion-original: token endpoint authentication method for upstream
+/// providers.
 ///
 /// Extends the standard OAuth methods with platform-specific variants for
 /// Chinese social login providers and Apple Sign-In.
@@ -503,7 +504,8 @@ impl ImportAction {
     }
 }
 
-/// Pasion-original: conflict-resolution strategy for upstream localpart imports.
+/// Pasion-original: conflict-resolution strategy for upstream localpart
+/// imports.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Default)]
 #[serde(rename_all = "lowercase")]
 pub enum OnConflict {

@@ -3,12 +3,13 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::salvo_utils::InternalError;
-use diesel_async::AsyncPgConnection;
-use diesel_async::RunQueryDsl;
-use diesel_async::pooled_connection::deadpool::Pool as DieselPool;
+use diesel_async::{
+    AsyncPgConnection, RunQueryDsl, pooled_connection::deadpool::Pool as DieselPool,
+};
 use salvo::prelude::*;
 use tracing::{Instrument, info_span};
+
+use crate::salvo_utils::InternalError;
 
 #[handler]
 pub async fn get(depot: &Depot) -> Result<String, InternalError> {

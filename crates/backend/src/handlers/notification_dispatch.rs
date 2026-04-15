@@ -5,10 +5,10 @@
 //! unified request/delivery tracking.
 
 use pasion_data::{
-    BoxRepository, RepositoryError,
+    BoxRepository, Clock, RepositoryError, UserEmailAuthentication, UserPhoneAuthentication,
+    UserRecoverySession,
     queue::{ContactVerificationTarget, DispatchNotificationJob, QueueJobRepositoryExt as _},
 };
-use pasion_data::{Clock, UserEmailAuthentication, UserPhoneAuthentication, UserRecoverySession};
 use rand_core::RngCore;
 
 /// User-facing notification intent expressed by the business layer.

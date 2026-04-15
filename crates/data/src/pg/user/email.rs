@@ -3,11 +3,8 @@ use chrono::{DateTime, Utc};
 use diesel::prelude::*;
 use diesel_async::RunQueryDsl;
 use pasion_data::{
-    BrowserSession, Clock, UpstreamOAuthAuthorizationSession, User, UserEmail,
+    BrowserSession, Clock, Page, Pagination, UpstreamOAuthAuthorizationSession, User, UserEmail,
     UserEmailAuthentication, UserEmailAuthenticationCode, UserEmailPatch, UserRegistration, new_id,
-};
-use pasion_data::{
-    Page, Pagination,
     pagination::{Node, PaginationDirection},
     user::{UserEmailFilter, UserEmailRepository},
 };

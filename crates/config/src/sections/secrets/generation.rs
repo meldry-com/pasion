@@ -9,15 +9,20 @@ use rand_core::{RngCore, SeedableRng};
 use tokio::task;
 use tracing::info;
 
-use super::encryption::EncryptionKey;
-use super::key_config::{Key, KeyConfig};
-use super::SecretsConfig;
+use super::{
+    SecretsConfig,
+    encryption::EncryptionKey,
+    key_config::{Key, KeyConfig},
+};
 
 /// Holds the generation logic for [`SecretsConfig`].
 impl SecretsConfig {
     /// Creates a fresh configuration with randomly-generated keys covering
     /// RSA, EC P-256, EC P-384, EC P-521, EC secp256k1, and Ed25519.
-    #[expect(clippy::similar_names, reason = "Key type names are necessarily similar")]
+    #[expect(
+        clippy::similar_names,
+        reason = "Key type names are necessarily similar"
+    )]
     #[tracing::instrument(skip_all)]
     pub(crate) async fn generate<R>(mut rng: R) -> anyhow::Result<Self>
     where
@@ -38,11 +43,16 @@ impl SecretsConfig {
             .context("could not join blocking task")?
         };
 
-        let ec_p256_key = spawn_ec_keygen(&mut rng, "ec_p256", PrivateKey::generate_ec_p256).await?;
-        let ec_p384_key = spawn_ec_keygen(&mut rng, "ec_p384", PrivateKey::generate_ec_p384).await?;
-        let ec_p521_key = spawn_ec_keygen(&mut rng, "ec_p521", PrivateKey::generate_ec_p521).await?;
-        let ec_k256_key = spawn_ec_keygen(&mut rng, "ec_k256", PrivateKey::generate_ec_k256).await?;
-        let ed25519_key = spawn_ec_keygen(&mut rng, "ed25519", PrivateKey::generate_ed25519).await?;
+        let ec_p256_key =
+            spawn_ec_keygen(&mut rng, "ec_p256", PrivateKey::generate_ec_p256).await?;
+        let ec_p384_key =
+            spawn_ec_keygen(&mut rng, "ec_p384", PrivateKey::generate_ec_p384).await?;
+        let ec_p521_key =
+            spawn_ec_keygen(&mut rng, "ec_p521", PrivateKey::generate_ec_p521).await?;
+        let ec_k256_key =
+            spawn_ec_keygen(&mut rng, "ec_k256", PrivateKey::generate_ec_k256).await?;
+        let ed25519_key =
+            spawn_ec_keygen(&mut rng, "ed25519", PrivateKey::generate_ed25519).await?;
 
         Ok(Self {
             encryption: EncryptionKey::Value({
@@ -110,11 +120,7 @@ impl SecretsConfig {
 
 /// Spawns a blocking task that generates a single elliptic-curve or
 /// Edwards-curve private key using the provided `gen_fn`, seeded from `rng`.
-async fn spawn_ec_keygen<R, F>(
-    rng: &mut R,
-    label: &str,
-    gen_fn: F,
-) -> anyhow::Result<PrivateKey>
+async fn spawn_ec_keygen<R, F>(rng: &mut R, label: &str, gen_fn: F) -> anyhow::Result<PrivateKey>
 where
     R: RngCore,
     F: FnOnce(rand_chacha::ChaChaRng) -> PrivateKey + Send + 'static,

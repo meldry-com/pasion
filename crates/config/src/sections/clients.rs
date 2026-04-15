@@ -72,7 +72,8 @@ impl std::fmt::Display for ClientAuthMethodConfig {
 
 // ── Single Client Configuration ──
 
-/// Represents the configuration of a single statically-registered OAuth 2.0 client
+/// Represents the configuration of a single statically-registered OAuth 2.0
+/// client
 #[serde_as]
 #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
 pub struct ClientConfig {
@@ -116,7 +117,8 @@ pub struct ClientConfig {
 impl ClientConfig {
     // ── Validation helpers ──
 
-    /// Checks that the fields present are consistent with the chosen auth method
+    /// Checks that the fields present are consistent with the chosen auth
+    /// method
     fn validate(&self) -> Result<(), Box<figment::error::Error>> {
         let method = self.client_auth_method;
 
@@ -191,22 +193,19 @@ impl ClientConfig {
         let has_jwks_uri = self.jwks_uri.is_some();
 
         if !has_jwks && !has_jwks_uri {
-            let err = figment::error::Error::custom(
-                "jwks or jwks_uri is required for private_key_jwt",
-            );
+            let err =
+                figment::error::Error::custom("jwks or jwks_uri is required for private_key_jwt");
             return Err(Box::new(err.with_path("client_auth_method")));
         }
 
         if has_jwks && has_jwks_uri {
-            let err =
-                figment::error::Error::custom("jwks and jwks_uri are mutually exclusive");
+            let err = figment::error::Error::custom("jwks and jwks_uri are mutually exclusive");
             return Err(Box::new(err.with_path("jwks")));
         }
 
         if self.client_secret.is_some() {
-            let err = figment::error::Error::custom(
-                "client_secret is not allowed with private_key_jwt",
-            );
+            let err =
+                figment::error::Error::custom("client_secret is not allowed with private_key_jwt");
             return Err(Box::new(err.with_path("client_secret")));
         }
 

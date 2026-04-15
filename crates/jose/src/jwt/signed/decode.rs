@@ -82,22 +82,19 @@ fn parse_compact_parts<'a, T: DeserializeOwned>(
     raw: RawJwt<'a>,
 ) -> Result<Jwt<'a, T>, JwtDecodeError> {
     // 1. header
-    let header_decoder =
-        base64ct::Decoder::<'_, Base64UrlUnpadded>::new(raw.header().as_bytes())
-            .map_err(JwtDecodeError::header_base64)?;
-    let header = serde_json::from_reader(header_decoder)
-        .map_err(JwtDecodeError::header_json)?;
+    let header_decoder = base64ct::Decoder::<'_, Base64UrlUnpadded>::new(raw.header().as_bytes())
+        .map_err(JwtDecodeError::header_base64)?;
+    let header = serde_json::from_reader(header_decoder).map_err(JwtDecodeError::header_json)?;
 
     // 2. payload
-    let payload_decoder =
-        base64ct::Decoder::<'_, Base64UrlUnpadded>::new(raw.payload().as_bytes())
-            .map_err(JwtDecodeError::payload_base64)?;
-    let payload: T = serde_json::from_reader(payload_decoder)
-        .map_err(JwtDecodeError::payload_json)?;
+    let payload_decoder = base64ct::Decoder::<'_, Base64UrlUnpadded>::new(raw.payload().as_bytes())
+        .map_err(JwtDecodeError::payload_base64)?;
+    let payload: T =
+        serde_json::from_reader(payload_decoder).map_err(JwtDecodeError::payload_json)?;
 
     // 3. signature (raw bytes, not typed yet -- that happens at verification)
-    let sig_bytes = Base64UrlUnpadded::decode_vec(raw.signature())
-        .map_err(JwtDecodeError::signature_base64)?;
+    let sig_bytes =
+        Base64UrlUnpadded::decode_vec(raw.signature()).map_err(JwtDecodeError::signature_base64)?;
 
     Ok(Jwt {
         raw,

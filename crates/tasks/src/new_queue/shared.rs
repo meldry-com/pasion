@@ -1,7 +1,6 @@
 use chrono::Duration;
-use thiserror::Error;
-
 use pasion_data::{DatabaseError, RepositoryError};
+use thiserror::Error;
 
 /// Errors that can occur while operating the queue worker.
 #[derive(Debug, Error)]
@@ -27,10 +26,8 @@ pub enum QueueRunnerError {
 
 // Workers sleep between polls with a small random jitter so they don't all
 // wake at exactly the same instant.
-pub(super) const MIN_SLEEP_DURATION: std::time::Duration =
-    std::time::Duration::from_millis(900);
-pub(super) const MAX_SLEEP_DURATION: std::time::Duration =
-    std::time::Duration::from_millis(1100);
+pub(super) const MIN_SLEEP_DURATION: std::time::Duration = std::time::Duration::from_millis(900);
+pub(super) const MAX_SLEEP_DURATION: std::time::Duration = std::time::Duration::from_millis(1100);
 
 /// Maximum number of jobs a single worker will run concurrently.
 pub(super) const MAX_CONCURRENT_JOBS: usize = 10;

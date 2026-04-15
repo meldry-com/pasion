@@ -4,18 +4,19 @@
 //! Template environment setup: registers filters, functions, tests,
 //! and global objects used by the Jinja templates.
 
-use minijinja::{
-    Error, ErrorKind, State, Value,
-    value::{Kwargs, Object, ViaDeserialize, from_args},
-};
-use pasion_data::UrlBuilder;
-use pasion_i18n::{DataLocale, Translator};
 use std::{
     collections::{BTreeMap, HashMap},
     fmt,
     str::FromStr,
     sync::{Arc, atomic::AtomicUsize},
 };
+
+use minijinja::{
+    Error, ErrorKind, State, Value,
+    value::{Kwargs, Object, ViaDeserialize, from_args},
+};
+use pasion_data::UrlBuilder;
+use pasion_i18n::{DataLocale, Translator};
 use url::Url;
 
 /// Populate the given minijinja [`Environment`](minijinja::Environment) with
@@ -52,9 +53,7 @@ pub fn register(
     env.add_global("include_asset", Value::from_object(IncludeAssetStub));
     env.add_global(
         "translator",
-        Value::from_object(TranslatorFactory {
-            translator,
-        }),
+        Value::from_object(TranslatorFactory { translator }),
     );
 }
 
@@ -135,9 +134,7 @@ fn filter_simplify_url(raw_url: &str, kwargs: Kwargs) -> Result<String, minijinj
         return Ok(parsed.to_string());
     }
 
-    let keep_path: bool = kwargs
-        .get::<Option<bool>>("keep_path")?
-        .unwrap_or_default();
+    let keep_path: bool = kwargs.get::<Option<bool>>("keep_path")?.unwrap_or_default();
     kwargs.assert_all_used()?;
 
     let Some(host) = parsed.domain() else {
@@ -321,9 +318,7 @@ impl Object for TranslateHandle {
         let formatted = self
             .translator
             .format(&self.locale, msg_key, args_ref)
-            .ok_or_else(|| {
-                Error::new(ErrorKind::InvalidOperation, "Missing translation")
-            })?;
+            .ok_or_else(|| Error::new(ErrorKind::InvalidOperation, "Missing translation"))?;
 
         Ok(Value::from_safe_string(formatted))
     }
@@ -371,14 +366,13 @@ impl Object for TranslateHandle {
 
             "short_time" => {
                 let (raw_date,): (String,) = from_args(args)?;
-                let parsed_date: chrono::DateTime<chrono::Utc> =
-                    raw_date.parse().map_err(|e| {
-                        Error::new(
-                            ErrorKind::InvalidOperation,
-                            "Invalid date while calling function `time`",
-                        )
-                        .with_source(e)
-                    })?;
+                let parsed_date: chrono::DateTime<chrono::Utc> = raw_date.parse().map_err(|e| {
+                    Error::new(
+                        ErrorKind::InvalidOperation,
+                        "Invalid date while calling function `time`",
+                    )
+                    .with_source(e)
+                })?;
 
                 // NOTE: we format `parsed_date` in UTC rather than the
                 // viewer's timezone. The callers use `short_time` for

@@ -1,7 +1,3 @@
-use crate::record_error;
-use crate::salvo_utils::{
-    client_authorization::{ClientAuthorization, CredentialsVerificationError},
-};
 use chrono::Duration;
 use oauth2_types::{
     errors::{ClientError, ClientErrorCode},
@@ -14,7 +10,11 @@ use salvo::{Extractible, prelude::*};
 use thiserror::Error;
 use ulid::Ulid;
 
-use crate::handlers::account::DepotExt;
+use crate::{
+    handlers::account::DepotExt,
+    record_error,
+    salvo_utils::client_authorization::{ClientAuthorization, CredentialsVerificationError},
+};
 
 #[derive(Debug, Error)]
 pub enum RouteError {
@@ -156,7 +156,9 @@ async fn handle_post(
     let ip_address = activity_tracker.ip();
 
     let device_code = Alphanumeric.sample_string(&mut rand::rng(), 32);
-    let user_code = Alphanumeric.sample_string(&mut rand::rng(), 6).to_uppercase();
+    let user_code = Alphanumeric
+        .sample_string(&mut rand::rng(), 6)
+        .to_uppercase();
 
     let device_code = repo
         .oauth2_device_code_grant()

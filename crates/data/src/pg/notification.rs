@@ -1,16 +1,18 @@
 use async_trait::async_trait;
 use chrono::{DateTime, Utc};
-use diesel::prelude::*;
-use diesel::sql_types::{BigInt, Jsonb, Nullable, Text, Timestamptz, Uuid as DieselUuid};
-use diesel_async::RunQueryDsl;
-use pasion_data::notification::{
-    NewNotificationDelivery, NewNotificationEventLog, NewNotificationRequest,
-    NotificationRepository,
+use diesel::{
+    prelude::*,
+    sql_types::{BigInt, Jsonb, Nullable, Text, Timestamptz, Uuid as DieselUuid},
 };
+use diesel_async::RunQueryDsl;
 use pasion_data::{
     Clock, NotificationChannel, NotificationDelivery, NotificationDeliveryFailure,
     NotificationDeliveryStatus, NotificationEventKind, NotificationEventLog,
     NotificationPreference, NotificationRequest, NotificationRequestStatus, User, new_id,
+    notification::{
+        NewNotificationDelivery, NewNotificationEventLog, NewNotificationRequest,
+        NotificationRepository,
+    },
 };
 use rand_core::RngCore;
 use serde::de::DeserializeOwned;
@@ -31,7 +33,8 @@ pub struct PgNotificationRepository<'c> {
 }
 
 impl<'c> PgNotificationRepository<'c> {
-    /// Create a new [`PgNotificationRepository`] from an active PostgreSQL connection.
+    /// Create a new [`PgNotificationRepository`] from an active PostgreSQL
+    /// connection.
     #[must_use]
     pub fn new(conn: &'c mut diesel_async::AsyncPgConnection) -> Self {
         Self { conn }

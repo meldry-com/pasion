@@ -10,22 +10,22 @@
 
 use std::{net::IpAddr, ops::Deref, sync::Arc};
 
-use crate::handlers::{
-    BoundActivityTracker, Limiter, RequesterFingerprint, passwords::PasswordManager,
-};
-use crate::salvo_utils::{SessionInfo, SessionInfoExt, cookies::CookieJar};
-use pasion_data::UrlBuilder;
 use pasion_data::{
-    BoxClock, BoxRepository, BoxRepositoryFactory, BoxRng, BrowserSession,
-    RepositoryError, Session, SiteConfig, SystemClock, User,
+    BoxClock, BoxRepository, BoxRepositoryFactory, BoxRng, BrowserSession, RepositoryError,
+    Session, SiteConfig, SystemClock, UrlBuilder, User,
 };
 use pasion_matrix::HomeserverAdmin;
 use pasion_policy::PolicyFactory;
-use rand_core::SeedableRng;
 use rand_chacha::ChaChaRng;
+use rand_core::SeedableRng;
 use salvo::prelude::*;
 use serde::Serialize;
 use ulid::Ulid;
+
+use crate::{
+    handlers::{BoundActivityTracker, Limiter, RequesterFingerprint, passwords::PasswordManager},
+    salvo_utils::{SessionInfo, SessionInfoExt, cookies::CookieJar},
+};
 
 // ── Requester / Auth ───────────────────────────────────────────
 

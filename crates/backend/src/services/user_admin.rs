@@ -3,11 +3,9 @@ use std::str::FromStr as _;
 use anyhow::Error as AnyhowError;
 use lettre::address::AddressError;
 use pasion_data::{
-    AdminUserPatch, Clock, UpstreamOAuthLink, UpstreamOAuthLinkPatch, User, UserEmail,
-    UserEmailPatch, audit::AdminOperation,
-};
-use pasion_data::{
-    BoxRepository, RepositoryAccess, RepositoryError,
+    AdminUserPatch, BoxRepository, Clock, RepositoryAccess, RepositoryError, UpstreamOAuthLink,
+    UpstreamOAuthLinkPatch, User, UserEmail, UserEmailPatch,
+    audit::AdminOperation,
     queue::{DeactivateUserJob, QueueJobRepositoryExt as _},
     upstream_oauth2::{UpstreamOAuthLinkRepository, UpstreamOAuthProviderRepository},
     user::{UserEmailRepository, UserRepository},

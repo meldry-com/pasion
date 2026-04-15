@@ -4,8 +4,10 @@
 //! encapsulates the repeated pattern of conditionally writing an admin
 //! operation audit log when the caller is an authenticated admin user.
 
-use pasion_data::audit::AdminOperation;
-use pasion_data::{BoxRepository, RepositoryAccess, RepositoryError, audit::NewAdminOperationLog};
+use pasion_data::{
+    BoxRepository, RepositoryAccess, RepositoryError,
+    audit::{AdminOperation, NewAdminOperationLog},
+};
 use rand_core::RngCore;
 use ulid::Ulid;
 

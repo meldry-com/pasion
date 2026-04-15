@@ -3,8 +3,10 @@
 
 use async_trait::async_trait;
 use chrono::{DateTime, Utc};
-use diesel::prelude::*;
-use diesel::sql_types::{Array, Bool, Nullable, Text, Timestamptz};
+use diesel::{
+    prelude::*,
+    sql_types::{Array, Bool, Nullable, Text, Timestamptz},
+};
 use diesel_async::RunQueryDsl;
 use pasion_data::queue::{QueueScheduleRepository, ScheduleStatus};
 

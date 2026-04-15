@@ -4,9 +4,7 @@ use std::collections::BTreeMap;
 
 use chrono::Duration;
 use oauth2_types::scope::OPENID;
-use pasion_data::{
-    AuthorizationGrant, Client, DeviceCodeGrant, MatrixUser, PostAuthAction,
-};
+use pasion_data::{AuthorizationGrant, Client, DeviceCodeGrant, MatrixUser, PostAuthAction};
 use rand_core::RngCore as Rng;
 use serde::Serialize;
 
@@ -34,7 +32,8 @@ pub struct ConsentContext {
 }
 
 impl ConsentContext {
-    /// Build a consent-page context for the given grant, client and Matrix user.
+    /// Build a consent-page context for the given grant, client and Matrix
+    /// user.
     #[must_use]
     pub fn new(grant: AuthorizationGrant, client: Client, matrix_user: MatrixUser) -> Self {
         let action = PostAuthAction::continue_grant(grant.id);

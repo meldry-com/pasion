@@ -15,18 +15,16 @@
 
 use std::sync::{Arc, LazyLock};
 
-use rand_core::SeedableRng;
-
-use diesel_async::AsyncPgConnection;
-use diesel_async::pooled_connection::deadpool::Pool as DieselPool;
+use diesel_async::{AsyncPgConnection, pooled_connection::deadpool::Pool as DieselPool};
 use new_queue::QueueRunnerError;
 use opentelemetry::metrics::Meter;
-use pasion_data::PgRepositoryFactory;
-use pasion_data::UrlBuilder;
-use pasion_data::{BoxRepository, RepositoryError, RepositoryFactory};
-use pasion_data::{Clock, SiteConfig};
+use pasion_data::{
+    BoxRepository, Clock, PgRepositoryFactory, RepositoryError, RepositoryFactory, SiteConfig,
+    UrlBuilder,
+};
 use pasion_matrix::HomeserverAdmin;
 use pasion_messaging::NotificationCenter;
+use rand_core::SeedableRng;
 use tokio_util::{sync::CancellationToken, task::TaskTracker};
 
 pub use crate::new_queue::QueueWorker;
@@ -204,9 +202,7 @@ fn register_all_handlers(w: &mut QueueWorker) {
 ///
 /// Schedules are deliberately spread across the hour in ~5-minute increments
 /// to keep database load even.
-fn attach_recurring_schedules(
-    w: &mut QueueWorker,
-) -> Result<(), QueueRunnerError> {
+fn attach_recurring_schedules(w: &mut QueueWorker) -> Result<(), QueueRunnerError> {
     use pasion_data::queue;
 
     // -- High-frequency: notification delivery (every minute) -------------

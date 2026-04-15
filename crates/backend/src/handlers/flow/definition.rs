@@ -24,11 +24,13 @@
 //! ```
 
 use chrono::Utc;
-use pasion_data::flow::{
-    AuthenticatorType, FlowDefinition, FlowDesignation, FlowStageBinding, IdentificationField,
-    PromptField, StageKind,
+use pasion_data::{
+    flow::{
+        AuthenticatorType, FlowDefinition, FlowDesignation, FlowStageBinding, IdentificationField,
+        PromptField, StageKind,
+    },
+    new_id,
 };
-use pasion_data::new_id;
 use serde::Deserialize;
 
 /// A declarative flow definition file that can be parsed from YAML (or JSON).
@@ -241,9 +243,10 @@ impl StageDefinition {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
     use pasion_data::flow::FlowDesignation;
     use rand_core::SeedableRng;
+
+    use super::*;
 
     fn test_rng() -> rand_chacha::ChaCha8Rng {
         rand_chacha::ChaCha8Rng::seed_from_u64(42)

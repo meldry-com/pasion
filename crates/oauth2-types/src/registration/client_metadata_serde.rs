@@ -338,8 +338,13 @@ impl<'de> Deserialize<'de> for ClientMetadataSerdeHelper {
 }
 
 /// The set of field names that carry localized variants.
-const LOCALIZED_FIELD_NAMES: &[&str] =
-    &["client_name", "logo_uri", "client_uri", "policy_uri", "tos_uri"];
+const LOCALIZED_FIELD_NAMES: &[&str] = &[
+    "client_name",
+    "logo_uri",
+    "client_uri",
+    "policy_uri",
+    "tos_uri",
+];
 
 /// Returns `true` if a key belongs to a localized field (either the base name
 /// or a language-tagged variant like `"client_name#fr"`).
@@ -389,8 +394,7 @@ impl<'de> Visitor<'de> for ClientMetadataHelperVisitor {
 
         // Deserialize the flat fields from the collected JSON object.
         let flat_value = Value::Object(flat_entries);
-        let flat: FlatFields =
-            serde_json::from_value(flat_value).map_err(de::Error::custom)?;
+        let flat: FlatFields = serde_json::from_value(flat_value).map_err(de::Error::custom)?;
 
         // Parse each localized field group.
         let client_name =
@@ -401,8 +405,7 @@ impl<'de> Visitor<'de> for ClientMetadataHelperVisitor {
             parse_localized_field(&mut grouped, "client_uri").map_err(de::Error::custom)?;
         let policy_uri =
             parse_localized_field(&mut grouped, "policy_uri").map_err(de::Error::custom)?;
-        let tos_uri =
-            parse_localized_field(&mut grouped, "tos_uri").map_err(de::Error::custom)?;
+        let tos_uri = parse_localized_field(&mut grouped, "tos_uri").map_err(de::Error::custom)?;
 
         Ok(ClientMetadataSerdeHelper {
             flat,

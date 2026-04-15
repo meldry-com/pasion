@@ -4,7 +4,8 @@
 //
 // Portions based on mas-cli by The Matrix.org Foundation C.I.C.
 
-//! CLI subcommands for managing the Pasion instance (users, tokens, sessions, etc.).
+//! CLI subcommands for managing the Pasion instance (users, tokens, sessions,
+//! etc.).
 
 mod command_handlers;
 mod register_user;
@@ -186,8 +187,13 @@ impl Options {
                 password,
                 ignore_complexity,
             } => {
-                command_handlers::handle_set_password(figment, username, password, ignore_complexity)
-                    .await
+                command_handlers::handle_set_password(
+                    figment,
+                    username,
+                    password,
+                    ignore_complexity,
+                )
+                .await
             }
 
             SC::AddEmail { username, email } => {
@@ -224,9 +230,7 @@ impl Options {
                 .await
             }
 
-            SC::ProvisionAllUsers => {
-                command_handlers::handle_provision_all_users(figment).await
-            }
+            SC::ProvisionAllUsers => command_handlers::handle_provision_all_users(figment).await,
 
             SC::KillSessions { username, dry_run } => {
                 command_handlers::handle_kill_sessions(figment, username, dry_run).await

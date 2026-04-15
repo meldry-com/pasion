@@ -16,8 +16,10 @@ use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use serde_with::serde_as;
 
-use self::encryption::{EncryptionKey, EncryptionKeyRaw};
-use self::key_config::{KeyConfig, enumerate_keys_in_directory};
+use self::{
+    encryption::{EncryptionKey, EncryptionKeyRaw},
+    key_config::{KeyConfig, enumerate_keys_in_directory},
+};
 use super::ConfigurationSection;
 
 // ── Secrets Section ──
@@ -111,9 +113,7 @@ mod tests {
     use rand::SeedableRng;
     use tokio::{runtime::Handle, task};
 
-    use super::*;
-    use super::encryption::EncryptionKey;
-    use super::key_config::Key;
+    use super::{encryption::EncryptionKey, key_config::Key, *};
 
     #[tokio::test]
     async fn load_config() {

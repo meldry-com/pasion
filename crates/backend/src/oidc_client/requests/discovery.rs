@@ -19,8 +19,8 @@
 use oauth2_types::oidc::{ProviderMetadata, VerifiedProviderMetadata};
 use url::Url;
 
-use crate::outbound_http::RequestBuilderExt;
 use super::super::error::DiscoveryError;
+use crate::outbound_http::RequestBuilderExt;
 
 /// Fetch the provider metadata.
 async fn discover_inner(

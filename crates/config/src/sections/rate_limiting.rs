@@ -253,7 +253,8 @@ impl RateLimitingConfig {
 }
 
 impl RateLimiterConfiguration {
-    /// Convert to a (limit, period) pair suitable for rate limiter construction.
+    /// Convert to a (limit, period) pair suitable for rate limiter
+    /// construction.
     ///
     /// The `limit` is the burst count, and `period` is the time window
     /// computed from `burst / per_second`.

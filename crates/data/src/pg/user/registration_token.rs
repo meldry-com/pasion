@@ -2,9 +2,8 @@ use async_trait::async_trait;
 use chrono::{DateTime, Utc};
 use diesel::prelude::*;
 use diesel_async::RunQueryDsl;
-use pasion_data::{Clock, UserRegistrationToken, new_id};
 use pasion_data::{
-    Page, Pagination,
+    Clock, Page, Pagination, UserRegistrationToken, new_id,
     pagination::{Node, PaginationDirection},
     user::{UserRegistrationTokenFilter, UserRegistrationTokenRepository},
 };
@@ -505,13 +504,15 @@ struct TimesUsedRow {
 
 #[cfg(test)]
 mod tests {
-    use crate::PgRepositoryFactory;
     use chrono::Duration;
-    use pasion_data::{Clock as _, clock::MockClock};
-    use pasion_data::{Pagination, user::UserRegistrationTokenFilter};
-    use pasion_data::{RepositoryAccess as _, RepositoryFactory as _, RepositoryTransaction as _};
+    use pasion_data::{
+        Clock as _, Pagination, RepositoryAccess as _, RepositoryFactory as _,
+        RepositoryTransaction as _, clock::MockClock, user::UserRegistrationTokenFilter,
+    };
     use rand::SeedableRng;
     use rand_chacha::ChaChaRng;
+
+    use crate::PgRepositoryFactory;
 
     #[tokio::test]
     async fn test_unrevoke() {

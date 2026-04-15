@@ -1,6 +1,5 @@
-use pasion_data::{Authentication, BrowserSession, Client, Clock, Session};
 use pasion_data::{
-    BoxRepository, RepositoryError,
+    Authentication, BoxRepository, BrowserSession, Client, Clock, RepositoryError, Session,
     oauth2::{OAuth2ClientRepository, OAuth2SessionRepository},
     queue::{QueueJobRepositoryExt as _, SyncDevicesJob},
     user::{BrowserSessionRepository, UserRepository},

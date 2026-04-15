@@ -107,7 +107,6 @@ pub enum ClientCredentials {
     },
 
     // -- Pasion-specific credential types for social login providers --
-
     /// The client authenticates using Sign in with Apple.
     ///
     /// Apple requires a specially constructed JWT as the client_secret.
@@ -204,8 +203,8 @@ impl ClientCredentials {
         }
     }
 
-    /// Apply these [`ClientCredentials`] to the given [`reqwest::RequestBuilder`]
-    /// together with the given form body.
+    /// Apply these [`ClientCredentials`] to the given
+    /// [`reqwest::RequestBuilder`] together with the given form body.
     ///
     /// Depending on the credential type the authentication may be placed in an
     /// HTTP header (for `ClientSecretBasic`) or serialised as part of the form
@@ -264,8 +263,12 @@ impl ClientCredentials {
                 signing_algorithm,
                 token_endpoint,
             } => {
-                let claims =
-                    prepare_jwt_bearer_claims(client_id.clone(), token_endpoint.to_string(), now, rng)?;
+                let claims = prepare_jwt_bearer_claims(
+                    client_id.clone(),
+                    token_endpoint.to_string(),
+                    now,
+                    rng,
+                )?;
                 let key = SymmetricKey::new_for_alg(
                     client_secret.as_bytes().to_vec(),
                     signing_algorithm,
@@ -288,8 +291,12 @@ impl ClientCredentials {
                 signing_algorithm,
                 token_endpoint,
             } => {
-                let claims =
-                    prepare_jwt_bearer_claims(client_id.clone(), token_endpoint.to_string(), now, rng)?;
+                let claims = prepare_jwt_bearer_claims(
+                    client_id.clone(),
+                    token_endpoint.to_string(),
+                    now,
+                    rng,
+                )?;
 
                 let key = keystore
                     .signing_key_for_algorithm(signing_algorithm)
@@ -316,7 +323,6 @@ impl ClientCredentials {
             }
 
             // -- Pasion-specific social provider handling --
-
             ClientCredentials::QQConnect {
                 client_id,
                 client_secret,
@@ -363,8 +369,10 @@ impl ClientCredentials {
                 claims::SUB.insert(&mut apple_claims, client_id)?;
                 claims::AUD.insert(&mut apple_claims, "https://appleid.apple.com".to_owned())?;
                 claims::IAT.insert(&mut apple_claims, now)?;
-                claims::EXP
-                    .insert(&mut apple_claims, now + Duration::microseconds(60 * 1000 * 1000))?;
+                claims::EXP.insert(
+                    &mut apple_claims,
+                    now + Duration::microseconds(60 * 1000 * 1000),
+                )?;
 
                 let header =
                     JsonWebSignatureHeader::new(JsonWebSignatureAlg::Es256).with_kid(key_id);

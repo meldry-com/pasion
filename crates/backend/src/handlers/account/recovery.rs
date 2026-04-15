@@ -1,21 +1,19 @@
 //! REST API endpoints for account recovery.
 //!
 //! These endpoints serve as thin HTTP adapters over the business logic in
-//! [`crate::handlers::account::service::recovery`]. They parse requests, delegate to service
-//! functions, and map results to JSON responses.
+//! [`crate::handlers::account::service::recovery`]. They parse requests,
+//! delegate to service functions, and map results to JSON responses.
 use chrono::Utc;
-use pasion_data::flow::{FlowSession, FlowSessionStatus};
-use pasion_data::new_id;
-use salvo::oapi::ToSchema;
-use salvo::prelude::*;
+use pasion_data::{
+    flow::{FlowSession, FlowSessionStatus},
+    new_id,
+};
+use salvo::{oapi::ToSchema, prelude::*};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use ulid::Ulid;
 
 use super::{DepotExt, RouteError, extract_bound_activity_tracker, make_clock, make_rng};
-use crate::handlers::flow::{
-    FlowExecutor, defaults::default_recovery_flow, flow_session_store_write,
-};
 use crate::handlers::{
     RequesterFingerprint,
     account::service::recovery::{
@@ -23,6 +21,7 @@ use crate::handlers::{
         load_account_recovery_session, recovery_session_status, resend_account_recovery,
         start_account_recovery,
     },
+    flow::{FlowExecutor, defaults::default_recovery_flow, flow_session_store_write},
 };
 
 // ── POST /api/v1/auth/recovery/start ───────────────────────────

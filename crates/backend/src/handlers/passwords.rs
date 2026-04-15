@@ -9,8 +9,7 @@ use anyhow::Context;
 use argon2::{Argon2, PasswordHash, PasswordHasher, PasswordVerifier, password_hash::SaltString};
 use futures_util::future::OptionFuture;
 use pbkdf2::Pbkdf2;
-use rand_core::SeedableRng;
-use rand_core::{CryptoRng, RngCore};
+use rand_core::{CryptoRng, RngCore, SeedableRng};
 use thiserror::Error;
 use zeroize::Zeroizing;
 use zxcvbn::zxcvbn;
@@ -265,11 +264,7 @@ pub struct Hasher {
 impl Hasher {
     /// Creates a new hashing scheme based on the bcrypt algorithm
     #[must_use]
-    pub const fn bcrypt(
-        cost: Option<u32>,
-        pepper: Option<Vec<u8>>,
-        nfkc_normalize: bool,
-    ) -> Self {
+    pub const fn bcrypt(cost: Option<u32>, pepper: Option<Vec<u8>>, nfkc_normalize: bool) -> Self {
         let algorithm = Algorithm::Bcrypt { cost };
         Self {
             algorithm,

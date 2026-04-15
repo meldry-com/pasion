@@ -1,9 +1,10 @@
 use std::{process::ExitCode, time::Duration};
 
-use crate::handlers::ActivityTracker;
 use futures_util::future::{BoxFuture, Either};
 use pasion_templates::Templates;
 use tokio_util::{sync::CancellationToken, task::TaskTracker};
+
+use crate::handlers::ActivityTracker;
 
 /// A helper to manage the lifecycle of the service, inclusing handling graceful
 /// shutdowns and configuration reloads.
@@ -66,7 +67,8 @@ impl Reloadable for Templates {
     }
 }
 
-/// A wrapper around [`sd_notify::notify`] that logs any errors (no-op on non-Unix)
+/// A wrapper around [`sd_notify::notify`] that logs any errors (no-op on
+/// non-Unix)
 #[cfg(unix)]
 fn notify(states: &[sd_notify::NotifyState]) {
     if let Err(e) = sd_notify::notify(states) {

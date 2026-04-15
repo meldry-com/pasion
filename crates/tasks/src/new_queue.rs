@@ -20,7 +20,7 @@ use self::{
     leader::ScheduleDefinition,
     repository as repo_runtime,
     runtime::{ListenerRuntime, WorkerMetrics},
-    shared::{retry_delay, MAX_ATTEMPTS},
+    shared::{MAX_ATTEMPTS, retry_delay},
     tracker::JobTracker,
 };
 
@@ -110,7 +110,8 @@ impl QueueWorker {
         self
     }
 
-    /// Register a queue name whose jobs should simply be consumed and discarded.
+    /// Register a queue name whose jobs should simply be consumed and
+    /// discarded.
     pub(crate) fn register_deprecated_queue(&mut self, queue_name: &'static str) -> &mut Self {
         self.tracker.register_deprecated_queue(queue_name);
         self
@@ -276,4 +277,3 @@ impl QueueWorker {
         .await
     }
 }
-

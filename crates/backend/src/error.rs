@@ -9,8 +9,7 @@ use salvo::{
 use crate::{
     handlers::{
         admin::{
-            CreatedJson,
-            CallContextRejection as AdminCallContextRejection, ErrorResponse,
+            CallContextRejection as AdminCallContextRejection, CreatedJson, ErrorResponse,
             InconsistentPersonalSession, PaginationRejection, UlidPathParamRejection,
         },
         common::RouteError as RestRouteError,
@@ -57,7 +56,12 @@ impl AppError {
         E: StdError + Send + Sync + 'static,
     {
         let message = error.to_string();
-        Self::with_source(StatusCode::INTERNAL_SERVER_ERROR, message, Box::new(error), true)
+        Self::with_source(
+            StatusCode::INTERNAL_SERVER_ERROR,
+            message,
+            Box::new(error),
+            true,
+        )
     }
 
     pub fn internal_box(error: BoxError) -> Self {
@@ -141,16 +145,12 @@ impl Scribe for AppError {
 
 impl EndpointOutRegister for AppError {
     fn register(_components: &mut oapi::Components, operation: &mut oapi::Operation) {
-        let error_schema = Object::new()
-            .property(
-                "errors",
-                Object::new()
-                    .property(
-                        "title",
-                        Object::new().schema_type(BasicType::String),
-                    )
-                    .required("title"),
-            );
+        let error_schema = Object::new().property(
+            "errors",
+            Object::new()
+                .property("title", Object::new().schema_type(BasicType::String))
+                .required("title"),
+        );
 
         for (status, description) in [
             ("400", "Bad request"),
@@ -165,7 +165,9 @@ impl EndpointOutRegister for AppError {
         ] {
             let response = oapi::Response::new(description)
                 .add_content("application/json", Content::new(error_schema.clone()));
-            operation.responses.insert(status, oapi::RefOr::Type(response));
+            operation
+                .responses
+                .insert(status, oapi::RefOr::Type(response));
         }
     }
 }
@@ -214,8 +216,9 @@ impl From<AdminCallContextRejection> for AppError {
                 true,
             ),
             AdminCallContextRejection::Repository(source) => Self::internal(source),
-            AdminCallContextRejection::LoadSession(_)
-            | AdminCallContextRejection::LoadUser(_) => Self::internal(error),
+            AdminCallContextRejection::LoadSession(_) | AdminCallContextRejection::LoadUser(_) => {
+                Self::internal(error)
+            }
         }
     }
 }

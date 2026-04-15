@@ -22,7 +22,8 @@ mod register;
 mod upstream;
 mod wrappers;
 
-// Re-export everything from sub-modules so downstream code sees a flat namespace.
+// Re-export everything from sub-modules so downstream code sees a flat
+// namespace.
 
 pub use self::{
     branding::SiteBranding,
@@ -34,9 +35,7 @@ pub use self::{
     features::SiteFeatures,
     login::{LoginContext, LoginFormField, PostAuthContext, PostAuthContextInner},
     oauth::FormPostContext,
-    pages::{
-        AppContext, AppErrorState, ErrorContext, IndexContext, NotFoundContext,
-    },
+    pages::{AppContext, AppErrorState, ErrorContext, IndexContext, NotFoundContext},
     recovery::{
         RecoveryExpiredContext, RecoveryFinishContext, RecoveryFinishFormField,
         RecoveryProgressContext, RecoveryStartContext, RecoveryStartFormField,

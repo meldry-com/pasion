@@ -1,7 +1,6 @@
 use anyhow::Context;
-use pasion_data::{PostAuthAction, UrlBuilder};
 use pasion_data::{
-    RepositoryAccess,
+    PostAuthAction, RepositoryAccess, UrlBuilder,
     oauth2::OAuth2AuthorizationGrantRepository,
     upstream_oauth2::{UpstreamOAuthLinkRepository, UpstreamOAuthProviderRepository},
 };

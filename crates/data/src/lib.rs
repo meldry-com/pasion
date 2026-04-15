@@ -80,15 +80,18 @@ pub mod workflow;
 #[error("invalid state transition")]
 pub struct InvalidTransitionError;
 
-pub use self::pg::{
-    DatabaseError, MIGRATIONS, PgRepository, PgRepositoryFactory, has_pending_migrations, migrate,
-    schema, test_utils,
-};
-pub use self::storage::{
-    BoxRepository, BoxRepositoryFactory, MapErr, Page, Pagination, Repository, RepositoryAccess,
-    RepositoryError, RepositoryFactory, RepositoryTransaction, pagination,
-};
 pub use ulid::Ulid;
+
+pub use self::{
+    pg::{
+        DatabaseError, MIGRATIONS, PgRepository, PgRepositoryFactory, has_pending_migrations,
+        migrate, schema, test_utils,
+    },
+    storage::{
+        BoxRepository, BoxRepositoryFactory, MapErr, Page, Pagination, Repository,
+        RepositoryAccess, RepositoryError, RepositoryFactory, RepositoryTransaction, pagination,
+    },
+};
 
 /// Generate a new UUID v7-compatible identifier (RFC 9562).
 ///
@@ -98,7 +101,10 @@ pub use ulid::Ulid;
 ///
 /// The result is returned as a [`Ulid`] for type compatibility with the
 /// rest of the codebase; the underlying bytes are valid UUID v7.
-pub fn new_id(ts: chrono::DateTime<chrono::Utc>, rng: &mut (impl rand_core::RngCore + ?Sized)) -> Ulid {
+pub fn new_id(
+    ts: chrono::DateTime<chrono::Utc>,
+    rng: &mut (impl rand_core::RngCore + ?Sized),
+) -> Ulid {
     let millis = ts.timestamp_millis() as u64;
     let mut bytes = [0u8; 16];
 
@@ -116,6 +122,7 @@ pub fn new_id(ts: chrono::DateTime<chrono::Utc>, rng: &mut (impl rand_core::RngC
     Ulid::from(uuid::Uuid::from_bytes(bytes))
 }
 
+pub(crate) use self::pg::DatabaseInconsistencyError;
 pub use self::{
     account::{AccountContactPoint, AccountIdentityBinding, ContactChannel, IdentityProviderType},
     audit::{AccountSecurityEvent, AdminOperation, AdminOperationLog, SecurityEventType},
@@ -171,5 +178,3 @@ pub use self::{
         WorkflowInstanceStatus, WorkflowStep, WorkflowStepStatus, WorkflowSubject,
     },
 };
-
-pub(crate) use self::pg::DatabaseInconsistencyError;

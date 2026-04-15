@@ -7,23 +7,25 @@
 //! will replace this once `FlowSession` has a database repository.
 
 use chrono::Utc;
-use pasion_data::flow::{
-    AuthenticatorType as DomainAuthenticatorType, FlowSession, FlowSessionStatus,
-    IdentificationField as DomainIdentificationField, PromptField as DomainPromptField,
-    PromptFieldType as DomainPromptFieldType, StageChallenge as DomainStageChallenge,
-    StageOutcome, StageResponse as DomainStageResponse,
-    StageValidationError as DomainStageValidationError,
+use pasion_data::{
+    flow::{
+        AuthenticatorType as DomainAuthenticatorType, FlowSession, FlowSessionStatus,
+        IdentificationField as DomainIdentificationField, PromptField as DomainPromptField,
+        PromptFieldType as DomainPromptFieldType, StageChallenge as DomainStageChallenge,
+        StageOutcome, StageResponse as DomainStageResponse,
+        StageValidationError as DomainStageValidationError,
+    },
+    new_id,
 };
-use pasion_data::new_id;
 use salvo::{oapi::ToSchema, prelude::*};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use ulid::Ulid;
 
 use super::{RouteError, make_rng};
-use crate::app_state::DepotExt as _;
-use crate::handlers::flow::{
-    CaptchaVerifyContext, FlowExecutor, FlowPlan, flow_session_store_write,
+use crate::{
+    app_state::DepotExt as _,
+    handlers::flow::{CaptchaVerifyContext, FlowExecutor, FlowPlan, flow_session_store_write},
 };
 
 // ---------------------------------------------------------------------------
@@ -179,9 +181,9 @@ impl From<DomainStageChallenge> for FlowChallenge {
             DomainStageChallenge::PasswordWrite { require_current } => {
                 Self::PasswordWrite { require_current }
             }
-            DomainStageChallenge::UserWrite { suggested_username } => Self::UserWrite {
-                suggested_username,
-            },
+            DomainStageChallenge::UserWrite { suggested_username } => {
+                Self::UserWrite { suggested_username }
+            }
             DomainStageChallenge::Captcha { site_key } => Self::Captcha { site_key },
             DomainStageChallenge::Consent { scope, client_name } => {
                 Self::Consent { scope, client_name }
@@ -472,7 +474,10 @@ pub async fn get_flow_session(req: &mut Request) -> Result<Json<FlowResponse>, R
 /// returns the new challenge.  On validation failure, returns the current
 /// challenge again with error details.
 #[endpoint]
-pub async fn respond_flow(req: &mut Request, depot: &Depot) -> Result<Json<FlowResponse>, RouteError> {
+pub async fn respond_flow(
+    req: &mut Request,
+    depot: &Depot,
+) -> Result<Json<FlowResponse>, RouteError> {
     let id = parse_flow_session_id(req)?;
 
     let input: RespondInput = req
@@ -503,10 +508,14 @@ pub async fn respond_flow(req: &mut Request, depot: &Depot) -> Result<Json<FlowR
     });
 
     // Process the response through the executor
-    let (outcome, updated_context) =
-        FlowExecutor::process_response(plan, session, input.response.into(), captcha_verify.as_ref())
-            .await
-            .map_err(|e| RouteError::Internal(Box::new(e)))?;
+    let (outcome, updated_context) = FlowExecutor::process_response(
+        plan,
+        session,
+        input.response.into(),
+        captcha_verify.as_ref(),
+    )
+    .await
+    .map_err(|e| RouteError::Internal(Box::new(e)))?;
 
     // Update the session context
     session.context = updated_context;

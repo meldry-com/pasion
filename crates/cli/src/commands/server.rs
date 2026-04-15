@@ -4,20 +4,11 @@ use anyhow::Context;
 use clap::Parser;
 use figment::Figment;
 use itertools::Itertools;
-use pasion_backend::handlers::{ActivityTracker, CookieManager, Limiter, MetadataCache};
-use pasion_backend::listener::server::Server;
-use pasion_config::{
-    AppConfig, ClientsConfig, ConfigurationSection, ConfigurationSectionExt, HttpResource,
-    UpstreamOAuth2Config,
-};
-use pasion_data::PgRepositoryFactory;
-use pasion_data::SystemClock;
-use pasion_data::UrlBuilder;
-use tracing::{info, info_span, warn};
-
 use pasion_backend::{
     app_state::AppState,
+    handlers::{ActivityTracker, CookieManager, Limiter, MetadataCache},
     lifecycle::LifecycleManager,
+    listener::server::Server,
     util::{
         database_url_from_config, diesel_pool_from_config, homeserver_connection_from_config,
         load_policy_factory_dynamic_data_continuously, notification_center_from_config,
@@ -25,6 +16,12 @@ use pasion_backend::{
         templates_from_config, test_mailer_in_background,
     },
 };
+use pasion_config::{
+    AppConfig, ClientsConfig, ConfigurationSection, ConfigurationSectionExt, HttpResource,
+    UpstreamOAuth2Config,
+};
+use pasion_data::{PgRepositoryFactory, SystemClock, UrlBuilder};
+use tracing::{info, info_span, warn};
 
 #[allow(clippy::struct_excessive_bools)]
 #[derive(Parser, Debug, Default)]

@@ -4,9 +4,10 @@
 //! available.  Stores the new user's `id` and `username` in the flow
 //! context so subsequent stages can reference them.
 
-use pasion_data::Clock;
-use pasion_data::flow::{StageOutcome, StageValidationError};
-use pasion_data::{BoxRepository, RepositoryAccess};
+use pasion_data::{
+    BoxRepository, Clock, RepositoryAccess,
+    flow::{StageOutcome, StageValidationError},
+};
 use rand_core::RngCore;
 
 use super::StageExecutionError;

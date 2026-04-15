@@ -304,36 +304,53 @@ impl ErrorResponse {
 // ---------------------------------------------------------------------------
 
 impl<T: 'static> ToSchema for PaginatedResponse<T> {
-    fn to_schema(_components: &mut salvo::oapi::Components) -> salvo::oapi::RefOr<salvo::oapi::Schema> {
+    fn to_schema(
+        _components: &mut salvo::oapi::Components,
+    ) -> salvo::oapi::RefOr<salvo::oapi::Schema> {
         use salvo::oapi::*;
         Object::new()
-            .property("meta", Object::new()
-                .property("count", Object::new().schema_type(BasicType::Integer)))
-            .property("data", Object::new()
-                .property("type", Object::new().schema_type(BasicType::String))
-                .property("id", Object::new().schema_type(BasicType::String))
-                .property("attributes", Object::new()))
-            .property("links", Object::new()
-                .property("self", Object::new().schema_type(BasicType::String))
-                .property("first", Object::new().schema_type(BasicType::String))
-                .property("last", Object::new().schema_type(BasicType::String))
-                .property("next", Object::new().schema_type(BasicType::String))
-                .property("prev", Object::new().schema_type(BasicType::String)))
+            .property(
+                "meta",
+                Object::new().property("count", Object::new().schema_type(BasicType::Integer)),
+            )
+            .property(
+                "data",
+                Object::new()
+                    .property("type", Object::new().schema_type(BasicType::String))
+                    .property("id", Object::new().schema_type(BasicType::String))
+                    .property("attributes", Object::new()),
+            )
+            .property(
+                "links",
+                Object::new()
+                    .property("self", Object::new().schema_type(BasicType::String))
+                    .property("first", Object::new().schema_type(BasicType::String))
+                    .property("last", Object::new().schema_type(BasicType::String))
+                    .property("next", Object::new().schema_type(BasicType::String))
+                    .property("prev", Object::new().schema_type(BasicType::String)),
+            )
             .required("links")
             .into()
     }
 }
 
 impl<T: 'static> ToSchema for SingleResponse<T> {
-    fn to_schema(_components: &mut salvo::oapi::Components) -> salvo::oapi::RefOr<salvo::oapi::Schema> {
+    fn to_schema(
+        _components: &mut salvo::oapi::Components,
+    ) -> salvo::oapi::RefOr<salvo::oapi::Schema> {
         use salvo::oapi::*;
         Object::new()
-            .property("data", Object::new()
-                .property("type", Object::new().schema_type(BasicType::String))
-                .property("id", Object::new().schema_type(BasicType::String))
-                .property("attributes", Object::new()))
-            .property("links", Object::new()
-                .property("self", Object::new().schema_type(BasicType::String)))
+            .property(
+                "data",
+                Object::new()
+                    .property("type", Object::new().schema_type(BasicType::String))
+                    .property("id", Object::new().schema_type(BasicType::String))
+                    .property("attributes", Object::new()),
+            )
+            .property(
+                "links",
+                Object::new().property("self", Object::new().schema_type(BasicType::String)),
+            )
             .required("data")
             .required("links")
             .into()

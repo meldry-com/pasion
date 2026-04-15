@@ -32,7 +32,11 @@ impl RunnableJob for PruneStalePolicyDataJob {
             .map_err(JobError::retry)?;
 
         repo.save().await.map_err(JobError::retry)?;
-        super::log_cleanup_result(removed, "no stale policy data to prune", "pruned stale policy data");
+        super::log_cleanup_result(
+            removed,
+            "no stale policy data to prune",
+            "pruned stale policy data",
+        );
 
         Ok(())
     }

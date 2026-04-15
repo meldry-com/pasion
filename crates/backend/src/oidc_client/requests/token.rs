@@ -21,11 +21,11 @@ use oauth2_types::requests::{AccessTokenRequest, AccessTokenResponse};
 use rand_core::RngCore as Rng;
 use url::Url;
 
-use crate::outbound_http::RequestBuilderExt;
 use super::super::{
     error::{ResponseExt, TokenRequestError},
     types::client_credentials::ClientCredentials,
 };
+use crate::outbound_http::RequestBuilderExt;
 
 /// Request an access token.
 ///

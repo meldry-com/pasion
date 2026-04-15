@@ -5,13 +5,13 @@
 use std::str::FromStr as _;
 
 use anyhow::Context;
-use chrono::DateTime;
-use chrono::Duration;
-use chrono::Utc;
+use chrono::{DateTime, Duration, Utc};
 use oauth2_types::scope::{Scope, ScopeToken};
-use pasion_data::TokenType;
-use pasion_data::personal::PersonalSessionFilter;
-use pasion_data::queue::{QueueJobRepositoryExt as _, SyncDevicesJob};
+use pasion_data::{
+    TokenType,
+    personal::{PersonalSessionFilter, session::PersonalSessionOwner},
+    queue::{QueueJobRepositoryExt as _, SyncDevicesJob},
+};
 use pasion_matrix::HomeserverAdmin;
 use salvo::prelude::*;
 use schemars::JsonSchema;
@@ -19,24 +19,18 @@ use serde::Deserialize;
 use tracing::error;
 use ulid::Ulid;
 
-use crate::AppError;
-use crate::CreatedJsonResult;
-use crate::JsonResult;
-use crate::handlers::{
-    admin::call_context::extract_call_context,
-    admin::model::PersonalSession,
-    admin::model::Resource,
-    admin::params::IncludeCount,
-    admin::params::extract_pagination,
-    admin::params::extract_ulid_param,
-    admin::response::PaginatedResponse,
-    admin::response::SingleResponse,
-    common::DepotExt,
+use crate::{
+    AppError, CreatedJsonResult, JsonResult,
+    handlers::{
+        admin::{
+            call_context::{CallerSession, extract_call_context},
+            model::{PersonalSession, Resource},
+            params::{IncludeCount, extract_pagination, extract_ulid_param},
+            response::{PaginatedResponse, SingleResponse},
+        },
+        common::DepotExt,
+    },
 };
-
-use pasion_data::personal::session::PersonalSessionOwner;
-
-use crate::handlers::admin::call_context::CallerSession;
 
 /// Derives the [`PersonalSessionOwner`] from the caller's active session,
 /// so that newly created personal sessions are attributed correctly.
@@ -49,9 +43,7 @@ pub(crate) fn personal_session_owner_from_caller(caller: &CallerSession) -> Pers
                 PersonalSessionOwner::OAuth2Client(entry.client_id)
             }
         }
-        CallerSession::PersonalSession(entry) => {
-            PersonalSessionOwner::User(entry.actor_user_id)
-        }
+        CallerSession::PersonalSession(entry) => PersonalSessionOwner::User(entry.actor_user_id),
     }
 }
 
@@ -90,10 +82,7 @@ pub async fn add_session(
     } = ctx;
     let mut rng = crate::handlers::account::make_rng();
     let homeserver = depot.homeserver()?;
-    let body: AddRequest = req
-        .parse_json()
-        .await
-        .map_err(AppError::internal)?;
+    let body: AddRequest = req.parse_json().await.map_err(AppError::internal)?;
     let owner = personal_session_owner_from_caller(&caller_session);
 
     // Look up the target user
@@ -162,8 +151,7 @@ pub async fn add_session(
 
     Ok(crate::handlers::admin::CreatedJson(
         SingleResponse::new_canonical(
-            PersonalSession::try_from((new_session, Some(token_record)))?
-                .with_token(raw_token),
+            PersonalSession::try_from((new_session, Some(token_record)))?.with_token(raw_token),
         ),
     ))
 }
@@ -489,9 +477,7 @@ pub async fn regenerate_session(
         return Err(AppError::unprocessable_entity("Session not valid"));
     };
 
-    repo.personal_access_token()
-        .revoke(&clock, prev)
-        .await?;
+    repo.personal_access_token().revoke(&clock, prev).await?;
 
     // Mint the replacement token
     let new_token_str = TokenType::PersonalAccessToken.generate(&mut rng);
@@ -511,8 +497,7 @@ pub async fn regenerate_session(
 
     Ok(crate::handlers::admin::CreatedJson(
         SingleResponse::new_canonical(
-            PersonalSession::try_from((entry, Some(new_token_record)))?
-                .with_token(new_token_str),
+            PersonalSession::try_from((entry, Some(new_token_record)))?.with_token(new_token_str),
         ),
     ))
 }
@@ -583,18 +568,15 @@ pub async fn revoke_session(
 #[cfg(test)]
 mod tests {
     use std::collections::BTreeSet;
-    
+
     use chrono::Duration;
-    use hyper::Request;
-    use hyper::StatusCode;
+    use hyper::{Request, StatusCode};
     use insta::assert_json_snapshot;
     use oauth2_types::scope::{OPENID, Scope};
-    use pasion_data::Clock;
-    use pasion_data::personal::session::PersonalSessionOwner;
-    use serde_json::Value;
-    use serde_json::json;
+    use pasion_data::{Clock, personal::session::PersonalSessionOwner};
+    use serde_json::{Value, json};
     use ulid::Ulid;
-    
+
     use crate::handlers::test_utils::{RequestBuilderExt, ResponseExt, TestState, setup};
 
     #[tokio::test]
@@ -1032,10 +1014,7 @@ mod tests {
                 .collect();
             let want: BTreeSet<&str> = want_ids.iter().copied().collect();
 
-            assert_eq!(
-                got, want,
-                "filter {qs} returned unexpected results"
-            );
+            assert_eq!(got, want, "filter {qs} returned unexpected results");
         }
     }
 
@@ -1213,7 +1192,10 @@ mod tests {
         let body: serde_json::Value = response.json();
         assert_eq!(
             body["errors"][0]["title"],
-            format!("Personal session with ID {} is already revoked", revoked_sess.id)
+            format!(
+                "Personal session with ID {} is already revoked",
+                revoked_sess.id
+            )
         );
     }
 

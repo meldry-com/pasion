@@ -2,10 +2,9 @@ use async_trait::async_trait;
 use chrono::{DateTime, Utc};
 use diesel::prelude::*;
 use diesel_async::RunQueryDsl;
-use pasion_data::personal::PersonalAccessTokenRepository;
 use pasion_data::{
     Clock, new_id,
-    personal::{PersonalAccessToken, session::PersonalSession},
+    personal::{PersonalAccessToken, PersonalAccessTokenRepository, session::PersonalSession},
 };
 use rand_core::RngCore;
 use sha2::{Digest, Sha256};

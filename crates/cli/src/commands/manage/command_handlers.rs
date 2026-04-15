@@ -11,6 +11,7 @@ use std::process::ExitCode;
 use anyhow::Context;
 use chrono::Duration;
 use figment::Figment;
+use pasion_backend::util::{diesel_pool_from_config, password_manager_from_config};
 use pasion_config::{ConfigurationSectionExt, DatabaseConfig, PasswordsConfig};
 use pasion_data::{
     Clock, Pagination, PgRepository, RepositoryAccess, SystemClock,
@@ -19,13 +20,14 @@ use pasion_data::{
         DeactivateUserJob, ProvisionUserJob, QueueJobRepositoryExt as _, ReactivateUserJob,
         SyncDevicesJob,
     },
-    user::{BrowserSessionFilter, UserEmailRepository, UserFilter, UserPasswordRepository, UserRepository},
+    user::{
+        BrowserSessionFilter, UserEmailRepository, UserFilter, UserPasswordRepository,
+        UserRepository,
+    },
 };
 use rand_core::{RngCore, SeedableRng};
 use tracing::{error, info, info_span, warn};
 use zeroize::Zeroizing;
-
-use pasion_backend::util::{diesel_pool_from_config, password_manager_from_config};
 
 pub(super) async fn handle_set_password(
     figment: &Figment,
@@ -126,7 +128,10 @@ pub(super) async fn handle_add_email(
     Ok(ExitCode::SUCCESS)
 }
 
-pub(super) async fn handle_verify_email(username: String, email: String) -> anyhow::Result<ExitCode> {
+pub(super) async fn handle_verify_email(
+    username: String,
+    email: String,
+) -> anyhow::Result<ExitCode> {
     let _span = info_span!(
         "cli.manage.verify_email",
         user.username = username,
@@ -265,7 +270,10 @@ pub(super) async fn handle_issue_registration_token(
         const CHARSET: &[u8] = b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789";
         let mut bytes = [0u8; 12];
         rng.fill_bytes(&mut bytes);
-        bytes.iter().map(|b| CHARSET[*b as usize % CHARSET.len()] as char).collect()
+        bytes
+            .iter()
+            .map(|b| CHARSET[*b as usize % CHARSET.len()] as char)
+            .collect()
     });
 
     // Create the token
@@ -386,8 +394,7 @@ pub(super) async fn handle_lock_user(
     let mut rng = rand_chacha::ChaChaRng::from_entropy();
 
     let _span = info_span!("cli.manage.lock_user", user.username = username).entered();
-    let config =
-        DatabaseConfig::extract_or_default(figment).map_err(anyhow::Error::from_boxed)?;
+    let config = DatabaseConfig::extract_or_default(figment).map_err(anyhow::Error::from_boxed)?;
     let pool = diesel_pool_from_config(&config).await?;
     let conn = pool
         .get()
@@ -427,8 +434,7 @@ pub(super) async fn handle_unlock_user(
     let mut rng = rand_chacha::ChaChaRng::from_entropy();
 
     let _span = info_span!("cli.manage.unlock_user", user.username = username).entered();
-    let config =
-        DatabaseConfig::extract_or_default(figment).map_err(anyhow::Error::from_boxed)?;
+    let config = DatabaseConfig::extract_or_default(figment).map_err(anyhow::Error::from_boxed)?;
     let pool = diesel_pool_from_config(&config).await?;
     let conn = pool
         .get()

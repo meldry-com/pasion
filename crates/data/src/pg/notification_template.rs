@@ -4,13 +4,17 @@ use async_trait::async_trait;
 use chrono::{DateTime, Utc};
 use diesel::prelude::*;
 use diesel_async::RunQueryDsl;
-use pasion_data::notification::{NotificationChannel, NotificationTemplateVersion};
-use pasion_data::{Clock, new_id};
+use pasion_data::{
+    Clock, new_id,
+    notification::{NotificationChannel, NotificationTemplateVersion},
+};
 use rand_core::RngCore;
 use uuid::Uuid;
 
-use crate::storage::notification_template::NotificationTemplateRepository;
-use crate::{DatabaseError, schema::notification_template_versions};
+use crate::{
+    DatabaseError, schema::notification_template_versions,
+    storage::notification_template::NotificationTemplateRepository,
+};
 
 /// PostgreSQL-backed notification template version repository.
 pub struct PgNotificationTemplateRepository<'c> {
@@ -18,7 +22,8 @@ pub struct PgNotificationTemplateRepository<'c> {
 }
 
 impl<'c> PgNotificationTemplateRepository<'c> {
-    /// Create a new [`PgNotificationTemplateRepository`] from an active PostgreSQL connection.
+    /// Create a new [`PgNotificationTemplateRepository`] from an active
+    /// PostgreSQL connection.
     #[must_use]
     pub fn new(conn: &'c mut diesel_async::AsyncPgConnection) -> Self {
         Self { conn }
@@ -97,7 +102,10 @@ impl NotificationTemplateRepository for PgNotificationTemplateRepository<'_> {
         }
 
         let rows = query.load::<TemplateVersionRow>(self.conn).await?;
-        Ok(rows.into_iter().map(NotificationTemplateVersion::from).collect())
+        Ok(rows
+            .into_iter()
+            .map(NotificationTemplateVersion::from)
+            .collect())
     }
 
     #[tracing::instrument(name = "db.notification_template.get_latest", skip_all, err)]

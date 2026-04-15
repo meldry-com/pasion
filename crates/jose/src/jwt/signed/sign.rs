@@ -108,9 +108,7 @@ impl<T> Jwt<'static, T> {
         let dot2 = message.len();
 
         // Produce the cryptographic signature and base64url-encode it.
-        let raw_sig = key
-            .try_sign_with_rng(rng, message.as_bytes())?
-            .to_vec();
+        let raw_sig = key.try_sign_with_rng(rng, message.as_bytes())?.to_vec();
         let encoded_sig = Base64UrlUnpadded::encode_string(&raw_sig);
 
         // Build the full compact token: "<header>.<payload>.<signature>"

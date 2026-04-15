@@ -179,7 +179,9 @@ impl TlsConfig {
         // -- password --
         let pw = match (&self.password, &self.password_file) {
             (None, None) => None,
-            (Some(_), Some(_)) => bail!("Only one of `password` or `password_file` can be set at a time"),
+            (Some(_), Some(_)) => {
+                bail!("Only one of `password` or `password_file` can be set at a time")
+            }
             (Some(p), None) => Some(Cow::Borrowed(p)),
             (None, Some(path)) => Some(Cow::Owned(std::fs::read_to_string(path)?)),
         };
@@ -211,14 +213,15 @@ impl TlsConfig {
         // -- certificate chain --
         let cert_pem = match (&self.certificate, &self.certificate_file) {
             (None, None) => bail!("Either `certificate` or `certificate_file` must be set"),
-            (Some(_), Some(_)) => bail!("Only one of `certificate` or `certificate_file` can be set at a time"),
+            (Some(_), Some(_)) => {
+                bail!("Only one of `certificate` or `certificate_file` can be set at a time")
+            }
             (Some(c), None) => Cow::Borrowed(c),
             (None, Some(path)) => Cow::Owned(std::fs::read_to_string(path)?),
         };
 
         let chain: Vec<CertificateDer<'static>> =
-            CertificateDer::pem_slice_iter(cert_pem.as_bytes())
-                .collect::<Result<Vec<_>, _>>()?;
+            CertificateDer::pem_slice_iter(cert_pem.as_bytes()).collect::<Result<Vec<_>, _>>()?;
 
         if chain.is_empty() {
             bail!("TLS certificate chain is empty (or invalid)");

@@ -8,13 +8,16 @@ use salvo::prelude::*;
 use schemars::JsonSchema;
 use serde::Deserialize;
 
-use crate::AppError;
-use crate::JsonResult;
-use crate::handlers::admin::call_context::extract_call_context;
-use crate::handlers::admin::model::User;
-use crate::handlers::admin::params::extract_ulid_param;
-use crate::handlers::admin::response::SingleResponse;
-use crate::handlers::common::DepotExt;
+use crate::{
+    AppError, JsonResult,
+    handlers::{
+        admin::{
+            call_context::extract_call_context, model::User, params::extract_ulid_param,
+            response::SingleResponse,
+        },
+        common::DepotExt,
+    },
+};
 
 #[derive(Deserialize, JsonSchema)]
 #[serde(rename_all = "camelCase")]
@@ -30,10 +33,7 @@ pub struct UpdateRequest {
 
 #[endpoint]
 #[tracing::instrument(name = "handler.admin.v1.users.update", skip_all)]
-pub async fn update_user(
-    req: &mut Request,
-    depot: &Depot,
-) -> JsonResult<SingleResponse<User>> {
+pub async fn update_user(req: &mut Request, depot: &Depot) -> JsonResult<SingleResponse<User>> {
     let call_context = extract_call_context(req, depot).await?;
     let crate::handlers::admin::call_context::CallContext {
         mut repo,

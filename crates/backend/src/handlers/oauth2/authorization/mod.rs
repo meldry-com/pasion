@@ -1,26 +1,26 @@
-use crate::salvo_utils::{
-    SessionInfoExt, cookies::CookieJar,
-};
 use oauth2_types::{
     errors::{ClientError, ClientErrorCode},
     pkce,
     requests::{AuthorizationRequest, GrantType, Prompt, ResponseMode},
     response_type::ResponseType,
 };
-use pasion_data::{AuthorizationCode, BoxClock, BoxRng, Pkce, SystemClock};
 use pasion_data::{
-    BoxRepository, BoxRepositoryFactory, RepositoryAccess,
-    oauth2::{OAuth2AuthorizationGrantRepository, OAuth2ClientRepository, OAuth2SessionFilter, OAuth2SessionRepository},
+    AuthorizationCode, BoxClock, BoxRepository, BoxRepositoryFactory, BoxRng, Pkce, PostAuthAction,
+    RepositoryAccess, SystemClock, UrlBuilder,
+    oauth2::{
+        OAuth2AuthorizationGrantRepository, OAuth2ClientRepository, OAuth2SessionFilter,
+        OAuth2SessionRepository,
+    },
 };
-use pasion_data::{PostAuthAction, UrlBuilder};
 use pasion_templates::Templates;
-use rand_core::SeedableRng;
 use rand_chacha::ChaChaRng;
+use rand_core::SeedableRng;
 use salvo::prelude::*;
 use serde::Deserialize;
 use thiserror::Error;
 
 use self::callback::CallbackDestination;
+use crate::salvo_utils::{SessionInfoExt, cookies::CookieJar};
 
 pub(crate) mod callback;
 
@@ -135,7 +135,8 @@ async fn handle_get(req: &mut Request, depot: &Depot) -> Result<(Response, Cooki
     let activity_tracker = crate::handlers::account::extract_bound_activity_tracker(req, depot);
 
     let clock: BoxClock = Box::new(SystemClock::default());
-    let mut rng: BoxRng = Box::new(ChaChaRng::from_rng(rand_core::OsRng).expect("Failed to seed rng"));
+    let mut rng: BoxRng =
+        Box::new(ChaChaRng::from_rng(rand_core::OsRng).expect("Failed to seed rng"));
 
     // Extract preferred language
     let locale = crate::handlers::preferred_language(req, depot);
@@ -249,10 +250,13 @@ async fn handle_get(req: &mut Request, depot: &Depot) -> Result<(Response, Cooki
 
                 // 32 random alphanumeric characters, about 190bit of entropy
                 let code: String = {
-                    const CHARSET: &[u8] = b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789";
+                    const CHARSET: &[u8] =
+                        b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789";
                     let mut buf = [0u8; 32];
                     rng.fill_bytes(&mut buf);
-                    buf.iter().map(|b| CHARSET[(*b as usize) % CHARSET.len()] as char).collect()
+                    buf.iter()
+                        .map(|b| CHARSET[(*b as usize) % CHARSET.len()] as char)
+                        .collect()
                 };
 
                 let pkce = params.pkce.map(|p| Pkce {
@@ -367,13 +371,9 @@ async fn handle_get(req: &mut Request, depot: &Depot) -> Result<(Response, Cooki
                     // sessions have been finished (user logged out), redirect
                     // to login instead of silently reusing the stale browser
                     // session.
-                    let filter = OAuth2SessionFilter::default()
-                        .for_browser_session(&user_session);
+                    let filter = OAuth2SessionFilter::default().for_browser_session(&user_session);
                     let total = repo.oauth2_session().count(filter).await?;
-                    let active = repo
-                        .oauth2_session()
-                        .count(filter.active_only())
-                        .await?;
+                    let active = repo.oauth2_session().count(filter.active_only()).await?;
 
                     repo.save().await?;
 

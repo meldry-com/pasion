@@ -12,10 +12,10 @@ use url::Url;
 use super::{
     DEFAULT_APPLICATION_TYPE, DEFAULT_ENCRYPTION_ENC_ALGORITHM, DEFAULT_GRANT_TYPES,
     DEFAULT_RESPONSE_TYPES, DEFAULT_SIGNING_ALGORITHM, DEFAULT_TOKEN_AUTH_METHOD,
+    client_metadata_serde::ClientMetadataSerdeHelper,
+    localized::Localized,
+    validation::{ClientMetadataVerificationError, VerifiedClientMetadata},
 };
-use super::client_metadata_serde::ClientMetadataSerdeHelper;
-use super::localized::Localized;
-use super::validation::{ClientMetadataVerificationError, VerifiedClientMetadata};
 use crate::{
     oidc::{ApplicationType, SubjectType},
     requests::GrantType,
@@ -38,7 +38,6 @@ use crate::{
 #[serde(from = "ClientMetadataSerdeHelper", into = "ClientMetadataSerdeHelper")]
 pub struct ClientMetadata {
     // -- RFC 7591: OAuth 2.0 Dynamic Client Registration Protocol --
-
     /// Array of redirection URIs for use in redirect-based flows such as the
     /// [authorization code flow].
     ///
@@ -156,7 +155,6 @@ pub struct ClientMetadata {
     pub software_version: Option<String>,
 
     // -- OpenID Connect Registration 1.0 --
-
     /// The kind of the application.
     ///
     /// Defaults to [`DEFAULT_APPLICATION_TYPE`].
@@ -295,7 +293,6 @@ pub struct ClientMetadata {
     pub request_uris: Option<Vec<Url>>,
 
     // -- RFC 9101 / RFC 9126 extensions --
-
     /// Whether the client will only send authorization requests as [Request
     /// Objects].
     ///
@@ -313,7 +310,6 @@ pub struct ClientMetadata {
     pub require_pushed_authorization_requests: Option<bool>,
 
     // -- Token introspection extensions --
-
     /// [JWS] `alg` algorithm for signing responses of the [introspection
     /// endpoint].
     ///
@@ -348,7 +344,6 @@ pub struct ClientMetadata {
     pub introspection_encrypted_response_enc: Option<JsonWebEncryptionEnc>,
 
     // -- RP-Initiated Logout --
-
     /// `post_logout_redirect_uri` values that are pre-registered by the client
     /// for use at the provider's [RP-Initiated Logout endpoint].
     ///
@@ -408,18 +403,15 @@ impl ClientMetadata {
                 || !has_code && !has_id_token && !has_token;
 
             if !is_ok {
-                collected_errors.push(
-                    ClientMetadataVerificationError::IncoherentResponseType(
-                        response_type.clone(),
-                    ),
-                );
+                collected_errors.push(ClientMetadataVerificationError::IncoherentResponseType(
+                    response_type.clone(),
+                ));
             }
         }
 
         // Validate JWKS mutual exclusivity
         if self.jwks_uri.is_some() && self.jwks.is_some() {
-            collected_errors
-                .push(ClientMetadataVerificationError::JwksUriAndJwksMutuallyExclusive);
+            collected_errors.push(ClientMetadataVerificationError::JwksUriAndJwksMutuallyExclusive);
         }
 
         // Validate sector_identifier_uri scheme
@@ -444,9 +436,9 @@ impl ClientMetadata {
 
         if let Some(alg) = &self.token_endpoint_auth_signing_alg {
             if *alg == JsonWebSignatureAlg::None {
-                collected_errors.push(
-                    ClientMetadataVerificationError::UnauthorizedSigningAlgNone("token_endpoint"),
-                );
+                collected_errors.push(ClientMetadataVerificationError::UnauthorizedSigningAlgNone(
+                    "token_endpoint",
+                ));
             }
         } else if matches!(
             self.token_endpoint_auth_method(),
@@ -469,15 +461,17 @@ impl ClientMetadata {
         if self.id_token_encrypted_response_enc.is_some()
             && self.id_token_encrypted_response_alg.is_none()
         {
-            collected_errors
-                .push(ClientMetadataVerificationError::MissingEncryptionAlg("id_token"));
+            collected_errors.push(ClientMetadataVerificationError::MissingEncryptionAlg(
+                "id_token",
+            ));
         }
 
         if self.userinfo_encrypted_response_enc.is_some()
             && self.userinfo_encrypted_response_alg.is_none()
         {
-            collected_errors
-                .push(ClientMetadataVerificationError::MissingEncryptionAlg("userinfo"));
+            collected_errors.push(ClientMetadataVerificationError::MissingEncryptionAlg(
+                "userinfo",
+            ));
         }
 
         if self.request_object_encryption_enc.is_some()

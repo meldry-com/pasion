@@ -13,7 +13,7 @@ use pasion_jose::{
 use pem_rfc7468::PemLabel;
 use pkcs1::EncodeRsaPrivateKey;
 use pkcs8::{AssociatedOid, DecodePrivateKey, PrivateKeyInfo};
-use rand_core::{CryptoRng, RngCore, OsRng};
+use rand_core::{CryptoRng, OsRng, RngCore};
 use rsa::BigUint;
 use thiserror::Error;
 
@@ -161,15 +161,9 @@ fn parse_pkcs8_key_info(info: PrivateKeyInfo) -> Result<PrivateKey, LoadError> {
     if algo_oid == elliptic_curve::ALGORITHM_OID {
         let curve_oid = info.algorithm.parameters_oid()?;
         return match curve_oid {
-            oid if oid == p256::NistP256::OID => {
-                Ok(PrivateKey::EcP256(Box::new(info.try_into()?)))
-            }
-            oid if oid == p384::NistP384::OID => {
-                Ok(PrivateKey::EcP384(Box::new(info.try_into()?)))
-            }
-            oid if oid == p521::NistP521::OID => {
-                Ok(PrivateKey::EcP521(Box::new(info.try_into()?)))
-            }
+            oid if oid == p256::NistP256::OID => Ok(PrivateKey::EcP256(Box::new(info.try_into()?))),
+            oid if oid == p384::NistP384::OID => Ok(PrivateKey::EcP384(Box::new(info.try_into()?))),
+            oid if oid == p521::NistP521::OID => Ok(PrivateKey::EcP521(Box::new(info.try_into()?))),
             oid if oid == k256::Secp256k1::OID => {
                 Ok(PrivateKey::EcK256(Box::new(info.try_into()?)))
             }
@@ -188,27 +182,17 @@ fn parse_pkcs8_key_info(info: PrivateKeyInfo) -> Result<PrivateKey, LoadError> {
 
 /// Helper: decode a SEC1-encoded EC private key into the correct curve variant.
 fn parse_sec1_ec_key(ec_key: sec1::EcPrivateKey) -> Result<PrivateKey, LoadError> {
-    let params = ec_key
-        .parameters
-        .ok_or(LoadError::MissingSec1Parameters)?;
+    let params = ec_key.parameters.ok_or(LoadError::MissingSec1Parameters)?;
 
     let curve_oid = params
         .named_curve()
         .ok_or(LoadError::MissingSec1CurveName)?;
 
     match curve_oid {
-        oid if oid == p256::NistP256::OID => {
-            Ok(PrivateKey::EcP256(Box::new(ec_key.try_into()?)))
-        }
-        oid if oid == p384::NistP384::OID => {
-            Ok(PrivateKey::EcP384(Box::new(ec_key.try_into()?)))
-        }
-        oid if oid == p521::NistP521::OID => {
-            Ok(PrivateKey::EcP521(Box::new(ec_key.try_into()?)))
-        }
-        oid if oid == k256::Secp256k1::OID => {
-            Ok(PrivateKey::EcK256(Box::new(ec_key.try_into()?)))
-        }
+        oid if oid == p256::NistP256::OID => Ok(PrivateKey::EcP256(Box::new(ec_key.try_into()?))),
+        oid if oid == p384::NistP384::OID => Ok(PrivateKey::EcP384(Box::new(ec_key.try_into()?))),
+        oid if oid == p521::NistP521::OID => Ok(PrivateKey::EcP521(Box::new(ec_key.try_into()?))),
+        oid if oid == k256::Secp256k1::OID => Ok(PrivateKey::EcK256(Box::new(ec_key.try_into()?))),
         other => Err(LoadError::UnknownEllipticCurveOid { oid: other }),
     }
 }

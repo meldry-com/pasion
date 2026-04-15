@@ -989,10 +989,7 @@ mod tests {
 
         for (variant, json_str) in cases {
             assert_eq!(serde_json::to_string(variant).unwrap(), *json_str);
-            assert_eq!(
-                serde_json::from_str::<Display>(json_str).unwrap(),
-                *variant,
-            );
+            assert_eq!(serde_json::from_str::<Display>(json_str).unwrap(), *variant,);
         }
     }
 
@@ -1010,10 +1007,7 @@ mod tests {
 
         for (variant, json_str) in cases {
             assert_eq!(serde_json::to_string(variant).unwrap(), *json_str);
-            assert_eq!(
-                serde_json::from_str::<Prompt>(json_str).unwrap(),
-                *variant,
-            );
+            assert_eq!(serde_json::from_str::<Prompt>(json_str).unwrap(), *variant,);
         }
     }
 }

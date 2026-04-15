@@ -14,9 +14,10 @@ pub mod password_write;
 pub mod prompt;
 pub mod user_write;
 
-use pasion_data::BoxRepository;
-use pasion_data::Clock;
-use pasion_data::flow::{StageKind, StageOutcome, StageResponse};
+use pasion_data::{
+    BoxRepository, Clock,
+    flow::{StageKind, StageOutcome, StageResponse},
+};
 use rand_core::RngCore;
 use thiserror::Error;
 

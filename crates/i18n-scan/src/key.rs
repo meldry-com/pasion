@@ -36,11 +36,7 @@ impl Context {
     /// identifiers (dot-separated template keys are converted to
     /// hyphen-separated FTL IDs).
     pub fn ftl_keys(&self) -> Vec<String> {
-        let mut ids: Vec<String> = self
-            .keys
-            .iter()
-            .map(|k| k.name.replace('.', "-"))
-            .collect();
+        let mut ids: Vec<String> = self.keys.iter().map(|k| k.name.replace('.', "-")).collect();
         ids.sort();
         ids.dedup();
         ids

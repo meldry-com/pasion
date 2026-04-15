@@ -101,7 +101,8 @@ pub struct WithCaptcha<T> {
 impl<T> WithCaptcha<T> {
     #[must_use]
     pub(crate) fn new(captcha: Option<pasion_data::CaptchaConfig>, inner: T) -> Self {
-        let captcha_value = captcha.map(|config| Value::from_object(CaptchaDescriptor::from(config)));
+        let captcha_value =
+            captcha.map(|config| Value::from_object(CaptchaDescriptor::from(config)));
         Self {
             captcha: captcha_value,
             inner,

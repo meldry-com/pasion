@@ -14,8 +14,7 @@ use ulid::Ulid;
 use url::Url;
 
 use crate::{
-    Pagination, pagination::Page, repository_impl,
-    upstream_oauth2::UpstreamOAuthProviderSource,
+    Pagination, pagination::Page, repository_impl, upstream_oauth2::UpstreamOAuthProviderSource,
 };
 
 /// Structure which holds parameters when inserting or updating an upstream

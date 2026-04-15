@@ -3,38 +3,34 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 
 use oauth2_types::scope::Scope;
-use pasion_data::audit::AdminOperation;
-use pasion_data::upstream_oauth2::{
-    UpstreamOAuthProviderFilter, UpstreamOAuthProviderParams, UpstreamOAuthProviderRepository,
-};
 use pasion_data::{
     RepositoryAccess, UpstreamOAuthProviderClaimsImports, UpstreamOAuthProviderDiscoveryMode,
     UpstreamOAuthProviderOnBackchannelLogout, UpstreamOAuthProviderPkceMode,
     UpstreamOAuthProviderResponseMode, UpstreamOAuthProviderSource,
     UpstreamOAuthProviderTokenAuthMethod,
+    audit::AdminOperation,
+    upstream_oauth2::{
+        UpstreamOAuthProviderFilter, UpstreamOAuthProviderParams, UpstreamOAuthProviderRepository,
+    },
 };
 use pasion_iana::jose::JsonWebSignatureAlg;
-use salvo::http::StatusCode;
-use salvo::prelude::*;
+use salvo::{http::StatusCode, prelude::*};
 use schemars::JsonSchema;
 use serde::Deserialize;
 use url::Url;
 
-use crate::AppError;
-use crate::AppResult;
-use crate::CreatedJsonResult;
-use crate::JsonResult;
-use crate::handlers::admin::{
-    call_context::extract_call_context,
-    model::Resource,
-    model::UpstreamOAuthProvider,
-    params::IncludeCount,
-    params::extract_pagination,
-    params::extract_ulid_param,
-    response::PaginatedResponse,
-    response::SingleResponse,
+use crate::{
+    AppError, AppResult, CreatedJsonResult, JsonResult,
+    handlers::{
+        admin::{
+            call_context::extract_call_context,
+            model::{Resource, UpstreamOAuthProvider},
+            params::{IncludeCount, extract_pagination, extract_ulid_param},
+            response::{PaginatedResponse, SingleResponse},
+        },
+        common::DepotExt as _,
+    },
 };
-use crate::handlers::common::DepotExt as _;
 
 /// Fetch a single upstream OAuth provider by its identifier.
 #[endpoint]
@@ -157,7 +153,8 @@ pub struct ProviderRequest {
     client_id: String,
     /// Plaintext client secret. Encrypted server-side before being persisted.
     client_secret: Option<String>,
-    /// Claims-import configuration as JSON. See [`UpstreamOAuthProviderClaimsImports`].
+    /// Claims-import configuration as JSON. See
+    /// [`UpstreamOAuthProviderClaimsImports`].
     #[serde(default)]
     #[schemars(with = "serde_json::Value")]
     claims_imports: serde_json::Value,
@@ -327,7 +324,8 @@ pub async fn add_provider(
     ))
 }
 
-/// Update an existing upstream OAuth provider. Only allowed for `source=manual`.
+/// Update an existing upstream OAuth provider. Only allowed for
+/// `source=manual`.
 #[endpoint]
 #[tracing::instrument(name = "handler.admin.v1.upstream_oauth_providers.update", skip_all)]
 pub async fn update_provider(
@@ -529,20 +527,17 @@ pub async fn enable_provider(
 
 #[cfg(test)]
 mod tests {
-    use hyper::Request;
-    use hyper::StatusCode;
+    use hyper::{Request, StatusCode};
     use oauth2_types::scope::{OPENID, Scope};
-    use pasion_data::RepositoryAccess;
-    use pasion_data::UpstreamOAuthProvider;
-    use pasion_data::UpstreamOAuthProviderClaimsImports;
-    use pasion_data::UpstreamOAuthProviderDiscoveryMode;
-    use pasion_data::UpstreamOAuthProviderOnBackchannelLogout;
-    use pasion_data::UpstreamOAuthProviderPkceMode;
-    use pasion_data::UpstreamOAuthProviderTokenAuthMethod;
-    use pasion_data::upstream_oauth2::{UpstreamOAuthProviderParams, UpstreamOAuthProviderRepository};
+    use pasion_data::{
+        RepositoryAccess, UpstreamOAuthProvider, UpstreamOAuthProviderClaimsImports,
+        UpstreamOAuthProviderDiscoveryMode, UpstreamOAuthProviderOnBackchannelLogout,
+        UpstreamOAuthProviderPkceMode, UpstreamOAuthProviderTokenAuthMethod,
+        upstream_oauth2::{UpstreamOAuthProviderParams, UpstreamOAuthProviderRepository},
+    };
     use pasion_iana::jose::JsonWebSignatureAlg;
     use ulid::Ulid;
-    
+
     use crate::handlers::test_utils::{RequestBuilderExt, ResponseExt, TestState, setup};
 
     async fn create_test_provider(state: &mut TestState) -> UpstreamOAuthProvider {

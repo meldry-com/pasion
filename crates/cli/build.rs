@@ -33,7 +33,9 @@ fn env_override() -> Option<String> {
 fn git_describe() -> Option<String> {
     let root = workspace_root()?;
     let output = Command::new("git")
-        .args(["describe", "--tags", "--dirty", "--always", "--match", "v*.*.*"])
+        .args([
+            "describe", "--tags", "--dirty", "--always", "--match", "v*.*.*",
+        ])
         .current_dir(root)
         .output()
         .ok()?;

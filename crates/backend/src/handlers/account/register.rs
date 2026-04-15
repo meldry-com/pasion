@@ -1,37 +1,39 @@
 //! REST API endpoints for user registration.
 //!
 //! These endpoints serve as thin HTTP adapters over the business logic in
-//! [`crate::handlers::account::service::registration`]. They parse requests, check config/policy
-//! constraints, delegate to service functions, and map results to JSON
-//! responses.
+//! [`crate::handlers::account::service::registration`]. They parse requests,
+//! check config/policy constraints, delegate to service functions, and map
+//! results to JSON responses.
 
-use crate::salvo_utils::SessionInfoExt;
 use chrono::Utc;
-use pasion_data::flow::{FlowSession, FlowSessionStatus};
-use pasion_data::new_id;
-use salvo::oapi::ToSchema;
-use salvo::prelude::*;
+use pasion_data::{
+    flow::{FlowSession, FlowSessionStatus},
+    new_id,
+};
+use salvo::{oapi::ToSchema, prelude::*};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use ulid::Ulid;
 
 use super::{DepotExt, RouteError, extract_bound_activity_tracker, make_clock, make_rng};
-use crate::handlers::flow::{
-    FlowExecutor, defaults::default_registration_flow, flow_session_store_write,
-};
-use crate::handlers::{
-    RequesterFingerprint,
-    account::service::registration::{
-        BeginPasswordRegistrationError, BeginPasswordRegistrationRequest,
-        BeginPasswordRegistrationResult, EmailAvailabilityCheck, HomeserverCheckMode,
-        LoadRegistrationProgressError, RegistrationDisplayNameOutcome,
-        RegistrationDisplayNameWorkflowError, RegistrationFinishError, RegistrationFinishOutcome,
-        RegistrationResendError, RegistrationResendOutcome, RegistrationVerificationError,
-        RegistrationVerificationOutcome, begin_password_registration, finish_registration,
-        load_registration_status, next_registration_step, resend_registration_verification,
-        submit_registration_display_name, submit_registration_email_code,
-        submit_registration_phone_code,
+use crate::{
+    handlers::{
+        RequesterFingerprint,
+        account::service::registration::{
+            BeginPasswordRegistrationError, BeginPasswordRegistrationRequest,
+            BeginPasswordRegistrationResult, EmailAvailabilityCheck, HomeserverCheckMode,
+            LoadRegistrationProgressError, RegistrationDisplayNameOutcome,
+            RegistrationDisplayNameWorkflowError, RegistrationFinishError,
+            RegistrationFinishOutcome, RegistrationResendError, RegistrationResendOutcome,
+            RegistrationVerificationError, RegistrationVerificationOutcome,
+            begin_password_registration, finish_registration, load_registration_status,
+            next_registration_step, resend_registration_verification,
+            submit_registration_display_name, submit_registration_email_code,
+            submit_registration_phone_code,
+        },
+        flow::{FlowExecutor, defaults::default_registration_flow, flow_session_store_write},
     },
+    salvo_utils::SessionInfoExt,
 };
 
 // ── POST /api/v1/auth/register ─────────────────────────────────
@@ -109,7 +111,11 @@ pub async fn post_register(
         BeginPasswordRegistrationRequest {
             username: input.username,
             email: input.email,
-            phone: if site_config.phone_verification_enabled { input.phone } else { None },
+            phone: if site_config.phone_verification_enabled {
+                input.phone
+            } else {
+                None
+            },
             password: input.password,
             password_confirm: input.password_confirm,
             user_agent,
@@ -126,7 +132,10 @@ pub async fn post_register(
     )
     .await
     .map_err(|error| {
-        tracing::error!(error = &error as &dyn std::error::Error, "Registration failed");
+        tracing::error!(
+            error = &error as &dyn std::error::Error,
+            "Registration failed"
+        );
         match error {
             BeginPasswordRegistrationError::Repository(error) => RouteError::from(error),
             BeginPasswordRegistrationError::Internal(error) => RouteError::Internal(error.into()),

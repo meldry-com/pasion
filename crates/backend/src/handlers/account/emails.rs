@@ -1,5 +1,4 @@
-use salvo::oapi::ToSchema;
-use salvo::prelude::*;
+use salvo::{oapi::ToSchema, prelude::*};
 use serde::{Deserialize, Serialize};
 
 use super::{

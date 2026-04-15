@@ -1,15 +1,14 @@
 use std::{collections::HashMap, sync::LazyLock};
 
-use crate::oidc_client::{
-    requests::jose::JwtVerificationData, types::client_credentials::ClientCredentials,
-};
-use crate::salvo_utils::{GenericError, InternalError, cookies::TimedCookie};
 use oauth2_types::{errors::ClientErrorCode, requests::AccessTokenRequest};
 use opentelemetry::{Key, KeyValue, metrics::Counter};
-use pasion_data::upstream_oauth2::{
-    UpstreamOAuthLinkRepository, UpstreamOAuthProviderRepository, UpstreamOAuthSessionRepository,
+use pasion_data::{
+    Clock, UpstreamOAuthProvider, UpstreamOAuthProviderResponseMode,
+    upstream_oauth2::{
+        UpstreamOAuthLinkRepository, UpstreamOAuthProviderRepository,
+        UpstreamOAuthSessionRepository,
+    },
 };
-use pasion_data::{Clock, UpstreamOAuthProvider, UpstreamOAuthProviderResponseMode};
 use pasion_jose::claims::TokenHash;
 use pasion_templates::FormPostContext;
 use salvo::prelude::*;
@@ -24,8 +23,13 @@ use super::{
     client_credentials_for_provider,
     template::{AttributeMappingContext, environment},
 };
-use crate::handlers::METER;
-use crate::handlers::account::DepotExt;
+use crate::{
+    handlers::{METER, account::DepotExt},
+    oidc_client::{
+        requests::jose::JwtVerificationData, types::client_credentials::ClientCredentials,
+    },
+    salvo_utils::{GenericError, InternalError, cookies::TimedCookie},
+};
 
 static CALLBACK_COUNTER: LazyLock<Counter<u64>> = LazyLock::new(|| {
     METER
@@ -155,7 +159,9 @@ pub async fn handler(
     depot: &mut Depot,
     res: &mut Response,
 ) -> Result<(), RouteError> {
-    let provider_id: Ulid = req.param("provider_id").ok_or(RouteError::ProviderNotFound)?;
+    let provider_id: Ulid = req
+        .param("provider_id")
+        .ok_or(RouteError::ProviderNotFound)?;
     let mut rng = crate::handlers::account::make_rng();
     let clock = crate::handlers::account::make_clock();
     let metadata_cache = depot.metadata_cache()?;

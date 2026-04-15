@@ -107,8 +107,8 @@ where
         T: Serialize,
     {
         let converted = value.into();
-        let json = serde_json::to_value(&converted)
-            .map_err(|_| ClaimError::InvalidClaim(self.key))?;
+        let json =
+            serde_json::to_value(&converted).map_err(|_| ClaimError::InvalidClaim(self.key))?;
         claims.insert(self.key.to_owned(), json);
         Ok(())
     }
@@ -116,22 +116,20 @@ where
     // -- extraction helpers -------------------------------------------------
 
     /// Decode a `serde_json::Value` into `T` and run the validator.
-    fn decode_and_validate(
-        &self,
-        raw: serde_json::Value,
-        validator: V,
-    ) -> Result<T, ClaimError>
+    fn decode_and_validate(&self, raw: serde_json::Value, validator: V) -> Result<T, ClaimError>
     where
         T: DeserializeOwned,
         V::Error: std::error::Error + Send + Sync + 'static,
     {
-        let decoded: T = serde_json::from_value(raw)
-            .map_err(|_| ClaimError::InvalidClaim(self.key))?;
+        let decoded: T =
+            serde_json::from_value(raw).map_err(|_| ClaimError::InvalidClaim(self.key))?;
 
-        validator.validate(&decoded).map_err(|e| ClaimError::ValidationError {
-            claim: self.key,
-            source: Box::new(e),
-        })?;
+        validator
+            .validate(&decoded)
+            .map_err(|e| ClaimError::ValidationError {
+                claim: self.key,
+                source: Box::new(e),
+            })?;
 
         Ok(decoded)
     }
@@ -373,7 +371,10 @@ fn sha_family_for(alg: &JsonWebSignatureAlg) -> Result<ShaFamily, TokenHashError
     } else if name.ends_with("384") {
         Ok(ShaFamily::Sha384)
     } else if name.ends_with("512")
-        || matches!(alg, JsonWebSignatureAlg::EdDsa | JsonWebSignatureAlg::Ed25519)
+        || matches!(
+            alg,
+            JsonWebSignatureAlg::EdDsa | JsonWebSignatureAlg::Ed25519
+        )
     {
         Ok(ShaFamily::Sha512)
     } else {
@@ -530,10 +531,7 @@ impl<'a, T> From<&'a T> for Contains<'a, T> {
 /// A UTC timestamp that serializes as a UNIX epoch integer (seconds).
 #[derive(Deserialize, Serialize, Debug, Clone, PartialEq, Eq)]
 #[serde(transparent)]
-pub struct Timestamp(
-    #[serde(with = "chrono::serde::ts_seconds")]
-    chrono::DateTime<chrono::Utc>,
-);
+pub struct Timestamp(#[serde(with = "chrono::serde::ts_seconds")] chrono::DateTime<chrono::Utc>);
 
 impl Deref for Timestamp {
     type Target = chrono::DateTime<chrono::Utc>;
@@ -759,7 +757,9 @@ mod tests {
         chrono::DateTime<chrono::Utc>,
         HashMap<String, serde_json::Value>,
     ) {
-        let now = chrono::Utc.with_ymd_and_hms(2018, 1, 18, 1, 30, 22).unwrap();
+        let now = chrono::Utc
+            .with_ymd_and_hms(2018, 1, 18, 1, 30, 22)
+            .unwrap();
         let claims = serde_json::json!({
             "iss": "https://foo.com",
             "sub": "johndoe",
@@ -774,7 +774,9 @@ mod tests {
 
     /// Reference time used across multiple tests.
     fn reference_time() -> chrono::DateTime<chrono::Utc> {
-        chrono::Utc.with_ymd_and_hms(2018, 1, 18, 1, 30, 22).unwrap()
+        chrono::Utc
+            .with_ymd_and_hms(2018, 1, 18, 1, 30, 22)
+            .unwrap()
     }
 
     /// Builds claims with deliberately wrong types for negative testing.
@@ -838,7 +840,10 @@ mod tests {
         let single = OneOrMany(vec!["one".to_owned()]);
         let multi = OneOrMany(vec!["one".to_owned(), "two".to_owned()]);
 
-        assert_eq!(serde_json::to_value(&single).unwrap(), serde_json::json!("one"));
+        assert_eq!(
+            serde_json::to_value(&single).unwrap(),
+            serde_json::json!("one")
+        );
         assert_eq!(
             serde_json::to_value(&multi).unwrap(),
             serde_json::json!(["one", "two"])
@@ -920,8 +925,7 @@ mod tests {
             "nbf": 1_516_239_022,
             "exp": 1_516_239_322,
         });
-        let base: HashMap<String, serde_json::Value> =
-            serde_json::from_value(time_claims).unwrap();
+        let base: HashMap<String, serde_json::Value> = serde_json::from_value(time_claims).unwrap();
 
         // Scenario 1: exactly at claim time, zero leeway => all pass
         {
@@ -951,8 +955,8 @@ mod tests {
         // Scenario 3: 1 minute before, 2-minute leeway => all pass
         {
             let mut c = base.clone();
-            let opts = TimeOptions::new(earlier)
-                .leeway(chrono::Duration::try_seconds(120).unwrap());
+            let opts =
+                TimeOptions::new(earlier).leeway(chrono::Duration::try_seconds(120).unwrap());
             assert!(IAT.extract_required_with_options(&mut c, &opts).is_ok());
             assert!(NBF.extract_required_with_options(&mut c, &opts).is_ok());
             assert!(EXP.extract_required_with_options(&mut c, &opts).is_ok());
@@ -974,8 +978,7 @@ mod tests {
         // Scenario 5: past expiration but within 2-minute leeway
         {
             let mut c = base;
-            let opts = TimeOptions::new(later)
-                .leeway(chrono::Duration::try_minutes(2).unwrap());
+            let opts = TimeOptions::new(later).leeway(chrono::Duration::try_minutes(2).unwrap());
             assert!(IAT.extract_required_with_options(&mut c, &opts).is_ok());
             assert!(NBF.extract_required_with_options(&mut c, &opts).is_ok());
             assert!(EXP.extract_required_with_options(&mut c, &opts).is_ok());

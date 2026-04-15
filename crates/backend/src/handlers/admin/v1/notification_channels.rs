@@ -4,15 +4,14 @@
 //! Since the [`NotificationCenter`] is not available in the HTTP depot,
 //! channel availability is inferred from the site configuration flags.
 
-use salvo::prelude::*;
+use salvo::{oapi::ToSchema, prelude::*};
 use schemars::JsonSchema;
-use salvo::oapi::ToSchema;
 use serde::Serialize;
 
-use crate::handlers::{
-    admin::call_context::extract_call_context, common::DepotExt,
+use crate::{
+    JsonResult,
+    handlers::{admin::call_context::extract_call_context, common::DepotExt},
 };
-use crate::JsonResult;
 
 /// Status of an individual notification channel.
 #[derive(Serialize, JsonSchema, ToSchema)]
@@ -33,10 +32,7 @@ pub struct NotificationChannelsResponse {
 
 #[endpoint]
 #[tracing::instrument(name = "handler.admin.v1.notification_channels", skip_all)]
-pub async fn handler(
-    req: &mut Request,
-    depot: &Depot,
-) -> JsonResult<NotificationChannelsResponse> {
+pub async fn handler(req: &mut Request, depot: &Depot) -> JsonResult<NotificationChannelsResponse> {
     let _call_context = extract_call_context(req, depot).await?;
     let site_config = depot.site_config()?;
 

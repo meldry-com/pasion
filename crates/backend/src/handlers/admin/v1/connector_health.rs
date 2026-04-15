@@ -1,15 +1,14 @@
 //! Admin endpoint for checking connector provider health.
 
 use pasion_matrix::ConnectorRegistry;
-use salvo::oapi::ToSchema;
-use salvo::prelude::*;
+use salvo::{oapi::ToSchema, prelude::*};
 use schemars::JsonSchema;
 use serde::Serialize;
 
-use crate::handlers::{
-    admin::call_context::extract_call_context, common::DepotExt,
+use crate::{
+    JsonResult,
+    handlers::{admin::call_context::extract_call_context, common::DepotExt},
 };
-use crate::JsonResult;
 
 #[derive(Serialize, JsonSchema, ToSchema)]
 #[serde(rename_all = "camelCase")]
@@ -44,10 +43,7 @@ fn get_registry(depot: &Depot) -> Option<ConnectorRegistry> {
 }
 #[endpoint]
 #[tracing::instrument(name = "handler.admin.v1.connector_health", skip_all)]
-pub async fn handler(
-    req: &mut Request,
-    depot: &Depot,
-) -> JsonResult<ConnectorHealthResponse> {
+pub async fn handler(req: &mut Request, depot: &Depot) -> JsonResult<ConnectorHealthResponse> {
     let call_context = extract_call_context(req, depot).await?;
 
     let providers = if let Some(registry) = get_registry(depot) {

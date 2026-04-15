@@ -103,9 +103,10 @@ impl<T: AsyncWrite + Unpin> AsyncWrite for BufferedStream<T> {
 
 #[cfg(test)]
 mod tests {
-    use super::BufferedStream;
     use bytes::Bytes;
     use tokio::io::AsyncReadExt;
+
+    use super::BufferedStream;
 
     #[tokio::test]
     async fn partial_rewind() {

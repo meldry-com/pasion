@@ -253,7 +253,6 @@ mod impls {
         app_session::AppSessionRepository,
         audit::AuditRepository,
         notification::NotificationRepository,
-        storage::notification_template::NotificationTemplateRepository,
         oauth2::{
             OAuth2AccessTokenRepository, OAuth2AuthorizationGrantRepository,
             OAuth2ClientRepository, OAuth2DeviceCodeGrantRepository, OAuth2RefreshTokenRepository,
@@ -262,6 +261,7 @@ mod impls {
         personal::{PersonalAccessTokenRepository, PersonalSessionRepository},
         policy_data::PolicyDataRepository,
         queue::{QueueJobRepository, QueueScheduleRepository, QueueWorkerRepository},
+        storage::notification_template::NotificationTemplateRepository,
         upstream_oauth2::{
             UpstreamOAuthLinkRepository, UpstreamOAuthProviderRepository,
             UpstreamOAuthSessionRepository,

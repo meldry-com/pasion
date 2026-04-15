@@ -56,17 +56,11 @@ impl Options {
         }
 
         // 1. Well-known discovery
-        let _discovered_cs_api = well_known::check_well_known(
-            &http,
-            &domain,
-            resolved_issuer,
-            public_base,
-        )
-        .await;
+        let _discovered_cs_api =
+            well_known::check_well_known(&http, &domain, resolved_issuer, public_base).await;
 
         // 2. Homeserver reachability
-        let reachable =
-            homeserver::verify_reachability(&http, &hs_endpoint, &domain).await;
+        let reachable = homeserver::verify_reachability(&http, &hs_endpoint, &domain).await;
 
         if reachable {
             // 3. Token validation round-trip

@@ -12,7 +12,8 @@ pub trait FormField: Copy + Hash + PartialEq + Eq + Serialize + for<'de> Deseria
     /// fields)
     fn keep(&self) -> bool;
 
-    /// Retain or clear the serialized field value according to the field policy.
+    /// Retain or clear the serialized field value according to the field
+    /// policy.
     fn retain_value(&self, value: Option<String>) -> Option<String> {
         self.keep().then_some(value).flatten()
     }
@@ -109,17 +110,19 @@ impl<K: Copy + Eq> FieldStore<K> {
     }
 
     fn insert(&mut self, key: K, value: Option<String>) {
-        self.entries.push((key, FieldSnapshot {
-            value,
-            errors: Vec::new(),
-        }));
+        self.entries.push((
+            key,
+            FieldSnapshot {
+                value,
+                errors: Vec::new(),
+            },
+        ));
     }
 }
 
 impl<K: FormField> FieldStore<K> {
     fn populate_from<F: Serialize>(form: &F) -> Self {
-        let json_val =
-            serde_json::to_value(form).expect("form serialization should not fail");
+        let json_val = serde_json::to_value(form).expect("form serialization should not fail");
         let raw_map: serde_json::Map<String, serde_json::Value> =
             serde_json::from_value(json_val).expect("form serialization should produce an object");
 
@@ -272,9 +275,8 @@ fn try_decode_key<K>(raw: String) -> Option<K>
 where
     K: for<'de> Deserialize<'de>,
 {
-    let decoded: MaybeKnownKey<K> =
-        serde_json::from_value(serde_json::Value::String(raw))
-            .expect("field key deserialization should not fail");
+    let decoded: MaybeKnownKey<K> = serde_json::from_value(serde_json::Value::String(raw))
+        .expect("field key deserialization should not fail");
     match decoded {
         MaybeKnownKey::Known(k) => Some(k),
         MaybeKnownKey::Unknown(_) => None,

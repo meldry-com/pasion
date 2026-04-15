@@ -2,10 +2,9 @@ use async_trait::async_trait;
 use chrono::{DateTime, Utc};
 use diesel::prelude::*;
 use diesel_async::RunQueryDsl;
-use pasion_data::user::UserPhoneRepository;
 use pasion_data::{
     Clock, User, UserPhone, UserPhoneAuthentication, UserPhoneAuthenticationCode, UserRegistration,
-    new_id,
+    new_id, user::UserPhoneRepository,
 };
 use rand_core::RngCore;
 use ulid::Ulid;

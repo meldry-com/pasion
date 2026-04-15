@@ -3,11 +3,10 @@
 //! This handler renders the `app.html` template, which loads the Dioxus WASM
 //! frontend. The client-side router then handles all page routing.
 
-use crate::salvo_utils::InternalError;
 use pasion_templates::{AppContext, TemplateContext};
 use salvo::{prelude::*, writing::Text};
 
-use crate::handlers::account::DepotExt;
+use crate::{handlers::account::DepotExt, salvo_utils::InternalError};
 
 /// Serve the SPA shell for anonymous (public) pages.
 ///

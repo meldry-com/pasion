@@ -1,7 +1,6 @@
 use std::net::IpAddr;
 
-use pasion_data::flow::*;
-use pasion_data::{CaptchaConfig, CaptchaService};
+use pasion_data::{CaptchaConfig, CaptchaService, flow::*};
 use serde::Serialize;
 use serde_json::Value;
 use thiserror::Error;
@@ -93,8 +92,7 @@ impl FlowExecutor {
             .ok_or(FlowPlannerError::NoMoreStages)?;
 
         let mut context = session.context.clone();
-        let outcome =
-            validate_response(&binding.stage, &response, &mut context, captcha_ctx).await;
+        let outcome = validate_response(&binding.stage, &response, &mut context, captcha_ctx).await;
 
         Ok((outcome, context))
     }
@@ -180,8 +178,7 @@ pub struct CaptchaVerifyContext<'a> {
 
 const RECAPTCHA_VERIFY_URL: &str = "https://www.google.com/recaptcha/api/siteverify";
 const HCAPTCHA_VERIFY_URL: &str = "https://api.hcaptcha.com/siteverify";
-const CF_TURNSTILE_VERIFY_URL: &str =
-    "https://challenges.cloudflare.com/turnstile/v0/siteverify";
+const CF_TURNSTILE_VERIFY_URL: &str = "https://challenges.cloudflare.com/turnstile/v0/siteverify";
 
 #[derive(Serialize)]
 struct CaptchaApiRequest<'a> {
@@ -333,7 +330,8 @@ async fn validate_response(
                                         );
                                     }
                                 }
-                                // Verification passed — fall through to Continue
+                                // Verification passed — fall through to
+                                // Continue
                             }
                             Ok(_) => {
                                 return StageOutcome::Retry {

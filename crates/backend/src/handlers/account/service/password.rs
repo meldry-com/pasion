@@ -6,10 +6,9 @@
 
 use anyhow::Error as AnyhowError;
 use pasion_data::{
-    BoxRepository, RepositoryAccess, RepositoryError,
+    BoxRepository, Clock, RepositoryAccess, RepositoryError, User,
     user::{UserPasswordRepository, UserRepository},
 };
-use pasion_data::{Clock, User};
 use rand_chacha::rand_core::CryptoRngCore;
 use thiserror::Error;
 use zeroize::Zeroizing;

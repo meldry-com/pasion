@@ -2,8 +2,7 @@ use async_trait::async_trait;
 use chrono::{DateTime, Utc};
 use diesel::prelude::*;
 use diesel_async::RunQueryDsl;
-use pasion_data::user::UserTotpRepository;
-use pasion_data::{Clock, User, UserTotpConfig, new_id};
+use pasion_data::{Clock, User, UserTotpConfig, new_id, user::UserTotpRepository};
 use rand_core::RngCore;
 use ulid::Ulid;
 use uuid::Uuid;
@@ -146,12 +145,10 @@ impl UserTotpRepository for PgUserTotpRepository<'_> {
     ) -> Result<UserTotpConfig, Self::Error> {
         let confirmed_at = clock.now();
 
-        let rows_affected = diesel::update(
-            user_totp_configs::table.find(Uuid::from(config.id)),
-        )
-        .set(user_totp_configs::confirmed_at.eq(Some(confirmed_at)))
-        .execute(self.conn)
-        .await?;
+        let rows_affected = diesel::update(user_totp_configs::table.find(Uuid::from(config.id)))
+            .set(user_totp_configs::confirmed_at.eq(Some(confirmed_at)))
+            .execute(self.conn)
+            .await?;
 
         DatabaseError::ensure_affected_rows_usize(rows_affected, 1)?;
 
@@ -170,11 +167,9 @@ impl UserTotpRepository for PgUserTotpRepository<'_> {
         err,
     )]
     async fn remove(&mut self, config: UserTotpConfig) -> Result<(), Self::Error> {
-        let rows_affected = diesel::delete(
-            user_totp_configs::table.find(Uuid::from(config.id)),
-        )
-        .execute(self.conn)
-        .await?;
+        let rows_affected = diesel::delete(user_totp_configs::table.find(Uuid::from(config.id)))
+            .execute(self.conn)
+            .await?;
 
         DatabaseError::ensure_affected_rows_usize(rows_affected, 1)?;
 

@@ -1,10 +1,10 @@
 use anyhow::Error as AnyhowError;
 use pasion_data::{
-    BoxRepository, RepositoryAccess, RepositoryError,
+    BoxRepository, BrowserSession, Clock, RepositoryAccess, RepositoryError, SiteConfig,
+    UpstreamOAuthProvider, User,
     upstream_oauth2::UpstreamOAuthProviderRepository,
     user::{BrowserSessionRepository, UserPasswordRepository, UserRepository},
 };
-use pasion_data::{BrowserSession, Clock, SiteConfig, UpstreamOAuthProvider, User};
 use pasion_matrix::HomeserverAdmin;
 use rand_chacha::rand_core::CryptoRngCore;
 use thiserror::Error;
@@ -79,7 +79,11 @@ pub async fn login_with_password(
         return Ok(PasswordLoginOutcome::InvalidCredentials);
     };
 
-    if limiter.check_password(request.requester, &user).await.is_err() {
+    if limiter
+        .check_password(request.requester, &user)
+        .await
+        .is_err()
+    {
         return Ok(PasswordLoginOutcome::RateLimited);
     }
 

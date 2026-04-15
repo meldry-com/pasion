@@ -133,7 +133,8 @@ pub struct SentryConfig {
     #[schemars(example = 0.5, range(min = 0.0, max = 1.0))]
     pub sample_rate: Option<f32>,
 
-    /// Fraction of tracing transactions sent to Sentry (0.0 -- 1.0). Default: `0.0`.
+    /// Fraction of tracing transactions sent to Sentry (0.0 -- 1.0). Default:
+    /// `0.0`.
     #[serde(skip_serializing_if = "Option::is_none")]
     #[schemars(example = 0.5, range(min = 0.0, max = 1.0))]
     pub traces_sample_rate: Option<f32>,
@@ -198,11 +199,7 @@ impl ConfigurationSection for TelemetryConfig {
         &self,
         _figment: &figment::Figment,
     ) -> Result<(), Box<dyn std::error::Error + Send + Sync + 'static>> {
-        check_sample_rate_bounds(
-            self.sentry.sample_rate,
-            "Sentry",
-            "sentry.sample_rate",
-        )?;
+        check_sample_rate_bounds(self.sentry.sample_rate, "Sentry", "sentry.sample_rate")?;
         check_sample_rate_bounds(
             self.sentry.traces_sample_rate,
             "Sentry",

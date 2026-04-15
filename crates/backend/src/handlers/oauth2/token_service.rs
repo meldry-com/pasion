@@ -7,7 +7,6 @@
 
 use std::sync::Arc;
 
-use crate::oidc_client::types::scope::ScopeToken;
 use chrono::Duration;
 use oauth2_types::{
     pkce::CodeChallengeError,
@@ -17,12 +16,9 @@ use oauth2_types::{
     },
     scope,
 };
-use pasion_data::UrlBuilder;
 use pasion_data::{
-    AuthorizationGrantStage, Client, Clock, DeviceCodeGrantState, SiteConfig, TokenType,
-};
-use pasion_data::{
-    BoxRepository, RepositoryAccess, RepositoryError,
+    AuthorizationGrantStage, BoxRepository, Client, Clock, DeviceCodeGrantState, RepositoryAccess,
+    RepositoryError, SiteConfig, TokenType, UrlBuilder,
     oauth2::{
         OAuth2AccessTokenRepository, OAuth2AuthorizationGrantRepository,
         OAuth2RefreshTokenRepository, OAuth2SessionRepository,
@@ -38,9 +34,12 @@ use thiserror::Error;
 use tracing::{debug, info, warn};
 use ulid::Ulid;
 
-use crate::handlers::{
-    BoundActivityTracker,
-    oauth2::{IdTokenSignatureError, generate_id_token, generate_token_pair},
+use crate::{
+    handlers::{
+        BoundActivityTracker,
+        oauth2::{IdTokenSignatureError, generate_id_token, generate_token_pair},
+    },
+    oidc_client::types::scope::ScopeToken,
 };
 
 // ---------------------------------------------------------------------------

@@ -3,9 +3,7 @@ use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
 use crate::Ulid;
-
-pub use crate::pg::audit::PgAuditRepository;
-pub use crate::storage::audit::*;
+pub use crate::{pg::audit::PgAuditRepository, storage::audit::*};
 
 /// An admin operation log entry, recording actions taken by administrators.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]

@@ -3,17 +3,23 @@
 
 use async_trait::async_trait;
 use chrono::{DateTime, Duration, Utc};
-use diesel::prelude::*;
-use diesel::sql_types::{Array, BigInt, Jsonb, Nullable, Text, Timestamptz, Uuid as DieselUuid};
+use diesel::{
+    prelude::*,
+    sql_types::{Array, BigInt, Jsonb, Nullable, Text, Timestamptz, Uuid as DieselUuid},
+};
 use diesel_async::RunQueryDsl;
-use pasion_data::queue::{Job, QueueJobRepository, Worker};
-use pasion_data::{Clock, new_id};
+use pasion_data::{
+    Clock, new_id,
+    queue::{Job, QueueJobRepository, Worker},
+};
 use rand_core::RngCore;
 use ulid::Ulid;
 use uuid::Uuid;
 
-use crate::schema::{queue_jobs, queue_schedules};
-use crate::{DatabaseError, DatabaseInconsistencyError};
+use crate::{
+    DatabaseError, DatabaseInconsistencyError,
+    schema::{queue_jobs, queue_schedules},
+};
 
 /// An implementation of [`QueueJobRepository`] for a PostgreSQL connection.
 pub struct PgQueueJobRepository<'c> {

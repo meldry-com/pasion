@@ -5,26 +5,25 @@
 use std::str::FromStr;
 
 use oauth2_types::scope::{Scope, ScopeToken};
-use pasion_data::RepositoryAccess;
-use pasion_data::audit::AdminOperation;
-use pasion_data::oauth2::OAuth2SessionFilter;
-use pasion_data::queue::{QueueJobRepositoryExt as _, SyncDevicesJob};
+use pasion_data::{
+    RepositoryAccess,
+    audit::AdminOperation,
+    oauth2::OAuth2SessionFilter,
+    queue::{QueueJobRepositoryExt as _, SyncDevicesJob},
+};
 use salvo::prelude::*;
 use schemars::JsonSchema;
 use serde::Deserialize;
 use ulid::Ulid;
 
-use crate::AppError;
-use crate::JsonResult;
-use crate::handlers::admin::{
-    call_context::extract_call_context,
-    model::OAuth2Session,
-    model::Resource,
-    params::IncludeCount,
-    params::extract_pagination,
-    params::extract_ulid_param,
-    response::PaginatedResponse,
-    response::SingleResponse,
+use crate::{
+    AppError, JsonResult,
+    handlers::admin::{
+        call_context::extract_call_context,
+        model::{OAuth2Session, Resource},
+        params::{IncludeCount, extract_pagination, extract_ulid_param},
+        response::{PaginatedResponse, SingleResponse},
+    },
 };
 
 /// Terminate an active OAuth 2.0 session. If the session is associated with a
@@ -51,9 +50,7 @@ pub async fn finish_session(
         .lookup(session_id)
         .await?
         .ok_or_else(|| {
-            AppError::not_found(format!(
-                "OAuth 2.0 session with ID {session_id} not found"
-            ))
+            AppError::not_found(format!("OAuth 2.0 session with ID {session_id} not found"))
         })?;
 
     if oauth_session.finished_at().is_some() {
@@ -72,10 +69,7 @@ pub async fn finish_session(
             .await?;
     }
 
-    let ended = repo
-        .oauth2_session()
-        .finish(&clock, oauth_session)
-        .await?;
+    let ended = repo.oauth2_session().finish(&clock, oauth_session).await?;
 
     crate::handlers::admin::audit_helper::record_admin_operation(
         &mut repo,
@@ -353,12 +347,10 @@ pub async fn list_sessions(
 #[cfg(test)]
 mod tests {
     use chrono::Duration;
-    use hyper::Request;
-    use hyper::StatusCode;
-    use pasion_data::AccessToken;
-    use pasion_data::Clock as _;
+    use hyper::{Request, StatusCode};
+    use pasion_data::{AccessToken, Clock as _};
     use ulid::Ulid;
-    
+
     use crate::handlers::test_utils::{RequestBuilderExt, ResponseExt, TestState, setup};
 
     #[tokio::test]

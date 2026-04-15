@@ -3,10 +3,9 @@ use std::process::ExitCode;
 use anyhow::Context;
 use clap::Parser;
 use figment::Figment;
+use pasion_backend::util::{database_url_from_config, diesel_pool_from_config};
 use pasion_config::{ConfigurationSectionExt, DatabaseConfig};
 use tracing::info_span;
-
-use pasion_backend::util::{database_url_from_config, diesel_pool_from_config};
 
 #[derive(Parser, Debug)]
 pub(super) struct Options {

@@ -1,19 +1,13 @@
 use std::collections::{HashMap, HashSet};
 
-use crate::oidc_client::{
-    error::JwtVerificationError,
-    requests::jose::{JwtVerificationData, verify_signed_jwt},
-};
-use crate::record_error;
 use oauth2_types::errors::{ClientError, ClientErrorCode};
 use pasion_data::{
-    Pagination,
+    Pagination, UpstreamOAuthProvider, UpstreamOAuthProviderOnBackchannelLogout,
     oauth2::OAuth2SessionFilter,
     queue::{QueueJobRepositoryExt as _, SyncDevicesJob},
     upstream_oauth2::UpstreamOAuthSessionFilter,
     user::BrowserSessionFilter,
 };
-use pasion_data::{UpstreamOAuthProvider, UpstreamOAuthProviderOnBackchannelLogout};
 use pasion_jose::{
     claims::{self, Claim, TimeOptions},
     jwt::JwtDecodeError,
@@ -24,8 +18,14 @@ use serde_json::Value;
 use thiserror::Error;
 use ulid::Ulid;
 
-use crate::handlers::account::DepotExt;
-use crate::handlers::upstream_oauth2::cache::LazyProviderInfos;
+use crate::{
+    handlers::{account::DepotExt, upstream_oauth2::cache::LazyProviderInfos},
+    oidc_client::{
+        error::JwtVerificationError,
+        requests::jose::{JwtVerificationData, verify_signed_jwt},
+    },
+    record_error,
+};
 
 #[derive(Debug, Error)]
 pub enum RouteError {
@@ -121,7 +121,9 @@ const EVENTS: Claim<LogoutTokenEvents> = Claim::new("events");
 #[handler]
 #[tracing::instrument(name = "handlers.upstream_oauth2.backchannel_logout.post", skip_all)]
 pub async fn post(req: &mut Request, depot: &mut Depot) -> Result<(), RouteError> {
-    let provider_id: Ulid = req.param("provider_id").ok_or(RouteError::ProviderNotFound)?;
+    let provider_id: Ulid = req
+        .param("provider_id")
+        .ok_or(RouteError::ProviderNotFound)?;
     let clock = crate::handlers::account::make_clock();
     let mut rng = crate::handlers::account::make_rng();
     let mut repo = depot.repo().await?;

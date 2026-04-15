@@ -3,10 +3,9 @@ use chrono::{DateTime, Utc};
 use diesel::prelude::*;
 use diesel_async::RunQueryDsl;
 use oauth2_types::{requests::ResponseMode, scope::Scope};
-use pasion_data::oauth2::OAuth2AuthorizationGrantRepository;
 use pasion_data::{
     AuthorizationCode, AuthorizationGrant, AuthorizationGrantStage, Client, Clock, Pkce, Session,
-    new_id,
+    new_id, oauth2::OAuth2AuthorizationGrantRepository,
 };
 use pasion_iana::oauth::PkceCodeChallengeMethod;
 use rand_core::RngCore;

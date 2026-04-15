@@ -30,7 +30,10 @@ pub async fn get(req: &mut Request, depot: &Depot, res: &mut Response) {
         Err(e) => {
             // Server is misconfigured. Return 500 instead of panicking so a
             // single bad request cannot crash the worker.
-            tracing::error!(error = &e as &dyn std::error::Error, "DepotExt::url_builder failed");
+            tracing::error!(
+                error = &e as &dyn std::error::Error,
+                "DepotExt::url_builder failed"
+            );
             res.status_code(StatusCode::INTERNAL_SERVER_ERROR);
             return;
         }

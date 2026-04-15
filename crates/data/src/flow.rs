@@ -192,9 +192,10 @@ pub enum PromptFieldType {
 /// Binds a stage to a flow with ordering and an optional policy expression.
 ///
 /// The planner iterates these bindings in [`order`](Self::order) to build the
-/// list of stages the user must complete.  If [`evaluate_on_plan`](Self::evaluate_on_plan)
-/// is `true`, the [`policy_expression`](Self::policy_expression) is evaluated
-/// at plan time to decide whether the stage should be included.
+/// list of stages the user must complete.  If
+/// [`evaluate_on_plan`](Self::evaluate_on_plan) is `true`, the
+/// [`policy_expression`](Self::policy_expression) is evaluated at plan time to
+/// decide whether the stage should be included.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct FlowStageBinding {
     /// Unique identifier.

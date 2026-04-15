@@ -1,13 +1,11 @@
 use std::sync::{Arc, LazyLock};
 
-use crate::salvo_utils::client_authorization::{ClientAuthorization, CredentialsVerificationError};
 use oauth2_types::{
     errors::{ClientError, ClientErrorCode},
     requests::{IntrospectionRequest, IntrospectionResponse},
 };
 use opentelemetry::{Key, KeyValue, metrics::Counter};
-use pasion_data::{BoxClock, SystemClock};
-use pasion_data::{BoxRepository, BoxRepositoryFactory};
+use pasion_data::{BoxClock, BoxRepository, BoxRepositoryFactory, SystemClock};
 use pasion_iana::oauth::{OAuthClientAuthenticationMethod, OAuthTokenTypeHint};
 use pasion_keystore::Encrypter;
 use pasion_matrix::HomeserverAdmin;
@@ -15,8 +13,11 @@ use salvo::{Extractible, prelude::*};
 use thiserror::Error;
 use ulid::Ulid;
 
-use crate::handlers::{ActivityTracker, METER};
 use super::introspection_service;
+use crate::{
+    handlers::{ActivityTracker, METER},
+    salvo_utils::client_authorization::{ClientAuthorization, CredentialsVerificationError},
+};
 
 static INTROSPECTION_COUNTER: LazyLock<Counter<u64>> = LazyLock::new(|| {
     METER

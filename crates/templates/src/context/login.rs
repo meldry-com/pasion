@@ -3,8 +3,7 @@
 use std::collections::BTreeMap;
 
 use pasion_data::{
-    AuthorizationGrant, DeviceCodeGrant, PostAuthAction, UpstreamOAuthLink,
-    UpstreamOAuthProvider,
+    AuthorizationGrant, DeviceCodeGrant, PostAuthAction, UpstreamOAuthLink, UpstreamOAuthProvider,
 };
 use rand_core::RngCore as Rng;
 use serde::{Deserialize, Serialize};

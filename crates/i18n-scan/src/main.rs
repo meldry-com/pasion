@@ -79,8 +79,7 @@ fn main() {
         n => tracing::info!("Found {} translation keys", n),
     }
 
-    serde_json::to_writer_pretty(std::io::stdout(), &keys)
-        .expect("Failed to write key list");
+    serde_json::to_writer_pretty(std::io::stdout(), &keys).expect("Failed to write key list");
 
     // Just to make sure we don't end up without a trailing newline
     println!();

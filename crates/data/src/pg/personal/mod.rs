@@ -9,20 +9,22 @@ pub use session::PgPersonalSessionRepository;
 
 #[cfg(test)]
 mod tests {
-    use crate::PgRepositoryFactory;
     use chrono::Duration;
     use oauth2_types::scope::{OPENID, PROFILE, Scope};
-    use pasion_data::{Clock, clock::MockClock, personal::session::PersonalSessionOwner};
     use pasion_data::{
-        Pagination, RepositoryAccess,
+        Clock, Pagination, RepositoryAccess, RepositoryAccess as _, RepositoryFactory as _,
+        RepositoryTransaction as _,
+        clock::MockClock,
         personal::{
             PersonalAccessTokenRepository, PersonalSessionFilter, PersonalSessionRepository,
+            session::PersonalSessionOwner,
         },
         user::UserRepository,
     };
-    use pasion_data::{RepositoryAccess as _, RepositoryFactory as _, RepositoryTransaction as _};
     use rand::SeedableRng;
     use rand_chacha::ChaChaRng;
+
+    use crate::PgRepositoryFactory;
 
     #[tokio::test]
     async fn test_session_repository() {

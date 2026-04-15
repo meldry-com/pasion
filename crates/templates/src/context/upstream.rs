@@ -4,10 +4,9 @@ use std::collections::BTreeMap;
 
 use oauth2_types::scope::{OPENID, Scope};
 use pasion_data::{
-    PostAuthAction, UpstreamOAuthLink, UpstreamOAuthProvider,
-    UpstreamOAuthProviderClaimsImports, UpstreamOAuthProviderDiscoveryMode,
-    UpstreamOAuthProviderOnBackchannelLogout, UpstreamOAuthProviderPkceMode,
-    UpstreamOAuthProviderTokenAuthMethod, User,
+    PostAuthAction, UpstreamOAuthLink, UpstreamOAuthProvider, UpstreamOAuthProviderClaimsImports,
+    UpstreamOAuthProviderDiscoveryMode, UpstreamOAuthProviderOnBackchannelLogout,
+    UpstreamOAuthProviderPkceMode, UpstreamOAuthProviderTokenAuthMethod, User,
 };
 use pasion_iana::jose::JsonWebSignatureAlg;
 use rand_core::RngCore as Rng;

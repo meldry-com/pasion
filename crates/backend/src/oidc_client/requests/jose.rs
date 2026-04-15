@@ -26,11 +26,11 @@ use pasion_jose::{
 use serde_json::Value;
 use url::Url;
 
-use crate::outbound_http::RequestBuilderExt;
 use super::super::{
     error::{IdTokenError, JwksError, JwtVerificationError},
     types::IdToken,
 };
+use crate::outbound_http::RequestBuilderExt;
 
 /// Fetch a JWKS at the given URL.
 ///

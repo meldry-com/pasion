@@ -5,7 +5,7 @@
 
 use std::borrow::Cow;
 
-use anyhow::{bail, Context};
+use anyhow::{Context, bail};
 use camino::Utf8PathBuf;
 use futures_util::future::try_join;
 use pasion_jose::jwk::{JsonWebKey, Thumbprint};
@@ -163,7 +163,8 @@ impl KeyConfig {
         }
     }
 
-    /// Derives a [`JsonWebKey`] by loading and parsing the underlying key material
+    /// Derives a [`JsonWebKey`] by loading and parsing the underlying key
+    /// material
     pub(crate) async fn to_json_web_key(
         &self,
     ) -> anyhow::Result<JsonWebKey<pasion_keystore::PrivateKey>> {

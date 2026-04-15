@@ -3,8 +3,7 @@
 //! These endpoints are consumed by the Dioxus SPA frontend and return JSON
 //! responses. They replace the server-rendered HTML consent pages.
 
-use salvo::oapi::ToSchema;
-use salvo::prelude::*;
+use salvo::{oapi::ToSchema, prelude::*};
 use serde::{Deserialize, Serialize};
 use ulid::Ulid;
 

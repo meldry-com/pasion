@@ -1,16 +1,12 @@
 use std::{net::IpAddr, sync::Arc};
 
-use crate::handlers::{
-    ActivityTracker, CookieManager, Limiter, MetadataCache, passwords::PasswordManager,
-};
-use diesel_async::AsyncPgConnection;
-use diesel_async::pooled_connection::deadpool::Pool as DieselPool;
+use diesel_async::{AsyncPgConnection, pooled_connection::deadpool::Pool as DieselPool};
 use ipnetwork::IpNetwork;
 use opentelemetry::KeyValue;
-use pasion_data::PgRepositoryFactory;
-use pasion_data::UrlBuilder;
-use pasion_data::{AppVersion, BoxClock, BoxRng, SiteConfig, SystemClock};
-use pasion_data::{BoxRepository, BoxRepositoryFactory, RepositoryFactory};
+use pasion_data::{
+    AppVersion, BoxClock, BoxRepository, BoxRepositoryFactory, BoxRng, PgRepositoryFactory,
+    RepositoryFactory, SiteConfig, SystemClock, UrlBuilder,
+};
 use pasion_i18n::Translator;
 use pasion_keystore::{Encrypter, Keystore};
 use pasion_matrix::{ConnectorRegistry, HomeserverAdmin};
@@ -20,7 +16,12 @@ use rand_core::SeedableRng;
 use salvo::prelude::*;
 use tracing::Instrument;
 
-use crate::telemetry::METER;
+use crate::{
+    handlers::{
+        ActivityTracker, CookieManager, Limiter, MetadataCache, passwords::PasswordManager,
+    },
+    telemetry::METER,
+};
 
 /// Shared application state that is cloned into the Salvo [`Depot`] for every
 /// incoming request. Holds all the service-level dependencies (database pool,
@@ -152,10 +153,7 @@ pub async fn inject_app_state(
     depot.insert("site_config", state.site_config.clone());
     depot.insert("limiter", state.limiter.clone());
     depot.insert("policy_factory", state.policy_factory.clone());
-    depot.insert(
-        "homeserver_admin",
-        Arc::clone(&state.homeserver_admin),
-    );
+    depot.insert("homeserver_admin", Arc::clone(&state.homeserver_admin));
     depot.insert("connector_registry", state.connector_registry.clone());
     depot.insert("app_version", AppVersion(crate::version()));
     depot.insert("activity_tracker", state.activity_tracker.clone());

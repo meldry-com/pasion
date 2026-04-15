@@ -5,7 +5,6 @@ use std::{
     time::Duration,
 };
 
-use crate::listener::{ConnectionInfo, unix_or_tcp::UnixOrTcpListener};
 use anyhow::Context;
 use headers::{CacheControl, HeaderMapExt as _, UserAgent};
 use http::{
@@ -28,7 +27,10 @@ use salvo::{
 };
 use tracing_opentelemetry::OpenTelemetrySpanExt;
 
-use crate::app_state::{AppState, inject_app_state};
+use crate::{
+    app_state::{AppState, inject_app_state},
+    listener::{ConnectionInfo, unix_or_tcp::UnixOrTcpListener},
+};
 
 /// Scan the Dioxus build output directory for the hashed frontend JS entry
 /// point. Returns a URL path like `/assets/pasion-frontend-dxh<hash>.js`.
@@ -283,7 +285,10 @@ pub fn build_router(
     router = router.hoop(InjectAppState(state));
 
     // Build sub-routers for each resource
-    use crate::handlers::{health, oauth2::discovery, oauth2::webfinger};
+    use crate::handlers::{
+        health,
+        oauth2::{discovery, webfinger},
+    };
 
     for resource in resources {
         router = match resource {
@@ -459,307 +464,288 @@ fn build_account_api_router(router: Router) -> Router {
     use crate::handlers::account::*;
 
     let api_router = Router::with_path("/api/v1")
-            // Viewer
-            .push(
-                Router::with_path("viewer")
-                    .get(viewer::get_viewer)
-                    .push(Router::with_path("overview").get(viewer::get_viewer_overview))
-                    .push(Router::with_path("security").get(viewer::get_security_summary))
-                    .push(Router::with_path("password").post(password::set_password))
-                    .push(Router::with_path("profile").patch(users::patch_profile))
-                    .push(Router::with_path("avatar").post(avatar::upload_avatar))
-                    .push(Router::with_path("avatar/{user_id}").get(avatar::get_avatar))
-                    .push(
-                        Router::with_path("cross-signing-reset")
-                            .post(users::allow_cross_signing_reset),
-                    )
-                    .push(Router::with_path("deactivate").post(users::deactivate_user))
-                    .push(
-                        Router::with_path("preferences")
-                            .get(notification_prefs::get_notification_preferences)
-                            .patch(notification_prefs::patch_notification_preferences),
-                    )
-                    .push(Router::with_path("workflow-inbox").get(viewer::get_workflow_inbox)),
-            )
-            // Site config
-            .push(Router::with_path("site-config").get(site_config::get))
-            // Sessions
-            .push(Router::with_path("sessions/{id}").get(sessions::get_session))
-            .push(Router::with_path("browser-sessions/{id}").delete(sessions::end_browser_session))
-            .push(
-                Router::with_path("oauth2-sessions/{id}")
-                    .delete(sessions::end_oauth2_session)
-                    .push(Router::with_path("name").put(sessions::set_oauth2_session_name)),
-            )
-            // OAuth2 clients
-            .push(Router::with_path("oauth2-clients/{id}").get(oauth2_clients::get_client))
-            // Password recovery
-            .push(
-                Router::with_path("password-recovery")
-                    .push(Router::with_path("set").post(password::set_password_by_recovery))
-                    .push(Router::with_path("resend").post(password::resend_recovery_email)),
-            )
-            // Email authentication
-            .push(
-                Router::with_path("email-auth")
-                    .push(Router::with_path("start").post(emails::start_email_auth))
-                    .push(
-                        Router::with_path("{id}")
-                            .get(emails::get_email_auth)
-                            .push(Router::with_path("complete").post(emails::complete_email_auth))
-                            .push(Router::with_path("resend").post(emails::resend_email_auth_code)),
-                    ),
-            )
-            // User emails
-            .push(Router::with_path("user-emails/{id}").delete(emails::remove_email))
-            // Auth (login, logout, providers, registration, recovery)
-            .push(
-                Router::with_path("auth")
-                    .push(Router::with_path("login").post(auth::login))
-                    .push(Router::with_path("logout").post(auth::logout))
-                    .push(Router::with_path("providers").get(auth::providers))
-                    // Registration
-                    .push(
-                        Router::with_path("register")
-                            .post(register::post_register)
-                            .push(
-                                Router::with_path("{id}")
-                                    .get(register::get_registration)
-                                    .push(
-                                        Router::with_path("verify-email")
-                                            .post(register::post_verify_email),
-                                    )
-                                    .push(
-                                        Router::with_path("verify-phone")
-                                            .post(register::post_verify_phone),
-                                    )
-                                    .push(
-                                        Router::with_path("resend-verification")
-                                            .post(register::post_resend_verification),
-                                    )
-                                    .push(
-                                        Router::with_path("display-name")
-                                            .post(register::post_display_name),
-                                    )
-                                    .push(Router::with_path("finish").post(register::post_finish)),
-                            ),
-                    )
-                    // Account recovery
-                    .push(
-                        Router::with_path("recovery")
-                            .push(Router::with_path("start").post(recovery::post_recovery_start))
-                            .push(Router::with_path("{id}").get(recovery::get_recovery).push(
-                                Router::with_path("resend").post(recovery::post_recovery_resend),
-                            )),
-                    ),
-            )
-            // OAuth2 consent
-            .push(
-                Router::with_path("oauth2/consent/{grant_id}")
-                    .get(consent::oauth2_consent_get)
-                    .post(consent::oauth2_consent_post),
-            )
-            // Device code link & consent
-            .push(Router::with_path("device-link").get(consent::device_link_get))
-            .push(
-                Router::with_path("device-consent/{id}")
-                    .get(consent::device_consent_get)
-                    .post(consent::device_consent_post),
-            )
-            // Linked accounts
-            .push(
-                Router::with_path("linked-accounts")
-                    .get(linked_accounts::list_linked_accounts)
-                    .push(Router::with_path("{id}").delete(linked_accounts::unlink_account)),
-            )
-            // Upstream OAuth2 link
-            .push(
-                Router::with_path("upstream-oauth2/link/{id}")
-                    .get(upstream_oauth2::get_link)
-                    .post(upstream_oauth2::post_link),
-            )
-            // Flow engine
-            .push(
-                Router::with_path("flow")
-                    .push(Router::with_path("{slug}/start").post(flow::start_flow))
-                    .push(
-                        Router::with_path("session/{id}")
-                            .get(flow::get_flow_session)
-                            .push(Router::with_path("respond").post(flow::respond_flow)),
-                    ),
-            );
+        // Viewer
+        .push(
+            Router::with_path("viewer")
+                .get(viewer::get_viewer)
+                .push(Router::with_path("overview").get(viewer::get_viewer_overview))
+                .push(Router::with_path("security").get(viewer::get_security_summary))
+                .push(Router::with_path("password").post(password::set_password))
+                .push(Router::with_path("profile").patch(users::patch_profile))
+                .push(Router::with_path("avatar").post(avatar::upload_avatar))
+                .push(Router::with_path("avatar/{user_id}").get(avatar::get_avatar))
+                .push(
+                    Router::with_path("cross-signing-reset").post(users::allow_cross_signing_reset),
+                )
+                .push(Router::with_path("deactivate").post(users::deactivate_user))
+                .push(
+                    Router::with_path("preferences")
+                        .get(notification_prefs::get_notification_preferences)
+                        .patch(notification_prefs::patch_notification_preferences),
+                )
+                .push(Router::with_path("workflow-inbox").get(viewer::get_workflow_inbox)),
+        )
+        // Site config
+        .push(Router::with_path("site-config").get(site_config::get))
+        // Sessions
+        .push(Router::with_path("sessions/{id}").get(sessions::get_session))
+        .push(Router::with_path("browser-sessions/{id}").delete(sessions::end_browser_session))
+        .push(
+            Router::with_path("oauth2-sessions/{id}")
+                .delete(sessions::end_oauth2_session)
+                .push(Router::with_path("name").put(sessions::set_oauth2_session_name)),
+        )
+        // OAuth2 clients
+        .push(Router::with_path("oauth2-clients/{id}").get(oauth2_clients::get_client))
+        // Password recovery
+        .push(
+            Router::with_path("password-recovery")
+                .push(Router::with_path("set").post(password::set_password_by_recovery))
+                .push(Router::with_path("resend").post(password::resend_recovery_email)),
+        )
+        // Email authentication
+        .push(
+            Router::with_path("email-auth")
+                .push(Router::with_path("start").post(emails::start_email_auth))
+                .push(
+                    Router::with_path("{id}")
+                        .get(emails::get_email_auth)
+                        .push(Router::with_path("complete").post(emails::complete_email_auth))
+                        .push(Router::with_path("resend").post(emails::resend_email_auth_code)),
+                ),
+        )
+        // User emails
+        .push(Router::with_path("user-emails/{id}").delete(emails::remove_email))
+        // Auth (login, logout, providers, registration, recovery)
+        .push(
+            Router::with_path("auth")
+                .push(Router::with_path("login").post(auth::login))
+                .push(Router::with_path("logout").post(auth::logout))
+                .push(Router::with_path("providers").get(auth::providers))
+                // Registration
+                .push(
+                    Router::with_path("register")
+                        .post(register::post_register)
+                        .push(
+                            Router::with_path("{id}")
+                                .get(register::get_registration)
+                                .push(
+                                    Router::with_path("verify-email")
+                                        .post(register::post_verify_email),
+                                )
+                                .push(
+                                    Router::with_path("verify-phone")
+                                        .post(register::post_verify_phone),
+                                )
+                                .push(
+                                    Router::with_path("resend-verification")
+                                        .post(register::post_resend_verification),
+                                )
+                                .push(
+                                    Router::with_path("display-name")
+                                        .post(register::post_display_name),
+                                )
+                                .push(Router::with_path("finish").post(register::post_finish)),
+                        ),
+                )
+                // Account recovery
+                .push(
+                    Router::with_path("recovery")
+                        .push(Router::with_path("start").post(recovery::post_recovery_start))
+                        .push(Router::with_path("{id}").get(recovery::get_recovery).push(
+                            Router::with_path("resend").post(recovery::post_recovery_resend),
+                        )),
+                ),
+        )
+        // OAuth2 consent
+        .push(
+            Router::with_path("oauth2/consent/{grant_id}")
+                .get(consent::oauth2_consent_get)
+                .post(consent::oauth2_consent_post),
+        )
+        // Device code link & consent
+        .push(Router::with_path("device-link").get(consent::device_link_get))
+        .push(
+            Router::with_path("device-consent/{id}")
+                .get(consent::device_consent_get)
+                .post(consent::device_consent_post),
+        )
+        // Linked accounts
+        .push(
+            Router::with_path("linked-accounts")
+                .get(linked_accounts::list_linked_accounts)
+                .push(Router::with_path("{id}").delete(linked_accounts::unlink_account)),
+        )
+        // Upstream OAuth2 link
+        .push(
+            Router::with_path("upstream-oauth2/link/{id}")
+                .get(upstream_oauth2::get_link)
+                .post(upstream_oauth2::post_link),
+        )
+        // Flow engine
+        .push(
+            Router::with_path("flow")
+                .push(Router::with_path("{slug}/start").post(flow::start_flow))
+                .push(
+                    Router::with_path("session/{id}")
+                        .get(flow::get_flow_session)
+                        .push(Router::with_path("respond").post(flow::respond_flow)),
+                ),
+        );
     let docs_router = openapi::build_openapi_router(&api_router);
 
     router.push(api_router).push(docs_router)
 }
 
 fn build_admin_router(router: Router) -> Router {
-    use crate::handlers::admin;
-    use crate::handlers::admin::v1::*;
+    use crate::handlers::{admin, admin::v1::*};
 
     let admin_router = Router::with_path("/api/admin/v1")
-            // Version
-            .push(Router::with_path("version").get(version::handler))
-            // Site config
-            .push(Router::with_path("site-config").get(site_config::handler))
-            // Operational health
-            .push(Router::with_path("connector-health").get(connector_health::handler))
-            .push(Router::with_path("notification-channels").get(notification_channels::handler))
-            // Notification templates
-            .push(
-                Router::with_path("notification-templates")
-                    .get(notification_templates::list_handler)
-                    .push(
-                        Router::with_path("publish").post(notification_templates::publish_handler),
-                    ),
-            )
-            // Audit feed
-            .push(Router::with_path("audit-feed").get(audit_feed::handler))
-            // Users
-            .push(
-                Router::with_path("users")
-                    .get(users::list_users)
-                    .post(users::add_user)
-                    .push(
-                        Router::with_path("by-username/{username}")
-                            .get(users::get_by_username),
-                    )
-                    .push(Router::with_path("batch-invite").post(users::batch_invite))
-                    .push(
-                        Router::with_path("{id}")
-                            .get(users::get_user)
-                            .patch(users::update_user)
-                            .push(
-                                Router::with_path("set-password")
-                                    .post(users::set_password),
-                            )
-                            .push(
-                                Router::with_path("risk-action").post(users::risk_action),
-                            ),
-                    ),
-            )
-            // User emails
-            .push(
-                Router::with_path("user-emails")
-                    .get(user_emails::list_emails)
-                    .post(user_emails::add_email)
-                    .push(
-                        Router::with_path("{id}")
-                            .get(user_emails::get_email)
-                            .patch(user_emails::update_email)
-                            .delete(user_emails::delete_email),
-                    ),
-            )
-            // User sessions
-            .push(
-                Router::with_path("user-sessions")
-                    .get(user_sessions::list_sessions)
-                    .push(
-                        Router::with_path("{id}")
-                            .get(user_sessions::get_session)
-                            .push(Router::with_path("finish").post(user_sessions::finish_session)),
-                    ),
-            )
-            // OAuth2 sessions
-            .push(
-                Router::with_path("oauth2-sessions")
-                    .get(oauth2_sessions::list_sessions)
-                    .push(
-                        Router::with_path("{id}")
-                            .get(oauth2_sessions::get_session)
-                            .push(
-                                Router::with_path("finish").post(oauth2_sessions::finish_session),
-                            ),
-                    ),
-            )
-            // OAuth2 client localised metadata
-            .push(
-                Router::with_path("oauth2-clients")
-                    .push(
-                        Router::with_path("{id}")
-                            .push(
-                                Router::with_path("localized-metadata")
-                                    .get(oauth2_clients::get_localized_metadata)
-                                    .put(oauth2_clients::replace_localized_metadata),
-                            ),
-                    ),
-            )
-            // Personal sessions
-            .push(
-                Router::with_path("personal-sessions")
-                    .get(personal_sessions::list_sessions)
-                    .post(personal_sessions::add_session)
-                    .push(
-                        Router::with_path("{id}")
-                            .get(personal_sessions::get_session)
-                            .push(
-                                Router::with_path("regenerate")
-                                    .post(personal_sessions::regenerate_session),
-                            )
-                            .push(
-                                Router::with_path("revoke")
-                                    .post(personal_sessions::revoke_session),
-                            ),
-                    ),
-            )
-            // User registration tokens
-            .push(
-                Router::with_path("user-registration-tokens")
-                    .get(user_registration_tokens::list_tokens)
-                    .post(user_registration_tokens::add_token)
-                    .push(
-                        Router::with_path("{id}")
-                            .get(user_registration_tokens::get_token)
-                            .put(user_registration_tokens::update_token)
-                            .push(
-                                Router::with_path("revoke")
-                                    .post(user_registration_tokens::revoke_token),
-                            )
-                            .push(
-                                Router::with_path("unrevoke")
-                                    .post(user_registration_tokens::unrevoke_token),
-                            ),
-                    ),
-            )
-            // Upstream OAuth providers
-            .push(
-                Router::with_path("upstream-oauth-providers")
-                    .get(upstream_oauth_providers::list_providers)
-                    .post(upstream_oauth_providers::add_provider)
-                    .push(
-                        Router::with_path("{id}")
-                            .get(upstream_oauth_providers::get_provider)
-                            .patch(upstream_oauth_providers::update_provider)
-                            .delete(upstream_oauth_providers::delete_provider)
-                            .push(
-                                Router::with_path("disable")
-                                    .post(upstream_oauth_providers::disable_provider),
-                            )
-                            .push(
-                                Router::with_path("enable")
-                                    .post(upstream_oauth_providers::enable_provider),
-                            ),
-                    ),
-            )
-            // Upstream OAuth links
-            .push(
-                Router::with_path("upstream-oauth-links")
-                    .get(upstream_oauth_links::list_links)
-                    .post(upstream_oauth_links::add_link)
-                    .push(
-                        Router::with_path("{id}")
-                            .get(upstream_oauth_links::get_link)
-                            .patch(upstream_oauth_links::update_link)
-                            .delete(upstream_oauth_links::delete_link),
-                    ),
-            )
-            // Policy data
-            .push(
-                Router::with_path("policy-data")
-                    .push(Router::with_path("latest").get(policy_data::get_latest))
-                    .push(Router::with_path("{id}").get(policy_data::get_by_id))
-                    .put(policy_data::set_data),
-            );
+        // Version
+        .push(Router::with_path("version").get(version::handler))
+        // Site config
+        .push(Router::with_path("site-config").get(site_config::handler))
+        // Operational health
+        .push(Router::with_path("connector-health").get(connector_health::handler))
+        .push(Router::with_path("notification-channels").get(notification_channels::handler))
+        // Notification templates
+        .push(
+            Router::with_path("notification-templates")
+                .get(notification_templates::list_handler)
+                .push(Router::with_path("publish").post(notification_templates::publish_handler)),
+        )
+        // Audit feed
+        .push(Router::with_path("audit-feed").get(audit_feed::handler))
+        // Users
+        .push(
+            Router::with_path("users")
+                .get(users::list_users)
+                .post(users::add_user)
+                .push(Router::with_path("by-username/{username}").get(users::get_by_username))
+                .push(Router::with_path("batch-invite").post(users::batch_invite))
+                .push(
+                    Router::with_path("{id}")
+                        .get(users::get_user)
+                        .patch(users::update_user)
+                        .push(Router::with_path("set-password").post(users::set_password))
+                        .push(Router::with_path("risk-action").post(users::risk_action)),
+                ),
+        )
+        // User emails
+        .push(
+            Router::with_path("user-emails")
+                .get(user_emails::list_emails)
+                .post(user_emails::add_email)
+                .push(
+                    Router::with_path("{id}")
+                        .get(user_emails::get_email)
+                        .patch(user_emails::update_email)
+                        .delete(user_emails::delete_email),
+                ),
+        )
+        // User sessions
+        .push(
+            Router::with_path("user-sessions")
+                .get(user_sessions::list_sessions)
+                .push(
+                    Router::with_path("{id}")
+                        .get(user_sessions::get_session)
+                        .push(Router::with_path("finish").post(user_sessions::finish_session)),
+                ),
+        )
+        // OAuth2 sessions
+        .push(
+            Router::with_path("oauth2-sessions")
+                .get(oauth2_sessions::list_sessions)
+                .push(
+                    Router::with_path("{id}")
+                        .get(oauth2_sessions::get_session)
+                        .push(Router::with_path("finish").post(oauth2_sessions::finish_session)),
+                ),
+        )
+        // OAuth2 client localised metadata
+        .push(
+            Router::with_path("oauth2-clients").push(
+                Router::with_path("{id}").push(
+                    Router::with_path("localized-metadata")
+                        .get(oauth2_clients::get_localized_metadata)
+                        .put(oauth2_clients::replace_localized_metadata),
+                ),
+            ),
+        )
+        // Personal sessions
+        .push(
+            Router::with_path("personal-sessions")
+                .get(personal_sessions::list_sessions)
+                .post(personal_sessions::add_session)
+                .push(
+                    Router::with_path("{id}")
+                        .get(personal_sessions::get_session)
+                        .push(
+                            Router::with_path("regenerate")
+                                .post(personal_sessions::regenerate_session),
+                        )
+                        .push(Router::with_path("revoke").post(personal_sessions::revoke_session)),
+                ),
+        )
+        // User registration tokens
+        .push(
+            Router::with_path("user-registration-tokens")
+                .get(user_registration_tokens::list_tokens)
+                .post(user_registration_tokens::add_token)
+                .push(
+                    Router::with_path("{id}")
+                        .get(user_registration_tokens::get_token)
+                        .put(user_registration_tokens::update_token)
+                        .push(
+                            Router::with_path("revoke")
+                                .post(user_registration_tokens::revoke_token),
+                        )
+                        .push(
+                            Router::with_path("unrevoke")
+                                .post(user_registration_tokens::unrevoke_token),
+                        ),
+                ),
+        )
+        // Upstream OAuth providers
+        .push(
+            Router::with_path("upstream-oauth-providers")
+                .get(upstream_oauth_providers::list_providers)
+                .post(upstream_oauth_providers::add_provider)
+                .push(
+                    Router::with_path("{id}")
+                        .get(upstream_oauth_providers::get_provider)
+                        .patch(upstream_oauth_providers::update_provider)
+                        .delete(upstream_oauth_providers::delete_provider)
+                        .push(
+                            Router::with_path("disable")
+                                .post(upstream_oauth_providers::disable_provider),
+                        )
+                        .push(
+                            Router::with_path("enable")
+                                .post(upstream_oauth_providers::enable_provider),
+                        ),
+                ),
+        )
+        // Upstream OAuth links
+        .push(
+            Router::with_path("upstream-oauth-links")
+                .get(upstream_oauth_links::list_links)
+                .post(upstream_oauth_links::add_link)
+                .push(
+                    Router::with_path("{id}")
+                        .get(upstream_oauth_links::get_link)
+                        .patch(upstream_oauth_links::update_link)
+                        .delete(upstream_oauth_links::delete_link),
+                ),
+        )
+        // Policy data
+        .push(
+            Router::with_path("policy-data")
+                .push(Router::with_path("latest").get(policy_data::get_latest))
+                .push(Router::with_path("{id}").get(policy_data::get_by_id))
+                .put(policy_data::set_data),
+        );
 
     // Generate OpenAPI spec and Swagger UI for the admin API
     let admin_doc = salvo::oapi::OpenApi::new("Pasion Admin API", env!("CARGO_PKG_VERSION"))
@@ -942,8 +928,9 @@ pub fn build_listeners(
 mod tests {
     use std::net::TcpListener;
 
-    use super::build_listeners;
     use pasion_config::HttpBindConfig;
+
+    use super::build_listeners;
 
     #[test]
     fn bind_error_mentions_requested_address() {

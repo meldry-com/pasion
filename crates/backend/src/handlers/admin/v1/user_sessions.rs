@@ -2,25 +2,20 @@
 //
 // SPDX-License-Identifier: AGPL-3.0-only
 
-use pasion_data::RepositoryAccess;
-use pasion_data::audit::AdminOperation;
-use pasion_data::user::BrowserSessionFilter;
+use pasion_data::{RepositoryAccess, audit::AdminOperation, user::BrowserSessionFilter};
 use salvo::prelude::*;
 use schemars::JsonSchema;
 use serde::Deserialize;
 use ulid::Ulid;
 
-use crate::AppError;
-use crate::JsonResult;
-use crate::handlers::admin::{
-    call_context::extract_call_context,
-    model::Resource,
-    model::UserSession,
-    params::IncludeCount,
-    params::extract_pagination,
-    params::extract_ulid_param,
-    response::PaginatedResponse,
-    response::SingleResponse,
+use crate::{
+    AppError, JsonResult,
+    handlers::admin::{
+        call_context::extract_call_context,
+        model::{Resource, UserSession},
+        params::{IncludeCount, extract_pagination, extract_ulid_param},
+        response::{PaginatedResponse, SingleResponse},
+    },
 };
 
 /// End an active browser session. Returns an error when the session does not
@@ -46,9 +41,7 @@ pub async fn finish_session(
         .lookup(session_id)
         .await?
         .ok_or_else(|| {
-            AppError::not_found(format!(
-                "User session with ID {session_id} not found"
-            ))
+            AppError::not_found(format!("User session with ID {session_id} not found"))
         })?;
 
     if browser_session.finished_at.is_some() {
@@ -57,7 +50,10 @@ pub async fn finish_session(
         )));
     }
 
-    let ended = repo.browser_session().finish(&clock, browser_session).await?;
+    let ended = repo
+        .browser_session()
+        .finish(&clock, browser_session)
+        .await?;
 
     crate::handlers::admin::audit_helper::record_admin_operation(
         &mut repo,
@@ -94,13 +90,11 @@ pub async fn get_session(
         .browser_session()
         .lookup(session_id)
         .await?
-        .ok_or_else(|| {
-            AppError::not_found(format!("User session ID {session_id} not found"))
-        })?;
+        .ok_or_else(|| AppError::not_found(format!("User session ID {session_id} not found")))?;
 
-    Ok(Json(SingleResponse::new_canonical(
-        UserSession::from(browser_session),
-    )))
+    Ok(Json(SingleResponse::new_canonical(UserSession::from(
+        browser_session,
+    ))))
 }
 
 #[derive(Deserialize, JsonSchema, Clone, Copy)]
@@ -229,11 +223,10 @@ pub async fn list_sessions(
 #[cfg(test)]
 mod tests {
     use chrono::Duration;
-    use hyper::Request;
-    use hyper::StatusCode;
+    use hyper::{Request, StatusCode};
     use insta::assert_json_snapshot;
     use pasion_data::Clock as _;
-    
+
     use crate::handlers::test_utils::{RequestBuilderExt, ResponseExt, TestState, setup};
 
     #[tokio::test]

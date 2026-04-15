@@ -1,16 +1,15 @@
 use anyhow::{Context as _, Error as AnyhowError};
 use pasion_data::{
-    BoxRepository, RepositoryAccess, RepositoryError,
+    BoxRepository, Clock, RepositoryAccess, RepositoryError, SiteConfig, User,
     queue::{DeactivateUserJob, QueueJobRepositoryExt as _},
     user::UserRepository,
 };
-use pasion_data::{Clock, SiteConfig, User};
 use pasion_matrix::HomeserverAdmin;
 use rand_chacha::rand_core::CryptoRngCore;
 use thiserror::Error;
 use ulid::Ulid;
 
-use crate::handlers::{passwords::PasswordManager, common::Requester};
+use crate::handlers::{common::Requester, passwords::PasswordManager};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum DeactivateAccountOutcome {
@@ -97,12 +96,12 @@ pub async fn deactivate_current_account(
     )
     .await
     .map_err(|error| match error {
-        crate::handlers::account::service::password::VerifyPasswordIfNeededError::Password(error) => {
-            AccountProfileError::Password(error)
-        }
-        crate::handlers::account::service::password::VerifyPasswordIfNeededError::Repository(error) => {
-            AccountProfileError::Repository(error)
-        }
+        crate::handlers::account::service::password::VerifyPasswordIfNeededError::Password(
+            error,
+        ) => AccountProfileError::Password(error),
+        crate::handlers::account::service::password::VerifyPasswordIfNeededError::Repository(
+            error,
+        ) => AccountProfileError::Repository(error),
     })?;
 
     if !password_ok {

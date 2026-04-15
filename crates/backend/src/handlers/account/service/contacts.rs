@@ -1,4 +1,5 @@
-//! Service functions for user contact (email/phone) verification and management.
+//! Service functions for user contact (email/phone) verification and
+//! management.
 //!
 //! These functions encapsulate the business logic for adding, verifying, and
 //! removing contact information on an existing user account. They are consumed
@@ -7,26 +8,27 @@
 //! # Migration path
 //!
 //! The contact verification workflow currently uses direct repository calls for
-//! state tracking. It will be progressively migrated to use `WorkflowRepository`
-//! for unified workflow state management. The flow engine (`crate::handlers::flow`) can
-//! already orchestrate contact verification as a workflow.
+//! state tracking. It will be progressively migrated to use
+//! `WorkflowRepository` for unified workflow state management. The flow engine
+//! (`crate::handlers::flow`) can already orchestrate contact verification as a
+//! workflow.
 
 use anyhow::Error as AnyhowError;
 use pasion_data::{
-    BoxRepository, RepositoryAccess, RepositoryError,
+    BoxRepository, BrowserSession, Clock, RepositoryAccess, RepositoryError,
+    UserEmailAuthentication,
     queue::{ProvisionUserJob, QueueJobRepositoryExt as _},
     user::{UserEmailRepository, UserRepository},
 };
-use pasion_data::{BrowserSession, Clock, UserEmailAuthentication};
 use rand_core::RngCore;
 use thiserror::Error;
 use ulid::Ulid;
 
-use crate::handlers::account::service::password::{
-    VerifyPasswordIfNeededError, verify_password_if_needed as verify_contact_password_if_needed,
-};
 use crate::handlers::{
     Limiter, RequesterFingerprint,
+    account::service::password::{
+        VerifyPasswordIfNeededError, verify_password_if_needed as verify_contact_password_if_needed,
+    },
     notification_dispatch::{NotificationIntent, schedule_notification},
     passwords::PasswordManager,
 };
@@ -112,7 +114,10 @@ pub async fn start_email_verification(
         return Err(StartEmailVerificationError::IncorrectPassword);
     }
 
-    if let Err(error) = limiter.check_email_authentication_email(requester, &email).await {
+    if let Err(error) = limiter
+        .check_email_authentication_email(requester, &email)
+        .await
+    {
         tracing::warn!(error = &error as &dyn std::error::Error);
         return Err(StartEmailVerificationError::RateLimited);
     }
@@ -282,7 +287,10 @@ pub async fn resend_email_verification_code(
         return Err(ResendEmailVerificationError::AlreadyCompleted);
     }
 
-    if let Err(error) = limiter.check_email_authentication_send_code(requester, &auth).await {
+    if let Err(error) = limiter
+        .check_email_authentication_send_code(requester, &auth)
+        .await
+    {
         tracing::warn!(error = &error as &dyn std::error::Error);
         return Err(ResendEmailVerificationError::RateLimited);
     }

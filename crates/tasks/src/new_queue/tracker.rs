@@ -5,20 +5,17 @@ use opentelemetry::{
     KeyValue,
     metrics::{Histogram, UpDownCounter},
 };
-use pasion_data::{
-    Clock, RepositoryAccess,
-    queue::InsertableJob,
-};
+use pasion_data::{Clock, RepositoryAccess, queue::InsertableJob};
 use rand_core::RngCore;
 use tokio::task::JoinSet;
 use tracing::Instrument as _;
 
-use crate::{METER, State};
-
 use super::{
-    FromJob, JobContext, JobError, JobErrorDecision, RunnableJob, MAX_ATTEMPTS, retry_delay,
+    FromJob, JobContext, JobError, JobErrorDecision, MAX_ATTEMPTS, RunnableJob,
     job_types::{JobPayload, box_runnable_job},
+    retry_delay,
 };
+use crate::{METER, State};
 
 type JobResult = (std::time::Duration, Result<(), JobError>);
 type JobFactory = Arc<dyn Fn(JobPayload) -> Box<dyn RunnableJob> + Send + Sync>;
@@ -41,7 +38,8 @@ impl RunnableJob for DeprecatedJob {
 
 /// Manages running job tasks and records their outcomes.
 pub(super) struct JobTracker {
-    /// Maps queue names to the factory that can produce a boxed [`RunnableJob`].
+    /// Maps queue names to the factory that can produce a boxed
+    /// [`RunnableJob`].
     factories: HashMap<&'static str, JobFactory>,
     /// All currently-executing Tokio tasks.
     running_jobs: JoinSet<JobResult>,
@@ -229,7 +227,10 @@ impl JobTracker {
         while let Some(result) = self.last_join_result.take() {
             match result {
                 Ok((id, (elapsed, Ok(())))) => {
-                    let context = self.job_contexts.remove(&id).expect("Job context not found");
+                    let context = self
+                        .job_contexts
+                        .remove(&id)
+                        .expect("Job context not found");
 
                     self.in_flight_jobs.add(
                         -1,
@@ -245,11 +246,16 @@ impl JobTracker {
                         ],
                     );
 
-                    repo.queue_job().mark_as_completed(clock, context.id).await?;
+                    repo.queue_job()
+                        .mark_as_completed(clock, context.id)
+                        .await?;
                 }
 
                 Ok((id, (elapsed, Err(e)))) => {
-                    let context = self.job_contexts.remove(&id).expect("Job context not found");
+                    let context = self
+                        .job_contexts
+                        .remove(&id)
+                        .expect("Job context not found");
 
                     self.in_flight_jobs.add(
                         -1,
@@ -305,7 +311,10 @@ impl JobTracker {
 
                 Err(e) => {
                     let id = e.id();
-                    let context = self.job_contexts.remove(&id).expect("Job context not found");
+                    let context = self
+                        .job_contexts
+                        .remove(&id)
+                        .expect("Job context not found");
 
                     self.in_flight_jobs.add(
                         -1,

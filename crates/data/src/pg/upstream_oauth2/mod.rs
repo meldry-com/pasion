@@ -15,7 +15,10 @@ mod tests {
     use chrono::Duration;
     use oauth2_types::scope::{OPENID, Scope};
     use pasion_data::{
-        Pagination, RepositoryAccess,
+        Pagination, RepositoryAccess, RepositoryAccess as _, RepositoryFactory as _,
+        RepositoryTransaction as _, UpstreamOAuthLinkPatch, UpstreamOAuthProviderClaimsImports,
+        UpstreamOAuthProviderOnBackchannelLogout, UpstreamOAuthProviderTokenAuthMethod,
+        clock::MockClock,
         upstream_oauth2::{
             UpstreamOAuthLinkFilter, UpstreamOAuthLinkRepository, UpstreamOAuthProviderFilter,
             UpstreamOAuthProviderParams, UpstreamOAuthProviderRepository,
@@ -23,16 +26,10 @@ mod tests {
         },
         user::UserRepository,
     };
-    use pasion_data::{
-        UpstreamOAuthLinkPatch, UpstreamOAuthProviderClaimsImports,
-        UpstreamOAuthProviderOnBackchannelLogout, UpstreamOAuthProviderTokenAuthMethod,
-        clock::MockClock,
-    };
     use pasion_iana::jose::JsonWebSignatureAlg;
     use rand::SeedableRng;
 
     use crate::PgRepositoryFactory;
-    use pasion_data::{RepositoryAccess as _, RepositoryFactory as _, RepositoryTransaction as _};
 
     #[tokio::test]
     async fn test_repository() {

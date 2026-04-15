@@ -5,13 +5,12 @@ use opentelemetry::{
 use rand_core::RngCore;
 use tokio_postgres::{Client, NoTls, Notification};
 
-use crate::{METER, State};
-
 use super::{
     JobContext, QueueRunnerError,
     shared::{MAX_SLEEP_DURATION, MIN_SLEEP_DURATION},
     tracker::JobTracker,
 };
+use crate::{METER, State};
 
 pub(super) struct ListenerRuntime {
     pub(super) client: Client,
@@ -71,7 +70,9 @@ pub(super) fn build_worker_metrics() -> WorkerMetrics {
 
     let tick_time = METER
         .u64_histogram("job.worker.tick_duration")
-        .with_description("How much time the worker took to tick, including performing leader duties")
+        .with_description(
+            "How much time the worker took to tick, including performing leader duties",
+        )
         .build();
 
     WorkerMetrics { wakeups, tick_time }
@@ -85,7 +86,9 @@ pub(super) async fn wait_until_wakeup(
     wakeups: &Counter<u64>,
 ) {
     let mut rng = state.rng();
-    let jitter_ms = (rng.next_u64() % (MAX_SLEEP_DURATION.as_millis() as u64 - MIN_SLEEP_DURATION.as_millis() as u64)) + MIN_SLEEP_DURATION.as_millis() as u64;
+    let jitter_ms = (rng.next_u64()
+        % (MAX_SLEEP_DURATION.as_millis() as u64 - MIN_SLEEP_DURATION.as_millis() as u64))
+        + MIN_SLEEP_DURATION.as_millis() as u64;
     let sleep_duration = std::time::Duration::from_millis(jitter_ms);
     let wakeup_sleep = tokio::time::sleep(sleep_duration);
 

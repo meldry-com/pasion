@@ -107,8 +107,8 @@ pub struct SiteConfig {
     /// user can have
     pub session_limit: Option<SessionLimitConfig>,
 
-    /// Pasion-original: when true, registration/recovery/password-change use the
-    /// flow engine instead of the legacy service modules.
+    /// Pasion-original: when true, registration/recovery/password-change use
+    /// the flow engine instead of the legacy service modules.
     pub flow_engine_enabled: bool,
 
     /// Whether phone number verification is available (i.e. a real SMS

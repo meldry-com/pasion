@@ -31,11 +31,13 @@ pub mod remote;
 
 use thiserror::Error;
 
-pub use self::model::{
-    AuthorizationGrantInput, ClientRegistrationInput, Code as ViolationCode, EmailInput,
-    EvaluationResult, GrantType, RegisterInput, RegistrationMethod, Requester, Violation,
+pub use self::{
+    model::{
+        AuthorizationGrantInput, ClientRegistrationInput, Code as ViolationCode, EmailInput,
+        EvaluationResult, GrantType, RegisterInput, RegistrationMethod, Requester, Violation,
+    },
+    provider::{PolicyEvaluator, PolicyProviderFactory},
 };
-pub use self::provider::{PolicyEvaluator, PolicyProviderFactory};
 
 // ---------------------------------------------------------------------------
 // Error types

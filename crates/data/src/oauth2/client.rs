@@ -410,10 +410,7 @@ fn build_localized<T: Clone>(
 
 /// Pick the best matching localised string for `locale` from `map`. Tries
 /// the exact tag first, then a language-prefix match (`zh-Hans` → `zh`).
-fn pick_localized_str<'a>(
-    map: &'a BTreeMap<String, String>,
-    locale: &str,
-) -> Option<&'a str> {
+fn pick_localized_str<'a>(map: &'a BTreeMap<String, String>, locale: &str) -> Option<&'a str> {
     if let Some(value) = map.get(locale) {
         return Some(value.as_str());
     }

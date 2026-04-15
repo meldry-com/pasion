@@ -4,8 +4,7 @@
 
 use dioxus::prelude::*;
 
-use crate::components::layout::Layout;
-use crate::config::AppError;
+use crate::{components::layout::Layout, config::AppError};
 
 /// Top-level dispatcher: picks the right error page based on `error.kind`.
 #[component]
@@ -98,8 +97,7 @@ fn SessionEnded() -> Element {
 
 #[component]
 fn GenericServerError(description: Option<String>) -> Element {
-    let msg = description
-        .unwrap_or_else(|| "An unexpected error occurred.".to_string());
+    let msg = description.unwrap_or_else(|| "An unexpected error occurred.".to_string());
 
     rsx! {
         Layout {

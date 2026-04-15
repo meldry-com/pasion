@@ -211,12 +211,10 @@ impl TemplateContext for RecoveryFinishContext {
                                 FieldError::Invalid,
                             ),
                         ),
-                        Self::new(u).with_form_state(
-                            FormState::default().with_error_on_field(
-                                RecoveryFinishFormField::NewPasswordConfirm,
-                                FieldError::Invalid,
-                            ),
-                        ),
+                        Self::new(u).with_form_state(FormState::default().with_error_on_field(
+                            RecoveryFinishFormField::NewPasswordConfirm,
+                            FieldError::Invalid,
+                        )),
                     ]
                 })
                 .collect(),

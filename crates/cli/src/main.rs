@@ -44,8 +44,7 @@ impl SentryTransportAdapter {
 
 impl sentry::TransportFactory for SentryTransportAdapter {
     fn create_transport(&self, opts: &sentry::ClientOptions) -> Arc<dyn sentry::Transport> {
-        let inner =
-            sentry::transports::ReqwestHttpTransport::with_client(opts, self.http.clone());
+        let inner = sentry::transports::ReqwestHttpTransport::with_client(opts, self.http.clone());
         Arc::new(inner)
     }
 }
@@ -109,8 +108,7 @@ async fn execute_command() -> anyhow::Result<ExitCode> {
         .context("could not setup logging filter")?;
 
     // Filter out noisy Jaeger propagator warnings about empty header values
-    let jaeger_suppression =
-        filter_fn(|meta| meta.name() != "JaegerPropagator.InvalidHeader");
+    let jaeger_suppression = filter_fn(|meta| meta.name() != "JaegerPropagator.InvalidHeader");
 
     // Install the default rustls crypto provider
     rustls::crypto::aws_lc_rs::default_provider()

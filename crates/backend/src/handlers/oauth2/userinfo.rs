@@ -1,22 +1,22 @@
-use crate::salvo_utils::{
-    user_authorization::{AuthorizationVerificationError, UserAuthorization},
-};
 use oauth2_types::scope::OPENID;
-use pasion_data::UrlBuilder;
-use pasion_data::{BoxClock, BoxRng, SystemClock};
-use pasion_data::{BoxRepository, BoxRepositoryFactory, oauth2::OAuth2ClientRepository};
+use pasion_data::{
+    BoxClock, BoxRepository, BoxRepositoryFactory, BoxRng, SystemClock, UrlBuilder,
+    oauth2::OAuth2ClientRepository,
+};
 use pasion_jose::{
     constraints::Constrainable,
     jwt::{JsonWebSignatureHeader, Jwt},
 };
 use pasion_keystore::Keystore;
-use rand_core::SeedableRng;
 use rand_chacha::ChaChaRng;
+use rand_core::SeedableRng;
 use salvo::{Extractible, prelude::*};
 use serde::Serialize;
 use serde_with::skip_serializing_none;
 use thiserror::Error;
 use ulid::Ulid;
+
+use crate::salvo_utils::user_authorization::{AuthorizationVerificationError, UserAuthorization};
 
 #[skip_serializing_none]
 #[derive(Serialize)]
@@ -138,7 +138,8 @@ async fn handle_get(req: &mut Request, depot: &mut Depot) -> Result<UserinfoResp
     let activity_tracker = crate::handlers::account::extract_bound_activity_tracker(req, depot);
 
     let clock: BoxClock = Box::new(SystemClock::default());
-    let mut rng: BoxRng = Box::new(ChaChaRng::from_rng(rand_core::OsRng).expect("Failed to seed rng"));
+    let mut rng: BoxRng =
+        Box::new(ChaChaRng::from_rng(rand_core::OsRng).expect("Failed to seed rng"));
 
     let mut repo: BoxRepository = depot.repo().await?;
     // The userinfo endpoint requires the `openid` scope (enforced by

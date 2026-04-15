@@ -3,8 +3,7 @@
 //! Provides a global storage operator that supports local filesystem
 //! and S3-compatible object storage backends.
 
-use std::sync::OnceLock;
-use std::time::Duration;
+use std::{sync::OnceLock, time::Duration};
 
 use opendal::{Operator, layers::LoggingLayer};
 use pasion_config::StorageConfig;
@@ -54,9 +53,7 @@ pub async fn presign_read(key: &str) -> anyhow::Result<Option<String>> {
     let Some(Some(config)) = REDIRECT_CONFIG.get() else {
         return Ok(None);
     };
-    let presigned = operator()
-        .presign_read(key, config.presign_expiry)
-        .await?;
+    let presigned = operator().presign_read(key, config.presign_expiry).await?;
     Ok(Some(presigned.uri().to_string()))
 }
 

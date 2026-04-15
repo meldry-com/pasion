@@ -3,8 +3,7 @@
 //! These endpoints allow authenticated users to view and unlink their
 //! connected external accounts (GitHub, Google, etc.).
 
-use salvo::oapi::ToSchema;
-use salvo::prelude::*;
+use salvo::{oapi::ToSchema, prelude::*};
 use serde::Serialize;
 use ulid::Ulid;
 

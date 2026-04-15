@@ -5,8 +5,7 @@ use async_trait::async_trait;
 use chrono::{DateTime, Utc};
 use diesel::prelude::*;
 use diesel_async::RunQueryDsl;
-use pasion_data::policy_data::PolicyDataRepository;
-use pasion_data::{Clock, PolicyData, new_id};
+use pasion_data::{Clock, PolicyData, new_id, policy_data::PolicyDataRepository};
 use rand_core::RngCore;
 use serde_json::Value;
 use uuid::Uuid;
@@ -127,14 +126,15 @@ impl PolicyDataRepository for PgPolicyDataRepository<'_> {
 #[cfg(test)]
 mod tests {
     use diesel_async::RunQueryDsl;
-    use pasion_data::clock::MockClock;
-    use pasion_data::policy_data::PolicyDataRepository;
+    use pasion_data::{
+        RepositoryAccess as _, RepositoryFactory as _, RepositoryTransaction as _,
+        clock::MockClock, policy_data::PolicyDataRepository,
+    };
     use rand::SeedableRng;
     use rand_chacha::ChaChaRng;
     use serde_json::json;
 
     use crate::PgRepositoryFactory;
-    use pasion_data::{RepositoryAccess as _, RepositoryFactory as _, RepositoryTransaction as _};
 
     #[tokio::test]
     async fn test_policy_data() {

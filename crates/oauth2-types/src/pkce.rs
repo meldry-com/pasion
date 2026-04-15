@@ -137,16 +137,20 @@ mod tests {
 
     #[test]
     fn s256_matches_rfc_vector() {
-        assert!(PkceCodeChallengeMethod::S256
-            .verify(RFC_CHALLENGE_S256, RFC_VERIFIER)
-            .is_ok());
+        assert!(
+            PkceCodeChallengeMethod::S256
+                .verify(RFC_CHALLENGE_S256, RFC_VERIFIER)
+                .is_ok()
+        );
     }
 
     #[test]
     fn plain_identity() {
-        assert!(PkceCodeChallengeMethod::Plain
-            .verify(RFC_CHALLENGE_S256, RFC_CHALLENGE_S256)
-            .is_ok());
+        assert!(
+            PkceCodeChallengeMethod::Plain
+                .verify(RFC_CHALLENGE_S256, RFC_CHALLENGE_S256)
+                .is_ok()
+        );
     }
 
     #[test]

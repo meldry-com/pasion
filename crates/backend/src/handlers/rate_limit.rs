@@ -265,12 +265,7 @@ impl Limiter {
         key: RequesterFingerprint,
         user: &User,
     ) -> Result<(), PasswordCheckLimitedError> {
-        if !self
-            .inner
-            .password_check_for_requester
-            .check(&key)
-            .await
-        {
+        if !self.inner.password_check_for_requester.check(&key).await {
             return Err(PasswordCheckLimitedError::Requester(key));
         }
 
@@ -554,9 +549,10 @@ mod tests {
                 .is_ok()
         );
 
-        // After 3 per-phone attempts, the phone limiter kicks in (burst=3 for per_phone)
-        // OR the per-IP limiter kicks in (burst=5 for per_ip) -- depends on config
-        // The phone limit should be hit first since burst=3 < burst=5
+        // After 3 per-phone attempts, the phone limiter kicks in (burst=3 for
+        // per_phone) OR the per-IP limiter kicks in (burst=5 for per_ip) --
+        // depends on config The phone limit should be hit first since burst=3 <
+        // burst=5
         assert!(
             limiter
                 .check_phone_authentication_phone(requester, &auth.phone)

@@ -1,9 +1,10 @@
 //! # Migration path
 //!
 //! The registration workflow currently uses `UserRegistrationRepository` for
-//! state tracking. It will be progressively migrated to use `WorkflowRepository`
-//! for unified workflow state management. The flow engine (`crate::handlers::flow`) can
-//! already orchestrate registration as a `default-registration` flow.
+//! state tracking. It will be progressively migrated to use
+//! `WorkflowRepository` for unified workflow state management. The flow engine
+//! (`crate::handlers::flow`) can already orchestrate registration as a
+//! `default-registration` flow.
 
 use std::{net::IpAddr, str::FromStr};
 
@@ -11,7 +12,9 @@ use anyhow::Error as AnyhowError;
 use chrono::{DateTime, Duration, Utc};
 use lettre::Address;
 use pasion_data::{
-    BoxRepository, RepositoryAccess, RepositoryError,
+    BoxRepository, BrowserSession, Clock, RepositoryAccess, RepositoryError,
+    UpstreamOAuthAuthorizationSession, UpstreamOAuthLink, User, UserEmailAuthentication,
+    UserPhoneAuthentication, UserRegistration, UserRegistrationToken,
     queue::{ProvisionUserJob, QueueJobRepositoryExt as _},
     upstream_oauth2::{UpstreamOAuthLinkRepository, UpstreamOAuthSessionRepository},
     user::{
@@ -19,10 +22,6 @@ use pasion_data::{
         UserPasswordRepository, UserPhoneRepository, UserRegistrationTokenRepository,
         UserRepository, UserTermsRepository,
     },
-};
-use pasion_data::{
-    BrowserSession, Clock, UpstreamOAuthAuthorizationSession, UpstreamOAuthLink, User,
-    UserEmailAuthentication, UserPhoneAuthentication, UserRegistration, UserRegistrationToken,
 };
 use pasion_matrix::HomeserverAdmin;
 use pasion_policy::PolicyFactory;
@@ -1197,14 +1196,18 @@ pub async fn begin_password_registration(
         }
 
         if let Some(email) = &email
-            && let Err(error) = limiter.check_email_authentication_email(request.requester, email).await
+            && let Err(error) = limiter
+                .check_email_authentication_email(request.requester, email)
+                .await
         {
             tracing::warn!(error = &error as &dyn std::error::Error);
             rate_limited = true;
         }
 
         if let Some(phone) = &phone
-            && let Err(error) = limiter.check_phone_authentication_phone(request.requester, phone).await
+            && let Err(error) = limiter
+                .check_phone_authentication_phone(request.requester, phone)
+                .await
         {
             tracing::warn!(error = &error as &dyn std::error::Error);
             rate_limited = true;
@@ -1276,7 +1279,10 @@ pub async fn resend_pending_registration_verification(
             .ok_or(ResendRegistrationVerificationError::NotFound)?;
 
         if auth.completed_at.is_none() {
-            if let Err(error) = limiter.check_email_authentication_send_code(requester, &auth).await {
+            if let Err(error) = limiter
+                .check_email_authentication_send_code(requester, &auth)
+                .await
+            {
                 tracing::warn!(error = &error as &dyn std::error::Error);
                 return Err(ResendRegistrationVerificationError::RateLimited);
             }
@@ -1302,7 +1308,10 @@ pub async fn resend_pending_registration_verification(
             .ok_or(ResendRegistrationVerificationError::NotFound)?;
 
         if auth.completed_at.is_none() {
-            if let Err(error) = limiter.check_phone_authentication_send_code(requester, &auth).await {
+            if let Err(error) = limiter
+                .check_phone_authentication_send_code(requester, &auth)
+                .await
+            {
                 tracing::warn!(error = &error as &dyn std::error::Error);
                 return Err(ResendRegistrationVerificationError::RateLimited);
             }
@@ -1355,7 +1364,10 @@ pub async fn verify_registration_email_code(
         return Err(VerifyRegistrationEmailCodeError::EmailAlreadyVerified);
     }
 
-    if let Err(error) = limiter.check_email_authentication_attempt(&email_authentication).await {
+    if let Err(error) = limiter
+        .check_email_authentication_attempt(&email_authentication)
+        .await
+    {
         tracing::warn!(error = &error as &dyn std::error::Error);
         return Err(VerifyRegistrationEmailCodeError::RateLimited);
     }
@@ -1412,7 +1424,10 @@ pub async fn verify_registration_phone_code(
         return Err(VerifyRegistrationPhoneCodeError::PhoneAlreadyVerified);
     }
 
-    if let Err(error) = limiter.check_phone_authentication_attempt(&phone_authentication).await {
+    if let Err(error) = limiter
+        .check_phone_authentication_attempt(&phone_authentication)
+        .await
+    {
         tracing::warn!(error = &error as &dyn std::error::Error);
         return Err(VerifyRegistrationPhoneCodeError::RateLimited);
     }
@@ -1853,17 +1868,14 @@ pub async fn complete_registration(
     // immediately, before the async homeserver-provision job runs.
     if registration.display_name.is_some() || registration.avatar_url.is_some() {
         let profile_patch = pasion_data::UserProfilePatch {
-            display_name: registration
-                .display_name
-                .clone()
-                .map(Some),
-            avatar_url: registration
-                .avatar_url
-                .clone()
-                .map(Some),
+            display_name: registration.display_name.clone().map(Some),
+            avatar_url: registration.avatar_url.clone().map(Some),
             preferred_locale: None,
         };
-        user = repo.user().update_profile(clock, user, profile_patch).await?;
+        user = repo
+            .user()
+            .update_profile(clock, user, profile_patch)
+            .await?;
     }
 
     let user_session = repo

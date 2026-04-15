@@ -15,19 +15,19 @@
 
 use std::collections::BTreeMap;
 
-use pasion_data::audit::AdminOperation;
-use pasion_data::oauth2::OAuth2ClientRepository;
-use pasion_data::{LocalizableField, LocalizedClientMetadata};
-use salvo::oapi::ToSchema;
-use salvo::prelude::*;
+use pasion_data::{
+    LocalizableField, LocalizedClientMetadata, audit::AdminOperation,
+    oauth2::OAuth2ClientRepository,
+};
+use salvo::{oapi::ToSchema, prelude::*};
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use url::Url;
 
-use crate::AppError;
-use crate::JsonResult;
-use crate::handlers::admin::call_context::extract_call_context;
-use crate::handlers::admin::params::extract_ulid_param;
+use crate::{
+    AppError, JsonResult,
+    handlers::admin::{call_context::extract_call_context, params::extract_ulid_param},
+};
 
 /// JSON shape for the localised metadata of a single OAuth 2.0 client.
 ///
@@ -135,7 +135,7 @@ pub struct LocalizedMetadataResponse {
 #[endpoint]
 #[tracing::instrument(
     name = "handler.admin.v1.oauth2_clients.get_localized_metadata",
-    skip_all,
+    skip_all
 )]
 pub async fn get_localized_metadata(
     req: &mut Request,
@@ -173,7 +173,7 @@ pub async fn get_localized_metadata(
 #[endpoint]
 #[tracing::instrument(
     name = "handler.admin.v1.oauth2_clients.replace_localized_metadata",
-    skip_all,
+    skip_all
 )]
 pub async fn replace_localized_metadata(
     req: &mut Request,

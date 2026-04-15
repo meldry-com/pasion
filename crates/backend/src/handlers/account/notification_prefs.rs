@@ -206,8 +206,8 @@ mod tests {
         RepositoryAccess,
         user::{BrowserSessionRepository, UserRepository},
     };
-    use rand_core::SeedableRng;
     use rand_chacha::ChaChaRng;
+    use rand_core::SeedableRng;
     use ulid::Ulid;
 
     use crate::{

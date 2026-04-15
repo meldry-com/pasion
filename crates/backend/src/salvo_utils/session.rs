@@ -1,7 +1,6 @@
 use std::sync::LazyLock;
 
-use pasion_data::BrowserSession;
-use pasion_data::RepositoryAccess;
+use pasion_data::{BrowserSession, RepositoryAccess};
 use salvo::extract::{Extractible, Metadata};
 use serde::{Deserialize, Serialize};
 use ulid::Ulid;

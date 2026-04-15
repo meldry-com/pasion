@@ -72,7 +72,8 @@ use crate::util::ConfigurationSection;
 
 // ── Client Secret ──
 
-/// Represents a client secret that can be provided inline or loaded from a file.
+/// Represents a client secret that can be provided inline or loaded from a
+/// file.
 #[derive(Clone, Debug)]
 pub enum ClientSecret {
     /// Path to the file containing the client secret.
@@ -234,7 +235,12 @@ impl ConfigurationSection for RootConfig {
         figment: &figment::Figment,
     ) -> Result<(), Box<dyn std::error::Error + Send + Sync + 'static>> {
         // Validate each sub-section in a deterministic order
-        let sections: &[&dyn Fn(&figment::Figment) -> Result<(), Box<dyn std::error::Error + Send + Sync + 'static>>] = &[
+        let sections: &[&dyn Fn(
+            &figment::Figment,
+        ) -> Result<
+            (),
+            Box<dyn std::error::Error + Send + Sync + 'static>,
+        >] = &[
             &|f| self.clients.validate(f),
             &|f| self.http.validate(f),
             &|f| self.database.validate(f),

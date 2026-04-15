@@ -28,7 +28,7 @@ use oauth2_types::{
         AccessTokenRequest, AccessTokenResponse, AuthorizationCodeGrant, AuthorizationRequest,
         Display, Prompt, ResponseMode,
     },
-    scope::{Scope, OPENID},
+    scope::{OPENID, Scope},
 };
 use pasion_iana::oauth::{OAuthAuthorizationEndpointResponseType, PkceCodeChallengeMethod};
 use pasion_jose::claims::{self, TokenHash};
@@ -36,11 +36,13 @@ use rand_core::RngCore as Rng;
 use serde::Serialize;
 use url::Url;
 
-use super::jose::JwtVerificationData;
-use super::super::{
-    error::{AuthorizationError, IdTokenError, TokenAuthorizationCodeError},
-    requests::{jose::verify_id_token, token::request_access_token},
-    types::{client_credentials::ClientCredentials, IdToken},
+use super::{
+    super::{
+        error::{AuthorizationError, IdTokenError, TokenAuthorizationCodeError},
+        requests::{jose::verify_id_token, token::request_access_token},
+        types::{IdToken, client_credentials::ClientCredentials},
+    },
+    jose::JwtVerificationData,
 };
 
 /// The data necessary to build an authorization request.

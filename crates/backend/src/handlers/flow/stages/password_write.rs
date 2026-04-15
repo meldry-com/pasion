@@ -5,9 +5,10 @@
 //! `PasswordManager`) is deferred to a later integration step — this
 //! module validates the inputs and records that a password was set.
 
-use pasion_data::Clock;
-use pasion_data::flow::{StageOutcome, StageValidationError};
-use pasion_data::{BoxRepository, RepositoryAccess};
+use pasion_data::{
+    BoxRepository, Clock, RepositoryAccess,
+    flow::{StageOutcome, StageValidationError},
+};
 use rand_core::RngCore;
 
 use super::StageExecutionError;
@@ -66,7 +67,8 @@ pub async fn execute(
         });
     }
 
-    // Store that password was set in context (actual hashing deferred to integration)
+    // Store that password was set in context (actual hashing deferred to
+    // integration)
     if let Some(ctx) = context.as_object_mut() {
         ctx.insert("password_set".into(), serde_json::json!(true));
     }

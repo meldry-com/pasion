@@ -4,8 +4,10 @@ use diesel::prelude::*;
 use diesel_async::RunQueryDsl;
 use ipnetwork::IpNetwork;
 use oauth2_types::scope::Scope;
-use pasion_data::oauth2::{OAuth2DeviceCodeGrantParams, OAuth2DeviceCodeGrantRepository};
-use pasion_data::{BrowserSession, Clock, DeviceCodeGrant, DeviceCodeGrantState, Session, new_id};
+use pasion_data::{
+    BrowserSession, Clock, DeviceCodeGrant, DeviceCodeGrantState, Session, new_id,
+    oauth2::{OAuth2DeviceCodeGrantParams, OAuth2DeviceCodeGrantRepository},
+};
 use rand_core::RngCore;
 use ulid::Ulid;
 use uuid::Uuid;

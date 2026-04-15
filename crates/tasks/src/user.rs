@@ -10,12 +10,11 @@
 use anyhow::Context;
 use async_trait::async_trait;
 use pasion_data::{
-    RepositoryAccess,
+    BoxRepository, Clock, RepositoryAccess,
     oauth2::OAuth2SessionFilter,
     personal::PersonalSessionFilter,
     queue::{DeactivateUserJob, ReactivateUserJob},
     user::{BrowserSessionFilter, User, UserEmailFilter, UserRepository},
-    BoxRepository, Clock,
 };
 use tracing::info;
 
@@ -42,7 +41,11 @@ async fn terminate_all_sessions_for(
         )
         .await
         .map_err(JobError::retry)?;
-    info!(sessions = browser_count, kind = "browser", "sessions terminated");
+    info!(
+        sessions = browser_count,
+        kind = "browser",
+        "sessions terminated"
+    );
 
     // OAuth 2.0 sessions
     let oauth_count = repo
@@ -53,7 +56,11 @@ async fn terminate_all_sessions_for(
         )
         .await
         .map_err(JobError::retry)?;
-    info!(sessions = oauth_count, kind = "oauth2", "sessions terminated");
+    info!(
+        sessions = oauth_count,
+        kind = "oauth2",
+        "sessions terminated"
+    );
 
     // Personal sessions where the user is the *actor*
     let actor_count = repo
@@ -66,7 +73,11 @@ async fn terminate_all_sessions_for(
         )
         .await
         .map_err(JobError::retry)?;
-    info!(sessions = actor_count, kind = "personal/actor", "sessions revoked");
+    info!(
+        sessions = actor_count,
+        kind = "personal/actor",
+        "sessions revoked"
+    );
 
     // Personal sessions where the user is the *owner*
     let owner_count = repo
@@ -79,7 +90,11 @@ async fn terminate_all_sessions_for(
         )
         .await
         .map_err(JobError::retry)?;
-    info!(sessions = owner_count, kind = "personal/owner", "sessions revoked");
+    info!(
+        sessions = owner_count,
+        kind = "personal/owner",
+        "sessions revoked"
+    );
 
     Ok(())
 }

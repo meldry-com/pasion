@@ -11,25 +11,20 @@
 #[cfg(test)]
 mod tests {
     use chrono::Duration;
-    use hyper::Request;
-    use hyper::StatusCode;
-    use pasion_data::RepositoryAccess;
-    use pasion_data::user::{UserPasswordRepository, UserRepository};
-    use pasion_matrix::HomeserverAdmin;
-    use pasion_matrix::ProvisionRequest;
-    use rand_core::SeedableRng;
+    use hyper::{Request, StatusCode};
+    use pasion_data::{
+        RepositoryAccess,
+        user::{UserPasswordRepository, UserRepository},
+    };
+    use pasion_matrix::{HomeserverAdmin, ProvisionRequest};
     use rand_chacha::ChaChaRng;
+    use rand_core::SeedableRng;
     use ulid::Ulid;
     use zeroize::Zeroizing;
-    
+
     use crate::handlers::{
-        passwords::PasswordManager,
-        passwords::PasswordVerificationResult,
-        test_utils::RequestBuilderExt,
-        test_utils::ResponseExt,
-        test_utils::TestState,
-        test_utils::setup,
-        test_utils::unique_test_nonce,
+        passwords::{PasswordManager, PasswordVerificationResult},
+        test_utils::{RequestBuilderExt, ResponseExt, TestState, setup, unique_test_nonce},
     };
 
     #[tokio::test]
@@ -585,11 +580,7 @@ mod tests {
         assert_eq!(body["data"]["attributes"]["admin"], true);
         assert!(body["data"]["attributes"]["locked_at"].is_string());
 
-        let user = state
-            .homeserver_admin
-            .query_user(&username)
-            .await
-            .unwrap();
+        let user = state.homeserver_admin.query_user(&username).await.unwrap();
         assert_eq!(user.displayname.as_deref(), Some("Alice Admin"));
     }
 

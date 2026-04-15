@@ -2,38 +2,31 @@
 //
 // SPDX-License-Identifier: AGPL-3.0-only
 
-use pasion_data::RepositoryAccess;
-use pasion_data::audit::AdminOperation;
-use pasion_data::upstream_oauth2::UpstreamOAuthLinkFilter;
-use salvo::http::StatusCode;
-use salvo::prelude::*;
+use pasion_data::{
+    RepositoryAccess, audit::AdminOperation, upstream_oauth2::UpstreamOAuthLinkFilter,
+};
+use salvo::{http::StatusCode, prelude::*};
 use schemars::JsonSchema;
 use serde::Deserialize;
 use ulid::Ulid;
 
-use crate::AppError;
-use crate::AppResult;
-use crate::CreatedJsonResult;
-use crate::JsonResult;
-use crate::handlers::admin::{
-    call_context::extract_call_context,
-    model::Resource,
-    model::UpstreamOAuthLink,
-    params::IncludeCount,
-    params::extract_pagination,
-    params::extract_ulid_param,
-    response::PaginatedResponse,
-    response::SingleResponse,
+use crate::{
+    AppError, AppResult, CreatedJsonResult, JsonResult,
+    handlers::admin::{
+        call_context::extract_call_context,
+        model::{Resource, UpstreamOAuthLink},
+        params::{IncludeCount, extract_pagination, extract_ulid_param},
+        response::{PaginatedResponse, SingleResponse},
+    },
 };
 
 #[cfg(test)]
 mod test_utils {
     use oauth2_types::scope::{OPENID, Scope};
-    use pasion_data::upstream_oauth2::UpstreamOAuthProviderParams;
     use pasion_data::{
         UpstreamOAuthProviderClaimsImports, UpstreamOAuthProviderDiscoveryMode,
         UpstreamOAuthProviderOnBackchannelLogout, UpstreamOAuthProviderPkceMode,
-        UpstreamOAuthProviderTokenAuthMethod,
+        UpstreamOAuthProviderTokenAuthMethod, upstream_oauth2::UpstreamOAuthProviderParams,
     };
     use pasion_iana::jose::JsonWebSignatureAlg;
 
@@ -101,10 +94,7 @@ pub async fn add_link(
         ..
     } = ctx;
     let mut rng = crate::handlers::account::make_rng();
-    let body: AddRequest = req
-        .parse_json()
-        .await
-        .map_err(AppError::internal)?;
+    let body: AddRequest = req.parse_json().await.map_err(AppError::internal)?;
 
     // Resolve the target user
     let owner = repo
@@ -501,24 +491,20 @@ fn map_service_error(error: crate::services::user_admin::UserAdminServiceError) 
 #[cfg(test)]
 mod tests {
     use chrono::Duration;
-    use hyper::Request;
-    use hyper::StatusCode;
+    use hyper::{Request, StatusCode};
     use insta::assert_json_snapshot;
-    use pasion_data::RepositoryAccess;
-    use pasion_data::UpstreamOAuthAuthorizationSessionState;
-    use pasion_data::upstream_oauth2::{UpstreamOAuthLinkRepository, UpstreamOAuthProviderRepository};
-    use pasion_data::user::UserRepository;
-    use rand_core::SeedableRng;
+    use pasion_data::{
+        RepositoryAccess, UpstreamOAuthAuthorizationSessionState,
+        upstream_oauth2::{UpstreamOAuthLinkRepository, UpstreamOAuthProviderRepository},
+        user::UserRepository,
+    };
     use rand_chacha::ChaChaRng;
-    use super::test_utils;
+    use rand_core::SeedableRng;
     use ulid::Ulid;
-    
+
+    use super::test_utils;
     use crate::handlers::test_utils::{
-        RequestBuilderExt,
-        ResponseExt,
-        TestState,
-        setup,
-        unique_test_nonce,
+        RequestBuilderExt, ResponseExt, TestState, setup, unique_test_nonce,
     };
 
     #[tokio::test]

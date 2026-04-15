@@ -7,8 +7,7 @@ use reqwest::Client;
 use thiserror::Error;
 use url::Url;
 
-use super::aliyun::AliyunSmsTransport;
-use super::tencent::TencentSmsTransport;
+use super::{aliyun::AliyunSmsTransport, tencent::TencentSmsTransport};
 
 /// Errors that can occur when sending an SMS
 #[derive(Debug, Error)]

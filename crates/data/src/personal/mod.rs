@@ -3,7 +3,8 @@ pub mod session;
 use chrono::{DateTime, Utc};
 use ulid::Ulid;
 
-/// A bearer token that grants access to a [`PersonalSession`](session::PersonalSession).
+/// A bearer token that grants access to a
+/// [`PersonalSession`](session::PersonalSession).
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct PersonalAccessToken {
     /// Unique identifier for this token.
@@ -34,5 +35,7 @@ impl PersonalAccessToken {
     }
 }
 
-pub use crate::pg::personal::{PgPersonalAccessTokenRepository, PgPersonalSessionRepository};
-pub use crate::storage::personal::*;
+pub use crate::{
+    pg::personal::{PgPersonalAccessTokenRepository, PgPersonalSessionRepository},
+    storage::personal::*,
+};

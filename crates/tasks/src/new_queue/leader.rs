@@ -1,17 +1,11 @@
 use chrono::Duration;
 use cron::Schedule;
-use diesel::sql_query;
-use diesel::sql_types::Bool;
+use diesel::{sql_query, sql_types::Bool};
 use diesel_async::RunQueryDsl;
-use pasion_data::{
-    DatabaseError, PgRepository,
-    RepositoryAccess,
-    queue::InsertableJob,
-};
-
-use crate::State;
+use pasion_data::{DatabaseError, PgRepository, RepositoryAccess, queue::InsertableJob};
 
 use super::QueueRunnerError;
+use crate::State;
 
 /// Result of a `pg_try_advisory_lock` query.
 #[derive(diesel::QueryableByName)]
@@ -51,6 +45,21 @@ impl ScheduleDefinition {
     }
 }
 
+fn missing_schedule_names(
+    schedules: &[ScheduleDefinition],
+    statuses: &[pasion_data::queue::ScheduleStatus],
+) -> Vec<&'static str> {
+    schedules
+        .iter()
+        .filter_map(|schedule| {
+            (!statuses
+                .iter()
+                .any(|status| status.schedule_name == schedule.schedule_name))
+            .then_some(schedule.schedule_name)
+        })
+        .collect()
+}
+
 pub(super) async fn run_leader_duties(
     state: &State,
     schedules: &[ScheduleDefinition],
@@ -78,7 +87,23 @@ pub(super) async fn run_leader_duties(
     }
 
     let mut repo = PgRepository::new(conn);
-    let schedules_status = repo.queue_schedule().list().await?;
+    let mut schedules_status = repo.queue_schedule().list().await?;
+    let mut missing = missing_schedule_names(schedules, &schedules_status);
+    if !missing.is_empty() {
+        tracing::warn!(
+            schedules = ?missing,
+            "Queue schedule definitions are missing from the database, repairing them",
+        );
+        repo.queue_schedule().setup(&missing).await?;
+        schedules_status = repo.queue_schedule().list().await?;
+        missing = missing_schedule_names(schedules, &schedules_status);
+        if !missing.is_empty() {
+            tracing::error!(
+                schedules = ?missing,
+                "Queue schedule definitions are still missing after repair",
+            );
+        }
+    }
 
     let now = clock.now();
     for schedule in schedules {
@@ -86,10 +111,6 @@ pub(super) async fn run_leader_duties(
             .iter()
             .find(|s| s.schedule_name == schedule.schedule_name)
         else {
-            tracing::error!(
-                "Schedule {} was not found in the database",
-                schedule.schedule_name
-            );
             continue;
         };
 
@@ -141,4 +162,40 @@ pub(super) async fn run_leader_duties(
         .await;
 
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use chrono::Utc;
+    use pasion_data::queue::ScheduleStatus;
+
+    use super::{ScheduleDefinition, missing_schedule_names};
+
+    fn schedule(name: &'static str) -> ScheduleDefinition {
+        ScheduleDefinition {
+            schedule_name: name,
+            expression: "* * * * * *".parse().expect("valid cron"),
+            queue_name: "queue",
+            payload: serde_json::json!({}),
+        }
+    }
+
+    #[test]
+    fn detects_missing_schedule_names() {
+        let schedules = vec![schedule("alpha"), schedule("beta"), schedule("gamma")];
+        let statuses = vec![
+            ScheduleStatus {
+                schedule_name: "alpha".to_string(),
+                last_scheduled_at: Some(Utc::now()),
+                last_scheduled_job_completed: Some(true),
+            },
+            ScheduleStatus {
+                schedule_name: "gamma".to_string(),
+                last_scheduled_at: None,
+                last_scheduled_job_completed: None,
+            },
+        ];
+
+        assert_eq!(missing_schedule_names(&schedules, &statuses), vec!["beta"]);
+    }
 }

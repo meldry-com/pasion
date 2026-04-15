@@ -22,9 +22,10 @@ mod tests {
         requests::{GrantType, ResponseMode},
         scope::{EMAIL, OPENID, PROFILE, Scope},
     };
-    use pasion_data::{AuthorizationCode, Clock, clock::MockClock};
     use pasion_data::{
-        Pagination,
+        AuthorizationCode, Clock, Pagination, RepositoryAccess as _, RepositoryFactory as _,
+        RepositoryTransaction as _,
+        clock::MockClock,
         oauth2::{OAuth2DeviceCodeGrantParams, OAuth2SessionFilter, OAuth2SessionRepository},
     };
     use rand::SeedableRng;
@@ -32,7 +33,6 @@ mod tests {
     use ulid::Ulid;
 
     use crate::PgRepositoryFactory;
-    use pasion_data::{RepositoryAccess as _, RepositoryFactory as _, RepositoryTransaction as _};
 
     #[tokio::test]
     async fn test_repositories() {

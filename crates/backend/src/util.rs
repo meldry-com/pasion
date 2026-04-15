@@ -1,18 +1,19 @@
 use std::{sync::Arc, time::Duration};
 
-use crate::handlers::passwords::PasswordManager;
 use anyhow::Context;
-use diesel_async::AsyncPgConnection;
-use diesel_async::pooled_connection::AsyncDieselConnectionManager;
-use diesel_async::pooled_connection::deadpool::Pool as DieselPool;
+use diesel_async::{
+    AsyncPgConnection,
+    pooled_connection::{AsyncDieselConnectionManager, deadpool::Pool as DieselPool},
+};
 use pasion_config::{
     AccountConfig, BrandingConfig, CaptchaConfig, DatabaseConfig, EmailConfig, EmailSmtpMode,
     EmailTransportKind, ExperimentalConfig, HomeserverKind, MatrixConfig, PasswordsConfig,
     PolicyConfig, PolicyEngine, SmsConfig, SmsTransportKind, TemplatesConfig,
 };
-use pasion_data::UrlBuilder;
-use pasion_data::{BoxRepositoryFactory, RepositoryAccess, RepositoryFactory};
-use pasion_data::{SessionExpirationConfig, SessionLimitConfig, SiteConfig};
+use pasion_data::{
+    BoxRepositoryFactory, RepositoryAccess, RepositoryFactory, SessionExpirationConfig,
+    SessionLimitConfig, SiteConfig, UrlBuilder,
+};
 use pasion_matrix::{ConnectorRegistry, HomeserverAdmin, ReadOnlyHomeserverAdmin};
 use pasion_matrix_palpo::PalpoAdmin;
 use pasion_messaging::{MailTransport, Mailer, NotificationCenter, SmsSender, SmsTransport};
@@ -20,6 +21,8 @@ use pasion_policy::PolicyFactory;
 use pasion_templates::{SiteConfigExt, Templates};
 use tokio_util::{sync::CancellationToken, task::TaskTracker};
 use tracing::Instrument;
+
+use crate::handlers::passwords::PasswordManager;
 
 /// Check whether `c` is a valid character for a username.
 fn valid_username_character(c: char) -> bool {
@@ -251,11 +254,9 @@ pub async fn policy_factory_from_config(
         PolicyEngine::Cedar => {
             #[cfg(feature = "cedar")]
             {
-                let default_path = camino::Utf8PathBuf::from("/usr/local/share/pasion/cedar/default.cedar");
-                let path = config
-                    .cedar_policy_file
-                    .as_ref()
-                    .unwrap_or(&default_path);
+                let default_path =
+                    camino::Utf8PathBuf::from("/usr/local/share/pasion/cedar/default.cedar");
+                let path = config.cedar_policy_file.as_ref().unwrap_or(&default_path);
                 PolicyFactory::load_cedar_from_file(path.as_str())
                     .await
                     .context("failed to load Cedar policy")
@@ -397,7 +398,8 @@ pub async fn templates_from_config(
     .with_context(|| format!("Failed to load the templates at {}", config.path))
 }
 
-/// Build a connection string from the [`DatabaseConfig`] for use with diesel-async.
+/// Build a connection string from the [`DatabaseConfig`] for use with
+/// diesel-async.
 ///
 /// This mirrors the logic from [`database_connect_options_from_config`] but
 /// produces a plain URL string suitable for

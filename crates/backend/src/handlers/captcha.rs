@@ -5,12 +5,11 @@
 
 use std::net::IpAddr;
 
-use crate::outbound_http::RequestBuilderExt as _;
 use pasion_data::{CaptchaConfig, CaptchaService};
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
-use crate::handlers::BoundActivityTracker;
+use crate::{handlers::BoundActivityTracker, outbound_http::RequestBuilderExt as _};
 
 // https://developers.google.com/recaptcha/docs/verify#api_request
 const RECAPTCHA_VERIFY_URL: &str = "https://www.google.com/recaptcha/api/siteverify";

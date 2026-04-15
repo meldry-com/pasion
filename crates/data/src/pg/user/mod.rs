@@ -5,9 +5,11 @@ use async_trait::async_trait;
 use chrono::{DateTime, Utc};
 use diesel::prelude::*;
 use diesel_async::RunQueryDsl;
-use pasion_data::user::{UserFilter, UserRepository, UserState};
-use pasion_data::{Clock, User, UserPatch, UserProfilePatch, new_id};
-use pasion_data::{Pagination, pagination::PaginationDirection};
+use pasion_data::{
+    Clock, Pagination, User, UserPatch, UserProfilePatch, new_id,
+    pagination::PaginationDirection,
+    user::{UserFilter, UserRepository, UserState},
+};
 use rand_core::RngCore;
 use ulid::Ulid;
 use uuid::Uuid;
@@ -279,8 +281,9 @@ impl UserRepository for PgUserRepository<'_> {
         err,
     )]
     async fn exists(&mut self, username: &str) -> Result<bool, Self::Error> {
-        use crate::lower;
         use diesel::dsl::{exists, select};
+
+        use crate::lower;
 
         let result = select(exists(
             users::table.filter(lower(users::username).eq(username.to_lowercase())),

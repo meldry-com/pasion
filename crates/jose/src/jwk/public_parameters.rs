@@ -79,11 +79,7 @@ pub struct EcPublicParameters {
 impl EcPublicParameters {
     /// Construct EC public parameters from the curve identifier
     /// and the base64url-encoded coordinates.
-    pub const fn new(
-        crv: JsonWebKeyEcEllipticCurve,
-        x: Base64UrlNoPad,
-        y: Base64UrlNoPad,
-    ) -> Self {
+    pub const fn new(crv: JsonWebKeyEcEllipticCurve, x: Base64UrlNoPad, y: Base64UrlNoPad) -> Self {
         Self { crv, x, y }
     }
 

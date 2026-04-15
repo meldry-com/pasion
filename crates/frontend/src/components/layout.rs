@@ -12,11 +12,7 @@ pub enum LayoutWidth {
 }
 
 #[component]
-pub fn Layout(
-    wide: Option<bool>,
-    width: Option<LayoutWidth>,
-    children: Element,
-) -> Element {
+pub fn Layout(wide: Option<bool>, width: Option<LayoutWidth>, children: Element) -> Element {
     let cls = match width.unwrap_or_else(|| {
         if wide.unwrap_or(false) {
             LayoutWidth::Wide

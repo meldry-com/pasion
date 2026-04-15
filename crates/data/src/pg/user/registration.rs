@@ -7,15 +7,14 @@ use diesel_async::RunQueryDsl;
 use pasion_data::{
     Clock, UpstreamOAuthAuthorizationSession, UserEmailAuthentication, UserPhoneAuthentication,
     UserRegistration, UserRegistrationPassword, UserRegistrationToken, new_id,
+    user::UserRegistrationRepository,
 };
 use rand_core::RngCore;
 use ulid::Ulid;
+use url::Url;
 use uuid::Uuid;
 
-use url::Url;
-
 use crate::{DatabaseError, DatabaseInconsistencyError, schema::user_registrations};
-use pasion_data::user::UserRegistrationRepository;
 
 /// An implementation of [`UserRegistrationRepository`] for a PostgreSQL
 /// connection
@@ -590,18 +589,19 @@ struct UuidRow {
 mod tests {
     use std::net::{IpAddr, Ipv4Addr};
 
-    use crate::PgRepositoryFactory;
     use oauth2_types::scope::Scope;
-    use pasion_data::upstream_oauth2::UpstreamOAuthProviderParams;
     use pasion_data::{
-        Clock, UpstreamOAuthProviderClaimsImports, UpstreamOAuthProviderDiscoveryMode,
+        Clock, RepositoryAccess as _, RepositoryFactory as _, RepositoryTransaction as _,
+        UpstreamOAuthProviderClaimsImports, UpstreamOAuthProviderDiscoveryMode,
         UpstreamOAuthProviderOnBackchannelLogout, UpstreamOAuthProviderPkceMode,
         UpstreamOAuthProviderTokenAuthMethod, UserRegistrationPassword, clock::MockClock,
+        upstream_oauth2::UpstreamOAuthProviderParams,
     };
-    use pasion_data::{RepositoryAccess as _, RepositoryFactory as _, RepositoryTransaction as _};
     use pasion_iana::jose::JsonWebSignatureAlg;
     use rand::SeedableRng;
     use rand_chacha::ChaChaRng;
+
+    use crate::PgRepositoryFactory;
 
     #[tokio::test]
     async fn test_create_lookup_complete() {

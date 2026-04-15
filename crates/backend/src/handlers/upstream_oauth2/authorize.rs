@@ -1,17 +1,17 @@
-use crate::oidc_client::requests::authorization_code::AuthorizationRequestData;
-use crate::salvo_utils::{GenericError, InternalError, cookies::TimedCookie};
-use pasion_data::PostAuthAction;
-use pasion_data::UpstreamOAuthProvider;
-use pasion_data::upstream_oauth2::{
-    UpstreamOAuthProviderRepository, UpstreamOAuthSessionRepository,
+use pasion_data::{
+    PostAuthAction, UpstreamOAuthProvider,
+    upstream_oauth2::{UpstreamOAuthProviderRepository, UpstreamOAuthSessionRepository},
 };
 use salvo::prelude::*;
 use thiserror::Error;
 use ulid::Ulid;
 
 use super::{UpstreamSessionsCookie, cache::LazyProviderInfos};
-use crate::handlers::post_auth::OptionalPostAuthAction;
-use crate::handlers::account::DepotExt;
+use crate::{
+    handlers::{account::DepotExt, post_auth::OptionalPostAuthAction},
+    oidc_client::requests::authorization_code::AuthorizationRequestData,
+    salvo_utils::{GenericError, InternalError, cookies::TimedCookie},
+};
 
 #[derive(Debug, Error)]
 pub enum RouteError {
@@ -47,7 +47,9 @@ pub async fn get(
     depot: &mut Depot,
     res: &mut Response,
 ) -> Result<(), RouteError> {
-    let provider_id: Ulid = req.param("provider_id").ok_or(RouteError::ProviderNotFound)?;
+    let provider_id: Ulid = req
+        .param("provider_id")
+        .ok_or(RouteError::ProviderNotFound)?;
     let mut rng = crate::handlers::account::make_rng();
     let clock = crate::handlers::account::make_clock();
     let metadata_cache = depot.metadata_cache()?;

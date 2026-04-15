@@ -3,12 +3,12 @@ use chrono::{DateTime, Utc};
 use diesel::prelude::*;
 use diesel_async::RunQueryDsl;
 use ipnetwork::IpNetwork;
-use pasion_data::audit::{
-    AdminOperationFilter, AuditRepository, NewAccountSecurityEvent, NewAdminOperationLog,
-};
 use pasion_data::{
     Clock,
-    audit::{AccountSecurityEvent, AdminOperation, AdminOperationLog, SecurityEventType},
+    audit::{
+        AccountSecurityEvent, AdminOperation, AdminOperationFilter, AdminOperationLog,
+        AuditRepository, NewAccountSecurityEvent, NewAdminOperationLog, SecurityEventType,
+    },
     new_id,
 };
 use rand_core::RngCore;

@@ -8,12 +8,12 @@
 
 use std::collections::HashMap;
 
-use crate::outbound_http::RequestBuilderExt;
 use serde::Deserialize;
 use serde_json::Value;
 use url::Url;
 
 use super::super::error::{TokenRequestError, UserInfoError};
+use crate::outbound_http::RequestBuilderExt;
 
 const WECOM_TOKEN_ENDPOINT: &str = "https://qyapi.weixin.qq.com/cgi-bin/gettoken";
 const WECOM_USERINFO_ENDPOINT: &str = "https://qyapi.weixin.qq.com/cgi-bin/auth/getuserinfo";

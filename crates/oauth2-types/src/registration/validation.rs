@@ -6,8 +6,7 @@ use serde::Serialize;
 use thiserror::Error;
 use url::Url;
 
-use super::client_metadata_serde::ClientMetadataSerdeHelper;
-use super::metadata::ClientMetadata;
+use super::{client_metadata_serde::ClientMetadataSerdeHelper, metadata::ClientMetadata};
 use crate::response_type::ResponseType;
 
 /// The verified client metadata.
@@ -39,9 +38,7 @@ impl VerifiedClientMetadata {
     /// [authorization code flow]: https://openid.net/specs/openid-connect-core-1_0.html#CodeFlowAuth
     #[must_use]
     pub fn redirect_uris(&self) -> &[Url] {
-        self.redirect_uris
-            .as_deref()
-            .unwrap_or(&[])
+        self.redirect_uris.as_deref().unwrap_or(&[])
     }
 }
 

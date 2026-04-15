@@ -8,15 +8,17 @@ use oauth2_types::{
     },
 };
 use opentelemetry::{Key, KeyValue, metrics::Counter};
-use pasion_data::{BoxClock, BoxRng, LocalizedClientMetadata, SystemClock};
-use pasion_data::{BoxRepository, BoxRepositoryFactory, oauth2::OAuth2ClientRepository};
+use pasion_data::{
+    BoxClock, BoxRepository, BoxRepositoryFactory, BoxRng, LocalizedClientMetadata, SystemClock,
+    oauth2::OAuth2ClientRepository,
+};
 use pasion_iana::oauth::OAuthClientAuthenticationMethod;
 use pasion_keystore::Encrypter;
 use pasion_policy::{EvaluationResult, Policy, PolicyFactory};
 use psl::Psl;
 use rand::distr::{Alphanumeric, SampleString};
-use rand_core::SeedableRng;
 use rand_chacha::ChaChaRng;
+use rand_core::SeedableRng;
 use salvo::prelude::*;
 use serde::Serialize;
 use sha2::Digest as _;
@@ -212,7 +214,8 @@ async fn handle_post(req: &mut Request, depot: &Depot) -> Result<RouteResponse, 
     let activity_tracker = crate::handlers::account::extract_bound_activity_tracker(req, depot);
 
     let clock: BoxClock = Box::new(SystemClock::default());
-    let mut rng: BoxRng = Box::new(ChaChaRng::from_rng(rand_core::OsRng).expect("Failed to seed rng"));
+    let mut rng: BoxRng =
+        Box::new(ChaChaRng::from_rng(rand_core::OsRng).expect("Failed to seed rng"));
 
     let mut repo: BoxRepository = repo_factory.create().await?;
     let mut policy: Policy = policy_factory
@@ -402,7 +405,8 @@ fn collect_localized_metadata(metadata: &VerifiedClientMetadata) -> LocalizedCli
     if let Some(name) = metadata.client_name.as_ref() {
         for (tag, value) in name.iter() {
             if let Some(tag) = tag {
-                out.client_name.insert(tag.as_str().to_owned(), value.clone());
+                out.client_name
+                    .insert(tag.as_str().to_owned(), value.clone());
             }
         }
     }
@@ -416,14 +420,16 @@ fn collect_localized_metadata(metadata: &VerifiedClientMetadata) -> LocalizedCli
     if let Some(uri) = metadata.client_uri.as_ref() {
         for (tag, value) in uri.iter() {
             if let Some(tag) = tag {
-                out.client_uri.insert(tag.as_str().to_owned(), value.clone());
+                out.client_uri
+                    .insert(tag.as_str().to_owned(), value.clone());
             }
         }
     }
     if let Some(uri) = metadata.policy_uri.as_ref() {
         for (tag, value) in uri.iter() {
             if let Some(tag) = tag {
-                out.policy_uri.insert(tag.as_str().to_owned(), value.clone());
+                out.policy_uri
+                    .insert(tag.as_str().to_owned(), value.clone());
             }
         }
     }

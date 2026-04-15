@@ -77,10 +77,7 @@ impl RunnableJob for ProvisionUserJob {
             req = req.set_admin();
         }
 
-        let created = matrix
-            .provision_user(&req)
-            .await
-            .map_err(JobError::retry)?;
+        let created = matrix.provision_user(&req).await.map_err(JobError::retry)?;
 
         let mxid = matrix.mxid(&user.username);
         if created {

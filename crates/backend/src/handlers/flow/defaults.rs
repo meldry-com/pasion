@@ -5,10 +5,10 @@
 //! database.
 
 use chrono::Utc;
-use pasion_data::flow::{
-    FlowDefinition, FlowDesignation, FlowStageBinding, IdentificationField, StageKind,
+use pasion_data::{
+    flow::{FlowDefinition, FlowDesignation, FlowStageBinding, IdentificationField, StageKind},
+    new_id,
 };
-use pasion_data::new_id;
 
 /// Create the default registration flow:
 /// 1. `UserWrite` — collect username / display name
@@ -289,8 +289,9 @@ pub fn default_enrollment_flow(
 
 #[cfg(test)]
 mod tests {
-    use super::*;
     use rand_core::SeedableRng;
+
+    use super::*;
 
     fn test_rng() -> rand_chacha::ChaCha8Rng {
         rand_chacha::ChaCha8Rng::seed_from_u64(42)

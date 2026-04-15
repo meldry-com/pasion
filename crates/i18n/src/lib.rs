@@ -11,14 +11,15 @@ mod translator;
 
 pub use icu_calendar;
 pub use icu_datetime;
-pub use icu_locid::{self, locale, Locale};
+pub use icu_locid::{self, Locale, locale};
 
-/// Type alias for backward compatibility -- previously `icu_provider::DataLocale`,
-/// now backed by `icu_locid::Locale` to avoid conflicts between ICU provider 1.x
-/// and 2.x in the dependency tree.
+/// Type alias for backward compatibility -- previously
+/// `icu_provider::DataLocale`, now backed by `icu_locid::Locale` to avoid
+/// conflicts between ICU provider 1.x and 2.x in the dependency tree.
 pub type DataLocale = icu_locid::Locale;
 
-/// Error type for backward compatibility -- previously re-exported from `icu_provider`.
+/// Error type for backward compatibility -- previously re-exported from
+/// `icu_provider`.
 ///
 /// Wraps an inner error with a static description. This is a thin replacement
 /// for the ICU provider `DataError` to decouple this crate from `icu_provider`

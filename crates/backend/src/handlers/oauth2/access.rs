@@ -1,13 +1,9 @@
 use std::{net::IpAddr, time::Duration};
 
 use oauth2_types::requests::AuthorizationResponse;
-use pasion_data::UrlBuilder;
 use pasion_data::{
-    AuthorizationGrant, AuthorizationGrantStage, BoxClock, BoxRng, BrowserSession, Client, Clock,
-    MatrixUser, Session,
-};
-use pasion_data::{
-    BoxRepository, RepositoryAccess, RepositoryError,
+    AuthorizationGrant, AuthorizationGrantStage, BoxClock, BoxRepository, BoxRng, BrowserSession,
+    Client, Clock, MatrixUser, RepositoryAccess, RepositoryError, Session, UrlBuilder,
     oauth2::{
         OAuth2AuthorizationGrantRepository, OAuth2ClientRepository,
         OAuth2DeviceCodeGrantRepository, OAuth2SessionRepository,
@@ -433,10 +429,7 @@ async fn has_policy_violation(
     Ok(!eval_result.valid())
 }
 
-async fn fetch_display_name(
-    homeserver: &dyn HomeserverAdmin,
-    localpart: &str,
-) -> Option<String> {
+async fn fetch_display_name(homeserver: &dyn HomeserverAdmin, localpart: &str) -> Option<String> {
     match tokio::time::timeout(Duration::from_secs(1), homeserver.query_user(localpart)).await {
         Ok(Ok(user)) => user.displayname,
         Ok(Err(err)) => {

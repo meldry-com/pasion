@@ -2,13 +2,14 @@
 //
 // SPDX-License-Identifier: AGPL-3.0-only
 
-use crate::handlers::admin::call_context::extract_call_context;
-use crate::handlers::account::DepotExt;
-use crate::salvo_utils::InternalError;
-use salvo::oapi::ToSchema;
-use salvo::prelude::*;
+use salvo::{oapi::ToSchema, prelude::*};
 use schemars::JsonSchema;
 use serde::Serialize;
+
+use crate::{
+    handlers::{account::DepotExt, admin::call_context::extract_call_context},
+    salvo_utils::InternalError,
+};
 
 /// Response payload describing the current site-level settings.
 #[allow(clippy::struct_excessive_bools)]

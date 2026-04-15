@@ -71,7 +71,6 @@ pub enum PgSslMode {
 #[derive(Debug, Serialize, Deserialize, JsonSchema)]
 pub struct DatabaseConfig {
     // -- Connection target (URI *or* split fields) --
-
     /// Full connection URI. Mutually exclusive with `host`/`port`/`socket`/
     /// `username`/`password`/`database`.
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -106,7 +105,6 @@ pub struct DatabaseConfig {
     pub database: Option<String>,
 
     // -- SSL --
-
     /// Wire-encryption policy
     #[serde(skip_serializing_if = "Option::is_none")]
     pub ssl_mode: Option<PgSslMode>,
@@ -140,7 +138,6 @@ pub struct DatabaseConfig {
     pub ssl_key_file: Option<Utf8PathBuf>,
 
     // -- Pool parameters --
-
     /// Upper bound on pool connections
     #[serde(default = "pool_max_connections")]
     pub max_connections: NonZeroU32,
@@ -157,19 +154,13 @@ pub struct DatabaseConfig {
 
     /// Recycle idle connections after this many seconds
     #[schemars(with = "Option<u64>")]
-    #[serde(
-        default = "pool_idle_timeout",
-        skip_serializing_if = "Option::is_none"
-    )]
+    #[serde(default = "pool_idle_timeout", skip_serializing_if = "Option::is_none")]
     #[serde_as(as = "Option<serde_with::DurationSeconds<u64>>")]
     pub idle_timeout: Option<Duration>,
 
     /// Hard upper bound on connection age (seconds)
     #[schemars(with = "u64")]
-    #[serde(
-        default = "pool_max_lifetime",
-        skip_serializing_if = "Option::is_none"
-    )]
+    #[serde(default = "pool_max_lifetime", skip_serializing_if = "Option::is_none")]
     #[serde_as(as = "Option<serde_with::DurationSeconds<u64>>")]
     pub max_lifetime: Option<Duration>,
 }
@@ -205,10 +196,7 @@ impl Default for DatabaseConfig {
 // ---------------------------------------------------------------------------
 
 /// Produce a fully-annotated `figment::Error` scoped to the database section
-fn scoped_error(
-    figment: &figment::Figment,
-    message: &str,
-) -> figment::Error {
+fn scoped_error(figment: &figment::Figment, message: &str) -> figment::Error {
     let mut err = figment::Error::from(message.to_owned());
     err.metadata = figment.find_metadata(DatabaseConfig::PATH).cloned();
     err.profile = Some(figment::Profile::Default);

@@ -5,26 +5,29 @@
 
 use std::sync::LazyLock;
 
-use crate::salvo_utils::{
-    SessionInfoExt,
-    cookies::{CookieJar, TimedCookie},
-};
 use opentelemetry::{Key, KeyValue, metrics::Counter};
-use salvo::oapi::ToSchema;
-use salvo::prelude::*;
+use salvo::{oapi::ToSchema, prelude::*};
 use serde::{Deserialize, Serialize};
 use ulid::Ulid;
 
 use super::{DepotExt, RouteError, extract_bound_activity_tracker, make_clock, make_rng};
-use crate::handlers::{
-    METER,
-    upstream_oauth2::link_workflow::{
-        LoadUpstreamLinkOutcome, SubmitUpstreamLinkError, SubmitUpstreamLinkOutcome,
-        UpstreamLinkAction, UpstreamLinkRegistrationAction, UpstreamLinkWorkflowError,
-        load_upstream_link_context, load_upstream_link_state, submit_upstream_link_action,
+use crate::{
+    handlers::{
+        METER,
+        account::registration_cookie::UserRegistrationSessions,
+        upstream_oauth2::{
+            UpstreamSessionsCookie,
+            link_workflow::{
+                LoadUpstreamLinkOutcome, SubmitUpstreamLinkError, SubmitUpstreamLinkOutcome,
+                UpstreamLinkAction, UpstreamLinkRegistrationAction, UpstreamLinkWorkflowError,
+                load_upstream_link_context, load_upstream_link_state, submit_upstream_link_action,
+            },
+        },
     },
-    upstream_oauth2::UpstreamSessionsCookie,
-    account::registration_cookie::UserRegistrationSessions,
+    salvo_utils::{
+        SessionInfoExt,
+        cookies::{CookieJar, TimedCookie},
+    },
 };
 
 static LOGIN_COUNTER: LazyLock<Counter<u64>> = LazyLock::new(|| {
@@ -47,7 +50,8 @@ const PROVIDER: Key = Key::from_static_str("provider");
 #[derive(Serialize, ToSchema)]
 #[serde(tag = "state", rename_all = "snake_case")]
 pub enum LinkState {
-    /// Redirect: session already linked and matches current user, or auto-login succeeded.
+    /// Redirect: session already linked and matches current user, or auto-login
+    /// succeeded.
     Redirect { redirect_url: String },
     /// User is logged in, upstream not linked: suggest linking.
     SuggestLink {

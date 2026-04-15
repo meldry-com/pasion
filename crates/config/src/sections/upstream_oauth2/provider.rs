@@ -13,10 +13,11 @@ use serde_with::{serde_as, skip_serializing_none};
 use ulid::Ulid;
 use url::Url;
 
+use super::{
+    claims::ClaimsImports,
+    discovery::{DiscoveryMode, OnBackchannelLogout, PkceMethod},
+};
 use crate::{ClientSecret, ClientSecretRaw};
-
-use super::claims::ClaimsImports;
-use super::discovery::{DiscoveryMode, OnBackchannelLogout, PkceMethod};
 
 // ── Response Mode ──
 
@@ -137,7 +138,10 @@ pub struct Provider {
     /// Whether this provider is enabled.
     ///
     /// Defaults to `true`
-    #[serde(default = "default_enabled", skip_serializing_if = "is_enabled_default")]
+    #[serde(
+        default = "default_enabled",
+        skip_serializing_if = "is_enabled_default"
+    )]
     pub enabled: bool,
 
     /// An internal unique identifier for this provider

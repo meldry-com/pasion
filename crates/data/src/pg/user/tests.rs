@@ -1,9 +1,10 @@
 use chrono::Duration;
 use diesel_async::RunQueryDsl;
 use oauth2_types::scope::{OPENID, Scope};
-use pasion_data::{Clock, UserEmailPatch, UserPatch, UserProfilePatch, clock::MockClock};
 use pasion_data::{
-    Pagination, RepositoryAccess,
+    Clock, Pagination, RepositoryAccess, RepositoryAccess as _, RepositoryFactory as _,
+    RepositoryTransaction as _, UserEmailPatch, UserPatch, UserProfilePatch,
+    clock::MockClock,
     upstream_oauth2::{UpstreamOAuthProviderParams, UpstreamOAuthSessionFilter},
     user::{
         BrowserSessionFilter, BrowserSessionRepository, UserEmailFilter, UserEmailRepository,
@@ -15,7 +16,6 @@ use rand::SeedableRng;
 use rand_chacha::ChaChaRng;
 
 use crate::PgRepositoryFactory;
-use pasion_data::{RepositoryAccess as _, RepositoryFactory as _, RepositoryTransaction as _};
 
 /// Test the user repository, by adding and looking up a user
 #[tokio::test]

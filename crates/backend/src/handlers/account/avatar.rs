@@ -56,15 +56,16 @@ pub async fn upload_avatar(
         ));
     }
 
-    let data = tokio::fs::read(file.path()).await.map_err(|e| {
-        RouteError::Internal(Box::new(e))
-    })?;
+    let data = tokio::fs::read(file.path())
+        .await
+        .map_err(|e| RouteError::Internal(Box::new(e)))?;
 
     // Validate size
     if data.len() > MAX_AVATAR_SIZE {
-        return Err(RouteError::BadRequest(
-            format!("avatar file too large (max {} MB)", MAX_AVATAR_SIZE / 1024 / 1024),
-        ));
+        return Err(RouteError::BadRequest(format!(
+            "avatar file too large (max {} MB)",
+            MAX_AVATAR_SIZE / 1024 / 1024
+        )));
     }
 
     let repo = repo_factory.create().await?;
@@ -100,11 +101,7 @@ pub async fn upload_avatar(
 
     // Build the avatar URL
     let base = url_builder.http_base();
-    let avatar_url = format!(
-        "{}api/v1/viewer/avatar/{}",
-        base.as_str(),
-        user_id
-    );
+    let avatar_url = format!("{}api/v1/viewer/avatar/{}", base.as_str(), user_id);
 
     // Update user profile with the new avatar URL
     let patch = pasion_data::UserProfilePatch {
@@ -158,14 +155,10 @@ pub async fn get_avatar(req: &mut Request, res: &mut Response) {
                 "webp" => "image/webp",
                 _ => "application/octet-stream",
             };
-            res.headers_mut().insert(
-                "content-type",
-                content_type.parse().unwrap(),
-            );
-            res.headers_mut().insert(
-                "cache-control",
-                "public, max-age=3600".parse().unwrap(),
-            );
+            res.headers_mut()
+                .insert("content-type", content_type.parse().unwrap());
+            res.headers_mut()
+                .insert("cache-control", "public, max-age=3600".parse().unwrap());
             res.write_body(data).ok();
             return;
         }

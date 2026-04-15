@@ -23,11 +23,9 @@
 use std::collections::HashMap;
 
 use chrono::Duration;
-use pasion_data::RepositoryAccess;
-use pasion_data::UrlBuilder;
 use pasion_data::{
     AccessToken, Authentication, AuthorizationGrant, BrowserSession, Client, Clock, RefreshToken,
-    Session, TokenType,
+    RepositoryAccess, Session, TokenType, UrlBuilder,
 };
 use pasion_iana::jose::JsonWebSignatureAlg;
 use pasion_jose::{
@@ -159,8 +157,8 @@ mod tests {
     use pasion_data::{AccessTokenState, AuthenticationMethod, clock::MockClock};
     use pasion_jose::{claims::hash_token, jwt::Jwt};
     use pasion_keystore::{JsonWebKey, JsonWebKeySet, PrivateKey};
-    use rand_core::SeedableRng;
     use rand_chacha::ChaChaRng;
+    use rand_core::SeedableRng;
     use serde_json::Value;
     use ulid::Ulid;
 

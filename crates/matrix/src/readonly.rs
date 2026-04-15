@@ -184,18 +184,19 @@ mod tests {
         source.reserve_localpart("reserved").await;
         source
             .provision_user(
-                &ProvisionRequest::new("alice", "sub-alice")
-                    .set_displayname("Alice".to_owned()),
+                &ProvisionRequest::new("alice", "sub-alice").set_displayname("Alice".to_owned()),
             )
             .await
             .unwrap();
 
         let connection = ReadOnlyHomeserverAdmin::new(source);
 
-        assert!(connection
-            .verify_token(MockHomeserverAdmin::VALID_BEARER_TOKEN)
-            .await
-            .unwrap());
+        assert!(
+            connection
+                .verify_token(MockHomeserverAdmin::VALID_BEARER_TOKEN)
+                .await
+                .unwrap()
+        );
         assert!(!connection.is_localpart_available("alice").await.unwrap());
         assert!(!connection.is_localpart_available("reserved").await.unwrap());
 
@@ -205,9 +206,7 @@ mod tests {
 
     #[tokio::test]
     async fn blocks_mutations_and_reports_no_write_capabilities() {
-        let connection = ReadOnlyHomeserverAdmin::new(MockHomeserverAdmin::new(
-            "example.org",
-        ));
+        let connection = ReadOnlyHomeserverAdmin::new(MockHomeserverAdmin::new("example.org"));
 
         assert_eq!(connection.provider_name(), "mock-homeserver");
         assert_all_writes_disabled(connection.capabilities());

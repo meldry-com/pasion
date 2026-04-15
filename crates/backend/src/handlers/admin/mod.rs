@@ -8,10 +8,10 @@
 //! The API specification is available as an OpenAPI document served by the
 //! [`swagger`] handler.
 
-use crate::handlers::account::DepotExt;
-use crate::salvo_utils::InternalError;
 use salvo::prelude::*;
 use serde::Serialize;
+
+use crate::{handlers::account::DepotExt, salvo_utils::InternalError};
 
 mod call_context;
 mod model;
@@ -70,15 +70,16 @@ impl<T: Serialize + Send> Scribe for CreatedJson<T> {
     }
 }
 
-impl<T: Serialize + Send + salvo::oapi::ToSchema + 'static> salvo::oapi::EndpointOutRegister for CreatedJson<T> {
-    fn register(
-        components: &mut salvo::oapi::Components,
-        operation: &mut salvo::oapi::Operation,
-    ) {
+impl<T: Serialize + Send + salvo::oapi::ToSchema + 'static> salvo::oapi::EndpointOutRegister
+    for CreatedJson<T>
+{
+    fn register(components: &mut salvo::oapi::Components, operation: &mut salvo::oapi::Operation) {
         let schema = T::to_schema(components);
         let response = salvo::oapi::Response::new("Created")
             .add_content("application/json", salvo::oapi::Content::new(schema));
-        operation.responses.insert("201", salvo::oapi::RefOr::Type(response));
+        operation
+            .responses
+            .insert("201", salvo::oapi::RefOr::Type(response));
     }
 }
 

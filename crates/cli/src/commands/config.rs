@@ -4,13 +4,12 @@ use anyhow::Context;
 use camino::Utf8PathBuf;
 use clap::Parser;
 use figment::Figment;
+use pasion_backend::util::{database_url_from_config, diesel_pool_from_config};
 use pasion_config::{ConfigurationSection, RootConfig, SyncConfig};
 use pasion_data::SystemClock;
 use rand_core::SeedableRng;
 use tokio::io::AsyncWriteExt;
 use tracing::{info, info_span};
-
-use pasion_backend::util::{database_url_from_config, diesel_pool_from_config};
 
 #[derive(Parser, Debug)]
 pub(super) struct Options {
@@ -55,16 +54,11 @@ impl Options {
             Subcommand::Dump { output } => Self::handle_dump(figment, output).await,
             Subcommand::Check => Self::handle_check(figment),
             Subcommand::Generate { output } => Self::handle_generate(figment, output).await,
-            Subcommand::Sync { prune, dry_run } => {
-                Self::handle_sync(figment, prune, dry_run).await
-            }
+            Subcommand::Sync { prune, dry_run } => Self::handle_sync(figment, prune, dry_run).await,
         }
     }
 
-    async fn handle_dump(
-        figment: &Figment,
-        dest: Option<Utf8PathBuf>,
-    ) -> anyhow::Result<ExitCode> {
+    async fn handle_dump(figment: &Figment, dest: Option<Utf8PathBuf>) -> anyhow::Result<ExitCode> {
         let _span = info_span!("cli.config.dump").entered();
 
         let root = RootConfig::extract(figment).map_err(anyhow::Error::from_boxed)?;

@@ -3,8 +3,10 @@
 //! Validates a TOTP second-factor code by looking up the user's TOTP secret
 //! from the repository and verifying the HMAC (RFC 6238).
 
-use pasion_data::BoxRepository;
-use pasion_data::flow::{StageOutcome, StageValidationError};
+use pasion_data::{
+    BoxRepository,
+    flow::{StageOutcome, StageValidationError},
+};
 use tracing::warn;
 use ulid::Ulid;
 

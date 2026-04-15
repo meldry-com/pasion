@@ -7,7 +7,7 @@
 #![allow(clippy::module_name_repetitions)]
 
 use chrono::{DateTime, Utc};
-use pasion_data::{BoxRepository, Clock};
+use pasion_data::{BoxRepository, Clock, SiteConfig, User};
 use serde::{Deserialize, Serialize};
 use ulid::Ulid;
 
@@ -15,12 +15,12 @@ use ulid::Ulid;
 // continue to work until all call-sites are migrated.
 pub use crate::handlers::common::{
     DepotExt, Requester, RequestingEntity, RouteError, UserAgentInfo,
-    extract_bound_activity_tracker, extract_session_info,
-    make_clock, make_rng, parse_user_agent,
+    extract_bound_activity_tracker, extract_session_info, make_clock, make_rng, parse_user_agent,
 };
-use crate::handlers::{BoundActivityTracker, passwords::PasswordManager};
-use crate::salvo_utils::SessionInfo;
-use pasion_data::{SiteConfig, User};
+use crate::{
+    handlers::{BoundActivityTracker, passwords::PasswordManager},
+    salvo_utils::SessionInfo,
+};
 
 pub mod auth;
 pub mod avatar;
@@ -211,6 +211,6 @@ pub struct DateFilter {
     pub before: Option<DateTime<Utc>>,
 }
 
-pub(crate) mod service;
 /// Cookie management for user registration sessions.
 pub mod registration_cookie;
+pub(crate) mod service;

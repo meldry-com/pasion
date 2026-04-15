@@ -42,7 +42,10 @@ async fn schedule_job_if_present<J: InsertableJob>(
     job: Option<J>,
 ) -> Result<(), JobError> {
     if let Some(job) = job {
-        tracing::info!(job.kind = label, "Scheduling another session maintenance batch");
+        tracing::info!(
+            job.kind = label,
+            "Scheduling another session maintenance batch"
+        );
         schedule_job_now(repo, rng, clock, job).await?;
     }
 
@@ -76,12 +79,24 @@ async fn enqueue_expiration_children(
     let mut scheduled_any = false;
 
     if let Some(ttl) = config.oauth_session_inactivity_ttl {
-        schedule_job_now(repo, rng, clock, ExpireInactiveOAuthSessionsJob::new(now - ttl)).await?;
+        schedule_job_now(
+            repo,
+            rng,
+            clock,
+            ExpireInactiveOAuthSessionsJob::new(now - ttl),
+        )
+        .await?;
         scheduled_any = true;
     }
 
     if let Some(ttl) = config.user_session_inactivity_ttl {
-        schedule_job_now(repo, rng, clock, ExpireInactiveUserSessionsJob::new(now - ttl)).await?;
+        schedule_job_now(
+            repo,
+            rng,
+            clock,
+            ExpireInactiveUserSessionsJob::new(now - ttl),
+        )
+        .await?;
         scheduled_any = true;
     }
 
@@ -131,7 +146,10 @@ impl RunnableJob for ExpireInactiveOAuthSessionsJob {
 
         let page = repo
             .oauth2_session()
-            .list(oauth_inactivity_filter(self.threshold()), self.pagination(SESSION_BATCH_SIZE))
+            .list(
+                oauth_inactivity_filter(self.threshold()),
+                self.pagination(SESSION_BATCH_SIZE),
+            )
             .await
             .map_err(JobError::retry)?;
 

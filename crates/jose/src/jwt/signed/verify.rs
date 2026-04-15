@@ -61,8 +61,7 @@ impl<T> Jwt<'_, T> {
         K: Verifier<S>,
         S: SignatureEncoding,
     {
-        let typed_sig =
-            S::try_from(&self.signature).map_err(JwtVerificationError::bad_encoding)?;
+        let typed_sig = S::try_from(&self.signature).map_err(JwtVerificationError::bad_encoding)?;
         key.verify(self.raw.signed_part().as_bytes(), &typed_sig)
             .map_err(JwtVerificationError::failed)
     }

@@ -1,8 +1,9 @@
 use chrono::Utc;
-use pasion_data::flow::{FlowSession, FlowSessionStatus};
-use pasion_data::new_id;
-use salvo::oapi::ToSchema;
-use salvo::prelude::*;
+use pasion_data::{
+    flow::{FlowSession, FlowSessionStatus},
+    new_id,
+};
+use salvo::{oapi::ToSchema, prelude::*};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use zeroize::Zeroizing;
@@ -12,10 +13,12 @@ use super::{
     get_requester, make_clock, make_rng,
 };
 use crate::handlers::{
-    account::service::password::{ChangePasswordError, change_password},
-    account::service::recovery::{
-        CompleteAccountRecoveryError, ResendAccountRecoveryByTicketError,
-        complete_account_recovery, resend_account_recovery_by_ticket,
+    account::service::{
+        password::{ChangePasswordError, change_password},
+        recovery::{
+            CompleteAccountRecoveryError, ResendAccountRecoveryByTicketError,
+            complete_account_recovery, resend_account_recovery_by_ticket,
+        },
     },
     flow::{FlowExecutor, defaults::default_password_change_flow, flow_session_store_write},
 };

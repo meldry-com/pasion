@@ -191,7 +191,8 @@ impl InsertableJob for DispatchNotificationJob {
     const QUEUE_NAME: &'static str = "dispatch-notification";
 }
 
-/// A job to process reserved notification deliveries from the notification outbox.
+/// A job to process reserved notification deliveries from the notification
+/// outbox.
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct ProcessNotificationDeliveriesJob {
     limit: usize,

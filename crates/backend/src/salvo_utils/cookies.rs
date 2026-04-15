@@ -305,7 +305,8 @@ pub trait TimedCookie: Sized + Default + Serialize + DeserializeOwned {
     /// Name of the cookie slot in the jar.
     const COOKIE_NAME: &'static str;
 
-    /// Drop entries whose embedded timestamp is older than `now - Self::max_age()`.
+    /// Drop entries whose embedded timestamp is older than `now -
+    /// Self::max_age()`.
     ///
     /// Implementers decide how to derive a timestamp from each entry (usually
     /// via a ULID field, see [`ulid_is_expired`]).

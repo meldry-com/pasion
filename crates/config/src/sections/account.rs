@@ -41,10 +41,7 @@ pub struct AccountConfig {
 
     /// Enable self-service password-based registration (default: `false`).
     /// Ignored when password login is disabled entirely.
-    #[serde(
-        default = "disabled_default",
-        skip_serializing_if = "matches_disabled"
-    )]
+    #[serde(default = "disabled_default", skip_serializing_if = "matches_disabled")]
     pub password_registration_enabled: bool,
 
     /// Require at least one verified contact method for password-based
@@ -63,10 +60,7 @@ pub struct AccountConfig {
 
     /// Permit email-based password recovery (default: `false`). Irrelevant when
     /// password login is disabled.
-    #[serde(
-        default = "disabled_default",
-        skip_serializing_if = "matches_disabled"
-    )]
+    #[serde(default = "disabled_default", skip_serializing_if = "matches_disabled")]
     pub password_recovery_enabled: bool,
 
     /// Allow users to deactivate (delete) their own account (default: `true`)
@@ -75,18 +69,12 @@ pub struct AccountConfig {
 
     /// Permit logging in via email address rather than username
     /// (default: `false`). Irrelevant when password login is disabled.
-    #[serde(
-        default = "disabled_default",
-        skip_serializing_if = "matches_disabled"
-    )]
+    #[serde(default = "disabled_default", skip_serializing_if = "matches_disabled")]
     pub login_with_email_allowed: bool,
 
     /// Require a registration token for new password-based accounts
     /// (default: `false`). Has no effect when registration is off.
-    #[serde(
-        default = "disabled_default",
-        skip_serializing_if = "matches_disabled"
-    )]
+    #[serde(default = "disabled_default", skip_serializing_if = "matches_disabled")]
     pub registration_token_required: bool,
 }
 

@@ -319,9 +319,9 @@ async fn upload_selected_avatar() -> Result<Option<String>, String> {
         )
         .await
         .map_err(|e| format!("failed to read body: {e:?}"))?;
-        return Err(text.as_string().unwrap_or_else(|| {
-            format!("HTTP {}", response.status())
-        }));
+        return Err(text
+            .as_string()
+            .unwrap_or_else(|| format!("HTTP {}", response.status())));
     }
 
     let json_value = JsFuture::from(

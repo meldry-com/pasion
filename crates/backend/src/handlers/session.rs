@@ -6,13 +6,14 @@
 //! operation (deactivated / locked / remotely ended) the caller receives
 //! an error variant that it can translate into an SPA error page.
 
-use crate::salvo_utils::{SessionInfoExt, cookies::CookieJar};
 use pasion_data::{
-    BoxRepository, BrowserSession, RepositoryError, User,
-    oauth2::OAuth2SessionFilter, personal::PersonalSessionFilter,
+    BoxRepository, BrowserSession, RepositoryError, User, oauth2::OAuth2SessionFilter,
+    personal::PersonalSessionFilter,
 };
 use pasion_policy::model::SessionCounts;
 use thiserror::Error;
+
+use crate::salvo_utils::{SessionInfoExt, cookies::CookieJar};
 
 /// Failures that can occur while loading a session.
 #[derive(Debug, Error)]

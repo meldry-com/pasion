@@ -13,25 +13,22 @@ use clap::CommandFactory;
 use console::{Alignment, Style, Term, pad_str, style};
 use dialoguer::{Confirm, FuzzySelect, Input, Password, theme::ColorfulTheme};
 use figment::Figment;
+use pasion_backend::util::{
+    diesel_pool_from_config, homeserver_connection_from_config, password_manager_from_config,
+};
 use pasion_config::{
     ConfigurationSection, ConfigurationSectionExt, DatabaseConfig, MatrixConfig, PasswordsConfig,
 };
 use pasion_data::{
-    Clock, DatabaseError, PgRepository, RepositoryAccess, SystemClock,
-    UpstreamOAuthProvider, User,
+    Clock, DatabaseError, PgRepository, RepositoryAccess, SystemClock, UpstreamOAuthProvider, User,
     queue::{ProvisionUserJob, QueueJobRepositoryExt as _},
     user::{UserEmailRepository, UserPasswordRepository, UserRepository},
 };
 use pasion_matrix::HomeserverAdmin;
 use pasion_messaging::Address;
-use rand_core::SeedableRng;
-use rand_core::RngCore;
+use rand_core::{RngCore, SeedableRng};
 use tracing::{info, warn};
 use zeroize::Zeroizing;
-
-use pasion_backend::util::{
-    diesel_pool_from_config, homeserver_connection_from_config, password_manager_from_config,
-};
 
 use super::UpstreamProviderMapping;
 
@@ -494,8 +491,7 @@ pub(super) async fn handle_register_user(
                     })
                     .await??;
 
-                    match check_and_normalize_username(&username, &mut repo, &homeserver).await
-                    {
+                    match check_and_normalize_username(&username, &mut repo, &homeserver).await {
                         Ok(localpart) => break localpart.to_owned(),
                         Err(e) => {
                             warn!("Invalid username: {e}");
@@ -512,8 +508,7 @@ pub(super) async fn handle_register_user(
                 })
                 .await??;
                 let password = Zeroizing::new(password);
-                req.hashed_password =
-                    Some(password_manager.hash(&mut rng, password).await?);
+                req.hashed_password = Some(password_manager.hash(&mut rng, password).await?);
             }
             Action::SetDisplayName => {
                 let display_name = tokio::task::spawn_blocking(|| {

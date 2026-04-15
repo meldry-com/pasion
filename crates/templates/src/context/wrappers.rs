@@ -3,8 +3,8 @@ use std::collections::BTreeMap;
 use chrono::{DateTime, Utc};
 use pasion_data::BrowserSession;
 use pasion_i18n::DataLocale;
-use rand_core::{RngCore as Rng, SeedableRng};
 use rand_chacha::ChaCha8Rng;
+use rand_core::{RngCore as Rng, SeedableRng};
 use serde::{Serialize, ser::SerializeStruct};
 
 use super::captcha::WithCaptcha;

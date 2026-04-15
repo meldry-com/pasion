@@ -4,9 +4,10 @@
 //! record.  On success the authentication is marked as completed and
 //! `email_verified` is set in the flow context.
 
-use pasion_data::Clock;
-use pasion_data::flow::{StageOutcome, StageValidationError};
-use pasion_data::{BoxRepository, RepositoryAccess};
+use pasion_data::{
+    BoxRepository, Clock, RepositoryAccess,
+    flow::{StageOutcome, StageValidationError},
+};
 
 use super::StageExecutionError;
 

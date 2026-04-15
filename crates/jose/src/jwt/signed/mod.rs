@@ -17,7 +17,6 @@ pub use self::{
     sign::JwtSignatureError,
     verify::{JwtVerificationError, NoKeyWorked},
 };
-
 use super::{header::JsonWebSignatureHeader, raw::RawJwt};
 
 // ---------------------------------------------------------------------------

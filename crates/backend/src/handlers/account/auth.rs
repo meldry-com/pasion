@@ -6,22 +6,19 @@
 use std::sync::LazyLock;
 
 use opentelemetry::{Key, KeyValue, metrics::Counter};
-use salvo::oapi::ToSchema;
-use salvo::prelude::*;
-
-use crate::salvo_utils::session::SessionInfoExt;
+use salvo::{oapi::ToSchema, prelude::*};
 use serde::{Deserialize, Serialize};
 
-use super::{
-    DepotExt, NodeType, RouteError, extract_bound_activity_tracker,
-    make_clock, make_rng,
-};
-use crate::handlers::{
-    METER, RequesterFingerprint,
-    account::service::access::{
-        PasswordLoginOutcome, PasswordLoginRequest, load_enabled_upstream_providers,
-        login_with_password, logout_browser_session,
+use super::{DepotExt, NodeType, RouteError, extract_bound_activity_tracker, make_clock, make_rng};
+use crate::{
+    handlers::{
+        METER, RequesterFingerprint,
+        account::service::access::{
+            PasswordLoginOutcome, PasswordLoginRequest, load_enabled_upstream_providers,
+            login_with_password, logout_browser_session,
+        },
     },
+    salvo_utils::session::SessionInfoExt,
 };
 
 // ── Metrics ────────────────────────────────────────────────────

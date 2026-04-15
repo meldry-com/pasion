@@ -2,20 +2,21 @@
 //!
 //! The recovery workflow currently uses `UserRecoveryRepository` for state
 //! tracking. It will be progressively migrated to use `WorkflowRepository`
-//! for unified workflow state management. The flow engine (`crate::handlers::flow`) can
-//! already orchestrate recovery as a `default-recovery` flow.
+//! for unified workflow state management. The flow engine
+//! (`crate::handlers::flow`) can already orchestrate recovery as a
+//! `default-recovery` flow.
 
 use std::{net::IpAddr, str::FromStr};
 
 use anyhow::{Context as _, Error as AnyhowError};
 use lettre::Address;
 use pasion_data::{
-    BoxRepository, RepositoryAccess, RepositoryError,
+    BoxRepository, Clock, RepositoryAccess, RepositoryError, UserRecoverySession,
+    UserRecoveryTicket,
     user::{UserEmailRepository, UserPasswordRepository, UserRecoveryRepository, UserRepository},
 };
-use pasion_data::{Clock, UserRecoverySession, UserRecoveryTicket};
-use rand_core::RngCore;
 use rand_chacha::rand_core::CryptoRngCore;
+use rand_core::RngCore;
 use thiserror::Error;
 use ulid::Ulid;
 use zeroize::Zeroizing;
@@ -196,7 +197,10 @@ pub async fn resend_account_recovery(
         return Err(ResendAccountRecoveryError::AlreadyConsumed);
     }
 
-    if let Err(error) = limiter.check_account_recovery(requester, &session.email).await {
+    if let Err(error) = limiter
+        .check_account_recovery(requester, &session.email)
+        .await
+    {
         tracing::warn!(error = &error as &dyn std::error::Error);
         return Err(ResendAccountRecoveryError::RateLimited);
     }

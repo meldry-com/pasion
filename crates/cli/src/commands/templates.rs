@@ -11,6 +11,7 @@ use camino::Utf8PathBuf;
 use chrono::DateTime;
 use clap::Parser;
 use figment::Figment;
+use pasion_backend::util::{site_config_from_config, templates_from_config};
 use pasion_config::{
     AccountConfig, BrandingConfig, CaptchaConfig, ConfigurationSection, ConfigurationSectionExt,
     ExperimentalConfig, MatrixConfig, PasswordsConfig, SmsConfig, TemplatesConfig,
@@ -18,8 +19,6 @@ use pasion_config::{
 use pasion_data::{Clock, SystemClock};
 use rand_core::SeedableRng;
 use tracing::info_span;
-
-use pasion_backend::util::{site_config_from_config, templates_from_config};
 
 /// Top-level options for the `templates` command.
 #[derive(Parser, Debug)]
@@ -51,22 +50,20 @@ impl Options {
         let _span = info_span!("cli.templates.check").entered();
 
         // ── Load every config section the renderer needs ─────────────
-        let tpl_cfg = TemplatesConfig::extract_or_default(figment)
-            .map_err(anyhow::Error::from_boxed)?;
-        let brand_cfg = BrandingConfig::extract_or_default(figment)
-            .map_err(anyhow::Error::from_boxed)?;
-        let matrix_cfg =
-            MatrixConfig::extract(figment).map_err(anyhow::Error::from_boxed)?;
-        let exp_cfg = ExperimentalConfig::extract_or_default(figment)
-            .map_err(anyhow::Error::from_boxed)?;
-        let pw_cfg = PasswordsConfig::extract_or_default(figment)
-            .map_err(anyhow::Error::from_boxed)?;
-        let acct_cfg = AccountConfig::extract_or_default(figment)
-            .map_err(anyhow::Error::from_boxed)?;
-        let captcha_cfg = CaptchaConfig::extract_or_default(figment)
-            .map_err(anyhow::Error::from_boxed)?;
-        let sms_cfg = SmsConfig::extract_or_default(figment)
-            .map_err(anyhow::Error::from_boxed)?;
+        let tpl_cfg =
+            TemplatesConfig::extract_or_default(figment).map_err(anyhow::Error::from_boxed)?;
+        let brand_cfg =
+            BrandingConfig::extract_or_default(figment).map_err(anyhow::Error::from_boxed)?;
+        let matrix_cfg = MatrixConfig::extract(figment).map_err(anyhow::Error::from_boxed)?;
+        let exp_cfg =
+            ExperimentalConfig::extract_or_default(figment).map_err(anyhow::Error::from_boxed)?;
+        let pw_cfg =
+            PasswordsConfig::extract_or_default(figment).map_err(anyhow::Error::from_boxed)?;
+        let acct_cfg =
+            AccountConfig::extract_or_default(figment).map_err(anyhow::Error::from_boxed)?;
+        let captcha_cfg =
+            CaptchaConfig::extract_or_default(figment).map_err(anyhow::Error::from_boxed)?;
+        let sms_cfg = SmsConfig::extract_or_default(figment).map_err(anyhow::Error::from_boxed)?;
 
         // ── Deterministic clock / RNG when stabilising ───────────────
         let now = if stabilise {
@@ -82,8 +79,7 @@ impl Options {
         };
 
         // ── Build renderer ───────────────────────────────────────────
-        let url_builder =
-            pasion_data::UrlBuilder::new("https://example.com/".parse()?, None, None);
+        let url_builder = pasion_data::UrlBuilder::new("https://example.com/".parse()?, None, None);
 
         let site_config = site_config_from_config(
             &brand_cfg,

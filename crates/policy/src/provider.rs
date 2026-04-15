@@ -7,10 +7,13 @@
 use async_trait::async_trait;
 use pasion_data::PolicyData;
 
-use crate::model::{
-    AuthorizationGrantInput, ClientRegistrationInput, EmailInput, EvaluationResult, RegisterInput,
+use crate::{
+    EvaluationError, InstantiateError, LoadError,
+    model::{
+        AuthorizationGrantInput, ClientRegistrationInput, EmailInput, EvaluationResult,
+        RegisterInput,
+    },
 };
-use crate::{EvaluationError, InstantiateError, LoadError};
 
 /// A policy evaluator instance capable of evaluating different policy types.
 ///

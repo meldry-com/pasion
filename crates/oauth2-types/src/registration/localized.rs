@@ -88,10 +88,7 @@ impl<T> Localized<T> {
     }
 
     /// Construct from separate parts (used during deserialization).
-    pub(crate) fn from_parts(
-        default_value: Option<T>,
-        tagged: Vec<(LanguageTag, T)>,
-    ) -> Self {
+    pub(crate) fn from_parts(default_value: Option<T>, tagged: Vec<(LanguageTag, T)>) -> Self {
         let mut inst = Self {
             default_value,
             tagged,

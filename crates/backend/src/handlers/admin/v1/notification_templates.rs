@@ -1,17 +1,18 @@
 //! Admin endpoints for notification template management.
 //!
 //! - `GET  /api/admin/v1/notification-templates` — list known template keys
-//! - `POST /api/admin/v1/notification-templates/publish` — publish a new template version
+//! - `POST /api/admin/v1/notification-templates/publish` — publish a new
+//!   template version
 
 use pasion_data::RepositoryAccess;
-use salvo::prelude::*;
+use salvo::{oapi::ToSchema, prelude::*};
 use schemars::JsonSchema;
-use salvo::oapi::ToSchema;
 use serde::{Deserialize, Serialize};
 
-use crate::handlers::admin::call_context::extract_call_context;
-use crate::{AppError, CreatedJsonResult, JsonResult};
-use crate::handlers::admin::CreatedJson;
+use crate::{
+    AppError, CreatedJsonResult, JsonResult,
+    handlers::admin::{CreatedJson, call_context::extract_call_context},
+};
 
 /// Describes a single notification template key.
 #[derive(Serialize, JsonSchema, ToSchema)]
@@ -56,7 +57,8 @@ pub struct PublishedTemplateResponse {
     pub id: String,
     /// The template key.
     pub template_key: String,
-    /// Monotonically increasing version number within the template key and channel.
+    /// Monotonically increasing version number within the template key and
+    /// channel.
     pub version: u32,
     /// The delivery channel.
     pub channel: String,
@@ -111,11 +113,14 @@ pub async fn publish_handler(
     depot: &Depot,
 ) -> CreatedJsonResult<PublishedTemplateResponse> {
     let ctx = extract_call_context(req, depot).await?;
-    let crate::handlers::admin::call_context::CallContext { mut repo, clock, .. } = ctx;
+    let crate::handlers::admin::call_context::CallContext {
+        mut repo, clock, ..
+    } = ctx;
 
-    let body: PublishTemplateRequest = req.parse_json().await.map_err(|e| {
-        AppError::bad_request(format!("Invalid request body: {e}"))
-    })?;
+    let body: PublishTemplateRequest = req
+        .parse_json()
+        .await
+        .map_err(|e| AppError::bad_request(format!("Invalid request body: {e}")))?;
 
     if body.template_key.is_empty() {
         return Err(AppError::bad_request("template_key is required"));

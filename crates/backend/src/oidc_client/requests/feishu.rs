@@ -10,12 +10,12 @@
 
 use std::collections::HashMap;
 
-use crate::outbound_http::RequestBuilderExt;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use url::Url;
 
 use super::super::error::{TokenRequestError, UserInfoError};
+use crate::outbound_http::RequestBuilderExt;
 
 /// Feishu (China) app_access_token endpoint.
 pub const FEISHU_APP_TOKEN_ENDPOINT: &str =

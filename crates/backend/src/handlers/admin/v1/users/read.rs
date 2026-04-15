@@ -2,19 +2,23 @@
 //
 // SPDX-License-Identifier: AGPL-3.0-only
 
-//! Read endpoints: `GET /users`, `GET /users/{id}`, `GET /users/by-username/{username}`.
+//! Read endpoints: `GET /users`, `GET /users/{id}`, `GET
+//! /users/by-username/{username}`.
 
 use pasion_data::user::UserFilter;
 use salvo::prelude::*;
 use schemars::JsonSchema;
 use serde::Deserialize;
 
-use crate::AppError;
-use crate::JsonResult;
-use crate::handlers::admin::call_context::extract_call_context;
-use crate::handlers::admin::model::{Resource, User};
-use crate::handlers::admin::params::{IncludeCount, extract_pagination, extract_ulid_param};
-use crate::handlers::admin::response::{PaginatedResponse, SingleResponse};
+use crate::{
+    AppError, JsonResult,
+    handlers::admin::{
+        call_context::extract_call_context,
+        model::{Resource, User},
+        params::{IncludeCount, extract_pagination, extract_ulid_param},
+        response::{PaginatedResponse, SingleResponse},
+    },
+};
 
 #[derive(Deserialize, JsonSchema)]
 pub struct UsernamePathParam {
@@ -25,10 +29,7 @@ pub struct UsernamePathParam {
 
 #[endpoint]
 #[tracing::instrument(name = "handler.admin.v1.users.by_username", skip_all)]
-pub async fn get_by_username(
-    req: &mut Request,
-    depot: &Depot,
-) -> JsonResult<SingleResponse<User>> {
+pub async fn get_by_username(req: &mut Request, depot: &Depot) -> JsonResult<SingleResponse<User>> {
     let call_context = extract_call_context(req, depot).await?;
     let crate::handlers::admin::call_context::CallContext { mut repo, .. } = call_context;
     let username: String = req
@@ -47,10 +48,7 @@ pub async fn get_by_username(
 
 #[endpoint]
 #[tracing::instrument(name = "handler.admin.v1.users.get", skip_all)]
-pub async fn get_user(
-    req: &mut Request,
-    depot: &Depot,
-) -> JsonResult<SingleResponse<User>> {
+pub async fn get_user(req: &mut Request, depot: &Depot) -> JsonResult<SingleResponse<User>> {
     let call_context = extract_call_context(req, depot).await?;
     let crate::handlers::admin::call_context::CallContext { mut repo, .. } = call_context;
     let id = extract_ulid_param(req)?;
@@ -141,10 +139,7 @@ impl std::fmt::Display for FilterParams {
 
 #[endpoint]
 #[tracing::instrument(name = "handler.admin.v1.users.list", skip_all)]
-pub async fn list_users(
-    req: &mut Request,
-    depot: &Depot,
-) -> JsonResult<PaginatedResponse<User>> {
+pub async fn list_users(req: &mut Request, depot: &Depot) -> JsonResult<PaginatedResponse<User>> {
     let call_context = extract_call_context(req, depot).await?;
     let crate::handlers::admin::call_context::CallContext { mut repo, .. } = call_context;
     let (pagination, include_count) = extract_pagination(req)?;

@@ -67,11 +67,7 @@ Error details: {e}
 /// Send a `whoami` request with a deliberately invalid token to verify that
 /// the homeserver correctly rejects it (HTTP 401).  Other status codes hint
 /// at connectivity or configuration problems.
-pub(super) async fn check_whoami(
-    http: &reqwest::Client,
-    hs_api: &Url,
-    issuer: &str,
-) {
+pub(super) async fn check_whoami(http: &reqwest::Client, hs_api: &Url, issuer: &str) {
     let whoami_url = match hs_api.join("/_matrix/client/v3/account/whoami") {
         Ok(u) => u,
         Err(e) => {
@@ -102,16 +98,9 @@ Error details: {e}
 }
 
 /// Interpret the HTTP status returned by the `whoami` endpoint.
-fn diagnose_whoami_status(
-    status: StatusCode,
-    whoami_url: &Url,
-    body: &str,
-    _issuer: &str,
-) {
+fn diagnose_whoami_status(status: StatusCode, whoami_url: &Url, body: &str, _issuer: &str) {
     match status.as_u16() {
-        401 => info!(
-            r#"Homeserver at "{whoami_url}" correctly rejected an invalid token."#
-        ),
+        401 => info!(r#"Homeserver at "{whoami_url}" correctly rejected an invalid token."#),
 
         0..=399 => error!(
             r#"Homeserver at "{whoami_url}" replied with {status}.
@@ -159,17 +148,11 @@ pub(super) async fn check_pasion_api(
         }
     };
 
-    let result = http
-        .get(api_url.as_str())
-        .bearer_auth(secret)
-        .send()
-        .await;
+    let result = http.get(api_url.as_str()).bearer_auth(secret).send().await;
 
     match result {
         Ok(resp) if resp.status() == StatusCode::BAD_REQUEST => {
-            info!(
-                r#"Palpo Pasion API is reachable with authentication at "{api_url}"."#
-            );
+            info!(r#"Palpo Pasion API is reachable with authentication at "{api_url}"."#);
         }
         Ok(resp) => {
             let code = resp.status();

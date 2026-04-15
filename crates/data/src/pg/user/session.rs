@@ -5,11 +5,8 @@ use chrono::{DateTime, Utc};
 use diesel::prelude::*;
 use diesel_async::RunQueryDsl;
 use pasion_data::{
-    Authentication, AuthenticationMethod, BrowserSession, Clock, Password,
+    Authentication, AuthenticationMethod, BrowserSession, Clock, Page, Pagination, Password,
     UpstreamOAuthAuthorizationSession, User, new_id,
-};
-use pasion_data::{
-    Page, Pagination,
     pagination::{Node, PaginationDirection},
     user::{BrowserSessionFilter, BrowserSessionRepository},
 };

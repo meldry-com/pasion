@@ -1,11 +1,9 @@
 use std::{collections::HashMap, sync::LazyLock};
 
-use crate::outbound_http::RequestBuilderExt;
 use headers::authorization::{Basic, Bearer, Credentials as _};
 use http::StatusCode;
 use oauth2_types::errors::{ClientError, ClientErrorCode};
-use pasion_data::{Client, JwksOrJwksUri};
-use pasion_data::{RepositoryAccess, oauth2::OAuth2ClientRepository};
+use pasion_data::{Client, JwksOrJwksUri, RepositoryAccess, oauth2::OAuth2ClientRepository};
 use pasion_iana::oauth::OAuthClientAuthenticationMethod;
 use pasion_jose::{jwk::PublicJsonWebKeySet, jwt::Jwt};
 use pasion_keystore::Encrypter;
@@ -17,7 +15,7 @@ use serde::{Deserialize, de::DeserializeOwned};
 use serde_json::Value;
 use thiserror::Error;
 
-use crate::record_error;
+use crate::{outbound_http::RequestBuilderExt, record_error};
 
 static JWT_BEARER_CLIENT_ASSERTION: &str = "urn:ietf:params:oauth:client-assertion-type:jwt-bearer";
 

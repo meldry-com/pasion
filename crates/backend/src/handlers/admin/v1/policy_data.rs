@@ -2,40 +2,32 @@
 //
 // SPDX-License-Identifier: AGPL-3.0-only
 
-use pasion_data::RepositoryAccess;
-use pasion_data::audit::AdminOperation;
+use pasion_data::{RepositoryAccess, audit::AdminOperation};
 use salvo::prelude::*;
 use schemars::JsonSchema;
 use serde::Deserialize;
 
-use crate::AppError;
-use crate::CreatedJsonResult;
-use crate::JsonResult;
-use crate::handlers::{
-    admin::CreatedJson,
-    admin::call_context::extract_call_context,
-    admin::model::PolicyData,
-    admin::params::extract_ulid_param,
-    admin::response::SingleResponse,
-    common::DepotExt,
+use crate::{
+    AppError, CreatedJsonResult, JsonResult,
+    handlers::{
+        admin::{
+            CreatedJson, call_context::extract_call_context, model::PolicyData,
+            params::extract_ulid_param, response::SingleResponse,
+        },
+        common::DepotExt,
+    },
 };
 
 /// Fetch a single policy data record by its ULID.
 #[endpoint]
 #[tracing::instrument(name = "handler.admin.v1.policy_data.get", skip_all)]
-pub async fn get_by_id(
-    req: &mut Request,
-    depot: &Depot,
-) -> JsonResult<SingleResponse<PolicyData>> {
+pub async fn get_by_id(req: &mut Request, depot: &Depot) -> JsonResult<SingleResponse<PolicyData>> {
     let ctx = extract_call_context(req, depot).await?;
     let crate::handlers::admin::call_context::CallContext { mut repo, .. } = ctx;
     let record_id = extract_ulid_param(req)?;
 
-    let entry = repo
-        .policy_data()
-        .get()
-        .await?
-        .ok_or_else(|| {
+    let entry =
+        repo.policy_data().get().await?.ok_or_else(|| {
             AppError::not_found(format!("Policy data with ID {record_id} not found"))
         })?;
 
@@ -94,15 +86,9 @@ pub async fn set_data(
     let mut rng = crate::handlers::account::make_rng();
     let factory = depot.policy_factory()?;
 
-    let body: SetPolicyDataRequest = req
-        .parse_json()
-        .await
-        .map_err(AppError::internal)?;
+    let body: SetPolicyDataRequest = req.parse_json().await.map_err(AppError::internal)?;
 
-    let record = repo
-        .policy_data()
-        .set(&mut rng, &clock, body.data)
-        .await?;
+    let record = repo.policy_data().set(&mut rng, &clock, body.data).await?;
 
     // Validate by attempting to load the new data into the policy engine.
     // Rolls back on failure since we haven't called save() yet.
@@ -137,11 +123,10 @@ pub async fn set_data(
 
 #[cfg(test)]
 mod tests {
-    use hyper::Request;
-    use hyper::StatusCode;
+    use hyper::{Request, StatusCode};
     use insta::assert_json_snapshot;
     use ulid::Ulid;
-    
+
     use crate::handlers::test_utils::{RequestBuilderExt, ResponseExt, TestState, setup};
 
     #[tokio::test]

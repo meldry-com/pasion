@@ -6,9 +6,8 @@ use diesel::prelude::*;
 use diesel_async::RunQueryDsl;
 use ipnetwork::IpNetwork;
 use oauth2_types::scope::{Scope, ScopeToken};
-use pasion_data::{BrowserSession, Client, Clock, Session, SessionState, User, new_id};
 use pasion_data::{
-    Page, Pagination,
+    BrowserSession, Client, Clock, Page, Pagination, Session, SessionState, User, new_id,
     oauth2::{OAuth2SessionFilter, OAuth2SessionRepository},
     pagination::{Node, PaginationDirection},
 };

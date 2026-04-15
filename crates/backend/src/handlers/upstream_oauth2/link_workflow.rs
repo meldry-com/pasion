@@ -1,10 +1,11 @@
 use std::net::IpAddr;
 
-use crate::salvo_utils::SessionInfo;
 use anyhow::Error as AnyhowError;
 use minijinja::Environment;
 use pasion_data::{
-    BoxRepository, Pagination, RepositoryAccess, RepositoryError,
+    BoxRepository, BrowserSession, Clock, Pagination, PostAuthAction, RepositoryAccess,
+    RepositoryError, SiteConfig, UpstreamOAuthAuthorizationSession, UpstreamOAuthLink,
+    UpstreamOAuthProvider, UpstreamOAuthProviderOnConflict, UrlBuilder, User, UserRegistration,
     upstream_oauth2::{
         UpstreamOAuthLinkFilter, UpstreamOAuthLinkRepository, UpstreamOAuthProviderRepository,
         UpstreamOAuthSessionRepository,
@@ -13,11 +14,6 @@ use pasion_data::{
         BrowserSessionRepository, UserEmailRepository, UserRegistrationRepository, UserRepository,
     },
 };
-use pasion_data::{
-    BrowserSession, Clock, SiteConfig, UpstreamOAuthAuthorizationSession, UpstreamOAuthLink,
-    UpstreamOAuthProvider, UpstreamOAuthProviderOnConflict, User, UserRegistration,
-};
-use pasion_data::{PostAuthAction, UrlBuilder};
 use pasion_jose::jwt::Jwt;
 use pasion_matrix::HomeserverAdmin;
 use pasion_policy::{Policy, RegisterInput, RegistrationMethod, Requester as PolicyRequester};
@@ -26,12 +22,15 @@ use serde_json::{Map as JsonMap, Value as JsonValue};
 use thiserror::Error;
 use ulid::Ulid;
 
-use crate::handlers::{
-    post_auth::OptionalPostAuthAction,
-    upstream_oauth2::{
-        UpstreamSessionsCookie,
-        template::{AttributeMappingContext, environment},
+use crate::{
+    handlers::{
+        post_auth::OptionalPostAuthAction,
+        upstream_oauth2::{
+            UpstreamSessionsCookie,
+            template::{AttributeMappingContext, environment},
+        },
     },
+    salvo_utils::SessionInfo,
 };
 
 const DEFAULT_LOCALPART_TEMPLATE: &str = "{{ user.preferred_username }}";

@@ -7,17 +7,17 @@
 //!   provider-agnostic for standard OIDC, and provider-specific for Chinese
 //!   platforms (QQ, WeChat, WeCom, Feishu, DingTalk).
 //!
-//! - **Handler layer** (this module): User-facing flow orchestration
-//!   (session management, link/unlink, attribute mapping, conflict resolution).
-//!   This logic is delegated to `upstream_link_workflow.rs`.
+//! - **Handler layer** (this module): User-facing flow orchestration (session
+//!   management, link/unlink, attribute mapping, conflict resolution). This
+//!   logic is delegated to `upstream_link_workflow.rs`.
 //!
 //! The `ConnectorRegistry` provides runtime provider lookup. Each upstream
 //! OAuth2 provider is NOT a `ConnectorProvider` (that's for homeservers).
-//! Instead, upstream providers are managed through `UpstreamOAuthProviderRepository`.
+//! Instead, upstream providers are managed through
+//! `UpstreamOAuthProviderRepository`.
 
 use std::string::FromUtf8Error;
 
-use crate::oidc_client::types::client_credentials::ClientCredentials;
 use pasion_data::{UpstreamOAuthProvider, UpstreamOAuthProviderTokenAuthMethod};
 use pasion_iana::jose::JsonWebSignatureAlg;
 use pasion_keystore::{DecryptError, Encrypter, Keystore};
@@ -25,6 +25,8 @@ use pkcs8::DecodePrivateKey;
 use serde::Deserialize;
 use thiserror::Error;
 use url::Url;
+
+use crate::oidc_client::types::client_credentials::ClientCredentials;
 
 pub mod authorize;
 pub mod backchannel_logout;

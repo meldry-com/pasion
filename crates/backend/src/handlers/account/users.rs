@@ -5,11 +5,13 @@ use super::{
     DepotExt, NodeType, RouteError, extract_bound_activity_tracker, extract_session_info,
     get_requester, make_clock, make_rng,
 };
-use crate::handlers::account::service::profile::{
-    AccountProfileError, DeactivateAccountOutcome,
-    allow_cross_signing_reset as allow_cross_signing_reset_service, deactivate_current_account,
+use crate::{
+    handlers::account::service::profile::{
+        AccountProfileError, DeactivateAccountOutcome,
+        allow_cross_signing_reset as allow_cross_signing_reset_service, deactivate_current_account,
+    },
+    services::user_profile::{self, UserProfileServiceError},
 };
-use crate::services::user_profile::{self, UserProfileServiceError};
 
 // ── PATCH /api/v1/viewer/profile ────────────────────────────────
 
@@ -247,8 +249,8 @@ mod tests {
         user::{BrowserSessionRepository, UserRepository},
     };
     use pasion_matrix::{HomeserverAdmin, ProvisionRequest};
-    use rand_core::SeedableRng;
     use rand_chacha::ChaChaRng;
+    use rand_core::SeedableRng;
     use ulid::Ulid;
 
     use crate::{
@@ -316,11 +318,7 @@ mod tests {
         );
         assert_eq!(stored.preferred_locale.as_deref(), Some("zh-CN"));
 
-        let matrix_user = state
-            .homeserver_admin
-            .query_user(&username)
-            .await
-            .unwrap();
+        let matrix_user = state.homeserver_admin.query_user(&username).await.unwrap();
         assert_eq!(matrix_user.displayname.as_deref(), Some("Alice Example"));
     }
 }

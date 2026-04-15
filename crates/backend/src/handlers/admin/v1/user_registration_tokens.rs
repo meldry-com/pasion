@@ -2,30 +2,22 @@
 //
 // SPDX-License-Identifier: AGPL-3.0-only
 
-use chrono::DateTime;
-use chrono::Utc;
-use pasion_data::RepositoryAccess;
-use pasion_data::audit::AdminOperation;
-use pasion_data::user::UserRegistrationTokenFilter;
+use chrono::{DateTime, Utc};
+use pasion_data::{RepositoryAccess, audit::AdminOperation, user::UserRegistrationTokenFilter};
 use rand::distr::{Alphanumeric, SampleString};
 use salvo::prelude::*;
 use schemars::JsonSchema;
-use serde::Deserialize;
-use serde::Deserializer;
+use serde::{Deserialize, Deserializer};
 
-use crate::AppError;
-use crate::CreatedJsonResult;
-use crate::JsonResult;
-use crate::handlers::admin::{
-    CreatedJson,
-    call_context::extract_call_context,
-    model::Resource,
-    model::UserRegistrationToken,
-    params::IncludeCount,
-    params::extract_pagination,
-    params::extract_ulid_param,
-    response::PaginatedResponse,
-    response::SingleResponse,
+use crate::{
+    AppError, CreatedJsonResult, JsonResult,
+    handlers::admin::{
+        CreatedJson,
+        call_context::extract_call_context,
+        model::{Resource, UserRegistrationToken},
+        params::{IncludeCount, extract_pagination, extract_ulid_param},
+        response::{PaginatedResponse, SingleResponse},
+    },
 };
 
 /// Payload for `POST /api/admin/v1/user-registration-tokens`.
@@ -38,7 +30,8 @@ pub struct AddRequest {
     /// Cap on how many times this token may be redeemed. Unlimited when absent.
     usage_limit: Option<u32>,
 
-    /// Point in time after which the token is no longer valid. Never expires when absent.
+    /// Point in time after which the token is no longer valid. Never expires
+    /// when absent.
     expires_at: Option<DateTime<Utc>>,
 }
 
@@ -57,10 +50,7 @@ pub async fn add_token(
         ..
     } = ctx;
     let mut rng = crate::handlers::account::make_rng();
-    let body: AddRequest = req
-        .parse_json()
-        .await
-        .map_err(AppError::internal)?;
+    let body: AddRequest = req.parse_json().await.map_err(AppError::internal)?;
 
     // Fall back to a randomly generated token string
     let token_str = body
@@ -126,9 +116,7 @@ pub async fn get_token(
         .lookup(target_id)
         .await?
         .ok_or_else(|| {
-            AppError::not_found(format!(
-                "Registration token with ID {target_id} not found"
-            ))
+            AppError::not_found(format!("Registration token with ID {target_id} not found"))
         })?;
 
     Ok(Json(SingleResponse::new_canonical(
@@ -184,7 +172,8 @@ impl std::fmt::Display for FilterParams {
     }
 }
 
-/// List registration tokens with optional filtering and cursor-based pagination.
+/// List registration tokens with optional filtering and cursor-based
+/// pagination.
 #[endpoint]
 #[tracing::instrument(name = "handler.admin.v1.registration_tokens.list", skip_all)]
 pub async fn list_tokens(
@@ -265,9 +254,7 @@ pub async fn revoke_token(
         .lookup(target_id)
         .await?
         .ok_or_else(|| {
-            AppError::not_found(format!(
-                "Registration token with ID {target_id} not found"
-            ))
+            AppError::not_found(format!("Registration token with ID {target_id} not found"))
         })?;
 
     if entry.revoked_at.is_some() {
@@ -276,10 +263,7 @@ pub async fn revoke_token(
         )));
     }
 
-    let revoked = repo
-        .user_registration_token()
-        .revoke(&clock, entry)
-        .await?;
+    let revoked = repo.user_registration_token().revoke(&clock, entry).await?;
 
     crate::handlers::admin::audit_helper::record_admin_operation(
         &mut repo,
@@ -319,9 +303,7 @@ pub async fn unrevoke_token(
         .lookup(target_id)
         .await?
         .ok_or_else(|| {
-            AppError::not_found(format!(
-                "Registration token with ID {target_id} not found"
-            ))
+            AppError::not_found(format!("Registration token with ID {target_id} not found"))
         })?;
 
     if entry.revoked_at.is_none() {
@@ -384,19 +366,14 @@ pub async fn update_token(
         mut repo, clock, ..
     } = ctx;
     let target_id = extract_ulid_param(req)?;
-    let body: UpdateRequest = req
-        .parse_json()
-        .await
-        .map_err(AppError::internal)?;
+    let body: UpdateRequest = req.parse_json().await.map_err(AppError::internal)?;
 
     let mut entry = repo
         .user_registration_token()
         .lookup(target_id)
         .await?
         .ok_or_else(|| {
-            AppError::not_found(format!(
-                "Registration token with ID {target_id} not found"
-            ))
+            AppError::not_found(format!("Registration token with ID {target_id} not found"))
         })?;
 
     // Patch expiry when the field was explicitly supplied
@@ -426,13 +403,12 @@ pub async fn update_token(
 #[cfg(test)]
 mod tests {
     use chrono::Duration;
-    use hyper::Request;
-    use hyper::StatusCode;
+    use hyper::{Request, StatusCode};
     use insta::assert_json_snapshot;
     use pasion_data::Clock as _;
     use serde_json::json;
     use ulid::Ulid;
-    
+
     use crate::handlers::test_utils::{RequestBuilderExt, ResponseExt, TestState, setup};
 
     #[tokio::test]
@@ -2262,10 +2238,7 @@ mod tests {
         let body: serde_json::Value = response.json();
         assert_eq!(
             body["errors"][0]["title"],
-            format!(
-                "Registration token with ID {} is not revoked",
-                reg_token.id
-            )
+            format!("Registration token with ID {} is not revoked", reg_token.id)
         );
     }
 

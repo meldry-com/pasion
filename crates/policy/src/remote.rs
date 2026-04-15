@@ -11,8 +11,10 @@
 //!
 //! - `POST {base_url}/evaluate/email` - Email policy evaluation
 //! - `POST {base_url}/evaluate/register` - Registration policy evaluation
-//! - `POST {base_url}/evaluate/client_registration` - Client registration evaluation
-//! - `POST {base_url}/evaluate/authorization_grant` - Authorization grant evaluation
+//! - `POST {base_url}/evaluate/client_registration` - Client registration
+//!   evaluation
+//! - `POST {base_url}/evaluate/authorization_grant` - Authorization grant
+//!   evaluation
 //! - `POST {base_url}/data` - Dynamic data update (optional)
 //!
 //! ### Request Format
@@ -43,12 +45,14 @@ use async_trait::async_trait;
 use pasion_data::PolicyData;
 use serde::Deserialize;
 
-use crate::model::{
-    AuthorizationGrantInput, ClientRegistrationInput, EmailInput, EvaluationResult, RegisterInput,
-    Violation,
+use crate::{
+    EvaluationError, InstantiateError, LoadError,
+    model::{
+        AuthorizationGrantInput, ClientRegistrationInput, EmailInput, EvaluationResult,
+        RegisterInput, Violation,
+    },
+    provider::{PolicyEvaluator, PolicyProviderFactory},
 };
-use crate::provider::{PolicyEvaluator, PolicyProviderFactory};
-use crate::{EvaluationError, InstantiateError, LoadError};
 
 /// Remote HTTP policy provider factory.
 ///
@@ -61,8 +65,7 @@ pub struct RemoteProviderFactory {
 impl RemoteProviderFactory {
     /// Create a new remote provider factory.
     ///
-    /// - `base_url`: The base URL of the remote policy service
-    ///   (e.g., `http://localhost:8181`)
+    /// - `base_url`: The base URL of the remote policy service (e.g., `http://localhost:8181`)
     /// - `client`: A shared `reqwest::Client` for making HTTP requests
     #[must_use]
     pub fn new(base_url: String, client: reqwest::Client) -> Self {

@@ -5,9 +5,8 @@ use chrono::{DateTime, Utc};
 use diesel::prelude::*;
 use diesel_async::RunQueryDsl;
 use oauth2_types::scope::{Scope, ScopeToken};
-use pasion_data::{Clock, Session, SessionState, User};
 use pasion_data::{
-    Page, Pagination,
+    Clock, Page, Pagination, Session, SessionState, User,
     app_session::{AppSession, AppSessionFilter, AppSessionRepository, AppSessionState},
     pagination::PaginationDirection,
 };
@@ -241,21 +240,22 @@ impl AppSessionRepository for PgAppSessionRepository<'_> {
 
 #[cfg(test)]
 mod tests {
-    use crate::PgRepositoryFactory;
     use chrono::Duration;
     use oauth2_types::{
         requests::GrantType,
         scope::{OPENID, Scope},
     };
-    use pasion_data::clock::MockClock;
     use pasion_data::{
-        Pagination, RepositoryAccess,
+        Pagination, RepositoryAccess, RepositoryAccess as _, RepositoryFactory as _,
+        RepositoryTransaction as _,
         app_session::{AppSession, AppSessionFilter},
+        clock::MockClock,
         oauth2::OAuth2SessionRepository,
     };
-    use pasion_data::{RepositoryAccess as _, RepositoryFactory as _, RepositoryTransaction as _};
     use rand::SeedableRng;
     use rand_chacha::ChaChaRng;
+
+    use crate::PgRepositoryFactory;
 
     #[tokio::test]
     async fn test_app_repo() {

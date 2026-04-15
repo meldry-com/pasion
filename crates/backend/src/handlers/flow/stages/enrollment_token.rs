@@ -7,8 +7,10 @@
 //! invitation).
 
 use chrono::Utc;
-use pasion_data::flow::{StageOutcome, StageValidationError};
-use pasion_data::{BoxRepository, RepositoryAccess};
+use pasion_data::{
+    BoxRepository, RepositoryAccess,
+    flow::{StageOutcome, StageValidationError},
+};
 
 use super::StageExecutionError;
 

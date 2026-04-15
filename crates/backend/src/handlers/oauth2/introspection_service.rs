@@ -5,12 +5,13 @@ use oauth2_types::{
     scope::{Scope, ScopeToken},
 };
 use pasion_data::{
-    BoxRepository, RepositoryAccess, RepositoryError,
+    BoxRepository, Clock, RepositoryAccess, RepositoryError, TokenFormatError, TokenType,
     oauth2::{OAuth2AccessTokenRepository, OAuth2RefreshTokenRepository, OAuth2SessionRepository},
-    personal::{PersonalAccessTokenRepository, PersonalSessionRepository},
+    personal::{
+        PersonalAccessTokenRepository, PersonalSessionRepository, session::PersonalSessionOwner,
+    },
     user::UserRepository,
 };
-use pasion_data::{Clock, TokenFormatError, TokenType, personal::session::PersonalSessionOwner};
 use pasion_iana::oauth::OAuthTokenTypeHint;
 use thiserror::Error;
 use ulid::Ulid;

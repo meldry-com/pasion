@@ -192,7 +192,8 @@ impl ConfigurationSection for EmailConfig {
             e
         };
 
-        let require = |field: &'static str| field_error(figment::error::Error::missing_field(field), field);
+        let require =
+            |field: &'static str| field_error(figment::error::Error::missing_field(field), field);
 
         let reject = |field: &'static str, allowed: &'static [&'static str]| {
             field_error(figment::error::Error::unknown_field(field, allowed), field)
@@ -226,7 +227,16 @@ impl ConfigurationSection for EmailConfig {
                 if self.command.is_some() {
                     return Err(reject(
                         "command",
-                        &["from", "reply_to", "transport", "mode", "hostname", "port", "username", "password"],
+                        &[
+                            "from",
+                            "reply_to",
+                            "transport",
+                            "mode",
+                            "hostname",
+                            "port",
+                            "username",
+                            "password",
+                        ],
                     )
                     .into());
                 }

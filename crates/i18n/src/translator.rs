@@ -158,22 +158,20 @@ impl Translator {
                 source,
             })?;
 
-            let resource = FluentResource::try_new(source).map_err(|(_, errors)| {
-                LoadError::ParseFtl {
+            let resource =
+                FluentResource::try_new(source).map_err(|(_, errors)| LoadError::ParseFtl {
                     path: file_path.clone(),
                     errors: errors.iter().map(|e| format!("{e}")).collect(),
-                }
-            })?;
+                })?;
 
-            let mut bundle =
-                fluent_bundle::concurrent::FluentBundle::new_concurrent(vec![langid]);
+            let mut bundle = fluent_bundle::concurrent::FluentBundle::new_concurrent(vec![langid]);
             bundle.set_use_isolating(false);
-            bundle.add_resource(resource).map_err(|errors| {
-                LoadError::ParseFtl {
+            bundle
+                .add_resource(resource)
+                .map_err(|errors| LoadError::ParseFtl {
                     path: file_path.clone(),
                     errors: errors.iter().map(|e| format!("{e}")).collect(),
-                }
-            })?;
+                })?;
 
             bundles.insert(icu_locale, bundle);
         }
@@ -393,8 +391,7 @@ mod tests {
 
         let mut args = fluent_bundle::FluentArgs::new();
         args.set("count", FluentValue::from(2));
-        let result =
-            translator.format(&locale!("en"), "active-sessions-other", Some(&args));
+        let result = translator.format(&locale!("en"), "active-sessions-other", Some(&args));
         assert_eq!(result.as_deref(), Some("2 active sessions."));
     }
 
@@ -404,8 +401,7 @@ mod tests {
 
         let mut args = fluent_bundle::FluentArgs::new();
         args.set("count", FluentValue::from(1));
-        let result =
-            translator.format(&locale!("en"), "active-sessions.one", Some(&args));
+        let result = translator.format(&locale!("en"), "active-sessions.one", Some(&args));
         assert_eq!(result.as_deref(), Some("1 active session."));
     }
 }

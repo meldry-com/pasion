@@ -2,12 +2,10 @@ use std::collections::{BTreeMap, BTreeSet};
 
 use anyhow::Error as AnyhowError;
 use pasion_data::{
-    BoxRepository, RepositoryAccess, RepositoryError,
+    BoxRepository, Clock, NotificationChannel, RepositoryAccess, RepositoryError, SiteConfig, User,
+    UserEmail, UserProfile, UserProfilePatch,
     notification::NotificationRepository,
     user::{UserEmailRepository, UserPasswordRepository, UserRepository},
-};
-use pasion_data::{
-    Clock, NotificationChannel, SiteConfig, User, UserEmail, UserProfile, UserProfilePatch,
 };
 use pasion_matrix::HomeserverAdmin;
 use rand_core::RngCore;

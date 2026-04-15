@@ -5,16 +5,16 @@
 //! operation log entries.
 
 use chrono::{DateTime, Utc};
-use pasion_data::RepositoryAccess;
-use pasion_data::audit::{AdminOperation, AdminOperationFilter, AdminOperationLog};
-use salvo::prelude::*;
+use pasion_data::{
+    RepositoryAccess,
+    audit::{AdminOperation, AdminOperationFilter, AdminOperationLog},
+};
+use salvo::{oapi::ToSchema, prelude::*};
 use schemars::JsonSchema;
-use salvo::oapi::ToSchema;
 use serde::{Deserialize, Serialize};
 use ulid::Ulid;
 
-use crate::handlers::admin::call_context::extract_call_context;
-use crate::JsonResult;
+use crate::{JsonResult, handlers::admin::call_context::extract_call_context};
 
 /// A single entry in the admin audit feed.
 #[derive(Serialize, JsonSchema, ToSchema)]
@@ -27,7 +27,8 @@ pub struct AuditEntry {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub admin_user_id: Option<String>,
 
-    /// The operation that was performed, e.g. `"user.lock"`, `"session.finish"`.
+    /// The operation that was performed, e.g. `"user.lock"`,
+    /// `"session.finish"`.
     pub operation: String,
 
     /// The type of resource that was acted upon, e.g. `"user"`, `"session"`.
@@ -87,10 +88,7 @@ impl From<AdminOperationLog> for AuditEntry {
             admin_user_id: Some(log.admin_user_id.to_string()),
             operation: format_operation(&log.operation),
             resource_type: log.resource_type,
-            resource_id: log
-                .resource_id
-                .map(|id| id.to_string())
-                .unwrap_or_default(),
+            resource_id: log.resource_id.map(|id| id.to_string()).unwrap_or_default(),
             details,
             created_at: log.created_at,
         }
@@ -120,17 +118,13 @@ pub struct AuditFeedQuery {
 
 #[endpoint]
 #[tracing::instrument(name = "handler.admin.v1.audit_feed", skip_all)]
-pub async fn handler(
-    req: &mut Request,
-    depot: &Depot,
-) -> JsonResult<AuditFeedResponse> {
+pub async fn handler(req: &mut Request, depot: &Depot) -> JsonResult<AuditFeedResponse> {
     let call_context = extract_call_context(req, depot).await?;
     let crate::handlers::admin::call_context::CallContext { mut repo, .. } = call_context;
 
     let query: AuditFeedQuery = req.parse_queries().unwrap_or_default();
 
-    let mut filter = AdminOperationFilter::new()
-        .with_limit(query.limit.unwrap_or(50));
+    let mut filter = AdminOperationFilter::new().with_limit(query.limit.unwrap_or(50));
 
     if let Some(ref admin_id_str) = query.admin_user_id {
         if let Ok(admin_id) = admin_id_str.parse::<Ulid>() {

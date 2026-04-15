@@ -19,10 +19,7 @@ pub fn find_in_stmt<'a>(context: &mut Context, stmt: &'a Stmt<'a>) -> Result<(),
 
 // ── Statement visitors ──────────────────────────────────────────────
 
-fn dispatch_stmt<'a>(
-    ctx: &mut Context,
-    stmt: &'a Stmt<'a>,
-) -> Result<(), minijinja::Error> {
+fn dispatch_stmt<'a>(ctx: &mut Context, stmt: &'a Stmt<'a>) -> Result<(), minijinja::Error> {
     match stmt {
         Stmt::Template(tpl) => visit_stmt_list(ctx, &tpl.children),
         Stmt::EmitExpr(emit) => visit_expr(ctx, &emit.expr),
@@ -104,10 +101,7 @@ fn dispatch_stmt<'a>(
 
 // ── Macro helpers ───────────────────────────────────────────────────
 
-fn visit_macro_decl<'a>(
-    ctx: &mut Context,
-    mac: &'a Macro<'a>,
-) -> Result<(), minijinja::Error> {
+fn visit_macro_decl<'a>(ctx: &mut Context, mac: &'a Macro<'a>) -> Result<(), minijinja::Error> {
     visit_stmt_list(ctx, &mac.body)?;
     visit_expr_list(ctx, &mac.args)?;
     visit_expr_list(ctx, &mac.defaults)
@@ -141,18 +135,14 @@ fn record_translation_key<'a>(
 ) -> Result<(), minijinja::Error> {
     let first_arg = args.first().and_then(extract_const_from_call_arg);
 
-    let key_str = first_arg
-        .and_then(|c| c.value.as_str())
-        .ok_or_else(|| {
-            minijinja::Error::new(
-                ErrorKind::UndefinedError,
-                "t() first argument must be a string literal",
-            )
-        })?;
+    let key_str = first_arg.and_then(|c| c.value.as_str()).ok_or_else(|| {
+        minijinja::Error::new(
+            ErrorKind::UndefinedError,
+            "t() first argument must be a string literal",
+        )
+    })?;
 
-    let is_plural = args
-        .iter()
-        .any(|a| matches!(a, CallArg::Kwarg("count", _)));
+    let is_plural = args.iter().any(|a| matches!(a, CallArg::Kwarg("count", _)));
 
     let kind = if is_plural {
         crate::key::Kind::Plural
@@ -191,29 +181,21 @@ fn visit_single_call_arg<'a>(
     arg: &'a CallArg<'a>,
 ) -> Result<(), minijinja::Error> {
     let inner = match arg {
-        CallArg::Pos(e) | CallArg::Kwarg(_, e) | CallArg::PosSplat(e) | CallArg::KwargSplat(e) => {
-            e
-        }
+        CallArg::Pos(e) | CallArg::Kwarg(_, e) | CallArg::PosSplat(e) | CallArg::KwargSplat(e) => e,
     };
     visit_expr(ctx, inner)
 }
 
 // ── Statement / expression list visitors ────────────────────────────
 
-fn visit_stmt_list<'a>(
-    ctx: &mut Context,
-    stmts: &'a [Stmt<'a>],
-) -> Result<(), minijinja::Error> {
+fn visit_stmt_list<'a>(ctx: &mut Context, stmts: &'a [Stmt<'a>]) -> Result<(), minijinja::Error> {
     for s in stmts {
         dispatch_stmt(ctx, s)?;
     }
     Ok(())
 }
 
-fn visit_expr_list<'a>(
-    ctx: &mut Context,
-    exprs: &'a [Expr<'a>],
-) -> Result<(), minijinja::Error> {
+fn visit_expr_list<'a>(ctx: &mut Context, exprs: &'a [Expr<'a>]) -> Result<(), minijinja::Error> {
     for e in exprs {
         visit_expr(ctx, e)?;
     }
@@ -344,15 +326,8 @@ mod tests {
         assert_eq!(
             keys,
             vec![
-                "hello",
-                "nested-1",
-                "nested-2",
-                "nested-3",
-                "nested-4",
-                "nested-5",
-                "nested-6",
-                "plural",
-                "world",
+                "hello", "nested-1", "nested-2", "nested-3", "nested-4", "nested-5", "nested-6",
+                "plural", "world",
             ]
         );
     }

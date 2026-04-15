@@ -3,19 +3,19 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::record_error;
 use oauth2_types::scope::Scope;
 use pasion_data::{
-    BoxClock, Session, TokenFormatError, TokenType, User,
+    BoxClock, BoxRepository, RepositoryError, Session, TokenFormatError, TokenType, User,
     personal::session::{PersonalSession, PersonalSessionOwner},
 };
-use pasion_data::{BoxRepository, RepositoryError};
 use salvo::{http::StatusCode, prelude::*};
 use ulid::Ulid;
 
 use super::response::ErrorResponse;
-use crate::handlers::BoundActivityTracker;
-use crate::handlers::account::DepotExt;
+use crate::{
+    handlers::{BoundActivityTracker, account::DepotExt},
+    record_error,
+};
 
 #[derive(Debug, thiserror::Error)]
 pub enum Rejection {

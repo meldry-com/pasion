@@ -1,5 +1,6 @@
 // @generated automatically by Diesel CLI.
-// This file represents the current database schema used by Diesel's query builder.
+// This file represents the current database schema used by Diesel's query
+// builder.
 #![allow(missing_docs)]
 
 diesel::table! {

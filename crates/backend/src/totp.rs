@@ -92,12 +92,9 @@ pub fn generate_secret(rng: &mut (impl rand_core::RngCore + ?Sized)) -> String {
 
 /// Build a `otpauth://` URI for QR code generation.
 ///
-/// The returned URI can be rendered as a QR code for authenticator app scanning.
-pub fn build_otpauth_uri(
-    secret_base32: &str,
-    issuer: &str,
-    account_name: &str,
-) -> String {
+/// The returned URI can be rendered as a QR code for authenticator app
+/// scanning.
+pub fn build_otpauth_uri(secret_base32: &str, issuer: &str, account_name: &str) -> String {
     // Manual percent-encoding for the label portion
     let label = format!("{}:{}", issuer, account_name);
     let encoded_label: String = label

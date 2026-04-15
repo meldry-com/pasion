@@ -2,16 +2,13 @@
 
 use std::collections::{BTreeMap, BTreeSet};
 
-use diesel::sql_query;
-use diesel::sql_types::Bool;
-use diesel_async::AsyncPgConnection;
-use diesel_async::RunQueryDsl;
-use diesel_async::pooled_connection::deadpool::Object as PooledConnection;
+use diesel::{sql_query, sql_types::Bool};
+use diesel_async::{
+    AsyncPgConnection, RunQueryDsl, pooled_connection::deadpool::Object as PooledConnection,
+};
 use pasion_config::{ClientsConfig, UpstreamOAuth2Config};
-use pasion_data::Clock;
-use pasion_data::PgRepository;
 use pasion_data::{
-    Pagination, RepositoryAccess, UpstreamOAuthProviderSource,
+    Clock, Pagination, PgRepository, RepositoryAccess, UpstreamOAuthProviderSource,
     upstream_oauth2::{UpstreamOAuthProviderFilter, UpstreamOAuthProviderParams},
 };
 use pasion_keystore::Encrypter;

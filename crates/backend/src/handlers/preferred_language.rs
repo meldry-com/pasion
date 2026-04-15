@@ -5,10 +5,11 @@
 
 use std::sync::Arc;
 
-use crate::salvo_utils::language_detection::AcceptLanguage;
 use headers::HeaderMapExt as _;
 use pasion_i18n::{DataLocale, Translator, locale};
 use salvo::prelude::*;
+
+use crate::salvo_utils::language_detection::AcceptLanguage;
 
 pub fn preferred_language(req: &Request, depot: &Depot) -> DataLocale {
     let translator = depot

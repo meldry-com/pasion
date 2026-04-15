@@ -3,8 +3,7 @@ use oauth2_types::{
     requests::{Display, GrantType, Prompt, ResponseMode},
     scope,
 };
-use pasion_data::SiteConfig;
-use pasion_data::UrlBuilder;
+use pasion_data::{SiteConfig, UrlBuilder};
 use pasion_iana::oauth::{
     OAuthAuthorizationEndpointResponseType, OAuthClientAuthenticationMethod,
     PkceCodeChallengeMethod,
@@ -199,8 +198,8 @@ fn get_inner(depot: &Depot) -> Json<DiscoveryResponse> {
 mod tests {
     use pasion_data::UrlBuilder;
     use pasion_keystore::{JsonWebKey, JsonWebKeySet, PrivateKey};
-    use rand_core::SeedableRng;
     use rand_chacha::ChaChaRng;
+    use rand_core::SeedableRng;
 
     use super::*;
 

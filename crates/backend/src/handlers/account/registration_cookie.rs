@@ -2,12 +2,13 @@
 
 use std::collections::BTreeSet;
 
-use crate::salvo_utils::cookies::{CookieExpiration, CookieJar};
 use chrono::{DateTime, Duration, Utc};
 use pasion_data::{Clock, UserRegistration};
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 use ulid::Ulid;
+
+use crate::salvo_utils::cookies::{CookieExpiration, CookieJar};
 
 /// Name of the cookie
 static COOKIE_NAME: &str = "user-registration-sessions";

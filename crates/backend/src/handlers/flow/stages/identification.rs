@@ -3,9 +3,10 @@
 //! Looks up a user by username or email address and stores the resolved
 //! `user_id` in the flow context for subsequent stages.
 
-use pasion_data::Clock;
-use pasion_data::flow::{StageOutcome, StageValidationError};
-use pasion_data::{BoxRepository, RepositoryAccess};
+use pasion_data::{
+    BoxRepository, Clock, RepositoryAccess,
+    flow::{StageOutcome, StageValidationError},
+};
 
 use super::StageExecutionError;
 

@@ -3,9 +3,7 @@ use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
 use crate::Ulid;
-
-pub use crate::pg::workflow::PgWorkflowRepository;
-pub use crate::storage::workflow::*;
+pub use crate::{pg::workflow::PgWorkflowRepository, storage::workflow::*};
 
 /// A persisted workflow instance coordinating a multi-step business flow.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]

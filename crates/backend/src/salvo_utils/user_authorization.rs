@@ -6,9 +6,8 @@ use headers::{
 };
 use http::{HeaderMap, HeaderValue, StatusCode, header::WWW_AUTHENTICATE};
 use oauth2_types::scope::ScopeToken;
-use pasion_data::{Clock, Session};
 use pasion_data::{
-    RepositoryAccess,
+    Clock, RepositoryAccess, Session,
     oauth2::{OAuth2AccessTokenRepository, OAuth2SessionRepository},
 };
 use salvo::{

@@ -4,9 +4,9 @@ use async_trait::async_trait;
 use diesel::prelude::*;
 use diesel_async::RunQueryDsl;
 use oauth2_types::{oidc::ApplicationType, requests::GrantType};
-use pasion_data::oauth2::OAuth2ClientRepository;
 use pasion_data::{
     Client, Clock, JwksOrJwksUri, LocalizableField, LocalizedClientMetadata, new_id,
+    oauth2::OAuth2ClientRepository,
 };
 use pasion_iana::{jose::JsonWebSignatureAlg, oauth::OAuthClientAuthenticationMethod};
 use pasion_jose::jwk::PublicJsonWebKeySet;
@@ -48,17 +48,16 @@ impl<'c> PgOAuth2ClientRepository<'c> {
             return Ok(BTreeMap::new());
         }
 
-        let rows: Vec<(Uuid, String, String, String)> =
-            oauth2_client_localized_metadata::table
-                .filter(oauth2_client_localized_metadata::client_id.eq_any(client_ids))
-                .select((
-                    oauth2_client_localized_metadata::client_id,
-                    oauth2_client_localized_metadata::locale,
-                    oauth2_client_localized_metadata::field,
-                    oauth2_client_localized_metadata::value,
-                ))
-                .load(self.conn)
-                .await?;
+        let rows: Vec<(Uuid, String, String, String)> = oauth2_client_localized_metadata::table
+            .filter(oauth2_client_localized_metadata::client_id.eq_any(client_ids))
+            .select((
+                oauth2_client_localized_metadata::client_id,
+                oauth2_client_localized_metadata::locale,
+                oauth2_client_localized_metadata::field,
+                oauth2_client_localized_metadata::value,
+            ))
+            .load(self.conn)
+            .await?;
 
         let mut by_client: BTreeMap<Uuid, LocalizedClientMetadata> = BTreeMap::new();
         for (client_id, locale, field, value) in rows {

@@ -12,8 +12,9 @@
 //! - [`upstream_oauth2`] — Upstream SSO / federated identity provider flows
 //! - [`passwords`] — Password hashing and verification utilities
 //!
-//! All user-facing pages are rendered by the Dioxus frontend (`crates/frontend`).
-//! The backend serves only REST API endpoints and the SPA shell.
+//! All user-facing pages are rendered by the Dioxus frontend
+//! (`crates/frontend`). The backend serves only REST API endpoints and the SPA
+//! shell.
 
 /// Implement `From<E>` for `RouteError`, for "internal server error" kind of
 /// errors.
@@ -65,8 +66,12 @@ use std::sync::LazyLock;
 
 use opentelemetry::metrics::Meter;
 
+/// Account management API endpoints consumed by the frontend SPA.
+pub mod account;
 /// Admin API handlers (JSON API, cursor-paginated).
 pub mod admin;
+/// Shared infrastructure types (DepotExt, RouteError, etc.).
+pub mod common;
 /// Flow execution engine for multi-step user interaction flows.
 pub mod flow;
 /// Health-check endpoint (`/health`).
@@ -77,10 +82,6 @@ pub mod oauth2;
 pub mod passwords;
 /// Post-authentication action utilities (shared across handlers).
 pub mod post_auth;
-/// Shared infrastructure types (DepotExt, RouteError, etc.).
-pub mod common;
-/// Account management API endpoints consumed by the frontend SPA.
-pub mod account;
 /// SPA shell serving (renders the Dioxus frontend HTML wrapper).
 pub mod spa;
 /// Upstream (federated) OAuth 2.0 / OIDC provider integration.
@@ -105,8 +106,6 @@ static METER: LazyLock<Meter> = LazyLock::new(|| {
     opentelemetry::global::meter_with_scope(scope)
 });
 
-pub use crate::salvo_utils::cookies::CookieManager;
-
 pub use self::{
     activity_tracker::{ActivityTracker, Bound as BoundActivityTracker},
     common::{make_clock, make_rng},
@@ -115,3 +114,4 @@ pub use self::{
     rate_limit::{Limiter, RequesterFingerprint},
     upstream_oauth2::cache::MetadataCache,
 };
+pub use crate::salvo_utils::cookies::CookieManager;

@@ -194,8 +194,7 @@ impl ProvisionRequest {
     where
         F: FnOnce(Option<&[String]>),
     {
-        self.emails
-            .apply(|opt| callback(opt.map(Vec::as_slice)));
+        self.emails.apply(|opt| callback(opt.map(Vec::as_slice)));
         self
     }
 
@@ -485,10 +484,7 @@ where
         self.as_admin().query_user(localpart).await
     }
 
-    async fn provision_user(
-        &self,
-        request: &ProvisionRequest,
-    ) -> Result<bool, anyhow::Error> {
+    async fn provision_user(&self, request: &ProvisionRequest) -> Result<bool, anyhow::Error> {
         self.as_admin().provision_user(request).await
     }
 
@@ -518,11 +514,7 @@ where
             .await
     }
 
-    async fn delete_device(
-        &self,
-        localpart: &str,
-        device_id: &str,
-    ) -> Result<(), anyhow::Error> {
+    async fn delete_device(&self, localpart: &str, device_id: &str) -> Result<(), anyhow::Error> {
         self.as_admin().delete_device(localpart, device_id).await
     }
 
@@ -538,11 +530,7 @@ where
         self.as_admin().query_devices(localpart).await
     }
 
-    async fn delete_user(
-        &self,
-        localpart: &str,
-        erase: bool,
-    ) -> Result<(), anyhow::Error> {
+    async fn delete_user(&self, localpart: &str, erase: bool) -> Result<(), anyhow::Error> {
         self.as_admin().delete_user(localpart, erase).await
     }
 
@@ -565,9 +553,7 @@ where
     }
 
     async fn allow_cross_signing_reset(&self, localpart: &str) -> Result<(), anyhow::Error> {
-        self.as_admin()
-            .allow_cross_signing_reset(localpart)
-            .await
+        self.as_admin().allow_cross_signing_reset(localpart).await
     }
 }
 

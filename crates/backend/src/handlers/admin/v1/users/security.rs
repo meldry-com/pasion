@@ -9,21 +9,21 @@
 //! grouped here to keep the security-sensitive code paths together.
 
 use pasion_data::audit::{AdminOperation, NewAdminOperationLog};
-use salvo::http::StatusCode;
-use salvo::oapi::ToSchema;
-use salvo::prelude::*;
+use salvo::{http::StatusCode, oapi::ToSchema, prelude::*};
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use zeroize::Zeroizing;
 
-use crate::AppError;
-use crate::AppResult;
-use crate::JsonResult;
-use crate::handlers::admin::call_context::extract_call_context;
-use crate::handlers::admin::model::User;
-use crate::handlers::admin::params::extract_ulid_param;
-use crate::handlers::admin::response::SingleResponse;
-use crate::handlers::common::DepotExt;
+use crate::{
+    AppError, AppResult, JsonResult,
+    handlers::{
+        admin::{
+            call_context::extract_call_context, model::User, params::extract_ulid_param,
+            response::SingleResponse,
+        },
+        common::DepotExt,
+    },
+};
 
 /// # JSON payload for the `POST /api/admin/v1/users/:id/risk-action` endpoint
 #[derive(Deserialize, JsonSchema)]
@@ -56,10 +56,7 @@ pub struct RiskActionResponse {
 
 #[endpoint]
 #[tracing::instrument(name = "handler.admin.v1.users.risk_action", skip_all)]
-pub async fn risk_action(
-    req: &mut Request,
-    depot: &Depot,
-) -> JsonResult<RiskActionResponse> {
+pub async fn risk_action(req: &mut Request, depot: &Depot) -> JsonResult<RiskActionResponse> {
     let call_context = extract_call_context(req, depot).await?;
     let crate::handlers::admin::call_context::CallContext {
         mut repo,
@@ -69,10 +66,7 @@ pub async fn risk_action(
     } = call_context;
     let id = extract_ulid_param(req)?;
     let mut rng = crate::handlers::account::make_rng();
-    let params: RiskActionRequest = req
-        .parse_json()
-        .await
-        .map_err(AppError::internal)?;
+    let params: RiskActionRequest = req.parse_json().await.map_err(AppError::internal)?;
 
     let user = repo
         .user()
@@ -100,7 +94,11 @@ pub async fn risk_action(
             user
         }
 
-        other => return Err(AppError::bad_request(format!("Unknown risk action: {other}"))),
+        other => {
+            return Err(AppError::bad_request(format!(
+                "Unknown risk action: {other}"
+            )));
+        }
     };
 
     // Record audit log for the risk action
@@ -168,10 +166,7 @@ pub async fn set_password(req: &mut Request, depot: &Depot) -> AppResult<StatusC
     let id = extract_ulid_param(req)?;
     let mut rng = crate::handlers::account::make_rng();
     let password_manager = depot.password_manager()?;
-    let params: SetPasswordRequest = req
-        .parse_json()
-        .await
-        .map_err(AppError::internal)?;
+    let params: SetPasswordRequest = req.parse_json().await.map_err(AppError::internal)?;
 
     if !password_manager.is_enabled() {
         return Err(AppError::forbidden("Password auth is disabled"));
@@ -194,17 +189,18 @@ pub async fn set_password(req: &mut Request, depot: &Depot) -> AppResult<StatusC
     }
 
     let password = Zeroizing::new(params.password);
-    let (version, hashed_password) = password_manager
-        .hash(&mut rng, password)
-        .await
-        .map_err(|error| {
-            AppError::with_source(
-                StatusCode::INTERNAL_SERVER_ERROR,
-                "Password hashing failed",
-                Box::new(std::io::Error::other(error.to_string())),
-                true,
-            )
-        })?;
+    let (version, hashed_password) =
+        password_manager
+            .hash(&mut rng, password)
+            .await
+            .map_err(|error| {
+                AppError::with_source(
+                    StatusCode::INTERNAL_SERVER_ERROR,
+                    "Password hashing failed",
+                    Box::new(std::io::Error::other(error.to_string())),
+                    true,
+                )
+            })?;
 
     repo.user_password()
         .add(&mut rng, &clock, &user, version, hashed_password, None)
