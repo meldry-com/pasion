@@ -1,8 +1,0 @@
-{
-  "permissions": {
-    "allow": [
-      "Bash(git mv:*)",
-      "Bash(wc -l \"e:\\\\Works\\\\taidge\\\\pasion\\\\crates\\\\frontend\\\\src\\\\components\"/*.rs)"
-    ]
-  }
-}
