@@ -41,72 +41,6 @@ jobs:
           echo "describe=$(git describe --tags --match 'v*.*.*' --always)" >> "$GITHUB_OUTPUT"
           echo "timestamp=$(git log -1 --format=%ct)" >> "$GITHUB_OUTPUT"
 
-  build-archives:
-    name: Build release archives (${{ matrix.arch }})
-    runs-on: ${{ matrix.runner }}
-    needs:
-      - compute-version
-
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - arch: x86_64
-            rust_target: x86_64-unknown-linux-gnu
-            runner: ubuntu-24.04
-          - arch: aarch64
-            rust_target: aarch64-unknown-linux-gnu
-            runner: ubuntu-24.04-arm64
-
-    permissions:
-      contents: read
-
-    env:
-      VERGEN_GIT_DESCRIBE: ${{ needs.compute-version.outputs.describe }}
-      SOURCE_DATE_EPOCH: ${{ needs.compute-version.outputs.timestamp }}
-
-    steps:
-      - name: Fetch repository
-        uses: actions/checkout@v4
-
-      - name: Set up Rust with Linux target
-        uses: dtolnay/rust-toolchain@stable
-        with:
-          targets: |
-            ${{ matrix.rust_target }}
-
-      - name: Assemble asset directory
-        run: |
-          mkdir -p assets-dist/share
-          cp -r templates/ assets-dist/share/templates
-          cp -r translations/ assets-dist/share/translations
-          cp -r policies/cedar/ assets-dist/share/cedar
-          chmod -R u=rwX,go=rX assets-dist/
-
-      - name: Compile release binary
-        run: |
-          cargo build \
-            --release \
-            --target ${{ matrix.rust_target }} \
-            --no-default-features \
-            --features dist \
-            -p pasion
-
-      - name: Build tarball for ${{ matrix.arch }}
-        run: |
-          mkdir -p "dist/${{ matrix.arch }}/share"
-          cp -r assets-dist/share/* "dist/${{ matrix.arch }}/share/"
-          cp "target/${{ matrix.rust_target }}/release/pasion" "dist/${{ matrix.arch }}/pasion"
-          chmod -R u=rwX,go=rX "dist/${{ matrix.arch }}/"
-          chmod u=rwx,go=rx "dist/${{ matrix.arch }}/pasion"
-          tar -czvf "pasion-${{ matrix.arch }}-linux.tar.gz" --owner=0 --group=0 -C "dist/${{ matrix.arch }}/" .
-
-      - name: Upload release archive
-        uses: christopherhx/gitea-upload-artifact@v4
-        with:
-          name: pasion-${{ matrix.arch }}-linux
-          path: pasion-${{ matrix.arch }}-linux.tar.gz
-
   prepare-image-build:
     name: Resolve image names and tags
     runs-on: ubuntu-24.04
@@ -240,9 +174,6 @@ jobs:
           - arch: amd64
             platform: linux/amd64
             runner: ubuntu-24.04
-          - arch: arm64
-            platform: linux/arm64
-            runner: ubuntu-24.04-arm64
 
     permissions:
       contents: read
@@ -313,7 +244,7 @@ jobs:
           tags: ${{ steps.arch-tags.outputs.release }}
 
   publish-image-manifests:
-    name: Publish Docker image manifests
+    name: Publish Docker image tags
     runs-on: ubuntu-24.04
     needs:
       - prepare-image-build
@@ -342,7 +273,7 @@ jobs:
           username: ${{ vars.DOCKERHUB_USER }}
           password: ${{ secrets.DOCKERHUB_TOKEN }}
 
-      - name: Publish release multi-arch manifests
+      - name: Publish release image tags
         shell: bash
         env:
           IMAGES: ${{ needs.prepare-image-build.outputs.images }}
@@ -362,8 +293,7 @@ jobs:
 
             docker buildx imagetools create \
               "${args[@]}" \
-              "${image}:${SOURCE_SUFFIX}-amd64" \
-              "${image}:${SOURCE_SUFFIX}-arm64"
+              "${image}:${SOURCE_SUFFIX}-amd64"
           done <<< "$IMAGES"
 
       - name: Summarize image result
@@ -371,7 +301,7 @@ jobs:
         env:
           IMAGES: ${{ needs.prepare-image-build.outputs.images }}
         run: |
-          echo "Published multi-arch images for:"
+          echo "Published amd64 image tags for:"
           printf '  - %s\n' "$IMAGES"
 
   summarize-image-build:
@@ -389,5 +319,5 @@ jobs:
       - name: Summarize image result
         shell: bash
         run: |
-          echo "Built amd64 and arm64 release images in parallel without pushing."
-          echo "Set REGISTRY_USER / REGISTRY_TOKEN and optionally DOCKERHUB_USER / DOCKERHUB_TOKEN to publish manifests."
+          echo "Built amd64 release image without pushing."
+          echo "Set REGISTRY_USER / REGISTRY_TOKEN and optionally DOCKERHUB_USER / DOCKERHUB_TOKEN to publish tags."
