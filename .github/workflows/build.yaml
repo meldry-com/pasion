@@ -255,7 +255,7 @@ jobs:
         uses: sigstore/cosign-installer@v4.0.0
 
       - name: Enable QEMU for arm64 builds
-        uses: docker/setup-qemu-action@v3
+        uses: docker/setup-qemu-action@v4
         with:
           platforms: arm64
 
