@@ -222,7 +222,6 @@ impl From<DomainStageValidationError> for FlowValidationError {
 }
 
 #[derive(Debug, Serialize, ToSchema)]
-#[serde(rename_all = "snake_case")]
 pub struct FlowResponse {
     /// The session identifier (ULID).
     pub session_id: String,

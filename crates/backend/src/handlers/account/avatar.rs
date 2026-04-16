@@ -12,7 +12,6 @@ use crate::storage;
 const MAX_AVATAR_SIZE: usize = 5 * 1024 * 1024; // 5 MB
 
 #[derive(Serialize, salvo::oapi::ToSchema)]
-#[serde(rename_all = "camelCase")]
 pub struct UploadAvatarResponse {
     pub avatar_url: String,
 }

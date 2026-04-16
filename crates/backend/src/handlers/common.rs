@@ -346,7 +346,6 @@ pub fn make_rng() -> BoxRng {
 // ── User-agent parsing helper ──────────────────────────────────
 
 #[derive(Serialize, Clone, salvo::oapi::ToSchema)]
-#[serde(rename_all = "camelCase")]
 pub struct UserAgentInfo {
     pub name: Option<String>,
     pub model: Option<String>,

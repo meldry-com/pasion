@@ -161,7 +161,6 @@ impl User {
 
 /// Pasion-original: user profile snapshot used for display and API responses.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
 pub struct UserProfile {
     pub display_name: Option<String>,
     pub avatar_url: Option<String>,
@@ -171,7 +170,6 @@ pub struct UserProfile {
 
 /// Pasion-original: a patch object for updating user profile fields.
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
 pub struct UserProfilePatch {
     pub display_name: Option<Option<String>>,
     pub avatar_url: Option<Option<String>>,
@@ -187,7 +185,6 @@ impl UserProfilePatch {
 
 /// Pasion-original: a patch object for updating user fields.
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
 pub struct UserPatch {
     pub display_name: Option<Option<String>>,
     pub avatar_url: Option<Option<String>>,
@@ -224,7 +221,6 @@ impl From<UserProfilePatch> for UserPatch {
 
 /// Pasion-original: admin-specific user patch.
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
 pub struct AdminUserPatch {
     pub display_name: Option<Option<String>>,
     pub avatar_url: Option<Option<String>>,
@@ -418,7 +414,6 @@ impl UserEmail {
 
 /// Pasion-original: a patch object for updating user email fields.
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
 pub struct UserEmailPatch {
     pub email: Option<String>,
     pub confirmed: Option<bool>,

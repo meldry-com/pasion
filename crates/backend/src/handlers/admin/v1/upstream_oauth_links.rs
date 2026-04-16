@@ -399,7 +399,6 @@ pub async fn list_links(
 }
 
 #[derive(Deserialize)]
-#[serde(rename_all = "camelCase")]
 pub struct UpdateRequest {
     user_id: Option<Option<Ulid>>,
     subject: Option<String>,
@@ -1537,9 +1536,9 @@ mod tests {
         let request = Request::patch(format!("/api/admin/v1/upstream-oauth-links/{}", link.id))
             .bearer(&token)
             .json(serde_json::json!({
-                "userId": bob.id,
+                "user_id": bob.id,
                 "subject": format!("subject-{suffix}-2"),
-                "humanAccountName": "Bob Provider"
+                "human_account_name": "Bob Provider"
             }));
 
         let response = state.request(request).await;

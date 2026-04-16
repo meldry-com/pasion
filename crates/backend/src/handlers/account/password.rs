@@ -1,7 +1,9 @@
 use chrono::Utc;
 use pasion_data::{
+    Clock, RepositoryAccess,
     flow::{FlowSession, FlowSessionStatus},
     new_id,
+    user::UserRecoveryRepository,
 };
 use salvo::{oapi::ToSchema, prelude::*};
 use serde::{Deserialize, Serialize};
@@ -26,7 +28,6 @@ use crate::handlers::{
 // ── POST /api/v1/viewer/password ───────────────────────────────
 
 #[derive(Deserialize, ToSchema)]
-#[serde(rename_all = "camelCase")]
 pub struct SetPasswordInput {
     pub user_id: String,
     pub current_password: Option<String>,
@@ -145,7 +146,7 @@ pub async fn set_password(
             flow_session_id: None,
         })),
         Err(ChangePasswordError::CurrentPasswordRequired) => Err(RouteError::BadRequest(
-            "currentPassword required for non-admins".into(),
+            "current_password required for non-admins".into(),
         )),
         Err(ChangePasswordError::WrongPassword) => Ok(Json(SetPasswordResponse {
             status: "WRONG_PASSWORD",
@@ -156,10 +157,71 @@ pub async fn set_password(
     }
 }
 
+// ── GET /api/v1/password-recovery/:ticket ─────────────────────
+
+#[derive(Serialize, ToSchema)]
+pub struct RecoveryTicketStatusResponse {
+    pub status: &'static str,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub email: Option<String>,
+}
+
+#[endpoint]
+pub async fn get_recovery_ticket_status(
+    req: &mut Request,
+    depot: &Depot,
+) -> Result<Json<RecoveryTicketStatusResponse>, RouteError> {
+    let ticket = req
+        .param::<String>("ticket")
+        .ok_or(RouteError::BadRequest("missing ticket".into()))?;
+
+    let config = depot.site_config()?;
+    if !config.account_recovery_allowed {
+        return Ok(Json(RecoveryTicketStatusResponse {
+            status: "disabled",
+            email: None,
+        }));
+    }
+
+    let repo_factory = depot.repo_factory()?;
+    let clock = make_clock();
+    let mut repo = repo_factory.create().await?;
+
+    let Some(recovery_ticket) = repo.user_recovery().find_ticket(&ticket).await? else {
+        repo.cancel().await?;
+        return Ok(Json(RecoveryTicketStatusResponse {
+            status: "not_found",
+            email: None,
+        }));
+    };
+
+    let Some(recovery_session) = repo
+        .user_recovery()
+        .lookup_session(recovery_ticket.user_recovery_session_id)
+        .await?
+    else {
+        return Err(RouteError::Internal(Box::new(std::io::Error::other(
+            "Could not load recovery session",
+        ))));
+    };
+
+    let status = if recovery_session.consumed_at.is_some() {
+        "consumed"
+    } else if !recovery_ticket.active(clock.now()) {
+        "expired"
+    } else {
+        "valid"
+    };
+
+    let email = Some(recovery_session.email.clone());
+    repo.cancel().await?;
+
+    Ok(Json(RecoveryTicketStatusResponse { status, email }))
+}
+
 // ── POST /api/v1/password-recovery/set ─────────────────────────
 
 #[derive(Deserialize, ToSchema)]
-#[serde(rename_all = "camelCase")]
 pub struct SetPasswordByRecoveryInput {
     pub ticket: String,
     pub new_password: String,
@@ -248,6 +310,8 @@ pub struct ResendRecoveryInput {
 #[derive(Serialize, ToSchema)]
 pub struct ResendRecoveryResponse {
     pub status: &'static str,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub progress_url: Option<String>,
 }
 
 #[endpoint]
@@ -267,6 +331,7 @@ pub async fn resend_recovery_email(
 
     let activity_tracker = extract_bound_activity_tracker(req, depot);
     let session_info = extract_session_info(req, depot);
+    let url_builder = depot.url_builder()?;
 
     let repo = repo_factory.create().await?;
     let (requester, repo) = get_requester(&clock, &activity_tracker, repo, &session_info).await?;
@@ -281,10 +346,16 @@ pub async fn resend_recovery_email(
     )
     .await
     {
-        Ok(()) => Ok(Json(ResendRecoveryResponse { status: "SENT" })),
+        Ok(session) => Ok(Json(ResendRecoveryResponse {
+            status: "SENT",
+            progress_url: Some(
+                url_builder.relative_url(&format!("/recover/progress/{}", session.id)),
+            ),
+        })),
         Err(ResendAccountRecoveryByTicketError::TicketNotFound) => {
             Ok(Json(ResendRecoveryResponse {
                 status: "NO_SUCH_RECOVERY_TICKET",
+                progress_url: None,
             }))
         }
         Err(ResendAccountRecoveryByTicketError::SessionNotFound) => Err(RouteError::Internal(
@@ -293,11 +364,129 @@ pub async fn resend_recovery_email(
         Err(ResendAccountRecoveryByTicketError::AlreadyConsumed) => {
             Ok(Json(ResendRecoveryResponse {
                 status: "RECOVERY_TICKET_ALREADY_USED",
+                progress_url: None,
             }))
         }
         Err(ResendAccountRecoveryByTicketError::RateLimited) => Ok(Json(ResendRecoveryResponse {
             status: "RATE_LIMITED",
+            progress_url: None,
         })),
         Err(ResendAccountRecoveryByTicketError::Repository(error)) => Err(error.into()),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use hyper::{Request, StatusCode};
+    use pasion_data::{
+        RepositoryAccess,
+        user::{UserEmailRepository, UserRecoveryRepository, UserRepository},
+    };
+    use ulid::Ulid;
+
+    use crate::handlers::test_utils::{RequestBuilderExt, ResponseExt, TestState, setup};
+
+    async fn create_recovery_ticket(
+        state: &TestState,
+        email: String,
+    ) -> (pasion_data::UserRecoverySession, String) {
+        let mut rng = state.rng();
+        let mut repo = state.repository().await.unwrap();
+        let username = format!("recover-{}", Ulid::new().to_string().to_lowercase());
+
+        let user = repo
+            .user()
+            .add(&mut rng, &state.clock, username)
+            .await
+            .unwrap();
+        let user_email = repo
+            .user_email()
+            .add(&mut rng, &state.clock, &user, email)
+            .await
+            .unwrap();
+        let session = repo
+            .user_recovery()
+            .add_session(
+                &mut rng,
+                &state.clock,
+                user_email.email.clone(),
+                "test-agent".to_string(),
+                None,
+                "en".to_string(),
+            )
+            .await
+            .unwrap();
+        let ticket = repo
+            .user_recovery()
+            .add_ticket(
+                &mut rng,
+                &state.clock,
+                &session,
+                &user_email,
+                format!("ticket-{}", Ulid::new().to_string().to_lowercase()),
+            )
+            .await
+            .unwrap();
+
+        repo.save().await.unwrap();
+
+        (session, ticket.ticket)
+    }
+
+    fn has_database_url() -> bool {
+        std::env::var_os("DATABASE_URL").is_some()
+    }
+
+    #[tokio::test]
+    async fn get_recovery_ticket_status_reports_valid_ticket() {
+        if !has_database_url() {
+            return;
+        }
+
+        setup();
+        let pool = pasion_data::test_utils::setup_test_pool().await;
+        let state = TestState::from_pool(pool).await.unwrap();
+
+        let (_session, ticket) =
+            create_recovery_ticket(&state, "alice@example.com".to_string()).await;
+
+        let response = state
+            .request(Request::get(format!("/api/v1/password-recovery/{ticket}")).empty())
+            .await;
+
+        response.assert_status(StatusCode::OK);
+        let body: serde_json::Value = response.json();
+
+        assert_eq!(body["status"], "valid");
+        assert_eq!(body["email"], "alice@example.com");
+    }
+
+    #[tokio::test]
+    async fn resend_recovery_email_returns_progress_url() {
+        if !has_database_url() {
+            return;
+        }
+
+        setup();
+        let pool = pasion_data::test_utils::setup_test_pool().await;
+        let state = TestState::from_pool(pool).await.unwrap();
+
+        let (session, ticket) = create_recovery_ticket(&state, "bob@example.com".to_string()).await;
+
+        let response = state
+            .request(
+                Request::post("/api/v1/password-recovery/resend")
+                    .json(serde_json::json!({ "ticket": ticket })),
+            )
+            .await;
+
+        response.assert_status(StatusCode::OK);
+        let body: serde_json::Value = response.json();
+
+        assert_eq!(body["status"], "SENT");
+        assert_eq!(
+            body["progress_url"],
+            format!("/recover/progress/{}", session.id)
+        );
     }
 }

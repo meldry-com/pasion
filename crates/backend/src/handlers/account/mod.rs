@@ -172,7 +172,6 @@ impl NodeType {
 // ── Pagination helpers ─────────────────────────────────────────
 
 #[derive(Deserialize, Default)]
-#[serde(rename_all = "camelCase")]
 pub struct PaginationParams {
     pub first: Option<i64>,
     pub after: Option<String>,
@@ -181,7 +180,6 @@ pub struct PaginationParams {
 }
 
 #[derive(Serialize)]
-#[serde(rename_all = "camelCase")]
 pub struct PageInfo {
     pub has_next_page: bool,
     pub has_previous_page: bool,
@@ -196,7 +194,6 @@ pub struct Edge<T: Serialize> {
 }
 
 #[derive(Serialize)]
-#[serde(rename_all = "camelCase")]
 pub struct Connection<T: Serialize> {
     pub total_count: i64,
     pub edges: Vec<Edge<T>>,

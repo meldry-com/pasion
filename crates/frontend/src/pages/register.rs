@@ -35,6 +35,7 @@ pub fn Register() -> Element {
                         providers: vec![],
                         password_login_enabled: true,
                         password_registration_enabled: true,
+                        account_recovery_allowed: true,
                     },
                 }
             }

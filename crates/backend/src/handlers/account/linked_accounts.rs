@@ -18,13 +18,11 @@ use crate::handlers::account::service::connections::{
 // ── Response types ──────────────────────────────────────────────
 
 #[derive(Serialize, ToSchema)]
-#[serde(rename_all = "camelCase")]
 pub struct LinkedAccountsResponse {
     pub accounts: Vec<LinkedAccount>,
 }
 
 #[derive(Serialize, ToSchema)]
-#[serde(rename_all = "camelCase")]
 pub struct LinkedAccount {
     pub id: String,
     pub provider_id: String,
@@ -36,7 +34,6 @@ pub struct LinkedAccount {
 }
 
 #[derive(Serialize, ToSchema)]
-#[serde(rename_all = "camelCase")]
 pub struct UnlinkResponse {
     pub status: &'static str,
 }

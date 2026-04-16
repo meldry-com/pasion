@@ -44,7 +44,6 @@ pub enum LinkState {
 }
 
 #[derive(Debug, Deserialize, Clone)]
-#[serde(rename_all = "camelCase")]
 pub struct LinkActionResponse {
     pub status: String,
     pub redirect_url: Option<String>,

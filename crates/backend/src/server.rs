@@ -18,6 +18,7 @@ use opentelemetry_semantic_conventions::trace::{
     NETWORK_PROTOCOL_VERSION, URL_PATH, URL_QUERY, URL_SCHEME, USER_AGENT_ORIGINAL,
 };
 use pasion_config::{HttpBindConfig, HttpResource, HttpTlsConfig, UnixOrTcp};
+use pasion_data::UrlBuilder;
 use pasion_templates::Templates;
 use rustls::ServerConfig;
 use salvo::{
@@ -402,6 +403,15 @@ fn build_human_router(router: Router, _templates: Templates) -> Router {
         .push(Router::with_path("/reset-cross-signing").get(spa::get))
         .push(Router::with_path("/clients/{**rest}").get(spa::get))
         .push(Router::with_path("/devices/{**rest}").get(spa::get))
+        // Legacy account password routes
+        .push(
+            Router::with_path("/account/password/change")
+                .get(account_password_change_redirect_handler),
+        )
+        .push(
+            Router::with_path("/account/password/recovery")
+                .get(account_password_recovery_redirect_handler),
+        )
         // Legacy /account redirect
         .push(Router::with_path("/account").get(account_redirect_handler))
         .push(Router::with_path("/account/").get(spa::get))
@@ -500,6 +510,7 @@ fn build_account_api_router(router: Router) -> Router {
         // Password recovery
         .push(
             Router::with_path("password-recovery")
+                .push(Router::with_path("{ticket}").get(password::get_recovery_ticket_status))
                 .push(Router::with_path("set").post(password::set_password_by_recovery))
                 .push(Router::with_path("resend").post(password::resend_recovery_email)),
         )
@@ -777,15 +788,64 @@ async fn change_password_redirect_handler(depot: &Depot) -> impl Writer + use<> 
     use crate::app_state::DepotExt;
 
     let url_builder = depot.get_url_builder().cloned();
-    if let Some(url_builder) = url_builder {
-        Redirect::found(
-            url_builder
-                .absolute_url("/account/password/change")
-                .to_string(),
-        )
-    } else {
-        Redirect::found("/account/password/change")
+    Redirect::found(absolute_redirect_location(
+        url_builder.as_ref(),
+        "/password/change",
+    ))
+}
+
+fn absolute_redirect_location(url_builder: Option<&UrlBuilder>, path: &str) -> String {
+    url_builder.map_or_else(
+        || path.to_owned(),
+        |url_builder| url_builder.absolute_url(path).to_string(),
+    )
+}
+
+fn relative_redirect_location(
+    url_builder: Option<&UrlBuilder>,
+    path: &str,
+    query: Option<&str>,
+) -> String {
+    let mut location = url_builder.map_or_else(
+        || path.to_owned(),
+        |url_builder| url_builder.relative_url(path),
+    );
+
+    if let Some(query) = query.filter(|query| !query.is_empty()) {
+        location.push('?');
+        location.push_str(query);
     }
+
+    location
+}
+
+#[handler]
+async fn account_password_change_redirect_handler(
+    req: &Request,
+    depot: &Depot,
+) -> impl Writer + use<> {
+    use crate::app_state::DepotExt;
+
+    let url_builder = depot.get_url_builder().cloned();
+    let location =
+        relative_redirect_location(url_builder.as_ref(), "/password/change", req.uri().query());
+    Redirect::found(location)
+}
+
+#[handler]
+async fn account_password_recovery_redirect_handler(
+    req: &Request,
+    depot: &Depot,
+) -> impl Writer + use<> {
+    use crate::app_state::DepotExt;
+
+    let url_builder = depot.get_url_builder().cloned();
+    let location = relative_redirect_location(
+        url_builder.as_ref(),
+        "/password/recovery",
+        req.uri().query(),
+    );
+    Redirect::found(location)
 }
 
 #[handler]
@@ -929,8 +989,9 @@ mod tests {
     use std::net::TcpListener;
 
     use pasion_config::HttpBindConfig;
+    use pasion_data::UrlBuilder;
 
-    use super::build_listeners;
+    use super::{absolute_redirect_location, build_listeners, relative_redirect_location};
 
     #[test]
     fn bind_error_mentions_requested_address() {
@@ -950,5 +1011,27 @@ mod tests {
 
         let message = format!("{error:#}");
         assert!(message.contains(&format!("127.0.0.1:{port}")), "{message}");
+    }
+
+    #[test]
+    fn relative_redirect_preserves_prefix_and_query() {
+        let url_builder = UrlBuilder::new("https://example.com/mas/".parse().unwrap(), None, None);
+
+        let location = relative_redirect_location(
+            Some(&url_builder),
+            "/password/recovery",
+            Some("ticket=abc123"),
+        );
+
+        assert_eq!(location, "/mas/password/recovery?ticket=abc123");
+    }
+
+    #[test]
+    fn change_password_discovery_uses_frontend_route() {
+        let url_builder = UrlBuilder::new("https://example.com/mas/".parse().unwrap(), None, None);
+
+        let location = absolute_redirect_location(Some(&url_builder), "/password/change");
+
+        assert_eq!(location, "https://example.com/mas/password/change");
     }
 }

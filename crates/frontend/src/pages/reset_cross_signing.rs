@@ -99,7 +99,7 @@ pub fn ResetCrossSigning() -> Element {
                                     spawn(async move {
                                         let result = crate::api::api_post::<AllowCrossSigningResetPayload>(
                                             "/viewer/cross-signing-reset",
-                                            serde_json::json!({ "userId": uid }),
+                                            serde_json::json!({ "user_id": uid }),
                                         ).await;
                                         match result {
                                             Ok(_) => {

@@ -5,7 +5,6 @@ use super::{DepotExt, NodeType, RouteError};
 use crate::handlers::account::service::connections::{OAuth2ClientLookupError, load_oauth2_client};
 
 #[derive(Serialize, ToSchema)]
-#[serde(rename_all = "camelCase")]
 pub struct Oauth2ClientResponse {
     pub id: String,
     pub client_id: String,

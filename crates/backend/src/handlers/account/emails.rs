@@ -15,7 +15,6 @@ use crate::handlers::account::service::contacts::{
 // ── Response types ─────────────────────────────────────────────
 
 #[derive(Serialize, ToSchema)]
-#[serde(rename_all = "camelCase")]
 pub struct StartEmailAuthResponse {
     pub status: &'static str,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -25,7 +24,6 @@ pub struct StartEmailAuthResponse {
 }
 
 #[derive(Serialize, ToSchema)]
-#[serde(rename_all = "camelCase")]
 pub struct EmailAuthData {
     pub id: String,
     pub email: String,
@@ -42,7 +40,6 @@ pub struct ResendEmailAuthCodeResponse {
 }
 
 #[derive(Serialize, ToSchema)]
-#[serde(rename_all = "camelCase")]
 pub struct RemoveEmailResponse {
     pub status: &'static str,
 }
@@ -50,7 +47,6 @@ pub struct RemoveEmailResponse {
 // ── GET /api/v1/email-auth/:id ─────────────────────────────────
 
 #[derive(Serialize, ToSchema)]
-#[serde(rename_all = "camelCase")]
 pub struct EmailAuthStatusResponse {
     pub id: String,
     pub email: String,
@@ -89,7 +85,6 @@ pub async fn get_email_auth(
 // ── POST /api/v1/email-auth/start ──────────────────────────────
 
 #[derive(Deserialize, ToSchema)]
-#[serde(rename_all = "camelCase")]
 pub struct StartEmailAuthInput {
     pub email: String,
     pub password: Option<String>,
@@ -246,7 +241,6 @@ pub async fn complete_email_auth(
 // ── POST /api/v1/email-auth/:id/resend ─────────────────────────
 
 #[derive(Deserialize, ToSchema)]
-#[serde(rename_all = "camelCase")]
 pub struct ResendEmailAuthInput {
     #[serde(default)]
     pub language: Option<String>,

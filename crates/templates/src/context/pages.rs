@@ -57,9 +57,8 @@ pub struct AppErrorState {
     pub description: Option<String>,
 }
 
-/// Frontend application configuration serialized as camelCase JSON.
+/// Frontend application configuration serialized as snake_case JSON.
 #[derive(Serialize)]
-#[serde(rename_all = "camelCase")]
 pub struct AppConfig {
     root: String,
     api_endpoint: String,

@@ -565,8 +565,8 @@ mod tests {
         let request = Request::patch(format!("/api/admin/v1/users/{}", user.id))
             .bearer(&token)
             .json(serde_json::json!({
-                "displayName": "Alice Admin",
-                "preferredLocale": "zh-CN",
+                "display_name": "Alice Admin",
+                "preferred_locale": "zh-CN",
                 "admin": true,
                 "locked": true
             }));

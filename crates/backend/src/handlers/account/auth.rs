@@ -41,7 +41,6 @@ pub struct LoginRequest {
 }
 
 #[derive(Serialize, ToSchema)]
-#[serde(rename_all = "camelCase")]
 pub struct LoginResponse {
     pub status: &'static str,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -51,7 +50,6 @@ pub struct LoginResponse {
 }
 
 #[derive(Serialize, ToSchema)]
-#[serde(rename_all = "camelCase")]
 pub struct ViewerInfo {
     pub id: String,
     pub username: String,
@@ -65,15 +63,14 @@ pub struct LogoutResponse {
 }
 
 #[derive(Serialize, ToSchema)]
-#[serde(rename_all = "camelCase")]
 pub struct ProvidersResponse {
     pub providers: Vec<ProviderInfo>,
     pub password_login_enabled: bool,
     pub password_registration_enabled: bool,
+    pub account_recovery_allowed: bool,
 }
 
 #[derive(Serialize, ToSchema)]
-#[serde(rename_all = "camelCase")]
 pub struct ProviderInfo {
     pub id: String,
     pub human_name: Option<String>,
@@ -284,5 +281,6 @@ pub async fn providers(depot: &Depot) -> Result<Json<ProvidersResponse>, RouteEr
         providers: provider_list,
         password_login_enabled: site_config.password_login_enabled,
         password_registration_enabled: site_config.password_registration_enabled,
+        account_recovery_allowed: site_config.account_recovery_allowed,
     }))
 }

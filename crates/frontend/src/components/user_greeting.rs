@@ -178,12 +178,12 @@ pub fn EditProfileDialog(
                             let response = crate::api::api_patch::<PatchViewerProfileResponse>(
                                 "/viewer/profile",
                                 serde_json::json!({
-                                    "displayName": if display_name.is_empty() { serde_json::Value::Null } else { serde_json::Value::String(display_name) },
-                                    "avatarUrl": match avatar_url {
+                                    "display_name": if display_name.is_empty() { serde_json::Value::Null } else { serde_json::Value::String(display_name) },
+                                    "avatar_url": match avatar_url {
                                         Some(url) => serde_json::Value::String(url),
                                         None => serde_json::Value::Null,
                                     },
-                                    "preferredLocale": if preferred_locale.is_empty() { serde_json::Value::Null } else { serde_json::Value::String(preferred_locale) },
+                                    "preferred_locale": if preferred_locale.is_empty() { serde_json::Value::Null } else { serde_json::Value::String(preferred_locale) },
                                 }),
                             ).await;
 
@@ -332,9 +332,14 @@ async fn upload_selected_avatar() -> Result<Option<String>, String> {
     .await
     .map_err(|e| format!("invalid JSON: {e:?}"))?;
 
-    let avatar_url = js_sys::Reflect::get(&json_value, &JsValue::from_str("avatarUrl"))
+    let avatar_url = js_sys::Reflect::get(&json_value, &JsValue::from_str("avatar_url"))
         .ok()
-        .and_then(|v| v.as_string());
+        .and_then(|v| v.as_string())
+        .or_else(|| {
+            js_sys::Reflect::get(&json_value, &JsValue::from_str("avatarUrl"))
+                .ok()
+                .and_then(|v| v.as_string())
+        });
     Ok(avatar_url)
 }
 

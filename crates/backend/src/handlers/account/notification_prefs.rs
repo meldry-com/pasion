@@ -21,7 +21,6 @@ use crate::services::user_profile::{
 
 /// Availability status of a single notification channel.
 #[derive(Serialize, Deserialize, Clone, salvo::oapi::ToSchema)]
-#[serde(rename_all = "camelCase")]
 pub struct ChannelAvailability {
     /// Channel name, e.g. `"email"` or `"sms"`.
     pub channel: String,
@@ -32,7 +31,6 @@ pub struct ChannelAvailability {
 
 /// Per-channel preference of the current user.
 #[derive(Serialize, Deserialize, Clone, salvo::oapi::ToSchema)]
-#[serde(rename_all = "camelCase")]
 pub struct ChannelPreference {
     /// Channel name, e.g. `"email"` or `"sms"`.
     pub channel: String,
@@ -43,7 +41,6 @@ pub struct ChannelPreference {
 
 /// Response for `GET /api/v1/viewer/preferences`.
 #[derive(Serialize, salvo::oapi::ToSchema)]
-#[serde(rename_all = "camelCase")]
 pub struct NotificationPreferencesResponse {
     /// Server-side channel availability.
     pub available_channels: Vec<ChannelAvailability>,
@@ -54,7 +51,6 @@ pub struct NotificationPreferencesResponse {
 
 /// Request body for `PATCH /api/v1/viewer/preferences`.
 #[derive(Deserialize, salvo::oapi::ToSchema)]
-#[serde(rename_all = "camelCase")]
 pub struct PatchNotificationPreferencesRequest {
     /// The per-channel preferences to update.
     pub preferences: Vec<ChannelPreference>,
@@ -62,7 +58,6 @@ pub struct PatchNotificationPreferencesRequest {
 
 /// Response for `PATCH /api/v1/viewer/preferences`.
 #[derive(Serialize, salvo::oapi::ToSchema)]
-#[serde(rename_all = "camelCase")]
 pub struct PatchNotificationPreferencesResponse {
     /// The preferences as persisted by the server.
     pub preferences: Vec<ChannelPreference>,

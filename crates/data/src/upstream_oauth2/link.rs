@@ -17,7 +17,6 @@ pub struct UpstreamOAuthLink {
 
 /// Pasion-original: a patch object for updating upstream OAuth link fields.
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
 pub struct UpstreamOAuthLinkPatch {
     pub user_id: Option<Option<Ulid>>,
     pub subject: Option<String>,

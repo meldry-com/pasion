@@ -21,7 +21,6 @@ pub enum SessionDetailResponse {
 }
 
 #[derive(Serialize, ToSchema)]
-#[serde(rename_all = "camelCase")]
 pub struct BrowserSessionDetail {
     pub id: String,
     pub display_name: Option<String>,
@@ -33,14 +32,12 @@ pub struct BrowserSessionDetail {
 }
 
 #[derive(Serialize, ToSchema)]
-#[serde(rename_all = "camelCase")]
 pub struct AuthenticationData {
     pub id: String,
     pub created_at: String,
 }
 
 #[derive(Serialize, ToSchema)]
-#[serde(rename_all = "camelCase")]
 pub struct Oauth2SessionDetail {
     pub id: String,
     pub scope: Option<String>,
@@ -53,7 +50,6 @@ pub struct Oauth2SessionDetail {
 }
 
 #[derive(Serialize, ToSchema)]
-#[serde(rename_all = "camelCase")]
 pub struct Oauth2ClientBrief {
     pub id: String,
     pub client_id: String,
@@ -198,7 +194,6 @@ pub async fn end_oauth2_session(
 // ── PUT /api/v1/oauth2-sessions/:id/name ───────────────────────
 
 #[derive(Deserialize, ToSchema)]
-#[serde(rename_all = "camelCase")]
 pub struct SetSessionNameInput {
     pub human_name: Option<String>,
 }

@@ -118,6 +118,7 @@ fn LoginFormBasic(error_msg: Option<String>) -> Element {
                 providers: vec![],
                 password_login_enabled: true,
                 password_registration_enabled: false,
+                account_recovery_allowed: true,
             },
         }
     }
@@ -133,6 +134,7 @@ fn LoginForm(providers: ProvidersResponse) -> Element {
     let has_providers = !providers.providers.is_empty();
     let password_enabled = providers.password_login_enabled;
     let registration_enabled = providers.password_registration_enabled;
+    let recovery_enabled = providers.account_recovery_allowed;
 
     rsx! {
         div { class: "login-page",
@@ -245,9 +247,11 @@ fn LoginForm(providers: ProvidersResponse) -> Element {
                         }
                     }
 
-                    div { class: "login-links",
-                        Link { class: "link", to: Route::RecoveryStart {},
-                            "Forgot password?"
+                    if recovery_enabled {
+                        div { class: "login-links",
+                            Link { class: "link", to: Route::RecoveryStart {},
+                                "Forgot password?"
+                            }
                         }
                     }
                 }

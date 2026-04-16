@@ -280,7 +280,6 @@ pub async fn list_emails(
 }
 
 #[derive(Deserialize)]
-#[serde(rename_all = "camelCase")]
 pub struct UpdateRequest {
     email: Option<String>,
     confirmed: Option<bool>,
@@ -1016,7 +1015,7 @@ mod tests {
             .json(serde_json::json!({
                 "email": updated_email.clone(),
                 "confirmed": false,
-                "isPrimary": true
+                "is_primary": true
             }));
 
         let response = state.request(request).await;

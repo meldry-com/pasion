@@ -18,7 +18,6 @@ use crate::{JsonResult, handlers::admin::call_context::extract_call_context};
 
 /// A single entry in the admin audit feed.
 #[derive(Serialize, JsonSchema, ToSchema)]
-#[serde(rename_all = "camelCase")]
 pub struct AuditEntry {
     /// Unique identifier for this audit entry.
     pub id: String,
@@ -104,7 +103,6 @@ pub struct AuditFeedResponse {
 
 /// Query parameters accepted by the audit feed endpoint.
 #[derive(Deserialize, Default)]
-#[serde(rename_all = "camelCase")]
 pub struct AuditFeedQuery {
     /// Maximum number of entries to return (default: 50).
     pub limit: Option<usize>,

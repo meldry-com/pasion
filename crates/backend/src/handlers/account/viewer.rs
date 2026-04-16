@@ -17,7 +17,6 @@ use crate::{
 // ── Response types ─────────────────────────────────────────────
 
 #[derive(Serialize, ToSchema)]
-#[serde(rename_all = "camelCase")]
 struct ViewerResponse {
     viewer: ViewerData,
     viewer_session: ViewerSessionData,
@@ -32,7 +31,6 @@ enum ViewerData {
 }
 
 #[derive(Serialize, ToSchema)]
-#[serde(rename_all = "camelCase")]
 struct ViewerUser {
     id: String,
     username: String,
@@ -56,7 +54,6 @@ enum ViewerSessionData {
 }
 
 #[derive(Serialize, ToSchema)]
-#[serde(rename_all = "camelCase")]
 struct BrowserSessionData {
     id: String,
     user: Option<ViewerUser>,
@@ -67,14 +64,12 @@ struct BrowserSessionData {
 }
 
 #[derive(Serialize, ToSchema)]
-#[serde(rename_all = "camelCase")]
 struct MatrixUserData {
     mxid: String,
     display_name: Option<String>,
 }
 
 #[derive(Serialize, ToSchema)]
-#[serde(rename_all = "camelCase")]
 struct UserProfileData {
     display_name: Option<String>,
     avatar_url: Option<String>,
@@ -83,21 +78,18 @@ struct UserProfileData {
 }
 
 #[derive(Serialize, ToSchema)]
-#[serde(rename_all = "camelCase")]
 struct EmailListData {
     total_count: i64,
     edges: Vec<EmailEdgeData>,
 }
 
 #[derive(Serialize, ToSchema)]
-#[serde(rename_all = "camelCase")]
 struct EmailEdgeData {
     cursor: String,
     node: EmailData,
 }
 
 #[derive(Serialize, ToSchema)]
-#[serde(rename_all = "camelCase")]
 struct EmailData {
     id: String,
     email: String,
@@ -279,7 +271,6 @@ pub async fn get_security_summary(
 
 /// A single pending workflow item in the inbox.
 #[derive(Serialize, ToSchema)]
-#[serde(rename_all = "camelCase")]
 pub struct WorkflowInboxItem {
     pub session_id: String,
     pub flow_slug: String,
@@ -290,7 +281,6 @@ pub struct WorkflowInboxItem {
 
 /// Response for `GET /api/v1/viewer/workflow-inbox`.
 #[derive(Serialize, ToSchema)]
-#[serde(rename_all = "camelCase")]
 pub struct WorkflowInboxResponse {
     pub pending: Vec<WorkflowInboxItem>,
     pub total: usize,
@@ -337,7 +327,6 @@ pub async fn get_workflow_inbox(
 
 /// Summary of the user for the overview dashboard.
 #[derive(Serialize, ToSchema)]
-#[serde(rename_all = "camelCase")]
 pub struct ViewerUserSummary {
     pub id: String,
     pub has_password: bool,
@@ -345,7 +334,6 @@ pub struct ViewerUserSummary {
 
 /// Security summary data exposed in the overview.
 #[derive(Serialize, ToSchema)]
-#[serde(rename_all = "camelCase")]
 pub struct SecuritySummaryData {
     pub has_password: bool,
     pub active_sessions_count: usize,
@@ -356,7 +344,6 @@ pub struct SecuritySummaryData {
 
 /// Summary of contact points for the overview.
 #[derive(Serialize, ToSchema)]
-#[serde(rename_all = "camelCase")]
 pub struct ContactsSummary {
     pub total: usize,
     pub verified: usize,
@@ -364,14 +351,12 @@ pub struct ContactsSummary {
 
 /// Summary of identity bindings for the overview.
 #[derive(Serialize, ToSchema)]
-#[serde(rename_all = "camelCase")]
 pub struct IdentitiesSummary {
     pub total: usize,
 }
 
 /// Summary of pending workflows for the overview.
 #[derive(Serialize, ToSchema)]
-#[serde(rename_all = "camelCase")]
 pub struct WorkflowsSummary {
     pub pending_count: usize,
 }
@@ -379,7 +364,6 @@ pub struct WorkflowsSummary {
 /// Unified overview response combining security, contacts, identities, and
 /// workflow summaries into a single payload for the account dashboard.
 #[derive(Serialize, ToSchema)]
-#[serde(rename_all = "camelCase")]
 pub struct ViewerOverviewResponse {
     pub user: ViewerUserSummary,
     pub security: SecuritySummaryData,

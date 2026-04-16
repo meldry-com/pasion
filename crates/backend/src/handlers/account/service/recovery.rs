@@ -224,7 +224,7 @@ pub async fn resend_account_recovery_by_ticket(
     clock: &dyn Clock,
     requester: RequesterFingerprint,
     ticket_string: &str,
-) -> Result<(), ResendAccountRecoveryByTicketError> {
+) -> Result<UserRecoverySession, ResendAccountRecoveryByTicketError> {
     let (_, session) = load_account_recovery_ticket(&mut repo, ticket_string)
         .await
         .map_err(|error| match error {
@@ -240,7 +240,7 @@ pub async fn resend_account_recovery_by_ticket(
         })?;
 
     match resend_account_recovery(repo, limiter, rng, clock, requester, session.id).await {
-        Ok(_) => Ok(()),
+        Ok(_) => Ok(session),
         Err(ResendAccountRecoveryError::NotFound) => {
             Err(ResendAccountRecoveryByTicketError::SessionNotFound)
         }

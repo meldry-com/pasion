@@ -5,7 +5,6 @@ use serde::Serialize;
 use super::{DepotExt, RouteError};
 
 #[derive(Serialize, ToSchema)]
-#[serde(rename_all = "camelCase")]
 pub struct SiteConfigResponse {
     pub id: Option<String>,
     pub email_change_allowed: bool,

@@ -20,7 +20,6 @@ use crate::handlers::oauth2::access::{
 // ── Response types ─────────────────────────────────────────────
 
 #[derive(Serialize, ToSchema)]
-#[serde(rename_all = "camelCase")]
 pub struct ClientInfo {
     pub id: String,
     pub client_id: String,
@@ -33,7 +32,6 @@ pub struct ClientInfo {
 }
 
 #[derive(Serialize, ToSchema)]
-#[serde(rename_all = "camelCase")]
 pub struct UserInfo {
     pub mxid: String,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -41,7 +39,6 @@ pub struct UserInfo {
 }
 
 #[derive(Serialize, ToSchema)]
-#[serde(rename_all = "camelCase")]
 pub struct ConsentGetResponse {
     pub grant_id: String,
     pub client: ClientInfo,
@@ -56,14 +53,12 @@ pub struct ConsentPostRequest {
 }
 
 #[derive(Serialize, ToSchema)]
-#[serde(rename_all = "camelCase")]
 pub struct ConsentPostResponse {
     pub status: &'static str,
     pub redirect_url: String,
 }
 
 #[derive(Serialize, ToSchema)]
-#[serde(rename_all = "camelCase")]
 pub struct DeviceLinkResponse {
     pub status: &'static str,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -82,7 +77,6 @@ pub struct DeviceConsentPostRequest {
 }
 
 #[derive(Serialize, ToSchema)]
-#[serde(rename_all = "camelCase")]
 pub struct DeviceConsentPostResponse {
     pub status: &'static str,
 }

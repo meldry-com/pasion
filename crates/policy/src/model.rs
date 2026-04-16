@@ -134,7 +134,6 @@ impl std::fmt::Display for EvaluationResult {
 
 /// Metadata about the entity making a policy-evaluated request.
 #[derive(Serialize, Debug, Default, JsonSchema)]
-#[serde(rename_all = "snake_case")]
 pub struct Requester {
     /// IP address of the entity making the request, when available
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -189,7 +188,6 @@ pub struct RegisterInput<'a> {
 
 /// Policy input for evaluating an OAuth 2.0 dynamic client registration.
 #[derive(Serialize, Debug, JsonSchema)]
-#[serde(rename_all = "snake_case")]
 pub struct ClientRegistrationInput<'a> {
     /// The validated client metadata from the registration request
     #[schemars(with = "std::collections::HashMap<String, serde_json::Value>")]
@@ -234,7 +232,6 @@ pub struct SessionCounts {
 
 /// Policy input for evaluating an authorization grant request.
 #[derive(Serialize, Debug, JsonSchema)]
-#[serde(rename_all = "snake_case")]
 pub struct AuthorizationGrantInput<'a> {
     /// The user requesting the grant, if applicable
     #[schemars(with = "Option<std::collections::HashMap<String, serde_json::Value>>")]
@@ -267,7 +264,6 @@ pub struct AuthorizationGrantInput<'a> {
 
 /// Policy input for evaluating whether an email address may be added.
 #[derive(Serialize, Debug, JsonSchema)]
-#[serde(rename_all = "snake_case")]
 pub struct EmailInput<'a> {
     /// The email address being evaluated
     pub email: &'a str,

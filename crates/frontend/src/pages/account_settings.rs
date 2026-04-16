@@ -430,7 +430,7 @@ fn AccountDeleteButton(mxid: String, has_password: bool, password_login_enabled:
                                 error.set(None);
                                 spawn(async move {
                                     let mut body = serde_json::json!({
-                                        "hsErase": hs_erase,
+                                        "hs_erase": hs_erase,
                                     });
                                     if let Some(ref pw_val) = pw {
                                         body.as_object_mut().unwrap().insert(

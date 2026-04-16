@@ -16,7 +16,6 @@ use crate::{
 // ── PATCH /api/v1/viewer/profile ────────────────────────────────
 
 #[derive(Deserialize)]
-#[serde(rename_all = "camelCase")]
 pub struct PatchViewerProfileInput {
     pub display_name: Option<Option<String>>,
     pub avatar_url: Option<Option<String>>,
@@ -24,14 +23,12 @@ pub struct PatchViewerProfileInput {
 }
 
 #[derive(Serialize, ToSchema)]
-#[serde(rename_all = "camelCase")]
 pub struct PatchViewerProfileResponse {
     pub profile: ViewerProfileData,
     pub matrix: MatrixUserData,
 }
 
 #[derive(Serialize, ToSchema)]
-#[serde(rename_all = "camelCase")]
 pub struct ViewerProfileData {
     pub display_name: Option<String>,
     pub avatar_url: Option<String>,
@@ -40,7 +37,6 @@ pub struct ViewerProfileData {
 }
 
 #[derive(Serialize, ToSchema)]
-#[serde(rename_all = "camelCase")]
 pub struct MatrixUserData {
     pub mxid: String,
     pub display_name: Option<String>,
@@ -102,7 +98,6 @@ pub async fn patch_profile(
 // ── POST /api/v1/viewer/cross-signing-reset ────────────────────
 
 #[derive(Deserialize, salvo::oapi::ToSchema)]
-#[serde(rename_all = "camelCase")]
 pub struct AllowCrossSigningResetInput {
     pub user_id: String,
 }
@@ -153,7 +148,6 @@ pub async fn allow_cross_signing_reset(
 // ── POST /api/v1/viewer/deactivate ─────────────────────────────
 
 #[derive(Deserialize, salvo::oapi::ToSchema)]
-#[serde(rename_all = "camelCase")]
 pub struct DeactivateUserInput {
     pub hs_erase: bool,
     pub password: Option<String>,
@@ -294,9 +288,9 @@ mod tests {
 
         let request = cookies.with_cookies(Request::patch("/api/v1/viewer/profile").json(
             serde_json::json!({
-                "displayName": "Alice Example",
-                "avatarUrl": "mxc://example.com/alice",
-                "preferredLocale": "zh-CN"
+                "display_name": "Alice Example",
+                "avatar_url": "mxc://example.com/alice",
+                "preferred_locale": "zh-CN"
             }),
         ));
 
@@ -304,10 +298,10 @@ mod tests {
         response.assert_status(StatusCode::OK);
         let body: serde_json::Value = response.json();
 
-        assert_eq!(body["profile"]["displayName"], "Alice Example");
-        assert_eq!(body["profile"]["avatarUrl"], "mxc://example.com/alice");
-        assert_eq!(body["profile"]["preferredLocale"], "zh-CN");
-        assert_eq!(body["matrix"]["displayName"], "Alice Example");
+        assert_eq!(body["profile"]["display_name"], "Alice Example");
+        assert_eq!(body["profile"]["avatar_url"], "mxc://example.com/alice");
+        assert_eq!(body["profile"]["preferred_locale"], "zh-CN");
+        assert_eq!(body["matrix"]["display_name"], "Alice Example");
 
         let mut repo = state.repository().await.unwrap();
         let stored = repo.user().lookup(user.id).await.unwrap().unwrap();

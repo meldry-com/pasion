@@ -437,6 +437,10 @@ impl TestState {
                     .post(crate::handlers::account::password::set_password),
             )
             .push(
+                Router::with_path("/api/v1/password-recovery/{ticket}")
+                    .get(crate::handlers::account::password::get_recovery_ticket_status),
+            )
+            .push(
                 Router::with_path("/api/v1/password-recovery/set")
                     .post(crate::handlers::account::password::set_password_by_recovery),
             )

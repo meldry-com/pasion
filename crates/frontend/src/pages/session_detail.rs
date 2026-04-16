@@ -241,7 +241,7 @@ fn EditSessionName(
                                     let result = crate::api::api_put::<serde_json::Value>(
                                         &path,
                                         serde_json::json!({
-                                            "humanName": name_param,
+                                            "human_name": name_param,
                                         }),
                                     ).await;
                                     saving.set(false);

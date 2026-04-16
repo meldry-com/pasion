@@ -20,7 +20,6 @@ use crate::{
 };
 
 #[derive(Deserialize, JsonSchema)]
-#[serde(rename_all = "camelCase")]
 pub struct UpdateRequest {
     display_name: Option<Option<String>>,
     avatar_url: Option<Option<String>>,

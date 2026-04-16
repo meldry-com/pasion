@@ -79,7 +79,7 @@ pub enum Route {
     RegisterFinish { id: String },
     #[route("/recover")]
     RecoveryStart {},
-    #[route("/recover/:id")]
+    #[route("/recover/progress/:id")]
     RecoveryProgress { id: String },
 
     // OAuth2 consent & device code (public, require session)

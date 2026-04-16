@@ -85,9 +85,9 @@ fn PasswordChangeForm(user_id: String) -> Element {
                         let result = crate::api::api_post::<crate::api::types::SetPasswordPayload>(
                             "/viewer/password",
                             serde_json::json!({
-                                "userId": uid,
-                                "currentPassword": current,
-                                "newPassword": new_pw,
+                                "user_id": uid,
+                                "current_password": current,
+                                "new_password": new_pw,
                             }),
                         ).await;
                         submitting.set(false);

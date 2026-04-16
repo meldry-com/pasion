@@ -11,7 +11,6 @@ use crate::{
 };
 
 #[derive(Serialize, JsonSchema, ToSchema)]
-#[serde(rename_all = "camelCase")]
 pub struct ProviderHealth {
     /// The connector provider name.
     provider: String,
@@ -28,7 +27,6 @@ pub struct ProviderHealth {
 }
 
 #[derive(Serialize, JsonSchema, ToSchema)]
-#[serde(rename_all = "camelCase")]
 pub struct ConnectorHealthResponse {
     /// Health results for each registered provider.
     providers: Vec<ProviderHealth>,

@@ -26,7 +26,6 @@ pub struct Anonymous {
 }
 
 #[derive(Debug, Clone, PartialEq, Deserialize, Serialize)]
-#[serde(rename_all = "camelCase")]
 pub struct User {
     pub id: String,
     #[serde(default)]
@@ -48,14 +47,12 @@ pub struct User {
 }
 
 #[derive(Debug, Clone, PartialEq, Deserialize, Serialize)]
-#[serde(rename_all = "camelCase")]
 pub struct MatrixUser {
     pub mxid: String,
     pub display_name: Option<String>,
 }
 
 #[derive(Debug, Clone, PartialEq, Deserialize, Serialize)]
-#[serde(rename_all = "camelCase")]
 pub struct UserProfile {
     #[serde(default)]
     pub display_name: Option<String>,
@@ -69,7 +66,6 @@ pub struct UserProfile {
 // ── Linked accounts ───────────────────────────────────────────
 
 #[derive(Debug, Clone, PartialEq, Deserialize, Serialize)]
-#[serde(rename_all = "camelCase")]
 pub struct LinkedAccount {
     pub id: String,
     pub provider_id: String,
@@ -84,7 +80,6 @@ pub struct LinkedAccount {
 }
 
 #[derive(Debug, Clone, PartialEq, Deserialize, Serialize)]
-#[serde(rename_all = "camelCase")]
 pub struct UnlinkResponse {
     pub status: String,
 }
@@ -108,7 +103,6 @@ impl ViewerSession {
 }
 
 #[derive(Debug, Clone, PartialEq, Deserialize, Serialize)]
-#[serde(rename_all = "camelCase")]
 pub struct BrowserSession {
     pub id: String,
     #[serde(default)]
@@ -128,7 +122,6 @@ pub struct BrowserSession {
 }
 
 #[derive(Debug, Clone, PartialEq, Deserialize, Serialize)]
-#[serde(rename_all = "camelCase")]
 pub struct UserAgent {
     pub name: Option<String>,
     pub model: Option<String>,
@@ -145,7 +138,6 @@ pub enum DeviceType {
 }
 
 #[derive(Debug, Clone, PartialEq, Deserialize, Serialize)]
-#[serde(rename_all = "camelCase")]
 pub struct Authentication {
     pub id: String,
     pub created_at: String,
@@ -158,7 +150,6 @@ pub enum AppSession {
 }
 
 #[derive(Debug, Clone, PartialEq, Deserialize, Serialize)]
-#[serde(rename_all = "camelCase")]
 pub struct Oauth2Session {
     pub id: String,
     #[serde(default)]
@@ -178,7 +169,6 @@ pub struct Oauth2Session {
 }
 
 #[derive(Debug, Clone, PartialEq, Deserialize, Serialize)]
-#[serde(rename_all = "camelCase")]
 pub struct Oauth2Client {
     pub id: String,
     pub client_id: String,
@@ -190,7 +180,6 @@ pub struct Oauth2Client {
 // ── Email ──────────────────────────────────────────────────────
 
 #[derive(Debug, Clone, PartialEq, Deserialize, Serialize)]
-#[serde(rename_all = "camelCase")]
 pub struct UserEmail {
     pub id: String,
     pub email: String,
@@ -201,7 +190,6 @@ pub struct UserEmail {
 }
 
 #[derive(Debug, Clone, PartialEq, Deserialize, Serialize)]
-#[serde(rename_all = "camelCase")]
 pub struct EmailConnection {
     pub total_count: i32,
     #[serde(default)]
@@ -217,7 +205,6 @@ pub struct EmailEdge {
 // ── Session connections / pagination ───────────────────────────
 
 #[derive(Debug, Clone, PartialEq, Deserialize, Serialize)]
-#[serde(rename_all = "camelCase")]
 pub struct PageInfo {
     pub has_next_page: bool,
     pub has_previous_page: bool,
@@ -226,7 +213,6 @@ pub struct PageInfo {
 }
 
 #[derive(Debug, Clone, PartialEq, Deserialize, Serialize)]
-#[serde(rename_all = "camelCase")]
 pub struct BrowserSessionConnection {
     pub total_count: i32,
     pub edges: Vec<BrowserSessionEdge>,
@@ -240,7 +226,6 @@ pub struct BrowserSessionEdge {
 }
 
 #[derive(Debug, Clone, PartialEq, Deserialize, Serialize)]
-#[serde(rename_all = "camelCase")]
 pub struct AppSessionConnection {
     pub total_count: i32,
     pub edges: Vec<AppSessionEdge>,
@@ -256,7 +241,6 @@ pub struct AppSessionEdge {
 // ── Site Config ────────────────────────────────────────────────
 
 #[derive(Debug, Clone, PartialEq, Deserialize, Serialize)]
-#[serde(rename_all = "camelCase")]
 pub struct SiteConfig {
     #[serde(default)]
     pub id: Option<String>,
@@ -318,7 +302,6 @@ pub enum SetDisplayNameStatus {
 }
 
 #[derive(Debug, Clone, PartialEq, Deserialize, Serialize)]
-#[serde(rename_all = "camelCase")]
 pub struct ProfilePatchRequest {
     #[serde(default)]
     pub display_name: Option<Option<String>>,
@@ -329,14 +312,12 @@ pub struct ProfilePatchRequest {
 }
 
 #[derive(Debug, Clone, PartialEq, Deserialize, Serialize)]
-#[serde(rename_all = "camelCase")]
 pub struct PatchViewerProfileResponse {
     pub profile: UserProfile,
     pub matrix: MatrixUser,
 }
 
 #[derive(Debug, Clone, PartialEq, Deserialize, Serialize)]
-#[serde(rename_all = "camelCase")]
 pub struct AdminUserPatchRequest {
     #[serde(default)]
     pub display_name: Option<Option<String>>,
@@ -355,7 +336,6 @@ pub struct AdminUserPatchRequest {
 }
 
 #[derive(Debug, Clone, PartialEq, Deserialize, Serialize)]
-#[serde(rename_all = "camelCase")]
 pub struct UserEmailPatchRequest {
     #[serde(default)]
     pub email: Option<String>,
@@ -434,7 +414,6 @@ pub enum DeactivateUserStatus {
 // ── Combined viewer response from REST /api/v1/viewer ──────────
 
 #[derive(Debug, Clone, PartialEq, Deserialize, Serialize)]
-#[serde(rename_all = "camelCase")]
 pub struct ViewerResponse {
     pub viewer: Viewer,
     pub viewer_session: ViewerSession,
@@ -451,7 +430,6 @@ pub type BrowserSessionListData = ViewerResponse;
 pub type PasswordChangeData = ViewerResponse;
 
 #[derive(Debug, Clone, PartialEq, Deserialize)]
-#[serde(rename_all = "camelCase")]
 pub struct FooterData {
     pub site_config: SiteConfig,
 }
@@ -464,7 +442,6 @@ pub type EndBrowserSessionResult = EndSessionPayload;
 pub type EndOauth2SessionResult = EndSessionPayload;
 
 #[derive(Debug, Clone, PartialEq, Deserialize)]
-#[serde(rename_all = "camelCase")]
 pub struct PlanManagementData {
     pub site_config: SiteConfig,
 }
@@ -480,7 +457,6 @@ pub enum SessionNode {
 }
 
 #[derive(Debug, Clone, PartialEq, Deserialize)]
-#[serde(rename_all = "camelCase")]
 pub struct UserEmailListData {
     pub viewer_session: ViewerSession,
 }
@@ -500,7 +476,6 @@ pub enum ClientNode {
 }
 
 #[derive(Debug, Clone, PartialEq, Deserialize)]
-#[serde(rename_all = "camelCase")]
 pub struct Oauth2ClientDetail {
     pub id: String,
     pub client_id: String,
@@ -539,6 +514,8 @@ pub type ResendRecoveryEmailResult = ResendRecoveryEmailPayload;
 #[derive(Debug, Clone, PartialEq, Deserialize)]
 pub struct ResendRecoveryEmailPayload {
     pub status: String,
+    #[serde(default, alias = "progressUrl")]
+    pub progress_url: Option<String>,
 }
 
 // ── Remove email result ───────────────────────────────────────
@@ -548,7 +525,6 @@ pub type RemoveEmailResult = RemoveEmailPayload;
 // ── Session name mutation results ─────────────────────────────
 
 #[derive(Debug, Clone, PartialEq, Deserialize)]
-#[serde(rename_all = "camelCase")]
 pub struct SetSessionNamePayload {
     pub status: String,
 }
@@ -558,7 +534,6 @@ pub type SetOauth2SessionNameResult = SetSessionNamePayload;
 // ── Email verification query/mutation types ───────────────────
 
 #[derive(Debug, Clone, PartialEq, Deserialize)]
-#[serde(rename_all = "camelCase")]
 pub struct UserEmailAuthentication {
     pub id: String,
     pub email: String,
@@ -575,7 +550,6 @@ pub enum EmailAuthNode {
 pub type VerifyEmailData = UserEmailAuthentication;
 
 #[derive(Debug, Clone, PartialEq, Deserialize)]
-#[serde(rename_all = "camelCase")]
 pub struct ResendEmailAuthCodePayload {
     pub status: String,
 }
@@ -585,14 +559,12 @@ pub type ResendEmailAuthCodeResult = ResendEmailAuthCodePayload;
 // ── Auth API types ────────────────────────────────────────────
 
 #[derive(Debug, Clone, PartialEq, Deserialize, Serialize)]
-#[serde(rename_all = "camelCase")]
 pub struct LoginRequest {
     pub username: String,
     pub password: String,
 }
 
 #[derive(Debug, Clone, PartialEq, Deserialize, Serialize)]
-#[serde(rename_all = "camelCase")]
 pub struct LoginResponse {
     pub status: String,
     #[serde(default)]
@@ -602,13 +574,11 @@ pub struct LoginResponse {
 }
 
 #[derive(Debug, Clone, PartialEq, Deserialize, Serialize)]
-#[serde(rename_all = "camelCase")]
 pub struct LogoutResponse {
     pub status: String,
 }
 
 #[derive(Debug, Clone, PartialEq, Deserialize, Serialize)]
-#[serde(rename_all = "camelCase")]
 pub struct UpstreamProvider {
     pub id: String,
     #[serde(default)]
@@ -619,11 +589,12 @@ pub struct UpstreamProvider {
 }
 
 #[derive(Debug, Clone, PartialEq, Deserialize, Serialize)]
-#[serde(rename_all = "camelCase")]
 pub struct ProvidersResponse {
     pub providers: Vec<UpstreamProvider>,
     pub password_login_enabled: bool,
     pub password_registration_enabled: bool,
+    #[serde(default, alias = "accountRecoveryAllowed")]
+    pub account_recovery_allowed: bool,
 }
 
 // ── Registration API types ────────────────────────────────────
@@ -691,13 +662,11 @@ pub struct StepResponse {
 // ── Recovery API types ────────────────────────────────────────
 
 #[derive(Debug, Clone, PartialEq, Deserialize, Serialize)]
-#[serde(rename_all = "camelCase")]
 pub struct RecoveryStartRequest {
     pub email: String,
 }
 
 #[derive(Debug, Clone, PartialEq, Deserialize, Serialize)]
-#[serde(rename_all = "camelCase")]
 pub struct RecoveryStartResponse {
     pub status: String,
     #[serde(default)]
@@ -707,17 +676,22 @@ pub struct RecoveryStartResponse {
 }
 
 #[derive(Debug, Clone, PartialEq, Deserialize, Serialize)]
-#[serde(rename_all = "camelCase")]
 pub struct RecoveryStatusResponse {
     pub id: String,
     pub email: String,
     pub status: String,
 }
 
+#[derive(Debug, Clone, PartialEq, Deserialize, Serialize)]
+pub struct RecoveryTicketStatusResponse {
+    pub status: String,
+    #[serde(default)]
+    pub email: Option<String>,
+}
+
 // ── OAuth2 Consent API types ──────────────────────────────────
 
 #[derive(Debug, Clone, PartialEq, Deserialize, Serialize)]
-#[serde(rename_all = "camelCase")]
 pub struct ConsentClientInfo {
     pub id: String,
     pub client_id: String,
@@ -730,7 +704,6 @@ pub struct ConsentClientInfo {
 }
 
 #[derive(Debug, Clone, PartialEq, Deserialize, Serialize)]
-#[serde(rename_all = "camelCase")]
 pub struct ConsentUserInfo {
     pub mxid: String,
     #[serde(default)]
@@ -738,7 +711,6 @@ pub struct ConsentUserInfo {
 }
 
 #[derive(Debug, Clone, PartialEq, Deserialize, Serialize)]
-#[serde(rename_all = "camelCase")]
 pub struct ConsentDataResponse {
     pub grant_id: String,
     pub client: ConsentClientInfo,
@@ -753,7 +725,6 @@ pub struct ConsentDataResponse {
 }
 
 #[derive(Debug, Clone, PartialEq, Deserialize, Serialize)]
-#[serde(rename_all = "camelCase")]
 pub struct ConsentSubmitResponse {
     pub status: String,
     #[serde(default)]
@@ -765,7 +736,6 @@ pub struct ConsentSubmitResponse {
 // ── Device Code API types ─────────────────────────────────────
 
 #[derive(Debug, Clone, PartialEq, Deserialize, Serialize)]
-#[serde(rename_all = "camelCase")]
 pub struct DeviceLinkResponse {
     pub status: String,
     #[serde(default)]
@@ -773,7 +743,6 @@ pub struct DeviceLinkResponse {
 }
 
 #[derive(Debug, Clone, PartialEq, Deserialize, Serialize)]
-#[serde(rename_all = "camelCase")]
 pub struct DeviceConsentResponse {
     pub status: String,
 }
@@ -781,7 +750,6 @@ pub struct DeviceConsentResponse {
 // ── Security summary (GET /api/v1/viewer/security) ───────────
 
 #[derive(Debug, Clone, PartialEq, Deserialize, Serialize)]
-#[serde(rename_all = "camelCase")]
 pub struct SecuritySummaryResponse {
     pub has_password: bool,
     pub active_sessions_count: usize,
@@ -793,7 +761,6 @@ pub struct SecuritySummaryResponse {
 // ── Linked accounts list (GET /api/v1/linked-accounts) ───────
 
 #[derive(Debug, Clone, PartialEq, Deserialize, Serialize)]
-#[serde(rename_all = "camelCase")]
 pub struct LinkedAccountsResponse {
     pub accounts: Vec<LinkedAccount>,
 }
@@ -801,7 +768,6 @@ pub struct LinkedAccountsResponse {
 // ── Workflow inbox (GET /api/v1/viewer/workflow-inbox) ───────
 
 #[derive(Debug, Clone, PartialEq, Deserialize, Serialize)]
-#[serde(rename_all = "camelCase")]
 pub struct WorkflowInboxItem {
     pub session_id: String,
     pub flow_slug: String,
@@ -811,7 +777,6 @@ pub struct WorkflowInboxItem {
 }
 
 #[derive(Debug, Clone, PartialEq, Deserialize, Serialize)]
-#[serde(rename_all = "camelCase")]
 pub struct WorkflowInboxResponse {
     pub pending: Vec<WorkflowInboxItem>,
     pub total: usize,
@@ -820,28 +785,24 @@ pub struct WorkflowInboxResponse {
 // ── Notification preferences (GET/PATCH /api/v1/viewer/preferences)
 
 #[derive(Debug, Clone, PartialEq, Deserialize, Serialize)]
-#[serde(rename_all = "camelCase")]
 pub struct ChannelAvailability {
     pub channel: String,
     pub enabled: bool,
 }
 
 #[derive(Debug, Clone, PartialEq, Deserialize, Serialize)]
-#[serde(rename_all = "camelCase")]
 pub struct ChannelPreference {
     pub channel: String,
     pub enabled: bool,
 }
 
 #[derive(Debug, Clone, PartialEq, Deserialize, Serialize)]
-#[serde(rename_all = "camelCase")]
 pub struct NotificationPreferencesResponse {
     pub available_channels: Vec<ChannelAvailability>,
     pub preferences: Vec<ChannelPreference>,
 }
 
 #[derive(Debug, Clone, PartialEq, Deserialize, Serialize)]
-#[serde(rename_all = "camelCase")]
 pub struct UpdateNotificationPreferencesResponse {
     pub preferences: Vec<ChannelPreference>,
 }

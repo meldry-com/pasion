@@ -102,7 +102,6 @@ pub enum LinkAction {
 }
 
 #[derive(Serialize, ToSchema)]
-#[serde(rename_all = "camelCase")]
 pub struct LinkActionResponse {
     pub status: &'static str,
     #[serde(skip_serializing_if = "Option::is_none")]

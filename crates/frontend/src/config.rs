@@ -46,9 +46,14 @@ pub fn get_config() -> AppConfig {
                         .ok()
                         .and_then(|v| v.as_string())
                         .unwrap_or_else(|| "/".to_string());
-                    let api_endpoint = js_sys::Reflect::get(&val, &"apiEndpoint".into())
+                    let api_endpoint = js_sys::Reflect::get(&val, &"api_endpoint".into())
                         .ok()
                         .and_then(|v| v.as_string())
+                        .or_else(|| {
+                            js_sys::Reflect::get(&val, &"apiEndpoint".into())
+                                .ok()
+                                .and_then(|v| v.as_string())
+                        })
                         .unwrap_or_else(|| "/api/v1".to_string());
 
                     let error = read_error_from_js(&val);
