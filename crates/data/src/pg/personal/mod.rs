@@ -21,8 +21,8 @@ mod tests {
         },
         user::UserRepository,
     };
-    use rand::SeedableRng;
     use rand_chacha::ChaChaRng;
+    use rand_core::SeedableRng;
 
     use crate::PgRepositoryFactory;
 

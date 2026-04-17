@@ -130,8 +130,8 @@ mod tests {
         RepositoryAccess as _, RepositoryFactory as _, RepositoryTransaction as _,
         clock::MockClock, policy_data::PolicyDataRepository,
     };
-    use rand::SeedableRng;
     use rand_chacha::ChaChaRng;
+    use rand_core::SeedableRng;
     use serde_json::json;
 
     use crate::PgRepositoryFactory;

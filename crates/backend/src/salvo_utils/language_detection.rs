@@ -84,7 +84,7 @@ impl Header for AcceptLanguage {
                     b"*" => None,
                     locale => {
                         let locale =
-                            Locale::try_from_bytes(locale).map_err(|_e| Error::invalid())?;
+                            Locale::try_from_utf8(locale).map_err(|_e| Error::invalid())?;
                         Some(locale)
                     }
                 };

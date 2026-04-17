@@ -509,8 +509,8 @@ mod tests {
         Clock as _, Pagination, RepositoryAccess as _, RepositoryFactory as _,
         RepositoryTransaction as _, clock::MockClock, user::UserRegistrationTokenFilter,
     };
-    use rand::SeedableRng;
     use rand_chacha::ChaChaRng;
+    use rand_core::SeedableRng;
 
     use crate::PgRepositoryFactory;
 

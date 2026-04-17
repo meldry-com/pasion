@@ -299,7 +299,7 @@ impl Hasher {
     fn maybe_normalize(&self, pwd: Zeroizing<String>) -> Zeroizing<String> {
         if self.nfkc_normalize {
             let normalizer = icu_normalizer::ComposingNormalizer::new_nfkc();
-            Zeroizing::new(normalizer.normalize(&pwd))
+            Zeroizing::new(normalizer.normalize(&pwd).to_string())
         } else {
             pwd
         }

@@ -252,8 +252,8 @@ mod tests {
         clock::MockClock,
         oauth2::OAuth2SessionRepository,
     };
-    use rand::SeedableRng;
     use rand_chacha::ChaChaRng;
+    use rand_core::SeedableRng;
 
     use crate::PgRepositoryFactory;
 

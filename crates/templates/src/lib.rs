@@ -469,7 +469,7 @@ impl Templates {
 
 #[cfg(test)]
 mod tests {
-    use rand::SeedableRng;
+    use rand_core::SeedableRng;
 
     use super::*;
 

@@ -64,7 +64,7 @@ salvo = { version = "0.92", features = [
     "test",
     "rate-limiter",
 ] }
-arc-swap = "1.9.0"
+arc-swap = "1.9.1"
 async-stream = "0.3.6"
 async-trait = "0.1.89"
 anyhow = "1.0.102"
@@ -75,10 +75,10 @@ argon2 = { version = "0.5.3", features = ["password-hash", "std"] }
 base64 = "0.22.1"
 base64ct = { version = "1.8.3", features = ["std"] }
 bcrypt = "0.19.0"
-bitflags = "2.11.0"
+bitflags = "2.11.1"
 bytes = "1.11.1"
 camino = { version = "1.2.2", features = ["serde1"] }
-data-encoding = "2.6"
+data-encoding = "2.10"
 chacha20poly1305 = { version = "0.10.1", features = ["std"] }
 compact_str = "0.9.0"
 console = "0.16.3"
@@ -89,13 +89,13 @@ chrono = { version = "0.4.44", default-features = false, features = [
     "serde",
     "clock",
 ] }
-clap = { version = "4.6.0", features = ["derive"] }
+clap = { version = "4.6.1", features = ["derive"] }
 const-oid = { version = "0.9.6", features = ["std"] }
 convert_case = "0.11.0"
 crc = "3.4.0"
 cron = "0.16"
 csv = "1.4.0"
-der = { version = "0.7.10", features = ["std"] }
+der = { version = "0.7.10", features = ["std", "pem"] }
 dialoguer = { version = "0.12.0", default-features = false, features = [
     "fuzzy-select",
     "password",
@@ -103,7 +103,7 @@ dialoguer = { version = "0.12.0", default-features = false, features = [
 digest = "0.10.7"
 dotenvy = "0.15.7"
 ecdsa = { version = "0.16.9", features = ["signing", "verifying"] }
-ed25519-dalek = { version = "2.1.1", features = ["rand_core", "pkcs8"] }
+ed25519-dalek = { version = "2.2.0", features = ["rand_core", "pkcs8"] }
 elliptic-curve = { version = "0.13.8", features = ["std", "pem", "sec1"] }
 fluent-bundle = "0.16"
 fluent-syntax = "0.12"
@@ -113,14 +113,14 @@ intl-memoizer = "0.5"
 figment = { version = "0.10.19", features = ["env", "yaml", "test"] }
 form_urlencoded = "1.2.2"
 futures-util = "0.3.32"
-generic-array = "0.14"
+generic-array = "0.14.9"
 hmac = "0.12.1"
 headers = "0.4.1"
 hex = "0.4.3"
 http = "1.4.0"
 http-body = "1.0.1"
 http-body-util = "0.1.3"
-hyper = { version = "1.8.1", features = ["client", "server", "http1", "http2"] }
+hyper = { version = "1.9.0", features = ["client", "server", "http1", "http2"] }
 hyper-util = { version = "0.1.20", features = [
     "client",
     "server",
@@ -130,27 +130,27 @@ hyper-util = { version = "0.1.20", features = [
     "http2",
     "tokio",
 ] }
-hyper-rustls = { version = "0.27.7", default-features = false, features = [
+hyper-rustls = { version = "0.27.9", default-features = false, features = [
     "http1",
     "http2",
 ] }
-icu_calendar = { version = "1.5.2", features = ["compiled_data", "std"] }
-icu_datetime = { version = "1.5.1", features = ["compiled_data", "std"] }
-icu_experimental = { version = "0.1.0", features = ["compiled_data", "std"] }
-icu_locid = { version = "1.5.0", features = ["std"] }
-icu_locid_transform = { version = "1.5.0", features = ["compiled_data", "std"] }
-icu_normalizer = { version = "1.5.0", features = ["compiled_data", "std"] }
-icu_plurals = { version = "1.5.0", features = ["compiled_data", "std"] }
-icu_provider = { version = "2.1.1", features = ["std", "sync"] }
-icu_provider_adapters = { version = "1.5.0", features = ["std"] }
-indexmap = { version = "2.13.0", features = ["serde"] }
+icu_calendar = { version = "2.2.1", features = ["compiled_data"] }
+icu_datetime = { version = "2.2.0", features = ["compiled_data"] }
+icu_experimental = { version = "0.5.0", features = ["compiled_data"] }
+icu_locid = { package = "icu_locale_core", version = "2.2.0", features = ["alloc"] }
+icu_locid_transform = { package = "icu_locale", version = "2.2.0", features = ["compiled_data"] }
+icu_normalizer = { version = "2.2.0", features = ["compiled_data"] }
+icu_plurals = { version = "2.2.0", features = ["compiled_data"] }
+icu_provider = { version = "2.2.0", features = ["std", "sync"] }
+icu_provider_adapters = "2.2.0"
+indexmap = { version = "2.14.0", features = ["serde"] }
 indoc = "2.0.7"
-insta = { version = "1.46.3", features = ["yaml", "json"] }
+insta = { version = "1.47.2", features = ["yaml", "json"] }
 ipnetwork = { version = "0.21", features = ["serde"] }
 itertools = "0.14.0"
 k256 = { version = "0.13.4", features = ["std"] }
 language-tags = { version = "0.3.2", features = ["serde"] }
-lettre = { version = "0.11.19", default-features = false, features = [
+lettre = { version = "0.11.21", default-features = false, features = [
     "tokio1-rustls",
     "rustls-platform-verifier",
     "aws-lc-rs",
@@ -163,14 +163,14 @@ lettre = { version = "0.11.19", default-features = false, features = [
 ] }
 listenfd = "1.0.2"
 mime = "0.3.17"
-minijinja = { version = "2.18.0", features = [
+minijinja = { version = "2.19.0", features = [
     "urlencode",
     "loader",
     "json",
     "speedups",
     "unstable_machinery",
 ] }
-minijinja-contrib = { version = "2.18.0", features = ["pycompat"] }
+minijinja-contrib = { version = "2.19.0", features = ["pycompat"] }
 nonzero_ext = "0.3.0"
 opendal = { version = "0.55", features = ["services-fs", "services-s3"] }
 cedar-policy = "4"
@@ -212,11 +212,11 @@ pest_derive = "2.8.6"
 pin-project-lite = "0.2.17"
 pkcs1 = { version = "0.7.5", features = ["std"] }
 pkcs8 = { version = "0.10.2", features = ["std", "pkcs5", "encryption", "pem"] }
-psl = "2.1.199"
+psl = "2.1.203"
 quanta = "0.12.6"
 rand = "0.10"
-rand_chacha = "0.3"
-rand_core = { version = "0.6", features = ["std", "getrandom"] }
+rand_chacha = "0.3.1"
+rand_core = { version = "0.6.4", features = ["std", "getrandom"] }
 regex = "1.12.3"
 reqwest = { version = "0.13.2", default-features = false, features = [
     "http2",
@@ -227,11 +227,11 @@ reqwest = { version = "0.13.2", default-features = false, features = [
     "socks",
 ] }
 rsa = { version = "0.9.10", features = ["std", "pem"] }
-rustc-hash = "2.1.1"
+rustc-hash = "2.1.2"
 ruma-common = "0.17.1"
-rustls = "0.23.37"
+rustls = "0.23.38"
 rustls-pki-types = "1.14.0"
-rustls-platform-verifier = "0.6.2"
+rustls-platform-verifier = "0.7.0"
 sd-notify = "0.5.0"
 schemars = { version = "1.2.1", features = [
     "url2",
@@ -271,14 +271,14 @@ serde_json = { version = "1.0.149", features = ["preserve_order"] }
 serde_urlencoded = "0.7.1"
 serde_with = { version = "3.18.0", features = ["hex", "chrono"] }
 serde_yaml = "0.9.34"
-sha1 = "0.10"
+sha1 = "0.10.6"
 sha2 = { version = "0.10.9", features = ["oid"] }
 signature = "2.2.0"
 socket2 = "0.6.3"
 spki = { version = "0.7.3", features = ["std"] }
 thiserror = "2.0.18"
 thiserror-ext = "0.3.0"
-tokio = { version = "1.50.0", features = ["full"] }
+tokio = { version = "1.52.1", features = ["full"] }
 tokio-stream = "0.1.18"
 tokio-rustls = "0.26.4"
 tokio-test = "0.4.5"
@@ -290,18 +290,18 @@ tracing-appender = "0.2.4"
 url = { version = "2.5.8", features = ["serde"] }
 urlencoding = "2.1.3"
 ulid = { version = "1.2", features = ["serde", "uuid"] }
-uuid = { version = "1.22.0", features = ["v7"] }
+uuid = { version = "1.23.1", features = ["v7"] }
 v_htmlescape = "0.15.8"
 vergen-gitcl = { version = "9.1.0", features = ["rustc"] }
 walkdir = "2.5.0"
 wiremock = "0.6.5"
 woothee = "0.13.0"
-writeable = "0.5.5"
+writeable = "0.6.3"
 zeroize = "1.8.2"
 zxcvbn = "3.1.0"
 
 # --- Front-end (Dioxus WASM) dependencies ---
-dioxus = { version = "0.7.4", features = ["web", "router"] }
+dioxus = { version = "0.7.5", features = ["web", "router"] }
 gloo-timers = { version = "0.4", features = ["futures"] }
 web-sys = { version = "0.3", features = [
     "Window",

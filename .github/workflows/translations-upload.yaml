@@ -13,6 +13,9 @@ jobs:
     permissions:
       contents: read
 
+    env:
+      LOCALAZY_WRITE_KEY: ${{ secrets.LOCALAZY_WRITE_KEY }}
+
     steps:
       - name: Fetch repository
         uses: actions/checkout@v6
@@ -31,8 +34,12 @@ jobs:
           # Strip the "release/" prefix when present; keep 'main' unchanged
           echo "name=${GITHUB_REF_NAME#release/}" >> "$GITHUB_OUTPUT"
 
+      - name: Skip Localazy upload when credentials are unavailable
+        if: ${{ env.LOCALAZY_WRITE_KEY == '' }}
+        run: echo "::notice::Skipping Localazy upload because LOCALAZY_WRITE_KEY is not configured."
+
       - name: Push source strings to Localazy
+        if: ${{ env.LOCALAZY_WRITE_KEY != '' }}
         run: localazy upload -w "$LOCALAZY_WRITE_KEY" -b "$BRANCH"
         env:
           BRANCH: ${{ steps.localazy-branch.outputs.name }}
-          LOCALAZY_WRITE_KEY: ${{ secrets.LOCALAZY_WRITE_KEY }}

@@ -27,7 +27,7 @@ mod tests {
         user::UserRepository,
     };
     use pasion_iana::jose::JsonWebSignatureAlg;
-    use rand::SeedableRng;
+    use rand_core::SeedableRng;
 
     use crate::PgRepositoryFactory;
 

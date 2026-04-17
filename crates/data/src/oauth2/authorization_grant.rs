@@ -273,7 +273,7 @@ impl AuthorizationGrant {
 
 #[cfg(test)]
 mod tests {
-    use rand::SeedableRng;
+    use rand_core::SeedableRng;
 
     use super::*;
     use crate::clock::{Clock, MockClock};

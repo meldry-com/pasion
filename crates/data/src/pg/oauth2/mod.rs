@@ -28,8 +28,8 @@ mod tests {
         clock::MockClock,
         oauth2::{OAuth2DeviceCodeGrantParams, OAuth2SessionFilter, OAuth2SessionRepository},
     };
-    use rand::SeedableRng;
     use rand_chacha::ChaChaRng;
+    use rand_core::SeedableRng;
     use ulid::Ulid;
 
     use crate::PgRepositoryFactory;

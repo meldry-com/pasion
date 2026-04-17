@@ -11,6 +11,7 @@ use std::{
     sync::{Arc, atomic::AtomicUsize},
 };
 
+use chrono::Timelike as _;
 use minijinja::{
     Error, ErrorKind, State, Value,
     value::{Kwargs, Object, ViaDeserialize, from_args},
@@ -380,11 +381,17 @@ impl Object for TranslateHandle {
                 // displaying UTC is unambiguous; localising by timezone
                 // would require storing the user's preferred TZ and is not
                 // yet modelled.
-                let time_of_day = parsed_date.time();
+                let time_of_day = pasion_i18n::icu_datetime::input::Time::try_new(
+                    parsed_date.hour() as u8,
+                    parsed_date.minute() as u8,
+                    parsed_date.second() as u8,
+                    parsed_date.nanosecond(),
+                )
+                .map_err(|_| Error::new(ErrorKind::InvalidOperation, "Failed to convert time"))?;
 
                 let formatted = self
                     .translator
-                    .short_time(&self.locale, &ChronoTimeAdapter(time_of_day))
+                    .short_time(&self.locale, &time_of_day)
                     .map_err(|_| {
                         Error::new(ErrorKind::InvalidOperation, "Failed to format time")
                     })?;
@@ -397,39 +404,6 @@ impl Object for TranslateHandle {
                 "Invalid method on include_asset",
             )),
         }
-    }
-}
-
-// ---------------------------------------------------------------------------
-// Chrono time adapter for ICU datetime
-// ---------------------------------------------------------------------------
-
-/// Bridges a chrono [`NaiveTime`](chrono::NaiveTime) (or any [`Timelike`])
-/// to the ICU [`IsoTimeInput`] trait.
-///
-/// [`Timelike`]: chrono::Timelike
-/// [`IsoTimeInput`]: pasion_i18n::icu_datetime::input::IsoTimeInput
-struct ChronoTimeAdapter<T>(T);
-
-impl<T: chrono::Timelike> pasion_i18n::icu_datetime::input::IsoTimeInput for ChronoTimeAdapter<T> {
-    fn hour(&self) -> Option<pasion_i18n::icu_calendar::types::IsoHour> {
-        let h: usize = chrono::Timelike::hour(&self.0).try_into().ok()?;
-        h.try_into().ok()
-    }
-
-    fn minute(&self) -> Option<pasion_i18n::icu_calendar::types::IsoMinute> {
-        let m: usize = chrono::Timelike::minute(&self.0).try_into().ok()?;
-        m.try_into().ok()
-    }
-
-    fn second(&self) -> Option<pasion_i18n::icu_calendar::types::IsoSecond> {
-        let s: usize = chrono::Timelike::second(&self.0).try_into().ok()?;
-        s.try_into().ok()
-    }
-
-    fn nanosecond(&self) -> Option<pasion_i18n::icu_calendar::types::NanoSecond> {
-        let ns: usize = chrono::Timelike::nanosecond(&self.0).try_into().ok()?;
-        ns.try_into().ok()
     }
 }
 

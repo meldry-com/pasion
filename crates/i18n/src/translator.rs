@@ -7,19 +7,14 @@ use icu_experimental::relativetime::{
 };
 use icu_locid::Locale;
 use icu_locid_transform::fallback::{
-    LocaleFallbackConfig, LocaleFallbackPriority, LocaleFallbackSupplement, LocaleFallbacker,
-    LocaleFallbackerWithConfig,
+    LocaleFallbackConfig, LocaleFallbacker, LocaleFallbackerWithConfig,
 };
 use thiserror::Error;
 use unic_langid::LanguageIdentifier;
 use writeable::Writeable;
 
-const FALLBACKER: LocaleFallbackerWithConfig<'static> = LocaleFallbacker::new().for_config({
-    let mut config = LocaleFallbackConfig::const_default();
-    config.priority = LocaleFallbackPriority::Collation;
-    config.fallback_supplement = Some(LocaleFallbackSupplement::Collation);
-    config
-});
+const FALLBACKER: LocaleFallbackerWithConfig<'static> =
+    LocaleFallbacker::new().for_config(LocaleFallbackConfig::default());
 
 /// Error type for loading translations.
 #[derive(Debug, Error)]
@@ -226,7 +221,7 @@ impl Translator {
                 return Some(result);
             }
 
-            if candidate.is_und() {
+            if candidate.is_unknown() {
                 // Last resort: default locale.
                 return self.format_in_bundle(&self.default_locale, &ftl_id, args);
             }
@@ -265,16 +260,11 @@ impl Translator {
     /// # Errors
     ///
     /// Returns an error if the ICU formatter cannot be created for the locale.
-    pub fn relative_date(
-        &self,
-        locale: &Locale,
-        days: i64,
-    ) -> Result<String, icu_experimental::relativetime::RelativeTimeError> {
-        let opts = RelativeTimeFormatterOptions {
-            numeric: Numeric::Auto,
-        };
-        let dl = locale.into();
-        let formatter = RelativeTimeFormatter::try_new_long_day(&dl, opts)?;
+    pub fn relative_date(&self, locale: &Locale, days: i64) -> Result<String, crate::DataError> {
+        let mut opts = RelativeTimeFormatterOptions::default();
+        opts.numeric = Numeric::Auto;
+        let formatter = RelativeTimeFormatter::try_new_long_day(locale.into(), opts)
+            .map_err(|_| crate::DataError::new("failed to load relative time formatter"))?;
         let writeable = formatter.format(days.into());
         Ok(writeable.write_to_string().into_owned())
     }
@@ -289,15 +279,17 @@ impl Translator {
     /// # Errors
     ///
     /// Returns an error if the ICU formatter cannot be created for the locale.
-    pub fn short_time<T: icu_datetime::input::IsoTimeInput>(
+    pub fn short_time(
         &self,
         locale: &Locale,
-        time: &T,
-    ) -> Result<String, icu_datetime::DateTimeError> {
-        let time_length = icu_datetime::options::length::Time::Short;
-        let dl = locale.into();
-        let fmt = icu_datetime::TimeFormatter::try_new_with_length(&dl, time_length)?;
-        Ok(fmt.format_to_string(time))
+        time: &icu_datetime::input::Time,
+    ) -> Result<String, crate::DataError> {
+        let fmt = icu_datetime::NoCalendarFormatter::try_new(
+            locale.into(),
+            icu_datetime::fieldsets::T::short(),
+        )
+        .map_err(|_| crate::DataError::new("failed to load time formatter"))?;
+        Ok(fmt.format(time).to_string())
     }
 
     // ------------------------------------------------------------------
@@ -329,7 +321,7 @@ impl Translator {
             let mut chain = FALLBACKER.fallback_for(candidate.into());
             loop {
                 let current = chain.get();
-                if current.is_und() {
+                if current.is_unknown() {
                     break;
                 }
 

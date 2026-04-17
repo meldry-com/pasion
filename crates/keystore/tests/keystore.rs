@@ -11,7 +11,7 @@ use pasion_jose::{
     jwt::{JsonWebSignatureHeader, Jwt},
 };
 use pasion_keystore::{JsonWebKey, JsonWebKeySet, Keystore, PrivateKey};
-use rand::SeedableRng;
+use rand_core::SeedableRng;
 
 /// Shared password used for encrypted-key tests.
 static TEST_PASSPHRASE: &str = "hunter2";

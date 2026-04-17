@@ -82,7 +82,7 @@ macro_rules! asymetric_jwt_test {
             conditional! { $supported =>
                 use pasion_jose::jwt::JsonWebSignatureHeader;
                 use rand_chacha::ChaCha8Rng;
-                use rand::SeedableRng;
+                use rand_chacha::rand_core::SeedableRng;
 
                 #[test]
                 fn verify_jwt() {

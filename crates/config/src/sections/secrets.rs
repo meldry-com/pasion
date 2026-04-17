@@ -110,7 +110,7 @@ mod tests {
     };
     use pasion_iana::jose::JsonWebSignatureAlg;
     use pasion_jose::constraints::Constrainable;
-    use rand::SeedableRng;
+    use rand_core::SeedableRng;
     use tokio::{runtime::Handle, task};
 
     use super::{encryption::EncryptionKey, key_config::Key, *};

@@ -89,8 +89,8 @@ impl From<pasion_i18n::DataError> for AuthorizationCodeExchangeError {
     }
 }
 
-impl From<pasion_i18n::icu_locid::ParserError> for AuthorizationCodeExchangeError {
-    fn from(e: pasion_i18n::icu_locid::ParserError) -> Self {
+impl From<pasion_i18n::icu_locid::ParseError> for AuthorizationCodeExchangeError {
+    fn from(e: pasion_i18n::icu_locid::ParseError) -> Self {
         Self::Internal(Box::new(e))
     }
 }
