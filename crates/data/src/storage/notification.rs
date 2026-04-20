@@ -298,6 +298,7 @@ pub trait NotificationRepository: Send + Sync {
         clock: &dyn Clock,
         notification_delivery: NotificationDelivery,
         failure: NotificationDeliveryFailure,
+        provider_message_id: Option<String>,
         next_retry_at: Option<DateTime<Utc>>,
     ) -> Result<NotificationDelivery, Self::Error>;
 
@@ -396,6 +397,7 @@ repository_impl!(NotificationRepository:
         clock: &dyn Clock,
         notification_delivery: NotificationDelivery,
         failure: NotificationDeliveryFailure,
+        provider_message_id: Option<String>,
         next_retry_at: Option<DateTime<Utc>>,
     ) -> Result<NotificationDelivery, Self::Error>;
     async fn cancel_delivery(

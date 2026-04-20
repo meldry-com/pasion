@@ -737,6 +737,7 @@ impl NotificationRepository for PgNotificationRepository<'_> {
         clock: &dyn Clock,
         mut notification_delivery: NotificationDelivery,
         failure: NotificationDeliveryFailure,
+        provider_message_id: Option<String>,
         next_retry_at: Option<DateTime<Utc>>,
     ) -> Result<NotificationDelivery, Self::Error> {
         let now = clock.now();
@@ -745,6 +746,8 @@ impl NotificationRepository for PgNotificationRepository<'_> {
         notification_delivery.failed_at = Some(now);
         notification_delivery.last_failure = Some(failure);
         notification_delivery.next_retry_at = next_retry_at;
+        notification_delivery.provider_message_id =
+            provider_message_id.or(notification_delivery.provider_message_id.take());
 
         persist_delivery(self.conn, &notification_delivery).await?;
 

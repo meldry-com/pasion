@@ -30,6 +30,7 @@ use serde_json::{Value, json};
 use sha1::Sha1;
 use sha2::Sha256;
 use thiserror::Error;
+use url::Url;
 use x509_cert::Certificate;
 
 type HmacSha256 = Hmac<Sha256>;
@@ -357,35 +358,37 @@ impl EmailWebhookService {
         delivery: &NotificationDelivery,
         update: &DeliveryUpdate,
     ) -> Result<Option<NotificationDelivery>, Error> {
+        if !should_apply_delivery_update(
+            delivery.status,
+            delivery.last_failure.as_ref(),
+            &update.status,
+        ) {
+            return Ok(None);
+        }
+
         match &update.status {
-            DeliveryTerminalStatus::Delivered => {
-                if delivery.status == NotificationDeliveryStatus::Delivered {
-                    Ok(None)
-                } else {
-                    repo.notification()
-                        .mark_delivery_delivered(
-                            clock,
-                            delivery.clone(),
-                            update.provider_message_id.clone(),
-                        )
-                        .await
-                        .map(Some)
-                        .map_err(|error| Error::Internal(anyhow!(error)))
-                }
-            }
-            DeliveryTerminalStatus::Failed(failure) => {
-                if delivery.status == NotificationDeliveryStatus::Failed
-                    && delivery.last_failure.as_ref() == Some(failure)
-                {
-                    Ok(None)
-                } else {
-                    repo.notification()
-                        .mark_delivery_failed(clock, delivery.clone(), failure.clone(), None)
-                        .await
-                        .map(Some)
-                        .map_err(|error| Error::Internal(anyhow!(error)))
-                }
-            }
+            DeliveryTerminalStatus::Delivered => repo
+                .notification()
+                .mark_delivery_delivered(
+                    clock,
+                    delivery.clone(),
+                    update.provider_message_id.clone(),
+                )
+                .await
+                .map(Some)
+                .map_err(|error| Error::Internal(anyhow!(error))),
+            DeliveryTerminalStatus::Failed(failure) => repo
+                .notification()
+                .mark_delivery_failed(
+                    clock,
+                    delivery.clone(),
+                    failure.clone(),
+                    update.provider_message_id.clone(),
+                    None,
+                )
+                .await
+                .map(Some)
+                .map_err(|error| Error::Internal(anyhow!(error))),
         }
     }
 
@@ -1132,6 +1135,25 @@ fn parse_key_value_tag(tag: &str) -> Option<(&str, &str)> {
     tag.split_once('=').or_else(|| tag.split_once(':'))
 }
 
+fn should_apply_delivery_update(
+    current_status: NotificationDeliveryStatus,
+    current_failure: Option<&NotificationDeliveryFailure>,
+    update: &DeliveryTerminalStatus,
+) -> bool {
+    match update {
+        DeliveryTerminalStatus::Delivered => !matches!(
+            current_status,
+            NotificationDeliveryStatus::Delivered
+                | NotificationDeliveryStatus::Failed
+                | NotificationDeliveryStatus::Cancelled
+        ),
+        DeliveryTerminalStatus::Failed(failure) => {
+            !(current_status == NotificationDeliveryStatus::Failed
+                && current_failure == Some(failure))
+        }
+    }
+}
+
 fn header_str(headers: &HeaderMap, name: &str) -> Option<String> {
     headers
         .get(name)
@@ -1305,14 +1327,7 @@ async fn verify_sns_signature(
     allowed_prefixes: &[String],
     envelope: &SnsEnvelope,
 ) -> Result<(), Error> {
-    if !allowed_prefixes
-        .iter()
-        .any(|prefix| envelope.signing_cert_url.starts_with(prefix))
-    {
-        return Err(Error::Unauthorized(
-            "SNS SigningCertURL does not match the allowed prefixes".into(),
-        ));
-    }
+    validate_sns_signing_cert_url(&envelope.signing_cert_url, allowed_prefixes)?;
 
     let cert_pem = client
         .get(&envelope.signing_cert_url)
@@ -1352,6 +1367,75 @@ async fn verify_sns_signature(
             "unsupported SNS signature version {other}"
         ))),
     }
+}
+
+fn validate_sns_signing_cert_url(
+    signing_cert_url: &str,
+    allowed_prefixes: &[String],
+) -> Result<(), Error> {
+    let url = Url::parse(signing_cert_url)
+        .map_err(|error| Error::Unauthorized(format!("invalid SNS SigningCertURL: {error}")))?;
+
+    if url.scheme() != "https" {
+        return Err(Error::Unauthorized(
+            "SNS SigningCertURL must use HTTPS".into(),
+        ));
+    }
+
+    if !url.username().is_empty()
+        || url.password().is_some()
+        || url.port().is_some()
+        || url.query().is_some()
+        || url.fragment().is_some()
+    {
+        return Err(Error::Unauthorized(
+            "SNS SigningCertURL must not contain credentials, ports, query strings, or fragments"
+                .into(),
+        ));
+    }
+
+    let host = url
+        .host_str()
+        .ok_or_else(|| Error::Unauthorized("SNS SigningCertURL is missing a host".into()))?
+        .to_ascii_lowercase();
+    let path = url.path();
+
+    if !host.ends_with(".amazonaws.com") && !host.ends_with(".amazonaws.com.cn") {
+        return Err(Error::Unauthorized(
+            "SNS SigningCertURL host must be an AWS SNS endpoint".into(),
+        ));
+    }
+
+    if !path.starts_with("/SimpleNotificationService-") || !path.ends_with(".pem") {
+        return Err(Error::Unauthorized(
+            "SNS SigningCertURL path must reference a SimpleNotificationService PEM certificate"
+                .into(),
+        ));
+    }
+
+    let normalized_url = format!("https://{host}{path}");
+    if !allowed_prefixes.iter().any(|prefix| {
+        let prefix = prefix.trim().trim_end_matches('/').to_ascii_lowercase();
+        if prefix.is_empty() {
+            return false;
+        }
+
+        if prefix.starts_with("https://") {
+            normalized_url.starts_with(&prefix)
+        } else {
+            host.starts_with(
+                prefix
+                    .trim_start_matches("http://")
+                    .trim_start_matches("https://"),
+            )
+        }
+    }) {
+        return Err(Error::Unauthorized(
+            "SNS SigningCertURL does not match the allowed prefixes".into(),
+        ));
+    }
+
+    Ok(())
 }
 
 #[cfg(test)]
@@ -1396,5 +1480,37 @@ mod tests {
         .unwrap();
 
         assert!(matches!(lookup, DeliveryLookup::DeliveryId(_)));
+    }
+
+    #[test]
+    fn delivered_webhook_does_not_override_failed_delivery() {
+        assert!(!should_apply_delivery_update(
+            NotificationDeliveryStatus::Failed,
+            Some(&webhook_failure(
+                "bounce",
+                "SendGrid reported that the email bounced"
+            )),
+            &DeliveryTerminalStatus::Delivered,
+        ));
+    }
+
+    #[test]
+    fn sns_signing_cert_url_rejects_lookalike_host() {
+        let error = validate_sns_signing_cert_url(
+            "https://sns.evil.com/SimpleNotificationService-test.pem",
+            &[String::from("https://sns.")],
+        )
+        .unwrap_err();
+
+        assert!(matches!(error, Error::Unauthorized(_)));
+    }
+
+    #[test]
+    fn sns_signing_cert_url_accepts_aws_host() {
+        validate_sns_signing_cert_url(
+            "https://sns.us-east-1.amazonaws.com/SimpleNotificationService-test.pem",
+            &[String::from("https://sns.")],
+        )
+        .unwrap();
     }
 }

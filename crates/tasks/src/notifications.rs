@@ -735,7 +735,7 @@ async fn complete_delivery_with_failure(
     let next_retry_at = next_retry_delay(&request, &delivery, &failure).map(|delay| now + delay);
     let delivery = repo
         .notification()
-        .mark_delivery_failed(clock, delivery, failure.clone(), next_retry_at)
+        .mark_delivery_failed(clock, delivery, failure.clone(), None, next_retry_at)
         .await
         .map_err(JobError::retry)?;
 
