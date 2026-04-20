@@ -9,6 +9,7 @@ use pasion_backend::{
     handlers::{ActivityTracker, CookieManager, Limiter, MetadataCache},
     lifecycle::LifecycleManager,
     listener::server::Server,
+    services::email_webhook::EmailWebhookService,
     util::{
         database_url_from_config, diesel_pool_from_config, homeserver_connection_from_config,
         load_policy_factory_dynamic_data_continuously, notification_center_from_config,
@@ -232,6 +233,10 @@ impl Options {
         pasion_backend::storage::init(&config.storage)
             .context("failed to initialize storage backend")?;
 
+        let email_webhook_service =
+            EmailWebhookService::from_email_config(&config.email, http_client.clone())
+                .context("invalid email webhook configuration")?;
+
         // Explicitly the config to properly zeroize secret keys
         drop(config);
 
@@ -256,6 +261,7 @@ impl Options {
                 trusted_proxies,
                 limiter,
                 frontend_script_src,
+                email_webhook_service,
             };
             s.init_metrics();
             s.init_metadata_cache();

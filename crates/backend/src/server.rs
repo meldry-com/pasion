@@ -352,9 +352,10 @@ pub fn build_router(
 }
 
 fn build_human_router(router: Router, _templates: Templates) -> Router {
-    use crate::handlers::{oauth2::authorization, spa, upstream_oauth2};
+    use crate::handlers::{email_webhooks, oauth2::authorization, spa, upstream_oauth2};
 
     router
+        .push(Router::with_path("/webhooks/email/{provider}").post(email_webhooks::post))
         // ── OAuth2 protocol endpoints (server-side redirects) ──
         .push(Router::with_path("/authorize").get(authorization::get))
         // ── Upstream OAuth2 (server-side redirect & callback) ──

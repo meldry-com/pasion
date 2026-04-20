@@ -268,6 +268,8 @@ pub enum NotificationEventKind {
     DeliveryReserved,
     /// Delivery began sending.
     DeliverySendStarted,
+    /// Provider accepted the outbound payload.
+    DeliveryAccepted,
     /// Delivery completed successfully.
     DeliveryDelivered,
     /// Delivery completed unsuccessfully.
@@ -276,6 +278,8 @@ pub enum NotificationEventKind {
     DeliveryRetried,
     /// Request completed successfully.
     RequestCompleted,
+    /// Request reached terminal failure.
+    RequestFailed,
     /// Request was cancelled.
     RequestCancelled,
 }

@@ -246,6 +246,14 @@ pub trait NotificationRepository: Send + Sync {
         id: Ulid,
     ) -> Result<Option<NotificationDelivery>, Self::Error>;
 
+    /// Look up a delivery using the provider binding key and provider-side
+    /// message identifier.
+    async fn lookup_delivery_by_provider_message_id(
+        &mut self,
+        provider_binding_key: &str,
+        provider_message_id: &str,
+    ) -> Result<Option<NotificationDelivery>, Self::Error>;
+
     /// List deliveries belonging to a request.
     async fn list_deliveries(
         &mut self,
@@ -349,6 +357,11 @@ repository_impl!(NotificationRepository:
     async fn lookup_delivery(
         &mut self,
         id: Ulid,
+    ) -> Result<Option<NotificationDelivery>, Self::Error>;
+    async fn lookup_delivery_by_provider_message_id(
+        &mut self,
+        provider_binding_key: &str,
+        provider_message_id: &str,
     ) -> Result<Option<NotificationDelivery>, Self::Error>;
     async fn list_deliveries(
         &mut self,

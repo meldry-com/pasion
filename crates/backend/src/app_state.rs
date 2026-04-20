@@ -20,6 +20,7 @@ use crate::{
     handlers::{
         ActivityTracker, CookieManager, Limiter, MetadataCache, passwords::PasswordManager,
     },
+    services::email_webhook::EmailWebhookService,
     telemetry::METER,
 };
 
@@ -45,6 +46,7 @@ pub struct AppState {
     pub trusted_proxies: Vec<IpNetwork>,
     pub limiter: Limiter,
     pub frontend_script_src: String,
+    pub email_webhook_service: Option<EmailWebhookService>,
 }
 
 impl AppState {
@@ -159,6 +161,9 @@ pub async fn inject_app_state(
     depot.insert("activity_tracker", state.activity_tracker.clone());
     depot.insert("trusted_proxies", state.trusted_proxies.clone());
     depot.insert("frontend_script_src", state.frontend_script_src.clone());
+    if let Some(email_webhook_service) = state.email_webhook_service.clone() {
+        depot.insert("email_webhook_service", email_webhook_service);
+    }
 
     ctrl.call_next(req, depot, res).await;
 }

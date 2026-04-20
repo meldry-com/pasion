@@ -1804,6 +1804,26 @@
         "url"
       ]
     },
+    "ResendWebhookConfig": {
+      "description": "Resend webhook verification settings",
+      "type": "object",
+      "properties": {
+        "signing_secret": {
+          "description": "Svix/Resend webhook signing secret",
+          "type": "string"
+        },
+        "max_age_seconds": {
+          "description": "Maximum accepted age for signed webhook timestamps",
+          "type": "integer",
+          "format": "uint64",
+          "minimum": 0,
+          "default": 300
+        }
+      },
+      "required": [
+        "signing_secret"
+      ]
+    },
     "ResendEmailProviderConfig": {
       "description": "Resend email API delivery settings",
       "type": "object",
@@ -1816,10 +1836,34 @@
           "description": "Base URL for the Resend API",
           "type": "string",
           "default": "https://api.resend.com"
+        },
+        "webhook": {
+          "description": "Optional webhook verification settings for asynchronous delivery events",
+          "anyOf": [
+            {
+              "$ref": "#/definitions/ResendWebhookConfig"
+            },
+            {
+              "type": "null"
+            }
+          ]
         }
       },
       "required": [
         "api_key"
+      ]
+    },
+    "SendgridWebhookConfig": {
+      "description": "SendGrid event webhook verification settings",
+      "type": "object",
+      "properties": {
+        "public_key_pem": {
+          "description": "PEM-encoded public key used to verify signed event webhooks",
+          "type": "string"
+        }
+      },
+      "required": [
+        "public_key_pem"
       ]
     },
     "SendgridEmailProviderConfig": {
@@ -1834,6 +1878,17 @@
           "description": "Base URL for the SendGrid API",
           "type": "string",
           "default": "https://api.sendgrid.com"
+        },
+        "webhook": {
+          "description": "Optional webhook verification settings for asynchronous delivery events",
+          "anyOf": [
+            {
+              "$ref": "#/definitions/SendgridWebhookConfig"
+            },
+            {
+              "type": "null"
+            }
+          ]
         }
       },
       "required": [
@@ -1852,11 +1907,35 @@
           "description": "Base URL for the Twilio SendGrid API",
           "type": "string",
           "default": "https://api.sendgrid.com"
+        },
+        "webhook": {
+          "description": "Optional webhook verification settings for asynchronous delivery events",
+          "anyOf": [
+            {
+              "$ref": "#/definitions/SendgridWebhookConfig"
+            },
+            {
+              "type": "null"
+            }
+          ]
         }
       },
       "required": [
         "api_key"
       ]
+    },
+    "BrevoWebhookConfig": {
+      "description": "Brevo webhook request validation settings",
+      "type": "object",
+      "properties": {
+        "headers": {
+          "description": "Expected static headers attached by Brevo when invoking the webhook URL",
+          "type": "object",
+          "additionalProperties": {
+            "type": "string"
+          }
+        }
+      }
     },
     "BrevoEmailProviderConfig": {
       "description": "Brevo transactional email API delivery settings",
@@ -1870,10 +1949,50 @@
           "description": "Base URL for the Brevo API",
           "type": "string",
           "default": "https://api.brevo.com"
+        },
+        "webhook": {
+          "description": "Optional webhook validation settings for asynchronous delivery events",
+          "anyOf": [
+            {
+              "$ref": "#/definitions/BrevoWebhookConfig"
+            },
+            {
+              "type": "null"
+            }
+          ]
         }
       },
       "required": [
         "api_key"
+      ]
+    },
+    "AwsSesWebhookConfig": {
+      "description": "AWS SES feedback ingestion settings delivered through SNS",
+      "type": "object",
+      "properties": {
+        "topic_arn": {
+          "description": "SNS topic ARN allowed to post SES delivery feedback to this endpoint",
+          "type": "string"
+        },
+        "auto_confirm_subscription": {
+          "description": "Automatically confirm `SubscriptionConfirmation` callbacks",
+          "type": "boolean",
+          "default": false
+        },
+        "allowed_signing_cert_url_prefixes": {
+          "description": "Allowed HTTPS prefixes for `SigningCertURL`",
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "default": [
+            "https://sns.",
+            "https://sns-"
+          ]
+        }
+      },
+      "required": [
+        "topic_arn"
       ]
     },
     "AwsSesEmailProviderConfig": {
@@ -1911,6 +2030,17 @@
           "type": [
             "string",
             "null"
+          ]
+        },
+        "webhook": {
+          "description": "Optional webhook settings for SNS-delivered delivery feedback",
+          "anyOf": [
+            {
+              "$ref": "#/definitions/AwsSesWebhookConfig"
+            },
+            {
+              "type": "null"
+            }
           ]
         }
       },

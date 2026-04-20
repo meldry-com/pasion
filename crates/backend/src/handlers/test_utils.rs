@@ -372,6 +372,10 @@ impl TestState {
             .hoop(InjectTestState(self.clone()))
             // Health
             .push(Router::with_path("/health").get(crate::handlers::health::get))
+            .push(
+                Router::with_path("/webhooks/email/{provider}")
+                    .post(crate::handlers::email_webhooks::post),
+            )
             // OAuth2 discovery
             .push(
                 Router::with_path("/.well-known/openid-configuration")

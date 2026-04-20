@@ -494,9 +494,7 @@ impl EmailProvider for ResendProvider {
 
         Err(provider_client_error(
             "sender_domain_unverified",
-            format!(
-                "Resend domain {sender_domain} is not configured or sending is not enabled"
-            ),
+            format!("Resend domain {sender_domain} is not configured or sending is not enabled"),
         ))
     }
 }
@@ -788,22 +786,24 @@ impl EmailProvider for AwsSesProvider {
 
         let body = serde_json::to_string(&payload)?;
         let url = provider_url(&self.endpoint, "/v2/email/outbound-emails");
-        execute_provider_request(
-            self.aws_signed_request(Method::POST, url, Some(body), Some("application/json"))?,
-        )
+        execute_provider_request(self.aws_signed_request(
+            Method::POST,
+            url,
+            Some(body),
+            Some("application/json"),
+        )?)
         .await
     }
 
     async fn test_connection(&self, from: &Mailbox) -> Result<(), Error> {
-        let account: AwsSesAccountResponse = execute_provider_json_request(
-            self.aws_signed_request(
+        let account: AwsSesAccountResponse =
+            execute_provider_json_request(self.aws_signed_request(
                 Method::GET,
                 provider_url(&self.endpoint, "/v2/email/account"),
                 None,
                 None,
-            )?,
-        )
-        .await?;
+            )?)
+            .await?;
 
         if !account.sending_enabled {
             return Err(provider_client_error(
@@ -959,9 +959,9 @@ impl AwsSesProvider {
     ) -> Result<Option<AwsSesIdentityResponse>, Error> {
         let mut url = self.endpoint.clone();
         {
-            let mut segments = url
-                .path_segments_mut()
-                .map_err(|_| provider_client_error("invalid_endpoint", "AWS SES endpoint path is invalid"))?;
+            let mut segments = url.path_segments_mut().map_err(|_| {
+                provider_client_error("invalid_endpoint", "AWS SES endpoint path is invalid")
+            })?;
             segments.clear();
             segments.extend(["v2", "email", "identities", identity]);
         }
@@ -976,7 +976,7 @@ impl AwsSesProvider {
     }
 }
 
-fn build_lettre_message(email: &OutboundEmail) -> Result<Message, lettre::error::Error> {
+fn build_lettre_message(email: &OutboundEmail) -> Result<Message, Error> {
     let mut builder = Message::builder()
         .from(email.from.clone())
         .subject(email.subject.trim());
@@ -989,6 +989,24 @@ fn build_lettre_message(email: &OutboundEmail) -> Result<Message, lettre::error:
         builder = builder.to(mailbox.clone());
     }
 
+    for (name, value) in &email.headers {
+        if reserved_message_header(name) {
+            return Err(provider_client_error(
+                "reserved_header",
+                format!("header {name} cannot be set explicitly"),
+            ));
+        }
+
+        let header_name = HeaderName::new_from_ascii(name.clone()).map_err(|_| {
+            provider_client_error(
+                "invalid_header_name",
+                format!("header {name} is not a valid RFC 5322 header name"),
+            )
+        })?;
+
+        builder = builder.raw_header(HeaderValue::new(header_name, value.clone()));
+    }
+
     match &email.html_body {
         Some(html) => builder.multipart(MultiPart::alternative_plain_html(
             email.text_body.clone(),
@@ -996,6 +1014,7 @@ fn build_lettre_message(email: &OutboundEmail) -> Result<Message, lettre::error:
         )),
         None => builder.singlepart(SinglePart::plain(email.text_body.clone())),
     }
+    .map_err(Error::from)
 }
 
 async fn execute_provider_request(request: RequestBuilder) -> Result<SendResult, Error> {
@@ -1013,12 +1032,54 @@ async fn execute_provider_request(request: RequestBuilder) -> Result<SendResult,
     })
 }
 
+async fn execute_provider_json_request<T: DeserializeOwned>(
+    request: RequestBuilder,
+) -> Result<T, Error> {
+    let response = request.send().await?;
+    let status = response.status();
+    let body = response.text().await.unwrap_or_default();
+
+    if !status.is_success() {
+        return Err(provider_error(status.as_u16(), body));
+    }
+
+    Ok(serde_json::from_str(&body)?)
+}
+
+async fn execute_optional_provider_json_request<T: DeserializeOwned>(
+    request: RequestBuilder,
+    ignored_statuses: &[StatusCode],
+) -> Result<Option<T>, Error> {
+    let response = request.send().await?;
+    let status = response.status();
+    let body = response.text().await.unwrap_or_default();
+
+    if ignored_statuses.contains(&status) {
+        return Ok(None);
+    }
+
+    if !status.is_success() {
+        return Err(provider_error(status.as_u16(), body));
+    }
+
+    Ok(Some(serde_json::from_str(&body)?))
+}
+
 fn provider_error(status: u16, body: String) -> Error {
     Error::ProviderError {
         status,
         code: extract_provider_error_code(&body),
         retryable: status == 429 || status >= 500,
         body,
+    }
+}
+
+fn provider_client_error(code: impl Into<String>, body: impl Into<String>) -> Error {
+    Error::ProviderError {
+        status: 400,
+        code: Some(code.into()),
+        retryable: false,
+        body: body.into(),
     }
 }
 
@@ -1064,7 +1125,7 @@ fn brevo_tags(tags: &BTreeMap<String, String>) -> Vec<String> {
             if value.trim().is_empty() {
                 name.clone()
             } else {
-                format!("{name}:{value}")
+                format!("{name}={value}")
             }
         })
         .collect()
@@ -1079,8 +1140,154 @@ fn aws_ses_tags(tags: &BTreeMap<String, String>) -> Vec<AwsSesTag<'_>> {
         .collect()
 }
 
-fn canonical_uri(path: &str) -> &str {
-    if path.is_empty() { "/" } else { path }
+async fn validate_sendgrid_sender(
+    provider: &SendgridLikeProvider,
+    from: &Mailbox,
+) -> Result<(), Error> {
+    let sender_email = from.email.to_string();
+    let sender_domain = sender_domain(from).ok_or_else(|| {
+        provider_client_error(
+            "invalid_sender",
+            format!("sender address {from} does not contain a domain"),
+        )
+    })?;
+
+    let mut authenticated_domains_url = provider_url(&provider.base_url, "/v3/whitelabel/domains");
+    authenticated_domains_url
+        .query_pairs_mut()
+        .append_pair("domain", &sender_domain)
+        .append_pair("limit", "200");
+    let authenticated_domains =
+        execute_optional_provider_json_request::<Vec<SendgridAuthenticatedDomain>>(
+            provider
+                .client
+                .get(authenticated_domains_url)
+                .bearer_auth(&provider.api_key),
+            &[StatusCode::FORBIDDEN, StatusCode::NOT_FOUND],
+        )
+        .await?;
+
+    if authenticated_domains.as_ref().is_some_and(|domains| {
+        domains.iter().any(|domain| {
+            domain.domain.eq_ignore_ascii_case(&sender_domain) && domain.valid != Some(false)
+        })
+    }) {
+        return Ok(());
+    }
+
+    let mut verified_senders_url = provider_url(&provider.base_url, "/v3/verified_senders");
+    verified_senders_url
+        .query_pairs_mut()
+        .append_pair("limit", "200");
+    let verified_senders =
+        execute_optional_provider_json_request::<SendgridVerifiedSendersResponse>(
+            provider
+                .client
+                .get(verified_senders_url)
+                .bearer_auth(&provider.api_key),
+            &[StatusCode::FORBIDDEN, StatusCode::NOT_FOUND],
+        )
+        .await?;
+
+    if verified_senders.as_ref().is_some_and(|response| {
+        response
+            .results
+            .iter()
+            .any(|sender| sender.from_email.eq_ignore_ascii_case(&sender_email) && sender.verified)
+    }) {
+        return Ok(());
+    }
+
+    if authenticated_domains.is_none() && verified_senders.is_none() {
+        return Ok(());
+    }
+
+    Err(provider_client_error(
+        "sender_identity_unverified",
+        format!(
+            "Twilio SendGrid sender {sender_email} is not verified and domain {sender_domain} is not authenticated"
+        ),
+    ))
+}
+
+fn reserved_message_header(name: &str) -> bool {
+    [
+        "bcc",
+        "cc",
+        "content-disposition",
+        "content-transfer-encoding",
+        "content-type",
+        "date",
+        "from",
+        "in-reply-to",
+        "message-id",
+        "mime-version",
+        "references",
+        "reply-to",
+        "sender",
+        "subject",
+        "to",
+    ]
+    .iter()
+    .any(|reserved| reserved.eq_ignore_ascii_case(name))
+}
+
+fn sender_domain(mailbox: &Mailbox) -> Option<String> {
+    mailbox
+        .email
+        .to_string()
+        .rsplit_once('@')
+        .map(|(_, domain)| domain.trim().to_ascii_lowercase())
+        .filter(|domain| !domain.is_empty())
+}
+
+fn canonical_uri(path: &str) -> String {
+    if path.is_empty() {
+        "/".to_owned()
+    } else {
+        aws_percent_encode(path, true)
+    }
+}
+
+fn canonical_query(query: Option<&str>) -> String {
+    let Some(query) = query else {
+        return String::new();
+    };
+
+    let mut pairs = query
+        .split('&')
+        .map(|pair| match pair.split_once('=') {
+            Some((name, value)) => (
+                aws_percent_encode(name, false),
+                aws_percent_encode(value, false),
+            ),
+            None => (aws_percent_encode(pair, false), String::new()),
+        })
+        .collect::<Vec<_>>();
+    pairs.sort();
+
+    pairs
+        .into_iter()
+        .map(|(name, value)| format!("{name}={value}"))
+        .collect::<Vec<_>>()
+        .join("&")
+}
+
+fn aws_percent_encode(value: &str, keep_slash: bool) -> String {
+    let mut encoded = String::with_capacity(value.len());
+
+    for byte in value.as_bytes() {
+        let is_unreserved =
+            byte.is_ascii_alphanumeric() || matches!(byte, b'-' | b'_' | b'.' | b'~');
+        if is_unreserved || (keep_slash && *byte == b'/') {
+            encoded.push(char::from(*byte));
+        } else {
+            encoded.push('%');
+            encoded.push_str(&format!("{byte:02X}"));
+        }
+    }
+
+    encoded
 }
 
 fn normalize_aws_header_value(value: &str) -> String {
@@ -1176,9 +1383,40 @@ fn extract_provider_error_code(body: &str) -> Option<String> {
 
 #[cfg(test)]
 mod tests {
-    use reqwest::header::{HeaderMap, HeaderValue};
+    use base64::{Engine as _, engine::general_purpose::STANDARD as BASE64_STANDARD};
+    use reqwest::{Client, header::HeaderMap};
+    use rustls_platform_verifier::ConfigVerifierExt as _;
+    use serde_json::json;
+    use wiremock::{
+        Mock, MockServer, Request, ResponseTemplate,
+        matchers::{body_partial_json, header, header_exists, method, path, query_param},
+    };
 
-    use super::{extract_provider_error_code, extract_provider_message_id};
+    use super::*;
+    use reqwest::header::HeaderValue;
+
+    fn sample_email() -> OutboundEmail {
+        OutboundEmail {
+            from: "Pasion <noreply@example.com>".parse().unwrap(),
+            reply_to: Some("Support <support@example.com>".parse().unwrap()),
+            to: vec!["Alice <alice@example.com>".parse().unwrap()],
+            subject: "Production check".to_owned(),
+            text_body: "Plain body".to_owned(),
+            html_body: Some("<p>HTML body</p>".to_owned()),
+            headers: BTreeMap::from([(String::from("X-Test"), String::from("1"))]),
+            tags: BTreeMap::from([(String::from("tenant"), String::from("auth"))]),
+        }
+    }
+
+    fn test_client() -> Client {
+        let tls_config: rustls::ClientConfig =
+            rustls::ClientConfig::with_platform_verifier().unwrap();
+
+        Client::builder()
+            .use_preconfigured_tls(tls_config)
+            .build()
+            .unwrap()
+    }
 
     #[test]
     fn extracts_message_id_from_headers_first() {
@@ -1215,5 +1453,217 @@ mod tests {
         );
 
         assert_eq!(code.as_deref(), Some("personalizations.0.to.0.email"));
+    }
+
+    #[tokio::test]
+    async fn resend_send_posts_expected_payload() {
+        let mock_server = MockServer::start().await;
+        let email = sample_email();
+
+        Mock::given(method("POST"))
+            .and(path("/emails"))
+            .and(header("authorization", "Bearer resend-key"))
+            .and(body_partial_json(json!({
+                "from": "Pasion <noreply@example.com>",
+                "reply_to": "Support <support@example.com>",
+                "to": ["Alice <alice@example.com>"],
+                "subject": "Production check",
+                "text": "Plain body",
+                "html": "<p>HTML body</p>",
+                "headers": {
+                    "X-Test": "1"
+                },
+                "tags": [{
+                    "name": "tenant",
+                    "value": "auth"
+                }]
+            })))
+            .respond_with(ResponseTemplate::new(200).set_body_json(json!({ "id": "re_123" })))
+            .expect(1)
+            .mount(&mock_server)
+            .await;
+
+        let provider = ResendProvider {
+            client: test_client(),
+            base_url: Url::parse(&mock_server.uri()).unwrap(),
+            api_key: "resend-key".to_owned(),
+        };
+
+        let result = provider.send(&email).await.unwrap();
+
+        assert_eq!(result.provider_message_id.as_deref(), Some("re_123"));
+    }
+
+    #[tokio::test]
+    async fn resend_test_connection_requires_enabled_sender_domain() {
+        let mock_server = MockServer::start().await;
+
+        Mock::given(method("GET"))
+            .and(path("/domains"))
+            .and(header("authorization", "Bearer resend-key"))
+            .respond_with(ResponseTemplate::new(200).set_body_json(json!({
+                "data": [{
+                    "name": "example.com",
+                    "capabilities": {
+                        "sending": "enabled"
+                    }
+                }]
+            })))
+            .expect(1)
+            .mount(&mock_server)
+            .await;
+
+        let provider = ResendProvider {
+            client: test_client(),
+            base_url: Url::parse(&mock_server.uri()).unwrap(),
+            api_key: "resend-key".to_owned(),
+        };
+
+        provider
+            .test_connection(&"Pasion <noreply@example.com>".parse().unwrap())
+            .await
+            .unwrap();
+    }
+
+    #[tokio::test]
+    async fn sendgrid_test_connection_requires_mail_send_scope() {
+        let mock_server = MockServer::start().await;
+
+        Mock::given(method("GET"))
+            .and(path("/v3/scopes"))
+            .and(header("authorization", "Bearer sg-key"))
+            .respond_with(
+                ResponseTemplate::new(200).set_body_json(json!({ "scopes": ["stats.read"] })),
+            )
+            .expect(1)
+            .mount(&mock_server)
+            .await;
+
+        let provider = SendgridLikeProvider {
+            client: test_client(),
+            base_url: Url::parse(&mock_server.uri()).unwrap(),
+            api_key: "sg-key".to_owned(),
+            binding_key: "email.sendgrid",
+        };
+
+        let error = provider
+            .test_connection(&"Pasion <noreply@example.com>".parse().unwrap())
+            .await
+            .unwrap_err();
+
+        match error {
+            Error::ProviderError {
+                status,
+                code,
+                retryable,
+                ..
+            } => {
+                assert_eq!(status, 400);
+                assert_eq!(code.as_deref(), Some("missing_scope"));
+                assert!(!retryable);
+            }
+            other => panic!("unexpected error: {other:?}"),
+        }
+    }
+
+    #[tokio::test]
+    async fn sendgrid_test_connection_accepts_verified_sender() {
+        let mock_server = MockServer::start().await;
+
+        Mock::given(method("GET"))
+            .and(path("/v3/scopes"))
+            .and(header("authorization", "Bearer sg-key"))
+            .respond_with(
+                ResponseTemplate::new(200).set_body_json(json!({ "scopes": ["mail.send"] })),
+            )
+            .expect(1)
+            .mount(&mock_server)
+            .await;
+
+        Mock::given(method("GET"))
+            .and(path("/v3/whitelabel/domains"))
+            .and(header("authorization", "Bearer sg-key"))
+            .and(query_param("domain", "example.com"))
+            .and(query_param("limit", "200"))
+            .respond_with(ResponseTemplate::new(200).set_body_json(json!([])))
+            .expect(1)
+            .mount(&mock_server)
+            .await;
+
+        Mock::given(method("GET"))
+            .and(path("/v3/verified_senders"))
+            .and(header("authorization", "Bearer sg-key"))
+            .and(query_param("limit", "200"))
+            .respond_with(ResponseTemplate::new(200).set_body_json(json!({
+                "results": [{
+                    "from_email": "noreply@example.com",
+                    "verified": true
+                }]
+            })))
+            .expect(1)
+            .mount(&mock_server)
+            .await;
+
+        let provider = SendgridLikeProvider {
+            client: test_client(),
+            base_url: Url::parse(&mock_server.uri()).unwrap(),
+            api_key: "sg-key".to_owned(),
+            binding_key: "email.sendgrid",
+        };
+
+        provider
+            .test_connection(&"Pasion <noreply@example.com>".parse().unwrap())
+            .await
+            .unwrap();
+    }
+
+    #[tokio::test]
+    async fn aws_ses_send_signs_and_embeds_raw_mime_message() {
+        let mock_server = MockServer::start().await;
+        let email = sample_email();
+
+        Mock::given(method("POST"))
+            .and(path("/v2/email/outbound-emails"))
+            .and(header_exists("authorization"))
+            .and(header_exists("x-amz-date"))
+            .and(header_exists("x-amz-content-sha256"))
+            .and(|request: &Request| {
+                let payload: serde_json::Value = serde_json::from_slice(&request.body).unwrap();
+                let raw = payload["Content"]["Raw"]["Data"].as_str().unwrap();
+                let decoded = BASE64_STANDARD.decode(raw).unwrap();
+                let message = String::from_utf8_lossy(&decoded);
+
+                payload["FromEmailAddress"] == "noreply@example.com"
+                    && payload["Destination"]["ToAddresses"] == json!(["alice@example.com"])
+                    && payload["EmailTags"]
+                        == json!([{
+                            "Name": "tenant",
+                            "Value": "auth"
+                        }])
+                    && message.contains("Subject: Production check")
+                    && message.contains("Reply-To: Support <support@example.com>")
+                    && message.contains("X-Test: 1")
+                    && message.contains("Plain body")
+            })
+            .respond_with(ResponseTemplate::new(200).set_body_json(json!({
+                "MessageId": "aws-123"
+            })))
+            .expect(1)
+            .mount(&mock_server)
+            .await;
+
+        let provider = AwsSesProvider {
+            client: test_client(),
+            endpoint: Url::parse(&mock_server.uri()).unwrap(),
+            region: "us-east-1".to_owned(),
+            access_key_id: "access-key".to_owned(),
+            secret_access_key: "secret-key".to_owned(),
+            session_token: None,
+            configuration_set_name: None,
+        };
+
+        let result = provider.send(&email).await.unwrap();
+
+        assert_eq!(result.provider_message_id.as_deref(), Some("aws-123"));
     }
 }

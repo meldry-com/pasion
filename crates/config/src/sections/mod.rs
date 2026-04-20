@@ -39,10 +39,11 @@ pub use self::{
     clients::{ClientAuthMethodConfig, ClientConfig, ClientsConfig},
     database::{DatabaseConfig, PgSslMode},
     email::{
-        AwsSesEmailProviderConfig, BrevoEmailProviderConfig, EmailConfig, EmailProviderConfig,
-        EmailSmtpMode, HttpWebhookEmailProviderConfig, ResendEmailProviderConfig,
-        SendgridEmailProviderConfig, SendmailEmailProviderConfig, SmtpEmailProviderConfig,
-        TwilioEmailProviderConfig,
+        AwsSesEmailProviderConfig, AwsSesWebhookConfig, BrevoEmailProviderConfig,
+        BrevoWebhookConfig, EmailConfig, EmailProviderConfig, EmailSmtpMode,
+        HttpWebhookEmailProviderConfig, ResendEmailProviderConfig, ResendWebhookConfig,
+        SendgridEmailProviderConfig, SendgridWebhookConfig, SendmailEmailProviderConfig,
+        SmtpEmailProviderConfig, TwilioEmailProviderConfig,
     },
     experimental::ExperimentalConfig,
     http::{

@@ -496,6 +496,30 @@ impl NotificationRepository for PgNotificationRepository<'_> {
     }
 
     #[tracing::instrument(
+        name = "db.notification.lookup_delivery_by_provider_message_id",
+        skip_all,
+        fields(provider_binding_key, provider_message_id),
+        err
+    )]
+    async fn lookup_delivery_by_provider_message_id(
+        &mut self,
+        provider_binding_key: &str,
+        provider_message_id: &str,
+    ) -> Result<Option<NotificationDelivery>, Self::Error> {
+        use crate::pg::schema::notification_deliveries::dsl;
+
+        dsl::notification_deliveries
+            .filter(dsl::provider_binding_key.eq(provider_binding_key))
+            .filter(dsl::provider_message_id.eq(provider_message_id))
+            .first::<NotificationDeliveryRow>(self.conn)
+            .await
+            .optional()?
+            .map(TryInto::try_into)
+            .transpose()
+            .map_err(Into::into)
+    }
+
+    #[tracing::instrument(
         name = "db.notification.list_deliveries",
         skip_all,
         fields(notification_request.id = %notification_request.id),
@@ -717,6 +741,7 @@ impl NotificationRepository for PgNotificationRepository<'_> {
     ) -> Result<NotificationDelivery, Self::Error> {
         let now = clock.now();
         notification_delivery.status = NotificationDeliveryStatus::Failed;
+        notification_delivery.delivered_at = None;
         notification_delivery.failed_at = Some(now);
         notification_delivery.last_failure = Some(failure);
         notification_delivery.next_retry_at = next_retry_at;
@@ -969,10 +994,12 @@ const fn event_kind_to_db(kind: NotificationEventKind) -> &'static str {
         NotificationEventKind::DeliveryQueued => "delivery_queued",
         NotificationEventKind::DeliveryReserved => "delivery_reserved",
         NotificationEventKind::DeliverySendStarted => "delivery_send_started",
+        NotificationEventKind::DeliveryAccepted => "delivery_accepted",
         NotificationEventKind::DeliveryDelivered => "delivery_delivered",
         NotificationEventKind::DeliveryFailed => "delivery_failed",
         NotificationEventKind::DeliveryRetried => "delivery_retried",
         NotificationEventKind::RequestCompleted => "request_completed",
+        NotificationEventKind::RequestFailed => "request_failed",
         NotificationEventKind::RequestCancelled => "request_cancelled",
     }
 }
@@ -1037,10 +1064,12 @@ fn parse_event_kind(
         "delivery_send_started" | "delivery_sending" => {
             Ok(NotificationEventKind::DeliverySendStarted)
         }
+        "delivery_accepted" => Ok(NotificationEventKind::DeliveryAccepted),
         "delivery_delivered" => Ok(NotificationEventKind::DeliveryDelivered),
         "delivery_failed" => Ok(NotificationEventKind::DeliveryFailed),
         "delivery_retried" => Ok(NotificationEventKind::DeliveryRetried),
         "request_completed" => Ok(NotificationEventKind::RequestCompleted),
+        "request_failed" => Ok(NotificationEventKind::RequestFailed),
         "request_cancelled" => Ok(NotificationEventKind::RequestCancelled),
         _ => Err(DatabaseInconsistencyError::on("notification_event_logs")
             .column("kind")

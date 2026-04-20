@@ -33,4 +33,6 @@ url.workspace = true
 
 [dev-dependencies]
 tokio.workspace = true
+rustls.workspace = true
+rustls-platform-verifier.workspace = true
 wiremock.workspace = true

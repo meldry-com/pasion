@@ -1,5 +1,7 @@
 //! Notification orchestration across delivery channels.
 
+use std::collections::BTreeMap;
+
 use lettre::message::Mailbox;
 use pasion_templates::{EmailRecoveryContext, EmailVerificationContext, WithLanguage};
 use thiserror::Error;
@@ -32,6 +34,8 @@ pub enum NotificationRequest {
         to: Mailbox,
         /// Template context for the verification email.
         context: WithLanguage<EmailVerificationContext>,
+        /// Provider metadata that should round-trip in delivery callbacks.
+        tags: BTreeMap<String, String>,
     },
 
     /// Send an account recovery email to a mailbox.
@@ -40,6 +44,8 @@ pub enum NotificationRequest {
         to: Mailbox,
         /// Template context for the recovery email.
         context: WithLanguage<EmailRecoveryContext>,
+        /// Provider metadata that should round-trip in delivery callbacks.
+        tags: BTreeMap<String, String>,
     },
 
     /// Send a verification code over SMS.
@@ -121,11 +127,11 @@ impl NotificationCenter {
         request: NotificationRequest,
     ) -> Result<NotificationDispatchResult, NotificationError> {
         match request {
-            NotificationRequest::EmailVerification { to, context } => {
-                self.send_email_verification(to, &context).await
+            NotificationRequest::EmailVerification { to, context, tags } => {
+                self.send_email_verification(to, &context, &tags).await
             }
-            NotificationRequest::EmailRecovery { to, context } => {
-                self.send_email_recovery(to, &context).await
+            NotificationRequest::EmailRecovery { to, context, tags } => {
+                self.send_email_recovery(to, &context, &tags).await
             }
             NotificationRequest::SmsVerificationCode { to, code, language } => {
                 self.send_sms_verification_code(&to, &code, &language).await
@@ -142,13 +148,14 @@ impl NotificationCenter {
         &self,
         to: Mailbox,
         context: &WithLanguage<EmailVerificationContext>,
+        tags: &BTreeMap<String, String>,
     ) -> Result<NotificationDispatchResult, NotificationError> {
         let mailer = self
             .email
             .as_ref()
             .ok_or(NotificationError::EmailNotConfigured)?;
         let result = mailer
-            .send_verification_email(to, context)
+            .send_verification_email(to, context, tags)
             .await
             .map_err(NotificationError::Email)?;
         Ok(result.into())
@@ -163,13 +170,14 @@ impl NotificationCenter {
         &self,
         to: Mailbox,
         context: &WithLanguage<EmailRecoveryContext>,
+        tags: &BTreeMap<String, String>,
     ) -> Result<NotificationDispatchResult, NotificationError> {
         let mailer = self
             .email
             .as_ref()
             .ok_or(NotificationError::EmailNotConfigured)?;
         let result = mailer
-            .send_recovery_email(to, context)
+            .send_recovery_email(to, context, tags)
             .await
             .map_err(NotificationError::Email)?;
         Ok(result.into())

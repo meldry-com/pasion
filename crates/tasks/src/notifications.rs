@@ -1,3 +1,5 @@
+use std::collections::BTreeMap;
+
 use anyhow::Context;
 use async_trait::async_trait;
 use chrono::{Duration, Utc};
@@ -14,7 +16,10 @@ use pasion_data::{
     user::UserEmailFilter,
 };
 use pasion_i18n::DataLocale;
-use pasion_messaging::{Address, Mailbox, NotificationError, NotificationRequest};
+use pasion_messaging::{
+    Address, Mailbox, NotificationError, NotificationRequest,
+    email::{DELIVERY_ID_TAG, REQUEST_ID_TAG},
+};
 use pasion_templates::{EmailRecoveryContext, EmailVerificationContext, TemplateContext as _};
 use rand_core::RngCore;
 use serde::{Deserialize, Serialize};
@@ -55,6 +60,16 @@ enum PreparedDelivery {
         summary: &'static str,
         metadata: Value,
     },
+}
+
+fn delivery_tracking_tags(
+    request: &PersistedNotificationRequest,
+    delivery: &NotificationDelivery,
+) -> BTreeMap<String, String> {
+    BTreeMap::from([
+        (DELIVERY_ID_TAG.to_owned(), delivery.id.to_string()),
+        (REQUEST_ID_TAG.to_owned(), request.id.to_string()),
+    ])
 }
 
 async fn append_event(
@@ -599,11 +614,13 @@ async fn prepare_delivery(
             let context =
                 EmailVerificationContext::new(authentication_code, browser_session, registration)
                     .with_language(language);
+            let tags = delivery_tracking_tags(request, delivery);
 
             Ok(PreparedDelivery::Ready(
                 NotificationRequest::EmailVerification {
                     to: mailbox,
                     context,
+                    tags,
                 },
             ))
         }
@@ -692,11 +709,13 @@ async fn prepare_delivery(
             let address: Address = email.parse()?;
             let mailbox = Mailbox::new(Some(user.username.clone()), address);
             let context = EmailRecoveryContext::new(user, session, url).with_language(language);
+            let tags = delivery_tracking_tags(request, delivery);
 
             Ok(PreparedDelivery::Ready(
                 NotificationRequest::EmailRecovery {
                     to: mailbox,
                     context,
+                    tags,
                 },
             ))
         }
@@ -782,7 +801,7 @@ async fn complete_delivery_with_failure(
             clock,
             &request,
             Some(&delivery),
-            NotificationEventKind::RequestCancelled,
+            NotificationEventKind::RequestFailed,
             Some("Notification request reached terminal failure"),
             json!({
                 "failure": failure,
@@ -930,8 +949,8 @@ async fn process_single_delivery(state: &State) -> Result<bool, JobError> {
                         clock,
                         &request,
                         Some(&delivery),
-                        NotificationEventKind::DeliveryDelivered,
-                        Some("Notification delivery delivered"),
+                        NotificationEventKind::DeliveryAccepted,
+                        Some("Notification delivery accepted by provider"),
                         json!({
                             "attempt_count": delivery.attempt_count,
                             "provider_message_id": delivery.provider_message_id,

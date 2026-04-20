@@ -53,6 +53,7 @@ impl Mailer {
         subject: String,
         text_body: String,
         html_body: Option<String>,
+        tags: &BTreeMap<String, String>,
     ) -> OutboundEmail {
         OutboundEmail {
             from: self.from.clone(),
@@ -62,7 +63,7 @@ impl Mailer {
             text_body,
             html_body,
             headers: BTreeMap::new(),
-            tags: BTreeMap::new(),
+            tags: tags.clone(),
         }
     }
 
@@ -70,24 +71,26 @@ impl Mailer {
         &self,
         to: Mailbox,
         context: &WithLanguage<EmailVerificationContext>,
+        tags: &BTreeMap<String, String>,
     ) -> Result<OutboundEmail, Error> {
         let text_body = self.templates.render_email_verification_txt(context)?;
         let html_body = self.templates.render_email_verification_html(context)?;
         let subject = self.templates.render_email_verification_subject(context)?;
 
-        Ok(self.outbound_email(to, subject, text_body, Some(html_body)))
+        Ok(self.outbound_email(to, subject, text_body, Some(html_body), tags))
     }
 
     fn prepare_recovery_email(
         &self,
         to: Mailbox,
         context: &WithLanguage<EmailRecoveryContext>,
+        tags: &BTreeMap<String, String>,
     ) -> Result<OutboundEmail, Error> {
         let text_body = self.templates.render_email_recovery_txt(context)?;
         let html_body = self.templates.render_email_recovery_html(context)?;
         let subject = self.templates.render_email_recovery_subject(context)?;
 
-        Ok(self.outbound_email(to, subject, text_body, Some(html_body)))
+        Ok(self.outbound_email(to, subject, text_body, Some(html_body), tags))
     }
 
     /// Send the verification email to a user.
@@ -107,12 +110,13 @@ impl Mailer {
         &self,
         to: Mailbox,
         context: &WithLanguage<EmailVerificationContext>,
+        tags: &BTreeMap<String, String>,
     ) -> Result<SendResult, Error> {
         println!(
             "[EMAIL] prepare verification email to={to}, code={}",
             context.code()
         );
-        let email = self.prepare_verification_email(to, context)?;
+        let email = self.prepare_verification_email(to, context, tags)?;
         println!("[EMAIL] sending verification email...");
         let result = self.transport.send(&email).await?;
         println!("[EMAIL] verification email sent OK");
@@ -138,9 +142,10 @@ impl Mailer {
         &self,
         to: Mailbox,
         context: &WithLanguage<EmailRecoveryContext>,
+        tags: &BTreeMap<String, String>,
     ) -> Result<SendResult, Error> {
         println!("[EMAIL] prepare recovery email to={to}");
-        let email = self.prepare_recovery_email(to, context)?;
+        let email = self.prepare_recovery_email(to, context, tags)?;
         println!("[EMAIL] sending recovery email...");
         let result = self.transport.send(&email).await?;
         println!("[EMAIL] recovery email sent OK");
@@ -154,7 +159,7 @@ impl Mailer {
     /// Returns an error if the connection failed.
     #[tracing::instrument(name = "email.test_connection", skip_all)]
     pub async fn test_connection(&self) -> Result<(), TransportError> {
-        self.transport.test_connection().await
+        self.transport.test_connection(&self.from).await
     }
 
     /// Return the stable provider binding key for the configured transport.

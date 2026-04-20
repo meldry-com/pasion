@@ -101,6 +101,9 @@ email:
     type: resend
     api_key: "re_xxxxxxxxx"
     # 可选类型: blackhole / smtp / sendmail / resend / sendgrid / twilio / brevo / aws_ses / http_webhook
+    # webhook:
+    #   signing_secret: whsec_xxxxxxxxx
+    #   max_age_seconds: 300
 
   # SMTP 示例
   # provider:
@@ -120,10 +123,17 @@ email:
   #   session_token: optional-session-token
   #   endpoint: https://email.us-east-1.amazonaws.com
   #   configuration_set_name: default-set
+  #   webhook:
+  #     topic_arn: arn:aws:sns:us-east-1:123456789012:ses-feedback
+  #     auto_confirm_subscription: true
 ```
 
 `twilio` 邮件 provider 实际上走的是 Twilio SendGrid 的 Mail Send API，
 和短信里的 `twilio` transport 是两套能力。
+
+如果启用了异步投递回执，可以把公开 webhook 路径配置到对应 provider：
+`/webhooks/email/resend`、`/webhooks/email/sendgrid`、`/webhooks/email/twilio`、
+`/webhooks/email/brevo`、`/webhooks/email/aws-ses`。
 
 ### `telemetry` — 可观测性
 

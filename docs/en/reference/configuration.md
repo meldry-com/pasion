@@ -550,24 +550,40 @@ email:
   #  type: resend
   #  api_key: re_xxxxxxxxx
   #  base_url: https://api.resend.com
+  #  webhook:
+  #    signing_secret: whsec_xxxxxxxxx
+  #    max_age_seconds: 300
 
   # Send emails through SendGrid
   #provider:
   #  type: sendgrid
   #  api_key: SG.xxxxxxxxx
   #  base_url: https://api.sendgrid.com
+  #  webhook:
+  #    public_key_pem: |
+  #      -----BEGIN PUBLIC KEY-----
+  #      ...
+  #      -----END PUBLIC KEY-----
 
   # Send emails through Twilio SendGrid
   #provider:
   #  type: twilio
   #  api_key: SG.xxxxxxxxx
   #  base_url: https://api.sendgrid.com
+  #  webhook:
+  #    public_key_pem: |
+  #      -----BEGIN PUBLIC KEY-----
+  #      ...
+  #      -----END PUBLIC KEY-----
 
   # Send emails through Brevo
   #provider:
   #  type: brevo
   #  api_key: xkeysib-xxxxxxxxx
   #  base_url: https://api.brevo.com
+  #  webhook:
+  #    headers:
+  #      X-Webhook-Token: example-secret
 
   # Send emails through AWS SES v2
   #provider:
@@ -578,6 +594,9 @@ email:
   #  session_token: optional-session-token
   #  endpoint: https://email.us-east-1.amazonaws.com
   #  configuration_set_name: default-set
+  #  webhook:
+  #    topic_arn: arn:aws:sns:us-east-1:123456789012:ses-feedback
+  #    auto_confirm_subscription: true
 
   # Send emails by submitting a JSON payload to an HTTP API
   #provider:
@@ -587,6 +606,12 @@ email:
   #  headers:
   #    X-Tenant: auth
 ```
+
+When asynchronous delivery tracking is enabled, expose the matching public
+webhook route to your provider:
+`/webhooks/email/resend`, `/webhooks/email/sendgrid`,
+`/webhooks/email/twilio`, `/webhooks/email/brevo`, or
+`/webhooks/email/aws-ses`.
 
 `email.provider.type` supports `blackhole`, `smtp`, `sendmail`, `resend`,
 `sendgrid`, `twilio`, `brevo`, `aws_ses`, and `http_webhook`.

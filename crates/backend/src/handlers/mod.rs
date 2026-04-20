@@ -72,6 +72,8 @@ pub mod account;
 pub mod admin;
 /// Shared infrastructure types (DepotExt, RouteError, etc.).
 pub mod common;
+/// Public inbound webhooks for email delivery providers.
+pub mod email_webhooks;
 /// Flow execution engine for multi-step user interaction flows.
 pub mod flow;
 /// Health-check endpoint (`/health`).

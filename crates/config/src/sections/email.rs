@@ -61,6 +61,58 @@ fn brevo_base_url_default() -> String {
     "https://api.brevo.com".to_owned()
 }
 
+fn email_webhook_max_age_seconds_default() -> u64 {
+    300
+}
+
+fn aws_sns_allowed_signing_cert_url_prefixes_default() -> Vec<String> {
+    vec!["https://sns.".to_owned(), "https://sns-".to_owned()]
+}
+
+/// Resend webhook verification settings
+#[derive(Clone, Debug, Serialize, Deserialize, JsonSchema)]
+pub struct ResendWebhookConfig {
+    /// Svix/Resend webhook signing secret
+    pub signing_secret: String,
+
+    /// Maximum accepted age for signed webhook timestamps
+    #[serde(default = "email_webhook_max_age_seconds_default")]
+    pub max_age_seconds: u64,
+}
+
+/// SendGrid event webhook verification settings
+#[derive(Clone, Debug, Serialize, Deserialize, JsonSchema)]
+pub struct SendgridWebhookConfig {
+    /// PEM-encoded public key used to verify signed event webhooks
+    pub public_key_pem: String,
+}
+
+/// Brevo webhook request validation settings
+#[derive(Clone, Debug, Serialize, Deserialize, JsonSchema, Default)]
+pub struct BrevoWebhookConfig {
+    /// Expected static headers attached by Brevo when invoking the webhook URL
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    pub headers: BTreeMap<String, String>,
+}
+
+/// AWS SES feedback ingestion settings delivered through SNS
+#[derive(Clone, Debug, Serialize, Deserialize, JsonSchema)]
+pub struct AwsSesWebhookConfig {
+    /// SNS topic ARN allowed to post SES delivery feedback to this endpoint
+    pub topic_arn: String,
+
+    /// Automatically confirm `SubscriptionConfirmation` callbacks
+    #[serde(default)]
+    pub auto_confirm_subscription: bool,
+
+    /// Allowed HTTPS prefixes for `SigningCertURL`
+    #[serde(
+        default = "aws_sns_allowed_signing_cert_url_prefixes_default",
+        skip_serializing_if = "Vec::is_empty"
+    )]
+    pub allowed_signing_cert_url_prefixes: Vec<String>,
+}
+
 /// Sendmail delivery settings
 #[derive(Clone, Debug, Serialize, Deserialize, JsonSchema)]
 pub struct SendmailEmailProviderConfig {
@@ -93,6 +145,10 @@ pub struct ResendEmailProviderConfig {
     /// Base URL for the Resend API
     #[serde(default = "resend_base_url_default")]
     pub base_url: String,
+
+    /// Optional webhook verification settings for asynchronous delivery events
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub webhook: Option<ResendWebhookConfig>,
 }
 
 /// SendGrid email API delivery settings
@@ -104,6 +160,10 @@ pub struct SendgridEmailProviderConfig {
     /// Base URL for the SendGrid API
     #[serde(default = "sendgrid_base_url_default")]
     pub base_url: String,
+
+    /// Optional webhook verification settings for asynchronous delivery events
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub webhook: Option<SendgridWebhookConfig>,
 }
 
 /// Twilio email API delivery settings.
@@ -117,6 +177,10 @@ pub struct TwilioEmailProviderConfig {
     /// Base URL for the Twilio SendGrid API
     #[serde(default = "sendgrid_base_url_default")]
     pub base_url: String,
+
+    /// Optional webhook verification settings for asynchronous delivery events
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub webhook: Option<SendgridWebhookConfig>,
 }
 
 /// Brevo transactional email API delivery settings
@@ -128,6 +192,10 @@ pub struct BrevoEmailProviderConfig {
     /// Base URL for the Brevo API
     #[serde(default = "brevo_base_url_default")]
     pub base_url: String,
+
+    /// Optional webhook validation settings for asynchronous delivery events
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub webhook: Option<BrevoWebhookConfig>,
 }
 
 /// AWS SES API delivery settings
@@ -153,6 +221,10 @@ pub struct AwsSesEmailProviderConfig {
     /// Optional SES configuration set name applied to every message
     #[serde(skip_serializing_if = "Option::is_none")]
     pub configuration_set_name: Option<String>,
+
+    /// Optional webhook settings for SNS-delivered delivery feedback
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub webhook: Option<AwsSesWebhookConfig>,
 }
 
 /// Which provider delivers outbound emails
@@ -297,21 +369,50 @@ impl ConfigurationSection for EmailConfig {
             EmailProviderConfig::Resend(provider) => {
                 ensure_non_empty(&provider.api_key, "provider.api_key")?;
                 ensure_valid_url(&provider.base_url, "provider.base_url")?;
+                if let Some(webhook) = &provider.webhook {
+                    ensure_non_empty(&webhook.signing_secret, "provider.webhook.signing_secret")?;
+                    if webhook.max_age_seconds == 0 {
+                        return Err(error_on_field(
+                            figment::error::Error::custom(
+                                "provider.webhook.max_age_seconds must be greater than zero",
+                            ),
+                            "provider.webhook.max_age_seconds",
+                        )
+                        .into());
+                    }
+                }
             }
 
             EmailProviderConfig::Sendgrid(provider) => {
                 ensure_non_empty(&provider.api_key, "provider.api_key")?;
                 ensure_valid_url(&provider.base_url, "provider.base_url")?;
+                if let Some(webhook) = &provider.webhook {
+                    ensure_non_empty(&webhook.public_key_pem, "provider.webhook.public_key_pem")?;
+                }
             }
 
             EmailProviderConfig::Twilio(provider) => {
                 ensure_non_empty(&provider.api_key, "provider.api_key")?;
                 ensure_valid_url(&provider.base_url, "provider.base_url")?;
+                if let Some(webhook) = &provider.webhook {
+                    ensure_non_empty(&webhook.public_key_pem, "provider.webhook.public_key_pem")?;
+                }
             }
 
             EmailProviderConfig::Brevo(provider) => {
                 ensure_non_empty(&provider.api_key, "provider.api_key")?;
                 ensure_valid_url(&provider.base_url, "provider.base_url")?;
+                if let Some(webhook) = &provider.webhook {
+                    if webhook.headers.is_empty() {
+                        return Err(error_on_field(
+                            figment::error::Error::custom(
+                                "provider.webhook.headers must not be empty",
+                            ),
+                            "provider.webhook.headers",
+                        )
+                        .into());
+                    }
+                }
             }
 
             EmailProviderConfig::AwsSes(provider) => {
@@ -321,6 +422,19 @@ impl ConfigurationSection for EmailConfig {
 
                 if let Some(endpoint) = &provider.endpoint {
                     ensure_valid_url(endpoint, "provider.endpoint")?;
+                }
+
+                if let Some(webhook) = &provider.webhook {
+                    ensure_non_empty(&webhook.topic_arn, "provider.webhook.topic_arn")?;
+                    if webhook.allowed_signing_cert_url_prefixes.is_empty() {
+                        return Err(error_on_field(
+                            figment::error::Error::custom(
+                                "provider.webhook.allowed_signing_cert_url_prefixes must not be empty",
+                            ),
+                            "provider.webhook.allowed_signing_cert_url_prefixes",
+                        )
+                        .into());
+                    }
                 }
             }
         }
@@ -387,6 +501,8 @@ mod tests {
                         type: resend
                         api_key: re_test_123
                         base_url: https://api.resend.com
+                        webhook:
+                          signing_secret: whsec_test_123
                 "#,
             )?;
 
@@ -398,6 +514,13 @@ mod tests {
                 EmailProviderConfig::Resend(provider) => {
                     assert_eq!(provider.api_key, "re_test_123");
                     assert_eq!(provider.base_url, "https://api.resend.com");
+                    assert_eq!(
+                        provider
+                            .webhook
+                            .as_ref()
+                            .map(|webhook| webhook.signing_secret.as_str()),
+                        Some("whsec_test_123")
+                    );
                 }
                 other => panic!("expected resend provider, got {other:?}"),
             }
@@ -514,6 +637,35 @@ mod tests {
                 .expect_err("config should be invalid");
 
             assert!(error.to_string().contains("provider.region"));
+
+            Ok(())
+        });
+    }
+
+    #[test]
+    fn reject_empty_brevo_webhook_headers() {
+        Jail::expect_with(|jail| {
+            jail.create_file(
+                "config.yaml",
+                r#"
+                    email:
+                      from: 'Pasion <noreply@example.com>'
+                      reply_to: 'Support <support@example.com>'
+                      provider:
+                        type: brevo
+                        api_key: brevo_test
+                        webhook:
+                          headers: {}
+                "#,
+            )?;
+
+            let figment = Figment::new().merge(Yaml::file("config.yaml"));
+            let config = figment.extract_inner::<EmailConfig>("email")?;
+            let error = config
+                .validate(&figment)
+                .expect_err("config should be invalid");
+
+            assert!(error.to_string().contains("provider.webhook.headers"));
 
             Ok(())
         });
