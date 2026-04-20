@@ -250,9 +250,8 @@ impl ConfigurationSection for EmailConfig {
 
         let ensure_valid_url =
             |value: &str, field: &'static str| -> Result<(), figment::error::Error> {
-                Url::parse(value).map_err(|error| {
-                    error_on_field(figment::error::Error::custom(error), field)
-                })?;
+                Url::parse(value)
+                    .map_err(|error| error_on_field(figment::error::Error::custom(error), field))?;
                 Ok(())
             };
 

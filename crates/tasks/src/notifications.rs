@@ -433,6 +433,9 @@ fn notification_failure_from_error(error: &NotificationError) -> NotificationDel
                     pasion_messaging::email::EmailTransportError::Sendmail(_) => {
                         Some("email_sendmail".to_owned())
                     }
+                    pasion_messaging::email::EmailTransportError::Json(_) => {
+                        Some("email_json".to_owned())
+                    }
                     pasion_messaging::email::EmailTransportError::Http(_) => {
                         Some("email_http".to_owned())
                     }
@@ -446,7 +449,8 @@ fn notification_failure_from_error(error: &NotificationError) -> NotificationDel
                         retryable,
                         ..
                     } => *retryable,
-                    pasion_messaging::email::EmailTransportError::Message(_) => false,
+                    pasion_messaging::email::EmailTransportError::Message(_)
+                    | pasion_messaging::email::EmailTransportError::Json(_) => false,
                     pasion_messaging::email::EmailTransportError::Smtp(_)
                     | pasion_messaging::email::EmailTransportError::Sendmail(_)
                     | pasion_messaging::email::EmailTransportError::Http(_) => true,

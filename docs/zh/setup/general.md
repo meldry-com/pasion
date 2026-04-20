@@ -32,7 +32,8 @@ pasion config dump -c config.yaml
 ```
 
 环境变量覆盖使用 `PASION_` 前缀，并以 `__` 作为层级分隔符。例如：
-`PASION_EMAIL__PROVIDER__TYPE=http_webhook`。
+`PASION_EMAIL__PROVIDER__TYPE=resend` 和
+`PASION_EMAIL__PROVIDER__API_KEY=re_xxxxxxxxx`。
 
 ## 编辑器支持
 

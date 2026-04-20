@@ -1603,6 +1603,96 @@
               "$ref": "#/definitions/HttpWebhookEmailProviderConfig"
             }
           ]
+        },
+        {
+          "description": "Deliver through the Resend email API",
+          "type": "object",
+          "properties": {
+            "type": {
+              "type": "string",
+              "const": "resend"
+            }
+          },
+          "required": [
+            "type"
+          ],
+          "allOf": [
+            {
+              "$ref": "#/definitions/ResendEmailProviderConfig"
+            }
+          ]
+        },
+        {
+          "description": "Deliver through the SendGrid email API",
+          "type": "object",
+          "properties": {
+            "type": {
+              "type": "string",
+              "const": "sendgrid"
+            }
+          },
+          "required": [
+            "type"
+          ],
+          "allOf": [
+            {
+              "$ref": "#/definitions/SendgridEmailProviderConfig"
+            }
+          ]
+        },
+        {
+          "description": "Deliver through Twilio SendGrid",
+          "type": "object",
+          "properties": {
+            "type": {
+              "type": "string",
+              "const": "twilio"
+            }
+          },
+          "required": [
+            "type"
+          ],
+          "allOf": [
+            {
+              "$ref": "#/definitions/TwilioEmailProviderConfig"
+            }
+          ]
+        },
+        {
+          "description": "Deliver through the Brevo transactional email API",
+          "type": "object",
+          "properties": {
+            "type": {
+              "type": "string",
+              "const": "brevo"
+            }
+          },
+          "required": [
+            "type"
+          ],
+          "allOf": [
+            {
+              "$ref": "#/definitions/BrevoEmailProviderConfig"
+            }
+          ]
+        },
+        {
+          "description": "Deliver through the AWS SES v2 email API",
+          "type": "object",
+          "properties": {
+            "type": {
+              "type": "string",
+              "const": "aws_ses"
+            }
+          },
+          "required": [
+            "type"
+          ],
+          "allOf": [
+            {
+              "$ref": "#/definitions/AwsSesEmailProviderConfig"
+            }
+          ]
         }
       ]
     },
@@ -1712,6 +1802,122 @@
       },
       "required": [
         "url"
+      ]
+    },
+    "ResendEmailProviderConfig": {
+      "description": "Resend email API delivery settings",
+      "type": "object",
+      "properties": {
+        "api_key": {
+          "description": "Resend API key",
+          "type": "string"
+        },
+        "base_url": {
+          "description": "Base URL for the Resend API",
+          "type": "string",
+          "default": "https://api.resend.com"
+        }
+      },
+      "required": [
+        "api_key"
+      ]
+    },
+    "SendgridEmailProviderConfig": {
+      "description": "SendGrid email API delivery settings",
+      "type": "object",
+      "properties": {
+        "api_key": {
+          "description": "SendGrid API key",
+          "type": "string"
+        },
+        "base_url": {
+          "description": "Base URL for the SendGrid API",
+          "type": "string",
+          "default": "https://api.sendgrid.com"
+        }
+      },
+      "required": [
+        "api_key"
+      ]
+    },
+    "TwilioEmailProviderConfig": {
+      "description": "Twilio email API delivery settings.\n\nTwilio email delivery is implemented via Twilio SendGrid's mail send API.",
+      "type": "object",
+      "properties": {
+        "api_key": {
+          "description": "Twilio SendGrid API key",
+          "type": "string"
+        },
+        "base_url": {
+          "description": "Base URL for the Twilio SendGrid API",
+          "type": "string",
+          "default": "https://api.sendgrid.com"
+        }
+      },
+      "required": [
+        "api_key"
+      ]
+    },
+    "BrevoEmailProviderConfig": {
+      "description": "Brevo transactional email API delivery settings",
+      "type": "object",
+      "properties": {
+        "api_key": {
+          "description": "Brevo API key",
+          "type": "string"
+        },
+        "base_url": {
+          "description": "Base URL for the Brevo API",
+          "type": "string",
+          "default": "https://api.brevo.com"
+        }
+      },
+      "required": [
+        "api_key"
+      ]
+    },
+    "AwsSesEmailProviderConfig": {
+      "description": "AWS SES API delivery settings",
+      "type": "object",
+      "properties": {
+        "region": {
+          "description": "AWS region that hosts the SES API endpoint",
+          "type": "string"
+        },
+        "access_key_id": {
+          "description": "AWS access key ID",
+          "type": "string"
+        },
+        "secret_access_key": {
+          "description": "AWS secret access key",
+          "type": "string"
+        },
+        "session_token": {
+          "description": "Optional AWS session token for temporary credentials",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "endpoint": {
+          "description": "Optional SES endpoint override, useful for proxies or AWS partitions",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "configuration_set_name": {
+          "description": "Optional SES configuration set name applied to every message",
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      },
+      "required": [
+        "region",
+        "access_key_id",
+        "secret_access_key"
       ]
     },
     "SmsConfig": {

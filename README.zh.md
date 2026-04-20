@@ -127,9 +127,9 @@ upstream_oauth2:
 email:
   from: '"Pasion" <noreply@example.com>'
   provider:
-    type: smtp
-    mode: starttls
-    hostname: smtp.example.com
+    type: resend
+    api_key: "re_xxxxxxxxx"
+    # 支持: smtp, sendmail, resend, sendgrid, twilio, brevo, aws_ses, http_webhook
 
 # 短信通知（多渠道通知中心，支持 Twilio / 阿里云 / 腾讯云）
 # sms:

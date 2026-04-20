@@ -54,7 +54,8 @@ pasion config dump
 ```
 
 Environment overrides use the `PASION_` prefix and `__` as the nesting
-separator. For example, `PASION_EMAIL__PROVIDER__TYPE=http_webhook`.
+separator. For example, `PASION_EMAIL__PROVIDER__TYPE=resend` and
+`PASION_EMAIL__PROVIDER__API_KEY=re_xxxxxxxxx`.
 
 ## Configuration schema
 

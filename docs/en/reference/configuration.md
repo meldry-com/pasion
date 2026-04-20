@@ -545,6 +545,40 @@ email:
   #  type: sendmail
   #  command: /usr/sbin/sendmail
 
+  # Send emails through Resend
+  #provider:
+  #  type: resend
+  #  api_key: re_xxxxxxxxx
+  #  base_url: https://api.resend.com
+
+  # Send emails through SendGrid
+  #provider:
+  #  type: sendgrid
+  #  api_key: SG.xxxxxxxxx
+  #  base_url: https://api.sendgrid.com
+
+  # Send emails through Twilio SendGrid
+  #provider:
+  #  type: twilio
+  #  api_key: SG.xxxxxxxxx
+  #  base_url: https://api.sendgrid.com
+
+  # Send emails through Brevo
+  #provider:
+  #  type: brevo
+  #  api_key: xkeysib-xxxxxxxxx
+  #  base_url: https://api.brevo.com
+
+  # Send emails through AWS SES v2
+  #provider:
+  #  type: aws_ses
+  #  region: us-east-1
+  #  access_key_id: AKIAXXXXXXXXXXXXXXXX
+  #  secret_access_key: your-secret-access-key
+  #  session_token: optional-session-token
+  #  endpoint: https://email.us-east-1.amazonaws.com
+  #  configuration_set_name: default-set
+
   # Send emails by submitting a JSON payload to an HTTP API
   #provider:
   #  type: http_webhook
@@ -553,6 +587,12 @@ email:
   #  headers:
   #    X-Tenant: auth
 ```
+
+`email.provider.type` supports `blackhole`, `smtp`, `sendmail`, `resend`,
+`sendgrid`, `twilio`, `brevo`, `aws_ses`, and `http_webhook`.
+
+The `twilio` email provider uses Twilio SendGrid's Mail Send API. It is
+separate from the SMS `twilio` transport.
 
 ## `upstream_oauth2`
 

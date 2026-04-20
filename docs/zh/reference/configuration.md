@@ -98,13 +98,32 @@ email:
   from: '"Pasion" <noreply@example.com>'
   reply_to: '"Support" <support@example.com>'
   provider:
-    type: smtp
-    mode: starttls
-    hostname: smtp.example.com
-    port: 587
-    username: "smtp_user"
-    password: "smtp_password"
+    type: resend
+    api_key: "re_xxxxxxxxx"
+    # 可选类型: blackhole / smtp / sendmail / resend / sendgrid / twilio / brevo / aws_ses / http_webhook
+
+  # SMTP 示例
+  # provider:
+  #   type: smtp
+  #   mode: starttls
+  #   hostname: smtp.example.com
+  #   port: 587
+  #   username: "smtp_user"
+  #   password: "smtp_password"
+
+  # AWS SES 示例
+  # provider:
+  #   type: aws_ses
+  #   region: us-east-1
+  #   access_key_id: AKIAXXXXXXXXXXXXXXXX
+  #   secret_access_key: your-secret-access-key
+  #   session_token: optional-session-token
+  #   endpoint: https://email.us-east-1.amazonaws.com
+  #   configuration_set_name: default-set
 ```
+
+`twilio` 邮件 provider 实际上走的是 Twilio SendGrid 的 Mail Send API，
+和短信里的 `twilio` transport 是两套能力。
 
 ### `telemetry` — 可观测性
 

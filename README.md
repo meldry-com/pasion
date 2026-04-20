@@ -9,7 +9,7 @@ Pasion is a comprehensive user operations platform built for Palpo. While it imp
 ### Key Features
 
 - **Workflow Engine** — Registration, recovery, and verification flows managed as state machines with step tracking, deadlines, retry logic, and audit snapshots
-- **Unified Notification Center** — Email + SMS dispatch with provider abstraction (SMTP/Sendmail for email; Twilio, Aliyun SMS, and Tencent Cloud SMS for messaging)
+- **Unified Notification Center** — Email + SMS dispatch with provider abstraction (SMTP, Sendmail, Resend, SendGrid, Twilio SendGrid, Brevo, AWS SES for email; Twilio, Aliyun SMS, and Tencent Cloud SMS for messaging)
 - **Connector Platform** — Pluggable external system integration: Palpo Matrix homeserver provisioning and upstream OAuth 2.0 identity provider federation
 - **Chinese Ecosystem SSO** — Native support for QQ, WeChat, WeCom, Feishu, Lark, and DingTalk with their non-standard OAuth2 flows
 - **Cedar + OPA Policy Engine** — Dual policy backend: Amazon Cedar policies evaluated natively in Rust, OPA/Rego compiled to WebAssembly, or remote HTTP delegation
@@ -129,9 +129,9 @@ upstream_oauth2:
 email:
   from: '"Pasion" <noreply@example.com>'
   provider:
-    type: smtp
-    mode: starttls
-    hostname: smtp.example.com
+    type: resend
+    api_key: "re_xxxxxxxxx"
+    # Supported types: smtp, sendmail, resend, sendgrid, twilio, brevo, aws_ses, http_webhook
 ```
 
 See the [full configuration reference](docs/en/reference/configuration.md) for all options.

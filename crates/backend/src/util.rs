@@ -135,6 +135,52 @@ pub fn mailer_from_config(
             provider.api_key.clone(),
             provider.headers.clone(),
         ),
+        EmailProviderConfig::Resend(provider) => MailTransport::resend(
+            crate::reqwest_client(),
+            provider
+                .base_url
+                .parse()
+                .context("invalid email configuration: invalid provider.base_url")?,
+            provider.api_key.clone(),
+        ),
+        EmailProviderConfig::Sendgrid(provider) => MailTransport::sendgrid(
+            crate::reqwest_client(),
+            provider
+                .base_url
+                .parse()
+                .context("invalid email configuration: invalid provider.base_url")?,
+            provider.api_key.clone(),
+        ),
+        EmailProviderConfig::Twilio(provider) => MailTransport::twilio(
+            crate::reqwest_client(),
+            provider
+                .base_url
+                .parse()
+                .context("invalid email configuration: invalid provider.base_url")?,
+            provider.api_key.clone(),
+        ),
+        EmailProviderConfig::Brevo(provider) => MailTransport::brevo(
+            crate::reqwest_client(),
+            provider
+                .base_url
+                .parse()
+                .context("invalid email configuration: invalid provider.base_url")?,
+            provider.api_key.clone(),
+        ),
+        EmailProviderConfig::AwsSes(provider) => MailTransport::aws_ses(
+            crate::reqwest_client(),
+            provider.region.clone(),
+            provider.access_key_id.clone(),
+            provider.secret_access_key.clone(),
+            provider.session_token.clone(),
+            provider
+                .endpoint
+                .as_deref()
+                .map(str::parse)
+                .transpose()
+                .context("invalid email configuration: invalid provider.endpoint")?,
+            provider.configuration_set_name.clone(),
+        ),
     };
 
     Ok(Mailer::new(templates.clone(), transport, from, reply_to))
