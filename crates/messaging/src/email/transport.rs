@@ -3,18 +3,22 @@
 use std::{collections::BTreeMap, ffi::OsString, num::NonZeroU16, sync::Arc};
 
 use async_trait::async_trait;
+use base64::{Engine as _, engine::general_purpose::STANDARD as BASE64};
 use chrono::Utc;
 use hmac::{Hmac, Mac};
 use lettre::{
     AsyncTransport, Message, Tokio1Executor,
-    message::{Mailbox, MultiPart, SinglePart},
+    message::{
+        Mailbox, MultiPart, SinglePart,
+        header::{HeaderName, HeaderValue},
+    },
     transport::{
         sendmail::AsyncSendmailTransport,
         smtp::{AsyncSmtpTransport, authentication::Credentials},
     },
 };
-use reqwest::{Client, RequestBuilder};
-use serde::{Deserialize, Serialize};
+use reqwest::{Client, Method, RequestBuilder, StatusCode};
+use serde::{Deserialize, Serialize, de::DeserializeOwned};
 use sha2::{Digest, Sha256};
 use thiserror::Error;
 use url::Url;
@@ -72,7 +76,7 @@ pub trait EmailProvider: Send + Sync {
 
     /// Performs a lightweight connectivity check when the provider supports
     /// it.
-    async fn test_connection(&self) -> Result<(), Error>;
+    async fn test_connection(&self, from: &Mailbox) -> Result<(), Error>;
 }
 
 /// A cloneable wrapper around an email provider implementation.
@@ -233,8 +237,8 @@ impl Transport {
     }
 
     /// Test the connection to the underlying transport when supported.
-    pub async fn test_connection(&self) -> Result<(), Error> {
-        self.inner.test_connection().await
+    pub async fn test_connection(&self, from: &Mailbox) -> Result<(), Error> {
+        self.inner.test_connection(from).await
     }
 
     /// Return the stable provider binding key for this transport.
@@ -296,7 +300,7 @@ impl EmailProvider for BlackholeProvider {
         Ok(SendResult::default())
     }
 
-    async fn test_connection(&self) -> Result<(), Error> {
+    async fn test_connection(&self, _from: &Mailbox) -> Result<(), Error> {
         Ok(())
     }
 }
@@ -317,7 +321,7 @@ impl EmailProvider for SmtpProvider {
         Ok(SendResult::default())
     }
 
-    async fn test_connection(&self) -> Result<(), Error> {
+    async fn test_connection(&self, _from: &Mailbox) -> Result<(), Error> {
         self.transport.test_connection().await?;
         Ok(())
     }
@@ -339,7 +343,7 @@ impl EmailProvider for SendmailProvider {
         Ok(SendResult::default())
     }
 
-    async fn test_connection(&self) -> Result<(), Error> {
+    async fn test_connection(&self, _from: &Mailbox) -> Result<(), Error> {
         Ok(())
     }
 }
@@ -394,7 +398,7 @@ impl EmailProvider for HttpWebhookProvider {
         execute_provider_request(request).await
     }
 
-    async fn test_connection(&self) -> Result<(), Error> {
+    async fn test_connection(&self, _from: &Mailbox) -> Result<(), Error> {
         Ok(())
     }
 }
@@ -420,6 +424,23 @@ struct ResendRequest<'a> {
     headers: &'a BTreeMap<String, String>,
     #[serde(skip_serializing_if = "Vec::is_empty")]
     tags: Vec<ProviderTag<'a>>,
+}
+
+#[derive(Debug, Deserialize)]
+struct ResendDomainsResponse {
+    #[serde(default)]
+    data: Vec<ResendDomain>,
+}
+
+#[derive(Debug, Deserialize)]
+struct ResendDomain {
+    name: String,
+    capabilities: ResendDomainCapabilities,
+}
+
+#[derive(Debug, Deserialize)]
+struct ResendDomainCapabilities {
+    sending: String,
 }
 
 #[async_trait]
@@ -449,8 +470,34 @@ impl EmailProvider for ResendProvider {
         execute_provider_request(request).await
     }
 
-    async fn test_connection(&self) -> Result<(), Error> {
-        Ok(())
+    async fn test_connection(&self, from: &Mailbox) -> Result<(), Error> {
+        let response: ResendDomainsResponse = execute_provider_json_request(
+            self.client
+                .get(provider_url(&self.base_url, "/domains"))
+                .bearer_auth(&self.api_key),
+        )
+        .await?;
+
+        let sender_domain = sender_domain(from).ok_or_else(|| {
+            provider_client_error(
+                "invalid_sender",
+                format!("sender address {from} does not contain a domain"),
+            )
+        })?;
+
+        if response.data.iter().any(|domain| {
+            domain.name.eq_ignore_ascii_case(&sender_domain)
+                && domain.capabilities.sending.eq_ignore_ascii_case("enabled")
+        }) {
+            return Ok(());
+        }
+
+        Err(provider_client_error(
+            "sender_domain_unverified",
+            format!(
+                "Resend domain {sender_domain} is not configured or sending is not enabled"
+            ),
+        ))
     }
 }
 
@@ -494,6 +541,30 @@ struct SendgridRequest<'a> {
     custom_args: Option<&'a BTreeMap<String, String>>,
 }
 
+#[derive(Debug, Deserialize)]
+struct SendgridScopesResponse {
+    #[serde(default)]
+    scopes: Vec<String>,
+}
+
+#[derive(Debug, Deserialize)]
+struct SendgridAuthenticatedDomain {
+    domain: String,
+    valid: Option<bool>,
+}
+
+#[derive(Debug, Deserialize)]
+struct SendgridVerifiedSendersResponse {
+    #[serde(default)]
+    results: Vec<SendgridVerifiedSender>,
+}
+
+#[derive(Debug, Deserialize)]
+struct SendgridVerifiedSender {
+    from_email: String,
+    verified: bool,
+}
+
 #[async_trait]
 impl EmailProvider for SendgridLikeProvider {
     fn binding_key(&self) -> &'static str {
@@ -534,8 +605,22 @@ impl EmailProvider for SendgridLikeProvider {
         execute_provider_request(request).await
     }
 
-    async fn test_connection(&self) -> Result<(), Error> {
-        Ok(())
+    async fn test_connection(&self, from: &Mailbox) -> Result<(), Error> {
+        let scopes: SendgridScopesResponse = execute_provider_json_request(
+            self.client
+                .get(provider_url(&self.base_url, "/v3/scopes"))
+                .bearer_auth(&self.api_key),
+        )
+        .await?;
+
+        if !scopes.scopes.iter().any(|scope| scope == "mail.send") {
+            return Err(provider_client_error(
+                "missing_scope",
+                "Twilio SendGrid API key is missing the mail.send scope",
+            ));
+        }
+
+        validate_sendgrid_sender(self, from).await
     }
 }
 
@@ -589,7 +674,13 @@ impl EmailProvider for BrevoProvider {
         execute_provider_request(request).await
     }
 
-    async fn test_connection(&self) -> Result<(), Error> {
+    async fn test_connection(&self, _from: &Mailbox) -> Result<(), Error> {
+        let _: serde_json::Value = execute_provider_json_request(
+            self.client
+                .get(provider_url(&self.base_url, "/v3/account"))
+                .header("api-key", &self.api_key),
+        )
+        .await?;
         Ok(())
     }
 }
@@ -608,12 +699,10 @@ struct AwsSesProvider {
 struct AwsSesRequest<'a> {
     #[serde(rename = "FromEmailAddress")]
     from_email_address: String,
-    #[serde(rename = "ReplyToAddresses", skip_serializing_if = "Vec::is_empty")]
-    reply_to_addresses: Vec<String>,
     #[serde(rename = "Destination")]
     destination: AwsSesDestination,
     #[serde(rename = "Content")]
-    content: AwsSesContent<'a>,
+    content: AwsSesContent,
     #[serde(
         rename = "ConfigurationSetName",
         skip_serializing_if = "Option::is_none"
@@ -630,33 +719,15 @@ struct AwsSesDestination {
 }
 
 #[derive(Serialize)]
-struct AwsSesContent<'a> {
-    #[serde(rename = "Simple")]
-    simple: AwsSesSimpleContent<'a>,
+struct AwsSesContent {
+    #[serde(rename = "Raw")]
+    raw: AwsSesRawContent,
 }
 
 #[derive(Serialize)]
-struct AwsSesSimpleContent<'a> {
-    #[serde(rename = "Subject")]
-    subject: AwsSesContentValue<'a>,
-    #[serde(rename = "Body")]
-    body: AwsSesBody<'a>,
-}
-
-#[derive(Serialize)]
-struct AwsSesBody<'a> {
-    #[serde(rename = "Text")]
-    text: AwsSesContentValue<'a>,
-    #[serde(rename = "Html", skip_serializing_if = "Option::is_none")]
-    html: Option<AwsSesContentValue<'a>>,
-}
-
-#[derive(Serialize)]
-struct AwsSesContentValue<'a> {
+struct AwsSesRawContent {
     #[serde(rename = "Data")]
-    data: &'a str,
-    #[serde(rename = "Charset")]
-    charset: &'static str,
+    data: String,
 }
 
 #[derive(Serialize)]
@@ -665,6 +736,22 @@ struct AwsSesTag<'a> {
     name: &'a str,
     #[serde(rename = "Value")]
     value: &'a str,
+}
+
+#[derive(Debug, Deserialize)]
+struct AwsSesAccountResponse {
+    #[serde(rename = "ProductionAccessEnabled")]
+    production_access_enabled: bool,
+    #[serde(rename = "SendingEnabled")]
+    sending_enabled: bool,
+}
+
+#[derive(Debug, Deserialize)]
+struct AwsSesIdentityResponse {
+    #[serde(rename = "VerificationStatus")]
+    verification_status: Option<String>,
+    #[serde(rename = "VerifiedForSendingStatus")]
+    verified_for_sending_status: bool,
 }
 
 #[derive(Serialize)]
@@ -680,13 +767,9 @@ impl EmailProvider for AwsSesProvider {
     }
 
     async fn send(&self, email: &OutboundEmail) -> Result<SendResult, Error> {
+        let raw_message = build_lettre_message(email)?.formatted();
         let payload = AwsSesRequest {
-            from_email_address: email.from.to_string(),
-            reply_to_addresses: email
-                .reply_to
-                .as_ref()
-                .map(|mailbox| vec![mailbox.to_string()])
-                .unwrap_or_default(),
+            from_email_address: email.from.email.to_string(),
             destination: AwsSesDestination {
                 to_addresses: email
                     .to
@@ -695,21 +778,8 @@ impl EmailProvider for AwsSesProvider {
                     .collect(),
             },
             content: AwsSesContent {
-                simple: AwsSesSimpleContent {
-                    subject: AwsSesContentValue {
-                        data: &email.subject,
-                        charset: "UTF-8",
-                    },
-                    body: AwsSesBody {
-                        text: AwsSesContentValue {
-                            data: &email.text_body,
-                            charset: "UTF-8",
-                        },
-                        html: email.html_body.as_deref().map(|html| AwsSesContentValue {
-                            data: html,
-                            charset: "UTF-8",
-                        }),
-                    },
+                raw: AwsSesRawContent {
+                    data: BASE64.encode(raw_message),
                 },
             },
             configuration_set_name: self.configuration_set_name.as_deref(),
@@ -717,22 +787,68 @@ impl EmailProvider for AwsSesProvider {
         };
 
         let body = serde_json::to_string(&payload)?;
-        let payload_hash = hex_sha256(body.as_bytes());
         let url = provider_url(&self.endpoint, "/v2/email/outbound-emails");
+        execute_provider_request(
+            self.aws_signed_request(Method::POST, url, Some(body), Some("application/json"))?,
+        )
+        .await
+    }
+
+    async fn test_connection(&self, from: &Mailbox) -> Result<(), Error> {
+        let account: AwsSesAccountResponse = execute_provider_json_request(
+            self.aws_signed_request(
+                Method::GET,
+                provider_url(&self.endpoint, "/v2/email/account"),
+                None,
+                None,
+            )?,
+        )
+        .await?;
+
+        if !account.sending_enabled {
+            return Err(provider_client_error(
+                "sending_disabled",
+                "AWS SES account sending is disabled in this region",
+            ));
+        }
+
+        if !account.production_access_enabled {
+            return Err(provider_client_error(
+                "sandbox_mode",
+                "AWS SES account is still in sandbox mode in this region",
+            ));
+        }
+
+        self.ensure_verified_sender(from).await
+    }
+}
+
+impl AwsSesProvider {
+    fn aws_signed_request(
+        &self,
+        method: Method,
+        url: Url,
+        body: Option<String>,
+        content_type: Option<&str>,
+    ) -> Result<RequestBuilder, Error> {
         let host = url
             .host_str()
             .expect("AWS SES endpoint must contain a hostname");
-
+        let body = body.unwrap_or_default();
+        let payload_hash = hex_sha256(body.as_bytes());
         let now = Utc::now();
         let amz_date = now.format("%Y%m%dT%H%M%SZ").to_string();
         let date_stamp = now.format("%Y%m%d").to_string();
 
         let mut canonical_headers = BTreeMap::from([
-            ("content-type".to_owned(), "application/json".to_owned()),
             ("host".to_owned(), host.to_owned()),
             ("x-amz-content-sha256".to_owned(), payload_hash.clone()),
             ("x-amz-date".to_owned(), amz_date.clone()),
         ]);
+
+        if let Some(content_type) = content_type {
+            canonical_headers.insert("content-type".to_owned(), content_type.to_owned());
+        }
 
         if let Some(session_token) = &self.session_token {
             canonical_headers.insert("x-amz-security-token".to_owned(), session_token.clone());
@@ -748,8 +864,10 @@ impl EmailProvider for AwsSesProvider {
             .collect::<Vec<_>>()
             .join(";");
         let canonical_request = format!(
-            "POST\n{}\n\n{}{signed_headers}\n{payload_hash}",
+            "{}\n{}\n{}\n{}{signed_headers}\n{payload_hash}",
+            method.as_str(),
             canonical_uri(url.path()),
+            canonical_query(url.query()),
             canonical_headers_text,
         );
         let credential_scope = format!("{date_stamp}/{}/ses/aws4_request", self.region);
@@ -767,22 +885,94 @@ impl EmailProvider for AwsSesProvider {
 
         let mut request = self
             .client
-            .post(url)
+            .request(method, url)
             .header("Authorization", authorization)
-            .header("content-type", "application/json")
             .header("x-amz-content-sha256", payload_hash)
-            .header("x-amz-date", amz_date)
-            .body(body);
+            .header("x-amz-date", amz_date);
+
+        if let Some(content_type) = content_type {
+            request = request.header("content-type", content_type);
+        }
 
         if let Some(session_token) = &self.session_token {
             request = request.header("x-amz-security-token", session_token);
         }
 
-        execute_provider_request(request).await
+        if !body.is_empty() {
+            request = request.body(body);
+        }
+
+        Ok(request)
     }
 
-    async fn test_connection(&self) -> Result<(), Error> {
-        Ok(())
+    async fn ensure_verified_sender(&self, from: &Mailbox) -> Result<(), Error> {
+        let sender_email = from.email.to_string();
+
+        if let Some(identity) = self
+            .get_email_identity(&sender_email)
+            .await?
+            .filter(|identity| identity.verified_for_sending_status)
+        {
+            if identity
+                .verification_status
+                .as_deref()
+                .unwrap_or("SUCCESS")
+                .eq_ignore_ascii_case("SUCCESS")
+            {
+                return Ok(());
+            }
+        }
+
+        let sender_domain = sender_domain(from).ok_or_else(|| {
+            provider_client_error(
+                "invalid_sender",
+                format!("sender address {from} does not contain a domain"),
+            )
+        })?;
+
+        if let Some(identity) = self
+            .get_email_identity(&sender_domain)
+            .await?
+            .filter(|identity| identity.verified_for_sending_status)
+        {
+            if identity
+                .verification_status
+                .as_deref()
+                .unwrap_or("SUCCESS")
+                .eq_ignore_ascii_case("SUCCESS")
+            {
+                return Ok(());
+            }
+        }
+
+        Err(provider_client_error(
+            "sender_identity_unverified",
+            format!(
+                "AWS SES sender {sender_email} or domain {sender_domain} is not verified for sending"
+            ),
+        ))
+    }
+
+    async fn get_email_identity(
+        &self,
+        identity: &str,
+    ) -> Result<Option<AwsSesIdentityResponse>, Error> {
+        let mut url = self.endpoint.clone();
+        {
+            let mut segments = url
+                .path_segments_mut()
+                .map_err(|_| provider_client_error("invalid_endpoint", "AWS SES endpoint path is invalid"))?;
+            segments.clear();
+            segments.extend(["v2", "email", "identities", identity]);
+        }
+        url.set_query(None);
+        url.set_fragment(None);
+
+        execute_optional_provider_json_request(
+            self.aws_signed_request(Method::GET, url, None, None)?,
+            &[StatusCode::NOT_FOUND],
+        )
+        .await
     }
 }
 
