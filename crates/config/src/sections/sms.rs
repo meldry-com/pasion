@@ -24,6 +24,9 @@ pub enum SmsTransportKind {
 
     /// Send SMS via Tencent Cloud (腾讯云短信)
     TencentCloudSms,
+
+    /// Submit SMS payloads to Paloud's internal notification API
+    PaloudInternal,
 }
 
 /// Configuration related to sending SMS messages
@@ -88,6 +91,22 @@ pub struct SmsConfig {
     /// Tencent Cloud SMS transport: Template ID (模板 ID)
     #[serde(skip_serializing_if = "Option::is_none")]
     pub tencent_template_id: Option<String>,
+
+    /// Paloud internal SMS transport: fully qualified dispatch endpoint
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub paloud_internal_url: Option<String>,
+
+    /// Shared key identifier sent in `X-Paloud-Key-Id`
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub paloud_internal_key_id: Option<String>,
+
+    /// Shared secret used to sign the request with `HMAC-SHA256`
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub paloud_internal_secret: Option<String>,
+
+    /// Optional workspace UUID or subdomain used for provider routing
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub paloud_internal_workspace: Option<String>,
 }
 
 impl SmsConfig {
@@ -107,6 +126,10 @@ impl SmsConfig {
             && self.tencent_sdk_app_id.is_none()
             && self.tencent_sign_name.is_none()
             && self.tencent_template_id.is_none()
+            && self.paloud_internal_url.is_none()
+            && self.paloud_internal_key_id.is_none()
+            && self.paloud_internal_secret.is_none()
+            && self.paloud_internal_workspace.is_none()
     }
 }
 
@@ -194,6 +217,20 @@ impl ConfigurationSection for SmsConfig {
 
                 if self.tencent_template_id.is_none() {
                     return Err(missing_field("tencent_template_id").into());
+                }
+            }
+
+            SmsTransportKind::PaloudInternal => {
+                if self.paloud_internal_url.is_none() {
+                    return Err(missing_field("paloud_internal_url").into());
+                }
+
+                if self.paloud_internal_key_id.is_none() {
+                    return Err(missing_field("paloud_internal_key_id").into());
+                }
+
+                if self.paloud_internal_secret.is_none() {
+                    return Err(missing_field("paloud_internal_secret").into());
                 }
             }
         }

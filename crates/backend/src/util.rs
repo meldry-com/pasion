@@ -266,6 +266,23 @@ pub fn sms_sender_from_config(config: &SmsConfig) -> Result<SmsSender, anyhow::E
                 .clone()
                 .context("invalid sms configuration: missing tencent_template_id")?,
         ),
+        SmsTransportKind::PaloudInternal => SmsTransport::paloud_internal(
+            config
+                .paloud_internal_url
+                .as_deref()
+                .context("invalid sms configuration: missing paloud_internal_url")?
+                .parse()
+                .context("invalid sms configuration: invalid paloud_internal_url")?,
+            config
+                .paloud_internal_key_id
+                .clone()
+                .context("invalid sms configuration: missing paloud_internal_key_id")?,
+            config
+                .paloud_internal_secret
+                .clone()
+                .context("invalid sms configuration: missing paloud_internal_secret")?,
+            config.paloud_internal_workspace.clone(),
+        ),
     };
 
     Ok(SmsSender::new(transport))
