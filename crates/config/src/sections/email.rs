@@ -136,6 +136,23 @@ pub struct HttpWebhookEmailProviderConfig {
     pub headers: BTreeMap<String, String>,
 }
 
+/// Paloud internal notification email delivery settings
+#[derive(Clone, Debug, Serialize, Deserialize, JsonSchema, Default)]
+pub struct PaloudInternalEmailProviderConfig {
+    /// Fully qualified Paloud internal email dispatch endpoint
+    pub url: String,
+
+    /// Shared key identifier sent in `X-Paloud-Key-Id`
+    pub key_id: String,
+
+    /// Shared secret used to sign the request with `HMAC-SHA256`
+    pub secret: String,
+
+    /// Optional workspace UUID or subdomain used for provider routing
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub workspace: Option<String>,
+}
+
 /// Resend email API delivery settings
 #[derive(Clone, Debug, Serialize, Deserialize, JsonSchema)]
 pub struct ResendEmailProviderConfig {
@@ -243,6 +260,9 @@ pub enum EmailProviderConfig {
 
     /// Submit email payloads to a generic HTTP endpoint
     HttpWebhook(HttpWebhookEmailProviderConfig),
+
+    /// Submit email payloads to Paloud's internal notification API
+    PaloudInternal(PaloudInternalEmailProviderConfig),
 
     /// Deliver through the Resend email API
     Resend(ResendEmailProviderConfig),
@@ -364,6 +384,12 @@ impl ConfigurationSection for EmailConfig {
 
             EmailProviderConfig::HttpWebhook(provider) => {
                 ensure_valid_url(&provider.url, "provider.url")?;
+            }
+
+            EmailProviderConfig::PaloudInternal(provider) => {
+                ensure_valid_url(&provider.url, "provider.url")?;
+                ensure_non_empty(&provider.key_id, "provider.key_id")?;
+                ensure_non_empty(&provider.secret, "provider.secret")?;
             }
 
             EmailProviderConfig::Resend(provider) => {
@@ -666,6 +692,44 @@ mod tests {
                 .expect_err("config should be invalid");
 
             assert!(error.to_string().contains("provider.webhook.headers"));
+
+            Ok(())
+        });
+    }
+
+    #[test]
+    fn load_paloud_internal_provider_config() {
+        Jail::expect_with(|jail| {
+            jail.create_file(
+                "config.yaml",
+                r#"
+                    email:
+                      from: '"Auth" <auth@example.com>'
+                      reply_to: '"Auth" <auth@example.com>'
+                      provider:
+                        type: paloud_internal
+                        url: https://tenant.meldry.com/api/v1/internal/notifications/email/send
+                        key_id: pasion-control-dev
+                        secret: super-secret
+                        workspace: demo
+                "#,
+            )?;
+
+            let figment = Figment::new().merge(Yaml::file("config.yaml"));
+            let config = figment.extract_inner::<EmailConfig>("email")?;
+
+            match config.provider {
+                EmailProviderConfig::PaloudInternal(provider) => {
+                    assert_eq!(
+                        provider.url,
+                        "https://tenant.meldry.com/api/v1/internal/notifications/email/send"
+                    );
+                    assert_eq!(provider.key_id, "pasion-control-dev");
+                    assert_eq!(provider.secret, "super-secret");
+                    assert_eq!(provider.workspace.as_deref(), Some("demo"));
+                }
+                other => panic!("unexpected provider: {other:?}"),
+            }
 
             Ok(())
         });

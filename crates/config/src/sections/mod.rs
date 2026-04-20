@@ -41,9 +41,10 @@ pub use self::{
     email::{
         AwsSesEmailProviderConfig, AwsSesWebhookConfig, BrevoEmailProviderConfig,
         BrevoWebhookConfig, EmailConfig, EmailProviderConfig, EmailSmtpMode,
-        HttpWebhookEmailProviderConfig, ResendEmailProviderConfig, ResendWebhookConfig,
-        SendgridEmailProviderConfig, SendgridWebhookConfig, SendmailEmailProviderConfig,
-        SmtpEmailProviderConfig, TwilioEmailProviderConfig,
+        HttpWebhookEmailProviderConfig, PaloudInternalEmailProviderConfig,
+        ResendEmailProviderConfig, ResendWebhookConfig, SendgridEmailProviderConfig,
+        SendgridWebhookConfig, SendmailEmailProviderConfig, SmtpEmailProviderConfig,
+        TwilioEmailProviderConfig,
     },
     experimental::ExperimentalConfig,
     http::{

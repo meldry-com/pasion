@@ -135,6 +135,16 @@ pub fn mailer_from_config(
             provider.api_key.clone(),
             provider.headers.clone(),
         ),
+        EmailProviderConfig::PaloudInternal(provider) => MailTransport::paloud_internal(
+            crate::reqwest_client(),
+            provider
+                .url
+                .parse()
+                .context("invalid email configuration: invalid provider.url")?,
+            provider.key_id.clone(),
+            provider.secret.clone(),
+            provider.workspace.clone(),
+        ),
         EmailProviderConfig::Resend(provider) => MailTransport::resend(
             crate::reqwest_client(),
             provider
