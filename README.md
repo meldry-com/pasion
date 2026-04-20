@@ -256,6 +256,7 @@ Key endpoints exposed by the server:
 | Endpoint | Purpose |
 |----------|---------|
 | `/health` | Health check |
+| `/healthz` | Health check alias |
 | `/metrics` | Prometheus metrics |
 | `/.well-known/openid-configuration` | OIDC discovery |
 | `/oauth2/authorize` | OAuth 2.0 authorization |

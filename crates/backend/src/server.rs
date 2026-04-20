@@ -293,9 +293,9 @@ pub fn build_router(
 
     for resource in resources {
         router = match resource {
-            pasion_config::HttpResource::Health => {
-                router.push(Router::with_path("/health").get(health::get))
-            }
+            pasion_config::HttpResource::Health => router
+                .push(Router::with_path("/health").get(health::get))
+                .push(Router::with_path("/healthz").get(health::get)),
             pasion_config::HttpResource::Prometheus => {
                 router.push(Router::with_path("/metrics").get(crate::telemetry::prometheus_handler))
             }

@@ -244,6 +244,7 @@ pasion worker -c config.yaml
 | 端点 | 用途 |
 |------|------|
 | `/health` | 健康检查 |
+| `/healthz` | 健康检查别名 |
 | `/metrics` | Prometheus 指标 |
 | `/.well-known/openid-configuration` | OIDC 发现 |
 | `/oauth2/authorize` | OAuth 2.0 授权 |

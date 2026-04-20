@@ -39,7 +39,7 @@ The server supports graceful shutdown via `SIGTERM` or `SIGINT` (Ctrl+C):
 
 ### Health check
 
-The server exposes a health endpoint (typically at `/health`) that returns HTTP 200 when the service is ready to handle requests. This endpoint can be used for load balancer health checks and container orchestration readiness probes.
+The server exposes health endpoints at `/health` and `/healthz` that return HTTP 200 when the service is ready to handle requests. These endpoints can be used for load balancer health checks and container orchestration readiness probes.
 
 ### Example: systemd service
 
