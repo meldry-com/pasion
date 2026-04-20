@@ -31,6 +31,9 @@ pasion config check -c config.yaml
 pasion config dump -c config.yaml
 ```
 
+环境变量覆盖使用 `PASION_` 前缀，并以 `__` 作为层级分隔符。例如：
+`PASION_EMAIL__PROVIDER__TYPE=http_webhook`。
+
 ## 编辑器支持
 
 Pasion 提供 JSON Schema 文件，可以在支持的编辑器中获得自动补全和验证。配置文件的 JSON Schema 位于 `docs/config.schema.json`。

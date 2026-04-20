@@ -423,17 +423,37 @@ fn notification_failure_from_error(error: &NotificationError) -> NotificationDel
         ),
         NotificationError::Email(error) => match error {
             pasion_messaging::email::MailerError::Transport(error) => (
-                Some("email_transport".to_owned()),
+                match error {
+                    pasion_messaging::email::EmailTransportError::Message(_) => {
+                        Some("email_message".to_owned())
+                    }
+                    pasion_messaging::email::EmailTransportError::Smtp(_) => {
+                        Some("email_smtp".to_owned())
+                    }
+                    pasion_messaging::email::EmailTransportError::Sendmail(_) => {
+                        Some("email_sendmail".to_owned())
+                    }
+                    pasion_messaging::email::EmailTransportError::Http(_) => {
+                        Some("email_http".to_owned())
+                    }
+                    pasion_messaging::email::EmailTransportError::ProviderError {
+                        status, ..
+                    } => Some(format!("email_provider_{status}")),
+                },
                 Some(error.to_string()),
-                true,
+                match error {
+                    pasion_messaging::email::EmailTransportError::ProviderError {
+                        retryable,
+                        ..
+                    } => *retryable,
+                    pasion_messaging::email::EmailTransportError::Message(_) => false,
+                    pasion_messaging::email::EmailTransportError::Smtp(_)
+                    | pasion_messaging::email::EmailTransportError::Sendmail(_)
+                    | pasion_messaging::email::EmailTransportError::Http(_) => true,
+                },
             ),
             pasion_messaging::email::MailerError::Templates(error) => (
                 Some("email_template".to_owned()),
-                Some(error.to_string()),
-                false,
-            ),
-            pasion_messaging::email::MailerError::Content(error) => (
-                Some("email_content".to_owned()),
                 Some(error.to_string()),
                 false,
             ),
@@ -884,10 +904,14 @@ async fn process_single_delivery(state: &State) -> Result<bool, JobError> {
             .await?;
 
             match notifications.dispatch(outbound_request).await {
-                Ok(()) => {
+                Ok(result) => {
                     let delivery = repo
                         .notification()
-                        .mark_delivery_delivered(clock, delivery, None)
+                        .mark_delivery_delivered(
+                            clock,
+                            delivery,
+                            result.provider_message_id.clone(),
+                        )
                         .await
                         .map_err(JobError::retry)?;
                     request = repo
@@ -906,6 +930,7 @@ async fn process_single_delivery(state: &State) -> Result<bool, JobError> {
                         Some("Notification delivery delivered"),
                         json!({
                             "attempt_count": delivery.attempt_count,
+                            "provider_message_id": delivery.provider_message_id,
                         }),
                     )
                     .await?;

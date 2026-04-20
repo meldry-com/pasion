@@ -6,7 +6,7 @@ use thiserror::Error;
 
 use crate::{
     Mailer,
-    email::MailerError,
+    email::{MailerError, SendResult as EmailSendResult},
     sms::{SmsSender, SmsTransportError},
 };
 
@@ -15,6 +15,13 @@ use crate::{
 pub struct NotificationCenter {
     email: Option<Mailer>,
     sms: Option<SmsSender>,
+}
+
+/// Result returned after a notification provider accepted a delivery.
+#[derive(Debug, Clone, Default)]
+pub struct NotificationDispatchResult {
+    /// Optional provider-side message identifier.
+    pub provider_message_id: Option<String>,
 }
 
 /// A standardized outbound notification request.
@@ -109,7 +116,10 @@ impl NotificationCenter {
     ///
     /// Returns an error if the requested delivery channel is unavailable or if
     /// delivery fails.
-    pub async fn dispatch(&self, request: NotificationRequest) -> Result<(), NotificationError> {
+    pub async fn dispatch(
+        &self,
+        request: NotificationRequest,
+    ) -> Result<NotificationDispatchResult, NotificationError> {
         match request {
             NotificationRequest::EmailVerification { to, context } => {
                 self.send_email_verification(to, &context).await
@@ -132,15 +142,16 @@ impl NotificationCenter {
         &self,
         to: Mailbox,
         context: &WithLanguage<EmailVerificationContext>,
-    ) -> Result<(), NotificationError> {
+    ) -> Result<NotificationDispatchResult, NotificationError> {
         let mailer = self
             .email
             .as_ref()
             .ok_or(NotificationError::EmailNotConfigured)?;
-        mailer
+        let result = mailer
             .send_verification_email(to, context)
             .await
-            .map_err(NotificationError::Email)
+            .map_err(NotificationError::Email)?;
+        Ok(result.into())
     }
 
     /// Send an account recovery email through the configured email channel.
@@ -152,15 +163,16 @@ impl NotificationCenter {
         &self,
         to: Mailbox,
         context: &WithLanguage<EmailRecoveryContext>,
-    ) -> Result<(), NotificationError> {
+    ) -> Result<NotificationDispatchResult, NotificationError> {
         let mailer = self
             .email
             .as_ref()
             .ok_or(NotificationError::EmailNotConfigured)?;
-        mailer
+        let result = mailer
             .send_recovery_email(to, context)
             .await
-            .map_err(NotificationError::Email)
+            .map_err(NotificationError::Email)?;
+        Ok(result.into())
     }
 
     /// Send a verification code via SMS through the configured SMS channel.
@@ -173,7 +185,7 @@ impl NotificationCenter {
         to: &str,
         code: &str,
         language: &str,
-    ) -> Result<(), NotificationError> {
+    ) -> Result<NotificationDispatchResult, NotificationError> {
         let sender = self
             .sms
             .as_ref()
@@ -181,7 +193,16 @@ impl NotificationCenter {
         sender
             .send_verification_code(to, code, language)
             .await
-            .map_err(NotificationError::Sms)
+            .map_err(NotificationError::Sms)?;
+        Ok(NotificationDispatchResult::default())
+    }
+}
+
+impl From<EmailSendResult> for NotificationDispatchResult {
+    fn from(result: EmailSendResult) -> Self {
+        Self {
+            provider_message_id: result.provider_message_id,
+        }
     }
 }
 

@@ -6,9 +6,9 @@ use diesel_async::{
     pooled_connection::{AsyncDieselConnectionManager, deadpool::Pool as DieselPool},
 };
 use pasion_config::{
-    AccountConfig, BrandingConfig, CaptchaConfig, DatabaseConfig, EmailConfig, EmailSmtpMode,
-    EmailTransportKind, ExperimentalConfig, HomeserverKind, MatrixConfig, PasswordsConfig,
-    PolicyConfig, PolicyEngine, SmsConfig, SmsTransportKind, TemplatesConfig,
+    AccountConfig, BrandingConfig, CaptchaConfig, DatabaseConfig, EmailConfig, EmailProviderConfig,
+    EmailSmtpMode, ExperimentalConfig, HomeserverKind, MatrixConfig, PasswordsConfig, PolicyConfig,
+    PolicyEngine, SmsConfig, SmsTransportKind, TemplatesConfig,
 };
 use pasion_data::{
     BoxRepositoryFactory, RepositoryAccess, RepositoryFactory, SessionExpirationConfig,
@@ -100,19 +100,10 @@ pub fn mailer_from_config(
         .reply_to
         .parse()
         .context("invalid email configuration: invalid 'reply_to' address")?;
-    let transport = match config.transport() {
-        EmailTransportKind::Blackhole => MailTransport::blackhole(),
-        EmailTransportKind::Smtp => {
-            // This should have been set ahead of time
-            let hostname = config
-                .hostname()
-                .context("invalid email configuration: missing hostname")?;
-
-            let mode = config
-                .mode()
-                .context("invalid email configuration: missing mode")?;
-
-            let credentials = match (config.username(), config.password()) {
+    let transport = match &config.provider {
+        EmailProviderConfig::Blackhole => MailTransport::blackhole(),
+        EmailProviderConfig::Smtp(provider) => {
+            let credentials = match (&provider.username, &provider.password) {
                 (Some(username), Some(password)) => Some(pasion_messaging::SmtpCredentials::new(
                     username.to_owned(),
                     password.to_owned(),
@@ -123,16 +114,27 @@ pub fn mailer_from_config(
                 }
             };
 
-            let mode = match mode {
+            let mode = match provider.mode {
                 EmailSmtpMode::Plain => pasion_messaging::SmtpMode::Plain,
                 EmailSmtpMode::StartTls => pasion_messaging::SmtpMode::StartTls,
                 EmailSmtpMode::Tls => pasion_messaging::SmtpMode::Tls,
             };
 
-            MailTransport::smtp(mode, hostname, config.port(), credentials)
+            MailTransport::smtp(mode, &provider.hostname, provider.port, credentials)
                 .context("failed to build SMTP transport")?
         }
-        EmailTransportKind::Sendmail => MailTransport::sendmail(config.command()),
+        EmailProviderConfig::Sendmail(provider) => {
+            MailTransport::sendmail(Some(provider.command.clone()))
+        }
+        EmailProviderConfig::HttpWebhook(provider) => MailTransport::http_webhook(
+            crate::reqwest_client(),
+            provider
+                .url
+                .parse()
+                .context("invalid email configuration: invalid provider.url")?,
+            provider.api_key.clone(),
+            provider.headers.clone(),
+        ),
     };
 
     Ok(Mailer::new(templates.clone(), transport, from, reply_to))

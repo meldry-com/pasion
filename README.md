@@ -128,9 +128,10 @@ upstream_oauth2:
 # Email (optional, for verification and recovery)
 email:
   from: '"Pasion" <noreply@example.com>'
-  transport: smtp
-  mode: starttls
-  hostname: smtp.example.com
+  provider:
+    type: smtp
+    mode: starttls
+    hostname: smtp.example.com
 ```
 
 See the [full configuration reference](docs/en/reference/configuration.md) for all options.

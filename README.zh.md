@@ -126,9 +126,10 @@ upstream_oauth2:
 # 邮件通知（多渠道通知中心）
 email:
   from: '"Pasion" <noreply@example.com>'
-  transport: smtp
-  mode: starttls
-  hostname: smtp.example.com
+  provider:
+    type: smtp
+    mode: starttls
+    hostname: smtp.example.com
 
 # 短信通知（多渠道通知中心，支持 Twilio / 阿里云 / 腾讯云）
 # sms:

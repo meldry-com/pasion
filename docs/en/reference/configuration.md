@@ -527,20 +527,31 @@ email:
   from: '"The almighty auth service" <auth@example.com>'
   reply_to: '"No reply" <no-reply@example.com>'
 
-  # Default transport: don't send any emails
-  transport: blackhole
+  # Default provider: don't send any emails
+  provider:
+    type: blackhole
 
   # Send emails using SMTP
-  #transport: smtp
-  #mode: plain | tls | starttls
-  #hostname: localhost
-  #port: 587
-  #username: username
-  #password: password
+  #provider:
+  #  type: smtp
+  #  mode: plain | tls | starttls
+  #  hostname: localhost
+  #  port: 587
+  #  username: username
+  #  password: password
 
   # Send emails by calling a local sendmail binary
-  #transport: sendmail
-  #command: /usr/sbin/sendmail
+  #provider:
+  #  type: sendmail
+  #  command: /usr/sbin/sendmail
+
+  # Send emails by submitting a JSON payload to an HTTP API
+  #provider:
+  #  type: http_webhook
+  #  url: https://mailer.example.com/api/send
+  #  api_key: example-token
+  #  headers:
+  #    X-Tenant: auth
 ```
 
 ## `upstream_oauth2`

@@ -97,12 +97,13 @@ passwords:
 email:
   from: '"Pasion" <noreply@example.com>'
   reply_to: '"Support" <support@example.com>'
-  transport: smtp
-  mode: starttls
-  hostname: smtp.example.com
-  port: 587
-  username: "smtp_user"
-  password: "smtp_password"
+  provider:
+    type: smtp
+    mode: starttls
+    hostname: smtp.example.com
+    port: 587
+    username: "smtp_user"
+    password: "smtp_password"
 ```
 
 ### `telemetry` — 可观测性

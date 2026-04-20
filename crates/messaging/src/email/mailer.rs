@@ -1,13 +1,15 @@
 //! Send emails to users
 
-use lettre::{
-    AsyncTransport, Message,
-    message::{Mailbox, MessageBuilder, MultiPart},
-};
+use std::collections::BTreeMap;
+
+use lettre::message::Mailbox;
 use pasion_templates::{EmailRecoveryContext, EmailVerificationContext, Templates, WithLanguage};
 use thiserror::Error;
 
-use super::Transport as MailTransport;
+use super::{
+    OutboundEmail, SendResult,
+    transport::{Error as TransportError, Transport as MailTransport},
+};
 
 /// Helps sending mails to users
 #[derive(Clone)]
@@ -23,11 +25,9 @@ pub struct Mailer {
 #[error(transparent)]
 pub enum Error {
     /// The configured email transport failed.
-    Transport(#[from] super::transport::Error),
+    Transport(#[from] TransportError),
     /// Rendering the email templates failed.
     Templates(#[from] pasion_templates::TemplateError),
-    /// Building the email message content failed.
-    Content(#[from] lettre::error::Error),
 }
 
 impl Mailer {
@@ -47,61 +47,54 @@ impl Mailer {
         }
     }
 
-    fn base_message(&self) -> MessageBuilder {
-        Message::builder()
-            .from(self.from.clone())
-            .reply_to(self.reply_to.clone())
+    fn outbound_email(
+        &self,
+        to: Mailbox,
+        subject: String,
+        text_body: String,
+        html_body: Option<String>,
+    ) -> OutboundEmail {
+        OutboundEmail {
+            from: self.from.clone(),
+            reply_to: Some(self.reply_to.clone()),
+            to: vec![to],
+            subject: subject.trim().to_owned(),
+            text_body,
+            html_body,
+            headers: BTreeMap::new(),
+            tags: BTreeMap::new(),
+        }
     }
 
     fn prepare_verification_email(
         &self,
         to: Mailbox,
         context: &WithLanguage<EmailVerificationContext>,
-    ) -> Result<Message, Error> {
-        let plain = self.templates.render_email_verification_txt(context)?;
-
-        let html = self.templates.render_email_verification_html(context)?;
-
-        let multipart = MultiPart::alternative_plain_html(plain, html);
-
+    ) -> Result<OutboundEmail, Error> {
+        let text_body = self.templates.render_email_verification_txt(context)?;
+        let html_body = self.templates.render_email_verification_html(context)?;
         let subject = self.templates.render_email_verification_subject(context)?;
 
-        let message = self
-            .base_message()
-            .subject(subject.trim())
-            .to(to)
-            .multipart(multipart)?;
-
-        Ok(message)
+        Ok(self.outbound_email(to, subject, text_body, Some(html_body)))
     }
 
     fn prepare_recovery_email(
         &self,
         to: Mailbox,
         context: &WithLanguage<EmailRecoveryContext>,
-    ) -> Result<Message, Error> {
-        let plain = self.templates.render_email_recovery_txt(context)?;
-
-        let html = self.templates.render_email_recovery_html(context)?;
-
-        let multipart = MultiPart::alternative_plain_html(plain, html);
-
+    ) -> Result<OutboundEmail, Error> {
+        let text_body = self.templates.render_email_recovery_txt(context)?;
+        let html_body = self.templates.render_email_recovery_html(context)?;
         let subject = self.templates.render_email_recovery_subject(context)?;
 
-        let message = self
-            .base_message()
-            .subject(subject.trim())
-            .to(to)
-            .multipart(multipart)?;
-
-        Ok(message)
+        Ok(self.outbound_email(to, subject, text_body, Some(html_body)))
     }
 
-    /// Send the verification email to a user
+    /// Send the verification email to a user.
     ///
     /// # Errors
     ///
-    /// Will return `Err` if the email failed rendering or failed sending
+    /// Will return `Err` if the email failed rendering or failed sending.
     #[tracing::instrument(
         name = "email.verification.send",
         skip_all,
@@ -114,23 +107,23 @@ impl Mailer {
         &self,
         to: Mailbox,
         context: &WithLanguage<EmailVerificationContext>,
-    ) -> Result<(), Error> {
+    ) -> Result<SendResult, Error> {
         println!(
             "[EMAIL] prepare verification email to={to}, code={}",
             context.code()
         );
-        let message = self.prepare_verification_email(to, context)?;
+        let email = self.prepare_verification_email(to, context)?;
         println!("[EMAIL] sending verification email...");
-        self.transport.send(message).await?;
+        let result = self.transport.send(&email).await?;
         println!("[EMAIL] verification email sent OK");
-        Ok(())
+        Ok(result)
     }
 
-    /// Send the recovery email to a user
+    /// Send the recovery email to a user.
     ///
     /// # Errors
     ///
-    /// Will return `Err` if the email failed rendering or failed sending
+    /// Will return `Err` if the email failed rendering or failed sending.
     #[tracing::instrument(
         name = "email.recovery.send",
         skip_all,
@@ -145,22 +138,22 @@ impl Mailer {
         &self,
         to: Mailbox,
         context: &WithLanguage<EmailRecoveryContext>,
-    ) -> Result<(), Error> {
+    ) -> Result<SendResult, Error> {
         println!("[EMAIL] prepare recovery email to={to}");
-        let message = self.prepare_recovery_email(to, context)?;
+        let email = self.prepare_recovery_email(to, context)?;
         println!("[EMAIL] sending recovery email...");
-        self.transport.send(message).await?;
+        let result = self.transport.send(&email).await?;
         println!("[EMAIL] recovery email sent OK");
-        Ok(())
+        Ok(result)
     }
 
-    /// Test the connetion to the mail server
+    /// Test the connection to the mail server.
     ///
     /// # Errors
     ///
-    /// Returns an error if the connection failed
+    /// Returns an error if the connection failed.
     #[tracing::instrument(name = "email.test_connection", skip_all)]
-    pub async fn test_connection(&self) -> Result<(), super::transport::Error> {
+    pub async fn test_connection(&self) -> Result<(), TransportError> {
         self.transport.test_connection().await
     }
 

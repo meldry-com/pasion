@@ -10,5 +10,7 @@ pub use pasion_templates::EmailVerificationContext;
 
 pub use self::{
     mailer::{Error as MailerError, Mailer},
-    transport::{SmtpMode, Transport},
+    transport::{
+        EmailProvider, Error as EmailTransportError, OutboundEmail, SendResult, SmtpMode, Transport,
+    },
 };

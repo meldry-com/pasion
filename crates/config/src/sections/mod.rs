@@ -38,7 +38,12 @@ pub use self::{
     captcha::{CaptchaConfig, CaptchaServiceKind},
     clients::{ClientAuthMethodConfig, ClientConfig, ClientsConfig},
     database::{DatabaseConfig, PgSslMode},
-    email::{EmailConfig, EmailSmtpMode, EmailTransportKind},
+    email::{
+        AwsSesEmailProviderConfig, BrevoEmailProviderConfig, EmailConfig, EmailProviderConfig,
+        EmailSmtpMode, HttpWebhookEmailProviderConfig, ResendEmailProviderConfig,
+        SendgridEmailProviderConfig, SendmailEmailProviderConfig, SmtpEmailProviderConfig,
+        TwilioEmailProviderConfig,
+    },
     experimental::ExperimentalConfig,
     http::{
         BindConfig as HttpBindConfig, HttpConfig, ListenerConfig as HttpListenerConfig,

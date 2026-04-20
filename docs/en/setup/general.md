@@ -53,6 +53,9 @@ To help understand what the resulting configuration looks like after merging all
 pasion config dump
 ```
 
+Environment overrides use the `PASION_` prefix and `__` as the nesting
+separator. For example, `PASION_EMAIL__PROVIDER__TYPE=http_webhook`.
+
 ## Configuration schema
 
 The configuration file is validated against a JSON schema, which can be found [here](../config.schema.json).

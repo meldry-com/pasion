@@ -5744,6 +5744,7 @@ dependencies = [
  "async-trait",
  "base64",
  "chrono",
+ "hex",
  "hmac 0.12.1",
  "lettre",
  "pasion-templates",

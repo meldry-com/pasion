@@ -15,7 +15,9 @@ pub use lettre::{
 pub use pasion_templates::EmailVerificationContext;
 
 pub use self::{
-    email::{Mailer, SmtpMode, Transport as MailTransport},
-    notification::{NotificationCenter, NotificationError, NotificationRequest},
+    email::{Mailer, SendResult as EmailSendResult, SmtpMode, Transport as MailTransport},
+    notification::{
+        NotificationCenter, NotificationDispatchResult, NotificationError, NotificationRequest,
+    },
     sms::{SmsSender, SmsTransport, SmsTransportError},
 };

@@ -87,7 +87,7 @@ impl Options {
         } else {
             self.config.clone()
         };
-        let base = Figment::new().merge(Env::prefixed("PASION_").split("_"));
+        let base = Figment::new().merge(Env::prefixed("PASION_").split("__"));
 
         configs
             .into_iter()
