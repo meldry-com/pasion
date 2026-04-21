@@ -20,8 +20,9 @@ Notes:
   per-architecture builds finish
 - Each architecture also gets its own published tags such as `main-amd64`,
   `main-arm64`, and `sha-<commit>-amd64`
-- The `arm64` image job uses a native runner labeled `ubuntu-24.04-arm64`
-  instead of QEMU emulation
+- The `arm64` image job targets the `ubuntu-24.04-arm64` runner label and
+  relies on Docker's `linux/arm64` emulation support when that label is
+  backed by an x86_64 runner
 - Gitea workflows intentionally do not use `mozilla-actions/sccache-action`,
   because that action expects GitHub cache token support that is not available
   in standard Gitea Actions runners
