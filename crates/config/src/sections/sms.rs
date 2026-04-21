@@ -2,134 +2,132 @@
 
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize, de::Error};
+use url::Url;
 
 use super::ConfigurationSection;
 
-/// What backend should be used when sending SMS messages
-#[derive(Clone, Copy, Debug, Serialize, Deserialize, JsonSchema, Default, PartialEq, Eq)]
-#[serde(rename_all = "snake_case")]
-pub enum SmsTransportKind {
-    /// Don't send SMS anywhere
-    #[default]
-    Blackhole,
+/// Twilio SMS delivery settings
+#[derive(Clone, Debug, Serialize, Deserialize, JsonSchema)]
+pub struct TwilioSmsProviderConfig {
+    /// Twilio account SID
+    pub account_sid: String,
 
-    /// Send SMS via Twilio
-    Twilio,
-
-    /// Send SMS via an HTTP webhook
-    HttpWebhook,
-
-    /// Send SMS via Aliyun (阿里云短信)
-    AliyunSms,
-
-    /// Send SMS via Tencent Cloud (腾讯云短信)
-    TencentCloudSms,
-
-    /// Submit SMS payloads to Paloud's internal notification API
-    PaloudInternal,
-}
-
-/// Configuration related to sending SMS messages
-#[derive(Clone, Debug, Serialize, Deserialize, JsonSchema, Default)]
-pub struct SmsConfig {
-    /// What backend should be used when sending SMS messages
-    #[serde(default)]
-    pub transport: SmsTransportKind,
-
-    /// HTTP webhook transport: URL to send SMS requests to
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub api_url: Option<String>,
-
-    /// Twilio transport: Account SID
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub account_sid: Option<String>,
-
-    /// Twilio transport: Auth token
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub auth_token: Option<String>,
+    /// Twilio auth token
+    pub auth_token: String,
 
     /// Phone number to send SMS from
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub from_number: Option<String>,
+    pub from_number: String,
+}
 
-    /// HTTP webhook transport: API key for authorization
+/// Generic HTTP SMS API delivery settings
+#[derive(Clone, Debug, Serialize, Deserialize, JsonSchema)]
+pub struct HttpWebhookSmsProviderConfig {
+    /// API endpoint accepting outbound SMS requests
+    pub url: String,
+
+    /// Optional bearer token sent as `Authorization: Bearer ...`
     #[serde(skip_serializing_if = "Option::is_none")]
     pub api_key: Option<String>,
 
-    /// Aliyun SMS transport: Access Key ID
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub aliyun_access_key_id: Option<String>,
+    /// Phone number to send SMS from
+    pub from_number: String,
+}
 
-    /// Aliyun SMS transport: Access Key Secret
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub aliyun_access_key_secret: Option<String>,
+/// Aliyun SMS delivery settings
+#[derive(Clone, Debug, Serialize, Deserialize, JsonSchema)]
+pub struct AliyunSmsProviderConfig {
+    /// Aliyun access key ID
+    pub access_key_id: String,
 
-    /// Aliyun SMS transport: Sign name (签名)
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub aliyun_sign_name: Option<String>,
+    /// Aliyun access key secret
+    pub access_key_secret: String,
 
-    /// Aliyun SMS transport: Template code (模板编号)
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub aliyun_template_code: Option<String>,
+    /// Aliyun sign name (签名)
+    pub sign_name: String,
 
-    /// Tencent Cloud SMS transport: Secret ID
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub tencent_secret_id: Option<String>,
+    /// Aliyun template code (模板编号)
+    pub template_code: String,
+}
 
-    /// Tencent Cloud SMS transport: Secret Key
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub tencent_secret_key: Option<String>,
+/// Tencent Cloud SMS delivery settings
+#[derive(Clone, Debug, Serialize, Deserialize, JsonSchema)]
+pub struct TencentCloudSmsProviderConfig {
+    /// Tencent Cloud secret ID
+    pub secret_id: String,
 
-    /// Tencent Cloud SMS transport: SDK App ID
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub tencent_sdk_app_id: Option<String>,
+    /// Tencent Cloud secret key
+    pub secret_key: String,
 
-    /// Tencent Cloud SMS transport: Sign name (签名)
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub tencent_sign_name: Option<String>,
+    /// Tencent Cloud SDK app ID
+    pub sdk_app_id: String,
 
-    /// Tencent Cloud SMS transport: Template ID (模板 ID)
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub tencent_template_id: Option<String>,
+    /// Tencent Cloud sign name (签名)
+    pub sign_name: String,
 
-    /// Paloud internal SMS transport: fully qualified dispatch endpoint
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub paloud_internal_url: Option<String>,
+    /// Tencent Cloud template ID (模板 ID)
+    pub template_id: String,
+}
+
+/// Paloud internal notification SMS delivery settings
+#[derive(Clone, Debug, Serialize, Deserialize, JsonSchema)]
+pub struct PaloudInternalSmsProviderConfig {
+    /// Fully qualified Paloud internal SMS dispatch endpoint
+    pub url: String,
 
     /// Shared key identifier sent in `X-Paloud-Key-Id`
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub paloud_internal_key_id: Option<String>,
+    pub key_id: String,
 
     /// Shared secret used to sign the request with `HMAC-SHA256`
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub paloud_internal_secret: Option<String>,
+    pub secret: String,
 
     /// Optional workspace UUID or subdomain used for provider routing
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub paloud_internal_workspace: Option<String>,
+    pub workspace: Option<String>,
+}
+
+/// Which provider delivers outbound SMS messages
+#[derive(Clone, Debug, Serialize, Deserialize, JsonSchema, Default)]
+#[serde(tag = "type", rename_all = "snake_case")]
+pub enum SmsProviderConfig {
+    /// Silently discard all SMS messages (useful for development)
+    #[default]
+    Blackhole,
+
+    /// Deliver through Twilio
+    Twilio(TwilioSmsProviderConfig),
+
+    /// Submit SMS payloads to a generic HTTP endpoint
+    HttpWebhook(HttpWebhookSmsProviderConfig),
+
+    /// Deliver through Aliyun SMS
+    AliyunSms(AliyunSmsProviderConfig),
+
+    /// Deliver through Tencent Cloud SMS
+    TencentCloudSms(TencentCloudSmsProviderConfig),
+
+    /// Submit SMS payloads to Paloud's internal notification API
+    PaloudInternal(PaloudInternalSmsProviderConfig),
+}
+
+/// Configuration related to sending SMS messages
+#[derive(Clone, Debug, Serialize, Deserialize, JsonSchema)]
+pub struct SmsConfig {
+    /// Active SMS delivery provider
+    #[serde(default)]
+    pub provider: SmsProviderConfig,
+}
+
+impl Default for SmsConfig {
+    fn default() -> Self {
+        Self {
+            provider: SmsProviderConfig::Blackhole,
+        }
+    }
 }
 
 impl SmsConfig {
     pub(crate) fn is_default(&self) -> bool {
-        matches!(self.transport, SmsTransportKind::Blackhole)
-            && self.api_url.is_none()
-            && self.account_sid.is_none()
-            && self.auth_token.is_none()
-            && self.from_number.is_none()
-            && self.api_key.is_none()
-            && self.aliyun_access_key_id.is_none()
-            && self.aliyun_access_key_secret.is_none()
-            && self.aliyun_sign_name.is_none()
-            && self.aliyun_template_code.is_none()
-            && self.tencent_secret_id.is_none()
-            && self.tencent_secret_key.is_none()
-            && self.tencent_sdk_app_id.is_none()
-            && self.tencent_sign_name.is_none()
-            && self.tencent_template_id.is_none()
-            && self.paloud_internal_url.is_none()
-            && self.paloud_internal_key_id.is_none()
-            && self.paloud_internal_secret.is_none()
-            && self.paloud_internal_workspace.is_none()
+        matches!(&self.provider, SmsProviderConfig::Blackhole)
     }
 }
 
@@ -149,92 +147,166 @@ impl ConfigurationSection for SmsConfig {
             error
         };
 
-        let missing_field = |field: &'static str| {
-            error_on_field(figment::error::Error::missing_field(field), field)
-        };
-
-        match self.transport {
-            SmsTransportKind::Blackhole => {}
-
-            SmsTransportKind::Twilio => {
-                if self.account_sid.is_none() {
-                    return Err(missing_field("account_sid").into());
+        let ensure_non_empty =
+            |value: &str, field: &'static str| -> Result<(), figment::error::Error> {
+                if value.trim().is_empty() {
+                    return Err(error_on_field(
+                        figment::error::Error::custom("value must not be empty"),
+                        field,
+                    ));
                 }
 
-                if self.auth_token.is_none() {
-                    return Err(missing_field("auth_token").into());
-                }
+                Ok(())
+            };
 
-                if self.from_number.is_none() {
-                    return Err(missing_field("from_number").into());
-                }
+        let ensure_valid_url =
+            |value: &str, field: &'static str| -> Result<(), figment::error::Error> {
+                Url::parse(value)
+                    .map_err(|error| error_on_field(figment::error::Error::custom(error), field))?;
+                Ok(())
+            };
+
+        match &self.provider {
+            SmsProviderConfig::Blackhole => {}
+
+            SmsProviderConfig::Twilio(provider) => {
+                ensure_non_empty(&provider.account_sid, "provider.account_sid")?;
+                ensure_non_empty(&provider.auth_token, "provider.auth_token")?;
+                ensure_non_empty(&provider.from_number, "provider.from_number")?;
             }
 
-            SmsTransportKind::HttpWebhook => {
-                if self.api_url.is_none() {
-                    return Err(missing_field("api_url").into());
-                }
-
-                if self.from_number.is_none() {
-                    return Err(missing_field("from_number").into());
-                }
+            SmsProviderConfig::HttpWebhook(provider) => {
+                ensure_valid_url(&provider.url, "provider.url")?;
+                ensure_non_empty(&provider.from_number, "provider.from_number")?;
             }
 
-            SmsTransportKind::AliyunSms => {
-                if self.aliyun_access_key_id.is_none() {
-                    return Err(missing_field("aliyun_access_key_id").into());
-                }
-
-                if self.aliyun_access_key_secret.is_none() {
-                    return Err(missing_field("aliyun_access_key_secret").into());
-                }
-
-                if self.aliyun_sign_name.is_none() {
-                    return Err(missing_field("aliyun_sign_name").into());
-                }
-
-                if self.aliyun_template_code.is_none() {
-                    return Err(missing_field("aliyun_template_code").into());
-                }
+            SmsProviderConfig::AliyunSms(provider) => {
+                ensure_non_empty(&provider.access_key_id, "provider.access_key_id")?;
+                ensure_non_empty(&provider.access_key_secret, "provider.access_key_secret")?;
+                ensure_non_empty(&provider.sign_name, "provider.sign_name")?;
+                ensure_non_empty(&provider.template_code, "provider.template_code")?;
             }
 
-            SmsTransportKind::TencentCloudSms => {
-                if self.tencent_secret_id.is_none() {
-                    return Err(missing_field("tencent_secret_id").into());
-                }
-
-                if self.tencent_secret_key.is_none() {
-                    return Err(missing_field("tencent_secret_key").into());
-                }
-
-                if self.tencent_sdk_app_id.is_none() {
-                    return Err(missing_field("tencent_sdk_app_id").into());
-                }
-
-                if self.tencent_sign_name.is_none() {
-                    return Err(missing_field("tencent_sign_name").into());
-                }
-
-                if self.tencent_template_id.is_none() {
-                    return Err(missing_field("tencent_template_id").into());
-                }
+            SmsProviderConfig::TencentCloudSms(provider) => {
+                ensure_non_empty(&provider.secret_id, "provider.secret_id")?;
+                ensure_non_empty(&provider.secret_key, "provider.secret_key")?;
+                ensure_non_empty(&provider.sdk_app_id, "provider.sdk_app_id")?;
+                ensure_non_empty(&provider.sign_name, "provider.sign_name")?;
+                ensure_non_empty(&provider.template_id, "provider.template_id")?;
             }
 
-            SmsTransportKind::PaloudInternal => {
-                if self.paloud_internal_url.is_none() {
-                    return Err(missing_field("paloud_internal_url").into());
-                }
-
-                if self.paloud_internal_key_id.is_none() {
-                    return Err(missing_field("paloud_internal_key_id").into());
-                }
-
-                if self.paloud_internal_secret.is_none() {
-                    return Err(missing_field("paloud_internal_secret").into());
-                }
+            SmsProviderConfig::PaloudInternal(provider) => {
+                ensure_valid_url(&provider.url, "provider.url")?;
+                ensure_non_empty(&provider.key_id, "provider.key_id")?;
+                ensure_non_empty(&provider.secret, "provider.secret")?;
             }
         }
 
         Ok(())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use figment::{
+        Figment, Jail,
+        providers::{Format, Yaml},
+    };
+
+    use super::*;
+
+    #[test]
+    fn load_twilio_provider_config() {
+        Jail::expect_with(|jail| {
+            jail.create_file(
+                "config.yaml",
+                r#"
+                    sms:
+                      provider:
+                        type: twilio
+                        account_sid: AC123
+                        auth_token: secret
+                        from_number: +12065550123
+                "#,
+            )?;
+
+            let config = Figment::new()
+                .merge(Yaml::file("config.yaml"))
+                .extract_inner::<SmsConfig>("sms")?;
+
+            match config.provider {
+                SmsProviderConfig::Twilio(provider) => {
+                    assert_eq!(provider.account_sid, "AC123");
+                    assert_eq!(provider.auth_token, "secret");
+                    assert_eq!(provider.from_number, "+12065550123");
+                }
+                other => panic!("expected twilio provider, got {other:?}"),
+            }
+
+            Ok(())
+        });
+    }
+
+    #[test]
+    fn load_paloud_internal_provider_config() {
+        Jail::expect_with(|jail| {
+            jail.create_file(
+                "config.yaml",
+                r#"
+                    sms:
+                      provider:
+                        type: paloud_internal
+                        url: https://tenant.meldry.com/api/v1/internal/notifications/sms/send
+                        key_id: pasion-control-dev
+                        secret: super-secret
+                        workspace: demo
+                "#,
+            )?;
+
+            let figment = Figment::new().merge(Yaml::file("config.yaml"));
+            let config = figment.extract_inner::<SmsConfig>("sms")?;
+
+            match config.provider {
+                SmsProviderConfig::PaloudInternal(provider) => {
+                    assert_eq!(
+                        provider.url,
+                        "https://tenant.meldry.com/api/v1/internal/notifications/sms/send"
+                    );
+                    assert_eq!(provider.key_id, "pasion-control-dev");
+                    assert_eq!(provider.secret, "super-secret");
+                    assert_eq!(provider.workspace.as_deref(), Some("demo"));
+                }
+                other => panic!("unexpected provider: {other:?}"),
+            }
+
+            Ok(())
+        });
+    }
+
+    #[test]
+    fn reject_invalid_paloud_internal_url() {
+        Jail::expect_with(|jail| {
+            jail.create_file(
+                "config.yaml",
+                r#"
+                    sms:
+                      provider:
+                        type: paloud_internal
+                        url: '::not-a-url::'
+                        key_id: pasion-control-dev
+                        secret: super-secret
+                "#,
+            )?;
+
+            let figment = Figment::new().merge(Yaml::file("config.yaml"));
+            let config = figment.extract_inner::<SmsConfig>("sms")?;
+            let error = config
+                .validate(&figment)
+                .expect_err("config should be invalid");
+
+            assert!(error.to_string().contains("provider.url"));
+
+            Ok(())
+        });
     }
 }

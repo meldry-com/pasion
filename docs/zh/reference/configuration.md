@@ -129,11 +129,62 @@ email:
 ```
 
 `twilio` 邮件 provider 实际上走的是 Twilio SendGrid 的 Mail Send API，
-和短信里的 `twilio` transport 是两套能力。
+和短信里的 `twilio` provider 是两套能力。
 
 如果启用了异步投递回执，可以把公开 webhook 路径配置到对应 provider：
 `/webhooks/email/resend`、`/webhooks/email/sendgrid`、`/webhooks/email/twilio`、
 `/webhooks/email/brevo`、`/webhooks/email/aws-ses`。
+
+### `sms` — 短信发送
+
+```yaml
+sms:
+  # 默认 provider：不发送任何短信
+  provider:
+    type: blackhole
+
+  # Twilio 短信
+  #provider:
+  #  type: twilio
+  #  account_sid: ACxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+  #  auth_token: your-auth-token
+  #  from_number: +12065550123
+
+  # HTTP webhook 短信
+  #provider:
+  #  type: http_webhook
+  #  url: https://sms.example.com/api/send
+  #  api_key: example-token
+  #  from_number: +12065550123
+
+  # 阿里云短信
+  #provider:
+  #  type: aliyun_sms
+  #  access_key_id: your-access-key-id
+  #  access_key_secret: your-access-key-secret
+  #  sign_name: 你的签名
+  #  template_code: SMS_123456789
+
+  # 腾讯云短信
+  #provider:
+  #  type: tencent_cloud_sms
+  #  secret_id: your-secret-id
+  #  secret_key: your-secret-key
+  #  sdk_app_id: "1400000000"
+  #  sign_name: 你的签名
+  #  template_id: "1234567"
+
+  # Paloud internal notification API
+  #provider:
+  #  type: paloud_internal
+  #  url: https://admin.example.com/api/v1/internal/notifications/sms/send
+  #  key_id: pasion-service
+  #  secret: super-secret
+  #  workspace: demo
+```
+
+`sms.provider.type` 支持 `blackhole`、`twilio`、`http_webhook`、
+`aliyun_sms`、`tencent_cloud_sms` 和 `paloud_internal`。
 
 ### `telemetry` — 可观测性
 

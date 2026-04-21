@@ -132,6 +132,14 @@ email:
     type: resend
     api_key: "re_xxxxxxxxx"
     # Supported types: smtp, sendmail, resend, sendgrid, twilio, brevo, aws_ses, http_webhook
+
+# SMS (optional, for phone verification and messaging)
+sms:
+  provider:
+    type: twilio
+    account_sid: "ACxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+    auth_token: "your-auth-token"
+    from_number: "+12065550123"
 ```
 
 See the [full configuration reference](docs/en/reference/configuration.md) for all options.

@@ -617,7 +617,60 @@ webhook route to your provider:
 `sendgrid`, `twilio`, `brevo`, `aws_ses`, and `http_webhook`.
 
 The `twilio` email provider uses Twilio SendGrid's Mail Send API. It is
-separate from the SMS `twilio` transport.
+separate from the SMS `twilio` provider.
+
+## `sms`
+
+Settings related to sending SMS messages.
+
+```yaml
+sms:
+  # Default provider: don't send any SMS messages
+  provider:
+    type: blackhole
+
+  # Send SMS through Twilio
+  #provider:
+  #  type: twilio
+  #  account_sid: ACxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+  #  auth_token: your-auth-token
+  #  from_number: +12065550123
+
+  # Send SMS by submitting a JSON payload to an HTTP API
+  #provider:
+  #  type: http_webhook
+  #  url: https://sms.example.com/api/send
+  #  api_key: example-token
+  #  from_number: +12065550123
+
+  # Send SMS through Aliyun SMS
+  #provider:
+  #  type: aliyun_sms
+  #  access_key_id: your-access-key-id
+  #  access_key_secret: your-access-key-secret
+  #  sign_name: ExampleSign
+  #  template_code: SMS_123456789
+
+  # Send SMS through Tencent Cloud SMS
+  #provider:
+  #  type: tencent_cloud_sms
+  #  secret_id: your-secret-id
+  #  secret_key: your-secret-key
+  #  sdk_app_id: "1400000000"
+  #  sign_name: ExampleSign
+  #  template_id: "1234567"
+
+  # Send SMS through Paloud's internal notification API
+  #provider:
+  #  type: paloud_internal
+  #  url: https://admin.example.com/api/v1/internal/notifications/sms/send
+  #  key_id: pasion-service
+  #  secret: super-secret
+  #  workspace: demo
+```
+
+`sms.provider.type` supports `blackhole`, `twilio`, `http_webhook`,
+`aliyun_sms`, `tencent_cloud_sms`, and `paloud_internal`.
 
 ## `upstream_oauth2`
 

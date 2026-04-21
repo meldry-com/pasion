@@ -1605,6 +1605,24 @@
           ]
         },
         {
+          "description": "Submit email payloads to Paloud's internal notification API",
+          "type": "object",
+          "properties": {
+            "type": {
+              "type": "string",
+              "const": "paloud_internal"
+            }
+          },
+          "required": [
+            "type"
+          ],
+          "allOf": [
+            {
+              "$ref": "#/definitions/PaloudInternalEmailProviderConfig"
+            }
+          ]
+        },
+        {
           "description": "Deliver through the Resend email API",
           "type": "object",
           "properties": {
@@ -1802,6 +1820,36 @@
       },
       "required": [
         "url"
+      ]
+    },
+    "PaloudInternalEmailProviderConfig": {
+      "description": "Paloud internal notification email delivery settings",
+      "type": "object",
+      "properties": {
+        "url": {
+          "description": "Fully qualified Paloud internal email dispatch endpoint",
+          "type": "string"
+        },
+        "key_id": {
+          "description": "Shared key identifier sent in `X-Paloud-Key-Id`",
+          "type": "string"
+        },
+        "secret": {
+          "description": "Shared secret used to sign the request with `HMAC-SHA256`",
+          "type": "string"
+        },
+        "workspace": {
+          "description": "Optional workspace UUID or subdomain used for provider routing",
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      },
+      "required": [
+        "url",
+        "key_id",
+        "secret"
       ]
     },
     "ResendWebhookConfig": {
@@ -2054,31 +2102,160 @@
       "description": "Configuration related to sending SMS messages",
       "type": "object",
       "properties": {
-        "transport": {
-          "description": "What backend should be used when sending SMS messages",
-          "default": "blackhole",
+        "provider": {
+          "description": "Active SMS delivery provider",
+          "default": {
+            "type": "blackhole"
+          },
           "allOf": [
             {
-              "$ref": "#/definitions/SmsTransportKind"
+              "$ref": "#/definitions/SmsProviderConfig"
+            }
+          ]
+        }
+      }
+    },
+    "SmsProviderConfig": {
+      "description": "Which provider delivers outbound SMS messages",
+      "oneOf": [
+        {
+          "description": "Silently discard all SMS messages (useful for development)",
+          "type": "object",
+          "properties": {
+            "type": {
+              "type": "string",
+              "const": "blackhole"
+            }
+          },
+          "required": [
+            "type"
+          ]
+        },
+        {
+          "description": "Deliver through Twilio",
+          "type": "object",
+          "properties": {
+            "type": {
+              "type": "string",
+              "const": "twilio"
+            }
+          },
+          "required": [
+            "type"
+          ],
+          "allOf": [
+            {
+              "$ref": "#/definitions/TwilioSmsProviderConfig"
             }
           ]
         },
-        "api_url": {
-          "description": "HTTP webhook transport: URL to send SMS requests to",
-          "type": [
-            "string",
-            "null"
+        {
+          "description": "Submit SMS payloads to a generic HTTP endpoint",
+          "type": "object",
+          "properties": {
+            "type": {
+              "type": "string",
+              "const": "http_webhook"
+            }
+          },
+          "required": [
+            "type"
+          ],
+          "allOf": [
+            {
+              "$ref": "#/definitions/HttpWebhookSmsProviderConfig"
+            }
           ]
         },
-        "account_sid": {
-          "description": "Twilio transport: Account SID",
-          "type": [
-            "string",
-            "null"
+        {
+          "description": "Deliver through Aliyun SMS",
+          "type": "object",
+          "properties": {
+            "type": {
+              "type": "string",
+              "const": "aliyun_sms"
+            }
+          },
+          "required": [
+            "type"
+          ],
+          "allOf": [
+            {
+              "$ref": "#/definitions/AliyunSmsProviderConfig"
+            }
           ]
+        },
+        {
+          "description": "Deliver through Tencent Cloud SMS",
+          "type": "object",
+          "properties": {
+            "type": {
+              "type": "string",
+              "const": "tencent_cloud_sms"
+            }
+          },
+          "required": [
+            "type"
+          ],
+          "allOf": [
+            {
+              "$ref": "#/definitions/TencentCloudSmsProviderConfig"
+            }
+          ]
+        },
+        {
+          "description": "Submit SMS payloads to Paloud's internal notification API",
+          "type": "object",
+          "properties": {
+            "type": {
+              "type": "string",
+              "const": "paloud_internal"
+            }
+          },
+          "required": [
+            "type"
+          ],
+          "allOf": [
+            {
+              "$ref": "#/definitions/PaloudInternalSmsProviderConfig"
+            }
+          ]
+        }
+      ]
+    },
+    "TwilioSmsProviderConfig": {
+      "description": "Twilio SMS delivery settings",
+      "type": "object",
+      "properties": {
+        "account_sid": {
+          "description": "Twilio account SID",
+          "type": "string"
         },
         "auth_token": {
-          "description": "Twilio transport: Auth token",
+          "description": "Twilio auth token",
+          "type": "string"
+        },
+        "from_number": {
+          "description": "Phone number to send SMS from",
+          "type": "string"
+        }
+      },
+      "required": [
+        "account_sid",
+        "auth_token",
+        "from_number"
+      ]
+    },
+    "HttpWebhookSmsProviderConfig": {
+      "description": "Generic HTTP SMS API delivery settings",
+      "type": "object",
+      "properties": {
+        "url": {
+          "description": "API endpoint accepting outbound SMS requests",
+          "type": "string"
+        },
+        "api_key": {
+          "description": "Optional bearer token sent as `Authorization: Bearer ...`",
           "type": [
             "string",
             "null"
@@ -2086,111 +2263,103 @@
         },
         "from_number": {
           "description": "Phone number to send SMS from",
-          "type": [
-            "string",
-            "null"
-          ]
-        },
-        "api_key": {
-          "description": "HTTP webhook transport: API key for authorization",
-          "type": [
-            "string",
-            "null"
-          ]
-        },
-        "aliyun_access_key_id": {
-          "description": "Aliyun SMS transport: Access Key ID",
-          "type": [
-            "string",
-            "null"
-          ]
-        },
-        "aliyun_access_key_secret": {
-          "description": "Aliyun SMS transport: Access Key Secret",
-          "type": [
-            "string",
-            "null"
-          ]
-        },
-        "aliyun_sign_name": {
-          "description": "Aliyun SMS transport: Sign name (签名)",
-          "type": [
-            "string",
-            "null"
-          ]
-        },
-        "aliyun_template_code": {
-          "description": "Aliyun SMS transport: Template code (模板编号)",
-          "type": [
-            "string",
-            "null"
-          ]
-        },
-        "tencent_secret_id": {
-          "description": "Tencent Cloud SMS transport: Secret ID",
-          "type": [
-            "string",
-            "null"
-          ]
-        },
-        "tencent_secret_key": {
-          "description": "Tencent Cloud SMS transport: Secret Key",
-          "type": [
-            "string",
-            "null"
-          ]
-        },
-        "tencent_sdk_app_id": {
-          "description": "Tencent Cloud SMS transport: SDK App ID",
-          "type": [
-            "string",
-            "null"
-          ]
-        },
-        "tencent_sign_name": {
-          "description": "Tencent Cloud SMS transport: Sign name (签名)",
-          "type": [
-            "string",
-            "null"
-          ]
-        },
-        "tencent_template_id": {
-          "description": "Tencent Cloud SMS transport: Template ID (模板 ID)",
-          "type": [
-            "string",
-            "null"
-          ]
+          "type": "string"
         }
-      }
+      },
+      "required": [
+        "url",
+        "from_number"
+      ]
     },
-    "SmsTransportKind": {
-      "description": "What backend should be used when sending SMS messages",
-      "oneOf": [
-        {
-          "description": "Don't send SMS anywhere",
-          "type": "string",
-          "const": "blackhole"
+    "AliyunSmsProviderConfig": {
+      "description": "Aliyun SMS delivery settings",
+      "type": "object",
+      "properties": {
+        "access_key_id": {
+          "description": "Aliyun access key ID",
+          "type": "string"
         },
-        {
-          "description": "Send SMS via Twilio",
-          "type": "string",
-          "const": "twilio"
+        "access_key_secret": {
+          "description": "Aliyun access key secret",
+          "type": "string"
         },
-        {
-          "description": "Send SMS via an HTTP webhook",
-          "type": "string",
-          "const": "http_webhook"
+        "sign_name": {
+          "description": "Aliyun sign name (签名)",
+          "type": "string"
         },
-        {
-          "description": "Send SMS via Aliyun (阿里云短信)",
-          "type": "string",
-          "const": "aliyun_sms"
-        },
-        {
-          "description": "Send SMS via Tencent Cloud (腾讯云短信)",
-          "type": "string",
-          "const": "tencent_cloud_sms"
+        "template_code": {
+          "description": "Aliyun template code (模板编号)",
+          "type": "string"
         }
+      },
+      "required": [
+        "access_key_id",
+        "access_key_secret",
+        "sign_name",
+        "template_code"
+      ]
+    },
+    "TencentCloudSmsProviderConfig": {
+      "description": "Tencent Cloud SMS delivery settings",
+      "type": "object",
+      "properties": {
+        "secret_id": {
+          "description": "Tencent Cloud secret ID",
+          "type": "string"
+        },
+        "secret_key": {
+          "description": "Tencent Cloud secret key",
+          "type": "string"
+        },
+        "sdk_app_id": {
+          "description": "Tencent Cloud SDK app ID",
+          "type": "string"
+        },
+        "sign_name": {
+          "description": "Tencent Cloud sign name (签名)",
+          "type": "string"
+        },
+        "template_id": {
+          "description": "Tencent Cloud template ID (模板 ID)",
+          "type": "string"
+        }
+      },
+      "required": [
+        "secret_id",
+        "secret_key",
+        "sdk_app_id",
+        "sign_name",
+        "template_id"
+      ]
+    },
+    "PaloudInternalSmsProviderConfig": {
+      "description": "Paloud internal notification SMS delivery settings",
+      "type": "object",
+      "properties": {
+        "url": {
+          "description": "Fully qualified Paloud internal SMS dispatch endpoint",
+          "type": "string"
+        },
+        "key_id": {
+          "description": "Shared key identifier sent in `X-Paloud-Key-Id`",
+          "type": "string"
+        },
+        "secret": {
+          "description": "Shared secret used to sign the request with `HMAC-SHA256`",
+          "type": "string"
+        },
+        "workspace": {
+          "description": "Optional workspace UUID or subdomain used for provider routing",
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      },
+      "required": [
+        "url",
+        "key_id",
+        "secret"
       ]
     },
     "SecretsConfig": {

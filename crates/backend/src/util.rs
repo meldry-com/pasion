@@ -8,7 +8,7 @@ use diesel_async::{
 use pasion_config::{
     AccountConfig, BrandingConfig, CaptchaConfig, DatabaseConfig, EmailConfig, EmailProviderConfig,
     EmailSmtpMode, ExperimentalConfig, HomeserverKind, MatrixConfig, PasswordsConfig, PolicyConfig,
-    PolicyEngine, SmsConfig, SmsTransportKind, TemplatesConfig,
+    PolicyEngine, SmsConfig, SmsProviderConfig, TemplatesConfig,
 };
 use pasion_data::{
     BoxRepositoryFactory, RepositoryAccess, RepositoryFactory, SessionExpirationConfig,
@@ -197,91 +197,42 @@ pub fn mailer_from_config(
 }
 
 pub fn sms_sender_from_config(config: &SmsConfig) -> Result<SmsSender, anyhow::Error> {
-    let transport = match config.transport {
-        SmsTransportKind::Blackhole => SmsTransport::blackhole(),
-        SmsTransportKind::Twilio => SmsTransport::twilio(
-            config
-                .account_sid
-                .clone()
-                .context("invalid sms configuration: missing account_sid")?,
-            config
-                .auth_token
-                .clone()
-                .context("invalid sms configuration: missing auth_token")?,
-            config
-                .from_number
-                .clone()
-                .context("invalid sms configuration: missing from_number")?,
+    let transport = match &config.provider {
+        SmsProviderConfig::Blackhole => SmsTransport::blackhole(),
+        SmsProviderConfig::Twilio(provider) => SmsTransport::twilio(
+            provider.account_sid.clone(),
+            provider.auth_token.clone(),
+            provider.from_number.clone(),
         ),
-        SmsTransportKind::HttpWebhook => SmsTransport::http_webhook(
-            config
-                .api_url
-                .as_deref()
-                .context("invalid sms configuration: missing api_url")?
+        SmsProviderConfig::HttpWebhook(provider) => SmsTransport::http_webhook(
+            provider
+                .url
                 .parse()
-                .context("invalid sms configuration: invalid api_url")?,
-            config.api_key.clone(),
-            config
-                .from_number
-                .clone()
-                .context("invalid sms configuration: missing from_number")?,
+                .context("invalid sms configuration: invalid provider.url")?,
+            provider.api_key.clone(),
+            provider.from_number.clone(),
         ),
-        SmsTransportKind::AliyunSms => SmsTransport::aliyun(
-            config
-                .aliyun_access_key_id
-                .clone()
-                .context("invalid sms configuration: missing aliyun_access_key_id")?,
-            config
-                .aliyun_access_key_secret
-                .clone()
-                .context("invalid sms configuration: missing aliyun_access_key_secret")?,
-            config
-                .aliyun_sign_name
-                .clone()
-                .context("invalid sms configuration: missing aliyun_sign_name")?,
-            config
-                .aliyun_template_code
-                .clone()
-                .context("invalid sms configuration: missing aliyun_template_code")?,
+        SmsProviderConfig::AliyunSms(provider) => SmsTransport::aliyun(
+            provider.access_key_id.clone(),
+            provider.access_key_secret.clone(),
+            provider.sign_name.clone(),
+            provider.template_code.clone(),
         ),
-        SmsTransportKind::TencentCloudSms => SmsTransport::tencent_cloud(
-            config
-                .tencent_secret_id
-                .clone()
-                .context("invalid sms configuration: missing tencent_secret_id")?,
-            config
-                .tencent_secret_key
-                .clone()
-                .context("invalid sms configuration: missing tencent_secret_key")?,
-            config
-                .tencent_sdk_app_id
-                .clone()
-                .context("invalid sms configuration: missing tencent_sdk_app_id")?,
-            config
-                .tencent_sign_name
-                .clone()
-                .context("invalid sms configuration: missing tencent_sign_name")?,
-            config
-                .tencent_template_id
-                .clone()
-                .context("invalid sms configuration: missing tencent_template_id")?,
+        SmsProviderConfig::TencentCloudSms(provider) => SmsTransport::tencent_cloud(
+            provider.secret_id.clone(),
+            provider.secret_key.clone(),
+            provider.sdk_app_id.clone(),
+            provider.sign_name.clone(),
+            provider.template_id.clone(),
         ),
-        SmsTransportKind::PaloudInternal => SmsTransport::paloud_internal(
-            config
-                .paloud_internal_url
-                .as_deref()
-                .context("invalid sms configuration: missing paloud_internal_url")?
+        SmsProviderConfig::PaloudInternal(provider) => SmsTransport::paloud_internal(
+            provider
+                .url
                 .parse()
-                .context("invalid sms configuration: invalid paloud_internal_url")?,
-            config
-                .paloud_internal_key_id
-                .clone()
-                .context("invalid sms configuration: missing paloud_internal_key_id")?,
-            config
-                .paloud_internal_secret
-                .clone()
-                .context("invalid sms configuration: missing paloud_internal_secret")?,
-            config.paloud_internal_workspace.clone(),
+                .context("invalid sms configuration: invalid provider.url")?,
+            provider.key_id.clone(),
+            provider.secret.clone(),
+            provider.workspace.clone(),
         ),
     };
 
@@ -443,7 +394,7 @@ pub fn site_config_from_config(
                 hard_limit: c.hard_limit,
             }),
         flow_engine_enabled: false,
-        phone_verification_enabled: !matches!(sms_config.transport, SmsTransportKind::Blackhole),
+        phone_verification_enabled: !matches!(&sms_config.provider, SmsProviderConfig::Blackhole),
     })
 }
 
