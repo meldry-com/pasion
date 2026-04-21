@@ -4,6 +4,7 @@ use async_trait::async_trait;
 use chrono::{DateTime, Utc};
 use diesel::prelude::*;
 use diesel_async::RunQueryDsl;
+use ipnetwork::IpNetwork;
 use pasion_data::{
     Clock, UpstreamOAuthAuthorizationSession, UserEmailAuthentication, UserPhoneAuthentication,
     UserRegistration, UserRegistrationPassword, UserRegistrationToken, new_id,
@@ -30,48 +31,31 @@ impl<'c> PgUserRegistrationRepository<'c> {
     }
 }
 
-/// Row type returned from `diesel::sql_query` for the lookup query, which
-/// includes the `ip_address` column cast to text.
-#[derive(Debug, Clone, QueryableByName)]
-struct UserRegistrationLookupRow {
-    #[diesel(sql_type = diesel::sql_types::Uuid)]
+#[derive(Debug, Clone, Queryable, Selectable)]
+#[diesel(table_name = user_registrations)]
+struct UserRegistrationRow {
     id: Uuid,
-    #[diesel(sql_type = diesel::sql_types::Nullable<diesel::sql_types::Text>)]
-    ip_address_text: Option<String>,
-    #[diesel(sql_type = diesel::sql_types::Nullable<diesel::sql_types::Text>)]
+    ip_address: Option<IpNetwork>,
     user_agent: Option<String>,
-    #[diesel(sql_type = diesel::sql_types::Nullable<diesel::sql_types::Jsonb>)]
     post_auth_action: Option<serde_json::Value>,
-    #[diesel(sql_type = diesel::sql_types::Text)]
     username: String,
-    #[diesel(sql_type = diesel::sql_types::Nullable<diesel::sql_types::Text>)]
     display_name: Option<String>,
-    #[diesel(sql_type = diesel::sql_types::Nullable<diesel::sql_types::Text>)]
     avatar_url: Option<String>,
-    #[diesel(sql_type = diesel::sql_types::Nullable<diesel::sql_types::Text>)]
     terms_url: Option<String>,
-    #[diesel(sql_type = diesel::sql_types::Nullable<diesel::sql_types::Uuid>)]
     email_authentication_id: Option<Uuid>,
-    #[diesel(sql_type = diesel::sql_types::Nullable<diesel::sql_types::Uuid>)]
     phone_authentication_id: Option<Uuid>,
-    #[diesel(sql_type = diesel::sql_types::Nullable<diesel::sql_types::Uuid>)]
     user_registration_token_id: Option<Uuid>,
-    #[diesel(sql_type = diesel::sql_types::Nullable<diesel::sql_types::Text>)]
     hashed_password: Option<String>,
-    #[diesel(sql_type = diesel::sql_types::Nullable<diesel::sql_types::Int4>)]
     hashed_password_version: Option<i32>,
-    #[diesel(sql_type = diesel::sql_types::Nullable<diesel::sql_types::Uuid>)]
     upstream_oauth_authorization_session_id: Option<Uuid>,
-    #[diesel(sql_type = diesel::sql_types::Timestamptz)]
     created_at: DateTime<Utc>,
-    #[diesel(sql_type = diesel::sql_types::Nullable<diesel::sql_types::Timestamptz>)]
     completed_at: Option<DateTime<Utc>>,
 }
 
-impl TryFrom<UserRegistrationLookupRow> for UserRegistration {
+impl TryFrom<UserRegistrationRow> for UserRegistration {
     type Error = DatabaseInconsistencyError;
 
-    fn try_from(value: UserRegistrationLookupRow) -> Result<Self, Self::Error> {
+    fn try_from(value: UserRegistrationRow) -> Result<Self, Self::Error> {
         let id = Ulid::from(value.id);
 
         let password = match (value.hashed_password, value.hashed_password_version) {
@@ -107,20 +91,9 @@ impl TryFrom<UserRegistrationLookupRow> for UserRegistration {
                     .source(e)
             })?;
 
-        let ip_address: Option<IpAddr> = value
-            .ip_address_text
-            .map(|s| s.parse())
-            .transpose()
-            .map_err(|e| {
-                DatabaseInconsistencyError::on("user_registrations")
-                    .column("ip_address")
-                    .row(id)
-                    .source(e)
-            })?;
-
         Ok(UserRegistration {
             id,
-            ip_address,
+            ip_address: value.ip_address.map(|network| network.ip()),
             user_agent: value.user_agent,
             post_auth_action: value.post_auth_action,
             username: value.username,
@@ -140,6 +113,17 @@ impl TryFrom<UserRegistrationLookupRow> for UserRegistration {
     }
 }
 
+#[derive(Debug, Clone, Insertable)]
+#[diesel(table_name = user_registrations)]
+struct NewUserRegistration {
+    id: Uuid,
+    ip_address: Option<IpNetwork>,
+    user_agent: Option<String>,
+    post_auth_action: Option<serde_json::Value>,
+    username: String,
+    created_at: DateTime<Utc>,
+}
+
 #[async_trait]
 impl UserRegistrationRepository for PgUserRegistrationRepository<'_> {
     type Error = DatabaseError;
@@ -153,32 +137,12 @@ impl UserRegistrationRepository for PgUserRegistrationRepository<'_> {
         err,
     )]
     async fn lookup(&mut self, id: Ulid) -> Result<Option<UserRegistration>, Self::Error> {
-        // Use raw SQL because the ip_address column is Inet, which requires
-        // the network-address diesel feature. We cast it to text instead.
-        let res: Option<UserRegistrationLookupRow> = diesel::sql_query(
-            "SELECT id \
-                  , ip_address::text AS ip_address_text \
-                  , user_agent \
-                  , post_auth_action \
-                  , username \
-                  , display_name \
-                  , avatar_url \
-                  , terms_url \
-                  , email_authentication_id \
-                  , phone_authentication_id \
-                  , user_registration_token_id \
-                  , hashed_password \
-                  , hashed_password_version \
-                  , upstream_oauth_authorization_session_id \
-                  , created_at \
-                  , completed_at \
-             FROM user_registrations \
-             WHERE id = $1",
-        )
-        .bind::<diesel::sql_types::Uuid, _>(Uuid::from(id))
-        .get_result(self.conn)
-        .await
-        .optional()?;
+        let res = user_registrations::table
+            .find(Uuid::from(id))
+            .select(UserRegistrationRow::as_select())
+            .first::<UserRegistrationRow>(self.conn)
+            .await
+            .optional()?;
 
         let Some(res) = res else { return Ok(None) };
 
@@ -206,27 +170,19 @@ impl UserRegistrationRepository for PgUserRegistrationRepository<'_> {
         let id = new_id(created_at, rng);
         tracing::Span::current().record("user_registration.id", tracing::field::display(id));
 
-        // Use raw SQL because the ip_address column is Inet type.
-        let ip_str = ip_address.map(|ip| ip.to_string());
-        diesel::sql_query(
-            "INSERT INTO user_registrations \
-               ( id \
-               , ip_address \
-               , user_agent \
-               , post_auth_action \
-               , username \
-               , created_at \
-               ) \
-             VALUES ($1, $2::inet, $3, $4, $5, $6)",
-        )
-        .bind::<diesel::sql_types::Uuid, _>(Uuid::from(id))
-        .bind::<diesel::sql_types::Nullable<diesel::sql_types::Text>, _>(&ip_str)
-        .bind::<diesel::sql_types::Nullable<diesel::sql_types::Text>, _>(&user_agent)
-        .bind::<diesel::sql_types::Nullable<diesel::sql_types::Jsonb>, _>(&post_auth_action)
-        .bind::<diesel::sql_types::Text, _>(&username)
-        .bind::<diesel::sql_types::Timestamptz, _>(created_at)
-        .execute(self.conn)
-        .await?;
+        let new_registration = NewUserRegistration {
+            id: Uuid::from(id),
+            ip_address: ip_address.map(IpNetwork::from),
+            user_agent: user_agent.clone(),
+            post_auth_action: post_auth_action.clone(),
+            username: username.clone(),
+            created_at,
+        };
+
+        diesel::insert_into(user_registrations::table)
+            .values(&new_registration)
+            .execute(self.conn)
+            .await?;
 
         Ok(UserRegistration {
             id,
@@ -589,18 +545,22 @@ struct UuidRow {
 mod tests {
     use std::net::{IpAddr, Ipv4Addr};
 
+    use ipnetwork::IpNetwork;
     use oauth2_types::scope::Scope;
     use pasion_data::{
         Clock, RepositoryAccess as _, RepositoryFactory as _, RepositoryTransaction as _,
         UpstreamOAuthProviderClaimsImports, UpstreamOAuthProviderDiscoveryMode,
         UpstreamOAuthProviderOnBackchannelLogout, UpstreamOAuthProviderPkceMode,
-        UpstreamOAuthProviderTokenAuthMethod, UserRegistrationPassword, clock::MockClock,
+        UpstreamOAuthProviderTokenAuthMethod, UserRegistration, UserRegistrationPassword,
+        clock::MockClock,
         upstream_oauth2::UpstreamOAuthProviderParams,
     };
     use pasion_iana::jose::JsonWebSignatureAlg;
     use rand_chacha::ChaChaRng;
     use rand_core::SeedableRng;
+    use uuid::Uuid;
 
+    use super::UserRegistrationRow;
     use crate::PgRepositoryFactory;
 
     #[tokio::test]
@@ -722,6 +682,35 @@ mod tests {
         assert_eq!(lookup.user_agent, registration.user_agent);
         assert_eq!(lookup.ip_address, registration.ip_address);
         assert_eq!(lookup.post_auth_action, registration.post_auth_action);
+    }
+
+    #[test]
+    fn test_row_maps_inet_to_ipaddr() {
+        let row = UserRegistrationRow {
+            id: Uuid::now_v7(),
+            ip_address: Some("103.151.173.203/32".parse::<IpNetwork>().unwrap()),
+            user_agent: Some("Mozilla/5.0".to_owned()),
+            post_auth_action: None,
+            username: "alice".to_owned(),
+            display_name: None,
+            avatar_url: None,
+            terms_url: None,
+            email_authentication_id: None,
+            phone_authentication_id: None,
+            user_registration_token_id: None,
+            hashed_password: None,
+            hashed_password_version: None,
+            upstream_oauth_authorization_session_id: None,
+            created_at: chrono::Utc::now(),
+            completed_at: None,
+        };
+
+        let registration = UserRegistration::try_from(row).expect("row should convert");
+
+        assert_eq!(
+            registration.ip_address,
+            Some(IpAddr::V4(Ipv4Addr::new(103, 151, 173, 203)))
+        );
     }
 
     #[tokio::test]
