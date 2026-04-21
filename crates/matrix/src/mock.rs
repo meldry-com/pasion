@@ -193,16 +193,6 @@ impl crate::HomeserverAdmin for HomeserverAdmin {
         Ok(())
     }
 
-    async fn query_devices(&self, localpart: &str) -> Result<HashSet<String>, anyhow::Error> {
-        let full_id = self.mxid(localpart);
-        let guard = self.state.read().await;
-        let record = guard
-            .accounts
-            .get(&full_id)
-            .ok_or_else(|| anyhow::anyhow!("User not found"))?;
-        Ok(record.device_ids.clone())
-    }
-
     async fn delete_user(&self, localpart: &str, erase: bool) -> Result<(), anyhow::Error> {
         let full_id = self.mxid(localpart);
         let mut guard = self.state.write().await;
@@ -307,16 +297,8 @@ mod tests {
         // Create the same device again (idempotent)
         assert!(conn.upsert_device("test", device, None).await.is_ok());
 
-        // The device should show up in a query
-        let devices = conn.query_devices("test").await.unwrap();
-        assert!(devices.contains(device));
-
         // Delete the device
         assert!(conn.delete_device("test", device).await.is_ok());
-
-        // And querying again should not return it
-        let devices = conn.query_devices("test").await.unwrap();
-        assert!(!devices.contains(device));
 
         // The user we just created should be not available
         assert!(!conn.is_localpart_available("test").await.unwrap());

@@ -402,21 +402,6 @@ impl HomeserverAdmin for PalpoAdmin {
     }
 
     #[tracing::instrument(
-        name = "homeserver.query_devices",
-        skip_all,
-        fields(
-            matrix.homeserver = self.homeserver,
-            matrix.localpart = localpart,
-        ),
-        err(Debug),
-    )]
-    async fn query_devices(&self, localpart: &str) -> Result<HashSet<String>, anyhow::Error> {
-        anyhow::bail!(
-            "Palpo MAS API does not expose a query_devices endpoint for localpart {localpart}"
-        )
-    }
-
-    #[tracing::instrument(
         name = "homeserver.delete_user",
         skip_all,
         fields(
