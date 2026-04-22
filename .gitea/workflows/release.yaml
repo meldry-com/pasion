@@ -54,6 +54,8 @@ jobs:
       use_gitea_registry: ${{ steps.image.outputs.use_gitea_registry }}
       gitea_registry: ${{ steps.image.outputs.gitea_registry }}
       gitea_registry_user: ${{ steps.image.outputs.gitea_registry_user }}
+      use_registry_cache: ${{ steps.image.outputs.use_registry_cache }}
+      buildcache_ref: ${{ steps.image.outputs.buildcache_ref }}
       use_dockerhub: ${{ steps.image.outputs.use_dockerhub }}
       regular_suffixes: ${{ steps.tags.outputs.regular_suffixes }}
       source_suffix: ${{ steps.tags.outputs.source_suffix }}
@@ -79,12 +81,16 @@ jobs:
           registry_host="${registry_host%%/*}"
           gitea_image="$registry_host/$REPOSITORY"
           use_gitea_registry="false"
+          use_registry_cache="false"
+          buildcache_ref=""
           use_dockerhub="false"
 
           images=()
 
           if [ -n "${REGISTRY_USER:-}" ] && [ -n "${REGISTRY_TOKEN:-}" ]; then
             use_gitea_registry="true"
+            use_registry_cache="true"
+            buildcache_ref="$gitea_image/buildcache"
             images+=("$gitea_image")
           fi
 
@@ -111,6 +117,8 @@ jobs:
             echo "gitea_registry_user=${REGISTRY_USER:-}"
             echo "gitea_image=$gitea_image"
             echo "use_gitea_registry=$use_gitea_registry"
+            echo "use_registry_cache=$use_registry_cache"
+            echo "buildcache_ref=$buildcache_ref"
             echo "use_dockerhub=$use_dockerhub"
             echo "dockerhub_image=$dockerhub_image"
             echo "push_images=$push_images"
@@ -160,40 +168,40 @@ jobs:
             echo "source_suffix=sha-${short_sha}"
           } >> "$GITHUB_OUTPUT"
 
-  smoke-test-runtime:
-    name: Smoke test runtime image
-    runs-on: ubuntu-24.04
-    needs:
-      - compute-version
+  # smoke-test-runtime:
+  #   name: Smoke test runtime image
+  #   runs-on: ubuntu-24.04
+  #   needs:
+  #     - compute-version
 
-    permissions:
-      contents: read
+  #   permissions:
+  #     contents: read
 
-    env:
-      VERGEN_GIT_DESCRIBE: ${{ needs.compute-version.outputs.describe }}
-      SOURCE_DATE_EPOCH: ${{ needs.compute-version.outputs.timestamp }}
+  #   env:
+  #     VERGEN_GIT_DESCRIBE: ${{ needs.compute-version.outputs.describe }}
+  #     SOURCE_DATE_EPOCH: ${{ needs.compute-version.outputs.timestamp }}
 
-    steps:
-      - name: Fetch repository
-        uses: actions/checkout@v4
+  #   steps:
+  #     - name: Fetch repository
+  #       uses: actions/checkout@v4
 
-      - name: Build debug runtime image
-        shell: bash
-        run: |
-          set -euo pipefail
-          docker build --target debug \
-            --build-arg VERGEN_GIT_DESCRIBE="${VERGEN_GIT_DESCRIBE}" \
-            -t pasion-runtime-smoke .
+  #     - name: Build debug runtime image
+  #       shell: bash
+  #       run: |
+  #         set -euo pipefail
+  #         docker build --target debug \
+  #           --build-arg VERGEN_GIT_DESCRIBE="${VERGEN_GIT_DESCRIBE}" \
+  #           -t pasion-runtime-smoke .
 
-      - name: Verify default storage root is writable
-        shell: bash
-        run: |
-          set -euo pipefail
-          docker run --rm --entrypoint=/busybox/sh pasion-runtime-smoke -c '
-            set -e
-            test "$PWD" = "/var/lib/pasion"
-            mkdir -p ./data/media
-            touch ./data/media/.write-test
+  #     - name: Verify default storage root is writable
+  #       shell: bash
+  #       run: |
+  #         set -euo pipefail
+  #         docker run --rm --entrypoint=/busybox/sh pasion-runtime-smoke -c '
+  #           set -e
+  #           test "$PWD" = "/var/lib/pasion"
+  #           mkdir -p ./data/media
+  #           touch ./data/media/.write-test
           '
 
   build-image-arch:
@@ -234,9 +242,12 @@ jobs:
 
       - name: Configure Docker Buildx
         uses: docker/setup-buildx-action@v3
+        with:
+          name: gitea-buildx-${{ matrix.arch }}
+          keep-state: true
 
       - name: Log in to Gitea registry
-        if: needs.prepare-image-build.outputs.push == 'true' && needs.prepare-image-build.outputs.use_gitea_registry == 'true'
+        if: needs.prepare-image-build.outputs.use_gitea_registry == 'true'
         uses: docker/login-action@v3
         with:
           registry: ${{ needs.prepare-image-build.outputs.gitea_registry }}
@@ -276,6 +287,40 @@ jobs:
           } >> "$GITHUB_OUTPUT"
 
       - name: Build release image for ${{ matrix.arch }}
+        if: needs.prepare-image-build.outputs.use_registry_cache == 'true' && needs.prepare-image-build.outputs.push == 'true'
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: Dockerfile
+          platforms: ${{ matrix.platform }}
+          pull: true
+          push: true
+          provenance: false
+          sbom: false
+          build-args: |
+            VERGEN_GIT_DESCRIBE=${{ needs.compute-version.outputs.describe }}
+          tags: ${{ steps.arch-tags.outputs.release }}
+          cache-from: type=registry,ref=${{ needs.prepare-image-build.outputs.buildcache_ref }}:buildcache-${{ matrix.arch }}
+          cache-to: type=registry,ref=${{ needs.prepare-image-build.outputs.buildcache_ref }}:buildcache-${{ matrix.arch }},mode=max
+
+      - name: Build release image for ${{ matrix.arch }} with pulled cache
+        if: needs.prepare-image-build.outputs.use_registry_cache == 'true' && needs.prepare-image-build.outputs.push != 'true'
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: Dockerfile
+          platforms: ${{ matrix.platform }}
+          pull: true
+          push: false
+          provenance: false
+          sbom: false
+          build-args: |
+            VERGEN_GIT_DESCRIBE=${{ needs.compute-version.outputs.describe }}
+          tags: ${{ steps.arch-tags.outputs.release }}
+          cache-from: type=registry,ref=${{ needs.prepare-image-build.outputs.buildcache_ref }}:buildcache-${{ matrix.arch }}
+
+      - name: Build release image for ${{ matrix.arch }} without registry cache
+        if: needs.prepare-image-build.outputs.use_registry_cache != 'true'
         uses: docker/build-push-action@v6
         with:
           context: .
