@@ -22,11 +22,9 @@ Notes:
 - The Gitea image build runs the release `amd64` and `arm64` images in
   parallel, then publishes a multi-arch manifest list after both
   per-architecture builds finish
-- The Dioxus frontend asset bundle is built once on `ubuntu-24.04`,
-  uploaded as a Gitea artifact, and reused by both the `amd64` and `arm64`
-  image jobs
-- When `REGISTRY_USER` / `REGISTRY_TOKEN` are configured, the frontend asset
-  bundle also pulls and refreshes registry-backed Buildx cache layers
+- The Gitea release image jobs build the Dioxus frontend inside each
+  per-architecture Docker build, matching the GitHub release workflow and
+  avoiding artifact hand-off failures between jobs
 - Each architecture also gets its own published tags such as `main-amd64`,
   `main-arm64`, and `sha-<commit>-amd64`
 - When `REGISTRY_USER` / `REGISTRY_TOKEN` are configured, the Gitea image
