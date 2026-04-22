@@ -3698,6 +3698,14 @@
           "description": "Permit logging in via email address rather than username\n(default: `false`). Irrelevant when password login is disabled.",
           "type": "boolean"
         },
+        "admin_portal_url": {
+          "description": "Optional URL of the external admin portal.\n\nWhen set, users with administrative access will see a link to the\nportal in the account UI.",
+          "type": [
+            "string",
+            "null"
+          ],
+          "format": "uri"
+        },
         "registration_token_required": {
           "description": "Require a registration token for new password-based accounts\n(default: `false`). Has no effect when registration is off.",
           "type": "boolean"

@@ -350,6 +350,14 @@ account:
   # This has no effect if password login is disabled.
   login_with_email_allowed: false
 
+  # Optional external admin portal URL.
+  #
+  # Defaults to `null`.
+  #
+  # When set, users with administrative access will see an Admin Portal link
+  # in the account UI.
+  admin_portal_url: ~
+
   # Whether registration tokens are required for password registrations.
   #
   # Defaults to `false`.

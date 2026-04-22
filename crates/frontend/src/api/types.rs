@@ -31,6 +31,8 @@ pub struct User {
     #[serde(default)]
     pub username: String,
     #[serde(default)]
+    pub can_request_admin: bool,
+    #[serde(default)]
     pub profile: Option<UserProfile>,
     #[serde(default)]
     pub matrix: Option<MatrixUser>,
@@ -264,6 +266,8 @@ pub struct SiteConfig {
     pub tos_uri: Option<String>,
     #[serde(default)]
     pub policy_uri: Option<String>,
+    #[serde(default)]
+    pub admin_portal_url: Option<String>,
     #[serde(default)]
     pub plan_management_iframe_uri: Option<String>,
 }

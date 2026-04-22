@@ -49,6 +49,9 @@ pub struct SiteConfig {
     /// Whether users may self-deactivate their account
     pub account_deactivation_allowed: bool,
 
+    /// URL of the external admin portal shown to eligible users
+    pub admin_portal_url: Option<String>,
+
     /// Whether CAPTCHA verification is active during registration
     pub captcha_enabled: bool,
 
@@ -76,6 +79,7 @@ pub async fn handler(req: &mut Request, depot: &Depot) -> Result<Json<SiteConfig
         password_change_allowed: cfg.password_change_allowed,
         account_recovery_allowed: cfg.account_recovery_allowed,
         account_deactivation_allowed: cfg.account_deactivation_allowed,
+        admin_portal_url: cfg.admin_portal_url.as_ref().map(|url| url.to_string()),
         captcha_enabled: cfg.captcha.is_some(),
         minimum_password_complexity: cfg.minimum_password_complexity,
     };

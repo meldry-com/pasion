@@ -91,6 +91,18 @@ passwords:
       algorithm: argon2id    # 密码哈希算法
 ```
 
+### `account` — 账户管理
+
+```yaml
+account:
+  password_registration_enabled: false
+  login_with_email_allowed: false
+
+  # 可选的管理员门户地址。
+  # 配置后，具备管理员权限的用户会在账户页面看到入口链接。
+  admin_portal_url: https://admin.example.com/
+```
+
 ### `email` — 邮件发送
 
 ```yaml

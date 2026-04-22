@@ -386,6 +386,7 @@ pub fn site_config_from_config(
         minimum_password_complexity: password_config.minimum_complexity(),
         session_expiration,
         login_with_email_allowed: account_config.login_with_email_allowed,
+        admin_portal_url: account_config.admin_portal_url.clone(),
         plan_management_iframe_uri: experimental_config.plan_management_iframe_uri.clone(),
         session_limit: experimental_config
             .session_limit
