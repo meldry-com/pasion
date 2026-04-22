@@ -185,13 +185,30 @@ COPY ./templates/ /share/templates
 COPY ./translations/ /share/translations
 COPY --from=frontend-assets /frontend-dist/ /share/assets
 
-###############################################
-## Prepare writable runtime state directory ##
-###############################################
+##########################################################
+## Prepare writable runtime state and shared libraries  ##
+##########################################################
 FROM docker.io/library/debian:${DEBIAN_VERSION_NAME}-slim AS runtime-rootfs
 
-RUN mkdir -p /var/lib/pasion/data/media \
-  && chown -R 65532:65532 /var/lib/pasion
+ARG TARGETARCH
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
+  libpq5 \
+  && rm -rf /var/lib/apt/lists/*
+
+COPY --from=builder /usr/local/bin/pasion-${TARGETARCH} /tmp/pasion
+
+RUN set -eux; \
+  mkdir -p /var/lib/pasion/data/media /runtime-deps; \
+  chown -R 65532:65532 /var/lib/pasion; \
+  ldd /tmp/pasion \
+    | awk '($2 == "=>") { print $3 } ($1 ~ /^\//) { print $1 }' \
+    | sort -u > /tmp/runtime-libs.txt; \
+  while read -r lib; do \
+    [ -n "$lib" ] || continue; \
+    mkdir -p "/runtime-deps$(dirname "$lib")"; \
+    cp -L "$lib" "/runtime-deps$lib"; \
+  done < /tmp/runtime-libs.txt
 
 ##################################
 ## Runtime stage, debug variant ##
@@ -199,6 +216,7 @@ RUN mkdir -p /var/lib/pasion/data/media \
 FROM gcr.io/distroless/cc-debian${DEBIAN_VERSION}:debug-nonroot AS debug
 
 ARG TARGETARCH
+COPY --from=runtime-rootfs /runtime-deps/ /
 COPY --from=builder /usr/local/bin/pasion-${TARGETARCH} /usr/local/bin/pasion
 COPY --from=share /share /usr/local/share/pasion
 COPY --from=runtime-rootfs --chown=65532:65532 /var/lib/pasion /var/lib/pasion
@@ -212,6 +230,7 @@ ENTRYPOINT ["/usr/local/bin/pasion"]
 FROM gcr.io/distroless/cc-debian${DEBIAN_VERSION}:nonroot
 
 ARG TARGETARCH
+COPY --from=runtime-rootfs /runtime-deps/ /
 COPY --from=builder /usr/local/bin/pasion-${TARGETARCH} /usr/local/bin/pasion
 COPY --from=share /share /usr/local/share/pasion
 COPY --from=runtime-rootfs --chown=65532:65532 /var/lib/pasion /var/lib/pasion

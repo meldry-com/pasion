@@ -366,6 +366,7 @@ jobs:
             VERGEN_GIT_DESCRIBE=${{ needs.compute-version.outputs.describe }}
           tags: ${{ steps.arch-tags.outputs.release }}
           cache-from: type=registry,ref=${{ needs.prepare-image-build.outputs.buildcache_ref }}:buildcache-${{ matrix.arch }}
+          load: true
 
       - name: Build release image for ${{ matrix.arch }} without registry cache
         if: needs.prepare-image-build.outputs.use_registry_cache != 'true'
@@ -384,6 +385,40 @@ jobs:
             FRONTEND_DIST_SOURCE=frontend-prebuilt
             VERGEN_GIT_DESCRIBE=${{ needs.compute-version.outputs.describe }}
           tags: ${{ steps.arch-tags.outputs.release }}
+          load: ${{ needs.prepare-image-build.outputs.push != 'true' }}
+
+      - name: Smoke test pushed release image for ${{ matrix.arch }}
+        if: needs.prepare-image-build.outputs.push == 'true'
+        shell: bash
+        env:
+          RELEASE_TAGS: ${{ steps.arch-tags.outputs.release }}
+        run: |
+          set -euo pipefail
+
+          image="$(printf '%s\n' "$RELEASE_TAGS" | sed '/^$/d' | head -n1)"
+          if [ -z "$image" ]; then
+            echo "No release image tag was produced" >&2
+            exit 1
+          fi
+
+          docker pull "$image"
+          docker run --rm "$image" --version
+
+      - name: Smoke test local release image for ${{ matrix.arch }}
+        if: needs.prepare-image-build.outputs.push != 'true'
+        shell: bash
+        env:
+          RELEASE_TAGS: ${{ steps.arch-tags.outputs.release }}
+        run: |
+          set -euo pipefail
+
+          image="$(printf '%s\n' "$RELEASE_TAGS" | sed '/^$/d' | head -n1)"
+          if [ -z "$image" ]; then
+            echo "No release image tag was produced" >&2
+            exit 1
+          fi
+
+          docker run --rm "$image" --version
 
   publish-image-manifests:
     name: Publish Docker image manifests

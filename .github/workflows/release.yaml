@@ -194,6 +194,22 @@ jobs:
           cache-from: type=registry,ref=${{ env.BUILDCACHE }}:buildcache-${{ matrix.arch }}
           cache-to: type=registry,ref=${{ env.BUILDCACHE }}:buildcache-${{ matrix.arch }},mode=max
 
+      - name: Smoke test release image for ${{ matrix.arch }}
+        shell: bash
+        env:
+          RELEASE_TAGS: ${{ steps.arch-tags.outputs.release }}
+        run: |
+          set -euo pipefail
+
+          image="$(printf '%s\n' "$RELEASE_TAGS" | sed '/^$/d' | head -n1)"
+          if [ -z "$image" ]; then
+            echo "No release image tag was produced" >&2
+            exit 1
+          fi
+
+          docker pull "$image"
+          docker run --rm "$image" --version
+
   build-image:
     name: Publish container image manifests
     runs-on: ubuntu-24.04
