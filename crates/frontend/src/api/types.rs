@@ -255,6 +255,8 @@ pub struct SiteConfig {
     #[serde(default)]
     pub password_registration_enabled: bool,
     #[serde(default)]
+    pub bootstrap_admin_token_enabled: bool,
+    #[serde(default)]
     pub minimum_password_complexity: i32,
     #[serde(default)]
     pub imprint: Option<String>,

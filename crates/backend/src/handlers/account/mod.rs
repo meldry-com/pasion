@@ -24,6 +24,7 @@ use crate::{
 
 pub mod auth;
 pub mod avatar;
+pub mod bootstrap_admin_status;
 pub mod consent;
 pub mod emails;
 pub mod flow;

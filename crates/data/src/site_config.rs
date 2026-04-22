@@ -72,6 +72,10 @@ pub struct SiteConfig {
     /// registrations.
     pub registration_token_required: bool,
 
+    /// Optional bootstrap token that allows one registration to claim the
+    /// first administrator role while no admin users exist.
+    pub bootstrap_admin_token: Option<String>,
+
     /// Whether users can change their email.
     pub email_change_allowed: bool,
 

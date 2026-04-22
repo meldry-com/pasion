@@ -357,6 +357,16 @@ account:
   # When enabled, users must provide a valid registration token during password
   # registration. This has no effect if password registration is disabled.
   registration_token_required: false
+
+  # Optional token for bootstrapping the first admin account.
+  #
+  # Defaults to `null`.
+  #
+  # When set, a registration may submit this token while completing sign-up.
+  # If no admin exists yet, a matching token grants admin privileges to that
+  # new account. Registrations without the token still succeed as normal users,
+  # and the token stops granting admin access as soon as any admin exists.
+  bootstrap_admin_token: ~
 ```
 
 ## `captcha`

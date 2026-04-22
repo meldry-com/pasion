@@ -35,6 +35,7 @@ use crate::{
 const TEMPLATE_EMAIL_VERIFICATION: &str = "email_verification";
 const TEMPLATE_SMS_VERIFICATION: &str = "sms_verification_code";
 const TEMPLATE_EMAIL_RECOVERY: &str = "email_recovery";
+const EMAIL_VERIFICATION_LANGUAGE: &str = "en";
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 struct EmailVerificationPayload {
@@ -186,7 +187,7 @@ async fn schedule_processing_job(
 pub(crate) async fn send_email_authentication_code(
     state: &State,
     user_email_authentication_id: Ulid,
-    language: &str,
+    _language: &str,
 ) -> Result<(), JobError> {
     let clock = state.clock();
     let notifications = state.notifications();
@@ -232,13 +233,13 @@ pub(crate) async fn send_email_authentication_code(
         &mut rng,
         clock,
         TEMPLATE_EMAIL_VERIFICATION,
-        language,
+        EMAIL_VERIFICATION_LANGUAGE,
         NotificationRequestSource::UserEmailAuthentication {
             user_email_authentication_id,
         },
         serde_json::to_value(EmailVerificationPayload {
             code: code.code.clone(),
-            language: language.to_owned(),
+            language: EMAIL_VERIFICATION_LANGUAGE.to_owned(),
         })
         .map_err(JobError::fail)?,
         NotificationDestination::Email {
@@ -652,9 +653,13 @@ async fn prepare_delivery(
             let mailbox = Mailbox::new(username, address);
 
             let language: DataLocale = payload.language.parse()?;
-            let context =
-                EmailVerificationContext::new(authentication_code, browser_session, registration)
-                    .with_language(language);
+            let context = EmailVerificationContext::new(
+                authentication_code,
+                browser_session,
+                registration,
+                url_builder.public_hostname().to_owned(),
+            )
+            .with_language(language);
             let tags = delivery_tracking_tags(request, delivery);
 
             Ok(PreparedDelivery::Ready(
@@ -1111,7 +1116,7 @@ impl RunnableJob for ProcessNotificationDeliveriesJob {
 mod tests {
     use thiserror::Error;
 
-    use super::is_permanent_tls_validation_error;
+    use super::{EMAIL_VERIFICATION_LANGUAGE, is_permanent_tls_validation_error};
 
     #[derive(Debug, Error)]
     #[error("{message}")]
@@ -1146,5 +1151,10 @@ mod tests {
         };
 
         assert!(!is_permanent_tls_validation_error(&error));
+    }
+
+    #[test]
+    fn email_verification_language_is_fixed_to_english() {
+        assert_eq!(EMAIL_VERIFICATION_LANGUAGE, "en");
     }
 }

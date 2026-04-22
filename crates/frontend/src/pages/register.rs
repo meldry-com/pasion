@@ -3,7 +3,7 @@ use dioxus::prelude::*;
 use crate::{
     api::types::{
         ChangeRegistrationEmailResponse, ProvidersResponse, RegisterResponse,
-        RegisterStatusResponse, ResendEmailAuthCodePayload, StepResponse,
+        RegisterStatusResponse, ResendEmailAuthCodePayload, SiteConfig, StepResponse,
     },
     components::{
         layout::Layout, loading::LoadingSpinner, password_input::PasswordCreationDoubleInput,
@@ -498,8 +498,24 @@ fn registration_error_message(code: &str) -> String {
         "email_already_verified" => "This email has already been verified.".to_string(),
         "email_invalid" => "Please enter a valid email address.".to_string(),
         "email_in_use" => "This email is already in use.".to_string(),
+        "bootstrap_admin_token_invalid" => {
+            "That admin bootstrap token is not valid. Clear the field to continue as a regular user, or enter the correct token to claim the first administrator account.".to_string()
+        }
         other => other.to_string(),
     }
+}
+
+async fn submit_registration_finish(
+    registration_id: &str,
+    bootstrap_admin_token: Option<String>,
+) -> Result<StepResponse, String> {
+    crate::api::api_post::<StepResponse>(
+        &format!("/auth/register/{registration_id}/finish"),
+        serde_json::json!({
+            "bootstrap_admin_token": bootstrap_admin_token,
+        }),
+    )
+    .await
 }
 
 /// Phone verification step during registration.
@@ -740,21 +756,36 @@ pub fn RegisterDisplayName(id: String) -> Element {
 #[component]
 pub fn RegisterFinish(id: String) -> Element {
     let nav = navigator();
-    let reg_id = id.clone();
+    let mut bootstrap_admin_token = use_signal(String::new);
+    let mut finish_result = use_signal(|| None::<Result<StepResponse, String>>);
+    let mut submitting = use_signal(|| false);
+    let mut auto_submit_started = use_signal(|| false);
 
-    let finish_result = use_resource(move || {
-        let rid = reg_id.clone();
-        async move {
-            crate::api::api_post::<StepResponse>(
-                &format!("/auth/register/{rid}/finish"),
-                serde_json::json!({}),
-            )
-            .await
-        }
-    });
-    let binding = finish_result.read();
+    let site_config =
+        use_resource(|| async { crate::api::api_get::<SiteConfig>("/site-config").await });
+    let site_config_binding = site_config.read();
+    let bootstrap_admin_enabled = matches!(
+        &*site_config_binding,
+        Some(Ok(cfg)) if cfg.bootstrap_admin_token_enabled
+    );
+    let site_config_ready = site_config_binding.is_some();
 
-    match &*binding {
+    if site_config_ready
+        && !bootstrap_admin_enabled
+        && finish_result.read().is_none()
+        && !auto_submit_started()
+    {
+        auto_submit_started.set(true);
+        let registration_id = id.clone();
+        spawn(async move {
+            submitting.set(true);
+            let result = submit_registration_finish(&registration_id, None).await;
+            submitting.set(false);
+            finish_result.set(Some(result));
+        });
+    }
+
+    match finish_result.read().as_ref() {
         Some(Ok(resp)) if resp.status == "success" => {
             // Check if there is a pending OAuth authorization flow to resume.
             // The backend returns `post_auth_action` from the registration
@@ -809,7 +840,7 @@ pub fn RegisterFinish(id: String) -> Element {
                 }
             }
         }
-        Some(Ok(resp)) => rsx! {
+        Some(Ok(resp)) if !bootstrap_admin_enabled => rsx! {
             Layout {
                 div { class: "login-page",
                     div { class: "login-container",
@@ -824,7 +855,7 @@ pub fn RegisterFinish(id: String) -> Element {
                 }
             }
         },
-        Some(Err(e)) => rsx! {
+        Some(Err(e)) if !bootstrap_admin_enabled => rsx! {
             Layout {
                 div { class: "login-page",
                     div { class: "login-container",
@@ -836,7 +867,81 @@ pub fn RegisterFinish(id: String) -> Element {
                 }
             }
         },
-        None => rsx! {
+        _ if bootstrap_admin_enabled => {
+            let error_message = match finish_result.read().as_ref() {
+                Some(Ok(resp)) if resp.status != "success" => {
+                    resp.error.as_deref().map(registration_error_message)
+                }
+                Some(Err(err)) => Some(err.clone()),
+                _ => None,
+            };
+
+            rsx! {
+                Layout {
+                    div { class: "login-page",
+                        div { class: "login-container",
+                            h1 { class: "heading-md login-title", "Create your account" }
+                            p { class: "text-secondary",
+                                "If you are claiming the initial administrator account, enter the bootstrap token below. Leave it blank to continue as a regular user."
+                            }
+
+                            if let Some(err) = error_message {
+                                div { class: "alert alert-critical",
+                                    p { "{err}" }
+                                }
+                            }
+
+                            form {
+                                class: "form-root",
+                                onsubmit: move |e| {
+                                    e.prevent_default();
+                                    e.stop_propagation();
+                                    let registration_id = id.clone();
+                                    let token = bootstrap_admin_token.to_string();
+
+                                    spawn(async move {
+                                        submitting.set(true);
+                                        let result = submit_registration_finish(
+                                            &registration_id,
+                                            (!token.trim().is_empty()).then_some(token),
+                                        )
+                                        .await;
+                                        submitting.set(false);
+                                        finish_result.set(Some(result));
+                                    });
+                                },
+
+                                div { class: "form-field",
+                                    label { class: "form-label", "Admin bootstrap token (optional)" }
+                                    input {
+                                        class: "form-input",
+                                        r#type: "text",
+                                        autocomplete: "one-time-code",
+                                        placeholder: "Enter token to claim the first admin account",
+                                        value: "{bootstrap_admin_token}",
+                                        oninput: move |e| bootstrap_admin_token.set(e.value()),
+                                    }
+                                    span { class: "form-help",
+                                        "This token only has an effect while no administrator exists yet."
+                                    }
+                                }
+
+                                button {
+                                    class: "btn btn-primary btn-block",
+                                    r#type: "submit",
+                                    disabled: submitting(),
+                                    if submitting() {
+                                        LoadingSpinner { inline: true }
+                                    }
+                                    "Create account"
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        _ => rsx! {
             Layout {
                 div { class: "login-page",
                     div { class: "login-container",

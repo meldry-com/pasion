@@ -36,6 +36,8 @@ pub use self::{
     terms::PgUserTermsRepository, totp::PgUserTotpRepository,
 };
 
+const BOOTSTRAP_ADMIN_LOCK_ID: i64 = 0x7061_7369_6f6e_4144;
+
 /// An implementation of [`UserRepository`] for a PostgreSQL connection
 pub struct PgUserRepository<'c> {
     conn: &'c mut diesel_async::AsyncPgConnection,
@@ -515,6 +517,16 @@ impl UserRepository for PgUserRepository<'_> {
         count
             .try_into()
             .map_err(DatabaseError::to_invalid_operation)
+    }
+
+    #[tracing::instrument(name = "db.user.acquire_bootstrap_admin_lock", skip_all, err)]
+    async fn acquire_bootstrap_admin_lock(&mut self) -> Result<(), Self::Error> {
+        diesel::sql_query("SELECT pg_advisory_xact_lock($1)")
+            .bind::<diesel::sql_types::BigInt, _>(BOOTSTRAP_ADMIN_LOCK_ID)
+            .execute(self.conn)
+            .await?;
+
+        Ok(())
     }
 
     #[tracing::instrument(

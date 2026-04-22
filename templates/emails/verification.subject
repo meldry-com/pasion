@@ -1,3 +1,1 @@
-{%- set _ = translator(lang) -%}
-
-{{ _("pasion.emails.verify.subject", code=authentication_code.code) }}
+[{{ instance_domain }}] Your email verification code: {{ authentication_code.code }}

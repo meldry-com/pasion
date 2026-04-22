@@ -31,6 +31,9 @@ pub struct SiteConfig {
     /// Whether a registration token is mandatory for sign-up
     pub registration_token_required: bool,
 
+    /// Whether a bootstrap admin token is configured
+    pub bootstrap_admin_token_enabled: bool,
+
     /// Whether users may update their email address
     pub email_change_allowed: bool,
 
@@ -67,6 +70,7 @@ pub async fn handler(req: &mut Request, depot: &Depot) -> Result<Json<SiteConfig
         password_registration_enabled: cfg.password_registration_enabled,
         password_registration_contact_required: cfg.password_registration_contact_required,
         registration_token_required: cfg.registration_token_required,
+        bootstrap_admin_token_enabled: cfg.bootstrap_admin_token.is_some(),
         email_change_allowed: cfg.email_change_allowed,
         displayname_change_allowed: cfg.displayname_change_allowed,
         password_change_allowed: cfg.password_change_allowed,

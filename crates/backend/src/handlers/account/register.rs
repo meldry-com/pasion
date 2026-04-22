@@ -636,6 +636,12 @@ pub struct FinishRegistrationResponse {
     pub post_auth_action: Option<serde_json::Value>,
 }
 
+#[derive(Default, Deserialize, ToSchema)]
+pub struct FinishRegistrationInput {
+    #[serde(default)]
+    pub bootstrap_admin_token: Option<String>,
+}
+
 #[endpoint]
 pub async fn post_finish(
     req: &mut Request,
@@ -651,6 +657,18 @@ pub async fn post_finish(
     let site_config = depot.site_config()?;
     let homeserver = depot.homeserver()?;
     let repo_factory = depot.repo_factory()?;
+    let input = if req
+        .payload()
+        .await
+        .map_err(|error| RouteError::Internal(error.into()))?
+        .is_empty()
+    {
+        FinishRegistrationInput::default()
+    } else {
+        req.parse_json()
+            .await
+            .map_err(|_| RouteError::BadRequest("invalid request body".into()))?
+    };
 
     let clock = make_clock();
     let mut rng = make_rng();
@@ -674,6 +692,8 @@ pub async fn post_finish(
         None,
         HomeserverCheckMode::BestEffort,
         site_config.registration_token_required,
+        site_config.bootstrap_admin_token.as_deref(),
+        input.bootstrap_admin_token,
         user_agent,
     )
     .await

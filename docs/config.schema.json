@@ -3701,6 +3701,13 @@
         "registration_token_required": {
           "description": "Require a registration token for new password-based accounts\n(default: `false`). Has no effect when registration is off.",
           "type": "boolean"
+        },
+        "bootstrap_admin_token": {
+          "description": "Optional bootstrap token that allows one registration to claim the\nfirst administrator role while no admin users exist.",
+          "type": [
+            "string",
+            "null"
+          ]
         }
       }
     },

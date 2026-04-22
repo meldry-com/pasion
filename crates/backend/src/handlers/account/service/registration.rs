@@ -749,6 +749,15 @@ pub enum PrepareRegistrationCompletionError {
     Repository(#[from] RepositoryError),
 }
 
+#[derive(Debug, Error)]
+enum PrepareAdminBootstrapError {
+    #[error("bootstrap admin token is invalid")]
+    InvalidToken,
+
+    #[error(transparent)]
+    Repository(#[from] RepositoryError),
+}
+
 #[must_use]
 pub fn next_registration_step(
     registration: &UserRegistration,
@@ -1940,11 +1949,49 @@ pub async fn prepare_registration_completion(
     })
 }
 
+fn normalize_optional_token(token: Option<&str>) -> Option<&str> {
+    token.map(str::trim).filter(|token| !token.is_empty())
+}
+
+async fn prepare_admin_bootstrap(
+    repo: &mut BoxRepository,
+    configured_bootstrap_admin_token: Option<&str>,
+    requested_bootstrap_admin_token: Option<&str>,
+) -> Result<bool, PrepareAdminBootstrapError> {
+    repo.user().acquire_bootstrap_admin_lock().await?;
+
+    let admin_count = repo
+        .user()
+        .count(UserFilter::new().can_request_admin_only())
+        .await?;
+
+    if admin_count > 0 {
+        return Ok(false);
+    }
+
+    let Some(configured_bootstrap_admin_token) =
+        normalize_optional_token(configured_bootstrap_admin_token)
+    else {
+        return Ok(false);
+    };
+
+    match normalize_optional_token(requested_bootstrap_admin_token) {
+        Some(requested_bootstrap_admin_token)
+            if requested_bootstrap_admin_token == configured_bootstrap_admin_token =>
+        {
+            Ok(true)
+        }
+        Some(_) => Err(PrepareAdminBootstrapError::InvalidToken),
+        None => Ok(false),
+    }
+}
+
 pub async fn complete_registration(
     mut repo: BoxRepository,
     rng: &mut (dyn CryptoRngCore + Send),
     clock: &dyn Clock,
     request: CompleteRegistrationRequest,
+    grant_admin: bool,
 ) -> Result<CompletedRegistration, RepositoryError> {
     let registration = repo
         .user_registration()
@@ -1962,8 +2009,7 @@ pub async fn complete_registration(
         .add(rng, clock, registration.username.clone())
         .await?;
 
-    let user_count = repo.user().count(UserFilter::new()).await?;
-    if user_count == 1 {
+    if grant_admin {
         user = repo.user().set_can_request_admin(user, true).await?;
     }
 
@@ -2072,6 +2118,8 @@ pub async fn finish_registration(
     browser_session_present: Option<bool>,
     homeserver_check_mode: HomeserverCheckMode,
     registration_token_required: bool,
+    configured_bootstrap_admin_token: Option<&str>,
+    requested_bootstrap_admin_token: Option<String>,
     user_agent: Option<String>,
 ) -> Result<RegistrationFinishOutcome, RegistrationFinishError> {
     let prepared = match load_registration_finish_preparation(
@@ -2195,9 +2243,33 @@ pub async fn finish_registration(
         }
     };
 
-    let completed = complete_registration(repo, rng, clock, prepared.into_request(user_agent))
-        .await
-        .map_err(RegistrationFinishError::Repository)?;
+    let grant_admin = match prepare_admin_bootstrap(
+        &mut repo,
+        configured_bootstrap_admin_token,
+        requested_bootstrap_admin_token.as_deref(),
+    )
+    .await
+    {
+        Ok(grant_admin) => grant_admin,
+        Err(PrepareAdminBootstrapError::InvalidToken) => {
+            return Ok(RegistrationFinishOutcome::Rejected {
+                error: "bootstrap_admin_token_invalid",
+            });
+        }
+        Err(PrepareAdminBootstrapError::Repository(error)) => {
+            return Err(RegistrationFinishError::Repository(error));
+        }
+    };
+
+    let completed = complete_registration(
+        repo,
+        rng,
+        clock,
+        prepared.into_request(user_agent),
+        grant_admin,
+    )
+    .await
+    .map_err(RegistrationFinishError::Repository)?;
 
     Ok(RegistrationFinishOutcome::Completed(completed))
 }
@@ -2205,9 +2277,13 @@ pub async fn finish_registration(
 #[cfg(test)]
 mod tests {
     use chrono::TimeZone;
+    use pasion_data::{
+        RepositoryAccess as _, RepositoryFactory as _, clock::MockClock, user::UserRepository as _,
+    };
+    use rand_chacha::ChaChaRng;
+    use rand_core::SeedableRng;
 
     use super::*;
-
     fn sample_registration(created_at: DateTime<Utc>) -> UserRegistration {
         UserRegistration {
             id: Ulid::new(),
@@ -2226,6 +2302,75 @@ mod tests {
             created_at,
             completed_at: None,
         }
+    }
+
+    async fn test_repo() -> BoxRepository {
+        let pool = pasion_data::test_utils::setup_test_pool().await;
+        pasion_data::PgRepositoryFactory::new(pool)
+            .create()
+            .await
+            .unwrap()
+    }
+
+    #[tokio::test]
+    async fn prepare_admin_bootstrap_requires_exact_token_to_grant_admin() {
+        let mut repo = test_repo().await;
+
+        assert!(
+            !prepare_admin_bootstrap(&mut repo, Some("bootstrap-secret"), None)
+                .await
+                .unwrap()
+        );
+        assert!(
+            prepare_admin_bootstrap(
+                &mut repo,
+                Some("bootstrap-secret"),
+                Some("bootstrap-secret")
+            )
+            .await
+            .unwrap()
+        );
+
+        repo.cancel().await.unwrap();
+    }
+
+    #[tokio::test]
+    async fn prepare_admin_bootstrap_rejects_invalid_token_while_no_admin_exists() {
+        let mut repo = test_repo().await;
+
+        let error = prepare_admin_bootstrap(&mut repo, Some("bootstrap-secret"), Some("wrong"))
+            .await
+            .unwrap_err();
+
+        assert!(matches!(error, PrepareAdminBootstrapError::InvalidToken));
+
+        repo.cancel().await.unwrap();
+    }
+
+    #[tokio::test]
+    async fn prepare_admin_bootstrap_stops_granting_after_first_admin_exists() {
+        let mut repo = test_repo().await;
+        let mut rng = ChaChaRng::seed_from_u64(42);
+        let clock = MockClock::default();
+
+        let user = repo
+            .user()
+            .add(&mut rng, &clock, "admin".to_owned())
+            .await
+            .unwrap();
+        repo.user().set_can_request_admin(user, true).await.unwrap();
+
+        assert!(
+            !prepare_admin_bootstrap(
+                &mut repo,
+                Some("bootstrap-secret"),
+                Some("bootstrap-secret")
+            )
+            .await
+            .unwrap()
+        );
+
+        repo.cancel().await.unwrap();
     }
 
     #[test]

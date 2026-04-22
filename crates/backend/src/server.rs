@@ -496,6 +496,7 @@ fn build_account_api_router(router: Router) -> Router {
                 )
                 .push(Router::with_path("workflow-inbox").get(viewer::get_workflow_inbox)),
         )
+        .push(Router::with_path("bootstrap-admin-status").get(bootstrap_admin_status::get))
         // Site config
         .push(Router::with_path("site-config").get(site_config::get))
         // Sessions

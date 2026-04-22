@@ -89,6 +89,7 @@ pub struct EmailVerificationContext {
     #[serde(skip_serializing_if = "Option::is_none")]
     user_registration: Option<UserRegistration>,
     authentication_code: UserEmailAuthenticationCode,
+    instance_domain: String,
 }
 
 impl EmailVerificationContext {
@@ -98,11 +99,13 @@ impl EmailVerificationContext {
         authentication_code: UserEmailAuthenticationCode,
         browser_session: Option<BrowserSession>,
         user_registration: Option<UserRegistration>,
+        instance_domain: String,
     ) -> Self {
         Self {
             browser_session,
             user_registration,
             authentication_code,
+            instance_domain,
         }
     }
 
@@ -116,6 +119,12 @@ impl EmailVerificationContext {
     #[must_use]
     pub fn code(&self) -> &str {
         &self.authentication_code.code
+    }
+
+    /// The public hostname of the tenant instance sending this email.
+    #[must_use]
+    pub fn instance_domain(&self) -> &str {
+        &self.instance_domain
     }
 }
 
@@ -141,6 +150,7 @@ impl TemplateContext for EmailVerificationContext {
                         browser_session: Some(session),
                         user_registration: None,
                         authentication_code: code,
+                        instance_domain: "tenant.example.com".to_owned(),
                     }
                 })
                 .collect(),

@@ -552,8 +552,7 @@ mod tests {
         UpstreamOAuthProviderClaimsImports, UpstreamOAuthProviderDiscoveryMode,
         UpstreamOAuthProviderOnBackchannelLogout, UpstreamOAuthProviderPkceMode,
         UpstreamOAuthProviderTokenAuthMethod, UserRegistration, UserRegistrationPassword,
-        clock::MockClock,
-        upstream_oauth2::UpstreamOAuthProviderParams,
+        clock::MockClock, upstream_oauth2::UpstreamOAuthProviderParams,
     };
     use pasion_iana::jose::JsonWebSignatureAlg;
     use rand_chacha::ChaChaRng;
