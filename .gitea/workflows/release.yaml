@@ -168,41 +168,41 @@ jobs:
             echo "source_suffix=sha-${short_sha}"
           } >> "$GITHUB_OUTPUT"
 
-  # smoke-test-runtime:
-  #   name: Smoke test runtime image
-  #   runs-on: ubuntu-24.04
-  #   needs:
-  #     - compute-version
+  build-frontend-assets:
+    name: Build shared frontend assets
+    runs-on: ubuntu-24.04
+    needs:
+      - prepare-image-build
 
-  #   permissions:
-  #     contents: read
+    permissions:
+      contents: read
 
-  #   env:
-  #     VERGEN_GIT_DESCRIBE: ${{ needs.compute-version.outputs.describe }}
-  #     SOURCE_DATE_EPOCH: ${{ needs.compute-version.outputs.timestamp }}
+    steps:
+      - name: Fetch repository
+        uses: actions/checkout@v4
 
-  #   steps:
-  #     - name: Fetch repository
-  #       uses: actions/checkout@v4
+      - name: Configure Docker Buildx
+        uses: docker/setup-buildx-action@v3
+        with:
+          name: gitea-frontend-assets
+          keep-state: true
 
-  #     - name: Build debug runtime image
-  #       shell: bash
-  #       run: |
-  #         set -euo pipefail
-  #         docker build --target debug \
-  #           --build-arg VERGEN_GIT_DESCRIBE="${VERGEN_GIT_DESCRIBE}" \
-  #           -t pasion-runtime-smoke .
+      - name: Build frontend asset bundle
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: Dockerfile
+          target: frontend-dist-export
+          outputs: type=local,dest=.ci/frontend-dist
+          pull: true
+          provenance: false
+          sbom: false
 
-  #     - name: Verify default storage root is writable
-  #       shell: bash
-  #       run: |
-  #         set -euo pipefail
-  #         docker run --rm --entrypoint=/busybox/sh pasion-runtime-smoke -c '
-  #           set -e
-  #           test "$PWD" = "/var/lib/pasion"
-  #           mkdir -p ./data/media
-  #           touch ./data/media/.write-test
-          '
+      - name: Upload frontend asset bundle
+        uses: christopherhx/gitea-upload-artifact@v4
+        with:
+          name: frontend-dist
+          path: .ci/frontend-dist
 
   build-image-arch:
     name: Build Docker images (${{ matrix.arch }})
@@ -210,7 +210,7 @@ jobs:
     needs:
       - compute-version
       - prepare-image-build
-      - smoke-test-runtime
+      - build-frontend-assets
 
     strategy:
       fail-fast: false
@@ -233,6 +233,12 @@ jobs:
     steps:
       - name: Fetch repository
         uses: actions/checkout@v4
+
+      - name: Download shared frontend assets
+        uses: christopherhx/gitea-download-artifact@v4
+        with:
+          name: frontend-dist
+          path: .ci/frontend-dist
 
       - name: Enable QEMU for arm64 container builds
         if: matrix.platform == 'linux/arm64'
@@ -292,12 +298,15 @@ jobs:
         with:
           context: .
           file: Dockerfile
+          build-contexts: |
+            frontend-dist=./.ci/frontend-dist
           platforms: ${{ matrix.platform }}
           pull: true
           push: true
           provenance: false
           sbom: false
           build-args: |
+            FRONTEND_DIST_SOURCE=frontend-prebuilt
             VERGEN_GIT_DESCRIBE=${{ needs.compute-version.outputs.describe }}
           tags: ${{ steps.arch-tags.outputs.release }}
           cache-from: type=registry,ref=${{ needs.prepare-image-build.outputs.buildcache_ref }}:buildcache-${{ matrix.arch }}
@@ -309,12 +318,15 @@ jobs:
         with:
           context: .
           file: Dockerfile
+          build-contexts: |
+            frontend-dist=./.ci/frontend-dist
           platforms: ${{ matrix.platform }}
           pull: true
           push: false
           provenance: false
           sbom: false
           build-args: |
+            FRONTEND_DIST_SOURCE=frontend-prebuilt
             VERGEN_GIT_DESCRIBE=${{ needs.compute-version.outputs.describe }}
           tags: ${{ steps.arch-tags.outputs.release }}
           cache-from: type=registry,ref=${{ needs.prepare-image-build.outputs.buildcache_ref }}:buildcache-${{ matrix.arch }}
@@ -325,12 +337,15 @@ jobs:
         with:
           context: .
           file: Dockerfile
+          build-contexts: |
+            frontend-dist=./.ci/frontend-dist
           platforms: ${{ matrix.platform }}
           pull: true
           push: ${{ needs.prepare-image-build.outputs.push == 'true' }}
           provenance: false
           sbom: false
           build-args: |
+            FRONTEND_DIST_SOURCE=frontend-prebuilt
             VERGEN_GIT_DESCRIBE=${{ needs.compute-version.outputs.describe }}
           tags: ${{ steps.arch-tags.outputs.release }}
 

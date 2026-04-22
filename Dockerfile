@@ -1,8 +1,9 @@
 # syntax = docker/dockerfile:1.7.1
 # Builds a minimal image with the binary only. Buildx publishes amd64 and arm64
-# variants from this Dockerfile. Frontend assets are built once on the native
-# builder platform, while the server binary is compiled on the requested target
-# platform so it links against the correct native system libraries.
+# variants from this Dockerfile. Frontend assets can either be built in-Docker
+# on the native builder platform or injected as a prebuilt named build context,
+# while the server binary is compiled on the requested target platform so it
+# links against the correct native system libraries.
 
 # The Debian version and version name must be in sync
 ARG DEBIAN_VERSION=12
@@ -10,11 +11,12 @@ ARG DEBIAN_VERSION_NAME=bookworm
 ARG RUSTC_VERSION=1.93.0
 ARG CARGO_AUDITABLE_VERSION=0.7.0
 ARG DIOXUS_CLI_VERSION=0.7.4
+ARG FRONTEND_DIST_SOURCE=frontend-build
 
 ############################################
 ## Build stage that builds the frontend   ##
 ############################################
-FROM --platform=${BUILDPLATFORM} docker.io/library/rust:${RUSTC_VERSION}-${DEBIAN_VERSION_NAME} AS frontend
+FROM --platform=${BUILDPLATFORM} docker.io/library/rust:${RUSTC_VERSION}-${DEBIAN_VERSION_NAME} AS frontend-build
 
 ARG DIOXUS_CLI_VERSION
 
@@ -49,6 +51,18 @@ RUN --network=default \
   --mount=type=cache,id=frontend-target,target=/app/target \
   for i in 1 2 3; do dx build -p pasion-frontend --release && break || echo "Retry $i..." && sleep 10; done \
   && cp -r target/dx/pasion-frontend/release/web/public /frontend-dist
+
+# Export the built frontend assets as a filesystem root so workflows can
+# materialize them once and reuse them across architecture-specific image jobs.
+FROM scratch AS frontend-dist-export
+COPY --from=frontend-build /frontend-dist/ /
+
+# Normalize a named build context containing prebuilt frontend assets to the
+# same /frontend-dist path used by the in-Docker frontend build stage.
+FROM scratch AS frontend-prebuilt
+COPY --from=frontend-dist / /frontend-dist
+
+FROM ${FRONTEND_DIST_SOURCE} AS frontend-assets
 
 ########################################
 ## Build stage that builds the binary ##
@@ -108,7 +122,7 @@ FROM --platform=${BUILDPLATFORM} scratch AS share
 COPY ./policies/cedar/ /share/cedar
 COPY ./templates/ /share/templates
 COPY ./translations/ /share/translations
-COPY --from=frontend /frontend-dist/ /share/assets
+COPY --from=frontend-assets /frontend-dist/ /share/assets
 
 ###############################################
 ## Prepare writable runtime state directory ##
