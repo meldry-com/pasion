@@ -553,7 +553,6 @@ mod tests {
             },
             None,
             None,
-            "tenant.example.com".to_owned(),
         )
         .with_language("en".parse().unwrap());
 
@@ -562,11 +561,10 @@ mod tests {
             .unwrap();
         let text = templates.render_email_verification_txt(&context).unwrap();
 
-        assert!(subject.contains("[tenant.example.com]"));
+        assert!(subject.contains("[matrix.example.com]"));
         assert!(subject.contains("Your email verification code"));
-        assert!(text.contains("Your email verification code for tenant.example.com is: 654321"));
-        assert!(text.contains("Instance domain: tenant.example.com"));
-        assert!(text.contains("Server name: matrix.example.com"));
-        assert!(!text.contains("tenant.example.comServer name"));
+        assert!(text.contains("Your email verification code for matrix.example.com is: 654321"));
+        assert!(text.contains("Matrix homeserver: matrix.example.com"));
+        assert!(!text.contains("Instance domain:"));
     }
 }

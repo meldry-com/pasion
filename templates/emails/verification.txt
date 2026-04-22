@@ -6,9 +6,6 @@
 
 Hello {{ username|default("user") }},
 
-Your email verification code for {{ instance_domain }} is: {{ authentication_code.code }}
+Your email verification code for {{ branding.server_name }} is: {{ authentication_code.code }}
 
-Instance domain: {{ instance_domain }}
-{% if branding.server_name != instance_domain %}
-Server name: {{ branding.server_name }}
-{% endif %}
+Matrix homeserver: {{ branding.server_name }}

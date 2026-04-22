@@ -653,13 +653,9 @@ async fn prepare_delivery(
             let mailbox = Mailbox::new(username, address);
 
             let language: DataLocale = payload.language.parse()?;
-            let context = EmailVerificationContext::new(
-                authentication_code,
-                browser_session,
-                registration,
-                url_builder.public_hostname().to_owned(),
-            )
-            .with_language(language);
+            let context =
+                EmailVerificationContext::new(authentication_code, browser_session, registration)
+                    .with_language(language);
             let tags = delivery_tracking_tags(request, delivery);
 
             Ok(PreparedDelivery::Ready(
