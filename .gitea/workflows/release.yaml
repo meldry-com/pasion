@@ -20,7 +20,7 @@ concurrency:
 jobs:
   compute-version:
     name: Derive version from git tags
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-24.04-arm64
 
     permissions:
       contents: read
@@ -43,7 +43,7 @@ jobs:
 
   prepare-image-build:
     name: Resolve image names and tags
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-24.04-arm64
 
     permissions:
       contents: read
@@ -314,7 +314,7 @@ jobs:
 
   summarize-published-images:
     name: Summarize published images
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-24.04-arm64
     needs:
       - prepare-image-build
       - build-image-arch
@@ -337,7 +337,7 @@ jobs:
 
   summarize-image-build:
     name: Summarize local image build
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-24.04-arm64
     needs:
       - prepare-image-build
       - build-image-arch
