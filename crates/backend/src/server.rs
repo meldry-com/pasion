@@ -554,6 +554,10 @@ fn build_account_api_router(router: Router) -> Router {
                                         .post(register::post_resend_verification),
                                 )
                                 .push(
+                                    Router::with_path("change-email")
+                                        .post(register::post_change_email),
+                                )
+                                .push(
                                     Router::with_path("display-name")
                                         .post(register::post_display_name),
                                 )

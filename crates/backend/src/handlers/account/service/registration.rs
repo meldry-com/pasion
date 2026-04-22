@@ -140,6 +140,7 @@ pub struct RegistrationProgress {
 pub struct RegistrationStatusSummary {
     pub registration: UserRegistration,
     pub email_pending: bool,
+    pub pending_email: Option<String>,
     pub phone_pending: bool,
     pub steps_completed: Vec<&'static str>,
     pub next_step: &'static str,
@@ -595,6 +596,28 @@ pub enum RegistrationResendError {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum RegistrationEmailChangeOutcome {
+    Updated,
+    AlreadyVerified,
+    RegistrationCompleted,
+    InvalidEmail,
+    EmailInUse,
+    RateLimited,
+}
+
+#[derive(Debug, Error)]
+pub enum RegistrationEmailChangeError {
+    #[error("registration not found")]
+    NotFound,
+
+    #[error("registration verification is not available")]
+    NotAvailable,
+
+    #[error(transparent)]
+    Repository(#[from] RepositoryError),
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum RegistrationDisplayNameOutcome {
     Advanced { next_step: &'static str },
     RegistrationCompleted,
@@ -819,6 +842,11 @@ pub async fn load_registration_status(
 
     let email_pending =
         progress.registration.email_authentication_id.is_some() && !progress.email_verified();
+    let pending_email = progress
+        .email_authentication
+        .as_ref()
+        .filter(|auth| auth.completed_at.is_none())
+        .map(|auth| auth.email.clone());
     let phone_pending =
         progress.registration.phone_authentication_id.is_some() && !progress.phone_verified();
     let steps_completed = workflow.completed_steps.clone();
@@ -827,6 +855,7 @@ pub async fn load_registration_status(
     Ok(RegistrationStatusSummary {
         registration: progress.registration,
         email_pending,
+        pending_email,
         phone_pending,
         steps_completed,
         next_step,
@@ -1527,6 +1556,81 @@ pub async fn resend_registration_verification(
             Err(RegistrationResendError::Repository(error))
         }
     }
+}
+
+pub async fn change_registration_email(
+    mut repo: BoxRepository,
+    limiter: &Limiter,
+    rng: &mut (dyn CryptoRngCore + Send),
+    clock: &dyn Clock,
+    requester: RequesterFingerprint,
+    registration_id: Ulid,
+    email: &str,
+    notification_language: String,
+) -> Result<RegistrationEmailChangeOutcome, RegistrationEmailChangeError> {
+    let progress = load_registration_progress(&mut repo, registration_id)
+        .await
+        .map_err(|error| match error {
+            LoadRegistrationProgressError::NotFound => RegistrationEmailChangeError::NotFound,
+            LoadRegistrationProgressError::Repository(error) => {
+                RegistrationEmailChangeError::Repository(error)
+            }
+        })?;
+
+    if progress.registration.completed_at.is_some() {
+        return Ok(RegistrationEmailChangeOutcome::RegistrationCompleted);
+    }
+
+    if progress.registration.email_authentication_id.is_none() {
+        return Err(RegistrationEmailChangeError::NotAvailable);
+    }
+
+    let current_auth = progress
+        .email_authentication
+        .ok_or(RegistrationEmailChangeError::NotFound)?;
+
+    if current_auth.completed_at.is_some() {
+        return Ok(RegistrationEmailChangeOutcome::AlreadyVerified);
+    }
+
+    let email = email.trim();
+    if Address::from_str(email).is_err() {
+        return Ok(RegistrationEmailChangeOutcome::InvalidEmail);
+    }
+
+    if repo.user_email().find_by_email(email).await?.is_some() {
+        return Ok(RegistrationEmailChangeOutcome::EmailInUse);
+    }
+
+    if let Err(error) = limiter
+        .check_email_authentication_email(requester, email)
+        .await
+    {
+        tracing::warn!(error = &error as &dyn std::error::Error);
+        return Ok(RegistrationEmailChangeOutcome::RateLimited);
+    }
+
+    let updated_auth = repo
+        .user_email()
+        .add_authentication_for_registration(rng, clock, email.to_owned(), &progress.registration)
+        .await?;
+
+    schedule_notification(
+        &mut repo,
+        rng,
+        clock,
+        NotificationIntent::verify_email(&updated_auth, notification_language),
+    )
+    .await?;
+
+    let _ = repo
+        .user_registration()
+        .set_email_authentication(progress.registration, &updated_auth)
+        .await?;
+
+    repo.save().await?;
+
+    Ok(RegistrationEmailChangeOutcome::Updated)
 }
 
 pub async fn submit_registration_email_code(

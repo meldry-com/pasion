@@ -1,7 +1,10 @@
 use dioxus::prelude::*;
 
 use crate::{
-    api::types::{ProvidersResponse, RegisterResponse, ResendEmailAuthCodePayload, StepResponse},
+    api::types::{
+        ChangeRegistrationEmailResponse, ProvidersResponse, RegisterResponse,
+        RegisterStatusResponse, ResendEmailAuthCodePayload, StepResponse,
+    },
     components::{
         layout::Layout, loading::LoadingSpinner, password_input::PasswordCreationDoubleInput,
     },
@@ -223,20 +226,130 @@ fn RegisterPage(providers: ProvidersResponse) -> Element {
 #[component]
 pub fn RegisterVerifyEmail(id: String) -> Element {
     let mut code = use_signal(String::new);
+    let mut email = use_signal(String::new);
+    let mut editing_email = use_signal(|| false);
     let mut submitting = use_signal(|| false);
     let mut resending = use_signal(|| false);
+    let mut changing_email = use_signal(|| false);
     let mut error = use_signal(|| None::<String>);
     let mut resend_message = use_signal(|| None::<String>);
     let nav = navigator();
     let reg_id = id.clone();
     let resend_id = id.clone();
+    let change_id = id.clone();
+    let status_id = id.clone();
+    let mut status = use_resource(move || {
+        let rid = status_id.clone();
+        async move {
+            crate::api::api_get::<RegisterStatusResponse>(&format!("/auth/register/{rid}")).await
+        }
+    });
+
+    let status_binding = status.read();
+    let pending_email = match &*status_binding {
+        Some(Ok(data)) => data.pending_email.clone(),
+        _ => None,
+    };
+    let masked_email = pending_email
+        .as_deref()
+        .map(mask_email_address)
+        .unwrap_or_else(|| "your email address".to_string());
+    let change_email_seed = pending_email.clone().unwrap_or_default();
 
     rsx! {
         Layout {
             div { class: "login-page",
                 div { class: "login-container",
                     h1 { class: "heading-md login-title", "Verify your email" }
-                    p { class: "text-secondary", "We sent a verification code to your email address. Please enter it below." }
+                    p { class: "text-secondary", "We sent a 6-digit verification code to {masked_email}. Please enter it below." }
+
+                    button {
+                        class: "btn btn-tertiary btn-block",
+                        r#type: "button",
+                        onclick: move |_| {
+                            let next_open = !editing_email();
+                            editing_email.set(next_open);
+                            error.set(None);
+                            resend_message.set(None);
+                            if next_open {
+                                email.set(change_email_seed.clone());
+                            }
+                        },
+                        if editing_email() {
+                            "Cancel email change"
+                        } else {
+                            "Wrong email? Change email"
+                        }
+                    }
+
+                    if editing_email() {
+                        form {
+                            class: "form-root",
+                            onsubmit: move |e| {
+                                e.prevent_default();
+                                e.stop_propagation();
+                                let new_email = email.to_string();
+                                if new_email.trim().is_empty() {
+                                    error.set(Some("Please enter your email address.".to_string()));
+                                    return;
+                                }
+
+                                changing_email.set(true);
+                                error.set(None);
+                                resend_message.set(None);
+                                let rid = change_id.clone();
+
+                                spawn(async move {
+                                    let result = crate::api::api_post::<ChangeRegistrationEmailResponse>(
+                                        &format!("/auth/register/{rid}/change-email"),
+                                        serde_json::json!({ "email": new_email }),
+                                    ).await;
+                                    changing_email.set(false);
+                                    match result {
+                                        Ok(resp) if resp.status == "updated" => {
+                                            code.set(String::new());
+                                            editing_email.set(false);
+                                            resend_message.set(Some("Your email has been updated and a new code has been sent.".to_string()));
+                                            status.restart();
+                                        }
+                                        Ok(resp) => {
+                                            let message = resp
+                                                .error
+                                                .as_deref()
+                                                .map(registration_error_message)
+                                                .unwrap_or_else(|| "Could not update your email address.".to_string());
+                                            error.set(Some(message));
+                                        }
+                                        Err(e) => error.set(Some(e)),
+                                    }
+                                });
+                            },
+
+                            div { class: "form-field",
+                                label { class: "form-label", "Email address" }
+                                input {
+                                    class: "form-input",
+                                    r#type: "email",
+                                    autocomplete: "email",
+                                    required: true,
+                                    placeholder: "your@email.com",
+                                    value: "{email}",
+                                    oninput: move |e| email.set(e.value()),
+                                }
+                                span { class: "form-help", "Saving a new email will send a fresh code and invalidate the current one." }
+                            }
+
+                            button {
+                                class: "btn btn-primary btn-block",
+                                r#type: "submit",
+                                disabled: changing_email(),
+                                if changing_email() {
+                                    LoadingSpinner { inline: true }
+                                }
+                                "Save new email"
+                            }
+                        }
+                    }
 
                     if let Some(ref err) = *error.read() {
                         div { class: "alert alert-critical",
@@ -281,7 +394,12 @@ pub fn RegisterVerifyEmail(id: String) -> Element {
                                         }
                                     }
                                     Ok(resp) => {
-                                        error.set(Some(resp.error.unwrap_or_else(|| "Invalid code.".to_string())));
+                                        let message = resp
+                                            .error
+                                            .as_deref()
+                                            .map(registration_error_message)
+                                            .unwrap_or_else(|| "Incorrect code. Please try again.".to_string());
+                                        error.set(Some(message));
                                     }
                                     Err(e) => error.set(Some(e)),
                                 }
@@ -327,8 +445,16 @@ pub fn RegisterVerifyEmail(id: String) -> Element {
                                     ).await;
                                     resending.set(false);
                                     match result {
-                                        Ok(_) => {
-                                            resend_message.set(Some("Verification code resent.".to_string()));
+                                        Ok(resp) if resp.status == "resent" => {
+                                            resend_message.set(Some("A new verification code has been sent.".to_string()));
+                                        }
+                                        Ok(resp) => {
+                                            let message = match resp.status.as_str() {
+                                                "already_verified" => "This email has already been verified.".to_string(),
+                                                "rate_limited" => "Please wait before requesting another code.".to_string(),
+                                                _ => "Could not resend the verification code.".to_string(),
+                                            };
+                                            error.set(Some(message));
                                         }
                                         Err(err) => {
                                             error.set(Some(err));
@@ -345,6 +471,34 @@ pub fn RegisterVerifyEmail(id: String) -> Element {
                 }
             }
         }
+    }
+}
+
+fn mask_email_address(email: &str) -> String {
+    let trimmed = email.trim();
+    let Some((local, domain)) = trimmed.split_once('@') else {
+        return trimmed.to_string();
+    };
+
+    if local.is_empty() || domain.is_empty() {
+        return trimmed.to_string();
+    }
+
+    let visible = local.chars().take(2).collect::<String>();
+    format!("{visible}***@{domain}")
+}
+
+fn registration_error_message(code: &str) -> String {
+    match code {
+        "invalid_code" => "Incorrect code. Please try again.".to_string(),
+        "rate_limited" => "Please wait a moment and try again.".to_string(),
+        "registration_already_completed" => {
+            "This registration has already been completed.".to_string()
+        }
+        "email_already_verified" => "This email has already been verified.".to_string(),
+        "email_invalid" => "Please enter a valid email address.".to_string(),
+        "email_in_use" => "This email is already in use.".to_string(),
+        other => other.to_string(),
     }
 }
 

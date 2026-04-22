@@ -629,6 +629,8 @@ pub struct RegisterStatusResponse {
     pub username: String,
     #[serde(default)]
     pub email_pending: bool,
+    #[serde(default)]
+    pub pending_email: Option<String>,
     pub next_step: String,
 }
 
@@ -657,6 +659,13 @@ pub struct StepResponse {
     /// uses this to resume the original flow after the account is created.
     #[serde(default)]
     pub post_auth_action: Option<serde_json::Value>,
+}
+
+#[derive(Debug, Clone, PartialEq, Deserialize, Serialize)]
+pub struct ChangeRegistrationEmailResponse {
+    pub status: String,
+    #[serde(default)]
+    pub error: Option<String>,
 }
 
 // ── Recovery API types ────────────────────────────────────────
