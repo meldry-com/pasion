@@ -25,6 +25,8 @@ Notes:
 - The Dioxus frontend asset bundle is built once on `ubuntu-24.04`,
   uploaded as a Gitea artifact, and reused by both the `amd64` and `arm64`
   image jobs
+- When `REGISTRY_USER` / `REGISTRY_TOKEN` are configured, the frontend asset
+  bundle also pulls and refreshes registry-backed Buildx cache layers
 - Each architecture also gets its own published tags such as `main-amd64`,
   `main-arm64`, and `sha-<commit>-amd64`
 - When `REGISTRY_USER` / `REGISTRY_TOKEN` are configured, the Gitea image

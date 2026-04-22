@@ -10,16 +10,20 @@ ARG DEBIAN_VERSION=12
 ARG DEBIAN_VERSION_NAME=bookworm
 ARG RUSTC_VERSION=1.93.0
 ARG CARGO_AUDITABLE_VERSION=0.7.0
+ARG CARGO_CHEF_VERSION=0.1.77
 ARG DIOXUS_CLI_VERSION=0.7.5
 ARG FRONTEND_DIST_SOURCE=frontend-build
 
 ############################################
-## Build stage that builds the frontend   ##
+## Shared frontend toolchain             ##
 ############################################
-FROM --platform=${BUILDPLATFORM} docker.io/library/rust:${RUSTC_VERSION}-${DEBIAN_VERSION_NAME} AS frontend-build
+FROM --platform=${BUILDPLATFORM} docker.io/library/rust:${RUSTC_VERSION}-${DEBIAN_VERSION_NAME} AS frontend-toolchain
 
 ARG DIOXUS_CLI_VERSION
+ARG CARGO_CHEF_VERSION
 
+ENV CARGO_HOME=/usr/local/cargo
+ENV RUSTUP_HOME=/usr/local/rustup
 ENV CARGO_HTTP_TIMEOUT=600
 ENV CARGO_HTTP_MULTIPLEXING=false
 ENV CARGO_NET_RETRY=10
@@ -30,25 +34,52 @@ ENV CARGO_REGISTRIES_CRATES_IO_PROTOCOL=sparse
 # Network access: to fetch dependencies
 ENV RUSTUP_HTTP_TIMEOUT=600
 RUN --network=default \
+  --mount=type=cache,id=frontend-cargo-registry,target=/usr/local/cargo/registry,sharing=locked \
+  --mount=type=cache,id=frontend-cargo-git,target=/usr/local/cargo/git,sharing=locked \
+  --mount=type=cache,id=frontend-rustup,target=/usr/local/rustup,sharing=locked \
   for i in 1 2 3 4 5; do rustup target add wasm32-unknown-unknown && break || sleep 10; done && \
-  cargo install --locked dioxus-cli@${DIOXUS_CLI_VERSION}
-
-WORKDIR /app
-COPY ./ /app
+  cargo install --locked dioxus-cli@${DIOXUS_CLI_VERSION} && \
+  cargo install --locked cargo-chef@=${CARGO_CHEF_VERSION}
 
 # Pre-install binaryen (wasm-opt) so dx build doesn't need to download from GitHub
 RUN --network=default \
   apt-get update && apt-get install -y binaryen && rm -rf /var/lib/apt/lists/* || true
 
-# Pre-fetch dependencies so dx build doesn't time out on cargo-metadata
+############################################
+## Build stage that builds the frontend   ##
+############################################
+FROM frontend-toolchain AS frontend-planner
+
+WORKDIR /app
+COPY ./ /app
+
+# cargo-chef computes a recipe keyed by workspace manifests so frontend
+# dependency compilation can be reused when Rust sources change.
+RUN cargo chef prepare --recipe-path frontend-recipe.json
+
+FROM frontend-toolchain AS frontend-build
+
+WORKDIR /app
+COPY --from=frontend-planner /app/frontend-recipe.json frontend-recipe.json
+
 RUN --network=default \
-  --mount=type=cache,id=frontend-registry,target=/root/.cargo/registry \
-  cargo fetch
+  --mount=type=cache,id=frontend-cargo-registry,target=/usr/local/cargo/registry,sharing=locked \
+  --mount=type=cache,id=frontend-cargo-git,target=/usr/local/cargo/git,sharing=locked \
+  --mount=type=cache,id=frontend-target,target=/app/target,sharing=locked \
+  cargo chef cook \
+    --recipe-path frontend-recipe.json \
+    --locked \
+    --release \
+    --package pasion-frontend \
+    --target wasm32-unknown-unknown
+
+COPY ./ /app
 
 # Build the WASM frontend (retry for flaky esbuild downloads)
 RUN --network=default \
-  --mount=type=cache,id=frontend-registry,target=/root/.cargo/registry \
-  --mount=type=cache,id=frontend-target,target=/app/target \
+  --mount=type=cache,id=frontend-cargo-registry,target=/usr/local/cargo/registry,sharing=locked \
+  --mount=type=cache,id=frontend-cargo-git,target=/usr/local/cargo/git,sharing=locked \
+  --mount=type=cache,id=frontend-target,target=/app/target,sharing=locked \
   for i in 1 2 3; do dx build -p pasion-frontend --release && break || echo "Retry $i..." && sleep 10; done \
   && cp -r target/dx/pasion-frontend/release/web/public /frontend-dist
 
@@ -67,12 +98,15 @@ FROM ${FRONTEND_DIST_SOURCE} AS frontend-assets
 ########################################
 ## Build stage that builds the binary ##
 ########################################
-FROM --platform=${TARGETPLATFORM} docker.io/library/rust:${RUSTC_VERSION}-${DEBIAN_VERSION_NAME} AS builder
+FROM --platform=${TARGETPLATFORM} docker.io/library/rust:${RUSTC_VERSION}-${DEBIAN_VERSION_NAME} AS builder-base
 
 ARG CARGO_AUDITABLE_VERSION
+ARG CARGO_CHEF_VERSION
 ARG RUSTC_VERSION
 ARG TARGETARCH
 
+ENV CARGO_HOME=/usr/local/cargo
+ENV RUSTUP_HOME=/usr/local/rustup
 ENV CARGO_HTTP_TIMEOUT=600
 ENV CARGO_HTTP_MULTIPLEXING=false
 ENV CARGO_NET_RETRY=10
@@ -82,20 +116,47 @@ ENV CARGO_REGISTRIES_CRATES_IO_PROTOCOL=sparse
 # Install pinned versions of cargo-auditable
 # Network access: to fetch dependencies
 RUN --network=default \
-  cargo install --locked \
-  cargo-auditable@=${CARGO_AUDITABLE_VERSION}
+  --mount=type=cache,id=builder-cargo-registry-${TARGETARCH},target=/usr/local/cargo/registry,sharing=locked \
+  --mount=type=cache,id=builder-cargo-git-${TARGETARCH},target=/usr/local/cargo/git,sharing=locked \
+  cargo install --locked cargo-auditable@=${CARGO_AUDITABLE_VERSION} && \
+  cargo install --locked cargo-chef@=${CARGO_CHEF_VERSION}
 
 # Install build dependencies
 # Network access: to install apt packages
 RUN --network=default \
   apt-get update && apt-get install -y \
   libpq-dev \
-  g++
+  g++ \
+  && rm -rf /var/lib/apt/lists/*
 
-# Set the working directory
+FROM builder-base AS builder-planner
+
 WORKDIR /app
+COPY ./ /app
 
-# Copy the code
+# cargo-chef keeps the dependency build layer keyed to Cargo manifests so
+# source-only changes can reuse compiled dependencies and downloaded crates.
+RUN cargo chef prepare --recipe-path backend-recipe.json
+
+FROM builder-base AS builder
+
+ARG TARGETARCH
+
+WORKDIR /app
+COPY --from=builder-planner /app/backend-recipe.json backend-recipe.json
+
+RUN --network=default \
+  --mount=type=cache,id=builder-cargo-registry-${TARGETARCH},target=/usr/local/cargo/registry,sharing=locked \
+  --mount=type=cache,id=builder-cargo-git-${TARGETARCH},target=/usr/local/cargo/git,sharing=locked \
+  --mount=type=cache,id=builder-target-${TARGETARCH},target=/app/target,sharing=locked \
+  cargo chef cook \
+    --recipe-path backend-recipe.json \
+    --locked \
+    --release \
+    --bin pasion \
+    --no-default-features \
+    --features docker,cedar
+
 COPY ./ /app
 
 ARG VERGEN_GIT_DESCRIBE
@@ -103,8 +164,9 @@ ENV VERGEN_GIT_DESCRIBE=${VERGEN_GIT_DESCRIBE}
 
 # Network access: cargo auditable needs it
 RUN --network=default \
-  --mount=type=cache,id=builder-registry,target=/root/.cargo/registry \
-  --mount=type=cache,id=builder-target-${TARGETARCH},target=/app/target \
+  --mount=type=cache,id=builder-cargo-registry-${TARGETARCH},target=/usr/local/cargo/registry,sharing=locked \
+  --mount=type=cache,id=builder-cargo-git-${TARGETARCH},target=/usr/local/cargo/git,sharing=locked \
+  --mount=type=cache,id=builder-target-${TARGETARCH},target=/app/target,sharing=locked \
   cargo auditable build \
     --locked \
     --release \
