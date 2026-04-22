@@ -345,7 +345,10 @@ pub async fn post(req: &mut Request, depot: &mut Depot, res: &mut Response) {
             );
             res.render(Json(reply));
         }
-        Err(e) => e.render(res),
+        Err(e) => {
+            tracing::error!(error = %e, error_debug = ?e, "OAuth2 token endpoint failed");
+            e.render(res);
+        }
     }
 }
 
@@ -430,7 +433,12 @@ async fn handle_post(
 
     let form = client_authorization.form.ok_or(RouteError::BadRequest)?;
 
-    let grant_type = form.grant_type();
+    let grant_type = form.grant_type().to_string();
+    tracing::info!(
+        oauth2_client.id = %client.id,
+        grant_type = %grant_type,
+        "Handling OAuth2 token request"
+    );
 
     let (reply, repo) = match form {
         AccessTokenRequest::AuthorizationCode(grant) => {
@@ -498,11 +506,22 @@ async fn handle_post(
             (reply, repo)
         }
         _ => {
+            tracing::warn!(
+                oauth2_client.id = %client.id,
+                grant_type = %grant_type,
+                "Client requested an unsupported grant type at the token endpoint"
+            );
             return Err(RouteError::UnsupportedGrantType);
         }
     };
 
     repo.save().await?;
+
+    tracing::debug!(
+        oauth2_client.id = %client.id,
+        grant_type = %grant_type,
+        "OAuth2 token request completed successfully"
+    );
 
     TOKEN_REQUEST_COUNTER.add(
         1,
