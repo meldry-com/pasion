@@ -19,19 +19,18 @@ Notes:
   directory via `actions/cache@v3`
 - The partitioned Rust test job compiles a `nextest` archive once, uploads it
   as a Gitea artifact, and reuses it across all test partitions
-- The Gitea image build runs the release `amd64` and `arm64` images in
-  parallel, then publishes a multi-arch manifest list after both
-  per-architecture builds finish
+- The Gitea image build currently runs only the release `arm64` image.
+  The `amd64` image build is temporarily disabled in Gitea Actions
+- Published image tags are pushed directly from the native `arm64` build
+  job; the workflow currently does not use Docker Buildx or manifest
+  assembly
 - The Gitea release image jobs build the Dioxus frontend inside each
   per-architecture Docker build, matching the GitHub release workflow and
   avoiding artifact hand-off failures between jobs
-- Each architecture also gets its own published tags such as `main-amd64`,
-  `main-arm64`, and `sha-<commit>-amd64`
-- When `REGISTRY_USER` / `REGISTRY_TOKEN` are configured, the Gitea image
-  build also pulls and refreshes registry-backed Buildx cache layers
+- Each enabled architecture also gets its own published tags such as
+  `main-arm64` and `sha-<commit>-arm64`
 - The `arm64` image job targets the `ubuntu-24.04-arm64` runner label and
-  relies on Docker's `linux/arm64` emulation support when that label is
-  backed by an x86_64 runner
+  builds with the runner's native Docker engine on arm64
 - Gitea workflows intentionally do not use `mozilla-actions/sccache-action`.
   They rely on the runner's `actions/cache` endpoint instead, because that
   works with standard Gitea Actions runners
