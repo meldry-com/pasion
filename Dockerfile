@@ -36,7 +36,6 @@ ENV RUSTUP_HTTP_TIMEOUT=600
 RUN --network=default \
   --mount=type=cache,id=frontend-cargo-registry,target=/usr/local/cargo/registry,sharing=locked \
   --mount=type=cache,id=frontend-cargo-git,target=/usr/local/cargo/git,sharing=locked \
-  --mount=type=cache,id=frontend-rustup,target=/usr/local/rustup,sharing=locked \
   for i in 1 2 3 4 5; do rustup target add wasm32-unknown-unknown && break || sleep 10; done && \
   cargo install --locked dioxus-cli@${DIOXUS_CLI_VERSION} && \
   cargo install --locked cargo-chef@=${CARGO_CHEF_VERSION}
