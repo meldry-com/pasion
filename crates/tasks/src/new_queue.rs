@@ -40,6 +40,8 @@ pub struct QueueWorker {
     am_i_leader: bool,
     /// Timestamp of the last heartbeat we sent.
     last_heartbeat: DateTime<Utc>,
+    /// Monotonic time when the previous tick started.
+    last_tick_started_at: Instant,
     /// Top-level cancellation token for graceful shutdown.
     cancellation_token: CancellationToken,
     /// Ensures the token is cancelled when this struct is dropped.
@@ -91,6 +93,7 @@ impl QueueWorker {
             registration,
             am_i_leader: false,
             last_heartbeat: now,
+            last_tick_started_at: Instant::now(),
             cancellation_token,
             cancellation_guard,
             state,
@@ -171,6 +174,19 @@ impl QueueWorker {
         if self.cancellation_token.is_cancelled() {
             return Ok(());
         }
+
+        let tick_started_at = Instant::now();
+        let tick_gap = tick_started_at.duration_since(self.last_tick_started_at);
+        if tick_gap > std::time::Duration::from_secs(5) {
+            tracing::warn!(
+                worker.id = %self.registration.id,
+                tick.gap_ms = tick_gap.as_millis(),
+                running_jobs = self.tracker.running_jobs(),
+                am_i_leader = self.am_i_leader,
+                "Worker loop stalled before the next tick"
+            );
+        }
+        self.last_tick_started_at = tick_started_at;
 
         let start = Instant::now();
         self.tick().await?;
