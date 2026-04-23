@@ -3,7 +3,7 @@ use std::{sync::Arc, time::Duration};
 use anyhow::Context;
 use diesel::sql_query;
 use diesel_async::{
-    AsyncPgConnection, RunQueryDsl as _,
+    AsyncPgConnection, RunQueryDsl as _, SimpleAsyncConnection,
     pooled_connection::{
         AsyncDieselConnectionManager, PoolError as AsyncPoolError,
         deadpool::{Hook as DieselPoolHook, HookError as DieselPoolHookError, Pool as DieselPool},
@@ -29,17 +29,12 @@ use tracing::Instrument;
 use crate::handlers::passwords::PasswordManager;
 
 fn cleanup_pooled_postgres_connection() -> DieselPoolHook<AsyncPgConnection> {
-    DieselPoolHook::async_fn(|conn, _metrics| {
+    DieselPoolHook::async_fn(|conn: &mut AsyncPgConnection, _metrics| {
         Box::pin(async move {
-            sql_query("ROLLBACK")
-                .execute(conn)
-                .await
-                .map_err(|error| DieselPoolHookError::Backend(AsyncPoolError::QueryError(error)))?;
-
-            // Leader duties use session advisory locks, so clear them before the
-            // connection re-enters the pool.
-            sql_query("SELECT pg_advisory_unlock_all()")
-                .execute(conn)
+            // Pooled sessions must be reset before reuse. `ROLLBACK` clears any
+            // leaked transaction, and `pg_advisory_unlock_all()` clears leader
+            // locks that are session-scoped.
+            conn.batch_execute("ROLLBACK; SELECT pg_advisory_unlock_all();")
                 .await
                 .map_err(|error| DieselPoolHookError::Backend(AsyncPoolError::QueryError(error)))?;
 
