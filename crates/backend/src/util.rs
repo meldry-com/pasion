@@ -1,9 +1,13 @@
 use std::{sync::Arc, time::Duration};
 
 use anyhow::Context;
+use diesel::sql_query;
 use diesel_async::{
-    AsyncPgConnection,
-    pooled_connection::{AsyncDieselConnectionManager, deadpool::Pool as DieselPool},
+    AsyncPgConnection, RunQueryDsl as _,
+    pooled_connection::{
+        AsyncDieselConnectionManager, PoolError as AsyncPoolError,
+        deadpool::{Hook as DieselPoolHook, HookError as DieselPoolHookError, Pool as DieselPool},
+    },
 };
 use pasion_config::{
     AccountConfig, BrandingConfig, CaptchaConfig, DatabaseConfig, EmailConfig, EmailProviderConfig,
@@ -23,6 +27,26 @@ use tokio_util::{sync::CancellationToken, task::TaskTracker};
 use tracing::Instrument;
 
 use crate::handlers::passwords::PasswordManager;
+
+fn cleanup_pooled_postgres_connection() -> DieselPoolHook<AsyncPgConnection> {
+    DieselPoolHook::async_fn(|conn, _metrics| {
+        Box::pin(async move {
+            sql_query("ROLLBACK")
+                .execute(conn)
+                .await
+                .map_err(|error| DieselPoolHookError::Backend(AsyncPoolError::QueryError(error)))?;
+
+            // Leader duties use session advisory locks, so clear them before the
+            // connection re-enters the pool.
+            sql_query("SELECT pg_advisory_unlock_all()")
+                .execute(conn)
+                .await
+                .map_err(|error| DieselPoolHookError::Backend(AsyncPoolError::QueryError(error)))?;
+
+            Ok(())
+        })
+    })
+}
 
 /// Check whether `c` is a valid character for a username.
 fn valid_username_character(c: char) -> bool {
@@ -479,6 +503,7 @@ pub async fn diesel_pool_from_config(
         .wait_timeout(Some(config.connect_timeout))
         .create_timeout(Some(config.connect_timeout))
         .recycle_timeout(Some(std::time::Duration::from_secs(5)))
+        .pre_recycle(cleanup_pooled_postgres_connection())
         .runtime(deadpool::Runtime::Tokio1)
         .build()
         .context("could not build diesel connection pool")?;
@@ -537,7 +562,12 @@ pub async fn load_policy_factory_dynamic_data(
         .await
         .context("Failed to acquire database connection")?;
 
-    if let Some(data) = repo.policy_data().get().await? {
+    let policy_data = repo.policy_data().get().await;
+    repo.cancel()
+        .await
+        .context("Failed to close read-only policy transaction")?;
+
+    if let Some(data) = policy_data? {
         let id = data.id;
         let updated = policy_factory.set_dynamic_data(data).await?;
         if updated {
@@ -587,7 +617,14 @@ pub async fn homeserver_connection_from_config(
 
 #[cfg(test)]
 mod tests {
+    use std::num::NonZeroU32;
+
+    use diesel::{
+        QueryableByName,
+        sql_types::{BigInt, Uuid as DieselUuid},
+    };
     use rand_core::SeedableRng;
+    use uuid::Uuid;
     use zeroize::Zeroizing;
 
     use super::*;
@@ -655,5 +692,72 @@ mod tests {
         .unwrap();
         let manager = password_manager_from_config(&config).await;
         assert!(manager.is_err());
+    }
+
+    #[derive(QueryableByName)]
+    struct RowCount {
+        #[diesel(sql_type = BigInt)]
+        count: i64,
+    }
+
+    #[tokio::test]
+    async fn test_diesel_pool_recycles_connections_back_to_a_clean_session() {
+        let database_url = std::env::var("DATABASE_URL").expect("DATABASE_URL must be set for tests");
+        let config = DatabaseConfig {
+            uri: Some(database_url),
+            max_connections: NonZeroU32::new(1).unwrap(),
+            ..Default::default()
+        };
+        let pool = diesel_pool_from_config(&config).await.unwrap();
+        let worker_id = Uuid::now_v7();
+
+        {
+            let mut conn = pool.get().await.unwrap();
+            sql_query("BEGIN").execute(&mut *conn).await.unwrap();
+            sql_query(
+                r"
+                    INSERT INTO queue_workers (id, registered_at, last_seen_at)
+                    VALUES ($1, NOW(), NOW())
+                ",
+            )
+            .bind::<DieselUuid, _>(worker_id)
+            .execute(&mut *conn)
+            .await
+            .unwrap();
+        }
+
+        let mut conn = pool.get().await.unwrap();
+        let row_count = sql_query("SELECT COUNT(*) AS count FROM queue_workers WHERE id = $1")
+            .bind::<DieselUuid, _>(worker_id)
+            .get_result::<RowCount>(&mut *conn)
+            .await
+            .unwrap();
+
+        assert_eq!(row_count.count, 0);
+
+        sql_query(
+            r"
+                INSERT INTO queue_workers (id, registered_at, last_seen_at)
+                VALUES ($1, NOW(), NOW())
+            ",
+        )
+        .bind::<DieselUuid, _>(worker_id)
+        .execute(&mut *conn)
+        .await
+        .unwrap();
+
+        let row_count = sql_query("SELECT COUNT(*) AS count FROM queue_workers WHERE id = $1")
+            .bind::<DieselUuid, _>(worker_id)
+            .get_result::<RowCount>(&mut *conn)
+            .await
+            .unwrap();
+
+        assert_eq!(row_count.count, 1);
+
+        sql_query("DELETE FROM queue_workers WHERE id = $1")
+            .bind::<DieselUuid, _>(worker_id)
+            .execute(&mut *conn)
+            .await
+            .unwrap();
     }
 }
