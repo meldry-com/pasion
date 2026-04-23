@@ -1,9 +1,8 @@
 use std::{sync::Arc, time::Duration};
 
 use anyhow::Context;
-use diesel::sql_query;
 use diesel_async::{
-    AsyncPgConnection, RunQueryDsl as _, SimpleAsyncConnection,
+    AsyncPgConnection, SimpleAsyncConnection,
     pooled_connection::{
         AsyncDieselConnectionManager, PoolError as AsyncPoolError,
         deadpool::{Hook as DieselPoolHook, HookError as DieselPoolHookError, Pool as DieselPool},
@@ -615,9 +614,11 @@ mod tests {
     use std::num::NonZeroU32;
 
     use diesel::{
+        sql_query,
         QueryableByName,
         sql_types::{BigInt, Uuid as DieselUuid},
     };
+    use diesel_async::RunQueryDsl as _;
     use rand_core::SeedableRng;
     use uuid::Uuid;
     use zeroize::Zeroizing;
@@ -704,55 +705,57 @@ mod tests {
             ..Default::default()
         };
         let pool = diesel_pool_from_config(&config).await.unwrap();
-        let worker_id = Uuid::now_v7();
+        let row_id = Uuid::now_v7();
+        let table_name = format!("codex_pool_cleanup_test_{}", Uuid::now_v7().simple());
 
         {
             let mut conn = pool.get().await.unwrap();
-            sql_query("BEGIN").execute(&mut *conn).await.unwrap();
-            sql_query(
+            let drop_table_sql = format!("DROP TABLE IF EXISTS {table_name}");
+            sql_query(&drop_table_sql).execute(&mut *conn).await.unwrap();
+            let create_table_sql = format!(
                 r"
-                    INSERT INTO queue_workers (id, registered_at, last_seen_at)
-                    VALUES ($1, NOW(), NOW())
-                ",
-            )
-            .bind::<DieselUuid, _>(worker_id)
-            .execute(&mut *conn)
-            .await
-            .unwrap();
+                    CREATE TABLE IF NOT EXISTS {table_name} (
+                        id UUID PRIMARY KEY
+                    )
+                "
+            );
+            sql_query(&create_table_sql).execute(&mut *conn).await.unwrap();
+
+            sql_query("BEGIN").execute(&mut *conn).await.unwrap();
+            let insert_sql = format!("INSERT INTO {table_name} (id) VALUES ($1)");
+            sql_query(&insert_sql)
+                .bind::<DieselUuid, _>(row_id)
+                .execute(&mut *conn)
+                .await
+                .unwrap();
         }
 
         let mut conn = pool.get().await.unwrap();
-        let row_count = sql_query("SELECT COUNT(*) AS count FROM queue_workers WHERE id = $1")
-            .bind::<DieselUuid, _>(worker_id)
+        let select_sql = format!("SELECT COUNT(*) AS count FROM {table_name} WHERE id = $1");
+        let row_count = sql_query(&select_sql)
+            .bind::<DieselUuid, _>(row_id)
             .get_result::<RowCount>(&mut *conn)
             .await
             .unwrap();
 
         assert_eq!(row_count.count, 0);
 
-        sql_query(
-            r"
-                INSERT INTO queue_workers (id, registered_at, last_seen_at)
-                VALUES ($1, NOW(), NOW())
-            ",
-        )
-        .bind::<DieselUuid, _>(worker_id)
-        .execute(&mut *conn)
-        .await
-        .unwrap();
+        let insert_sql = format!("INSERT INTO {table_name} (id) VALUES ($1)");
+        sql_query(&insert_sql)
+            .bind::<DieselUuid, _>(row_id)
+            .execute(&mut *conn)
+            .await
+            .unwrap();
 
-        let row_count = sql_query("SELECT COUNT(*) AS count FROM queue_workers WHERE id = $1")
-            .bind::<DieselUuid, _>(worker_id)
+        let row_count = sql_query(&select_sql)
+            .bind::<DieselUuid, _>(row_id)
             .get_result::<RowCount>(&mut *conn)
             .await
             .unwrap();
 
         assert_eq!(row_count.count, 1);
 
-        sql_query("DELETE FROM queue_workers WHERE id = $1")
-            .bind::<DieselUuid, _>(worker_id)
-            .execute(&mut *conn)
-            .await
-            .unwrap();
+        let drop_sql = format!("DROP TABLE IF EXISTS {table_name}");
+        sql_query(&drop_sql).execute(&mut *conn).await.unwrap();
     }
 }
