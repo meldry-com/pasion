@@ -66,9 +66,25 @@ services:
     command: server -c /config.yaml
     volumes:
       - ./config.yaml:/config.yaml:ro
+      - ./keys:/keys:ro
     ports:
       - "8080:8080"
     depends_on:
       postgres:
         condition: service_healthy
 ```
+
+The container image runs as the distroless non-root user (`uid=65532`,
+`gid=65532`).
+Any path referenced by the configuration file must therefore be readable by that
+user, not just present in the container.
+This is especially important for file-backed secrets such as
+`secrets.keys[*].key_file`, `secrets.keys[*].password_file`,
+`secrets.keys_dir`, and `secrets.encryption_file`.
+
+For example, if the config references `/keys/pasion-signing-key.pem`, the mounted
+file must be readable by the container process.
+A host file with permissions like `0600 root:root` will fail at startup with
+`Permission denied (os error 13)`.
+Either make the file world-readable for the container mount (for example
+`chmod 0444`) or change ownership/ACLs so `uid=65532` can read it.
