@@ -21,6 +21,25 @@ Pasion is a comprehensive user operations platform built for Palpo. While it imp
 - **Observability** — OpenTelemetry tracing and Prometheus metrics export
 - **Internationalization** — Multi-language UI with configurable templates
 
+## Credential rotation policy
+
+Every secret-bearing field in `config.dev.yaml`, sample configs, and the
+documentation is a **placeholder** that must be replaced before any
+non-local use. If a real secret slipped into a commit, container, or issue
+attachment, treat it as compromised and rotate it:
+
+- Encryption / signing keys (`secrets.encryption`, `secrets.keys[]`) →
+  regenerate with `openssl rand -hex 32` and `openssl genpkey` /
+  `openssl ecparam`. Reference them via `key_file:` rather than inline
+  `key:` blocks for production.
+- SMTP credentials (`email.provider.password`) → revoke and reissue (for
+  Gmail App Passwords see
+  <https://myaccount.google.com/apppasswords>).
+- Matrix shared secret (`matrix.secret`) → `openssl rand -base64 24` and
+  update the homeserver to match.
+- Upstream OAuth client secrets (`upstream_oauth2.providers[].client_secret`)
+  → regenerate at the provider console.
+
 ## Quick Start
 
 ### 1. Install
@@ -43,8 +62,10 @@ docker pull ghcr.io/taidge/pasion:latest
 ```bash
 git clone https://github.com/taidge/pasion.git
 cd pasion
-cd front && npm ci && npm run build && cd ..
-cargo build --release
+# Build the WebAssembly frontend with the Dioxus CLI (cargo install dioxus-cli@0.7.5).
+dx build -p pasion-frontend --release
+# Then build the server binary.
+cargo build --release --bin pasion --no-default-features --features docker,cedar
 ```
 
 ### 2. Prepare Database

@@ -346,7 +346,12 @@ pub async fn post(req: &mut Request, depot: &mut Depot, res: &mut Response) {
             res.render(Json(reply));
         }
         Err(e) => {
-            tracing::error!(error = %e, error_debug = ?e, "OAuth2 token endpoint failed");
+            // Only the Display form goes into logs — the Debug form (`?e`)
+            // can carry full request payloads / authorization codes /
+            // refresh tokens through `RouteError` variants that wrap inner
+            // errors, and shipping those to disk or to a remote log
+            // collector is a credential leak.
+            tracing::error!(error = %e, "OAuth2 token endpoint failed");
             e.render(res);
         }
     }

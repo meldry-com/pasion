@@ -248,15 +248,32 @@ async fn handle_get(req: &mut Request, depot: &Depot) -> Result<(Response, Cooki
                     )?);
                 }
 
-                // 32 random alphanumeric characters, about 190bit of entropy
+                // 32 random alphanumeric characters, about 190 bits of entropy.
+                // Use rejection sampling to avoid the modulo bias of
+                // `b % CHARSET.len()` — for a 62-character alphabet, bytes
+                // 248..=255 would have mapped to the first 8 characters at
+                // slightly higher probability. Only bytes < `LIMIT` are kept
+                // (the largest multiple of 62 ≤ 256), which yields a uniform
+                // distribution at the cost of ~3% extra random draws.
                 let code: String = {
                     const CHARSET: &[u8] =
                         b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789";
-                    let mut buf = [0u8; 32];
-                    rng.fill_bytes(&mut buf);
-                    buf.iter()
-                        .map(|b| CHARSET[(*b as usize) % CHARSET.len()] as char)
-                        .collect()
+                    const N: u8 = CHARSET.len() as u8; // 62
+                    const LIMIT: u8 = 256u16.saturating_sub((256 % N as u16) as u16) as u8; // 248
+                    let mut out = String::with_capacity(32);
+                    let mut buf = [0u8; 64];
+                    while out.len() < 32 {
+                        rng.fill_bytes(&mut buf);
+                        for &b in &buf {
+                            if b < LIMIT {
+                                out.push(CHARSET[(b % N) as usize] as char);
+                                if out.len() == 32 {
+                                    break;
+                                }
+                            }
+                        }
+                    }
+                    out
                 };
 
                 let pkce = params.pkce.map(|p| Pkce {

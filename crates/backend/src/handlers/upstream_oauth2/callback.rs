@@ -175,28 +175,33 @@ pub async fn handler(
     let cookie_jar = depot.cookie_jar(req)?;
     let method = req.method().clone();
 
-    // For POST requests, parse from form body; for GET requests, parse from query
+    // For POST requests, parse from form body; for GET requests, parse from
+    // query. Treat *any* parse failure (malformed body, invalid percent
+    // encoding, …) as a hard error rather than synthesising an empty
+    // `Params`. The previous fallback path silently dropped the `state`
+    // parameter, defeating CSRF / session-binding checks downstream.
     let params: Params = if method == http::Method::POST {
-        req.parse_form().await.unwrap_or_else(|_| Params {
-            state: None,
-            did_repost_to_itself: false,
-            code: None,
-            error: None,
-            error_description: None,
-            error_uri: None,
-            extra_callback_parameters: None,
-        })
+        req.parse_form()
+            .await
+            .map_err(|e| {
+                tracing::warn!(error = %e, "failed to parse upstream OAuth callback form body");
+                RouteError::MissingFormParams
+            })?
     } else {
-        req.parse_queries().unwrap_or_else(|_| Params {
-            state: None,
-            did_repost_to_itself: false,
-            code: None,
-            error: None,
-            error_description: None,
-            error_uri: None,
-            extra_callback_parameters: None,
-        })
+        req.parse_queries().map_err(|e| {
+            tracing::warn!(error = %e, "failed to parse upstream OAuth callback query string");
+            RouteError::MissingQueryParams
+        })?
     };
+
+    // RFC 6749 §10.12 requires the relying party to reject a callback that
+    // is missing `state` (or whose `state` cannot be matched to a session).
+    // Without this check, an attacker could begin an authorization flow on
+    // their own account and trick the victim into completing it, federating
+    // the attacker's identity into the victim's pasion account.
+    if params.state.as_deref().map_or(true, str::is_empty) {
+        return Err(RouteError::MissingState);
+    }
 
     let provider = repo
         .upstream_oauth_provider()
