@@ -416,9 +416,19 @@ async fn handle_post(
         .as_ref()
         .ok_or(RouteError::ClientNotAllowed(client.id))?;
 
+    let token_endpoint = url_builder.oauth_token_endpoint();
+    let issuer = url_builder.oidc_issuer();
     client_authorization
         .credentials
-        .verify(http_client, encrypter, method, &client)
+        .verify(
+            http_client,
+            encrypter,
+            method,
+            &client,
+            &token_endpoint,
+            &issuer,
+            clock.now(),
+        )
         .await
         .map_err(|err| {
             // Classify the error differently, depending on whether it's an 'internal'

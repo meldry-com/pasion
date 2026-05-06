@@ -93,6 +93,10 @@ fn otel_url_scheme(req: &Request) -> &'static str {
         })
 }
 
+fn redacted_query_for_tracing(query: &str) -> Option<&'static str> {
+    (!query.is_empty()).then_some("<redacted>")
+}
+
 /// Middleware for logging responses
 #[handler]
 pub async fn log_response_middleware(
@@ -164,8 +168,10 @@ pub async fn tracing_middleware(
         { USER_AGENT_ORIGINAL } = tracing::field::Empty,
     );
 
-    if let Some(ref q) = query {
-        span.record(URL_QUERY, q.as_str());
+    if let Some(ref q) = query
+        && let Some(redacted) = redacted_query_for_tracing(q)
+    {
+        span.record(URL_QUERY, redacted);
     }
 
     if let Some(ref ua) = user_agent {
@@ -997,7 +1003,10 @@ mod tests {
     use pasion_config::HttpBindConfig;
     use pasion_data::UrlBuilder;
 
-    use super::{absolute_redirect_location, build_listeners, relative_redirect_location};
+    use super::{
+        absolute_redirect_location, build_listeners, redacted_query_for_tracing,
+        relative_redirect_location,
+    };
 
     #[test]
     fn bind_error_mentions_requested_address() {
@@ -1039,5 +1048,14 @@ mod tests {
         let location = absolute_redirect_location(Some(&url_builder), "/password/change");
 
         assert_eq!(location, "https://example.com/mas/password/change");
+    }
+
+    #[test]
+    fn tracing_query_is_redacted() {
+        assert_eq!(
+            redacted_query_for_tracing("code=abc&state=def"),
+            Some("<redacted>")
+        );
+        assert_eq!(redacted_query_for_tracing(""), None);
     }
 }

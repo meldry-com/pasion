@@ -4,7 +4,7 @@ use oauth2_types::{
     errors::{ClientError, ClientErrorCode},
     requests::RevocationRequest,
 };
-use pasion_data::{BoxClock, BoxRepository, BoxRepositoryFactory, BoxRng, SystemClock};
+use pasion_data::{BoxClock, BoxRepository, BoxRepositoryFactory, BoxRng, SystemClock, UrlBuilder};
 use pasion_keystore::Encrypter;
 use pasion_matrix::HomeserverAdmin;
 use rand_chacha::ChaChaRng;
@@ -136,6 +136,9 @@ async fn handle_post(req: &mut Request, depot: &mut Depot) -> Result<(), RouteEr
     let repo_factory = depot
         .get::<BoxRepositoryFactory>("box_repository_factory")
         .expect("BoxRepositoryFactory not found in depot");
+    let url_builder = depot
+        .get::<UrlBuilder>("url_builder")
+        .expect("UrlBuilder not found in depot");
     let activity_tracker = crate::handlers::account::extract_bound_activity_tracker(req, depot);
 
     let clock: BoxClock = Box::new(SystemClock::default());
@@ -172,9 +175,19 @@ async fn handle_post(req: &mut Request, depot: &mut Depot) -> Result<(), RouteEr
             .as_ref()
             .ok_or(RouteError::ClientNotAllowed)?;
 
+        let token_endpoint = url_builder.oauth_token_endpoint();
+        let issuer = url_builder.oidc_issuer();
         client_authorization
             .credentials
-            .verify(http_client, encrypter, method, &client)
+            .verify(
+                http_client,
+                encrypter,
+                method,
+                &client,
+                &token_endpoint,
+                &issuer,
+                clock.now(),
+            )
             .await
             .map_err(|err| {
                 if err.is_internal() {
