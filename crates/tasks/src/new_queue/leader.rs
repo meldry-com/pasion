@@ -2,7 +2,10 @@ use chrono::Duration;
 use cron::Schedule;
 use diesel::{sql_query, sql_types::Bool};
 use diesel_async::RunQueryDsl;
-use pasion_data::{DatabaseError, PgRepository, RepositoryAccess, queue::InsertableJob};
+use pasion_data::{
+    DatabaseError, PgRepository, RepositoryAccess, advisory_lock::advisory_lock_key,
+    queue::InsertableJob,
+};
 
 use super::{QueueRunnerError, shared::MAX_ATTEMPTS};
 use crate::State;
@@ -12,12 +15,6 @@ use crate::State;
 struct AdvisoryLockResult {
     #[diesel(sql_type = Bool)]
     acquired: bool,
-}
-
-/// Derive a stable i64 key from a human-readable lock name using CRC-32.
-fn advisory_lock_key(name: &str) -> i64 {
-    const CRC_IEEE: crc::Crc<u32> = crc::Crc::<u32>::new(&crc::CRC_32_ISO_HDLC);
-    i64::from(CRC_IEEE.checksum(name.as_bytes()))
 }
 
 /// A cron-like schedule definition that the leader evaluates every tick.

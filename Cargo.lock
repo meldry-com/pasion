@@ -5441,7 +5441,6 @@ dependencies = [
  "chrono",
  "cookie",
  "cookie_store",
- "crc",
  "data-encoding",
  "deadpool 0.13.0",
  "der",
@@ -5781,6 +5780,7 @@ dependencies = [
  "tokio",
  "tracing",
  "url",
+ "uuid",
  "wiremock",
 ]
 
@@ -5810,7 +5810,6 @@ dependencies = [
  "anyhow",
  "async-trait",
  "chrono",
- "crc",
  "cron",
  "diesel",
  "diesel-async",

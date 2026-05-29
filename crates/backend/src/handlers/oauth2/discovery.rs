@@ -12,8 +12,14 @@ use pasion_jose::jwa::SUPPORTED_SIGNING_ALGORITHMS;
 use pasion_keystore::Keystore;
 use salvo::prelude::*;
 use serde::Serialize;
+use std::sync::OnceLock;
 
-#[derive(Debug, Serialize)]
+/// Cached, pre-built discovery document. The metadata only depends on
+/// process-stable inputs (`UrlBuilder`, `Keystore`, `SiteConfig`), so we build
+/// it once on the first request and clone the cached value thereafter.
+static DISCOVERY: OnceLock<DiscoveryResponse> = OnceLock::new();
+
+#[derive(Debug, Clone, Serialize)]
 struct DiscoveryResponse {
     #[serde(flatten)]
     standard: ProviderMetadata,
@@ -33,6 +39,10 @@ pub async fn get(depot: &Depot) -> Json<DiscoveryResponse> {
 }
 
 fn get_inner(depot: &Depot) -> Json<DiscoveryResponse> {
+    Json(DISCOVERY.get_or_init(|| build_discovery(depot)).clone())
+}
+
+fn build_discovery(depot: &Depot) -> DiscoveryResponse {
     let key_store = depot
         .get::<Keystore>("keystore")
         .expect("Keystore not found in depot");
@@ -178,7 +188,7 @@ fn get_inner(depot: &Depot) -> Json<DiscoveryResponse> {
         ..ProviderMetadata::default()
     };
 
-    Json(DiscoveryResponse {
+    DiscoveryResponse {
         standard,
         api_endpoint: format!("{}/api/v1", url_builder.prefix().unwrap_or_default()),
         account_management_uri: url_builder.account_management_uri(),
@@ -191,7 +201,7 @@ fn get_inner(depot: &Depot) -> Json<DiscoveryResponse> {
             "org.matrix.session_end".to_owned(),
             "org.matrix.cross_signing_reset".to_owned(),
         ],
-    })
+    }
 }
 
 #[cfg(test)]

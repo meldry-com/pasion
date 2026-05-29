@@ -369,8 +369,10 @@ pub(super) async fn handle_register_user(
     let matrix_config = MatrixConfig::extract(figment).map_err(anyhow::Error::from_boxed)?;
 
     let password_manager = password_manager_from_config(&password_config).await?;
-    let (homeserver, _registry) =
-        homeserver_connection_from_config(&matrix_config, http_client).await?;
+    let homeserver = homeserver_connection_from_config(&matrix_config, http_client)
+        .await?
+        .primary_homeserver()
+        .context("matrix connector registry has no primary provider")?;
     let pool = diesel_pool_from_config(&database_config).await?;
     let conn = pool
         .get()

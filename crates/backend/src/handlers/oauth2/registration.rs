@@ -1,4 +1,4 @@
-use std::sync::{Arc, LazyLock};
+use std::sync::LazyLock;
 
 use oauth2_types::{
     errors::{ClientError, ClientErrorCode},
@@ -14,7 +14,7 @@ use pasion_data::{
 };
 use pasion_iana::oauth::OAuthClientAuthenticationMethod;
 use pasion_keystore::Encrypter;
-use pasion_policy::{EvaluationResult, Policy, PolicyFactory};
+use pasion_policy::{EvaluationResult, Policy};
 use psl::Psl;
 use rand::distr::{Alphanumeric, SampleString};
 use rand_chacha::ChaChaRng;
@@ -26,7 +26,7 @@ use thiserror::Error;
 use tracing::info;
 use url::Url;
 
-use crate::handlers::METER;
+use crate::handlers::{METER, common::DepotExt};
 
 static REGISTRATION_COUNTER: LazyLock<Counter<u64>> = LazyLock::new(|| {
     METER
@@ -208,9 +208,6 @@ async fn handle_post(req: &mut Request, depot: &Depot) -> Result<RouteResponse, 
     let repo_factory = depot
         .get::<BoxRepositoryFactory>("box_repository_factory")
         .expect("BoxRepositoryFactory not found in depot");
-    let policy_factory = depot
-        .get::<Arc<PolicyFactory>>("policy_factory")
-        .expect("PolicyFactory not found in depot");
     let activity_tracker = crate::handlers::account::extract_bound_activity_tracker(req, depot);
 
     let clock: BoxClock = Box::new(SystemClock::default());
@@ -218,8 +215,8 @@ async fn handle_post(req: &mut Request, depot: &Depot) -> Result<RouteResponse, 
         Box::new(ChaChaRng::from_rng(rand_core::OsRng).expect("Failed to seed rng"));
 
     let mut repo: BoxRepository = repo_factory.create().await?;
-    let mut policy: Policy = policy_factory
-        .instantiate()
+    let mut policy: Policy = depot
+        .policy()
         .await
         .map_err(|e| RouteError::Internal(Box::new(e)))?;
 

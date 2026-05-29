@@ -2,66 +2,137 @@
 
 use std::collections::{BTreeMap, BTreeSet};
 
-use diesel::{sql_query, sql_types::Bool};
+use diesel::sql_query;
 use diesel_async::{
     AsyncPgConnection, RunQueryDsl, pooled_connection::deadpool::Object as PooledConnection,
 };
 use pasion_config::{ClientsConfig, UpstreamOAuth2Config};
 use pasion_data::{
     Clock, Pagination, PgRepository, RepositoryAccess, UpstreamOAuthProviderSource,
+    advisory_lock::advisory_lock_key,
     upstream_oauth2::{UpstreamOAuthProviderFilter, UpstreamOAuthProviderParams},
 };
 use pasion_keystore::Encrypter;
 use tracing::{error, info, info_span, warn};
 
-/// Result of a `pg_try_advisory_lock` query
-#[derive(diesel::QueryableByName)]
-#[allow(dead_code)]
-struct AdvisoryLockResult {
-    #[diesel(sql_type = Bool)]
-    acquired: bool,
+/// Generates a free conversion function mapping a `pasion_config` enum to the
+/// corresponding `pasion_data` enum.
+///
+/// `From` impls cannot live here because of the orphan rule (neither type is
+/// local to `pasion-backend`, and `pasion-data` does not depend on
+/// `pasion-config`), so the conversions are kept as consolidated free
+/// functions instead. The match is left exhaustive on purpose: adding a
+/// variant to either enum must force this mapping to be updated rather than
+/// being silently mismapped by a catch-all arm.
+macro_rules! map_enum {
+    (
+        $(#[$meta:meta])*
+        fn $name:ident($from:path => $to:path) {
+            $($variant:ident),+ $(,)?
+        }
+    ) => {
+        $(#[$meta])*
+        fn $name(config: $from) -> $to {
+            use $from as From;
+            use $to as To;
+            match config {
+                $(From::$variant => To::$variant,)+
+            }
+        }
+    };
 }
 
-/// Compute a stable advisory lock key from a string
-fn advisory_lock_key(name: &str) -> i64 {
-    const CRC_IEEE: crc::Crc<u32> = crc::Crc::<u32>::new(&crc::CRC_32_ISO_HDLC);
-    i64::from(CRC_IEEE.checksum(name.as_bytes()))
-}
-
-fn map_import_action(
-    config: pasion_config::UpstreamOAuth2ImportAction,
-) -> pasion_data::UpstreamOAuthProviderImportAction {
-    match config {
-        pasion_config::UpstreamOAuth2ImportAction::Ignore => {
-            pasion_data::UpstreamOAuthProviderImportAction::Ignore
-        }
-        pasion_config::UpstreamOAuth2ImportAction::Suggest => {
-            pasion_data::UpstreamOAuthProviderImportAction::Suggest
-        }
-        pasion_config::UpstreamOAuth2ImportAction::Force => {
-            pasion_data::UpstreamOAuthProviderImportAction::Force
-        }
-        pasion_config::UpstreamOAuth2ImportAction::Require => {
-            pasion_data::UpstreamOAuthProviderImportAction::Require
-        }
+map_enum! {
+    fn map_import_action(
+        pasion_config::UpstreamOAuth2ImportAction
+            => pasion_data::UpstreamOAuthProviderImportAction
+    ) {
+        Ignore,
+        Suggest,
+        Force,
+        Require,
     }
 }
 
-fn map_import_on_conflict(
-    config: pasion_config::UpstreamOAuth2OnConflict,
-) -> pasion_data::UpstreamOAuthProviderOnConflict {
+map_enum! {
+    fn map_import_on_conflict(
+        pasion_config::UpstreamOAuth2OnConflict
+            => pasion_data::UpstreamOAuthProviderOnConflict
+    ) {
+        Add,
+        Replace,
+        Set,
+        Fail,
+    }
+}
+
+map_enum! {
+    fn map_discovery_mode(
+        pasion_config::UpstreamOAuth2DiscoveryMode
+            => pasion_data::UpstreamOAuthProviderDiscoveryMode
+    ) {
+        Oidc,
+        Insecure,
+        Disabled,
+    }
+}
+
+map_enum! {
+    fn map_token_endpoint_auth_method(
+        pasion_config::UpstreamOAuth2TokenAuthMethod
+            => pasion_data::UpstreamOAuthProviderTokenAuthMethod
+    ) {
+        None,
+        ClientSecretBasic,
+        ClientSecretPost,
+        ClientSecretJwt,
+        PrivateKeyJwt,
+        SignInWithApple,
+        QQConnect,
+        Feishu,
+        Lark,
+        DingTalk,
+        WeChat,
+        WeCom,
+    }
+}
+
+map_enum! {
+    fn map_response_mode(
+        pasion_config::UpstreamOAuth2ResponseMode
+            => pasion_data::UpstreamOAuthProviderResponseMode
+    ) {
+        Query,
+        FormPost,
+    }
+}
+
+map_enum! {
+    fn map_on_backchannel_logout(
+        pasion_config::UpstreamOAuth2OnBackchannelLogout
+            => pasion_data::UpstreamOAuthProviderOnBackchannelLogout
+    ) {
+        DoNothing,
+        LogoutBrowserOnly,
+        LogoutAll,
+    }
+}
+
+/// The PKCE enums are not structurally identical (the variant names differ),
+/// so this mapping is written out explicitly. The match is exhaustive on
+/// purpose so that adding a config variant forces this to be revisited.
+fn map_pkce_mode(
+    config: pasion_config::UpstreamOAuth2PkceMethod,
+) -> pasion_data::UpstreamOAuthProviderPkceMode {
     match config {
-        pasion_config::UpstreamOAuth2OnConflict::Add => {
-            pasion_data::UpstreamOAuthProviderOnConflict::Add
+        pasion_config::UpstreamOAuth2PkceMethod::Auto => {
+            pasion_data::UpstreamOAuthProviderPkceMode::Auto
         }
-        pasion_config::UpstreamOAuth2OnConflict::Replace => {
-            pasion_data::UpstreamOAuthProviderOnConflict::Replace
+        pasion_config::UpstreamOAuth2PkceMethod::Always => {
+            pasion_data::UpstreamOAuthProviderPkceMode::S256
         }
-        pasion_config::UpstreamOAuth2OnConflict::Set => {
-            pasion_data::UpstreamOAuthProviderOnConflict::Set
-        }
-        pasion_config::UpstreamOAuth2OnConflict::Fail => {
-            pasion_data::UpstreamOAuthProviderOnConflict::Fail
+        pasion_config::UpstreamOAuth2PkceMethod::Never => {
+            pasion_data::UpstreamOAuthProviderPkceMode::Disabled
         }
     }
 }
@@ -111,12 +182,10 @@ pub async fn config_sync(
     tracing::info!("Acquiring configuration lock");
     let lock_key = advisory_lock_key("Pasion config sync");
 
-    // pg_advisory_lock blocks until the lock is acquired (returns void/true)
-    let _: AdvisoryLockResult = sql_query(format!(
-        "SELECT pg_advisory_lock({lock_key}) IS NOT NULL AS acquired"
-    ))
-    .get_result(&mut *conn)
-    .await?;
+    // pg_advisory_lock blocks until the lock is acquired (returns void)
+    sql_query(format!("SELECT pg_advisory_lock({lock_key})"))
+        .execute(&mut *conn)
+        .await?;
 
     // Create a repository from the locked connection
     let mut repo = PgRepository::new(conn);
@@ -246,67 +315,12 @@ pub async fn config_sync(
                 None
             };
 
-            let discovery_mode = match provider.discovery_mode {
-                pasion_config::UpstreamOAuth2DiscoveryMode::Oidc => {
-                    pasion_data::UpstreamOAuthProviderDiscoveryMode::Oidc
-                }
-                pasion_config::UpstreamOAuth2DiscoveryMode::Insecure => {
-                    pasion_data::UpstreamOAuthProviderDiscoveryMode::Insecure
-                }
-                pasion_config::UpstreamOAuth2DiscoveryMode::Disabled => {
-                    pasion_data::UpstreamOAuthProviderDiscoveryMode::Disabled
-                }
-            };
+            let discovery_mode = map_discovery_mode(provider.discovery_mode);
 
-            let token_endpoint_auth_method = match provider.token_endpoint_auth_method {
-                pasion_config::UpstreamOAuth2TokenAuthMethod::None => {
-                    pasion_data::UpstreamOAuthProviderTokenAuthMethod::None
-                }
-                pasion_config::UpstreamOAuth2TokenAuthMethod::ClientSecretBasic => {
-                    pasion_data::UpstreamOAuthProviderTokenAuthMethod::ClientSecretBasic
-                }
-                pasion_config::UpstreamOAuth2TokenAuthMethod::ClientSecretPost => {
-                    pasion_data::UpstreamOAuthProviderTokenAuthMethod::ClientSecretPost
-                }
-                pasion_config::UpstreamOAuth2TokenAuthMethod::ClientSecretJwt => {
-                    pasion_data::UpstreamOAuthProviderTokenAuthMethod::ClientSecretJwt
-                }
-                pasion_config::UpstreamOAuth2TokenAuthMethod::PrivateKeyJwt => {
-                    pasion_data::UpstreamOAuthProviderTokenAuthMethod::PrivateKeyJwt
-                }
-                pasion_config::UpstreamOAuth2TokenAuthMethod::SignInWithApple => {
-                    pasion_data::UpstreamOAuthProviderTokenAuthMethod::SignInWithApple
-                }
-                pasion_config::UpstreamOAuth2TokenAuthMethod::QQConnect => {
-                    pasion_data::UpstreamOAuthProviderTokenAuthMethod::QQConnect
-                }
-                pasion_config::UpstreamOAuth2TokenAuthMethod::Feishu => {
-                    pasion_data::UpstreamOAuthProviderTokenAuthMethod::Feishu
-                }
-                pasion_config::UpstreamOAuth2TokenAuthMethod::Lark => {
-                    pasion_data::UpstreamOAuthProviderTokenAuthMethod::Lark
-                }
-                pasion_config::UpstreamOAuth2TokenAuthMethod::DingTalk => {
-                    pasion_data::UpstreamOAuthProviderTokenAuthMethod::DingTalk
-                }
-                pasion_config::UpstreamOAuth2TokenAuthMethod::WeChat => {
-                    pasion_data::UpstreamOAuthProviderTokenAuthMethod::WeChat
-                }
-                pasion_config::UpstreamOAuth2TokenAuthMethod::WeCom => {
-                    pasion_data::UpstreamOAuthProviderTokenAuthMethod::WeCom
-                }
-            };
+            let token_endpoint_auth_method =
+                map_token_endpoint_auth_method(provider.token_endpoint_auth_method);
 
-            let response_mode = provider
-                .response_mode
-                .map(|response_mode| match response_mode {
-                    pasion_config::UpstreamOAuth2ResponseMode::Query => {
-                        pasion_data::UpstreamOAuthProviderResponseMode::Query
-                    }
-                    pasion_config::UpstreamOAuth2ResponseMode::FormPost => {
-                        pasion_data::UpstreamOAuthProviderResponseMode::FormPost
-                    }
-                });
+            let response_mode = provider.response_mode.map(map_response_mode);
 
             if discovery_mode.is_disabled() {
                 if provider.authorization_endpoint.is_none() {
@@ -322,29 +336,9 @@ pub async fn config_sync(
                 }
             }
 
-            let pkce_mode = match provider.pkce_method {
-                pasion_config::UpstreamOAuth2PkceMethod::Auto => {
-                    pasion_data::UpstreamOAuthProviderPkceMode::Auto
-                }
-                pasion_config::UpstreamOAuth2PkceMethod::Always => {
-                    pasion_data::UpstreamOAuthProviderPkceMode::S256
-                }
-                pasion_config::UpstreamOAuth2PkceMethod::Never => {
-                    pasion_data::UpstreamOAuthProviderPkceMode::Disabled
-                }
-            };
+            let pkce_mode = map_pkce_mode(provider.pkce_method);
 
-            let on_backchannel_logout = match provider.on_backchannel_logout {
-                pasion_config::UpstreamOAuth2OnBackchannelLogout::DoNothing => {
-                    pasion_data::UpstreamOAuthProviderOnBackchannelLogout::DoNothing
-                }
-                pasion_config::UpstreamOAuth2OnBackchannelLogout::LogoutBrowserOnly => {
-                    pasion_data::UpstreamOAuthProviderOnBackchannelLogout::LogoutBrowserOnly
-                }
-                pasion_config::UpstreamOAuth2OnBackchannelLogout::LogoutAll => {
-                    pasion_data::UpstreamOAuthProviderOnBackchannelLogout::LogoutAll
-                }
-            };
+            let on_backchannel_logout = map_on_backchannel_logout(provider.on_backchannel_logout);
 
             // If a row with this id already exists but is `manual`, refuse to
             // clobber it. The admin and the operator have to reconcile by

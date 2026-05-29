@@ -37,6 +37,8 @@ diesel::define_sql_function! {
 
 /// Unified contact points and external identity bindings for user accounts.
 pub mod account;
+/// PostgreSQL advisory lock helpers.
+pub mod advisory_lock;
 /// App session repositories and PostgreSQL implementations.
 pub mod app_session;
 /// Admin operation logs and account security event models.
