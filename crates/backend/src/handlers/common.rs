@@ -15,7 +15,7 @@ use pasion_data::{
     Session, SiteConfig, SystemClock, UrlBuilder, User,
 };
 use pasion_matrix::HomeserverAdmin;
-use pasion_policy::PolicyFactory;
+use pasion_policy::{Policy, PolicyFactory};
 use rand_chacha::ChaChaRng;
 use rand_core::SeedableRng;
 use salvo::prelude::*;
@@ -234,6 +234,16 @@ pub trait DepotExt {
     fn matrix_shared_secret(&self) -> Result<String, RouteError>;
     fn homeserver(&self) -> Result<Arc<dyn HomeserverAdmin>, RouteError>;
     fn policy_factory(&self) -> Result<Arc<PolicyFactory>, RouteError>;
+    /// Convenience shortcut: fetch the [`PolicyFactory`] from the depot and
+    /// instantiate a [`Policy`]. Replaces the repeated
+    /// `get policy_factory -> instantiate` boilerplate across handlers.
+    ///
+    /// Returns [`pasion_policy::InstantiateError`] so the `?` operator composes
+    /// in any handler whose local `RouteError` implements
+    /// `From<InstantiateError>` (a depot miss is reported as a runtime error).
+    fn policy(
+        &self,
+    ) -> impl std::future::Future<Output = Result<Policy, pasion_policy::InstantiateError>> + Send;
     fn password_manager(&self) -> Result<PasswordManager, RouteError>;
     fn url_builder(&self) -> Result<UrlBuilder, RouteError>;
     fn limiter(&self) -> Result<Limiter, RouteError>;
@@ -291,6 +301,15 @@ impl DepotExt for Depot {
 
     fn policy_factory(&self) -> Result<Arc<PolicyFactory>, RouteError> {
         depot_get(self, "policy_factory")
+    }
+
+    async fn policy(&self) -> Result<Policy, pasion_policy::InstantiateError> {
+        let factory = self.get::<Arc<PolicyFactory>>("policy_factory").map_err(|_| {
+            pasion_policy::InstantiateError::Runtime(anyhow::anyhow!(
+                "PolicyFactory not found in depot"
+            ))
+        })?;
+        factory.instantiate().await
     }
 
     fn password_manager(&self) -> Result<PasswordManager, RouteError> {

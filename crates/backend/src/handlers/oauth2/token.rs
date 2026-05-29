@@ -23,7 +23,7 @@ use super::token_service::{
     RefreshTokenExchangeError,
 };
 use crate::{
-    handlers::METER,
+    handlers::{METER, common::DepotExt},
     salvo_utils::client_authorization::{ClientAuthorization, CredentialsVerificationError},
 };
 
@@ -389,17 +389,14 @@ async fn handle_post(
         .get::<BoxRepositoryFactory>("box_repository_factory")
         .expect("BoxRepositoryFactory not found in depot");
     let activity_tracker = crate::handlers::account::extract_bound_activity_tracker(req, depot);
-    let policy_factory = depot
-        .get::<Arc<pasion_policy::PolicyFactory>>("policy_factory")
-        .expect("PolicyFactory not found in depot");
 
     let clock: BoxClock = Box::new(SystemClock::default());
     let mut rng: BoxRng =
         Box::new(ChaChaRng::from_rng(rand_core::OsRng).expect("Failed to seed rng"));
 
     let mut repo: BoxRepository = repo_factory.create().await?;
-    let policy: Policy = policy_factory
-        .instantiate()
+    let policy: Policy = depot
+        .policy()
         .await
         .map_err(|e| RouteError::Internal(Box::new(e)))?;
 

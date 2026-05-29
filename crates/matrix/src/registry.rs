@@ -4,7 +4,7 @@
 
 use std::{collections::HashMap, sync::Arc};
 
-use crate::{ConnectorCapabilities, ConnectorProvider};
+use crate::{ConnectorCapabilities, ConnectorProvider, HomeserverAdmin};
 
 /// A registry of connector providers.
 ///
@@ -43,6 +43,19 @@ impl ConnectorRegistry {
         self.primary
             .as_ref()
             .and_then(|name| self.providers.get(name))
+    }
+
+    /// Get the primary provider as an owned [`HomeserverAdmin`] handle.
+    ///
+    /// Every [`ConnectorProvider`] is also a [`HomeserverAdmin`], so this
+    /// upcasts the primary provider into the type-erased admin handle used
+    /// throughout the request handlers.
+    #[must_use]
+    pub fn primary_homeserver(&self) -> Option<Arc<dyn HomeserverAdmin>> {
+        self.primary().map(|provider| {
+            let provider = Arc::clone(provider);
+            provider as Arc<dyn HomeserverAdmin>
+        })
     }
 
     /// Get a provider by name.

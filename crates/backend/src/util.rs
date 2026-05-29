@@ -17,7 +17,7 @@ use pasion_data::{
     BoxRepositoryFactory, RepositoryAccess, RepositoryFactory, SessionExpirationConfig,
     SessionLimitConfig, SiteConfig, UrlBuilder,
 };
-use pasion_matrix::{ConnectorRegistry, HomeserverAdmin, ReadOnlyHomeserverAdmin};
+use pasion_matrix::{ConnectorRegistry, ReadOnlyHomeserverAdmin};
 use pasion_matrix_palpo::PalpoAdmin;
 use pasion_messaging::{MailTransport, Mailer, NotificationCenter, SmsSender, SmsTransport};
 use pasion_policy::PolicyFactory;
@@ -516,6 +516,15 @@ pub async fn load_policy_factory_dynamic_data_continuously(
 ) -> Result<(), anyhow::Error> {
     let policy_factory = policy_factory.clone();
 
+    // If the backend ignores dynamic data (e.g. Cedar), there's nothing to load
+    // and no point spawning a polling loop.
+    if !policy_factory.supports_dynamic_data() {
+        tracing::debug!(
+            "Policy backend does not support dynamic data; skipping dynamic data loader"
+        );
+        return Ok(());
+    }
+
     load_policy_factory_dynamic_data(&policy_factory, &*repository_factory).await?;
 
     task_tracker.spawn(async move {
@@ -572,28 +581,26 @@ pub async fn load_policy_factory_dynamic_data(
     Ok(())
 }
 
-/// Create a clonable, type-erased [`HomeserverAdmin`] and a
-/// [`ConnectorRegistry`] from the configuration.
+/// Create a [`ConnectorRegistry`] from the configuration.
 ///
-/// The returned registry contains the connector as its primary provider,
-/// while the `Arc<dyn HomeserverAdmin>` is kept for backward
-/// compatibility with code that accesses the homeserver directly.
+/// The returned registry contains the connector as its primary provider.
+/// Callers that need a direct homeserver handle should use
+/// [`ConnectorRegistry::primary_homeserver`].
 pub async fn homeserver_connection_from_config(
     config: &MatrixConfig,
     http_client: reqwest::Client,
-) -> anyhow::Result<(Arc<dyn HomeserverAdmin>, ConnectorRegistry)> {
+) -> anyhow::Result<ConnectorRegistry> {
     let mut registry = ConnectorRegistry::new();
 
-    Ok(match config.kind {
-        HomeserverKind::Palpo | HomeserverKind::PalpoModern => {
+    match config.kind {
+        HomeserverKind::Palpo => {
             let palpo = Arc::new(PalpoAdmin::new(
                 config.homeserver.clone(),
                 config.endpoint.clone(),
                 config.secret().await?,
                 http_client,
             ));
-            registry.register(Arc::clone(&palpo) as _);
-            (palpo as Arc<dyn HomeserverAdmin>, registry)
+            registry.register(palpo as _);
         }
         HomeserverKind::PalpoReadOnly => {
             let palpo = PalpoAdmin::new(
@@ -603,10 +610,11 @@ pub async fn homeserver_connection_from_config(
                 http_client,
             );
             let readonly = Arc::new(ReadOnlyHomeserverAdmin::new(palpo));
-            registry.register(Arc::clone(&readonly) as _);
-            (readonly as Arc<dyn HomeserverAdmin>, registry)
+            registry.register(readonly as _);
         }
-    })
+    }
+
+    Ok(registry)
 }
 
 #[cfg(test)]

@@ -163,7 +163,7 @@ impl Options {
 
         let http_client = pasion_backend::reqwest_client();
 
-        let (homeserver_admin, connector_registry) =
+        let connector_registry =
             homeserver_connection_from_config(&config.matrix, http_client.clone()).await?;
         let matrix_shared_secret = config.matrix.secret().await?;
 
@@ -181,7 +181,9 @@ impl Options {
                 database_url,
                 SystemClock::default(),
                 &notifications,
-                homeserver_admin.clone(),
+                connector_registry
+                    .primary_homeserver()
+                    .context("matrix connector registry has no primary provider")?,
                 url_builder.clone(),
                 &site_config,
                 shutdown.soft_shutdown_token(),
@@ -251,7 +253,6 @@ impl Options {
                 cookie_manager,
                 encrypter,
                 url_builder,
-                homeserver_admin,
                 connector_registry,
                 policy_factory,
                 http_client,

@@ -622,17 +622,11 @@ pub async fn handler(
 
             let mut context = AttributeMappingContext::new();
             if let Some(id_token) = token_response.id_token.as_ref() {
-                jwks = Some(
-                    crate::oidc_client::requests::jose::fetch_jwks(
-                        &client,
-                        lazy_metadata.jwks_uri().await?,
-                    )
-                    .await?,
-                );
+                jwks = Some(lazy_metadata.jwks().await?);
 
                 let id_token_verification_data = JwtVerificationData {
                     issuer: provider.issuer.as_deref(),
-                    jwks: jwks.as_ref().unwrap(),
+                    jwks: jwks.as_deref().unwrap(),
                     signing_algorithm: &provider.id_token_signed_response_alg,
                     client_id: &provider.client_id,
                 };
@@ -686,13 +680,7 @@ pub async fn handler(
                     Some(signing_algorithm) => {
                         let jwks = match jwks {
                             Some(jwks) => jwks,
-                            None => {
-                                crate::oidc_client::requests::jose::fetch_jwks(
-                                    &client,
-                                    lazy_metadata.jwks_uri().await?,
-                                )
-                                .await?
-                            }
+                            None => lazy_metadata.jwks().await?,
                         };
 
                         crate::oidc_client::requests::userinfo::fetch_userinfo(

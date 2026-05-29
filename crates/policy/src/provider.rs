@@ -1,8 +1,7 @@
 //! Policy provider traits for supporting multiple policy engines.
 //!
 //! This module defines the core abstractions that allow different policy
-//! backends (OPA/WASM, Cedar, Remote HTTP, etc.) to be plugged in via a
-//! common interface.
+//! backends (Cedar, Remote HTTP) to be plugged in via a common interface.
 
 use async_trait::async_trait;
 use pasion_data::PolicyData;
@@ -56,6 +55,15 @@ pub trait PolicyEvaluator: Send {
 pub trait PolicyProviderFactory: Send + Sync {
     /// Create a new policy evaluator instance.
     async fn instantiate(&self) -> Result<Box<dyn PolicyEvaluator>, InstantiateError>;
+
+    /// Whether this backend actually consumes dynamic policy data.
+    ///
+    /// When this returns `false`, [`set_dynamic_data`](Self::set_dynamic_data)
+    /// is a no-op and callers should avoid spawning a background loop to poll
+    /// and push dynamic data. Defaults to `false`.
+    fn supports_dynamic_data(&self) -> bool {
+        false
+    }
 
     /// Update the dynamic policy data.
     ///
