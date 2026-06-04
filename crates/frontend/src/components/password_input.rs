@@ -21,24 +21,15 @@ impl PasswordStrength {
         }
     }
 
-    fn color(&self) -> &'static str {
+    /// Stable slug used as a `data-strength` attribute so styling (colors,
+    /// bar width) lives in CSS and adapts to light/dark mode.
+    fn slug(&self) -> &'static str {
         match self {
-            PasswordStrength::Empty => "transparent",
-            PasswordStrength::Weak => "#e53e3e",
-            PasswordStrength::Fair => "#dd6b20",
-            PasswordStrength::Good => "#38a169",
-            PasswordStrength::Strong => "#2b6cb0",
-        }
-    }
-
-    /// Width percentage of the strength bar.
-    fn width_percent(&self) -> u8 {
-        match self {
-            PasswordStrength::Empty => 0,
-            PasswordStrength::Weak => 25,
-            PasswordStrength::Fair => 50,
-            PasswordStrength::Good => 75,
-            PasswordStrength::Strong => 100,
+            PasswordStrength::Empty => "empty",
+            PasswordStrength::Weak => "weak",
+            PasswordStrength::Fair => "fair",
+            PasswordStrength::Good => "good",
+            PasswordStrength::Strong => "strong",
         }
     }
 }
@@ -116,19 +107,16 @@ pub fn PasswordCreationDoubleInput(
 
             // Password strength indicator
             if strength != PasswordStrength::Empty {
-                div {
-                    style: "margin-top: 6px;",
-                    // Strength bar background
-                    div {
-                        style: "height: 4px; border-radius: 2px; background-color: #e2e8f0; overflow: hidden;",
-                        // Filled portion
+                div { class: "pw-strength",
+                    div { class: "pw-strength-track",
                         div {
-                            style: "height: 100%; border-radius: 2px; transition: width 0.3s ease, background-color 0.3s ease; width: {strength.width_percent()}%; background-color: {strength.color()};",
+                            class: "pw-strength-bar",
+                            "data-strength": "{strength.slug()}",
                         }
                     }
-                    // Strength label
                     span {
-                        style: "font-size: 0.75rem; color: {strength.color()}; margin-top: 2px; display: inline-block;",
+                        class: "pw-strength-label",
+                        "data-strength": "{strength.slug()}",
                         "{strength.label()}"
                     }
                 }

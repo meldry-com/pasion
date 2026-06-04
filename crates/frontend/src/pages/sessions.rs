@@ -23,32 +23,19 @@ pub fn Sessions() -> Element {
         pagination.set(PaginationState::new(6));
     });
 
-    let overview =
+    // `/viewer` returns all session data combined; fetch it once.
+    let sessions =
         use_resource(|| async { crate::api::api_get::<ViewerResponse>("/viewer").await });
 
-    let sessions = use_resource(move || {
-        let _inactive = show_inactive();
-        let _pag = pagination.read().clone();
-        async move {
-            // REST /viewer returns all session data combined
-            crate::api::api_get::<ViewerResponse>("/viewer").await
-        }
-    });
-
-    let overview_binding = overview.read();
     let sessions_binding = sessions.read();
 
-    match (&*overview_binding, &*sessions_binding) {
-        (Some(Ok(overview_data)), Some(Ok(session_data))) => {
-            let user = match overview_data.viewer.as_user() {
-                Some(u) => u,
-                None => return rsx! { p { "Not authenticated." } },
-            };
-
+    match &*sessions_binding {
+        Some(Ok(session_data)) => {
             let session_user = match session_data.viewer.as_user() {
                 Some(u) => u,
                 None => return rsx! { p { "Not authenticated." } },
             };
+            let user = session_user;
 
             let browser_session_count = user
                 .browser_sessions
@@ -147,9 +134,9 @@ pub fn Sessions() -> Element {
                 }
             }
         }
-        (Some(Err(e)), _) | (_, Some(Err(e))) => rsx! {
+        Some(Err(e)) => rsx! {
             div { class: "alert alert-critical", "{e}" }
         },
-        _ => rsx! { LoadingScreen {} },
+        None => rsx! { LoadingScreen {} },
     }
 }
