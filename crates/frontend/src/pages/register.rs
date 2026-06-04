@@ -3,7 +3,7 @@ use dioxus::prelude::*;
 use crate::{
     api::types::{
         ChangeRegistrationEmailResponse, ProvidersResponse, RegisterResponse,
-        RegisterStatusResponse, ResendEmailAuthCodePayload, SiteConfig, StepResponse,
+        RegisterStatusResponse, ResendEmailAuthCodePayload, StepResponse,
     },
     components::{
         layout::Layout, loading::LoadingSpinner, password_input::PasswordCreationDoubleInput,
@@ -755,14 +755,12 @@ pub fn RegisterDisplayName(id: String) -> Element {
 /// Final registration step — creates the user account.
 #[component]
 pub fn RegisterFinish(id: String) -> Element {
-    let nav = navigator();
     let mut bootstrap_admin_token = use_signal(String::new);
     let mut finish_result = use_signal(|| None::<Result<StepResponse, String>>);
     let mut submitting = use_signal(|| false);
     let mut auto_submit_started = use_signal(|| false);
 
-    let site_config =
-        use_resource(|| async { crate::api::api_get::<SiteConfig>("/site-config").await });
+    let site_config = crate::use_site_config().0;
     let site_config_binding = site_config.read();
     let bootstrap_admin_enabled = matches!(
         &*site_config_binding,
@@ -785,50 +783,64 @@ pub fn RegisterFinish(id: String) -> Element {
         });
     }
 
+    // Resolve the post-registration destination once the finish call succeeds.
+    // The backend may return a `post_auth_action` to resume a pending OAuth
+    // grant; for password registration we fall back to sessionStorage values
+    // saved by the manual register flow. The redirect happens after render via
+    // an effect so we never call `nav.push()` during the render phase.
+    let success_grant_id: Option<String> = match finish_result.read().as_ref() {
+        Some(Ok(resp)) if resp.status == "success" => resp
+            .post_auth_action
+            .as_ref()
+            .and_then(|action| {
+                let kind = action.get("kind").and_then(|v| v.as_str());
+                if kind == Some("continue_authorization_grant") {
+                    action.get("id").and_then(|v| v.as_str()).map(String::from)
+                } else {
+                    None
+                }
+            }),
+        _ => None,
+    };
+    let is_success = matches!(
+        finish_result.read().as_ref(),
+        Some(Ok(resp)) if resp.status == "success"
+    );
+
+    use_effect(use_reactive!(|(is_success, success_grant_id)| {
+        if !is_success {
+            return;
+        }
+        let nav = navigator();
+
+        if let Some(grant_id) = success_grant_id.clone() {
+            nav.push(Route::Consent { grant_id });
+            return;
+        }
+
+        #[cfg(target_arch = "wasm32")]
+        if let Some(storage) =
+            web_sys::window().and_then(|w| w.session_storage().ok().flatten())
+        {
+            let kind = storage.get_item("post_auth_kind").ok().flatten();
+            let id = storage.get_item("post_auth_id").ok().flatten();
+            // Clean up regardless
+            let _ = storage.remove_item("post_auth_kind");
+            let _ = storage.remove_item("post_auth_id");
+
+            if kind.as_deref() == Some("continue_authorization_grant")
+                && let Some(grant_id) = id
+            {
+                nav.push(Route::Consent { grant_id });
+                return;
+            }
+        }
+
+        nav.push(Route::AccountOverview {});
+    }));
+
     match finish_result.read().as_ref() {
         Some(Ok(resp)) if resp.status == "success" => {
-            // Check if there is a pending OAuth authorization flow to resume.
-            // The backend returns `post_auth_action` from the registration
-            // record if registration was started from an OAuth grant; for
-            // password registration we fall back to sessionStorage values
-            // saved by the manual register flow.
-            let mut redirected = false;
-
-            // 1. API-returned post_auth_action (set during upstream OIDC registration
-            //    flows)
-            if let Some(action) = resp.post_auth_action.as_ref() {
-                let kind = action.get("kind").and_then(|v| v.as_str());
-                let id = action.get("id").and_then(|v| v.as_str()).map(String::from);
-                if kind == Some("continue_authorization_grant")
-                    && let Some(grant_id) = id
-                {
-                    nav.push(Route::Consent { grant_id });
-                    redirected = true;
-                }
-            }
-
-            #[cfg(target_arch = "wasm32")]
-            if !redirected
-                && let Some(storage) =
-                    web_sys::window().and_then(|w| w.session_storage().ok().flatten())
-            {
-                let kind = storage.get_item("post_auth_kind").ok().flatten();
-                let id = storage.get_item("post_auth_id").ok().flatten();
-                // Clean up regardless
-                let _ = storage.remove_item("post_auth_kind");
-                let _ = storage.remove_item("post_auth_id");
-
-                if kind.as_deref() == Some("continue_authorization_grant")
-                    && let Some(grant_id) = id
-                {
-                    nav.push(Route::Consent { grant_id });
-                    redirected = true;
-                }
-            }
-
-            if !redirected {
-                nav.push(Route::AccountOverview {});
-            }
             rsx! {
                 Layout {
                     div { class: "login-page",

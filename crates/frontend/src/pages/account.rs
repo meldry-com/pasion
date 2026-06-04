@@ -39,6 +39,14 @@ fn SidebarExternalLink(href: String, children: Element) -> Element {
 #[component]
 pub fn AccountPage() -> Element {
     let data = use_resource(|| async { crate::api::api_get::<ViewerResponse>("/viewer").await });
+
+    // Redirect to login when the viewer resolved but is not a user.
+    let needs_login = matches!(
+        &*data.read(),
+        Some(Ok(result)) if result.viewer.as_user().is_none()
+    );
+    crate::utils::use_redirect(needs_login, Route::Login {});
+
     let binding = data.read();
 
     match &*binding {
@@ -46,8 +54,6 @@ pub fn AccountPage() -> Element {
             let user = match result.viewer.as_user() {
                 Some(u) => u,
                 None => {
-                    let nav = navigator();
-                    nav.push(Route::Login {});
                     return rsx! {
                         Layout { p { "Redirecting to login..." } }
                     };

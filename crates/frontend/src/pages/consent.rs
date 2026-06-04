@@ -14,13 +14,18 @@ pub fn Consent(grant_id: String) -> Element {
         let id = gid.clone();
         async move { crate::api::api_get::<ConsentDataResponse>(&format!("/oauth2/consent/{id}")).await }
     });
+    // Redirect to login when the consent endpoint reports no session.
+    let needs_login = matches!(
+        &*data.read(),
+        Some(Ok(resp)) if resp.error.as_deref() == Some("not_authenticated")
+    );
+    crate::utils::use_redirect(needs_login, Route::Login {});
+
     let binding = data.read();
 
     match &*binding {
         Some(Ok(resp)) => {
             if resp.error.as_deref() == Some("not_authenticated") {
-                let nav = navigator();
-                nav.push(Route::Login {});
                 return rsx! { Layout { p { "Redirecting to login..." } } };
             }
             if resp.policy_violation {
