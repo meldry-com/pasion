@@ -165,6 +165,7 @@ jobs:
         run: |
           {
             echo "enabled_arches<<EOF"
+            echo "amd64"
             echo "arm64"
             echo "EOF"
           } >> "$GITHUB_OUTPUT"
@@ -180,7 +181,8 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          # Temporarily disable amd64 image builds in Gitea Actions.
+          - arch: amd64
+            runner: ubuntu-24.04
           - arch: arm64
             runner: ubuntu-24.04-arm64
 
@@ -228,7 +230,6 @@ jobs:
               [ -n "$suffix" ] || continue
               release_tags+=("${image}:${suffix}-${{ matrix.arch }}")
               publish_tags+=("${image}:${suffix}-${{ matrix.arch }}")
-              publish_tags+=("${image}:${suffix}")
             done <<< "$FINAL_SUFFIXES"
           done <<< "$IMAGES"
 
@@ -312,12 +313,80 @@ jobs:
 
           docker run --rm "$image" --version
 
+  merge-image-manifests:
+    name: Publish multi-arch image manifests
+    runs-on: ubuntu-24.04
+    needs:
+      - prepare-image-build
+      - build-image-arch
+    if: needs.prepare-image-build.outputs.push == 'true'
+
+    permissions:
+      contents: read
+
+    steps:
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to Gitea registry
+        if: needs.prepare-image-build.outputs.use_gitea_registry == 'true'
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ needs.prepare-image-build.outputs.gitea_registry }}
+          username: ${{ needs.prepare-image-build.outputs.gitea_registry_user }}
+          password: ${{ secrets.REGISTRY_TOKEN }}
+
+      - name: Log in to Docker Hub
+        if: needs.prepare-image-build.outputs.use_dockerhub == 'true'
+        uses: docker/login-action@v3
+        with:
+          username: ${{ vars.DOCKERHUB_USER }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+      - name: Assemble multi-arch manifests
+        shell: bash
+        env:
+          IMAGES: ${{ needs.prepare-image-build.outputs.images }}
+          FINAL_SUFFIXES: ${{ needs.prepare-image-build.outputs.regular_suffixes }}
+          ENABLED_ARCHES: ${{ needs.prepare-image-build.outputs.enabled_arches }}
+        run: |
+          set -euo pipefail
+
+          arches=()
+          while IFS= read -r arch; do
+            [ -n "$arch" ] || continue
+            arches+=("$arch")
+          done <<< "$ENABLED_ARCHES"
+
+          if [ "${#arches[@]}" -eq 0 ]; then
+            echo "No enabled architectures were resolved" >&2
+            exit 1
+          fi
+
+          while IFS= read -r image; do
+            [ -n "$image" ] || continue
+            while IFS= read -r suffix; do
+              [ -n "$suffix" ] || continue
+
+              sources=()
+              for arch in "${arches[@]}"; do
+                sources+=("${image}:${suffix}-${arch}")
+              done
+
+              echo "Creating multi-arch manifest ${image}:${suffix} from ${sources[*]}"
+              docker buildx imagetools create \
+                --tag "${image}:${suffix}" \
+                "${sources[@]}"
+            done <<< "$FINAL_SUFFIXES"
+          done <<< "$IMAGES"
+
   summarize-published-images:
     name: Summarize published images
     runs-on: ubuntu-24.04-arm64
     needs:
       - prepare-image-build
       - build-image-arch
+      - merge-image-manifests
     if: needs.prepare-image-build.outputs.push == 'true'
 
     permissions:
