@@ -1,3 +1,4 @@
+#[cfg(any(test, feature = "test-support"))]
 mod mock;
 mod readonly;
 pub mod registry;
@@ -6,10 +7,9 @@ use std::{collections::HashSet, sync::Arc};
 
 use ruma_common::UserId;
 
-pub use self::{
-    mock::HomeserverAdmin as MockHomeserverAdmin, readonly::ReadOnlyHomeserverAdmin,
-    registry::ConnectorRegistry,
-};
+#[cfg(any(test, feature = "test-support"))]
+pub use self::mock::HomeserverAdmin as MockHomeserverAdmin;
+pub use self::{readonly::ReadOnlyHomeserverAdmin, registry::ConnectorRegistry};
 
 /// Describes what operations a connector provider supports.
 #[derive(Debug, Clone, Default)]
