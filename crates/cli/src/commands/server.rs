@@ -165,6 +165,7 @@ impl Options {
 
         let (homeserver_admin, connector_registry) =
             homeserver_connection_from_config(&config.matrix, http_client.clone()).await?;
+        let matrix_shared_secret = config.matrix.secret().await?;
 
         if !self.no_worker {
             let notifications =
@@ -257,6 +258,7 @@ impl Options {
                 password_manager,
                 metadata_cache,
                 site_config,
+                matrix_shared_secret,
                 activity_tracker,
                 trusted_proxies,
                 limiter,
