@@ -240,6 +240,20 @@ pub struct AppSessionEdge {
     pub node: AppSession,
 }
 
+// ── Bootstrap Admin Status ─────────────────────────────────────
+
+#[derive(Debug, Clone, PartialEq, Deserialize, Serialize)]
+pub struct BootstrapAdminStatus {
+    #[serde(default)]
+    pub has_admin: bool,
+    #[serde(default)]
+    pub token_configured: bool,
+    /// `true` only while a bootstrap token is configured *and* no administrator
+    /// exists yet — i.e. the very first admin can still be claimed.
+    #[serde(default)]
+    pub setup_required: bool,
+}
+
 // ── Site Config ────────────────────────────────────────────────
 
 #[derive(Debug, Clone, PartialEq, Deserialize, Serialize)]
