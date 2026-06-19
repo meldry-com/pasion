@@ -42,6 +42,7 @@ pub struct AppState {
     pub password_manager: PasswordManager,
     pub metadata_cache: MetadataCache,
     pub site_config: SiteConfig,
+    pub matrix_shared_secret: String,
     pub activity_tracker: ActivityTracker,
     pub trusted_proxies: Vec<IpNetwork>,
     pub limiter: Limiter,
@@ -153,6 +154,7 @@ pub async fn inject_app_state(
     depot.insert("cookie_manager", state.cookie_manager.clone());
     depot.insert("metadata_cache", state.metadata_cache.clone());
     depot.insert("site_config", state.site_config.clone());
+    depot.insert("matrix_shared_secret", state.matrix_shared_secret.clone());
     depot.insert("limiter", state.limiter.clone());
     depot.insert("policy_factory", state.policy_factory.clone());
     depot.insert("homeserver_admin", Arc::clone(&state.homeserver_admin));

@@ -132,6 +132,7 @@ pub async fn login(req: &mut Request, depot: &Depot, res: &mut Response) -> Resu
             password: zeroize::Zeroizing::new(input.password),
             user_agent,
             requester,
+            skip_requester_limit: false,
         },
     )
     .await

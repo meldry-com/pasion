@@ -480,6 +480,9 @@ fn build_oauth_router(router: Router) -> Router {
 fn build_account_api_router(router: Router) -> Router {
     use crate::handlers::account::*;
 
+    let internal_router = Router::with_path("/api/internal/matrix")
+        .push(Router::with_path("password-login").post(crate::handlers::matrix::password_login));
+
     let api_router = Router::with_path("/api/v1")
         // Viewer
         .push(
@@ -617,7 +620,10 @@ fn build_account_api_router(router: Router) -> Router {
         );
     let docs_router = openapi::build_openapi_router(&api_router);
 
-    router.push(api_router).push(docs_router)
+    router
+        .push(internal_router)
+        .push(api_router)
+        .push(docs_router)
 }
 
 fn build_admin_router(router: Router) -> Router {

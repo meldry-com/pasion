@@ -1,6 +1,6 @@
 use anyhow::Error as AnyhowError;
 use pasion_data::{
-    BoxRepository, BrowserSession, Clock, RepositoryAccess, RepositoryError, SiteConfig,
+    BoxRepository, BrowserSession, Clock, Password, RepositoryAccess, RepositoryError, SiteConfig,
     UpstreamOAuthProvider, User,
     upstream_oauth2::UpstreamOAuthProviderRepository,
     user::{BrowserSessionRepository, UserPasswordRepository, UserRepository},
@@ -22,6 +22,7 @@ pub struct PasswordLoginRequest {
     pub password: Zeroizing<String>,
     pub user_agent: Option<String>,
     pub requester: RequesterFingerprint,
+    pub skip_requester_limit: bool,
 }
 
 #[derive(Debug)]
@@ -39,6 +40,16 @@ pub enum PasswordLoginOutcome {
         user: User,
         user_session: BrowserSession,
     },
+}
+
+#[derive(Debug)]
+pub enum PasswordVerificationOutcome {
+    Disabled,
+    InvalidCredentials,
+    RateLimited,
+    AccountDeactivated { user: User },
+    AccountLocked { user: User },
+    Authenticated { user: User, user_password: Password },
 }
 
 #[derive(Debug, Error)]
@@ -66,29 +77,86 @@ pub async fn login_with_password(
     site_config: &SiteConfig,
     request: PasswordLoginRequest,
 ) -> Result<PasswordLoginOutcome, PasswordLoginError> {
+    let user_agent = request.user_agent.clone();
+    match verify_password_login(
+        &mut repo,
+        rng,
+        clock,
+        password_manager,
+        limiter,
+        homeserver,
+        site_config,
+        request,
+    )
+    .await?
+    {
+        PasswordVerificationOutcome::Disabled => Ok(PasswordLoginOutcome::Disabled),
+        PasswordVerificationOutcome::InvalidCredentials => {
+            Ok(PasswordLoginOutcome::InvalidCredentials)
+        }
+        PasswordVerificationOutcome::RateLimited => Ok(PasswordLoginOutcome::RateLimited),
+        PasswordVerificationOutcome::AccountDeactivated { user } => {
+            Ok(PasswordLoginOutcome::AccountDeactivated { user })
+        }
+        PasswordVerificationOutcome::AccountLocked { user } => {
+            Ok(PasswordLoginOutcome::AccountLocked { user })
+        }
+        PasswordVerificationOutcome::Authenticated {
+            user,
+            user_password,
+        } => {
+            let user_session = repo
+                .browser_session()
+                .add(&mut *rng, clock, &user, user_agent)
+                .await?;
+
+            repo.browser_session()
+                .authenticate_with_password(&mut *rng, clock, &user_session, &user_password)
+                .await?;
+
+            repo.save().await?;
+
+            Ok(PasswordLoginOutcome::Authenticated { user, user_session })
+        }
+    }
+}
+
+pub async fn verify_password_login(
+    repo: &mut BoxRepository,
+    rng: &mut (dyn CryptoRngCore + Send),
+    clock: &dyn Clock,
+    password_manager: &PasswordManager,
+    limiter: &Limiter,
+    homeserver: &dyn HomeserverAdmin,
+    site_config: &SiteConfig,
+    request: PasswordLoginRequest,
+) -> Result<PasswordVerificationOutcome, PasswordLoginError> {
     if !site_config.password_login_enabled {
-        return Ok(PasswordLoginOutcome::Disabled);
+        return Ok(PasswordVerificationOutcome::Disabled);
     }
 
     let username = homeserver
         .localpart(&request.username_or_email)
         .unwrap_or(&request.username_or_email);
 
-    let Some(user) = find_user_by_email_or_by_username(site_config, &mut repo, username).await?
-    else {
-        return Ok(PasswordLoginOutcome::InvalidCredentials);
+    let Some(user) = find_user_by_email_or_by_username(site_config, repo, username).await? else {
+        return Ok(PasswordVerificationOutcome::InvalidCredentials);
     };
 
-    if limiter
+    if request.skip_requester_limit {
+        if limiter.check_password_for_user(&user).await.is_err() {
+            return Ok(PasswordVerificationOutcome::RateLimited);
+        }
+    } else if limiter
         .check_password(request.requester, &user)
         .await
         .is_err()
     {
-        return Ok(PasswordLoginOutcome::RateLimited);
+        return Ok(PasswordVerificationOutcome::RateLimited);
     }
 
     let Some(user_password) = repo.user_password().active(&user).await? else {
-        return Ok(PasswordLoginOutcome::InvalidCredentials);
+        return Ok(PasswordVerificationOutcome::InvalidCredentials);
     };
 
     let user_password = match password_manager
@@ -114,33 +182,25 @@ pub async fn login_with_password(
         }
         Ok(PasswordVerificationResult::Matched(None)) => user_password,
         Ok(PasswordVerificationResult::NotMatched) => {
-            return Ok(PasswordLoginOutcome::InvalidCredentials);
+            return Ok(PasswordVerificationOutcome::InvalidCredentials);
         }
         Err(error) => return Err(PasswordLoginError::Password(error.into())),
     };
 
     if user.deactivated_at.is_some() {
-        return Ok(PasswordLoginOutcome::AccountDeactivated { user });
+        return Ok(PasswordVerificationOutcome::AccountDeactivated { user });
     }
 
     if user.locked_at.is_some() {
-        return Ok(PasswordLoginOutcome::AccountLocked { user });
+        return Ok(PasswordVerificationOutcome::AccountLocked { user });
     }
 
     debug_assert!(user.is_valid());
 
-    let user_session = repo
-        .browser_session()
-        .add(&mut *rng, clock, &user, request.user_agent)
-        .await?;
-
-    repo.browser_session()
-        .authenticate_with_password(&mut *rng, clock, &user_session, &user_password)
-        .await?;
-
-    repo.save().await?;
-
-    Ok(PasswordLoginOutcome::Authenticated { user, user_session })
+    Ok(PasswordVerificationOutcome::Authenticated {
+        user,
+        user_password,
+    })
 }
 
 pub async fn logout_browser_session(
