@@ -21,6 +21,16 @@ ignore = [
     # RSA key extraction "Marvin Attack" (PKCS#1 v1.5 encryption only,
     # which we do not use).
     "RUSTSEC-2023-0071",
+
+    # quick-xml parser DoS advisories. Transitive through OpenDAL's S3
+    # signing/configuration stack; Pasion does not parse user-supplied XML
+    # directly. Re-evaluate when OpenDAL moves to quick-xml >= 0.41.
+    "RUSTSEC-2026-0194",
+    "RUSTSEC-2026-0195",
+
+    # diesel-async warning affects the MySQL backend. Pasion enables and uses
+    # only PostgreSQL.
+    "RUSTSEC-2026-0138",
 ]
 
 # ── Allowed licenses ────────────────────────────────────────────────────────

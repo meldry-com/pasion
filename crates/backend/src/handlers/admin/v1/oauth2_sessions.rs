@@ -233,9 +233,9 @@ pub async fn list_sessions(
     // `FilterParams::default()` on parse failure would silently strip a
     // typo'd `user_id=…` from an admin's request and quietly list every
     // session — easy to miss in audit-log review.
-    let params: FilterParams = req.parse_queries().map_err(|e| {
-        AppError::bad_request(format!("invalid filter parameters: {e}"))
-    })?;
+    let params: FilterParams = req
+        .parse_queries()
+        .map_err(|e| AppError::bad_request(format!("invalid filter parameters: {e}")))?;
 
     let base = format!("{path}{params}", path = OAuth2Session::PATH);
     let base = include_count.add_to_base(&base);

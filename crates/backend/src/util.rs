@@ -622,8 +622,7 @@ mod tests {
     use std::num::NonZeroU32;
 
     use diesel::{
-        sql_query,
-        QueryableByName,
+        QueryableByName, sql_query,
         sql_types::{BigInt, Uuid as DieselUuid},
     };
     use diesel_async::RunQueryDsl as _;
@@ -706,7 +705,8 @@ mod tests {
 
     #[tokio::test]
     async fn test_diesel_pool_recycles_connections_back_to_a_clean_session() {
-        let database_url = std::env::var("DATABASE_URL").expect("DATABASE_URL must be set for tests");
+        let database_url =
+            std::env::var("DATABASE_URL").expect("DATABASE_URL must be set for tests");
         let config = DatabaseConfig {
             uri: Some(database_url),
             max_connections: NonZeroU32::new(1).unwrap(),
@@ -719,7 +719,10 @@ mod tests {
         {
             let mut conn = pool.get().await.unwrap();
             let drop_table_sql = format!("DROP TABLE IF EXISTS {table_name}");
-            sql_query(&drop_table_sql).execute(&mut *conn).await.unwrap();
+            sql_query(&drop_table_sql)
+                .execute(&mut *conn)
+                .await
+                .unwrap();
             let create_table_sql = format!(
                 r"
                     CREATE TABLE IF NOT EXISTS {table_name} (
@@ -727,7 +730,10 @@ mod tests {
                     )
                 "
             );
-            sql_query(&create_table_sql).execute(&mut *conn).await.unwrap();
+            sql_query(&create_table_sql)
+                .execute(&mut *conn)
+                .await
+                .unwrap();
 
             sql_query("BEGIN").execute(&mut *conn).await.unwrap();
             let insert_sql = format!("INSERT INTO {table_name} (id) VALUES ($1)");

@@ -10,7 +10,8 @@ use crate::api::types::{LinkedAccount, UpstreamProvider};
 #[component]
 pub fn LinkedAccountRow(
     account: LinkedAccount,
-    /// Whether this specific row's unlink request is in flight (shows a spinner).
+    /// Whether this specific row's unlink request is in flight (shows a
+    /// spinner).
     is_unlinking: bool,
     /// Whether the unlink button is disabled (e.g. another request in flight,
     /// or this is the last connected account).

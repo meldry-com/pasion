@@ -5,8 +5,7 @@ use headers::authorization::{Basic, Bearer, Credentials as _};
 use http::StatusCode;
 use oauth2_types::errors::{ClientError, ClientErrorCode};
 use pasion_data::{Client, JwksOrJwksUri, RepositoryAccess, oauth2::OAuth2ClientRepository};
-use pasion_iana::jose::JsonWebSignatureAlg;
-use pasion_iana::oauth::OAuthClientAuthenticationMethod;
+use pasion_iana::{jose::JsonWebSignatureAlg, oauth::OAuthClientAuthenticationMethod};
 use pasion_jose::{
     claims::{self, TimeOptions},
     jwk::PublicJsonWebKeySet,
@@ -653,9 +652,10 @@ where
 
 #[cfg(test)]
 mod tests {
-    use super::*;
     use base64ct::{Base64UrlUnpadded, Encoding};
     use chrono::TimeZone as _;
+
+    use super::*;
 
     fn jwt_with_claims(claims: serde_json::Value) -> Jwt<'static, HashMap<String, Value>> {
         jwt_with_alg_and_claims("HS256", claims)

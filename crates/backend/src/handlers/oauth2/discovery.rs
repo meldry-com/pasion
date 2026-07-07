@@ -1,3 +1,5 @@
+use std::sync::OnceLock;
+
 use oauth2_types::{
     oidc::{ClaimType, ProviderMetadata, SubjectType},
     requests::{Display, GrantType, Prompt, ResponseMode},
@@ -12,7 +14,6 @@ use pasion_jose::jwa::SUPPORTED_SIGNING_ALGORITHMS;
 use pasion_keystore::Keystore;
 use salvo::prelude::*;
 use serde::Serialize;
-use std::sync::OnceLock;
 
 /// Cached, pre-built discovery document. The metadata only depends on
 /// process-stable inputs (`UrlBuilder`, `Keystore`, `SiteConfig`), so we build

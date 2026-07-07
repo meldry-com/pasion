@@ -7,9 +7,9 @@ use dioxus::prelude::*;
 ///
 /// - `open`: controlled visibility signal.
 /// - `title`: optional heading rendered as a `.dialog-title`.
-/// - `trigger`: optional element rendered before the dialog that sets
-///   `open` to `true` when clicked. Omit it for fully-controlled dialogs
-///   whose open state is managed by an external button.
+/// - `trigger`: optional element rendered before the dialog that sets `open` to
+///   `true` when clicked. Omit it for fully-controlled dialogs whose open state
+///   is managed by an external button.
 /// - `children`: dialog body (forms, actions, etc.).
 #[component]
 pub fn Dialog(

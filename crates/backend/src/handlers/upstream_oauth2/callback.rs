@@ -181,12 +181,10 @@ pub async fn handler(
     // `Params`. The previous fallback path silently dropped the `state`
     // parameter, defeating CSRF / session-binding checks downstream.
     let params: Params = if method == http::Method::POST {
-        req.parse_form()
-            .await
-            .map_err(|e| {
-                tracing::warn!(error = %e, "failed to parse upstream OAuth callback form body");
-                RouteError::MissingFormParams
-            })?
+        req.parse_form().await.map_err(|e| {
+            tracing::warn!(error = %e, "failed to parse upstream OAuth callback form body");
+            RouteError::MissingFormParams
+        })?
     } else {
         req.parse_queries().map_err(|e| {
             tracing::warn!(error = %e, "failed to parse upstream OAuth callback query string");

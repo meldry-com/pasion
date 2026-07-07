@@ -24,8 +24,7 @@ pub fn BrowserSessions() -> Element {
     // `/viewer` returns all session data combined; fetch it once. The filter
     // and pagination state only affect client-side rendering, so they must not
     // be (pseudo-)dependencies of the resource.
-    let data =
-        use_resource(|| async { crate::api::api_get::<ViewerResponse>("/viewer").await });
+    let data = use_resource(|| async { crate::api::api_get::<ViewerResponse>("/viewer").await });
     let binding = data.read();
 
     match &*binding {
