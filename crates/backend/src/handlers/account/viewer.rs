@@ -34,6 +34,7 @@ enum ViewerData {
 struct ViewerUser {
     id: String,
     username: String,
+    can_request_admin: bool,
     has_password: bool,
     profile: UserProfileData,
     matrix: Option<MatrixUserData>,
@@ -167,6 +168,7 @@ pub async fn get_viewer(
             let viewer_user = ViewerUser {
                 id: NodeType::User.serialize(user.id),
                 username: user.username.clone(),
+                can_request_admin: user.can_request_admin,
                 has_password,
                 profile: UserProfileData {
                     display_name: profile.profile.display_name,

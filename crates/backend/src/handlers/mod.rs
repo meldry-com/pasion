@@ -78,6 +78,8 @@ pub mod email_webhooks;
 pub mod flow;
 /// Health-check endpoint (`/health`).
 pub mod health;
+/// Internal Matrix integration endpoints.
+pub mod matrix;
 /// OAuth 2.0 and OpenID Connect protocol endpoints.
 pub mod oauth2;
 /// Password hashing, verification, and complexity checking.

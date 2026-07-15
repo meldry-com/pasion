@@ -1,3 +1,4 @@
+#[cfg(any(test, feature = "test-support"))]
 mod mock;
 mod readonly;
 pub mod registry;
@@ -6,10 +7,9 @@ use std::{collections::HashSet, sync::Arc};
 
 use ruma_common::UserId;
 
-pub use self::{
-    mock::HomeserverAdmin as MockHomeserverAdmin, readonly::ReadOnlyHomeserverAdmin,
-    registry::ConnectorRegistry,
-};
+#[cfg(any(test, feature = "test-support"))]
+pub use self::mock::HomeserverAdmin as MockHomeserverAdmin;
+pub use self::{readonly::ReadOnlyHomeserverAdmin, registry::ConnectorRegistry};
 
 /// Describes what operations a connector provider supports.
 #[derive(Debug, Clone, Default)]
@@ -363,18 +363,6 @@ pub trait HomeserverAdmin: Send + Sync {
         devices: HashSet<String>,
     ) -> Result<(), anyhow::Error>;
 
-    /// Query the list of devices known to the homeserver for a user.
-    ///
-    /// # Parameters
-    ///
-    /// * `localpart` - The localpart of the user whose devices to query.
-    ///
-    /// # Errors
-    ///
-    /// Returns an error if the homeserver is unreachable or the user does
-    /// not exist.
-    async fn query_devices(&self, localpart: &str) -> Result<HashSet<String>, anyhow::Error>;
-
     /// Delete a user on the homeserver.
     ///
     /// # Parameters
@@ -524,10 +512,6 @@ where
         devices: HashSet<String>,
     ) -> Result<(), anyhow::Error> {
         self.as_admin().sync_devices(localpart, devices).await
-    }
-
-    async fn query_devices(&self, localpart: &str) -> Result<HashSet<String>, anyhow::Error> {
-        self.as_admin().query_devices(localpart).await
     }
 
     async fn delete_user(&self, localpart: &str, erase: bool) -> Result<(), anyhow::Error> {

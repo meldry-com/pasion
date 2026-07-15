@@ -9,7 +9,6 @@ mod key_config;
 
 use anyhow::Context;
 use camino::Utf8PathBuf;
-use futures_util::future::try_join_all;
 use pasion_jose::jwk::JsonWebKeySet;
 use pasion_keystore::{Encrypter, Keystore};
 use schemars::JsonSchema;
@@ -60,7 +59,15 @@ impl SecretsConfig {
     #[tracing::instrument(name = "secrets.load", skip_all)]
     pub async fn key_store(&self) -> anyhow::Result<Keystore> {
         let all_keys = self.collect_key_configs().await?;
-        let jwk_list = try_join_all(all_keys.iter().map(KeyConfig::to_json_web_key)).await?;
+        let mut jwk_list = Vec::with_capacity(all_keys.len());
+        for key in &all_keys {
+            let source = key.source_description();
+            let jwk = key
+                .to_json_web_key()
+                .await
+                .with_context(|| format!("loading {source}"))?;
+            jwk_list.push(jwk);
+        }
         let jwk_set =
             JsonWebKeySet::try_new(jwk_list).context("invalid JWK metadata in secrets config")?;
         Ok(Keystore::new(jwk_set))
@@ -356,5 +363,81 @@ mod tests {
 
         assert!(algs.contains(&JsonWebSignatureAlg::Es512));
         assert!(algs.contains(&JsonWebSignatureAlg::EdDsa));
+    }
+
+    #[tokio::test]
+    async fn key_store_reports_missing_key_file_path() {
+        task::spawn_blocking(|| {
+            Jail::expect_with(|jail| {
+                jail.create_file(
+                    "config.yaml",
+                    indoc::indoc! {r"
+                        secrets:
+                          encryption: >-
+                            0000111122223333444455556666777788889999aaaabbbbccccddddeeeeffff
+                          keys:
+                            - kid: missing-file
+                              key_file: missing-key.pem
+                    "},
+                )?;
+
+                let config = Figment::new()
+                    .merge(Yaml::file("config.yaml"))
+                    .extract_inner::<SecretsConfig>("secrets")?;
+
+                Handle::current().block_on(async move {
+                    let error = match config.key_store().await {
+                        Ok(_) => panic!("expected missing key file to fail"),
+                        Err(error) => format!("{error:#}"),
+                    };
+                    assert!(
+                        error.contains(
+                            "loading secrets key file missing-key.pem (kid=missing-file)"
+                        )
+                    );
+                    assert!(error.contains("reading secrets key file missing-key.pem"));
+                });
+
+                Ok(())
+            });
+        })
+        .await
+        .unwrap();
+    }
+
+    #[tokio::test]
+    async fn key_store_reports_inline_key_identity() {
+        task::spawn_blocking(|| {
+            Jail::expect_with(|jail| {
+                jail.create_file(
+                    "config.yaml",
+                    indoc::indoc! {r"
+                        secrets:
+                          encryption: >-
+                            0000111122223333444455556666777788889999aaaabbbbccccddddeeeeffff
+                          keys:
+                            - kid: broken-inline
+                              key: |
+                                not a private key
+                    "},
+                )?;
+
+                let config = Figment::new()
+                    .merge(Yaml::file("config.yaml"))
+                    .extract_inner::<SecretsConfig>("secrets")?;
+
+                Handle::current().block_on(async move {
+                    let error = match config.key_store().await {
+                        Ok(_) => panic!("expected invalid inline key to fail"),
+                        Err(error) => format!("{error:#}"),
+                    };
+                    assert!(error.contains("loading inline secrets key (kid=broken-inline)"));
+                });
+
+                Ok(())
+            });
+        })
+        .await
+        .unwrap();
     }
 }

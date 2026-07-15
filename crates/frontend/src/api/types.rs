@@ -31,6 +31,8 @@ pub struct User {
     #[serde(default)]
     pub username: String,
     #[serde(default)]
+    pub can_request_admin: bool,
+    #[serde(default)]
     pub profile: Option<UserProfile>,
     #[serde(default)]
     pub matrix: Option<MatrixUser>,
@@ -238,6 +240,20 @@ pub struct AppSessionEdge {
     pub node: AppSession,
 }
 
+// ── Bootstrap Admin Status ─────────────────────────────────────
+
+#[derive(Debug, Clone, PartialEq, Deserialize, Serialize)]
+pub struct BootstrapAdminStatus {
+    #[serde(default)]
+    pub has_admin: bool,
+    #[serde(default)]
+    pub token_configured: bool,
+    /// `true` only while a bootstrap token is configured *and* no administrator
+    /// exists yet — i.e. the very first admin can still be claimed.
+    #[serde(default)]
+    pub setup_required: bool,
+}
+
 // ── Site Config ────────────────────────────────────────────────
 
 #[derive(Debug, Clone, PartialEq, Deserialize, Serialize)]
@@ -255,6 +271,8 @@ pub struct SiteConfig {
     #[serde(default)]
     pub password_registration_enabled: bool,
     #[serde(default)]
+    pub bootstrap_admin_token_enabled: bool,
+    #[serde(default)]
     pub minimum_password_complexity: i32,
     #[serde(default)]
     pub imprint: Option<String>,
@@ -262,6 +280,8 @@ pub struct SiteConfig {
     pub tos_uri: Option<String>,
     #[serde(default)]
     pub policy_uri: Option<String>,
+    #[serde(default)]
+    pub admin_portal_url: Option<String>,
     #[serde(default)]
     pub plan_management_iframe_uri: Option<String>,
 }
@@ -629,6 +649,8 @@ pub struct RegisterStatusResponse {
     pub username: String,
     #[serde(default)]
     pub email_pending: bool,
+    #[serde(default)]
+    pub pending_email: Option<String>,
     pub next_step: String,
 }
 
@@ -657,6 +679,13 @@ pub struct StepResponse {
     /// uses this to resume the original flow after the account is created.
     #[serde(default)]
     pub post_auth_action: Option<serde_json::Value>,
+}
+
+#[derive(Debug, Clone, PartialEq, Deserialize, Serialize)]
+pub struct ChangeRegistrationEmailResponse {
+    pub status: String,
+    #[serde(default)]
+    pub error: Option<String>,
 }
 
 // ── Recovery API types ────────────────────────────────────────

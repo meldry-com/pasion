@@ -141,8 +141,7 @@ pub async fn get(
         .and_then(|v| v.to_str().ok())
         .map(|s| s.to_owned());
 
-    let policy_factory = depot.policy_factory()?;
-    let mut policy = policy_factory.instantiate().await?;
+    let mut policy = depot.policy().await?;
     let site_config = depot.site_config()?;
     let ip_address = crate::handlers::account::extract_bound_activity_tracker(req, depot).ip();
 
@@ -413,8 +412,7 @@ pub async fn post(
         .get(http::header::USER_AGENT)
         .and_then(|v| v.to_str().ok())
         .map(|s| s.to_owned());
-    let policy_factory = depot.policy_factory()?;
-    let mut policy = policy_factory.instantiate().await?;
+    let mut policy = depot.policy().await?;
     let locale = crate::handlers::preferred_language(req, depot);
     let templates = depot.templates()?;
     let homeserver = depot.homeserver()?;

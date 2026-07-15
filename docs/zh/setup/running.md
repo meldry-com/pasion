@@ -70,6 +70,7 @@ services:
     command: server -c /config.yaml
     volumes:
       - ./config.yaml:/config.yaml:ro
+      - ./keys:/keys:ro
     ports:
       - "8080:8080"
     depends_on:
@@ -94,6 +95,17 @@ services:
 volumes:
   pgdata:
 ```
+
+镜像默认以 distroless 非 root 用户运行，UID/GID 为 `65532`。
+因此，配置文件中引用的所有文件路径都必须对该用户可读，而不只是挂载进容器即可。
+这尤其包括 `secrets.keys[*].key_file`、`secrets.keys[*].password_file`、
+`secrets.keys_dir` 和 `secrets.encryption_file`。
+
+例如，如果配置里引用 `/keys/pasion-signing-key.pem`，宿主机挂载进去的文件必须允许
+容器内的 `65532` 用户读取。
+如果文件权限类似 `0600 root:root`，启动时就会报
+`Permission denied (os error 13)`。
+可以改成容器内可读的权限，例如 `chmod 0444`，或者通过所有者/ACL 授权给 `65532`。
 
 ## 日志配置
 

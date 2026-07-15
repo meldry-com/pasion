@@ -5,7 +5,7 @@ use oauth2_types::{
     requests::{IntrospectionRequest, IntrospectionResponse},
 };
 use opentelemetry::{Key, KeyValue, metrics::Counter};
-use pasion_data::{BoxClock, BoxRepository, BoxRepositoryFactory, SystemClock};
+use pasion_data::{BoxClock, BoxRepository, BoxRepositoryFactory, SystemClock, UrlBuilder};
 use pasion_iana::oauth::{OAuthClientAuthenticationMethod, OAuthTokenTypeHint};
 use pasion_keystore::Encrypter;
 use pasion_matrix::HomeserverAdmin;
@@ -181,6 +181,9 @@ async fn handle_post(
     let repo_factory = depot
         .get::<BoxRepositoryFactory>("box_repository_factory")
         .expect("BoxRepositoryFactory not found in depot");
+    let url_builder = depot
+        .get::<UrlBuilder>("url_builder")
+        .expect("UrlBuilder not found in depot");
     let activity_tracker = depot
         .get::<ActivityTracker>("activity_tracker")
         .expect("ActivityTracker not found in depot");
@@ -214,8 +217,18 @@ async fn handle_post(
             Some(c) => c,
         };
 
+        let token_endpoint = url_builder.oauth_token_endpoint();
+        let issuer = url_builder.oidc_issuer();
         credentials
-            .verify(http_client, encrypter, method, &client)
+            .verify(
+                http_client,
+                encrypter,
+                method,
+                &client,
+                &token_endpoint,
+                &issuer,
+                clock.now(),
+            )
             .await?;
     }
 

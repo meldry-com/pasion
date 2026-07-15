@@ -350,14 +350,31 @@ impl Algorithm {
                 let mut salt = [0u8; 16];
                 rng.fill_bytes(&mut salt);
 
-                let hashed = bcrypt::hash_with_salt(password, cost.unwrap_or(12), salt)?;
+                // Keep this default in sync with `bcrypt_cost_default` in
+                // `pasion-config::sections::passwords`. Both fall through to
+                // the same 13-round baseline when no explicit cost is
+                // configured.
+                let hashed = bcrypt::hash_with_salt(password, cost.unwrap_or(13), salt)?;
                 Ok(hashed.format_for_version(bcrypt::Version::TwoB))
             }
 
             Self::Argon2id => {
                 let algorithm = argon2::Algorithm::default();
                 let version = argon2::Version::default();
-                let params = argon2::Params::default();
+                // Explicit Argon2 parameters following OWASP's 2025 guidance
+                // for password storage:
+                //   - m_cost: 19 MiB (19 * 1024 = 19_456 KiB)
+                //   - t_cost: 2 iterations
+                //   - p_cost: 1 lane
+                //   - output:  32 bytes
+                // These deliberately diverge from `Params::default()` (the
+                // default is the much weaker `OWASP minimum`-style profile
+                // baked into argon2-rs and was flagged as inadequate during
+                // a security audit on 2026-05-04). Tune upward — never
+                // downward — as hardware improves; reference deltas should
+                // ship as a config knob.
+                let params = argon2::Params::new(19_456, 2, 1, Some(32))
+                    .map_err(|e| anyhow::anyhow!("argon2 params: {e}"))?;
 
                 let phf = if let Some(secret) = pepper {
                     Argon2::new_with_secret(secret, algorithm, version, params)?

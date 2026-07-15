@@ -2,19 +2,22 @@ use std::{sync::Arc, time::Duration};
 
 use anyhow::Context;
 use diesel_async::{
-    AsyncPgConnection,
-    pooled_connection::{AsyncDieselConnectionManager, deadpool::Pool as DieselPool},
+    AsyncPgConnection, SimpleAsyncConnection,
+    pooled_connection::{
+        AsyncDieselConnectionManager, PoolError as AsyncPoolError,
+        deadpool::{Hook as DieselPoolHook, HookError as DieselPoolHookError, Pool as DieselPool},
+    },
 };
 use pasion_config::{
     AccountConfig, BrandingConfig, CaptchaConfig, DatabaseConfig, EmailConfig, EmailProviderConfig,
     EmailSmtpMode, ExperimentalConfig, HomeserverKind, MatrixConfig, PasswordsConfig, PolicyConfig,
-    PolicyEngine, SmsConfig, SmsTransportKind, TemplatesConfig,
+    PolicyEngine, SmsConfig, SmsProviderConfig, TemplatesConfig,
 };
 use pasion_data::{
     BoxRepositoryFactory, RepositoryAccess, RepositoryFactory, SessionExpirationConfig,
     SessionLimitConfig, SiteConfig, UrlBuilder,
 };
-use pasion_matrix::{ConnectorRegistry, HomeserverAdmin, ReadOnlyHomeserverAdmin};
+use pasion_matrix::{ConnectorRegistry, ReadOnlyHomeserverAdmin};
 use pasion_matrix_palpo::PalpoAdmin;
 use pasion_messaging::{MailTransport, Mailer, NotificationCenter, SmsSender, SmsTransport};
 use pasion_policy::PolicyFactory;
@@ -23,6 +26,21 @@ use tokio_util::{sync::CancellationToken, task::TaskTracker};
 use tracing::Instrument;
 
 use crate::handlers::passwords::PasswordManager;
+
+fn cleanup_pooled_postgres_connection() -> DieselPoolHook<AsyncPgConnection> {
+    DieselPoolHook::async_fn(|conn: &mut AsyncPgConnection, _metrics| {
+        Box::pin(async move {
+            // Pooled sessions must be reset before reuse. `ROLLBACK` clears any
+            // leaked transaction, and `pg_advisory_unlock_all()` clears leader
+            // locks that are session-scoped.
+            conn.batch_execute("ROLLBACK; SELECT pg_advisory_unlock_all();")
+                .await
+                .map_err(|error| DieselPoolHookError::Backend(AsyncPoolError::QueryError(error)))?;
+
+            Ok(())
+        })
+    })
+}
 
 /// Check whether `c` is a valid character for a username.
 fn valid_username_character(c: char) -> bool {
@@ -197,91 +215,42 @@ pub fn mailer_from_config(
 }
 
 pub fn sms_sender_from_config(config: &SmsConfig) -> Result<SmsSender, anyhow::Error> {
-    let transport = match config.transport {
-        SmsTransportKind::Blackhole => SmsTransport::blackhole(),
-        SmsTransportKind::Twilio => SmsTransport::twilio(
-            config
-                .account_sid
-                .clone()
-                .context("invalid sms configuration: missing account_sid")?,
-            config
-                .auth_token
-                .clone()
-                .context("invalid sms configuration: missing auth_token")?,
-            config
-                .from_number
-                .clone()
-                .context("invalid sms configuration: missing from_number")?,
+    let transport = match &config.provider {
+        SmsProviderConfig::Blackhole => SmsTransport::blackhole(),
+        SmsProviderConfig::Twilio(provider) => SmsTransport::twilio(
+            provider.account_sid.clone(),
+            provider.auth_token.clone(),
+            provider.from_number.clone(),
         ),
-        SmsTransportKind::HttpWebhook => SmsTransport::http_webhook(
-            config
-                .api_url
-                .as_deref()
-                .context("invalid sms configuration: missing api_url")?
+        SmsProviderConfig::HttpWebhook(provider) => SmsTransport::http_webhook(
+            provider
+                .url
                 .parse()
-                .context("invalid sms configuration: invalid api_url")?,
-            config.api_key.clone(),
-            config
-                .from_number
-                .clone()
-                .context("invalid sms configuration: missing from_number")?,
+                .context("invalid sms configuration: invalid provider.url")?,
+            provider.api_key.clone(),
+            provider.from_number.clone(),
         ),
-        SmsTransportKind::AliyunSms => SmsTransport::aliyun(
-            config
-                .aliyun_access_key_id
-                .clone()
-                .context("invalid sms configuration: missing aliyun_access_key_id")?,
-            config
-                .aliyun_access_key_secret
-                .clone()
-                .context("invalid sms configuration: missing aliyun_access_key_secret")?,
-            config
-                .aliyun_sign_name
-                .clone()
-                .context("invalid sms configuration: missing aliyun_sign_name")?,
-            config
-                .aliyun_template_code
-                .clone()
-                .context("invalid sms configuration: missing aliyun_template_code")?,
+        SmsProviderConfig::AliyunSms(provider) => SmsTransport::aliyun(
+            provider.access_key_id.clone(),
+            provider.access_key_secret.clone(),
+            provider.sign_name.clone(),
+            provider.template_code.clone(),
         ),
-        SmsTransportKind::TencentCloudSms => SmsTransport::tencent_cloud(
-            config
-                .tencent_secret_id
-                .clone()
-                .context("invalid sms configuration: missing tencent_secret_id")?,
-            config
-                .tencent_secret_key
-                .clone()
-                .context("invalid sms configuration: missing tencent_secret_key")?,
-            config
-                .tencent_sdk_app_id
-                .clone()
-                .context("invalid sms configuration: missing tencent_sdk_app_id")?,
-            config
-                .tencent_sign_name
-                .clone()
-                .context("invalid sms configuration: missing tencent_sign_name")?,
-            config
-                .tencent_template_id
-                .clone()
-                .context("invalid sms configuration: missing tencent_template_id")?,
+        SmsProviderConfig::TencentCloudSms(provider) => SmsTransport::tencent_cloud(
+            provider.secret_id.clone(),
+            provider.secret_key.clone(),
+            provider.sdk_app_id.clone(),
+            provider.sign_name.clone(),
+            provider.template_id.clone(),
         ),
-        SmsTransportKind::PaloudInternal => SmsTransport::paloud_internal(
-            config
-                .paloud_internal_url
-                .as_deref()
-                .context("invalid sms configuration: missing paloud_internal_url")?
+        SmsProviderConfig::PaloudInternal(provider) => SmsTransport::paloud_internal(
+            provider
+                .url
                 .parse()
-                .context("invalid sms configuration: invalid paloud_internal_url")?,
-            config
-                .paloud_internal_key_id
-                .clone()
-                .context("invalid sms configuration: missing paloud_internal_key_id")?,
-            config
-                .paloud_internal_secret
-                .clone()
-                .context("invalid sms configuration: missing paloud_internal_secret")?,
-            config.paloud_internal_workspace.clone(),
+                .context("invalid sms configuration: invalid provider.url")?,
+            provider.key_id.clone(),
+            provider.secret.clone(),
+            provider.workspace.clone(),
         ),
     };
 
@@ -423,6 +392,7 @@ pub fn site_config_from_config(
         password_registration_contact_required: account_config
             .password_registration_contact_required,
         registration_token_required: account_config.registration_token_required,
+        bootstrap_admin_token: account_config.bootstrap_admin_token.clone(),
         email_change_allowed: account_config.email_change_allowed,
         displayname_change_allowed: account_config.displayname_change_allowed,
         password_change_allowed: password_config.enabled()
@@ -434,6 +404,7 @@ pub fn site_config_from_config(
         minimum_password_complexity: password_config.minimum_complexity(),
         session_expiration,
         login_with_email_allowed: account_config.login_with_email_allowed,
+        admin_portal_url: account_config.admin_portal_url.clone(),
         plan_management_iframe_uri: experimental_config.plan_management_iframe_uri.clone(),
         session_limit: experimental_config
             .session_limit
@@ -443,7 +414,7 @@ pub fn site_config_from_config(
                 hard_limit: c.hard_limit,
             }),
         flow_engine_enabled: false,
-        phone_verification_enabled: !matches!(sms_config.transport, SmsTransportKind::Blackhole),
+        phone_verification_enabled: !matches!(&sms_config.provider, SmsProviderConfig::Blackhole),
     })
 }
 
@@ -526,6 +497,7 @@ pub async fn diesel_pool_from_config(
         .wait_timeout(Some(config.connect_timeout))
         .create_timeout(Some(config.connect_timeout))
         .recycle_timeout(Some(std::time::Duration::from_secs(5)))
+        .pre_recycle(cleanup_pooled_postgres_connection())
         .runtime(deadpool::Runtime::Tokio1)
         .build()
         .context("could not build diesel connection pool")?;
@@ -543,6 +515,15 @@ pub async fn load_policy_factory_dynamic_data_continuously(
     task_tracker: &TaskTracker,
 ) -> Result<(), anyhow::Error> {
     let policy_factory = policy_factory.clone();
+
+    // If the backend ignores dynamic data (e.g. Cedar), there's nothing to load
+    // and no point spawning a polling loop.
+    if !policy_factory.supports_dynamic_data() {
+        tracing::debug!(
+            "Policy backend does not support dynamic data; skipping dynamic data loader"
+        );
+        return Ok(());
+    }
 
     load_policy_factory_dynamic_data(&policy_factory, &*repository_factory).await?;
 
@@ -584,7 +565,12 @@ pub async fn load_policy_factory_dynamic_data(
         .await
         .context("Failed to acquire database connection")?;
 
-    if let Some(data) = repo.policy_data().get().await? {
+    let policy_data = repo.policy_data().get().await;
+    repo.cancel()
+        .await
+        .context("Failed to close read-only policy transaction")?;
+
+    if let Some(data) = policy_data? {
         let id = data.id;
         let updated = policy_factory.set_dynamic_data(data).await?;
         if updated {
@@ -595,28 +581,26 @@ pub async fn load_policy_factory_dynamic_data(
     Ok(())
 }
 
-/// Create a clonable, type-erased [`HomeserverAdmin`] and a
-/// [`ConnectorRegistry`] from the configuration.
+/// Create a [`ConnectorRegistry`] from the configuration.
 ///
-/// The returned registry contains the connector as its primary provider,
-/// while the `Arc<dyn HomeserverAdmin>` is kept for backward
-/// compatibility with code that accesses the homeserver directly.
+/// The returned registry contains the connector as its primary provider.
+/// Callers that need a direct homeserver handle should use
+/// [`ConnectorRegistry::primary_homeserver`].
 pub async fn homeserver_connection_from_config(
     config: &MatrixConfig,
     http_client: reqwest::Client,
-) -> anyhow::Result<(Arc<dyn HomeserverAdmin>, ConnectorRegistry)> {
+) -> anyhow::Result<ConnectorRegistry> {
     let mut registry = ConnectorRegistry::new();
 
-    Ok(match config.kind {
-        HomeserverKind::Palpo | HomeserverKind::PalpoModern => {
+    match config.kind {
+        HomeserverKind::Palpo => {
             let palpo = Arc::new(PalpoAdmin::new(
                 config.homeserver.clone(),
                 config.endpoint.clone(),
                 config.secret().await?,
                 http_client,
             ));
-            registry.register(Arc::clone(&palpo) as _);
-            (palpo as Arc<dyn HomeserverAdmin>, registry)
+            registry.register(palpo as _);
         }
         HomeserverKind::PalpoReadOnly => {
             let palpo = PalpoAdmin::new(
@@ -626,15 +610,25 @@ pub async fn homeserver_connection_from_config(
                 http_client,
             );
             let readonly = Arc::new(ReadOnlyHomeserverAdmin::new(palpo));
-            registry.register(Arc::clone(&readonly) as _);
-            (readonly as Arc<dyn HomeserverAdmin>, registry)
+            registry.register(readonly as _);
         }
-    })
+    }
+
+    Ok(registry)
 }
 
 #[cfg(test)]
 mod tests {
+    use std::num::NonZeroU32;
+
+    use diesel::{
+        sql_query,
+        QueryableByName,
+        sql_types::{BigInt, Uuid as DieselUuid},
+    };
+    use diesel_async::RunQueryDsl as _;
     use rand_core::SeedableRng;
+    use uuid::Uuid;
     use zeroize::Zeroizing;
 
     use super::*;
@@ -702,5 +696,74 @@ mod tests {
         .unwrap();
         let manager = password_manager_from_config(&config).await;
         assert!(manager.is_err());
+    }
+
+    #[derive(QueryableByName)]
+    struct RowCount {
+        #[diesel(sql_type = BigInt)]
+        count: i64,
+    }
+
+    #[tokio::test]
+    async fn test_diesel_pool_recycles_connections_back_to_a_clean_session() {
+        let database_url = std::env::var("DATABASE_URL").expect("DATABASE_URL must be set for tests");
+        let config = DatabaseConfig {
+            uri: Some(database_url),
+            max_connections: NonZeroU32::new(1).unwrap(),
+            ..Default::default()
+        };
+        let pool = diesel_pool_from_config(&config).await.unwrap();
+        let row_id = Uuid::now_v7();
+        let table_name = format!("codex_pool_cleanup_test_{}", Uuid::now_v7().simple());
+
+        {
+            let mut conn = pool.get().await.unwrap();
+            let drop_table_sql = format!("DROP TABLE IF EXISTS {table_name}");
+            sql_query(&drop_table_sql).execute(&mut *conn).await.unwrap();
+            let create_table_sql = format!(
+                r"
+                    CREATE TABLE IF NOT EXISTS {table_name} (
+                        id UUID PRIMARY KEY
+                    )
+                "
+            );
+            sql_query(&create_table_sql).execute(&mut *conn).await.unwrap();
+
+            sql_query("BEGIN").execute(&mut *conn).await.unwrap();
+            let insert_sql = format!("INSERT INTO {table_name} (id) VALUES ($1)");
+            sql_query(&insert_sql)
+                .bind::<DieselUuid, _>(row_id)
+                .execute(&mut *conn)
+                .await
+                .unwrap();
+        }
+
+        let mut conn = pool.get().await.unwrap();
+        let select_sql = format!("SELECT COUNT(*) AS count FROM {table_name} WHERE id = $1");
+        let row_count = sql_query(&select_sql)
+            .bind::<DieselUuid, _>(row_id)
+            .get_result::<RowCount>(&mut *conn)
+            .await
+            .unwrap();
+
+        assert_eq!(row_count.count, 0);
+
+        let insert_sql = format!("INSERT INTO {table_name} (id) VALUES ($1)");
+        sql_query(&insert_sql)
+            .bind::<DieselUuid, _>(row_id)
+            .execute(&mut *conn)
+            .await
+            .unwrap();
+
+        let row_count = sql_query(&select_sql)
+            .bind::<DieselUuid, _>(row_id)
+            .get_result::<RowCount>(&mut *conn)
+            .await
+            .unwrap();
+
+        assert_eq!(row_count.count, 1);
+
+        let drop_sql = format!("DROP TABLE IF EXISTS {table_name}");
+        sql_query(&drop_sql).execute(&mut *conn).await.unwrap();
     }
 }

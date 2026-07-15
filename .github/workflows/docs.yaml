@@ -44,7 +44,7 @@ jobs:
           done
 
       - name: Store pages artifact
-        uses: actions/upload-pages-artifact@v4.0.0
+        uses: actions/upload-pages-artifact@v5.0.0
         with:
           path: target/book/
 
@@ -65,4 +65,4 @@ jobs:
     steps:
       - name: Publish pages
         id: pages-deploy
-        uses: actions/deploy-pages@v4.0.5
+        uses: actions/deploy-pages@v5.0.0

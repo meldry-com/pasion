@@ -23,7 +23,7 @@ use super::token_service::{
     RefreshTokenExchangeError,
 };
 use crate::{
-    handlers::METER,
+    handlers::{METER, common::DepotExt},
     salvo_utils::client_authorization::{ClientAuthorization, CredentialsVerificationError},
 };
 
@@ -345,7 +345,15 @@ pub async fn post(req: &mut Request, depot: &mut Depot, res: &mut Response) {
             );
             res.render(Json(reply));
         }
-        Err(e) => e.render(res),
+        Err(e) => {
+            // Only the Display form goes into logs — the Debug form (`?e`)
+            // can carry full request payloads / authorization codes /
+            // refresh tokens through `RouteError` variants that wrap inner
+            // errors, and shipping those to disk or to a remote log
+            // collector is a credential leak.
+            tracing::error!(error = %e, "OAuth2 token endpoint failed");
+            e.render(res);
+        }
     }
 }
 
@@ -381,17 +389,14 @@ async fn handle_post(
         .get::<BoxRepositoryFactory>("box_repository_factory")
         .expect("BoxRepositoryFactory not found in depot");
     let activity_tracker = crate::handlers::account::extract_bound_activity_tracker(req, depot);
-    let policy_factory = depot
-        .get::<Arc<pasion_policy::PolicyFactory>>("policy_factory")
-        .expect("PolicyFactory not found in depot");
 
     let clock: BoxClock = Box::new(SystemClock::default());
     let mut rng: BoxRng =
         Box::new(ChaChaRng::from_rng(rand_core::OsRng).expect("Failed to seed rng"));
 
     let mut repo: BoxRepository = repo_factory.create().await?;
-    let policy: Policy = policy_factory
-        .instantiate()
+    let policy: Policy = depot
+        .policy()
         .await
         .map_err(|e| RouteError::Internal(Box::new(e)))?;
 
@@ -408,9 +413,19 @@ async fn handle_post(
         .as_ref()
         .ok_or(RouteError::ClientNotAllowed(client.id))?;
 
+    let token_endpoint = url_builder.oauth_token_endpoint();
+    let issuer = url_builder.oidc_issuer();
     client_authorization
         .credentials
-        .verify(http_client, encrypter, method, &client)
+        .verify(
+            http_client,
+            encrypter,
+            method,
+            &client,
+            &token_endpoint,
+            &issuer,
+            clock.now(),
+        )
         .await
         .map_err(|err| {
             // Classify the error differently, depending on whether it's an 'internal'
@@ -430,7 +445,12 @@ async fn handle_post(
 
     let form = client_authorization.form.ok_or(RouteError::BadRequest)?;
 
-    let grant_type = form.grant_type();
+    let grant_type = form.grant_type().to_string();
+    tracing::info!(
+        oauth2_client.id = %client.id,
+        grant_type = %grant_type,
+        "Handling OAuth2 token request"
+    );
 
     let (reply, repo) = match form {
         AccessTokenRequest::AuthorizationCode(grant) => {
@@ -498,11 +518,22 @@ async fn handle_post(
             (reply, repo)
         }
         _ => {
+            tracing::warn!(
+                oauth2_client.id = %client.id,
+                grant_type = %grant_type,
+                "Client requested an unsupported grant type at the token endpoint"
+            );
             return Err(RouteError::UnsupportedGrantType);
         }
     };
 
     repo.save().await?;
+
+    tracing::debug!(
+        oauth2_client.id = %client.id,
+        grant_type = %grant_type,
+        "OAuth2 token request completed successfully"
+    );
 
     TOKEN_REQUEST_COUNTER.add(
         1,

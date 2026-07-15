@@ -104,8 +104,8 @@ pub(crate) fn generate_id_token(
         .id_token_signed_response_alg
         .clone()
         .unwrap_or(JsonWebSignatureAlg::Rs256);
-    let key = key_store
-        .signing_key_for_algorithm(&alg)
+    let (kid, signer) = key_store
+        .signer_for_algorithm(&alg)
         .ok_or(IdTokenSignatureError::InvalidSigningKey)?;
 
     if let Some(access_token) = access_token {
@@ -116,10 +116,8 @@ pub(crate) fn generate_id_token(
         claims::C_HASH.insert(&mut claims, hash_token(&alg, &code.code)?)?;
     }
 
-    let signer = key.params().signing_key_for_alg(&alg)?;
-    let header = JsonWebSignatureHeader::new(alg)
-        .with_kid(key.kid().ok_or(IdTokenSignatureError::InvalidSigningKey)?);
-    let id_token = Jwt::sign_with_rng(rng, header, claims, &signer)?;
+    let header = JsonWebSignatureHeader::new(alg).with_kid(kid);
+    let id_token = Jwt::sign_with_rng(rng, header, claims, signer.as_ref())?;
 
     Ok(id_token.into_string())
 }

@@ -120,16 +120,17 @@ fn LoginFormBasic(error_msg: Option<String>) -> Element {
                 password_registration_enabled: false,
                 account_recovery_allowed: true,
             },
+            initial_error: error_msg,
         }
     }
 }
 
 #[component]
-fn LoginForm(providers: ProvidersResponse) -> Element {
+fn LoginForm(providers: ProvidersResponse, initial_error: Option<String>) -> Element {
     let mut username = use_signal(String::new);
     let mut password = use_signal(String::new);
     let mut submitting = use_signal(|| false);
-    let mut error = use_signal(|| None::<String>);
+    let mut error = use_signal(|| initial_error.clone());
     let nav = navigator();
     let has_providers = !providers.providers.is_empty();
     let password_enabled = providers.password_login_enabled;

@@ -132,9 +132,13 @@ email:
     # 支持: smtp, sendmail, resend, sendgrid, twilio, brevo, aws_ses, http_webhook
 
 # 短信通知（多渠道通知中心，支持 Twilio / 阿里云 / 腾讯云）
-# sms:
-#   transport: aliyun
-#   ...
+sms:
+  provider:
+    type: aliyun_sms
+    access_key_id: "your-access-key-id"
+    access_key_secret: "your-access-key-secret"
+    sign_name: "你的签名"
+    template_code: "SMS_123456789"
 ```
 
 完整配置参考请查阅[配置文档](docs/zh/reference/configuration.md)。

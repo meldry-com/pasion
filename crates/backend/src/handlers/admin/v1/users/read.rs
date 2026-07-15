@@ -20,13 +20,6 @@ use crate::{
     },
 };
 
-#[derive(Deserialize, JsonSchema)]
-pub struct UsernamePathParam {
-    /// The username (localpart) of the user to get
-    #[allow(dead_code)]
-    username: String,
-}
-
 #[endpoint]
 #[tracing::instrument(name = "handler.admin.v1.users.by_username", skip_all)]
 pub async fn get_by_username(req: &mut Request, depot: &Depot) -> JsonResult<SingleResponse<User>> {

@@ -1435,6 +1435,76 @@ body:has(.dialog-overlay) .theme-toggle {
     pointer-events: none;
 }
 
+/* Password strength indicator */
+.pw-strength {
+    margin-top: 6px;
+}
+
+.pw-strength-track {
+    height: 4px;
+    border-radius: 2px;
+    background-color: var(--color-border);
+    overflow: hidden;
+}
+
+.pw-strength-bar {
+    height: 100%;
+    border-radius: 2px;
+    width: 0;
+    background-color: transparent;
+    transition: width 0.3s ease, background-color 0.3s ease;
+}
+
+.pw-strength-label {
+    font-size: 0.75rem;
+    margin-top: 2px;
+    display: inline-block;
+    color: var(--color-text-secondary);
+}
+
+.pw-strength-bar[data-strength="weak"] {
+    width: 25%;
+    background-color: var(--color-destructive);
+}
+.pw-strength-bar[data-strength="fair"] {
+    width: 50%;
+    background-color: var(--color-warning);
+}
+.pw-strength-bar[data-strength="good"] {
+    width: 75%;
+    background-color: var(--color-success);
+}
+.pw-strength-bar[data-strength="strong"] {
+    width: 100%;
+    background-color: var(--color-info);
+}
+
+.pw-strength-label[data-strength="weak"] { color: var(--color-destructive); }
+.pw-strength-label[data-strength="fair"] { color: var(--color-warning); }
+.pw-strength-label[data-strength="good"] { color: var(--color-success); }
+.pw-strength-label[data-strength="strong"] { color: var(--color-info); }
+
+/* Small utilities (replace one-off inline styles) */
+.text-italic {
+    font-style: italic;
+}
+
+.is-hidden {
+    display: none;
+}
+
+.text-destructive {
+    color: var(--color-destructive);
+}
+
+/* Large avatar variant used in the edit-profile dialog */
+.user-avatar-lg {
+    width: 88px;
+    height: 88px;
+    object-fit: cover;
+    font-size: 32px;
+}
+
 /* ─── Footer ───────────────────────────────────────────────── */
 
 .legal-footer {

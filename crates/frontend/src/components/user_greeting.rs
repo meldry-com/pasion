@@ -1,6 +1,9 @@
 use dioxus::prelude::*;
 
-use crate::api::types::{MatrixUser, PatchViewerProfileResponse, UserProfile};
+use crate::{
+    api::types::{MatrixUser, PatchViewerProfileResponse, UserProfile},
+    components::dialog::Dialog,
+};
 
 #[component]
 pub fn UserGreeting(
@@ -79,27 +82,17 @@ pub fn EditProfileDialog(
         .to_string();
 
     rsx! {
-        div {
-            class: "dialog-overlay",
-            onclick: move |_| open.set(false),
-            div {
-                class: "dialog-content",
-                onclick: move |e| e.stop_propagation(),
-
-                h3 { class: "dialog-title", "Edit profile" }
-
+        Dialog { open: open, title: "Edit profile".to_string(),
                 // Avatar section with upload
                 div { class: "flex flex-col items-center gap-3",
                     if let Some(ref url) = *current_avatar_url.read() {
                         img {
-                            class: "user-avatar self-center",
-                            style: "width: 88px; height: 88px; object-fit: cover;",
+                            class: "user-avatar user-avatar-lg self-center",
                             src: "{url}",
                             alt: "Avatar",
                         }
                     } else {
-                        div { class: "user-avatar self-center",
-                            style: "width: 88px; height: 88px; font-size: 32px;",
+                        div { class: "user-avatar user-avatar-lg self-center",
                             "{avatar_initial}"
                         }
                     }
@@ -110,7 +103,7 @@ pub fn EditProfileDialog(
                         id: "user-greeting-avatar-input",
                         r#type: "file",
                         accept: "image/png,image/jpeg,image/gif,image/webp",
-                        style: "display: none;",
+                        class: "is-hidden",
                         onchange: move |evt| {
                             uploading_avatar.set(true);
                             error.set(None);
@@ -248,7 +241,6 @@ pub fn EditProfileDialog(
                     onclick: move |_| open.set(false),
                     "Cancel"
                 }
-            }
         }
     }
 }

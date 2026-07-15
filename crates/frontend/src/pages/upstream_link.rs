@@ -93,11 +93,16 @@ pub fn UpstreamLink(id: String) -> Element {
 
 #[component]
 fn LinkStateView(id: String, state: LinkState) -> Element {
+    // When the backend asks for an immediate redirect, perform it after render
+    // (top-level hook keeps ordering stable across state variants).
+    let redirect_url = match &state {
+        LinkState::Redirect { redirect_url } => Some(redirect_url.clone()),
+        _ => None,
+    };
+    crate::utils::use_redirect_url(redirect_url.is_some(), redirect_url.unwrap_or_default());
+
     match state {
-        LinkState::Redirect { redirect_url } => {
-            // Redirect immediately
-            let nav = navigator();
-            nav.push(redirect_url);
+        LinkState::Redirect { .. } => {
             rsx! { LoadingSpinner {} }
         }
         LinkState::SuggestLink {

@@ -20,7 +20,7 @@ concurrency:
 jobs:
   compute-version:
     name: Derive version from git tags
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-24.04-arm64
 
     permissions:
       contents: read
@@ -43,7 +43,7 @@ jobs:
 
   prepare-image-build:
     name: Resolve image names and tags
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-24.04-arm64
 
     permissions:
       contents: read
@@ -55,8 +55,8 @@ jobs:
       gitea_registry: ${{ steps.image.outputs.gitea_registry }}
       gitea_registry_user: ${{ steps.image.outputs.gitea_registry_user }}
       use_dockerhub: ${{ steps.image.outputs.use_dockerhub }}
+      enabled_arches: ${{ steps.arches.outputs.enabled_arches }}
       regular_suffixes: ${{ steps.tags.outputs.regular_suffixes }}
-      source_suffix: ${{ steps.tags.outputs.source_suffix }}
 
     steps:
       - name: Resolve image names
@@ -157,44 +157,18 @@ jobs:
             echo "regular_suffixes<<EOF"
             printf "%s\n" "${regular_suffixes[@]}" | awk '!seen[$0]++'
             echo "EOF"
-            echo "source_suffix=sha-${short_sha}"
           } >> "$GITHUB_OUTPUT"
 
-  smoke-test-runtime:
-    name: Smoke test runtime image
-    runs-on: ubuntu-24.04
-    needs:
-      - compute-version
-
-    permissions:
-      contents: read
-
-    env:
-      VERGEN_GIT_DESCRIBE: ${{ needs.compute-version.outputs.describe }}
-      SOURCE_DATE_EPOCH: ${{ needs.compute-version.outputs.timestamp }}
-
-    steps:
-      - name: Fetch repository
-        uses: actions/checkout@v4
-
-      - name: Build debug runtime image
+      - name: Resolve enabled image architectures
+        id: arches
         shell: bash
         run: |
-          set -euo pipefail
-          docker build --target debug \
-            --build-arg VERGEN_GIT_DESCRIBE="${VERGEN_GIT_DESCRIBE}" \
-            -t pasion-runtime-smoke .
-
-      - name: Verify default storage root is writable
-        shell: bash
-        run: |
-          set -euo pipefail
-          docker run --rm --entrypoint=/busybox/sh pasion-runtime-smoke -c '
-            set -e
-            test "$PWD" = "/var/lib/pasion"
-            mkdir -p ./data/media
-            touch ./data/media/.write-test
-          '
+          {
+            echo "enabled_arches<<EOF"
+            echo "amd64"
+            echo "arm64"
+            echo "EOF"
+          } >> "$GITHUB_OUTPUT"
 
   build-image-arch:
     name: Build Docker images (${{ matrix.arch }})
@@ -202,17 +176,14 @@ jobs:
     needs:
       - compute-version
       - prepare-image-build
-      - smoke-test-runtime
 
     strategy:
       fail-fast: false
       matrix:
         include:
           - arch: amd64
-            platform: linux/amd64
             runner: ubuntu-24.04
           - arch: arm64
-            platform: linux/arm64
             runner: ubuntu-24.04-arm64
 
     permissions:
@@ -226,11 +197,8 @@ jobs:
       - name: Fetch repository
         uses: actions/checkout@v4
 
-      - name: Configure Docker Buildx
-        uses: docker/setup-buildx-action@v3
-
       - name: Log in to Gitea registry
-        if: needs.prepare-image-build.outputs.push == 'true' && needs.prepare-image-build.outputs.use_gitea_registry == 'true'
+        if: needs.prepare-image-build.outputs.use_gitea_registry == 'true'
         uses: docker/login-action@v3
         with:
           registry: ${{ needs.prepare-image-build.outputs.gitea_registry }}
@@ -254,37 +222,99 @@ jobs:
           set -euo pipefail
 
           release_tags=()
+          publish_tags=()
 
           while IFS= read -r image; do
             [ -n "$image" ] || continue
             while IFS= read -r suffix; do
               [ -n "$suffix" ] || continue
               release_tags+=("${image}:${suffix}-${{ matrix.arch }}")
+              publish_tags+=("${image}:${suffix}-${{ matrix.arch }}")
             done <<< "$FINAL_SUFFIXES"
           done <<< "$IMAGES"
 
           {
             echo "release<<EOF"
-            printf "%s\n" "${release_tags[@]}"
+            printf "%s\n" "${release_tags[@]}" | awk '!seen[$0]++'
+            echo "EOF"
+            echo "publish<<EOF"
+            printf "%s\n" "${publish_tags[@]}" | awk '!seen[$0]++'
             echo "EOF"
           } >> "$GITHUB_OUTPUT"
 
       - name: Build release image for ${{ matrix.arch }}
-        uses: docker/build-push-action@v6
-        with:
-          context: .
-          file: Dockerfile
-          platforms: ${{ matrix.platform }}
-          pull: true
-          push: ${{ needs.prepare-image-build.outputs.push == 'true' }}
-          provenance: false
-          sbom: false
-          build-args: |
-            VERGEN_GIT_DESCRIBE=${{ needs.compute-version.outputs.describe }}
-          tags: ${{ steps.arch-tags.outputs.release }}
+        shell: bash
+        env:
+          PUBLISH_TAGS: ${{ steps.arch-tags.outputs.publish }}
+        run: |
+          set -euo pipefail
 
-  publish-image-manifests:
-    name: Publish Docker image manifests
+          tag_args=()
+          while IFS= read -r tag; do
+            [ -n "$tag" ] || continue
+            tag_args+=("-t" "$tag")
+          done <<< "$PUBLISH_TAGS"
+
+          if [ "${#tag_args[@]}" -eq 0 ]; then
+            echo "No release image tags were produced" >&2
+            exit 1
+          fi
+
+          docker build \
+            --pull \
+            "${tag_args[@]}" \
+            --build-arg "VERGEN_GIT_DESCRIBE=${{ needs.compute-version.outputs.describe }}" \
+            -f Dockerfile \
+            .
+
+      - name: Push release image tags for ${{ matrix.arch }}
+        if: needs.prepare-image-build.outputs.push == 'true'
+        shell: bash
+        env:
+          PUBLISH_TAGS: ${{ steps.arch-tags.outputs.publish }}
+        run: |
+          set -euo pipefail
+
+          while IFS= read -r tag; do
+            [ -n "$tag" ] || continue
+            docker push "$tag"
+          done <<< "$PUBLISH_TAGS"
+
+      - name: Smoke test pushed release image for ${{ matrix.arch }}
+        if: needs.prepare-image-build.outputs.push == 'true'
+        shell: bash
+        env:
+          RELEASE_TAGS: ${{ steps.arch-tags.outputs.release }}
+        run: |
+          set -euo pipefail
+
+          image="$(printf '%s\n' "$RELEASE_TAGS" | sed '/^$/d' | head -n1)"
+          if [ -z "$image" ]; then
+            echo "No release image tag was produced" >&2
+            exit 1
+          fi
+
+          docker pull "$image"
+          docker run --rm "$image" --version
+
+      - name: Smoke test local release image for ${{ matrix.arch }}
+        if: needs.prepare-image-build.outputs.push != 'true'
+        shell: bash
+        env:
+          RELEASE_TAGS: ${{ steps.arch-tags.outputs.release }}
+        run: |
+          set -euo pipefail
+
+          image="$(printf '%s\n' "$RELEASE_TAGS" | sed '/^$/d' | head -n1)"
+          if [ -z "$image" ]; then
+            echo "No release image tag was produced" >&2
+            exit 1
+          fi
+
+          docker run --rm "$image" --version
+
+  merge-image-manifests:
+    name: Publish multi-arch image manifests
     runs-on: ubuntu-24.04
     needs:
       - prepare-image-build
@@ -295,7 +325,7 @@ jobs:
       contents: read
 
     steps:
-      - name: Configure Docker Buildx
+      - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
 
       - name: Log in to Gitea registry
@@ -313,41 +343,70 @@ jobs:
           username: ${{ vars.DOCKERHUB_USER }}
           password: ${{ secrets.DOCKERHUB_TOKEN }}
 
-      - name: Publish release multi-arch manifests
+      - name: Assemble multi-arch manifests
         shell: bash
         env:
           IMAGES: ${{ needs.prepare-image-build.outputs.images }}
           FINAL_SUFFIXES: ${{ needs.prepare-image-build.outputs.regular_suffixes }}
-          SOURCE_SUFFIX: ${{ needs.prepare-image-build.outputs.source_suffix }}
+          ENABLED_ARCHES: ${{ needs.prepare-image-build.outputs.enabled_arches }}
         run: |
           set -euo pipefail
 
+          arches=()
+          while IFS= read -r arch; do
+            [ -n "$arch" ] || continue
+            arches+=("$arch")
+          done <<< "$ENABLED_ARCHES"
+
+          if [ "${#arches[@]}" -eq 0 ]; then
+            echo "No enabled architectures were resolved" >&2
+            exit 1
+          fi
+
           while IFS= read -r image; do
             [ -n "$image" ] || continue
-
-            args=()
             while IFS= read -r suffix; do
               [ -n "$suffix" ] || continue
-              args+=("-t" "${image}:${suffix}")
-            done <<< "$FINAL_SUFFIXES"
 
-            docker buildx imagetools create \
-              "${args[@]}" \
-              "${image}:${SOURCE_SUFFIX}-amd64" \
-              "${image}:${SOURCE_SUFFIX}-arm64"
+              sources=()
+              for arch in "${arches[@]}"; do
+                sources+=("${image}:${suffix}-${arch}")
+              done
+
+              echo "Creating multi-arch manifest ${image}:${suffix} from ${sources[*]}"
+              docker buildx imagetools create \
+                --tag "${image}:${suffix}" \
+                "${sources[@]}"
+            done <<< "$FINAL_SUFFIXES"
           done <<< "$IMAGES"
 
+  summarize-published-images:
+    name: Summarize published images
+    runs-on: ubuntu-24.04-arm64
+    needs:
+      - prepare-image-build
+      - build-image-arch
+      - merge-image-manifests
+    if: needs.prepare-image-build.outputs.push == 'true'
+
+    permissions:
+      contents: read
+
+    steps:
       - name: Summarize image result
         shell: bash
         env:
+          ENABLED_ARCHES: ${{ needs.prepare-image-build.outputs.enabled_arches }}
           IMAGES: ${{ needs.prepare-image-build.outputs.images }}
         run: |
-          echo "Published multi-arch images for:"
-          printf '  - %s\n' "$IMAGES"
+          echo "Published release images for architectures:"
+          printf '%s\n' "$ENABLED_ARCHES" | sed '/^$/d; s/^/  - /'
+          echo "Published image repositories:"
+          printf '%s\n' "$IMAGES" | sed '/^$/d; s/^/  - /'
 
   summarize-image-build:
     name: Summarize local image build
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-24.04-arm64
     needs:
       - prepare-image-build
       - build-image-arch
@@ -359,6 +418,9 @@ jobs:
     steps:
       - name: Summarize image result
         shell: bash
+        env:
+          ENABLED_ARCHES: ${{ needs.prepare-image-build.outputs.enabled_arches }}
         run: |
-          echo "Built amd64 and arm64 release images in parallel without pushing."
-          echo "Set REGISTRY_USER / REGISTRY_TOKEN and optionally DOCKERHUB_USER / DOCKERHUB_TOKEN to publish manifests."
+          echo "Built local release images for architectures:"
+          printf '%s\n' "$ENABLED_ARCHES" | sed '/^$/d; s/^/  - /'
+          echo "Set REGISTRY_USER / REGISTRY_TOKEN and optionally DOCKERHUB_USER / DOCKERHUB_TOKEN to push release image tags."

@@ -3,6 +3,7 @@ use dioxus::prelude::*;
 use crate::{
     api::types::{LinkedAccountsResponse, ProvidersResponse},
     components::{
+        linked_accounts::{LinkProvidersRow, LinkedAccountRow},
         loading::LoadingScreen,
         separator::{Separator, SeparatorKind},
     },
@@ -55,7 +56,7 @@ pub fn IdentityBindings() -> Element {
                     }
 
                     if accounts.is_empty() {
-                        p { class: "text-md text-secondary", style: "font-style: italic;",
+                        p { class: "text-md text-secondary text-italic",
                             "No external accounts linked."
                         }
                     } else {
@@ -63,9 +64,6 @@ pub fn IdentityBindings() -> Element {
                             for account in accounts.iter() {
                                 {
                                     let account_id = account.id.clone();
-                                    let display_name = account.human_account_name.clone()
-                                        .or_else(|| Some(account.subject.clone()))
-                                        .unwrap_or_default();
                                     let provider_label = account.provider_name.clone()
                                         .or_else(|| account.provider_brand.clone())
                                         .unwrap_or_else(|| "External provider".to_string());
@@ -73,43 +71,31 @@ pub fn IdentityBindings() -> Element {
                                     // Prevent unlinking the last linked account
                                     let can_unlink = account_count > 1;
                                     rsx! {
-                                        div {
-                                            class: "flex items-center justify-between p-3 rounded-lg border",
-                                            div { class: "flex flex-col gap-1",
-                                                span { class: "text-md font-semibold", "{provider_label}" }
-                                                span { class: "text-sm text-secondary", "{display_name}" }
-                                            }
-                                            button {
-                                                class: "btn btn-destructive btn-sm",
-                                                disabled: !can_unlink || unlinking_id.read().is_some(),
-                                                title: if !can_unlink { "Cannot unlink last connected account" } else { "Unlink this account" },
-                                                onclick: {
-                                                    let aid = account_id.clone();
-                                                    let label = provider_label.clone();
-                                                    move |_| {
-                                                        let aid = aid.clone();
-                                                        let label = label.clone();
-                                                        unlinking_id.set(Some(aid.clone()));
-                                                        feedback.set(None);
-                                                        spawn(async move {
-                                                            let result = crate::api::api_delete::<crate::api::types::UnlinkResponse>(
-                                                                &format!("/linked-accounts/{aid}"),
-                                                            ).await;
-                                                            unlinking_id.set(None);
-                                                            match result {
-                                                                Ok(_) => {
-                                                                    feedback.set(Some(Ok(format!("{label} unlinked."))));
-                                                                    data.restart();
-                                                                }
-                                                                Err(e) => {
-                                                                    feedback.set(Some(Err(e)));
-                                                                }
-                                                            }
-                                                        });
+                                        LinkedAccountRow {
+                                            account: account.clone(),
+                                            is_unlinking: is_unlinking,
+                                            unlink_disabled: !can_unlink || unlinking_id.read().is_some(),
+                                            title: if !can_unlink { "Cannot unlink last connected account".to_string() } else { "Unlink this account".to_string() },
+                                            on_unlink: move |aid: String| {
+                                                let label = provider_label.clone();
+                                                unlinking_id.set(Some(aid.clone()));
+                                                feedback.set(None);
+                                                spawn(async move {
+                                                    let result = crate::api::api_delete::<crate::api::types::UnlinkResponse>(
+                                                        &format!("/linked-accounts/{aid}"),
+                                                    ).await;
+                                                    unlinking_id.set(None);
+                                                    match result {
+                                                        Ok(_) => {
+                                                            feedback.set(Some(Ok(format!("{label} unlinked."))));
+                                                            data.restart();
+                                                        }
+                                                        Err(e) => {
+                                                            feedback.set(Some(Err(e)));
+                                                        }
                                                     }
-                                                },
-                                                if is_unlinking { "Unlinking…" } else { "Unlink" }
-                                            }
+                                                });
+                                            },
                                         }
                                     }
                                 }
@@ -131,7 +117,8 @@ pub fn IdentityBindings() -> Element {
                                 .providers
                                 .iter()
                                 .filter(|p| !linked_ids.contains(&p.id))
-                                .collect();
+                                .cloned()
+                                .collect::<Vec<_>>();
                             if !unlinked.is_empty() {
                                 rsx! {
                                     div { class: "flex flex-col gap-2",
@@ -140,15 +127,7 @@ pub fn IdentityBindings() -> Element {
                                             "Connect an additional external account to enable more sign-in options."
                                         }
                                     }
-                                    div { class: "flex flex-wrap gap-2",
-                                        for provider in unlinked.iter() {
-                                            a {
-                                                class: "btn btn-secondary btn-sm",
-                                                href: "{provider.authorize_url}",
-                                                "Link {provider.human_name.clone().unwrap_or_else(|| provider.id.clone())}"
-                                            }
-                                        }
-                                    }
+                                    LinkProvidersRow { providers: unlinked }
                                     Separator {}
                                 }
                             } else {

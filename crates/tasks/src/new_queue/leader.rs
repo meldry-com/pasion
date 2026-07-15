@@ -2,9 +2,12 @@ use chrono::Duration;
 use cron::Schedule;
 use diesel::{sql_query, sql_types::Bool};
 use diesel_async::RunQueryDsl;
-use pasion_data::{DatabaseError, PgRepository, RepositoryAccess, queue::InsertableJob};
+use pasion_data::{
+    DatabaseError, PgRepository, RepositoryAccess, advisory_lock::advisory_lock_key,
+    queue::InsertableJob,
+};
 
-use super::QueueRunnerError;
+use super::{QueueRunnerError, shared::MAX_ATTEMPTS};
 use crate::State;
 
 /// Result of a `pg_try_advisory_lock` query.
@@ -12,12 +15,6 @@ use crate::State;
 struct AdvisoryLockResult {
     #[diesel(sql_type = Bool)]
     acquired: bool,
-}
-
-/// Derive a stable i64 key from a human-readable lock name using CRC-32.
-fn advisory_lock_key(name: &str) -> i64 {
-    const CRC_IEEE: crc::Crc<u32> = crc::Crc::<u32>::new(&crc::CRC_32_ISO_HDLC);
-    i64::from(CRC_IEEE.checksum(name.as_bytes()))
 }
 
 /// A cron-like schedule definition that the leader evaluates every tick.
@@ -60,6 +57,83 @@ fn missing_schedule_names(
         .collect()
 }
 
+async fn recover_abandoned_jobs(
+    repo: &mut PgRepository,
+    rng: &mut rand_chacha::ChaChaRng,
+    clock: &dyn pasion_data::Clock,
+) -> Result<(), QueueRunnerError> {
+    let dead_workers = repo
+        .queue_worker()
+        .shutdown_dead_workers(clock, Duration::minutes(2))
+        .await?;
+
+    match dead_workers.len() {
+        0 => {}
+        1 => tracing::warn!(
+            worker.id = %dead_workers[0].id,
+            worker.last_seen_at = %dead_workers[0].last_seen_at,
+            worker.shutdown_at = %dead_workers[0].shutdown_at,
+            "Marked one worker as shut down after missed heartbeats"
+        ),
+        _ => {
+            for worker in &dead_workers {
+                tracing::warn!(
+                    worker.id = %worker.id,
+                    worker.last_seen_at = %worker.last_seen_at,
+                    worker.shutdown_at = %worker.shutdown_at,
+                    "Marked worker as shut down after missed heartbeats"
+                );
+            }
+        }
+    }
+
+    let abandoned_jobs = repo
+        .queue_job()
+        .mark_abandoned_jobs_as_failed(clock, "worker lost heartbeat")
+        .await?;
+
+    let mut recovered_jobs = 0;
+    let mut abandoned_forever = 0;
+    for job in abandoned_jobs {
+        if job.attempt < MAX_ATTEMPTS {
+            repo.queue_job()
+                .retry(rng, clock, job.id, Duration::zero())
+                .await?;
+            recovered_jobs += 1;
+
+            tracing::warn!(
+                job.id = %job.id,
+                job.queue.name = %job.queue_name,
+                job.attempt = job.attempt,
+                worker.id = %job.started_by,
+                worker.shutdown_at = %job.worker_shutdown_at,
+                "Recovered an abandoned job after worker shutdown"
+            );
+        } else {
+            abandoned_forever += 1;
+
+            tracing::error!(
+                job.id = %job.id,
+                job.queue.name = %job.queue_name,
+                job.attempt = job.attempt,
+                worker.id = %job.started_by,
+                worker.shutdown_at = %job.worker_shutdown_at,
+                "Abandoned job exceeded the retry limit after worker shutdown"
+            );
+        }
+    }
+
+    if recovered_jobs > 0 || abandoned_forever > 0 {
+        tracing::warn!(
+            recovered_jobs,
+            abandoned_forever,
+            "Processed abandoned jobs left behind by shut-down workers"
+        );
+    }
+
+    Ok(())
+}
+
 pub(super) async fn run_leader_duties(
     state: &State,
     schedules: &[ScheduleDefinition],
@@ -87,6 +161,8 @@ pub(super) async fn run_leader_duties(
     }
 
     let mut repo = PgRepository::new(conn);
+    recover_abandoned_jobs(&mut repo, &mut rng, clock).await?;
+
     let mut schedules_status = repo.queue_schedule().list().await?;
     let mut missing = missing_schedule_names(schedules, &schedules_status);
     if !missing.is_empty() {
@@ -144,10 +220,6 @@ pub(super) async fn run_leader_duties(
             )
             .await?;
     }
-
-    repo.queue_worker()
-        .shutdown_dead_workers(clock, Duration::minutes(2))
-        .await?;
 
     let scheduled = repo.queue_job().schedule_available_jobs(clock).await?;
     match scheduled {

@@ -58,7 +58,10 @@ pub use self::{
     policy::{PolicyConfig, PolicyEngine},
     rate_limiting::{RateLimiterConfiguration, RateLimitingConfig},
     secrets::SecretsConfig,
-    sms::{SmsConfig, SmsTransportKind},
+    sms::{
+        AliyunSmsProviderConfig, HttpWebhookSmsProviderConfig, PaloudInternalSmsProviderConfig,
+        SmsConfig, SmsProviderConfig, TencentCloudSmsProviderConfig, TwilioSmsProviderConfig,
+    },
     storage::StorageConfig,
     telemetry::{
         MetricsConfig, MetricsExporterKind, Propagator, TelemetryConfig, TracingConfig,
