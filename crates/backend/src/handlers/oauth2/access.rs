@@ -184,15 +184,60 @@ pub async fn accept_authorization_consent(
     let callback_destination = CallbackDestination::try_from(&grant)
         .map_err(|error| OAuth2AccessError::Internal(Box::new(error)))?;
 
-    if !matches!(grant.stage, AuthorizationGrantStage::Pending) {
-        return Err(OAuth2AccessError::GrantNotPending);
-    }
-
     let client = repo
         .oauth2_client()
         .lookup(grant.client_id)
         .await?
         .ok_or(OAuth2AccessError::NotFound)?;
+
+    // Idempotency: a consent grant can legitimately be submitted more than
+    // once — the user double-clicks "Allow", the SPA re-fires the request
+    // while navigating to the callback, or a flaky network triggers a retry.
+    // The first POST fulfills the grant; without this guard every later POST
+    // fails with `GrantNotPending`, surfacing a scary "grant is not pending"
+    // error even though authorization actually *succeeded*. Instead, when the
+    // grant is already fulfilled by a session belonging to the same user, we
+    // rebuild the original callback parameters and replay them so the client
+    // still gets redirected. (Exchanged/Cancelled grants can't be replayed —
+    // the code is single-use and already consumed — so they keep erroring.)
+    if let AuthorizationGrantStage::Fulfilled { session_id, .. } = &grant.stage {
+        let session_id = *session_id;
+        let session = repo
+            .oauth2_session()
+            .lookup(session_id)
+            .await?
+            .ok_or(OAuth2AccessError::NotFound)?;
+
+        if session.user_id != Some(browser_session.user.id) {
+            // The fulfilling session belongs to someone else — refuse to leak
+            // another user's authorization code.
+            return Err(OAuth2AccessError::GrantNotPending);
+        }
+
+        let params = build_authorization_response(
+            &mut repo,
+            rng,
+            clock,
+            key_store,
+            url_builder,
+            &client,
+            &grant,
+            browser_session,
+        )
+        .await?;
+
+        repo.cancel().await?;
+
+        return Ok(AuthorizationConsentDecision {
+            session,
+            callback_destination,
+            params,
+        });
+    }
+
+    if !matches!(grant.stage, AuthorizationGrantStage::Pending) {
+        return Err(OAuth2AccessError::GrantNotPending);
+    }
 
     if has_policy_violation(
         &mut repo,
@@ -219,6 +264,42 @@ pub async fn accept_authorization_consent(
         .fulfill(clock, &session, grant)
         .await?;
 
+    let params = build_authorization_response(
+        &mut repo,
+        rng,
+        clock,
+        key_store,
+        url_builder,
+        &client,
+        &grant,
+        browser_session,
+    )
+    .await?;
+
+    repo.save().await?;
+
+    Ok(AuthorizationConsentDecision {
+        session,
+        callback_destination,
+        params,
+    })
+}
+
+/// Build the OAuth2 [`AuthorizationResponse`] (authorization code and/or
+/// id_token) for a fulfilled grant.
+///
+/// Shared by the fresh-fulfillment path and the idempotent replay path so both
+/// produce identical callback parameters.
+async fn build_authorization_response(
+    repo: &mut BoxRepository,
+    rng: &mut BoxRng,
+    clock: &BoxClock,
+    key_store: &Keystore,
+    url_builder: &UrlBuilder,
+    client: &Client,
+    grant: &AuthorizationGrant,
+    browser_session: &BrowserSession,
+) -> Result<AuthorizationResponse, OAuth2AccessError> {
     let mut params = AuthorizationResponse::default();
 
     if grant.response_type_id_token {
@@ -233,8 +314,8 @@ pub async fn accept_authorization_consent(
                 clock,
                 url_builder,
                 key_store,
-                &client,
-                Some(&grant),
+                client,
+                Some(grant),
                 browser_session,
                 None,
                 last_authentication.as_ref(),
@@ -243,17 +324,11 @@ pub async fn accept_authorization_consent(
         );
     }
 
-    if let Some(code) = grant.code {
-        params.code = Some(code.code);
+    if let Some(code) = grant.code.as_ref() {
+        params.code = Some(code.code.clone());
     }
 
-    repo.save().await?;
-
-    Ok(AuthorizationConsentDecision {
-        session,
-        callback_destination,
-        params,
-    })
+    Ok(params)
 }
 
 pub async fn lookup_device_link(

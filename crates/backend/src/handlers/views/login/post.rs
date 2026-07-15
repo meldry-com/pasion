@@ -109,6 +109,7 @@ pub async fn post(
             password: Zeroizing::new(form.password),
             user_agent,
             requester,
+            skip_requester_limit: false,
         },
     )
     .await

@@ -99,6 +99,29 @@ pub fn reqwest_client() -> reqwest::Client {
         .expect("failed to create HTTP client")
 }
 
+/// Build the loggable form of an outbound request URL: drop the query
+/// string entirely so secrets that some upstream providers mandate be
+/// passed via query (WeChat: `secret=…`, QQ Connect: `access_token=…`,
+/// SMS gateway tokens, …) never leak into traces, structured logs, or
+/// downstream span exporters.
+fn redacted_url_for_logging(url: &url::Url) -> String {
+    let mut out = String::with_capacity(url.as_str().len());
+    out.push_str(url.scheme());
+    out.push_str("://");
+    if let Some(host) = url.host_str() {
+        out.push_str(host);
+    }
+    if let Some(port) = url.port() {
+        out.push(':');
+        out.push_str(&port.to_string());
+    }
+    out.push_str(url.path());
+    if url.query().is_some() {
+        out.push_str("?<redacted>");
+    }
+    out
+}
+
 async fn send_traced(
     request: reqwest::RequestBuilder,
 ) -> Result<reqwest::Response, reqwest::Error> {
@@ -115,13 +138,14 @@ async fn send_traced(
         .map(tracing::field::display);
     let content_length = headers.typed_get().map(|ContentLength(len)| len);
     let method = request.method().to_string();
+    let safe_url = redacted_url_for_logging(request.url());
 
     let span = tracing::info_span!(
         "http.client.request",
         "otel.kind" = "client",
         "otel.status_code" = tracing::field::Empty,
         { HTTP_REQUEST_METHOD } = method,
-        { URL_FULL } = %request.url(),
+        { URL_FULL } = %safe_url,
         { HTTP_RESPONSE_STATUS_CODE } = tracing::field::Empty,
         { SERVER_ADDRESS } = server_address,
         { SERVER_PORT } = server_port,

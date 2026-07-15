@@ -23,6 +23,13 @@ docker run ghcr.io/palpo-im/pasion config generate > config.yaml
 
 This applies to all of the `pasion` commands in this document.
 
+When running inside the container image, remember that Pasion runs as the
+distroless non-root user (`uid=65532`, `gid=65532`).
+Any config file, key file, password file, or key directory mounted into the
+container must be readable by that user.
+If a config entry such as `secrets.keys[*].key_file` points to a mounted file
+that is only readable by root, startup will fail with `Permission denied (os error 13)`.
+
 **Note:** The generated configuration file is very extensive, and contains the default values for all the configuration options.
 This will be made easier to read in the future, but in the meantime, it is recommended to strip untouched options from the configuration file.
 

@@ -85,6 +85,10 @@ impl AppError {
         Self::new(StatusCode::NOT_FOUND, message)
     }
 
+    pub fn too_many_requests(message: impl Into<String>) -> Self {
+        Self::new(StatusCode::TOO_MANY_REQUESTS, message)
+    }
+
     pub fn conflict(message: impl Into<String>) -> Self {
         Self::new(StatusCode::CONFLICT, message)
     }
@@ -157,6 +161,7 @@ impl EndpointOutRegister for AppError {
             ("401", "Unauthorized"),
             ("403", "Forbidden"),
             ("404", "Not found"),
+            ("429", "Too many requests"),
             ("409", "Conflict"),
             ("410", "Gone"),
             ("422", "Unprocessable entity"),
@@ -231,6 +236,7 @@ impl From<RestRouteError> for AppError {
             RestRouteError::InvalidToken => Self::unauthorized(error.to_string()),
             RestRouteError::Unauthorized => Self::forbidden(error.to_string()),
             RestRouteError::NotFound => Self::not_found(error.to_string()),
+            RestRouteError::RateLimited => Self::too_many_requests("rate_limited"),
             RestRouteError::BadRequest(message) => Self::bad_request(message),
         }
     }

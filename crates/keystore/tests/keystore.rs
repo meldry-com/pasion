@@ -4,7 +4,7 @@
 // round-trip serialisation, key generation, JWT signing + verification via
 // the Keystore / JWKS API, and thumbprint consistency.
 
-use der::pem::LineEnding;
+use der_legacy::pem::LineEnding;
 use pasion_iana::jose::JsonWebSignatureAlg;
 use pasion_jose::{
     jwk::{ParametersInfo, Thumbprint},

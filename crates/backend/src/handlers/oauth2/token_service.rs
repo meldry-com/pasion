@@ -31,7 +31,7 @@ use pasion_matrix::HomeserverAdmin;
 use pasion_policy::Policy;
 use pasion_templates::{DeviceNameContext, TemplateContext, Templates};
 use thiserror::Error;
-use tracing::{debug, info, warn};
+use tracing::{debug, error, info, warn};
 use ulid::Ulid;
 
 use crate::{
@@ -213,6 +213,26 @@ impl From<IdTokenSignatureError> for DeviceCodeExchangeError {
     }
 }
 
+fn scope_tokens(scope: &scope::Scope) -> Vec<String> {
+    scope
+        .iter()
+        .map(|token| token.as_str().to_owned())
+        .collect()
+}
+
+fn matrix_device_ids(scope: &scope::Scope) -> Vec<String> {
+    scope
+        .iter()
+        .filter_map(|token| {
+            let token = token.as_str();
+            token
+                .strip_prefix("urn:matrix:client:device:")
+                .or_else(|| token.strip_prefix("urn:matrix:org.matrix.msc2967.client:device:"))
+                .map(str::to_owned)
+        })
+        .collect()
+}
+
 // ---------------------------------------------------------------------------
 // Service functions
 // ---------------------------------------------------------------------------
@@ -240,24 +260,50 @@ pub async fn exchange_authorization_code(
     templates: &Templates,
     user_agent: Option<String>,
 ) -> Result<(AccessTokenResponse, BoxRepository), AuthorizationCodeExchangeError> {
+    debug!(
+        oauth2_client.id = %client.id,
+        has_code_verifier = grant.code_verifier.is_some(),
+        "Starting authorization_code token exchange"
+    );
+
     // Check that the client is allowed to use this grant type
     if !client.grant_types.contains(&GrantType::AuthorizationCode) {
+        warn!(
+            oauth2_client.id = %client.id,
+            "Client attempted authorization_code exchange without authorization_code grant enabled"
+        );
         return Err(AuthorizationCodeExchangeError::UnauthorizedClient(
             client.id,
         ));
     }
 
-    let authz_grant = repo
+    let authz_grant = match repo
         .oauth2_authorization_grant()
         .find_by_code(&grant.code)
         .await?
-        .ok_or(AuthorizationCodeExchangeError::GrantNotFound)?;
+    {
+        Some(authz_grant) => authz_grant,
+        None => {
+            warn!(
+                oauth2_client.id = %client.id,
+                has_code_verifier = grant.code_verifier.is_some(),
+                "Authorization code not found during token exchange"
+            );
+            return Err(AuthorizationCodeExchangeError::GrantNotFound);
+        }
+    };
+    let authorization_grant_id = authz_grant.id;
 
     let now = clock.now();
 
     let session_id = match authz_grant.stage {
         AuthorizationGrantStage::Cancelled { cancelled_at } => {
-            debug!(%cancelled_at, "Authorization grant was cancelled");
+            warn!(
+                oauth2_client.id = %client.id,
+                authorization_grant.id = %authz_grant.id,
+                %cancelled_at,
+                "Authorization grant was cancelled before token exchange"
+            );
             return Err(AuthorizationCodeExchangeError::InvalidGrant(authz_grant.id));
         }
         AuthorizationGrantStage::Exchanged {
@@ -265,7 +311,14 @@ pub async fn exchange_authorization_code(
             fulfilled_at,
             session_id,
         } => {
-            warn!(%exchanged_at, %fulfilled_at, "Authorization code was already exchanged");
+            warn!(
+                oauth2_client.id = %client.id,
+                authorization_grant.id = %authz_grant.id,
+                oauth2_session.id = %session_id,
+                %exchanged_at,
+                %fulfilled_at,
+                "Authorization code was already exchanged"
+            );
 
             // Ending the session if the token was already exchanged more than 20s ago
             if now - exchanged_at > Duration::microseconds(20 * 1000 * 1000) {
@@ -281,7 +334,11 @@ pub async fn exchange_authorization_code(
             return Err(AuthorizationCodeExchangeError::InvalidGrant(authz_grant.id));
         }
         AuthorizationGrantStage::Pending => {
-            warn!("Authorization grant has not been fulfilled yet");
+            warn!(
+                oauth2_client.id = %client.id,
+                authorization_grant.id = %authz_grant.id,
+                "Authorization grant has not been fulfilled yet"
+            );
             return Err(AuthorizationCodeExchangeError::InvalidGrant(authz_grant.id));
         }
         AuthorizationGrantStage::Fulfilled {
@@ -289,7 +346,13 @@ pub async fn exchange_authorization_code(
             fulfilled_at,
         } => {
             if now - fulfilled_at > Duration::microseconds(10 * 60 * 1000 * 1000) {
-                warn!("Code exchange took more than 10 minutes");
+                warn!(
+                    oauth2_client.id = %client.id,
+                    authorization_grant.id = %authz_grant.id,
+                    oauth2_session.id = %session_id,
+                    %fulfilled_at,
+                    "Code exchange took more than 10 minutes"
+                );
                 return Err(AuthorizationCodeExchangeError::InvalidGrant(authz_grant.id));
             }
 
@@ -297,9 +360,32 @@ pub async fn exchange_authorization_code(
         }
     };
 
-    let mut session = repo.oauth2_session().lookup(session_id).await?.ok_or(
-        AuthorizationCodeExchangeError::NoSuchOAuthSession(session_id),
-    )?;
+    let mut session = match repo.oauth2_session().lookup(session_id).await? {
+        Some(session) => session,
+        None => {
+            error!(
+                oauth2_client.id = %client.id,
+                authorization_grant.id = %authz_grant.id,
+                oauth2_session.id = %session_id,
+                "OAuth session missing during authorization_code exchange"
+            );
+            return Err(AuthorizationCodeExchangeError::NoSuchOAuthSession(
+                session_id,
+            ));
+        }
+    };
+
+    let requested_scopes = scope_tokens(&session.scope);
+    let requested_matrix_device_ids = matrix_device_ids(&session.scope);
+    debug!(
+        oauth2_client.id = %client.id,
+        authorization_grant.id = %authz_grant.id,
+        oauth2_session.id = %session.id,
+        scopes = ?requested_scopes,
+        openid_requested = session.scope.contains(&scope::OPENID),
+        matrix_device_ids = ?requested_matrix_device_ids,
+        "Loaded OAuth session for authorization_code exchange"
+    );
 
     // Generate a device name
     let lang: DataLocale = authz_grant.locale.as_deref().unwrap_or("en").parse()?;
@@ -314,12 +400,27 @@ pub async fn exchange_authorization_code(
     }
 
     // This should never happen, since we looked up in the database using the code
-    let code = authz_grant
-        .code
-        .as_ref()
-        .ok_or(AuthorizationCodeExchangeError::InvalidGrant(authz_grant.id))?;
+    let code = match authz_grant.code.as_ref() {
+        Some(code) => code,
+        None => {
+            error!(
+                oauth2_client.id = %client.id,
+                authorization_grant.id = %authz_grant.id,
+                oauth2_session.id = %session.id,
+                "Authorization grant is missing embedded code payload during token exchange"
+            );
+            return Err(AuthorizationCodeExchangeError::InvalidGrant(authz_grant.id));
+        }
+    };
 
     if client.id != session.client_id {
+        warn!(
+            oauth2_client.id = %client.id,
+            authorization_grant.id = %authz_grant.id,
+            oauth2_session.id = %session.id,
+            expected_client.id = %session.client_id,
+            "Authorization code exchange client mismatch"
+        );
         return Err(AuthorizationCodeExchangeError::UnexpectedClient {
             was: client.id,
             expected: session.client_id,
@@ -330,6 +431,14 @@ pub async fn exchange_authorization_code(
         (None, None) => {}
         // We have a challenge but no verifier (or vice-versa)? Bad request.
         (Some(_), None) | (None, Some(_)) => {
+            warn!(
+                oauth2_client.id = %client.id,
+                authorization_grant.id = %authz_grant.id,
+                oauth2_session.id = %session.id,
+                has_pkce_challenge = code.pkce.is_some(),
+                has_code_verifier = grant.code_verifier.is_some(),
+                "PKCE parameters missing or mismatched during authorization_code exchange"
+            );
             return Err(AuthorizationCodeExchangeError::BadRequest);
         }
         // If we have both, we need to check the code validity
@@ -339,17 +448,30 @@ pub async fn exchange_authorization_code(
     }
 
     let Some(user_session_id) = session.user_session_id else {
-        tracing::warn!("No user session associated with this OAuth2 session");
+        warn!(
+            oauth2_client.id = %client.id,
+            authorization_grant.id = %authz_grant.id,
+            oauth2_session.id = %session.id,
+            "No user session associated with this OAuth2 session"
+        );
         return Err(AuthorizationCodeExchangeError::InvalidGrant(authz_grant.id));
     };
 
-    let browser_session = repo
-        .browser_session()
-        .lookup(user_session_id)
-        .await?
-        .ok_or(AuthorizationCodeExchangeError::NoSuchBrowserSession(
-            user_session_id,
-        ))?;
+    let browser_session = match repo.browser_session().lookup(user_session_id).await? {
+        Some(browser_session) => browser_session,
+        None => {
+            error!(
+                oauth2_client.id = %client.id,
+                authorization_grant.id = %authz_grant.id,
+                oauth2_session.id = %session.id,
+                browser_session.id = %user_session_id,
+                "Browser session missing during authorization_code exchange"
+            );
+            return Err(AuthorizationCodeExchangeError::NoSuchBrowserSession(
+                user_session_id,
+            ));
+        }
+    };
 
     let last_authentication = repo
         .browser_session()
@@ -361,17 +483,38 @@ pub async fn exchange_authorization_code(
         generate_token_pair(rng, clock, &mut repo, &session, ttl).await?;
 
     let id_token = if session.scope.contains(&scope::OPENID) {
-        Some(generate_id_token(
-            rng,
-            clock,
-            url_builder,
-            key_store,
-            client,
-            Some(&authz_grant),
-            &browser_session,
-            Some(&access_token),
-            last_authentication.as_ref(),
-        )?)
+        debug!(
+            oauth2_client.id = %client.id,
+            authorization_grant.id = %authz_grant.id,
+            oauth2_session.id = %session.id,
+            browser_session.id = %browser_session.id,
+            "Generating ID token because openid scope is present"
+        );
+        Some(
+            generate_id_token(
+                rng,
+                clock,
+                url_builder,
+                key_store,
+                client,
+                Some(&authz_grant),
+                &browser_session,
+                Some(&access_token),
+                last_authentication.as_ref(),
+            )
+            .map_err(|err| {
+                error!(
+                    oauth2_client.id = %client.id,
+                    authorization_grant.id = %authz_grant.id,
+                    oauth2_session.id = %session.id,
+                    browser_session.id = %browser_session.id,
+                    error = %err,
+                    error_debug = ?err,
+                    "ID token generation failed during authorization_code exchange"
+                );
+                AuthorizationCodeExchangeError::from(err)
+            })?,
+        )
     } else {
         None
     };
@@ -391,21 +534,37 @@ pub async fn exchange_authorization_code(
         .await?;
 
     // Look for device to provision
-    for scope in &*session.scope {
-        let s = scope.as_str();
-        let device_id = s
-            .strip_prefix("urn:matrix:client:device:")
-            .or_else(|| s.strip_prefix("urn:matrix:org.matrix.msc2967.client:device:"));
-        if let Some(device_id) = device_id {
-            homeserver
-                .upsert_device(
-                    &browser_session.user.username,
-                    device_id,
-                    Some(&device_name),
-                )
-                .await
-                .map_err(AuthorizationCodeExchangeError::ProvisionDeviceFailed)?;
-        }
+    if !requested_matrix_device_ids.is_empty() {
+        debug!(
+            oauth2_client.id = %client.id,
+            authorization_grant.id = %authz_grant.id,
+            oauth2_session.id = %session.id,
+            browser_session.id = %browser_session.id,
+            matrix_device_ids = ?requested_matrix_device_ids,
+            "Provisioning Matrix devices during authorization_code exchange"
+        );
+    }
+    for device_id in &requested_matrix_device_ids {
+        homeserver
+            .upsert_device(
+                &browser_session.user.username,
+                device_id,
+                Some(&device_name),
+            )
+            .await
+            .map_err(|err| {
+                error!(
+                    oauth2_client.id = %client.id,
+                    authorization_grant.id = %authz_grant.id,
+                    oauth2_session.id = %session.id,
+                    browser_session.id = %browser_session.id,
+                    matrix_device.id = %device_id,
+                    error = %err,
+                    error_debug = ?err,
+                    "Failed to provision Matrix device during authorization_code exchange"
+                );
+                AuthorizationCodeExchangeError::ProvisionDeviceFailed(err)
+            })?;
     }
 
     repo.oauth2_authorization_grant()
@@ -418,6 +577,14 @@ pub async fn exchange_authorization_code(
     activity_tracker
         .record_oauth2_session(clock, &session)
         .await;
+
+    debug!(
+        oauth2_client.id = %client.id,
+        authorization_grant.id = %authorization_grant_id,
+        oauth2_session.id = %session.id,
+        browser_session.id = %browser_session.id,
+        "Authorization_code token exchange completed"
+    );
 
     Ok((params, repo))
 }
@@ -692,19 +859,44 @@ pub async fn exchange_device_code(
     homeserver: &Arc<dyn HomeserverAdmin>,
     user_agent: Option<String>,
 ) -> Result<(AccessTokenResponse, BoxRepository), DeviceCodeExchangeError> {
+    debug!(
+        oauth2_client.id = %client.id,
+        "Starting device_code token exchange"
+    );
+
     // Check that the client is allowed to use this grant type
     if !client.grant_types.contains(&GrantType::DeviceCode) {
+        warn!(
+            oauth2_client.id = %client.id,
+            "Client attempted device_code exchange without device_code grant enabled"
+        );
         return Err(DeviceCodeExchangeError::UnauthorizedClient(client.id));
     }
 
-    let grant = repo
+    let grant = match repo
         .oauth2_device_code_grant()
         .find_by_device_code(&grant.device_code)
         .await?
-        .ok_or(DeviceCodeExchangeError::GrantNotFound)?;
+    {
+        Some(grant) => grant,
+        None => {
+            warn!(
+                oauth2_client.id = %client.id,
+                "Device code grant not found during token exchange"
+            );
+            return Err(DeviceCodeExchangeError::GrantNotFound);
+        }
+    };
+    let device_code_grant_id = grant.id;
 
     // Check that the client match
     if client.id != grant.client_id {
+        warn!(
+            oauth2_client.id = %client.id,
+            device_code_grant.id = %grant.id,
+            expected_client.id = %grant.client_id,
+            "Device code exchange client mismatch"
+        );
         return Err(DeviceCodeExchangeError::ClientIdMismatch {
             expected: grant.client_id,
             actual: client.id,
@@ -712,17 +904,38 @@ pub async fn exchange_device_code(
     }
 
     if grant.expires_at < clock.now() {
+        warn!(
+            oauth2_client.id = %client.id,
+            device_code_grant.id = %grant.id,
+            expires_at = %grant.expires_at,
+            "Device code grant expired before token exchange"
+        );
         return Err(DeviceCodeExchangeError::DeviceCodeExpired);
     }
 
     let browser_session_id = match &grant.state {
         DeviceCodeGrantState::Pending => {
+            debug!(
+                oauth2_client.id = %client.id,
+                device_code_grant.id = %grant.id,
+                "Device code grant is still pending"
+            );
             return Err(DeviceCodeExchangeError::DeviceCodePending);
         }
         DeviceCodeGrantState::Rejected { .. } => {
+            warn!(
+                oauth2_client.id = %client.id,
+                device_code_grant.id = %grant.id,
+                "Device code grant was rejected"
+            );
             return Err(DeviceCodeExchangeError::DeviceCodeRejected);
         }
         DeviceCodeGrantState::Exchanged { .. } => {
+            warn!(
+                oauth2_client.id = %client.id,
+                device_code_grant.id = %grant.id,
+                "Device code grant was already exchanged"
+            );
             return Err(DeviceCodeExchangeError::DeviceCodeExchanged);
         }
         DeviceCodeGrantState::Fulfilled {
@@ -730,19 +943,39 @@ pub async fn exchange_device_code(
         } => *browser_session_id,
     };
 
-    let browser_session = repo
-        .browser_session()
-        .lookup(browser_session_id)
-        .await?
-        .ok_or(DeviceCodeExchangeError::NoSuchBrowserSession(
-            browser_session_id,
-        ))?;
+    let browser_session = match repo.browser_session().lookup(browser_session_id).await? {
+        Some(browser_session) => browser_session,
+        None => {
+            error!(
+                oauth2_client.id = %client.id,
+                device_code_grant.id = %grant.id,
+                browser_session.id = %browser_session_id,
+                "Browser session missing during device_code exchange"
+            );
+            return Err(DeviceCodeExchangeError::NoSuchBrowserSession(
+                browser_session_id,
+            ));
+        }
+    };
 
     // Start the session
     let mut session = repo
         .oauth2_session()
         .add_from_browser_session(rng, clock, client, &browser_session, grant.scope.clone())
         .await?;
+
+    let requested_scopes = scope_tokens(&session.scope);
+    let requested_matrix_device_ids = matrix_device_ids(&session.scope);
+    debug!(
+        oauth2_client.id = %client.id,
+        device_code_grant.id = %grant.id,
+        oauth2_session.id = %session.id,
+        browser_session.id = %browser_session.id,
+        scopes = ?requested_scopes,
+        openid_requested = session.scope.contains(&scope::OPENID),
+        matrix_device_ids = ?requested_matrix_device_ids,
+        "Started OAuth session for device_code exchange"
+    );
 
     repo.oauth2_device_code_grant()
         .exchange(clock, grant, &session)
@@ -782,6 +1015,13 @@ pub async fn exchange_device_code(
 
     // If the client asked for an ID token, we generate one
     if session.scope.contains(&scope::OPENID) {
+        debug!(
+            oauth2_client.id = %client.id,
+            device_code_grant.id = %device_code_grant_id,
+            oauth2_session.id = %session.id,
+            browser_session.id = %browser_session.id,
+            "Generating ID token because openid scope is present"
+        );
         let id_token = generate_id_token(
             rng,
             clock,
@@ -792,7 +1032,19 @@ pub async fn exchange_device_code(
             &browser_session,
             Some(&access_token),
             None,
-        )?;
+        )
+        .map_err(|err| {
+            error!(
+                oauth2_client.id = %client.id,
+                device_code_grant.id = %device_code_grant_id,
+                oauth2_session.id = %session.id,
+                browser_session.id = %browser_session.id,
+                error = %err,
+                error_debug = ?err,
+                "ID token generation failed during device_code exchange"
+            );
+            DeviceCodeExchangeError::from(err)
+        })?;
 
         params = params.with_id_token(id_token);
     }
@@ -803,17 +1055,33 @@ pub async fn exchange_device_code(
         .await?;
 
     // Look for device to provision
-    for scope in &*session.scope {
-        let s = scope.as_str();
-        let device_id = s
-            .strip_prefix("urn:matrix:client:device:")
-            .or_else(|| s.strip_prefix("urn:matrix:org.matrix.msc2967.client:device:"));
-        if let Some(device_id) = device_id {
-            homeserver
-                .upsert_device(&browser_session.user.username, device_id, None)
-                .await
-                .map_err(DeviceCodeExchangeError::ProvisionDeviceFailed)?;
-        }
+    if !requested_matrix_device_ids.is_empty() {
+        debug!(
+            oauth2_client.id = %client.id,
+            device_code_grant.id = %device_code_grant_id,
+            oauth2_session.id = %session.id,
+            browser_session.id = %browser_session.id,
+            matrix_device_ids = ?requested_matrix_device_ids,
+            "Provisioning Matrix devices during device_code exchange"
+        );
+    }
+    for device_id in &requested_matrix_device_ids {
+        homeserver
+            .upsert_device(&browser_session.user.username, device_id, None)
+            .await
+            .map_err(|err| {
+                error!(
+                    oauth2_client.id = %client.id,
+                    device_code_grant.id = %device_code_grant_id,
+                    oauth2_session.id = %session.id,
+                    browser_session.id = %browser_session.id,
+                    matrix_device.id = %device_id,
+                    error = %err,
+                    error_debug = ?err,
+                    "Failed to provision Matrix device during device_code exchange"
+                );
+                DeviceCodeExchangeError::ProvisionDeviceFailed(err)
+            })?;
     }
 
     // XXX: there is a potential (but unlikely) race here, where the activity for
@@ -827,6 +1095,14 @@ pub async fn exchange_device_code(
         // We only return the scope if it's not empty
         params = params.with_scope(session.scope);
     }
+
+    debug!(
+        oauth2_client.id = %client.id,
+        device_code_grant.id = %device_code_grant_id,
+        oauth2_session.id = %session.id,
+        browser_session.id = %browser_session.id,
+        "Device_code token exchange completed"
+    );
 
     Ok((params, repo))
 }

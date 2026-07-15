@@ -35,13 +35,13 @@ pub struct AppState {
     pub cookie_manager: CookieManager,
     pub encrypter: Encrypter,
     pub url_builder: UrlBuilder,
-    pub homeserver_admin: Arc<dyn HomeserverAdmin>,
     pub connector_registry: ConnectorRegistry,
     pub policy_factory: Arc<PolicyFactory>,
     pub http_client: reqwest::Client,
     pub password_manager: PasswordManager,
     pub metadata_cache: MetadataCache,
     pub site_config: SiteConfig,
+    pub matrix_shared_secret: String,
     pub activity_tracker: ActivityTracker,
     pub trusted_proxies: Vec<IpNetwork>,
     pub limiter: Limiter,
@@ -50,6 +50,21 @@ pub struct AppState {
 }
 
 impl AppState {
+    /// Returns the primary homeserver admin handle from the connector
+    /// registry.
+    ///
+    /// # Panics
+    ///
+    /// Panics if the registry has no primary provider. A registry built via
+    /// [`crate::util::homeserver_connection_from_config`] always registers
+    /// exactly one provider, so this never panics in practice.
+    #[must_use]
+    pub fn homeserver(&self) -> Arc<dyn HomeserverAdmin> {
+        self.connector_registry
+            .primary_homeserver()
+            .expect("ConnectorRegistry has no primary provider")
+    }
+
     /// Init the metrics for the app state.
     pub fn init_metrics(&mut self) {
         let pool = self.repository_factory.pool().clone();
@@ -153,9 +168,10 @@ pub async fn inject_app_state(
     depot.insert("cookie_manager", state.cookie_manager.clone());
     depot.insert("metadata_cache", state.metadata_cache.clone());
     depot.insert("site_config", state.site_config.clone());
+    depot.insert("matrix_shared_secret", state.matrix_shared_secret.clone());
     depot.insert("limiter", state.limiter.clone());
     depot.insert("policy_factory", state.policy_factory.clone());
-    depot.insert("homeserver_admin", Arc::clone(&state.homeserver_admin));
+    depot.insert("homeserver_admin", state.homeserver());
     depot.insert("connector_registry", state.connector_registry.clone());
     depot.insert("app_version", AppVersion(crate::version()));
     depot.insert("activity_tracker", state.activity_tracker.clone());

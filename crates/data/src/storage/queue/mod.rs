@@ -6,8 +6,10 @@ mod tasks;
 mod worker;
 
 pub use self::{
-    job::{InsertableJob, Job, JobMetadata, QueueJobRepository, QueueJobRepositoryExt},
+    job::{
+        AbandonedJob, InsertableJob, Job, JobMetadata, QueueJobRepository, QueueJobRepositoryExt,
+    },
     schedule::{QueueScheduleRepository, ScheduleStatus},
     tasks::*,
-    worker::{QueueWorkerRepository, Worker},
+    worker::{QueueWorkerRepository, ShutdownWorker, Worker},
 };

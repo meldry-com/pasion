@@ -14,10 +14,16 @@ use crate::ConfigurationSection;
 /// Minimum password strength score (zxcvbn)
 const DEFAULT_MIN_COMPLEXITY: u8 = 3;
 
-/// bcrypt cost factor used when none is specified
+/// bcrypt cost factor used when none is specified.
+///
+/// 13 is the OWASP-recommended baseline for new bcrypt deployments as of
+/// 2025 (~250 ms per verify on commodity hardware). Operators can override
+/// with `passwords.schemes[].cost` if they have benchmarked a different
+/// trade-off; raising it is always safe, but never lower without first
+/// considering offline-attack resistance for your threat model.
 #[allow(clippy::unnecessary_wraps)]
 fn bcrypt_cost_default() -> Option<u32> {
-    Some(12)
+    Some(13)
 }
 
 fn initial_scheme() -> Vec<HashingScheme> {

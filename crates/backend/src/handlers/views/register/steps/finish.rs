@@ -218,8 +218,14 @@ pub async fn get(
         .consume_session(&prepared.registration)?
         .save(cookie_jar, &clock);
 
-    let completed =
-        complete_registration(repo, &mut rng, &clock, prepared.into_request(user_agent)).await?;
+    let completed = complete_registration(
+        repo,
+        &mut rng,
+        &clock,
+        prepared.into_request(user_agent),
+        false,
+    )
+    .await?;
 
     if completed.password_authenticated {
         PASSWORD_REGISTER_COUNTER.add(1, &[]);

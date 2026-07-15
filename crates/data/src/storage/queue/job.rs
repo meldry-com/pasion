@@ -30,6 +30,22 @@ pub struct Job {
     pub attempt: usize,
 }
 
+/// A running job whose worker was shut down before the job completed.
+pub struct AbandonedJob {
+    /// The ID of the abandoned job.
+    pub id: Ulid,
+    /// The queue the job belongs to.
+    pub queue_name: String,
+    /// Which attempt this abandoned job was on.
+    pub attempt: usize,
+    /// The worker that last started the job.
+    pub started_by: Ulid,
+    /// When the job started running.
+    pub started_at: DateTime<Utc>,
+    /// When the worker was marked as shut down.
+    pub worker_shutdown_at: DateTime<Utc>,
+}
+
 /// Metadata stored alongside the job
 #[derive(Serialize, Deserialize, Default, Clone, Debug)]
 pub struct JobMetadata {
@@ -209,6 +225,20 @@ pub trait QueueJobRepository: Send + Sync {
     /// Returns an error if the underlying repository fails.
     async fn schedule_available_jobs(&mut self, clock: &dyn Clock) -> Result<usize, Self::Error>;
 
+    /// Mark running jobs owned by shut-down workers as failed so they can be
+    /// retried by the queue runtime.
+    ///
+    /// Returns the jobs that were marked as failed.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the underlying repository fails.
+    async fn mark_abandoned_jobs_as_failed(
+        &mut self,
+        clock: &dyn Clock,
+        reason: &str,
+    ) -> Result<Vec<AbandonedJob>, Self::Error>;
+
     /// Cleanup old completed and failed jobs
     ///
     /// This will delete jobs with status 'completed' or 'failed' and IDs up to
@@ -280,6 +310,12 @@ repository_impl!(QueueJobRepository:
     ) -> Result<(), Self::Error>;
 
     async fn schedule_available_jobs(&mut self, clock: &dyn Clock) -> Result<usize, Self::Error>;
+
+    async fn mark_abandoned_jobs_as_failed(
+        &mut self,
+        clock: &dyn Clock,
+        reason: &str,
+    ) -> Result<Vec<AbandonedJob>, Self::Error>;
 
     async fn cleanup(
         &mut self,

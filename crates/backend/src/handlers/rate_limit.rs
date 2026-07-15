@@ -269,6 +269,16 @@ impl Limiter {
             return Err(PasswordCheckLimitedError::Requester(key));
         }
 
+        self.check_password_for_user(user).await
+    }
+
+    /// Check if a password check can be performed for a user, without applying
+    /// a requester/IP bucket. This is only intended for authenticated
+    /// service-to-service calls where the real client IP is not available.
+    pub async fn check_password_for_user(
+        &self,
+        user: &User,
+    ) -> Result<(), PasswordCheckLimitedError> {
         if !self.inner.password_check_for_user.check(&user.id).await {
             return Err(PasswordCheckLimitedError::User(user.id));
         }

@@ -181,13 +181,11 @@ async fn handle_get(req: &mut Request, depot: &mut Depot) -> Result<UserinfoResp
     repo.save().await?;
 
     if let Some(alg) = client.userinfo_signed_response_alg {
-        let key = key_store
-            .signing_key_for_algorithm(&alg)
+        let (kid, signer) = key_store
+            .signer_for_algorithm(&alg)
             .ok_or(RouteError::InvalidSigningKey)?;
 
-        let signer = key.params().signing_key_for_alg(&alg)?;
-        let header = JsonWebSignatureHeader::new(alg)
-            .with_kid(key.kid().ok_or(RouteError::InvalidSigningKey)?);
+        let header = JsonWebSignatureHeader::new(alg).with_kid(kid);
 
         let signed_user_info = SignedUserInfo {
             iss: url_builder.oidc_issuer().to_string(),
@@ -195,7 +193,7 @@ async fn handle_get(req: &mut Request, depot: &mut Depot) -> Result<UserinfoResp
             user_info,
         };
 
-        let token = Jwt::sign_with_rng(&mut rng, header, signed_user_info, &signer)?;
+        let token = Jwt::sign_with_rng(&mut rng, header, signed_user_info, signer.as_ref())?;
         Ok(UserinfoResponse::Jwt(token.into_string()))
     } else {
         Ok(UserinfoResponse::Json(user_info))

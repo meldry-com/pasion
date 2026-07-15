@@ -1,3 +1,29 @@
+use dioxus::prelude::*;
+
+/// Declarative redirect hook.
+///
+/// Must be called unconditionally at the top level of a component to keep
+/// hook ordering stable. When `when` becomes `true`, the navigator pushes
+/// `to` from inside an effect (i.e. after render), avoiding the
+/// render-phase `nav.push()` anti-pattern.
+pub fn use_redirect(when: bool, to: crate::pages::Route) {
+    use_effect(use_reactive!(|(when, to)| {
+        if when {
+            navigator().push(to);
+        }
+    }));
+}
+
+/// Like [`use_redirect`] but navigates to an arbitrary URL string (used for
+/// external/raw redirect URLs returned by the backend).
+pub fn use_redirect_url(when: bool, to: String) {
+    use_effect(use_reactive!(|(when, to)| {
+        if when {
+            navigator().push(to);
+        }
+    }));
+}
+
 /// Get ISO date string for 90 days ago (for inactive session filter).
 pub fn get_ninety_days_ago() -> String {
     let now = chrono::Utc::now();

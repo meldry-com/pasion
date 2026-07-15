@@ -8,6 +8,7 @@ pub mod filter;
 pub mod footer;
 pub mod last_active;
 pub mod layout;
+pub mod linked_accounts;
 pub mod loading;
 pub mod nav_bar;
 pub mod oauth2_session;

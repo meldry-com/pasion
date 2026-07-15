@@ -469,6 +469,8 @@ impl Templates {
 
 #[cfg(test)]
 mod tests {
+    use chrono::Duration;
+    use pasion_data::UserEmailAuthenticationCode;
     use rand_core::SeedableRng;
 
     use super::*;
@@ -508,5 +510,61 @@ mod tests {
         let render2 = templates.check_render(now, &rng).unwrap();
 
         assert_eq!(render1, render2);
+    }
+
+    #[tokio::test]
+    async fn verification_email_renders_instance_identifiers_in_english() {
+        #[allow(clippy::disallowed_methods)]
+        let now = chrono::Utc::now();
+        let mut rng = rand_chacha::ChaCha8Rng::from_seed([7; 32]);
+
+        let path = Utf8Path::new(env!("CARGO_MANIFEST_DIR")).join("../../templates/");
+        let url_builder =
+            UrlBuilder::new("https://tenant.example.com/".parse().unwrap(), None, None);
+        let branding = SiteBranding::new("matrix.example.com");
+        let features = SiteFeatures {
+            password_login: true,
+            password_registration: true,
+            password_registration_contact_required: true,
+            account_recovery: true,
+            login_with_email_allowed: true,
+        };
+        let translations_path =
+            Utf8Path::new(env!("CARGO_MANIFEST_DIR")).join("../../translations");
+
+        let templates = Templates::load(
+            path,
+            url_builder,
+            translations_path,
+            branding,
+            features,
+            true,
+        )
+        .await
+        .unwrap();
+
+        let context = EmailVerificationContext::new(
+            UserEmailAuthenticationCode {
+                id: pasion_data::new_id(now, &mut rng),
+                user_email_authentication_id: pasion_data::new_id(now, &mut rng),
+                code: "654321".to_owned(),
+                created_at: now - Duration::minutes(1),
+                expires_at: now + Duration::minutes(4),
+            },
+            None,
+            None,
+        )
+        .with_language("en".parse().unwrap());
+
+        let subject = templates
+            .render_email_verification_subject(&context)
+            .unwrap();
+        let text = templates.render_email_verification_txt(&context).unwrap();
+
+        assert!(subject.contains("[matrix.example.com]"));
+        assert!(subject.contains("Your email verification code"));
+        assert!(text.contains("Your email verification code for matrix.example.com is: 654321"));
+        assert!(text.contains("Matrix homeserver: matrix.example.com"));
+        assert!(!text.contains("Instance domain:"));
     }
 }

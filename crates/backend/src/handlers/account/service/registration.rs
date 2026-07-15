@@ -140,6 +140,7 @@ pub struct RegistrationProgress {
 pub struct RegistrationStatusSummary {
     pub registration: UserRegistration,
     pub email_pending: bool,
+    pub pending_email: Option<String>,
     pub phone_pending: bool,
     pub steps_completed: Vec<&'static str>,
     pub next_step: &'static str,
@@ -595,6 +596,28 @@ pub enum RegistrationResendError {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum RegistrationEmailChangeOutcome {
+    Updated,
+    AlreadyVerified,
+    RegistrationCompleted,
+    InvalidEmail,
+    EmailInUse,
+    RateLimited,
+}
+
+#[derive(Debug, Error)]
+pub enum RegistrationEmailChangeError {
+    #[error("registration not found")]
+    NotFound,
+
+    #[error("registration verification is not available")]
+    NotAvailable,
+
+    #[error(transparent)]
+    Repository(#[from] RepositoryError),
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum RegistrationDisplayNameOutcome {
     Advanced { next_step: &'static str },
     RegistrationCompleted,
@@ -726,6 +749,15 @@ pub enum PrepareRegistrationCompletionError {
     Repository(#[from] RepositoryError),
 }
 
+#[derive(Debug, Error)]
+enum PrepareAdminBootstrapError {
+    #[error("bootstrap admin token is invalid")]
+    InvalidToken,
+
+    #[error(transparent)]
+    Repository(#[from] RepositoryError),
+}
+
 #[must_use]
 pub fn next_registration_step(
     registration: &UserRegistration,
@@ -819,6 +851,11 @@ pub async fn load_registration_status(
 
     let email_pending =
         progress.registration.email_authentication_id.is_some() && !progress.email_verified();
+    let pending_email = progress
+        .email_authentication
+        .as_ref()
+        .filter(|auth| auth.completed_at.is_none())
+        .map(|auth| auth.email.clone());
     let phone_pending =
         progress.registration.phone_authentication_id.is_some() && !progress.phone_verified();
     let steps_completed = workflow.completed_steps.clone();
@@ -827,6 +864,7 @@ pub async fn load_registration_status(
     Ok(RegistrationStatusSummary {
         registration: progress.registration,
         email_pending,
+        pending_email,
         phone_pending,
         steps_completed,
         next_step,
@@ -1529,6 +1567,81 @@ pub async fn resend_registration_verification(
     }
 }
 
+pub async fn change_registration_email(
+    mut repo: BoxRepository,
+    limiter: &Limiter,
+    rng: &mut (dyn CryptoRngCore + Send),
+    clock: &dyn Clock,
+    requester: RequesterFingerprint,
+    registration_id: Ulid,
+    email: &str,
+    notification_language: String,
+) -> Result<RegistrationEmailChangeOutcome, RegistrationEmailChangeError> {
+    let progress = load_registration_progress(&mut repo, registration_id)
+        .await
+        .map_err(|error| match error {
+            LoadRegistrationProgressError::NotFound => RegistrationEmailChangeError::NotFound,
+            LoadRegistrationProgressError::Repository(error) => {
+                RegistrationEmailChangeError::Repository(error)
+            }
+        })?;
+
+    if progress.registration.completed_at.is_some() {
+        return Ok(RegistrationEmailChangeOutcome::RegistrationCompleted);
+    }
+
+    if progress.registration.email_authentication_id.is_none() {
+        return Err(RegistrationEmailChangeError::NotAvailable);
+    }
+
+    let current_auth = progress
+        .email_authentication
+        .ok_or(RegistrationEmailChangeError::NotFound)?;
+
+    if current_auth.completed_at.is_some() {
+        return Ok(RegistrationEmailChangeOutcome::AlreadyVerified);
+    }
+
+    let email = email.trim();
+    if Address::from_str(email).is_err() {
+        return Ok(RegistrationEmailChangeOutcome::InvalidEmail);
+    }
+
+    if repo.user_email().find_by_email(email).await?.is_some() {
+        return Ok(RegistrationEmailChangeOutcome::EmailInUse);
+    }
+
+    if let Err(error) = limiter
+        .check_email_authentication_email(requester, email)
+        .await
+    {
+        tracing::warn!(error = &error as &dyn std::error::Error);
+        return Ok(RegistrationEmailChangeOutcome::RateLimited);
+    }
+
+    let updated_auth = repo
+        .user_email()
+        .add_authentication_for_registration(rng, clock, email.to_owned(), &progress.registration)
+        .await?;
+
+    schedule_notification(
+        &mut repo,
+        rng,
+        clock,
+        NotificationIntent::verify_email(&updated_auth, notification_language),
+    )
+    .await?;
+
+    let _ = repo
+        .user_registration()
+        .set_email_authentication(progress.registration, &updated_auth)
+        .await?;
+
+    repo.save().await?;
+
+    Ok(RegistrationEmailChangeOutcome::Updated)
+}
+
 pub async fn submit_registration_email_code(
     repo: BoxRepository,
     limiter: &Limiter,
@@ -1836,11 +1949,49 @@ pub async fn prepare_registration_completion(
     })
 }
 
+fn normalize_optional_token(token: Option<&str>) -> Option<&str> {
+    token.map(str::trim).filter(|token| !token.is_empty())
+}
+
+async fn prepare_admin_bootstrap(
+    repo: &mut BoxRepository,
+    configured_bootstrap_admin_token: Option<&str>,
+    requested_bootstrap_admin_token: Option<&str>,
+) -> Result<bool, PrepareAdminBootstrapError> {
+    repo.user().acquire_bootstrap_admin_lock().await?;
+
+    let admin_count = repo
+        .user()
+        .count(UserFilter::new().can_request_admin_only())
+        .await?;
+
+    if admin_count > 0 {
+        return Ok(false);
+    }
+
+    let Some(configured_bootstrap_admin_token) =
+        normalize_optional_token(configured_bootstrap_admin_token)
+    else {
+        return Ok(false);
+    };
+
+    match normalize_optional_token(requested_bootstrap_admin_token) {
+        Some(requested_bootstrap_admin_token)
+            if requested_bootstrap_admin_token == configured_bootstrap_admin_token =>
+        {
+            Ok(true)
+        }
+        Some(_) => Err(PrepareAdminBootstrapError::InvalidToken),
+        None => Ok(false),
+    }
+}
+
 pub async fn complete_registration(
     mut repo: BoxRepository,
     rng: &mut (dyn CryptoRngCore + Send),
     clock: &dyn Clock,
     request: CompleteRegistrationRequest,
+    grant_admin: bool,
 ) -> Result<CompletedRegistration, RepositoryError> {
     let registration = repo
         .user_registration()
@@ -1858,8 +2009,7 @@ pub async fn complete_registration(
         .add(rng, clock, registration.username.clone())
         .await?;
 
-    let user_count = repo.user().count(UserFilter::new()).await?;
-    if user_count == 1 {
+    if grant_admin {
         user = repo.user().set_can_request_admin(user, true).await?;
     }
 
@@ -1968,6 +2118,8 @@ pub async fn finish_registration(
     browser_session_present: Option<bool>,
     homeserver_check_mode: HomeserverCheckMode,
     registration_token_required: bool,
+    configured_bootstrap_admin_token: Option<&str>,
+    requested_bootstrap_admin_token: Option<String>,
     user_agent: Option<String>,
 ) -> Result<RegistrationFinishOutcome, RegistrationFinishError> {
     let prepared = match load_registration_finish_preparation(
@@ -2091,9 +2243,33 @@ pub async fn finish_registration(
         }
     };
 
-    let completed = complete_registration(repo, rng, clock, prepared.into_request(user_agent))
-        .await
-        .map_err(RegistrationFinishError::Repository)?;
+    let grant_admin = match prepare_admin_bootstrap(
+        &mut repo,
+        configured_bootstrap_admin_token,
+        requested_bootstrap_admin_token.as_deref(),
+    )
+    .await
+    {
+        Ok(grant_admin) => grant_admin,
+        Err(PrepareAdminBootstrapError::InvalidToken) => {
+            return Ok(RegistrationFinishOutcome::Rejected {
+                error: "bootstrap_admin_token_invalid",
+            });
+        }
+        Err(PrepareAdminBootstrapError::Repository(error)) => {
+            return Err(RegistrationFinishError::Repository(error));
+        }
+    };
+
+    let completed = complete_registration(
+        repo,
+        rng,
+        clock,
+        prepared.into_request(user_agent),
+        grant_admin,
+    )
+    .await
+    .map_err(RegistrationFinishError::Repository)?;
 
     Ok(RegistrationFinishOutcome::Completed(completed))
 }
@@ -2101,9 +2277,13 @@ pub async fn finish_registration(
 #[cfg(test)]
 mod tests {
     use chrono::TimeZone;
+    use pasion_data::{
+        RepositoryAccess as _, RepositoryFactory as _, clock::MockClock, user::UserRepository as _,
+    };
+    use rand_chacha::ChaChaRng;
+    use rand_core::SeedableRng;
 
     use super::*;
-
     fn sample_registration(created_at: DateTime<Utc>) -> UserRegistration {
         UserRegistration {
             id: Ulid::new(),
@@ -2122,6 +2302,75 @@ mod tests {
             created_at,
             completed_at: None,
         }
+    }
+
+    async fn test_repo() -> BoxRepository {
+        let pool = pasion_data::test_utils::setup_test_pool().await;
+        pasion_data::PgRepositoryFactory::new(pool)
+            .create()
+            .await
+            .unwrap()
+    }
+
+    #[tokio::test]
+    async fn prepare_admin_bootstrap_requires_exact_token_to_grant_admin() {
+        let mut repo = test_repo().await;
+
+        assert!(
+            !prepare_admin_bootstrap(&mut repo, Some("bootstrap-secret"), None)
+                .await
+                .unwrap()
+        );
+        assert!(
+            prepare_admin_bootstrap(
+                &mut repo,
+                Some("bootstrap-secret"),
+                Some("bootstrap-secret")
+            )
+            .await
+            .unwrap()
+        );
+
+        repo.cancel().await.unwrap();
+    }
+
+    #[tokio::test]
+    async fn prepare_admin_bootstrap_rejects_invalid_token_while_no_admin_exists() {
+        let mut repo = test_repo().await;
+
+        let error = prepare_admin_bootstrap(&mut repo, Some("bootstrap-secret"), Some("wrong"))
+            .await
+            .unwrap_err();
+
+        assert!(matches!(error, PrepareAdminBootstrapError::InvalidToken));
+
+        repo.cancel().await.unwrap();
+    }
+
+    #[tokio::test]
+    async fn prepare_admin_bootstrap_stops_granting_after_first_admin_exists() {
+        let mut repo = test_repo().await;
+        let mut rng = ChaChaRng::seed_from_u64(42);
+        let clock = MockClock::default();
+
+        let user = repo
+            .user()
+            .add(&mut rng, &clock, "admin".to_owned())
+            .await
+            .unwrap();
+        repo.user().set_can_request_admin(user, true).await.unwrap();
+
+        assert!(
+            !prepare_admin_bootstrap(
+                &mut repo,
+                Some("bootstrap-secret"),
+                Some("bootstrap-secret")
+            )
+            .await
+            .unwrap()
+        );
+
+        repo.cancel().await.unwrap();
     }
 
     #[test]

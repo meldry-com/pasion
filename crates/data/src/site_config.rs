@@ -72,6 +72,10 @@ pub struct SiteConfig {
     /// registrations.
     pub registration_token_required: bool,
 
+    /// Optional bootstrap token that allows one registration to claim the
+    /// first administrator role while no admin users exist.
+    pub bootstrap_admin_token: Option<String>,
+
     /// Whether users can change their email.
     pub email_change_allowed: bool,
 
@@ -99,6 +103,9 @@ pub struct SiteConfig {
 
     /// Pasion-original: whether users can log in with their email address.
     pub login_with_email_allowed: bool,
+
+    /// URL of the external admin portal shown to eligible users.
+    pub admin_portal_url: Option<Url>,
 
     /// Pasion-original: the iframe URL to show in the plan tab of the UI
     pub plan_management_iframe_uri: Option<String>,
