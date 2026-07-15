@@ -79,7 +79,6 @@ base64ct.workspace = true
 bcrypt.workspace = true
 camino.workspace = true
 cookie.workspace = true
-der.workspace = true
 elliptic-curve.workspace = true
 form_urlencoded.workspace = true
 hex.workspace = true

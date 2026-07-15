@@ -3,7 +3,6 @@ use std::collections::{BTreeMap, BTreeSet};
 use anyhow::{Context, anyhow};
 use base64ct::{Base64, Encoding};
 use chrono::{TimeZone, Utc};
-use der::{DecodePem as _, Encode as _};
 use hmac::{Hmac, Mac};
 use http::HeaderMap;
 use p256::ecdsa::{
@@ -31,7 +30,10 @@ use sha1::Sha1;
 use sha2::Sha256;
 use thiserror::Error;
 use url::Url;
-use x509_cert::Certificate;
+use x509_cert::{
+    Certificate,
+    der::{DecodePem as _, Encode as _},
+};
 
 type HmacSha256 = Hmac<Sha256>;
 
