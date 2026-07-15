@@ -11,6 +11,12 @@ use super::{
 };
 use crate::State;
 
+fn jobs_to_fetch_capacity(running_jobs: usize) -> usize {
+    MAX_CONCURRENT_JOBS
+        .saturating_sub(running_jobs)
+        .min(MAX_JOBS_TO_FETCH)
+}
+
 pub(super) async fn register_worker(
     state: &State,
 ) -> Result<(Worker, DateTime<Utc>), QueueRunnerError> {
@@ -86,6 +92,7 @@ pub(super) async fn tick_worker(
     let clock = state.clock();
     let mut rng = state.rng();
     let now = clock.now();
+    let heartbeat_age = now - *last_heartbeat;
 
     let conn = state
         .pool()
@@ -94,8 +101,22 @@ pub(super) async fn tick_worker(
         .map_err(|e| QueueRunnerError::Pool(Box::new(e)))?;
     let mut repo = PgRepository::new(conn);
 
-    if now - *last_heartbeat >= chrono::Duration::minutes(1) {
-        tracing::info!("Sending heartbeat");
+    if heartbeat_age >= chrono::Duration::seconds(90) {
+        tracing::warn!(
+            worker.id = %registration.id,
+            heartbeat.age_secs = heartbeat_age.num_seconds(),
+            running_jobs = tracker.running_jobs(),
+            "Worker heartbeat is overdue"
+        );
+    }
+
+    if heartbeat_age >= chrono::Duration::minutes(1) {
+        tracing::info!(
+            worker.id = %registration.id,
+            heartbeat.age_secs = heartbeat_age.num_seconds(),
+            running_jobs = tracker.running_jobs(),
+            "Sending heartbeat"
+        );
         repo.queue_worker().heartbeat(clock, registration).await?;
         *last_heartbeat = now;
     }
@@ -113,12 +134,16 @@ pub(super) async fn tick_worker(
         .process_jobs(&mut rng, clock, &mut repo, false)
         .await?;
 
-    let max_jobs_to_fetch = MAX_CONCURRENT_JOBS
-        .saturating_sub(tracker.running_jobs())
-        .max(MAX_JOBS_TO_FETCH);
+    let running_jobs = tracker.running_jobs();
+    let max_jobs_to_fetch = jobs_to_fetch_capacity(running_jobs);
 
     if max_jobs_to_fetch == 0 {
-        tracing::warn!("Internal job queue is full, not fetching any new jobs");
+        tracing::warn!(
+            worker.id = %registration.id,
+            running_jobs,
+            max_concurrent_jobs = MAX_CONCURRENT_JOBS,
+            "Internal job queue is full, not fetching any new jobs"
+        );
     } else {
         let queues = tracker.queues();
         let jobs = repo
@@ -126,10 +151,34 @@ pub(super) async fn tick_worker(
             .reserve(clock, registration, &queues, max_jobs_to_fetch)
             .await?;
 
+        if !jobs.is_empty() {
+            tracing::info!(
+                worker.id = %registration.id,
+                running_jobs,
+                reserved_jobs = jobs.len(),
+                max_jobs_to_fetch,
+                "Reserved jobs from the queue"
+            );
+        }
+
         runtime::spawn_reserved_jobs(tracker, state, cancellation_token, jobs);
     }
 
     Ok(leader)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::jobs_to_fetch_capacity;
+
+    #[test]
+    fn limits_fetch_to_remaining_capacity() {
+        assert_eq!(jobs_to_fetch_capacity(0), 5);
+        assert_eq!(jobs_to_fetch_capacity(4), 5);
+        assert_eq!(jobs_to_fetch_capacity(7), 3);
+        assert_eq!(jobs_to_fetch_capacity(10), 0);
+        assert_eq!(jobs_to_fetch_capacity(12), 0);
+    }
 }
 
 pub(super) async fn process_all_jobs_in_tests(

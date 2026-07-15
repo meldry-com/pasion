@@ -353,6 +353,17 @@ pub trait UserRepository: Send + Sync {
     /// Returns [`Self::Error`] if the underlying repository fails
     async fn count(&mut self, filter: UserFilter<'_>) -> Result<usize, Self::Error>;
 
+    /// Acquire a transaction-scoped lock that serializes first-admin bootstrap
+    /// decisions across concurrent registrations.
+    ///
+    /// The lock is released when the repository transaction is saved or rolled
+    /// back.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`Self::Error`] if the underlying repository fails.
+    async fn acquire_bootstrap_admin_lock(&mut self) -> Result<(), Self::Error>;
+
     /// Acquire a lock on the user to make sure device operations are done in a
     /// sequential way. The lock is released when the repository is saved or
     /// rolled back.
@@ -404,5 +415,6 @@ repository_impl!(UserRepository:
         pagination: Pagination,
     ) -> Result<Page<User>, Self::Error>;
     async fn count(&mut self, filter: UserFilter<'_>) -> Result<usize, Self::Error>;
+    async fn acquire_bootstrap_admin_lock(&mut self) -> Result<(), Self::Error>;
     async fn acquire_lock_for_sync(&mut self, user: &User) -> Result<(), Self::Error>;
 );

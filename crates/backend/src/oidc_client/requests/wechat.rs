@@ -40,6 +40,13 @@ pub struct WeChatTokenResponse {
 /// Exchange an authorization code for an access token with WeChat.
 ///
 /// `GET https://api.weixin.qq.com/sns/oauth2/access_token?appid=APPID&secret=SECRET&code=CODE&grant_type=authorization_code`
+///
+/// WeChat's documented OAuth flow requires the `secret` to be passed as a
+/// query parameter (it does not accept POST with a form body). To keep
+/// the secret out of trace logs, `outbound_http::send_traced` redacts
+/// query strings from the `url.full` span attribute before recording it.
+/// This is a documented limitation of WeChat's API; if WeChat ever
+/// supports POST form submission, switch to it for an additional defence.
 #[tracing::instrument(skip_all, fields(%token_endpoint))]
 pub async fn request_access_token(
     http_client: &reqwest::Client,

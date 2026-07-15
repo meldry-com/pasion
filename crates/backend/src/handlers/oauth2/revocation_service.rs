@@ -1,6 +1,9 @@
 use pasion_data::{
     BoxRepository, BoxRng, Clock, RepositoryAccess, RepositoryError, TokenType,
     oauth2::{OAuth2AccessTokenRepository, OAuth2RefreshTokenRepository, OAuth2SessionRepository},
+    personal::{
+        PersonalAccessTokenRepository, PersonalSessionRepository, session::PersonalSessionOwner,
+    },
     queue::{QueueJobRepositoryExt as _, SyncDevicesJob},
     user::UserRepository,
 };
@@ -41,6 +44,14 @@ pub async fn revoke_token(
     client_id: Option<Ulid>,
 ) -> Result<(), RevocationError> {
     let token_type = TokenType::check(token_str).map_err(|_| RevocationError::UnknownToken)?;
+
+    if token_type == TokenType::PersonalAccessToken {
+        if matches!(token_type_hint, Some(OAuthTokenTypeHint::RefreshToken)) {
+            return Err(RevocationError::UnknownToken);
+        }
+        return revoke_personal_token(repo, rng, clock, activity_tracker, token_str, client_id)
+            .await;
+    }
 
     // Find the ID of the session to end.
     let session_id = match (token_type_hint, token_type) {
@@ -119,6 +130,64 @@ pub async fn revoke_token(
 
     // Now that we checked everything, we can end the session.
     repo.oauth2_session().finish(clock, session).await?;
+
+    Ok(())
+}
+
+async fn revoke_personal_token(
+    repo: &mut BoxRepository,
+    rng: &mut BoxRng,
+    clock: &dyn Clock,
+    activity_tracker: &BoundActivityTracker,
+    token_str: &str,
+    client_id: Option<Ulid>,
+) -> Result<(), RevocationError> {
+    let access_token = repo
+        .personal_access_token()
+        .find_by_token(token_str)
+        .await?
+        .ok_or(RevocationError::UnknownToken)?;
+
+    if !access_token.is_valid(clock.now()) {
+        return Err(RevocationError::UnknownToken);
+    }
+
+    let session = repo
+        .personal_session()
+        .lookup(access_token.session_id)
+        .await?
+        .ok_or(RevocationError::UnknownToken)?;
+
+    if !session.is_valid() {
+        return Err(RevocationError::UnknownToken);
+    }
+
+    if let Some(client_id) = client_id {
+        match session.owner {
+            PersonalSessionOwner::OAuth2Client(owner_client_id) if owner_client_id == client_id => {
+            }
+            _ => return Err(RevocationError::UnauthorizedClient),
+        }
+    }
+
+    activity_tracker
+        .record_personal_session(clock, &session)
+        .await;
+
+    repo.personal_access_token()
+        .revoke(clock, access_token)
+        .await?;
+    let revoked = repo.personal_session().revoke(clock, session).await?;
+
+    if revoked.has_device() {
+        repo.queue_job()
+            .schedule_job(
+                rng,
+                clock,
+                SyncDevicesJob::new_for_id(revoked.actor_user_id),
+            )
+            .await?;
+    }
 
     Ok(())
 }

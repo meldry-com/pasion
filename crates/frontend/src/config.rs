@@ -32,9 +32,31 @@ impl Default for AppConfig {
     }
 }
 
+thread_local! {
+    /// Cached, lazily-resolved app configuration. The underlying source
+    /// (`window.APP_CONFIG`) never changes during a session, so we parse it
+    /// once.
+    static CONFIG_CACHE: std::cell::RefCell<Option<AppConfig>> =
+        const { std::cell::RefCell::new(None) };
+    /// Cached resolved API base URL.
+    static API_BASE_URL_CACHE: std::cell::RefCell<Option<String>> =
+        const { std::cell::RefCell::new(None) };
+}
+
 /// Get the app configuration.
 /// In WASM, this reads from window.APP_CONFIG. Otherwise uses defaults.
+/// The result is cached per thread (WASM is single-threaded) so repeated
+/// calls don't re-parse the JS config.
 pub fn get_config() -> AppConfig {
+    if let Some(cfg) = CONFIG_CACHE.with(|c| c.borrow().clone()) {
+        return cfg;
+    }
+    let cfg = resolve_config();
+    CONFIG_CACHE.with(|c| *c.borrow_mut() = Some(cfg.clone()));
+    cfg
+}
+
+fn resolve_config() -> AppConfig {
     #[cfg(target_arch = "wasm32")]
     {
         use web_sys::window;
@@ -99,7 +121,18 @@ fn read_error_from_js(config: &web_sys::wasm_bindgen::JsValue) -> Option<AppErro
 }
 
 /// Resolve the full API base URL based on the current location.
+/// Cached per thread since neither the configured endpoint nor the document
+/// origin change during a session.
 pub fn api_base_url() -> String {
+    if let Some(url) = API_BASE_URL_CACHE.with(|c| c.borrow().clone()) {
+        return url;
+    }
+    let url = resolve_api_base_url();
+    API_BASE_URL_CACHE.with(|c| *c.borrow_mut() = Some(url.clone()));
+    url
+}
+
+fn resolve_api_base_url() -> String {
     let config = get_config();
 
     #[cfg(target_arch = "wasm32")]

@@ -110,10 +110,6 @@ impl<C: HomeserverAdmin> HomeserverAdmin for ReadOnlyHomeserverAdmin<C> {
         deny_write(BlockedMatrixWrite::SyncDevices)
     }
 
-    async fn query_devices(&self, localpart: &str) -> Result<HashSet<String>, anyhow::Error> {
-        self.source.query_devices(localpart).await
-    }
-
     async fn delete_user(&self, _localpart: &str, _erase: bool) -> Result<(), anyhow::Error> {
         deny_write(BlockedMatrixWrite::DeleteUser)
     }

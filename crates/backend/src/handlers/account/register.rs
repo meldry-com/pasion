@@ -23,10 +23,11 @@ use crate::{
             BeginPasswordRegistrationError, BeginPasswordRegistrationRequest,
             BeginPasswordRegistrationResult, EmailAvailabilityCheck, HomeserverCheckMode,
             LoadRegistrationProgressError, RegistrationDisplayNameOutcome,
-            RegistrationDisplayNameWorkflowError, RegistrationFinishError,
-            RegistrationFinishOutcome, RegistrationResendError, RegistrationResendOutcome,
-            RegistrationVerificationError, RegistrationVerificationOutcome,
-            begin_password_registration, finish_registration, load_registration_status,
+            RegistrationDisplayNameWorkflowError, RegistrationEmailChangeError,
+            RegistrationEmailChangeOutcome, RegistrationFinishError, RegistrationFinishOutcome,
+            RegistrationResendError, RegistrationResendOutcome, RegistrationVerificationError,
+            RegistrationVerificationOutcome, begin_password_registration,
+            change_registration_email, finish_registration, load_registration_status,
             next_registration_step, resend_registration_verification,
             submit_registration_display_name, submit_registration_email_code,
             submit_registration_phone_code,
@@ -214,6 +215,8 @@ pub struct RegistrationStatusResponse {
     pub id: String,
     pub username: String,
     pub email_pending: bool,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub pending_email: Option<String>,
     pub phone_pending: bool,
     pub steps_completed: Vec<&'static str>,
     pub next_step: &'static str,
@@ -246,6 +249,7 @@ pub async fn get_registration(
         id: status.registration.id.to_string(),
         username: status.registration.username,
         email_pending: status.email_pending,
+        pending_email: status.pending_email,
         phone_pending: status.phone_pending,
         steps_completed: status.steps_completed,
         next_step: status.next_step,
@@ -390,6 +394,88 @@ pub async fn post_resend_verification(
     };
 
     Ok(Json(ResendVerificationResponse { status, error }))
+}
+
+// ── POST /api/v1/auth/register/:id/change-email ──────────────
+
+#[derive(Deserialize, ToSchema)]
+pub struct ChangeRegistrationEmailInput {
+    pub email: String,
+}
+
+#[derive(Serialize, ToSchema)]
+pub struct ChangeRegistrationEmailResponse {
+    pub status: &'static str,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub error: Option<String>,
+}
+
+#[endpoint]
+pub async fn post_change_email(
+    req: &mut Request,
+    depot: &Depot,
+) -> Result<Json<ChangeRegistrationEmailResponse>, RouteError> {
+    let id: Ulid = req
+        .param::<String>("id")
+        .ok_or(RouteError::BadRequest("missing id".into()))?
+        .parse()
+        .map_err(|_| RouteError::BadRequest("invalid id".into()))?;
+
+    let input: ChangeRegistrationEmailInput = req
+        .parse_json()
+        .await
+        .map_err(|_| RouteError::BadRequest("invalid json body".into()))?;
+
+    let repo_factory = depot.repo_factory()?;
+    let limiter = depot.limiter()?;
+    let clock = make_clock();
+    let mut rng = make_rng();
+    let notification_language = crate::handlers::notification_language(req, depot, None);
+
+    let activity_tracker = extract_bound_activity_tracker(req, depot);
+    let requester = activity_tracker
+        .ip()
+        .map(RequesterFingerprint::new)
+        .unwrap_or(RequesterFingerprint::EMPTY);
+
+    let repo = repo_factory.create().await?;
+
+    let outcome = match change_registration_email(
+        repo,
+        &limiter,
+        &mut rng,
+        &clock,
+        requester,
+        id,
+        &input.email,
+        notification_language,
+    )
+    .await
+    {
+        Ok(outcome) => outcome,
+        Err(RegistrationEmailChangeError::NotFound) => return Err(RouteError::NotFound),
+        Err(RegistrationEmailChangeError::NotAvailable) => {
+            return Err(RouteError::BadRequest(
+                "no email authentication for this registration".into(),
+            ));
+        }
+        Err(RegistrationEmailChangeError::Repository(error)) => return Err(error.into()),
+    };
+
+    let (status, error) = match outcome {
+        RegistrationEmailChangeOutcome::Updated => ("updated", None),
+        RegistrationEmailChangeOutcome::RegistrationCompleted => {
+            ("error", Some("registration_already_completed".into()))
+        }
+        RegistrationEmailChangeOutcome::AlreadyVerified => {
+            ("error", Some("email_already_verified".into()))
+        }
+        RegistrationEmailChangeOutcome::InvalidEmail => ("error", Some("email_invalid".into())),
+        RegistrationEmailChangeOutcome::EmailInUse => ("error", Some("email_in_use".into())),
+        RegistrationEmailChangeOutcome::RateLimited => ("error", Some("rate_limited".into())),
+    };
+
+    Ok(Json(ChangeRegistrationEmailResponse { status, error }))
 }
 
 // ── POST /api/v1/auth/register/:id/verify-phone ────────────────
@@ -550,6 +636,12 @@ pub struct FinishRegistrationResponse {
     pub post_auth_action: Option<serde_json::Value>,
 }
 
+#[derive(Default, Deserialize, ToSchema)]
+pub struct FinishRegistrationInput {
+    #[serde(default)]
+    pub bootstrap_admin_token: Option<String>,
+}
+
 #[endpoint]
 pub async fn post_finish(
     req: &mut Request,
@@ -565,6 +657,18 @@ pub async fn post_finish(
     let site_config = depot.site_config()?;
     let homeserver = depot.homeserver()?;
     let repo_factory = depot.repo_factory()?;
+    let input = if req
+        .payload()
+        .await
+        .map_err(|error| RouteError::Internal(error.into()))?
+        .is_empty()
+    {
+        FinishRegistrationInput::default()
+    } else {
+        req.parse_json()
+            .await
+            .map_err(|_| RouteError::BadRequest("invalid request body".into()))?
+    };
 
     let clock = make_clock();
     let mut rng = make_rng();
@@ -588,6 +692,8 @@ pub async fn post_finish(
         None,
         HomeserverCheckMode::BestEffort,
         site_config.registration_token_required,
+        site_config.bootstrap_admin_token.as_deref(),
+        input.bootstrap_admin_token,
         user_agent,
     )
     .await

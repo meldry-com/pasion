@@ -11,7 +11,6 @@ workspace = true
 anyhow.workspace = true
 bytes.workspace = true
 chrono.workspace = true
-crc.workspace = true
 deadpool.workspace = true
 futures-util.workspace = true
 headers.workspace = true
@@ -118,6 +117,9 @@ zxcvbn.workspace = true
 sd-notify.workspace = true
 
 [dev-dependencies]
+# Re-declared here to pull in the `test-support` feature (which exposes
+# `MockHomeserverAdmin`) only for test builds, never for the release binary.
+pasion-matrix = { workspace = true, features = ["test-support"] }
 cookie_store.workspace = true
 insta.workspace = true
 tokio-test.workspace = true

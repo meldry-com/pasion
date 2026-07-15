@@ -36,8 +36,6 @@ pub enum HomeserverKind {
     Palpo,
     /// Read-only mode against Palpo (safe for rolling-out evaluations)
     PalpoReadOnly,
-    /// Palpo using the newer (modern) admin API surface
-    PalpoModern,
 }
 
 // ---------------------------------------------------------------------------

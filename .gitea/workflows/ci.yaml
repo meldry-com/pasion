@@ -53,6 +53,26 @@ jobs:
         with:
           components: clippy
 
+      - name: Restore Cargo dependency cache
+        uses: actions/cache@v3
+        with:
+          path: |
+            ~/.cargo/registry/index/
+            ~/.cargo/registry/cache/
+            ~/.cargo/git/db/
+            ~/.cargo/git/checkouts/
+          key: gitea-cargo-stable-v1-${{ runner.os }}-${{ hashFiles('**/Cargo.lock') }}
+          restore-keys: |
+            gitea-cargo-stable-v1-${{ runner.os }}-
+
+      - name: Restore Clippy target cache
+        uses: actions/cache@v3
+        with:
+          path: target/
+          key: gitea-target-clippy-stable-v1-${{ runner.os }}-${{ hashFiles('**/Cargo.lock') }}
+          restore-keys: |
+            gitea-target-clippy-stable-v1-${{ runner.os }}-
+
       - name: Execute Clippy lints
         run: cargo clippy --workspace --tests --bins --lib -- -D warnings
 
@@ -89,6 +109,26 @@ jobs:
       - name: Set up stable Rust
         uses: dtolnay/rust-toolchain@stable
 
+      - name: Restore Cargo dependency cache
+        uses: actions/cache@v3
+        with:
+          path: |
+            ~/.cargo/registry/index/
+            ~/.cargo/registry/cache/
+            ~/.cargo/git/db/
+            ~/.cargo/git/checkouts/
+          key: gitea-cargo-stable-v1-${{ runner.os }}-${{ hashFiles('**/Cargo.lock') }}
+          restore-keys: |
+            gitea-cargo-stable-v1-${{ runner.os }}-
+
+      - name: Restore schema target cache
+        uses: actions/cache@v3
+        with:
+          path: target/
+          key: gitea-target-schema-stable-v1-${{ runner.os }}-${{ hashFiles('**/Cargo.lock') }}
+          restore-keys: |
+            gitea-target-schema-stable-v1-${{ runner.os }}-
+
       - name: Regenerate schemas
         run: sh ./misc/update.sh
 
@@ -100,9 +140,60 @@ jobs:
             exit 1
           fi
 
+  compile-test-artifacts:
+    name: Build nextest archive
+    runs-on: ubuntu-24.04
+
+    permissions:
+      contents: read
+
+    steps:
+      - name: Fetch repository
+        uses: actions/checkout@v4
+
+      - name: Set up stable Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Restore Cargo dependency cache
+        uses: actions/cache@v3
+        with:
+          path: |
+            ~/.cargo/registry/index/
+            ~/.cargo/registry/cache/
+            ~/.cargo/git/db/
+            ~/.cargo/git/checkouts/
+          key: gitea-cargo-stable-v1-${{ runner.os }}-${{ hashFiles('**/Cargo.lock') }}
+          restore-keys: |
+            gitea-cargo-stable-v1-${{ runner.os }}-
+
+      - name: Restore nextest target cache
+        uses: actions/cache@v3
+        with:
+          path: target/
+          key: gitea-target-nextest-stable-v1-${{ runner.os }}-${{ hashFiles('**/Cargo.lock') }}
+          restore-keys: |
+            gitea-target-nextest-stable-v1-${{ runner.os }}-
+
+      - name: Set up nextest
+        uses: taiki-e/install-action@v2
+        with:
+          tool: cargo-nextest
+
+      - name: Compile and archive test binaries
+        run: cargo nextest archive --workspace --archive-file nextest-archive.tar.zst
+
+      - name: Upload nextest archive
+        uses: christopherhx/gitea-upload-artifact@v4
+        with:
+          name: nextest-archive
+          path: nextest-archive.tar.zst
+
   test:
     name: Run partitioned Rust tests
     runs-on: ubuntu-24.04
+    needs:
+      - rustfmt
+      - compile-test-artifacts
     strategy:
       fail-fast: false
       matrix:
@@ -138,10 +229,16 @@ jobs:
         with:
           tool: cargo-nextest
 
+      - name: Download nextest archive
+        uses: christopherhx/gitea-download-artifact@v4
+        with:
+          name: nextest-archive
+          path: .
+
       - name: Execute test partition
         env:
           DATABASE_URL: postgresql://postgres:postgres@localhost/postgres
         run: |
-          cargo nextest run \
-            --workspace \
+          ~/.cargo/bin/cargo-nextest nextest run \
+            --archive-file nextest-archive.tar.zst \
             --partition count:${{ matrix.partition }}/3

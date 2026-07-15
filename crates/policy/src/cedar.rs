@@ -38,7 +38,7 @@
 //! };
 //! ```
 
-use std::sync::Arc;
+use std::sync::{Arc, OnceLock};
 
 use async_trait::async_trait;
 use cedar_policy::{Authorizer, Context, Decision, Entities, EntityUid, PolicySet, Request};
@@ -163,14 +163,12 @@ impl CedarEvaluator {
             );
         }
 
-        let principal: EntityUid = r#"Requester::"anonymous""#.parse().map_err(|e| {
-            EvaluationError::Evaluation(anyhow::anyhow!("Failed to parse principal: {e}"))
-        })?;
+        // The principal and resource UIDs are constant for every evaluation, so
+        // we parse them exactly once and clone the cached values (cheap).
+        let principal = constant_principal()?.clone();
+        let resource = constant_resource()?.clone();
         let action: EntityUid = format!(r#"Action::"{action_name}""#).parse().map_err(|e| {
             EvaluationError::Evaluation(anyhow::anyhow!("Failed to parse action: {e}"))
-        })?;
-        let resource: EntityUid = r#"Resource::"default""#.parse().map_err(|e| {
-            EvaluationError::Evaluation(anyhow::anyhow!("Failed to parse resource: {e}"))
         })?;
 
         // Cedar does not support JSON null values; strip them before building
@@ -178,11 +176,13 @@ impl CedarEvaluator {
         // a parse error.
         strip_json_nulls(&mut context_json);
 
-        let context = Context::from_json_value(context_json.clone(), None).map_err(|e| {
+        // `from_json_value` consumes the value; log the error without cloning the
+        // (potentially large) context — the Cedar error itself describes the
+        // offending field.
+        let context = Context::from_json_value(context_json, None).map_err(|e| {
             tracing::error!(
                 action = action_name,
                 error = %e,
-                context = %context_json,
                 "Failed to build Cedar context"
             );
             EvaluationError::Evaluation(anyhow::anyhow!("Failed to build Cedar context: {e}"))
@@ -268,6 +268,26 @@ impl PolicyEvaluator for CedarEvaluator {
     ) -> Result<EvaluationResult, EvaluationError> {
         self.evaluate_action("authorize", &input)
     }
+}
+
+/// The constant `Requester::"anonymous"` principal UID, parsed once.
+fn constant_principal() -> Result<&'static EntityUid, EvaluationError> {
+    static PRINCIPAL: OnceLock<EntityUid> = OnceLock::new();
+    Ok(PRINCIPAL.get_or_init(|| {
+        r#"Requester::"anonymous""#
+            .parse()
+            .expect("constant principal UID must be valid")
+    }))
+}
+
+/// The constant `Resource::"default"` resource UID, parsed once.
+fn constant_resource() -> Result<&'static EntityUid, EvaluationError> {
+    static RESOURCE: OnceLock<EntityUid> = OnceLock::new();
+    Ok(RESOURCE.get_or_init(|| {
+        r#"Resource::"default""#
+            .parse()
+            .expect("constant resource UID must be valid")
+    }))
 }
 
 /// Recursively remove JSON `null` values from objects so they do not trip

@@ -23,7 +23,6 @@ digest.workspace = true
 ecdsa.workspace = true
 ed25519-dalek.workspace = true
 elliptic-curve.workspace = true
-generic-array.workspace = true
 hmac.workspace = true
 rand.workspace = true
 rsa.workspace = true

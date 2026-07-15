@@ -1,11 +1,17 @@
 use std::{collections::HashMap, sync::LazyLock};
 
+use chrono::{DateTime, Duration, Utc};
 use headers::authorization::{Basic, Bearer, Credentials as _};
 use http::StatusCode;
 use oauth2_types::errors::{ClientError, ClientErrorCode};
 use pasion_data::{Client, JwksOrJwksUri, RepositoryAccess, oauth2::OAuth2ClientRepository};
+use pasion_iana::jose::JsonWebSignatureAlg;
 use pasion_iana::oauth::OAuthClientAuthenticationMethod;
-use pasion_jose::{jwk::PublicJsonWebKeySet, jwt::Jwt};
+use pasion_jose::{
+    claims::{self, TimeOptions},
+    jwk::PublicJsonWebKeySet,
+    jwt::Jwt,
+};
 use pasion_keystore::Encrypter;
 use salvo::{
     extract::{Extractible, Metadata},
@@ -107,6 +113,9 @@ impl Credentials {
         encrypter: &Encrypter,
         method: &OAuthClientAuthenticationMethod,
         client: &Client,
+        token_endpoint: &url::Url,
+        issuer: &url::Url,
+        now: DateTime<Utc>,
     ) -> Result<(), CredentialsVerificationError> {
         match (self, method) {
             (Credentials::None { .. }, OAuthClientAuthenticationMethod::None) => {}
@@ -139,6 +148,11 @@ impl Credentials {
                 Credentials::ClientAssertionJwtBearer { jwt, .. },
                 OAuthClientAuthenticationMethod::PrivateKeyJwt,
             ) => {
+                validate_client_assertion_alg(
+                    jwt,
+                    client.token_endpoint_auth_signing_alg.as_ref(),
+                )?;
+
                 // Get the client JWKS
                 let jwks = client
                     .jwks
@@ -151,12 +165,24 @@ impl Credentials {
 
                 jwt.verify_with_jwks(&jwks)
                     .map_err(|_| CredentialsVerificationError::InvalidAssertionSignature)?;
+                validate_client_assertion_claims(
+                    jwt,
+                    &client.client_id,
+                    token_endpoint,
+                    issuer,
+                    now,
+                )?;
             }
 
             (
                 Credentials::ClientAssertionJwtBearer { jwt, .. },
                 OAuthClientAuthenticationMethod::ClientSecretJwt,
             ) => {
+                validate_client_assertion_alg(
+                    jwt,
+                    client.token_endpoint_auth_signing_alg.as_ref(),
+                )?;
+
                 // Decrypt the client_secret
                 let encrypted_client_secret = client
                     .encrypted_client_secret
@@ -169,6 +195,13 @@ impl Credentials {
 
                 jwt.verify_with_shared_secret(decrypted_client_secret)
                     .map_err(|_| CredentialsVerificationError::InvalidAssertionSignature)?;
+                validate_client_assertion_claims(
+                    jwt,
+                    &client.client_id,
+                    token_endpoint,
+                    issuer,
+                    now,
+                )?;
             }
 
             (_, _) => {
@@ -177,6 +210,86 @@ impl Credentials {
         }
         Ok(())
     }
+}
+
+fn max_client_assertion_lifetime() -> Duration {
+    Duration::try_minutes(5).expect("five-minute assertion lifetime is representable")
+}
+
+fn validate_client_assertion_alg(
+    jwt: &Jwt<'_, HashMap<String, Value>>,
+    expected: Option<&JsonWebSignatureAlg>,
+) -> Result<(), CredentialsVerificationError> {
+    if let Some(expected) = expected
+        && jwt.header().alg() != expected
+    {
+        return Err(CredentialsVerificationError::AssertionAlgorithmMismatch);
+    }
+
+    Ok(())
+}
+
+fn validate_client_assertion_claims(
+    jwt: &Jwt<'_, HashMap<String, Value>>,
+    expected_client_id: &str,
+    token_endpoint: &url::Url,
+    issuer: &url::Url,
+    now: DateTime<Utc>,
+) -> Result<(), CredentialsVerificationError> {
+    let mut claims = jwt.payload().clone();
+    let time_options = TimeOptions::new(now);
+
+    claims::ISS
+        .extract_required_with_options(&mut claims, expected_client_id)
+        .map_err(CredentialsVerificationError::InvalidAssertionClaims)?;
+
+    let subject = claims::SUB
+        .extract_required(&mut claims)
+        .map_err(CredentialsVerificationError::InvalidAssertionClaims)?;
+    if subject != expected_client_id {
+        return Err(CredentialsVerificationError::InvalidAssertionSubject);
+    }
+
+    validate_client_assertion_audience(&claims, token_endpoint, issuer)
+        .map_err(CredentialsVerificationError::InvalidAssertionClaims)?;
+
+    let expires_at = claims::EXP
+        .extract_required_with_options(&mut claims, &time_options)
+        .map_err(CredentialsVerificationError::InvalidAssertionClaims)?;
+    if expires_at.signed_duration_since(now) > max_client_assertion_lifetime() {
+        return Err(CredentialsVerificationError::AssertionExpirationTooLong);
+    }
+
+    claims::NBF
+        .extract_optional_with_options(&mut claims, &time_options)
+        .map_err(CredentialsVerificationError::InvalidAssertionClaims)?;
+    claims::IAT
+        .extract_optional_with_options(&mut claims, &time_options)
+        .map_err(CredentialsVerificationError::InvalidAssertionClaims)?;
+
+    Ok(())
+}
+
+fn validate_client_assertion_audience(
+    claims: &HashMap<String, Value>,
+    token_endpoint: &url::Url,
+    issuer: &url::Url,
+) -> Result<(), pasion_jose::claims::ClaimError> {
+    let accepted = [
+        token_endpoint.as_str().to_owned(),
+        issuer.as_str().to_owned(),
+    ];
+    let mut last_error = None;
+
+    for audience in &accepted {
+        let mut claims = claims.clone();
+        match claims::AUD.extract_required_with_options(&mut claims, audience) {
+            Ok(_) => return Ok(()),
+            Err(e) => last_error = Some(e),
+        }
+    }
+
+    Err(last_error.unwrap_or(pasion_jose::claims::ClaimError::MissingClaim("aud")))
 }
 
 async fn fetch_jwks(
@@ -215,6 +328,18 @@ pub enum CredentialsVerificationError {
 
     #[error("invalid assertion signature")]
     InvalidAssertionSignature,
+
+    #[error("invalid client assertion claims")]
+    InvalidAssertionClaims(#[source] pasion_jose::claims::ClaimError),
+
+    #[error("client assertion subject did not match client id")]
+    InvalidAssertionSubject,
+
+    #[error("client assertion expiration is too far in the future")]
+    AssertionExpirationTooLong,
+
+    #[error("client assertion signing algorithm did not match registered algorithm")]
+    AssertionAlgorithmMismatch,
 
     #[error("failed to fetch jwks")]
     JwksFetchFailed(#[source] Box<dyn std::error::Error + Send + Sync + 'static>),
@@ -529,6 +654,127 @@ where
 #[cfg(test)]
 mod tests {
     use super::*;
+    use base64ct::{Base64UrlUnpadded, Encoding};
+    use chrono::TimeZone as _;
+
+    fn jwt_with_claims(claims: serde_json::Value) -> Jwt<'static, HashMap<String, Value>> {
+        jwt_with_alg_and_claims("HS256", claims)
+    }
+
+    fn jwt_with_alg_and_claims(
+        alg: &str,
+        claims: serde_json::Value,
+    ) -> Jwt<'static, HashMap<String, Value>> {
+        fn encode(value: &serde_json::Value) -> String {
+            Base64UrlUnpadded::encode_string(&serde_json::to_vec(value).unwrap())
+        }
+
+        let header = serde_json::json!({ "alg": alg });
+        let token = format!("{}.{}.c2ln", encode(&header), encode(&claims));
+        Jwt::try_from(token).unwrap()
+    }
+
+    fn fixed_now() -> DateTime<Utc> {
+        Utc.with_ymd_and_hms(2026, 5, 6, 12, 0, 0).unwrap()
+    }
+
+    #[test]
+    fn client_assertion_claims_accept_valid_assertion() {
+        let now = fixed_now();
+        let token_endpoint = url::Url::parse("https://example.com/oauth2/token").unwrap();
+        let issuer = url::Url::parse("https://example.com/").unwrap();
+        let jwt = jwt_with_claims(serde_json::json!({
+            "iss": "client-123",
+            "sub": "client-123",
+            "aud": "https://example.com/oauth2/token",
+            "exp": (now + Duration::try_minutes(1).unwrap()).timestamp(),
+            "iat": now.timestamp(),
+            "jti": "assertion-1"
+        }));
+
+        validate_client_assertion_claims(&jwt, "client-123", &token_endpoint, &issuer, now)
+            .unwrap();
+    }
+
+    #[test]
+    fn client_assertion_alg_rejects_registered_algorithm_mismatch() {
+        let jwt = jwt_with_alg_and_claims("HS256", serde_json::json!({}));
+
+        assert!(matches!(
+            validate_client_assertion_alg(&jwt, Some(&JsonWebSignatureAlg::Hs512)),
+            Err(CredentialsVerificationError::AssertionAlgorithmMismatch)
+        ));
+    }
+
+    #[test]
+    fn client_assertion_claims_accept_issuer_audience() {
+        let now = fixed_now();
+        let token_endpoint = url::Url::parse("https://example.com/oauth2/token").unwrap();
+        let issuer = url::Url::parse("https://example.com/").unwrap();
+        let jwt = jwt_with_claims(serde_json::json!({
+            "iss": "client-123",
+            "sub": "client-123",
+            "aud": "https://example.com/",
+            "exp": (now + Duration::try_minutes(1).unwrap()).timestamp(),
+        }));
+
+        validate_client_assertion_claims(&jwt, "client-123", &token_endpoint, &issuer, now)
+            .unwrap();
+    }
+
+    #[test]
+    fn client_assertion_claims_reject_wrong_audience() {
+        let now = fixed_now();
+        let token_endpoint = url::Url::parse("https://example.com/oauth2/token").unwrap();
+        let issuer = url::Url::parse("https://example.com/").unwrap();
+        let jwt = jwt_with_claims(serde_json::json!({
+            "iss": "client-123",
+            "sub": "client-123",
+            "aud": "https://attacker.example/token",
+            "exp": (now + Duration::try_minutes(1).unwrap()).timestamp(),
+        }));
+
+        assert!(matches!(
+            validate_client_assertion_claims(&jwt, "client-123", &token_endpoint, &issuer, now),
+            Err(CredentialsVerificationError::InvalidAssertionClaims(_))
+        ));
+    }
+
+    #[test]
+    fn client_assertion_claims_reject_wrong_subject() {
+        let now = fixed_now();
+        let token_endpoint = url::Url::parse("https://example.com/oauth2/token").unwrap();
+        let issuer = url::Url::parse("https://example.com/").unwrap();
+        let jwt = jwt_with_claims(serde_json::json!({
+            "iss": "client-123",
+            "sub": "other-client",
+            "aud": "https://example.com/oauth2/token",
+            "exp": (now + Duration::try_minutes(1).unwrap()).timestamp(),
+        }));
+
+        assert!(matches!(
+            validate_client_assertion_claims(&jwt, "client-123", &token_endpoint, &issuer, now),
+            Err(CredentialsVerificationError::InvalidAssertionSubject)
+        ));
+    }
+
+    #[test]
+    fn client_assertion_claims_reject_long_lived_assertion() {
+        let now = fixed_now();
+        let token_endpoint = url::Url::parse("https://example.com/oauth2/token").unwrap();
+        let issuer = url::Url::parse("https://example.com/").unwrap();
+        let jwt = jwt_with_claims(serde_json::json!({
+            "iss": "client-123",
+            "sub": "client-123",
+            "aud": "https://example.com/oauth2/token",
+            "exp": (now + Duration::try_minutes(30).unwrap()).timestamp(),
+        }));
+
+        assert!(matches!(
+            validate_client_assertion_claims(&jwt, "client-123", &token_endpoint, &issuer, now),
+            Err(CredentialsVerificationError::AssertionExpirationTooLong)
+        ));
+    }
 
     // Tests would need to be updated for Salvo's test utilities
     // For now, we'll skip the tests as they require significant Salvo-specific

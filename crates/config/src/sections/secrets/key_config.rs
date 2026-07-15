@@ -140,13 +140,27 @@ pub struct KeyConfig {
 }
 
 impl KeyConfig {
+    pub(crate) fn source_description(&self) -> String {
+        let source = match &self.key {
+            Key::File(path) => format!("secrets key file {path}"),
+            Key::Value(_) => "inline secrets key".to_owned(),
+        };
+
+        match self.kid.as_deref() {
+            Some(kid) => format!("{source} (kid={kid})"),
+            None => source,
+        }
+    }
+
     /// Reads the password bytes, fetching from disk when stored as a file path
     async fn resolve_password(&self) -> anyhow::Result<Option<Cow<'_, [u8]>>> {
         match &self.password {
             None => Ok(None),
             Some(Password::Value(pw)) => Ok(Some(Cow::Borrowed(pw.as_bytes()))),
             Some(Password::File(path)) => {
-                let bytes = tokio::fs::read(path).await?;
+                let bytes = tokio::fs::read(path)
+                    .await
+                    .with_context(|| format!("reading secrets key password file {path}"))?;
                 Ok(Some(Cow::Owned(bytes)))
             }
         }
@@ -157,7 +171,9 @@ impl KeyConfig {
         match &self.key {
             Key::Value(val) => Ok(Cow::Borrowed(val.as_bytes())),
             Key::File(path) => {
-                let bytes = tokio::fs::read(path).await?;
+                let bytes = tokio::fs::read(path)
+                    .await
+                    .with_context(|| format!("reading secrets key file {path}"))?;
                 Ok(Cow::Owned(bytes))
             }
         }
@@ -198,14 +214,24 @@ pub(crate) async fn enumerate_keys_in_directory(
         .await
         .with_context(|| format!("reading key directory {dir}"))?;
 
-    while let Some(entry) = entries.next_entry().await? {
-        if !entry.path().is_file() {
+    while let Some(entry) = entries
+        .next_entry()
+        .await
+        .with_context(|| format!("iterating key directory {dir}"))?
+    {
+        let path = entry.path();
+        if !entry
+            .file_type()
+            .await
+            .with_context(|| format!("reading file type for key path {}", path.display()))?
+            .is_file()
+        {
             continue;
         }
         configs.push(KeyConfig {
             kid: None,
             password: None,
-            key: Key::File(entry.path().try_into()?),
+            key: Key::File(path.try_into()?),
         });
     }
 

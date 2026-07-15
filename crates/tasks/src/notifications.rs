@@ -1,4 +1,4 @@
-use std::collections::BTreeMap;
+use std::{collections::BTreeMap, error::Error as StdError};
 
 use anyhow::Context;
 use async_trait::async_trait;
@@ -35,6 +35,7 @@ use crate::{
 const TEMPLATE_EMAIL_VERIFICATION: &str = "email_verification";
 const TEMPLATE_SMS_VERIFICATION: &str = "sms_verification_code";
 const TEMPLATE_EMAIL_RECOVERY: &str = "email_recovery";
+const EMAIL_VERIFICATION_LANGUAGE: &str = "en";
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 struct EmailVerificationPayload {
@@ -186,7 +187,7 @@ async fn schedule_processing_job(
 pub(crate) async fn send_email_authentication_code(
     state: &State,
     user_email_authentication_id: Ulid,
-    language: &str,
+    _language: &str,
 ) -> Result<(), JobError> {
     let clock = state.clock();
     let notifications = state.notifications();
@@ -232,13 +233,13 @@ pub(crate) async fn send_email_authentication_code(
         &mut rng,
         clock,
         TEMPLATE_EMAIL_VERIFICATION,
-        language,
+        EMAIL_VERIFICATION_LANGUAGE,
         NotificationRequestSource::UserEmailAuthentication {
             user_email_authentication_id,
         },
         serde_json::to_value(EmailVerificationPayload {
             code: code.code.clone(),
-            language: language.to_owned(),
+            language: EMAIL_VERIFICATION_LANGUAGE.to_owned(),
         })
         .map_err(JobError::fail)?,
         NotificationDestination::Email {
@@ -424,6 +425,35 @@ pub(crate) async fn send_account_recovery(
     Ok(())
 }
 
+fn error_chain_contains_any(error: &(dyn StdError + 'static), needles: &[&str]) -> bool {
+    let mut current = Some(error);
+
+    while let Some(err) = current {
+        let message = err.to_string().to_ascii_lowercase();
+        if needles.iter().any(|needle| message.contains(needle)) {
+            return true;
+        }
+        current = err.source();
+    }
+
+    false
+}
+
+fn is_permanent_tls_validation_error(error: &(dyn StdError + 'static)) -> bool {
+    error_chain_contains_any(
+        error,
+        &[
+            "invalid peer certificate",
+            "unknownissuer",
+            "certificate verify failed",
+            "self-signed certificate",
+            "certificate has expired",
+            "not valid for name",
+            "hostname mismatch",
+        ],
+    )
+}
+
 fn notification_failure_from_error(error: &NotificationError) -> NotificationDeliveryFailure {
     let (code, message, retryable) = match error {
         NotificationError::EmailNotConfigured => (
@@ -451,8 +481,12 @@ fn notification_failure_from_error(error: &NotificationError) -> NotificationDel
                     pasion_messaging::email::EmailTransportError::Json(_) => {
                         Some("email_json".to_owned())
                     }
-                    pasion_messaging::email::EmailTransportError::Http(_) => {
-                        Some("email_http".to_owned())
+                    pasion_messaging::email::EmailTransportError::Http(error) => {
+                        if is_permanent_tls_validation_error(error) {
+                            Some("email_tls_certificate".to_owned())
+                        } else {
+                            Some("email_http".to_owned())
+                        }
                     }
                     pasion_messaging::email::EmailTransportError::ProviderError {
                         status, ..
@@ -467,8 +501,10 @@ fn notification_failure_from_error(error: &NotificationError) -> NotificationDel
                     pasion_messaging::email::EmailTransportError::Message(_)
                     | pasion_messaging::email::EmailTransportError::Json(_) => false,
                     pasion_messaging::email::EmailTransportError::Smtp(_)
-                    | pasion_messaging::email::EmailTransportError::Sendmail(_)
-                    | pasion_messaging::email::EmailTransportError::Http(_) => true,
+                    | pasion_messaging::email::EmailTransportError::Sendmail(_) => true,
+                    pasion_messaging::email::EmailTransportError::Http(error) => {
+                        !is_permanent_tls_validation_error(error)
+                    }
                 },
             ),
             pasion_messaging::email::MailerError::Templates(error) => (
@@ -479,7 +515,13 @@ fn notification_failure_from_error(error: &NotificationError) -> NotificationDel
         },
         NotificationError::Sms(error) => match error {
             pasion_messaging::SmsTransportError::Http(error) => {
-                (Some("sms_http".to_owned()), Some(error.to_string()), true)
+                let is_permanent_tls = is_permanent_tls_validation_error(error);
+                let code = if is_permanent_tls {
+                    Some("sms_tls_certificate".to_owned())
+                } else {
+                    Some("sms_http".to_owned())
+                };
+                (code, Some(error.to_string()), !is_permanent_tls)
             }
             pasion_messaging::SmsTransportError::ProviderError { status, body } => (
                 Some(format!("sms_provider_{status}")),
@@ -1063,5 +1105,52 @@ impl RunnableJob for ProcessNotificationDeliveriesJob {
     #[tracing::instrument(name = "job.process_notification_deliveries", skip_all)]
     async fn run(&self, state: &State, _context: JobContext) -> Result<(), JobError> {
         process_notification_deliveries(state, self.limit()).await
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use thiserror::Error;
+
+    use super::{EMAIL_VERIFICATION_LANGUAGE, is_permanent_tls_validation_error};
+
+    #[derive(Debug, Error)]
+    #[error("{message}")]
+    struct LeafError {
+        message: &'static str,
+    }
+
+    #[derive(Debug, Error)]
+    #[error("transport failed")]
+    struct WrapperError {
+        #[source]
+        source: LeafError,
+    }
+
+    #[test]
+    fn detects_tls_validation_errors_from_nested_sources() {
+        let error = WrapperError {
+            source: LeafError {
+                message: "invalid peer certificate: UnknownIssuer",
+            },
+        };
+
+        assert!(is_permanent_tls_validation_error(&error));
+    }
+
+    #[test]
+    fn ignores_non_certificate_transport_errors() {
+        let error = WrapperError {
+            source: LeafError {
+                message: "connection reset by peer",
+            },
+        };
+
+        assert!(!is_permanent_tls_validation_error(&error));
+    }
+
+    #[test]
+    fn email_verification_language_is_fixed_to_english() {
+        assert_eq!(EMAIL_VERIFICATION_LANGUAGE, "en");
     }
 }

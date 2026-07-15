@@ -9,19 +9,24 @@ pub fn SessionCardRoot(children: Element) -> Element {
     }
 }
 
+/// Resolve the session-card class without allocating: there are only four
+/// possible (compact, disabled) combinations.
+fn session_card_class(compact: bool, disabled: bool) -> &'static str {
+    match (compact, disabled) {
+        (false, false) => "session-card",
+        (true, false) => "session-card compact",
+        (false, true) => "session-card disabled",
+        (true, true) => "session-card compact disabled",
+    }
+}
+
 #[component]
 pub fn SessionCardBody(
     compact: Option<bool>,
     disabled: Option<bool>,
     children: Element,
 ) -> Element {
-    let mut class = "session-card".to_string();
-    if compact.unwrap_or(false) {
-        class.push_str(" compact");
-    }
-    if disabled.unwrap_or(false) {
-        class.push_str(" disabled");
-    }
+    let class = session_card_class(compact.unwrap_or(false), disabled.unwrap_or(false));
 
     rsx! {
         div { class: "{class}", {children} }
@@ -35,13 +40,7 @@ pub fn SessionCardLinkBody(
     disabled: Option<bool>,
     children: Element,
 ) -> Element {
-    let mut class = "session-card".to_string();
-    if compact.unwrap_or(false) {
-        class.push_str(" compact");
-    }
-    if disabled.unwrap_or(false) {
-        class.push_str(" disabled");
-    }
+    let class = session_card_class(compact.unwrap_or(false), disabled.unwrap_or(false));
 
     rsx! {
         Link { class: "{class}", to: to, {children} }

@@ -3,7 +3,8 @@ use dioxus::prelude::*;
 use crate::{
     api::types::{DeviceType, SessionNode},
     components::{
-        last_active::LastActive, layout::Layout, loading::LoadingScreen, session_card::*,
+        dialog::Dialog, last_active::LastActive, layout::Layout, loading::LoadingScreen,
+        session_card::*,
     },
     utils::format_date,
 };
@@ -203,15 +204,7 @@ fn EditSessionName(
             "Edit name"
         }
 
-        if dialog_open() {
-            div {
-                class: "dialog-overlay",
-                onclick: move |_| dialog_open.set(false),
-                div {
-                    class: "dialog-content",
-                    onclick: move |evt| evt.stop_propagation(),
-                    h3 { class: "dialog-title", "Edit session name" }
-
+        Dialog { open: dialog_open, title: "Edit session name".to_string(),
                     if let Some(ref err_text) = *error_msg.read() {
                         div { class: "alert alert-critical", "{err_text}" }
                     }
@@ -289,8 +282,6 @@ fn EditSessionName(
                             }
                         }
                     }
-                }
-            }
         }
     }
 }

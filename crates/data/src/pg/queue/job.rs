@@ -10,7 +10,7 @@ use diesel::{
 use diesel_async::RunQueryDsl;
 use pasion_data::{
     Clock, new_id,
-    queue::{Job, QueueJobRepository, Worker},
+    queue::{AbandonedJob, Job, QueueJobRepository, Worker},
 };
 use rand_core::RngCore;
 use ulid::Ulid;
@@ -78,6 +78,45 @@ impl TryFrom<JobReservationResult> for Job {
             payload,
             metadata,
             attempt,
+        })
+    }
+}
+
+#[derive(Debug, QueryableByName)]
+struct AbandonedJobResult {
+    #[diesel(sql_type = DieselUuid)]
+    id: Uuid,
+    #[diesel(sql_type = Text)]
+    queue_name: String,
+    #[diesel(sql_type = diesel::sql_types::Integer)]
+    attempt: i32,
+    #[diesel(sql_type = DieselUuid)]
+    started_by: Uuid,
+    #[diesel(sql_type = Timestamptz)]
+    started_at: DateTime<Utc>,
+    #[diesel(sql_type = Timestamptz)]
+    worker_shutdown_at: DateTime<Utc>,
+}
+
+impl TryFrom<AbandonedJobResult> for AbandonedJob {
+    type Error = DatabaseInconsistencyError;
+
+    fn try_from(value: AbandonedJobResult) -> Result<Self, Self::Error> {
+        let id = value.id.into();
+        let attempt = value.attempt.try_into().map_err(|e| {
+            DatabaseInconsistencyError::on("queue_jobs")
+                .column("attempt")
+                .row(id)
+                .source(e)
+        })?;
+
+        Ok(Self {
+            id,
+            queue_name: value.queue_name,
+            attempt,
+            started_by: value.started_by.into(),
+            started_at: value.started_at,
+            worker_shutdown_at: value.worker_shutdown_at,
         })
     }
 }
@@ -400,6 +439,61 @@ impl QueueJobRepository for PgQueueJobRepository<'_> {
         Ok(count)
     }
 
+    #[tracing::instrument(name = "db.queue_job.mark_abandoned_jobs_as_failed", skip_all, err)]
+    async fn mark_abandoned_jobs_as_failed(
+        &mut self,
+        clock: &dyn Clock,
+        reason: &str,
+    ) -> Result<Vec<AbandonedJob>, Self::Error> {
+        let now = clock.now();
+        let jobs = diesel::sql_query(
+            r"
+                WITH abandoned_jobs AS (
+                    SELECT
+                        queue_jobs.id,
+                        queue_jobs.queue_name,
+                        queue_jobs.attempt,
+                        queue_jobs.started_by,
+                        queue_jobs.started_at,
+                        queue_workers.shutdown_at AS worker_shutdown_at
+                    FROM queue_jobs
+                    JOIN queue_workers
+                        ON queue_workers.id = queue_jobs.started_by
+                    WHERE queue_jobs.status = 'running'
+                      AND queue_workers.shutdown_at IS NOT NULL
+                ),
+                marked_jobs AS (
+                    UPDATE queue_jobs
+                    SET status = 'failed', failed_at = $1, failed_reason = $2
+                    FROM abandoned_jobs
+                    WHERE queue_jobs.id = abandoned_jobs.id
+                      AND queue_jobs.status = 'running'
+                    RETURNING queue_jobs.id
+                )
+                SELECT
+                    abandoned_jobs.id,
+                    abandoned_jobs.queue_name,
+                    abandoned_jobs.attempt,
+                    abandoned_jobs.started_by,
+                    abandoned_jobs.started_at,
+                    abandoned_jobs.worker_shutdown_at
+                FROM abandoned_jobs
+                JOIN marked_jobs USING (id)
+            ",
+        )
+        .bind::<Timestamptz, _>(now)
+        .bind::<Text, _>(reason)
+        .get_results::<AbandonedJobResult>(self.conn)
+        .await?;
+
+        let jobs = jobs
+            .into_iter()
+            .map(TryFrom::try_from)
+            .collect::<Result<Vec<_>, _>>()?;
+
+        Ok(jobs)
+    }
+
     #[tracing::instrument(
         name = "db.queue_job.cleanup",
         skip_all,
@@ -454,4 +548,106 @@ impl QueueJobRepository for PgQueueJobRepository<'_> {
 struct UuidRow {
     #[diesel(sql_type = DieselUuid)]
     id: Uuid,
+}
+
+#[cfg(test)]
+mod tests {
+    use std::time::{SystemTime, UNIX_EPOCH};
+
+    use chrono::Duration;
+    use pasion_data::{RepositoryAccess as _, RepositoryFactory as _, clock::MockClock};
+    use rand_chacha::ChaChaRng;
+    use rand_core::SeedableRng;
+
+    use crate::PgRepositoryFactory;
+
+    fn unique_queue_name() -> String {
+        let now = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .expect("system time is after unix epoch")
+            .as_nanos();
+        format!("queue-test-{now}")
+    }
+
+    #[tokio::test]
+    async fn recovers_abandoned_jobs_from_shutdown_workers() {
+        let pool = crate::test_utils::setup_test_pool().await;
+        let mut repo = PgRepositoryFactory::new(pool).create().await.unwrap();
+        let clock = MockClock::default();
+        let mut rng = ChaChaRng::seed_from_u64(42);
+        let queue_name = unique_queue_name();
+
+        let payload = serde_json::json!({ "kind": "test" });
+        repo.queue_job()
+            .schedule(
+                &mut rng,
+                &clock,
+                &queue_name,
+                payload.clone(),
+                serde_json::json!({}),
+            )
+            .await
+            .unwrap();
+
+        let worker = repo
+            .queue_worker()
+            .register(&mut rng, &clock)
+            .await
+            .unwrap();
+        let reserved = repo
+            .queue_job()
+            .reserve(&clock, &worker, &[queue_name.as_str()], 1)
+            .await
+            .unwrap();
+        let job = reserved.into_iter().next().expect("reserved one job");
+
+        clock.advance(Duration::minutes(3));
+
+        let dead_workers = repo
+            .queue_worker()
+            .shutdown_dead_workers(&clock, Duration::minutes(2))
+            .await
+            .unwrap();
+        assert_eq!(dead_workers.len(), 1);
+        assert_eq!(dead_workers[0].id, worker.id);
+
+        let abandoned_jobs = repo
+            .queue_job()
+            .mark_abandoned_jobs_as_failed(&clock, "worker lost heartbeat")
+            .await
+            .unwrap();
+        assert_eq!(abandoned_jobs.len(), 1);
+        assert_eq!(abandoned_jobs[0].id, job.id);
+        assert_eq!(abandoned_jobs[0].queue_name.as_str(), queue_name.as_str());
+        assert_eq!(abandoned_jobs[0].attempt, job.attempt);
+        assert_eq!(abandoned_jobs[0].started_by, worker.id);
+
+        repo.queue_job()
+            .retry(&mut rng, &clock, job.id, Duration::zero())
+            .await
+            .unwrap();
+        assert_eq!(
+            repo.queue_job()
+                .schedule_available_jobs(&clock)
+                .await
+                .unwrap(),
+            1
+        );
+
+        let rescuer = repo
+            .queue_worker()
+            .register(&mut rng, &clock)
+            .await
+            .unwrap();
+        let retried = repo
+            .queue_job()
+            .reserve(&clock, &rescuer, &[queue_name.as_str()], 1)
+            .await
+            .unwrap();
+        assert_eq!(retried.len(), 1);
+        assert_ne!(retried[0].id, job.id);
+        assert_eq!(retried[0].queue_name.as_str(), queue_name.as_str());
+        assert_eq!(retried[0].payload, payload);
+        assert_eq!(retried[0].attempt, job.attempt + 1);
+    }
 }
