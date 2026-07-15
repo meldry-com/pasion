@@ -2503,7 +2503,7 @@
           ],
           "format": "uint32",
           "minimum": 0,
-          "default": 12
+          "default": 13
         },
         "secret": {
           "description": "Pepper secret mixed into the hash -- makes brute-force harder after a\ndatabase leak",
@@ -2595,11 +2595,6 @@
           "description": "Read-only mode against Palpo (safe for rolling-out evaluations)",
           "type": "string",
           "const": "palpo_read_only"
-        },
-        {
-          "description": "Palpo using the newer (modern) admin API surface",
-          "type": "string",
-          "const": "palpo_modern"
         }
       ]
     },

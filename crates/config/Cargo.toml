@@ -54,5 +54,6 @@ docker = []
 dist = []
 
 [[bin]]
-name = "schema"
+name = "config-schema"
+path = "src/bin/schema.rs"
 doc = false

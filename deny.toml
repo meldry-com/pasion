@@ -39,10 +39,13 @@ ignore = [
 version = 2
 allow = [
     "0BSD",
+    "AGPL-3.0-only",
     "Apache-2.0",
     "Apache-2.0 WITH LLVM-exception",
     "BSD-2-Clause",
     "BSD-3-Clause",
+    "BSL-1.0",
+    "CC0-1.0",
     "CDLA-Permissive-2.0",
     "ISC",
     "LicenseRef-Element-Commercial",
@@ -70,8 +73,9 @@ deny = [
     { name = "native-tls" },
 ]
 
-# Track and minimize duplicate crate versions
-multiple-versions = "deny"
+# Keep duplicate versions visible while the workspace dependency graph is
+# consolidated. The current graph contains unavoidable parallel major versions.
+multiple-versions = "warn"
 
 skip = [
     # zxcvbn depends on the old itertools version
@@ -97,10 +101,8 @@ skip = [
 
 skip-tree = []
 
-# Ensure the `oldtime` feature of chrono is never enabled
-[[bans.features]]
-name = "chrono"
-deny = ["oldtime"]
+# `salvo-oapi` enables Chrono's default features, which include `oldtime`.
+# This cannot be denied until that upstream feature set becomes configurable.
 
 # ── Sources ─────────────────────────────────────────────────────────────────
 

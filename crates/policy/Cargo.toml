@@ -38,4 +38,5 @@ chrono = { workspace = true, optional = true }
 reqwest = { workspace = true, optional = true }
 
 [[bin]]
-name = "schema"
+name = "policy-schema"
+path = "src/bin/schema.rs"
