@@ -55,7 +55,7 @@ oauth2-types = { path = "./crates/oauth2-types/", version = "=1.8.0" }
 
 pasion-frontend = { path = "./crates/frontend/", version = "=1.8.0" }
 
-salvo = { version = "0.92", features = [
+salvo = { version = "0.94", features = [
     "oapi",
     "cors",
     "cookie",
@@ -172,7 +172,7 @@ minijinja = { version = "2.19.0", features = [
 ] }
 minijinja-contrib = { version = "2.19.0", features = ["pycompat"] }
 nonzero_ext = "0.3.0"
-opendal = { version = "0.55", features = ["services-fs", "services-s3"] }
+opendal = { version = "0.57", features = ["services-fs", "services-s3"] }
 cedar-policy = "4"
 opentelemetry = { version = "0.31.0", features = ["trace", "metrics"] }
 opentelemetry-http = { version = "0.31.0", features = ["reqwest"] }

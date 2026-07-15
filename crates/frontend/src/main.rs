@@ -38,9 +38,8 @@ fn app() -> Element {
     let cfg = get_config();
 
     // Fetch site-config once and share it app-wide via context.
-    let site_config = use_resource(|| async {
-        crate::api::api_get::<SiteConfig>("/site-config").await
-    });
+    let site_config =
+        use_resource(|| async { crate::api::api_get::<SiteConfig>("/site-config").await });
     use_context_provider(|| SiteConfigContext(site_config));
 
     rsx! {

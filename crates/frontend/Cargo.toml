@@ -22,6 +22,7 @@ web-sys.workspace = true
 js-sys.workspace = true
 wasm-bindgen.workspace = true
 wasm-bindgen-futures.workspace = true
+zxcvbn.workspace = true
 
 [dependencies.reqwest]
 workspace = true

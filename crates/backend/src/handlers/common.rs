@@ -304,11 +304,13 @@ impl DepotExt for Depot {
     }
 
     async fn policy(&self) -> Result<Policy, pasion_policy::InstantiateError> {
-        let factory = self.get::<Arc<PolicyFactory>>("policy_factory").map_err(|_| {
-            pasion_policy::InstantiateError::Runtime(anyhow::anyhow!(
-                "PolicyFactory not found in depot"
-            ))
-        })?;
+        let factory = self
+            .get::<Arc<PolicyFactory>>("policy_factory")
+            .map_err(|_| {
+                pasion_policy::InstantiateError::Runtime(anyhow::anyhow!(
+                    "PolicyFactory not found in depot"
+                ))
+            })?;
         factory.instantiate().await
     }
 

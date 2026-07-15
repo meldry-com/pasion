@@ -1,12 +1,12 @@
 use std::{collections::HashMap, sync::Arc};
 
 use oauth2_types::oidc::VerifiedProviderMetadata;
-use pasion_jose::jwk::PublicJsonWebKeySet;
 use pasion_data::{
     RepositoryAccess, UpstreamOAuthProvider, UpstreamOAuthProviderDiscoveryMode,
     UpstreamOAuthProviderPkceMode, upstream_oauth2::UpstreamOAuthProviderRepository,
 };
 use pasion_iana::oauth::PkceCodeChallengeMethod;
+use pasion_jose::jwk::PublicJsonWebKeySet;
 use tokio::sync::RwLock;
 use url::Url;
 

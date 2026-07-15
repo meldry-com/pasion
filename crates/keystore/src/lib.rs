@@ -737,7 +737,8 @@ impl Keystore {
         }
     }
 
-    /// Get the public JSON Web Key Set for the keys stored in this [`Keystore`].
+    /// Get the public JSON Web Key Set for the keys stored in this
+    /// [`Keystore`].
     ///
     /// This is precomputed at construction; the returned set is a cheap clone
     /// of the shared, immutable JWKS.

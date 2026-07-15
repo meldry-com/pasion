@@ -3,54 +3,23 @@ $ErrorActionPreference = "Stop"
 
 $baseDir = Split-Path -Parent $PSScriptRoot
 $configSchema = Join-Path $baseDir "docs/config.schema.json"
-$templatesDir = Join-Path $baseDir "templates"
-$translationsFile = Join-Path $baseDir "translations/en.json"
 $policiesSchemaDir = Join-Path $baseDir "policies/schema"
 
 New-Item -ItemType Directory -Force -Path $policiesSchemaDir | Out-Null
 
-function Normalize-TranslationContexts {
-    param(
-        [Parameter(Mandatory = $true)]
-        [string]$Path
-    )
-
-    $content = Get-Content -Raw -Path $Path
-    $normalized = [regex]::Replace(
-        $content,
-        '"context"\s*:\s*"([^"]*)"',
-        {
-            param($match)
-            $value = $match.Groups[1].Value -replace '\\\\', '/'
-            '"context": "' + $value + '"'
-        }
-    )
-
-    if ($normalized -ne $content) {
-        $encoding = [System.Text.UTF8Encoding]::new($false)
-        [System.IO.File]::WriteAllText($Path, $normalized, $encoding)
-    }
-}
-
-Write-Host "+ cargo run -q -p pasion-config --bin schema"
-$configJson = & cargo run -q -p pasion-config --bin schema
+Write-Host "+ cargo run -q -p pasion-config --bin config-schema"
+$configJson = & cargo run -q -p pasion-config --bin config-schema
 if ($LASTEXITCODE -ne 0) {
     exit $LASTEXITCODE
 }
-$configJson | Set-Content -Path $configSchema -Encoding utf8NoBOM
-
-Write-Host "+ cargo run -q -p pasion-i18n-scan -- --update $templatesDir $translationsFile"
-& cargo run -q -p pasion-i18n-scan -- --update $templatesDir $translationsFile
-if ($LASTEXITCODE -ne 0) {
-    exit $LASTEXITCODE
-}
-Normalize-TranslationContexts -Path $translationsFile
+$utf8NoBom = [System.Text.UTF8Encoding]::new($false)
+[System.IO.File]::WriteAllText($configSchema, ($configJson -join "`n"), $utf8NoBom)
 
 $oldOutDir = $env:OUT_DIR
 $env:OUT_DIR = $policiesSchemaDir
 try {
-    Write-Host "+ cargo run -q -p pasion-policy --bin schema"
-    & cargo run -q -p pasion-policy --bin schema
+    Write-Host "+ cargo run -q -p pasion-policy --bin policy-schema"
+    & cargo run -q -p pasion-policy --bin policy-schema
     if ($LASTEXITCODE -ne 0) {
         exit $LASTEXITCODE
     }

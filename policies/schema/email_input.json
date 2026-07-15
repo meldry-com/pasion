@@ -1,0 +1,54 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "EmailInput",
+  "description": "Policy input for evaluating whether an email address may be added.",
+  "type": "object",
+  "properties": {
+    "email": {
+      "description": "The email address being evaluated",
+      "type": "string"
+    },
+    "requester": {
+      "description": "Information about the entity making this request",
+      "allOf": [
+        {
+          "$ref": "#/definitions/Requester"
+        }
+      ]
+    }
+  },
+  "required": [
+    "email",
+    "requester"
+  ],
+  "definitions": {
+    "Requester": {
+      "description": "Metadata about the entity making a policy-evaluated request.",
+      "type": "object",
+      "properties": {
+        "ip_address": {
+          "description": "IP address of the entity making the request, when available",
+          "type": [
+            "string",
+            "null"
+          ],
+          "format": "ip"
+        },
+        "user_agent": {
+          "description": "HTTP User-Agent header value, when available",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "country_code": {
+          "description": "ISO 3166-1 alpha-2 country code derived from the IP address",
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      }
+    }
+  }
+}

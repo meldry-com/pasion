@@ -2,8 +2,8 @@ use dioxus::prelude::*;
 
 use crate::{
     api::types::{
-        BootstrapAdminStatus, ChangeRegistrationEmailResponse, ProvidersResponse,
-        RegisterResponse, RegisterStatusResponse, ResendEmailAuthCodePayload, StepResponse,
+        BootstrapAdminStatus, ChangeRegistrationEmailResponse, ProvidersResponse, RegisterResponse,
+        RegisterStatusResponse, ResendEmailAuthCodePayload, StepResponse,
     },
     components::{
         layout::Layout, loading::LoadingSpinner, password_input::PasswordCreationDoubleInput,
@@ -796,17 +796,16 @@ pub fn RegisterFinish(id: String) -> Element {
     // saved by the manual register flow. The redirect happens after render via
     // an effect so we never call `nav.push()` during the render phase.
     let success_grant_id: Option<String> = match finish_result.read().as_ref() {
-        Some(Ok(resp)) if resp.status == "success" => resp
-            .post_auth_action
-            .as_ref()
-            .and_then(|action| {
+        Some(Ok(resp)) if resp.status == "success" => {
+            resp.post_auth_action.as_ref().and_then(|action| {
                 let kind = action.get("kind").and_then(|v| v.as_str());
                 if kind == Some("continue_authorization_grant") {
                     action.get("id").and_then(|v| v.as_str()).map(String::from)
                 } else {
                     None
                 }
-            }),
+            })
+        }
         _ => None,
     };
     let is_success = matches!(
@@ -826,9 +825,7 @@ pub fn RegisterFinish(id: String) -> Element {
         }
 
         #[cfg(target_arch = "wasm32")]
-        if let Some(storage) =
-            web_sys::window().and_then(|w| w.session_storage().ok().flatten())
-        {
+        if let Some(storage) = web_sys::window().and_then(|w| w.session_storage().ok().flatten()) {
             let kind = storage.get_item("post_auth_kind").ok().flatten();
             let id = storage.get_item("post_auth_id").ok().flatten();
             // Clean up regardless

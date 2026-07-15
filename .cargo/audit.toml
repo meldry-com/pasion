@@ -1,0 +1,35 @@
+# Configuration for `cargo audit` (RustSec).
+#
+# This mirrors the accepted advisory list in `deny.toml`. New advisories
+# outside this list should fail local audit runs until fixed or explicitly
+# documented here.
+
+[advisories]
+ignore = [
+    # RSA key extraction "Marvin Attack". Pasion uses the `rsa` crate for JOSE
+    # signing/verification and key material handling, not PKCS#1 v1.5
+    # decryption. There is no fixed upgrade available yet.
+    "RUSTSEC-2023-0071",
+
+    # quick-xml parser DoS advisories. These are transitive through OpenDAL's
+    # S3 signing/configuration stack (`opendal`/`reqsign`); Pasion does not
+    # parse user-supplied XML directly. Re-evaluate when OpenDAL moves to
+    # quick-xml >= 0.41.
+    "RUSTSEC-2026-0194",
+    "RUSTSEC-2026-0195",
+
+    # async-std is pulled transitively by lettre. Pasion uses lettre's Tokio
+    # SMTP transport; re-evaluate when lettre removes or replaces this
+    # transitive dependency.
+    "RUSTSEC-2025-0052",
+
+    # proc-macro-error2 is pulled transitively through Salvo proxy local IP
+    # detection. There is no direct application use.
+    "RUSTSEC-2026-0173",
+
+    # diesel-async warning affects the MySQL backend. Pasion enables and uses
+    # only the PostgreSQL backend.
+    "RUSTSEC-2026-0138",
+]
+
+informational_warnings = ["unmaintained"]

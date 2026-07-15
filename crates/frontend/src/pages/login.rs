@@ -4,7 +4,7 @@ use web_sys::wasm_bindgen::JsValue;
 
 use crate::{
     api::types::{LoginResponse, ProvidersResponse},
-    components::{layout::Layout, loading::LoadingSpinner},
+    components::{layout::Layout, loading::LoadingSpinner, password_input::PasswordInput},
     pages::Route,
 };
 
@@ -225,15 +225,15 @@ fn LoginForm(providers: ProvidersResponse, initial_error: Option<String>) -> Ele
                         }
 
                         div { class: "form-field",
-                            label { class: "form-label", "Password" }
-                            input {
-                                class: "form-input",
-                                r#type: "password",
-                                autocomplete: "current-password",
+                            label { class: "form-label", r#for: "login-password", "Password" }
+                            PasswordInput {
+                                id: "login-password",
+                                name: "password",
+                                autocomplete: "current-password".to_string(),
                                 required: true,
-                                placeholder: "Password",
-                                value: "{password}",
-                                oninput: move |e| password.set(e.value()),
+                                placeholder: "Password".to_string(),
+                                value: password.read().clone(),
+                                oninput: move |e: FormEvent| password.set(e.value()),
                             }
                         }
 

@@ -8,8 +8,7 @@ use std::sync::{
 use base64::{Engine as _, engine::general_purpose::STANDARD as BASE64};
 use chrono::Utc;
 use hmac::{Hmac, Mac};
-use reqwest::Client;
-use reqwest::Method;
+use reqwest::{Client, Method};
 use sha2::{Digest, Sha256};
 use thiserror::Error;
 use url::Url;
@@ -377,12 +376,13 @@ fn sign_paloud_internal_request(
 
 #[cfg(test)]
 mod tests {
-    use super::*;
     use serde_json::json;
     use wiremock::{
         Mock, MockServer, ResponseTemplate,
         matchers::{body_partial_json, header, header_exists, method, path},
     };
+
+    use super::*;
 
     #[tokio::test]
     async fn paloud_internal_transport_signs_request() {

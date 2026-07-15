@@ -6,7 +6,7 @@ use crate::{
         layout::Layout,
         loading::{LoadingScreen, LoadingSpinner},
         page_heading::PageHeading,
-        password_input::PasswordCreationDoubleInput,
+        password_input::{PasswordCreationDoubleInput, PasswordInput},
         separator::Separator,
     },
     pages::Route,
@@ -123,14 +123,15 @@ fn PasswordChangeForm(user_id: String) -> Element {
                 }
 
                 div { class: "form-field",
-                    label { class: "form-label", "Current password" }
-                    input {
+                    label { class: "form-label", r#for: "current-password", "Current password" }
+                    PasswordInput {
                         class: if wrong_password() { "form-input invalid" } else { "form-input" },
-                        r#type: "password",
-                        autocomplete: "current-password",
+                        id: "current-password",
+                        name: "current_password",
+                        autocomplete: "current-password".to_string(),
                         required: true,
-                        value: "{current_password}",
-                        oninput: move |e| current_password.set(e.value()),
+                        value: current_password.read().clone(),
+                        oninput: move |e: FormEvent| current_password.set(e.value()),
                     }
                     if wrong_password() {
                         span { class: "form-error", "Incorrect password." }
