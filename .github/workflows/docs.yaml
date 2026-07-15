@@ -65,4 +65,4 @@ jobs:
     steps:
       - name: Publish pages
         id: pages-deploy
-        uses: actions/deploy-pages@v4.0.5
+        uses: actions/deploy-pages@v5.0.0
