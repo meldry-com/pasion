@@ -62,6 +62,12 @@ pub enum LoadError {
     },
 
     #[error(transparent)]
+    Sec1Der {
+        #[from]
+        inner: sec1::der::Error,
+    },
+
+    #[error(transparent)]
     Spki {
         #[from]
         inner: spki::Error,
@@ -69,6 +75,12 @@ pub enum LoadError {
 
     #[error("Unknown Elliptic Curve OID {oid}")]
     UnknownEllipticCurveOid { oid: const_oid::ObjectIdentifier },
+
+    #[error("Unknown SEC1 Elliptic Curve OID {oid}")]
+    UnknownSec1EllipticCurveOid { oid: String },
+
+    #[error("Invalid SEC1 elliptic curve private key")]
+    InvalidSec1Key,
 
     #[error("Unknown algorithm OID {oid}")]
     UnknownAlgorithmOid { oid: const_oid::ObjectIdentifier },
@@ -186,20 +198,41 @@ fn parse_pkcs8_key_info(info: PrivateKeyInfo) -> Result<PrivateKey, LoadError> {
 }
 
 /// Helper: decode a SEC1-encoded EC private key into the correct curve variant.
-fn parse_sec1_ec_key(ec_key: sec1::EcPrivateKey) -> Result<PrivateKey, LoadError> {
+fn decode_sec1_ec_key(der: &[u8]) -> Result<sec1::EcPrivateKey<'_>, sec1::der::Error> {
+    sec1::der::Decode::from_der(der)
+}
+
+fn parse_sec1_ec_key(der: &[u8]) -> Result<PrivateKey, LoadError> {
+    let ec_key = decode_sec1_ec_key(der)?;
     let params = ec_key.parameters.ok_or(LoadError::MissingSec1Parameters)?;
 
     let curve_oid = params
         .named_curve()
         .ok_or(LoadError::MissingSec1CurveName)?;
 
-    match curve_oid {
-        oid if oid == p256::NistP256::OID => Ok(PrivateKey::EcP256(Box::new(ec_key.try_into()?))),
-        oid if oid == p384::NistP384::OID => Ok(PrivateKey::EcP384(Box::new(ec_key.try_into()?))),
-        oid if oid == p521::NistP521::OID => Ok(PrivateKey::EcP521(Box::new(ec_key.try_into()?))),
-        oid if oid == k256::Secp256k1::OID => Ok(PrivateKey::EcK256(Box::new(ec_key.try_into()?))),
-        other => Err(LoadError::UnknownEllipticCurveOid { oid: other }),
+    let curve_oid = curve_oid.to_string();
+    if curve_oid == p256::NistP256::OID.to_string() {
+        return elliptic_curve::SecretKey::<p256::NistP256>::from_sec1_der(der)
+            .map(|key| PrivateKey::EcP256(Box::new(key)))
+            .map_err(|_| LoadError::InvalidSec1Key);
     }
+    if curve_oid == p384::NistP384::OID.to_string() {
+        return elliptic_curve::SecretKey::<p384::NistP384>::from_sec1_der(der)
+            .map(|key| PrivateKey::EcP384(Box::new(key)))
+            .map_err(|_| LoadError::InvalidSec1Key);
+    }
+    if curve_oid == p521::NistP521::OID.to_string() {
+        return elliptic_curve::SecretKey::<p521::NistP521>::from_sec1_der(der)
+            .map(|key| PrivateKey::EcP521(Box::new(key)))
+            .map_err(|_| LoadError::InvalidSec1Key);
+    }
+    if curve_oid == k256::Secp256k1::OID.to_string() {
+        return elliptic_curve::SecretKey::<k256::Secp256k1>::from_sec1_der(der)
+            .map(|key| PrivateKey::EcK256(Box::new(key)))
+            .map_err(|_| LoadError::InvalidSec1Key);
+    }
+
+    Err(LoadError::UnknownSec1EllipticCurveOid { oid: curve_oid })
 }
 
 /// Encode an EC secret key to SEC1 DER with the named-curve OID included,
@@ -212,9 +245,9 @@ where
 {
     let scalar_bytes = Zeroizing::new(key.to_bytes());
     let pub_point = key.public_key().to_encoded_point(false);
-    let ec_private = sec1::EcPrivateKey {
+    let ec_private = sec1_legacy::EcPrivateKey {
         private_key: &scalar_bytes,
-        parameters: Some(sec1::EcParameters::NamedCurve(C::OID)),
+        parameters: Some(sec1_legacy::EcParameters::NamedCurve(C::OID)),
         public_key: Some(pub_point.as_bytes()),
     };
     Ok(Zeroizing::new(ec_private.to_der()?))
@@ -232,9 +265,9 @@ where
 {
     let scalar_bytes = Zeroizing::new(key.to_bytes());
     let pub_point = key.public_key().to_encoded_point(false);
-    let ec_private = sec1::EcPrivateKey {
+    let ec_private = sec1_legacy::EcPrivateKey {
         private_key: &scalar_bytes,
-        parameters: Some(sec1::EcParameters::NamedCurve(C::OID)),
+        parameters: Some(sec1_legacy::EcParameters::NamedCurve(C::OID)),
         public_key: Some(pub_point.as_bytes()),
     };
     Ok(Zeroizing::new(ec_private.to_pem(line_ending)?))
@@ -358,7 +391,7 @@ impl PrivateKey {
 
         // If we can parse the DER as any unencrypted format, report the mismatch.
         let is_unencrypted = pkcs8::PrivateKeyInfo::from_der(der).is_ok()
-            || sec1::EcPrivateKey::from_der(der).is_ok()
+            || decode_sec1_ec_key(der).is_ok()
             || pkcs1::RsaPrivateKey::from_der(der).is_ok();
 
         if is_unencrypted {
@@ -391,8 +424,8 @@ impl PrivateKey {
         }
 
         // Then SEC1 for EC keys.
-        if let Ok(ec_key) = sec1::EcPrivateKey::from_der(der) {
-            return parse_sec1_ec_key(ec_key);
+        if decode_sec1_ec_key(der).is_ok() {
+            return parse_sec1_ec_key(der);
         }
 
         // Finally PKCS#1 for RSA.
@@ -429,7 +462,7 @@ impl PrivateKey {
         let unencrypted_labels = [
             pkcs1::RsaPrivateKey::PEM_LABEL,
             pkcs8::PrivateKeyInfo::PEM_LABEL,
-            sec1::EcPrivateKey::PEM_LABEL,
+            "EC PRIVATE KEY",
         ];
 
         if unencrypted_labels.contains(&label) {
@@ -464,9 +497,8 @@ impl PrivateKey {
             return parse_pkcs8_key_info(info);
         }
 
-        if label == sec1::EcPrivateKey::PEM_LABEL {
-            let ec_key = sec1::EcPrivateKey::from_der(&raw)?;
-            return parse_sec1_ec_key(ec_key);
+        if label == "EC PRIVATE KEY" {
+            return parse_sec1_ec_key(&raw);
         }
 
         if label == pkcs8::EncryptedPrivateKeyInfo::PEM_LABEL {

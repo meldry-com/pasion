@@ -238,7 +238,8 @@ schemars = { version = "1.2.1", features = [
     "chrono04",
     "preserve_order",
 ] }
-sec1 = { version = "0.7.3", features = ["std"] }
+sec1 = { version = "0.8.1", features = ["std"] }
+sec1-legacy = { package = "sec1", version = "0.7.3", features = ["std"] }
 diesel = { version = "2.3", features = [
     "postgres",
     "chrono",
