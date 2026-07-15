@@ -34,6 +34,7 @@ sec1-legacy.workspace = true
 base64ct.workspace = true
 const-oid.workspace = true
 der.workspace = true
+der-legacy.workspace = true
 pem-rfc7468.workspace = true
 pkcs1.workspace = true
 pkcs8.workspace = true

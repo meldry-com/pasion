@@ -6,7 +6,7 @@ use std::{
     sync::{Arc, RwLock},
 };
 
-use der::{Decode, Encode, EncodePem, zeroize::Zeroizing};
+use der_legacy::{Decode, Encode, EncodePem, zeroize::Zeroizing};
 use elliptic_curve::{pkcs8::EncodePrivateKey, sec1::ToEncodedPoint};
 use pasion_iana::jose::{JsonWebKeyType, JsonWebSignatureAlg};
 pub use pasion_jose::jwk::{JsonWebKey, JsonWebKeySet};
@@ -58,13 +58,13 @@ pub enum LoadError {
     #[error(transparent)]
     Der {
         #[from]
-        inner: der::Error,
+        inner: der_legacy::Error,
     },
 
     #[error(transparent)]
     Sec1Der {
         #[from]
-        inner: sec1::der::Error,
+        inner: der::Error,
     },
 
     #[error(transparent)]
@@ -198,8 +198,8 @@ fn parse_pkcs8_key_info(info: PrivateKeyInfo) -> Result<PrivateKey, LoadError> {
 }
 
 /// Helper: decode a SEC1-encoded EC private key into the correct curve variant.
-fn decode_sec1_ec_key(der: &[u8]) -> Result<sec1::EcPrivateKey<'_>, sec1::der::Error> {
-    sec1::der::Decode::from_der(der)
+fn decode_sec1_ec_key(bytes: &[u8]) -> Result<sec1::EcPrivateKey<'_>, der::Error> {
+    der::Decode::from_der(bytes)
 }
 
 fn parse_sec1_ec_key(der: &[u8]) -> Result<PrivateKey, LoadError> {
@@ -237,7 +237,9 @@ fn parse_sec1_ec_key(der: &[u8]) -> Result<PrivateKey, LoadError> {
 
 /// Encode an EC secret key to SEC1 DER with the named-curve OID included,
 /// matching OpenSSL's default output format.
-fn ec_to_sec1_der<C>(key: &elliptic_curve::SecretKey<C>) -> Result<Zeroizing<Vec<u8>>, der::Error>
+fn ec_to_sec1_der<C>(
+    key: &elliptic_curve::SecretKey<C>,
+) -> Result<Zeroizing<Vec<u8>>, der_legacy::Error>
 where
     C: elliptic_curve::Curve + elliptic_curve::CurveArithmetic + AssociatedOid,
     elliptic_curve::PublicKey<C>: elliptic_curve::sec1::ToEncodedPoint<C>,
@@ -257,7 +259,7 @@ where
 fn ec_to_sec1_pem<C>(
     key: &elliptic_curve::SecretKey<C>,
     line_ending: pem_rfc7468::LineEnding,
-) -> Result<Zeroizing<String>, der::Error>
+) -> Result<Zeroizing<String>, der_legacy::Error>
 where
     C: elliptic_curve::Curve + elliptic_curve::CurveArithmetic + AssociatedOid,
     elliptic_curve::PublicKey<C>: elliptic_curve::sec1::ToEncodedPoint<C>,
