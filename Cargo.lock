@@ -5743,6 +5743,7 @@ dependencies = [
  "rand_chacha 0.3.1",
  "rand_core 0.6.4",
  "rsa",
+ "sec1 0.7.3",
  "sec1 0.8.1",
  "spki",
  "thiserror 2.0.18",

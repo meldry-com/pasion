@@ -29,6 +29,7 @@ p256.workspace = true
 p384.workspace = true
 p521.workspace = true
 sec1.workspace = true
+sec1-legacy.workspace = true
 
 # Key encoding formats
 base64ct.workspace = true
