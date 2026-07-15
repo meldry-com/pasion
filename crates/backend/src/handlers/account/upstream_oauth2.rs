@@ -1,7 +1,7 @@
 //! REST API endpoints for upstream OAuth 2.0 link flow.
 //!
-//! These endpoints replace the server-rendered HTML handlers in
-//! `upstream_oauth2::link`, providing JSON responses for the Dioxus SPA.
+//! These endpoints expose the shared upstream-link workflow as JSON responses
+//! for the Dioxus SPA.
 
 use std::sync::LazyLock;
 
