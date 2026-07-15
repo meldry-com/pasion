@@ -11,6 +11,8 @@ use url::Url;
 
 use crate::error::{M_EXCLUSIVE, M_INVALID_USERNAME, M_USER_IN_USE, PalpoResponseExt as _};
 
+const PALPO_MAS_API_PREFIX: &str = "_palpo/mas/";
+
 #[derive(Clone)]
 pub struct PalpoAdmin {
     homeserver: String,
@@ -51,8 +53,8 @@ impl PalpoAdmin {
         self.builder(Method::POST, url)
     }
 
-    fn put(&self, url: &str) -> reqwest::RequestBuilder {
-        self.builder(Method::PUT, url)
+    fn mas_post(&self, url: &str) -> reqwest::RequestBuilder {
+        self.post(&format!("{PALPO_MAS_API_PREFIX}{url}"))
     }
 
     fn get(&self, url: &str) -> reqwest::RequestBuilder {
@@ -92,7 +94,7 @@ impl HomeserverAdmin for PalpoAdmin {
         }
 
         let encoded_localpart = urlencoding::encode(localpart);
-        let url = format!("_palpo/admin/query_user?localpart={encoded_localpart}");
+        let url = format!("{PALPO_MAS_API_PREFIX}query_user?localpart={encoded_localpart}");
         let response = self
             .get(&url)
             .send()
@@ -172,7 +174,7 @@ impl HomeserverAdmin for PalpoAdmin {
         });
 
         let response = self
-            .post("_palpo/admin/provision_user")
+            .mas_post("provision_user")
             .json(&body)
             .send()
             .await
@@ -209,7 +211,8 @@ impl HomeserverAdmin for PalpoAdmin {
         }
 
         let encoded_localpart = urlencoding::encode(localpart);
-        let url = format!("_palpo/admin/is_localpart_available?localpart={encoded_localpart}");
+        let url =
+            format!("{PALPO_MAS_API_PREFIX}is_localpart_available?localpart={encoded_localpart}");
         let response = self
             .get(&url)
             .send()
@@ -265,7 +268,7 @@ impl HomeserverAdmin for PalpoAdmin {
         };
 
         let response = self
-            .post("_palpo/admin/upsert_device")
+            .mas_post("upsert_device")
             .json(&body)
             .send()
             .await
@@ -309,7 +312,7 @@ impl HomeserverAdmin for PalpoAdmin {
         };
 
         let response = self
-            .post("_palpo/admin/update_device_display_name")
+            .mas_post("update_device_display_name")
             .json(&body)
             .send()
             .await
@@ -346,7 +349,7 @@ impl HomeserverAdmin for PalpoAdmin {
         };
 
         let response = self
-            .post("_palpo/admin/delete_device")
+            .mas_post("delete_device")
             .json(&body)
             .send()
             .await
@@ -384,7 +387,7 @@ impl HomeserverAdmin for PalpoAdmin {
         let body = Request { localpart, devices };
 
         let response = self
-            .post("_palpo/admin/sync_devices")
+            .mas_post("sync_devices")
             .json(&body)
             .send()
             .await
@@ -396,42 +399,6 @@ impl HomeserverAdmin for PalpoAdmin {
             .context("Unexpected HTTP response while syncing devices in Palpo")?;
 
         Ok(())
-    }
-
-    #[tracing::instrument(
-        name = "homeserver.query_devices",
-        skip_all,
-        fields(
-            matrix.homeserver = self.homeserver,
-            matrix.localpart = localpart,
-        ),
-        err(Debug),
-    )]
-    async fn query_devices(&self, localpart: &str) -> Result<HashSet<String>, anyhow::Error> {
-        #[derive(Deserialize)]
-        struct Response {
-            devices: HashSet<String>,
-        }
-
-        let encoded_localpart = urlencoding::encode(localpart);
-        let url = format!("_palpo/admin/query_devices?localpart={encoded_localpart}");
-        let response = self
-            .get(&url)
-            .send()
-            .await
-            .context("Failed to query devices from Palpo")?;
-
-        let response = response
-            .error_for_palpo_error()
-            .await
-            .context("Unexpected HTTP response while querying devices from Palpo")?;
-
-        let body: Response = response
-            .json()
-            .await
-            .context("Failed to deserialize response while querying devices from Palpo")?;
-
-        Ok(body.devices)
     }
 
     #[tracing::instrument(
@@ -454,7 +421,7 @@ impl HomeserverAdmin for PalpoAdmin {
         let body = Request { localpart, erase };
 
         let response = self
-            .post("_palpo/admin/delete_user")
+            .mas_post("delete_user")
             .json(&body)
             .send()
             .await
@@ -486,7 +453,7 @@ impl HomeserverAdmin for PalpoAdmin {
         let body = Request { localpart };
 
         let response = self
-            .post("_palpo/admin/reactivate_user")
+            .mas_post("reactivate_user")
             .json(&body)
             .send()
             .await
@@ -526,7 +493,7 @@ impl HomeserverAdmin for PalpoAdmin {
         };
 
         let response = self
-            .post("_palpo/admin/set_displayname")
+            .mas_post("set_displayname")
             .json(&body)
             .send()
             .await
@@ -558,7 +525,7 @@ impl HomeserverAdmin for PalpoAdmin {
         let body = Request { localpart };
 
         let response = self
-            .post("_palpo/admin/unset_displayname")
+            .mas_post("unset_displayname")
             .json(&body)
             .send()
             .await
@@ -590,7 +557,7 @@ impl HomeserverAdmin for PalpoAdmin {
         let body = Request { localpart };
 
         let response = self
-            .post("_palpo/admin/allow_cross_signing_reset")
+            .mas_post("allow_cross_signing_reset")
             .json(&body)
             .send()
             .await

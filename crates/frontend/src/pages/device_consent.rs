@@ -16,13 +16,18 @@ pub fn DeviceConsent(id: String) -> Element {
             crate::api::api_get::<ConsentDataResponse>(&format!("/device-consent/{gid}")).await
         }
     });
+    // Redirect to login when the device-consent endpoint reports no session.
+    let needs_login = matches!(
+        &*data.read(),
+        Some(Ok(resp)) if resp.error.as_deref() == Some("not_authenticated")
+    );
+    crate::utils::use_redirect(needs_login, Route::Login {});
+
     let binding = data.read();
 
     match &*binding {
         Some(Ok(resp)) => {
             if resp.error.as_deref() == Some("not_authenticated") {
-                let nav = navigator();
-                nav.push(Route::Login {});
                 return rsx! { Layout { p { "Redirecting to login..." } } };
             }
             if resp.policy_violation {

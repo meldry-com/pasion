@@ -229,7 +229,13 @@ pub async fn list_sessions(
     let call_context = extract_call_context(req, depot).await?;
     let crate::handlers::admin::call_context::CallContext { mut repo, .. } = call_context;
     let (pagination, include_count) = extract_pagination(req)?;
-    let params: FilterParams = req.parse_queries().unwrap_or_default();
+    // Reject malformed filter parameters explicitly. Returning
+    // `FilterParams::default()` on parse failure would silently strip a
+    // typo'd `user_id=…` from an admin's request and quietly list every
+    // session — easy to miss in audit-log review.
+    let params: FilterParams = req.parse_queries().map_err(|e| {
+        AppError::bad_request(format!("invalid filter parameters: {e}"))
+    })?;
 
     let base = format!("{path}{params}", path = OAuth2Session::PATH);
     let base = include_count.add_to_base(&base);

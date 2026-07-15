@@ -9,7 +9,6 @@ use crate::{
 #[component]
 pub fn DeviceRedirect(route: Vec<String>) -> Element {
     let device_id = route.join("/");
-    let nav = navigator();
 
     let data = use_resource(move || {
         let _device_id = device_id.clone();
@@ -18,6 +17,25 @@ pub fn DeviceRedirect(route: Vec<String>) -> Element {
             crate::api::api_get::<ViewerResponse>("/viewer").await
         }
     });
+
+    // Resolve the target session (if any) and redirect to its detail page.
+    let target_session_id: Option<String> = match &*data.read() {
+        Some(Ok(result)) => result
+            .viewer
+            .as_user()
+            .and_then(|user| user.app_sessions.as_ref())
+            .and_then(|app_sessions| app_sessions.edges.first())
+            .map(|edge| match &edge.node {
+                AppSession::Oauth2Session(s) => s.id.clone(),
+            }),
+        _ => None,
+    };
+    crate::utils::use_redirect(
+        target_session_id.is_some(),
+        Route::SessionDetail {
+            id: target_session_id.clone().unwrap_or_default(),
+        },
+    );
 
     let binding = data.read();
 
@@ -43,13 +61,10 @@ pub fn DeviceRedirect(route: Vec<String>) -> Element {
                 }
             };
 
-            // Check if we found a session
+            // A matching session triggers a redirect (handled by use_redirect
+            // above); show a loading screen while it happens.
             if let Some(ref app_sessions) = user.app_sessions {
-                if let Some(edge) = app_sessions.edges.first() {
-                    let session_id = match &edge.node {
-                        AppSession::Oauth2Session(s) => s.id.clone(),
-                    };
-                    nav.push(Route::SessionDetail { id: session_id });
+                if app_sessions.edges.first().is_some() {
                     return rsx! { LoadingScreen {} };
                 }
             }

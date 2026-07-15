@@ -21,14 +21,11 @@ pub fn BrowserSessions() -> Element {
         pagination.set(PaginationState::new(6));
     });
 
-    let data = use_resource(move || {
-        let _inactive = show_inactive();
-        let _pag = pagination.read().clone();
-        async move {
-            // REST /viewer returns all session data combined
-            crate::api::api_get::<ViewerResponse>("/viewer").await
-        }
-    });
+    // `/viewer` returns all session data combined; fetch it once. The filter
+    // and pagination state only affect client-side rendering, so they must not
+    // be (pseudo-)dependencies of the resource.
+    let data =
+        use_resource(|| async { crate::api::api_get::<ViewerResponse>("/viewer").await });
     let binding = data.read();
 
     match &*binding {

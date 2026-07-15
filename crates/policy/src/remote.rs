@@ -82,6 +82,10 @@ impl PolicyProviderFactory for RemoteProviderFactory {
         }))
     }
 
+    fn supports_dynamic_data(&self) -> bool {
+        true
+    }
+
     async fn set_dynamic_data(&self, data: PolicyData) -> Result<bool, LoadError> {
         let response = self
             .client

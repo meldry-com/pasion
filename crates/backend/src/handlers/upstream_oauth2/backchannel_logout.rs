@@ -111,9 +111,11 @@ pub struct BackchannelLogoutRequest {
 
 #[derive(Deserialize)]
 struct LogoutTokenEvents {
-    #[allow(dead_code)] // We just want to check it deserializes
+    // We don't read the contents — we only require that the claim is present
+    // and deserializes, per the OIDC back-channel logout spec. The leading
+    // underscore documents that the field exists purely for that validation.
     #[serde(rename = "http://schemas.openid.net/event/backchannel-logout")]
-    backchannel_logout: HashMap<String, Value>,
+    _backchannel_logout: HashMap<String, Value>,
 }
 
 const EVENTS: Claim<LogoutTokenEvents> = Claim::new("events");

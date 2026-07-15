@@ -1,6 +1,7 @@
 use std::{collections::HashMap, sync::Arc};
 
 use oauth2_types::oidc::VerifiedProviderMetadata;
+use pasion_jose::jwk::PublicJsonWebKeySet;
 use pasion_data::{
     RepositoryAccess, UpstreamOAuthProvider, UpstreamOAuthProviderDiscoveryMode,
     UpstreamOAuthProviderPkceMode, upstream_oauth2::UpstreamOAuthProviderRepository,
@@ -84,6 +85,20 @@ impl<'a> LazyProviderInfos<'a> {
         Ok(self.load().await?.jwks_uri())
     }
 
+    /// Get the JWKS for the provider, using the shared cache so it is fetched
+    /// over the network at most once per `jwks_uri` (rather than on every
+    /// login callback).
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if discovery fails or the JWKS could not be fetched.
+    pub async fn jwks(&mut self) -> Result<Arc<PublicJsonWebKeySet>, DiscoveryError> {
+        // Resolve the URI (cloned so we don't hold a borrow of `self` across
+        // the cache call which also borrows `self.cache`/`self.client`).
+        let jwks_uri = self.jwks_uri().await?.clone();
+        self.cache.get_jwks(self.client, &jwks_uri).await
+    }
+
     /// Get the authorization endpoint for the provider.
     ///
     /// Uses [`UpstreamOAuthProvider.authorization_endpoint_override`] if set,
@@ -150,6 +165,9 @@ impl<'a> LazyProviderInfos<'a> {
 pub struct MetadataCache {
     cache: Arc<RwLock<HashMap<String, Arc<VerifiedProviderMetadata>>>>,
     insecure_cache: Arc<RwLock<HashMap<String, Arc<VerifiedProviderMetadata>>>>,
+    /// Cache of fetched JWKS, keyed by `jwks_uri`. Avoids refetching the
+    /// upstream signing keys over the network on every login callback.
+    jwks_cache: Arc<RwLock<HashMap<String, Arc<PublicJsonWebKeySet>>>>,
 }
 
 impl MetadataCache {
@@ -235,6 +253,35 @@ impl MetadataCache {
 
             Ok(metadata)
         }
+    }
+
+    /// Get the JWKS for the given `jwks_uri`, fetching and caching it on first
+    /// access. Subsequent calls (across login callbacks) reuse the cached set.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the JWKS could not be retrieved.
+    #[tracing::instrument(name = "metadata_cache.get_jwks", fields(%jwks_uri), skip_all)]
+    pub async fn get_jwks(
+        &self,
+        client: &reqwest::Client,
+        jwks_uri: &Url,
+    ) -> Result<Arc<PublicJsonWebKeySet>, DiscoveryError> {
+        let key = jwks_uri.as_str();
+
+        if let Some(jwks) = self.jwks_cache.read().await.get(key) {
+            return Ok(Arc::clone(jwks));
+        }
+
+        let jwks = crate::oidc_client::requests::jose::fetch_jwks(client, jwks_uri).await?;
+        let jwks = Arc::new(jwks);
+
+        self.jwks_cache
+            .write()
+            .await
+            .insert(key.to_owned(), Arc::clone(&jwks));
+
+        Ok(jwks)
     }
 
     /// Get the metadata for the given issuer.

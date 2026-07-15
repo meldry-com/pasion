@@ -49,6 +49,9 @@ pub enum DiscoveryError {
     /// An error occurred validating the metadata.
     Validation(#[from] ProviderMetadataVerificationError),
 
+    /// An error occurred fetching the provider's JWKS.
+    Jwks(#[from] JwksError),
+
     /// The provider doesn't have an issuer set, which is required if discovery
     /// is enabled.
     #[error("Provider doesn't have an issuer set")]

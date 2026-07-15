@@ -23,8 +23,30 @@ fn SidebarItem(to: Route, children: Element) -> Element {
 }
 
 #[component]
+fn SidebarExternalLink(href: String, children: Element) -> Element {
+    rsx! {
+        a {
+            class: "sidebar-item",
+            href: "{href}",
+            target: "_blank",
+            rel: "noopener noreferrer",
+            {children}
+            span { class: "text-xs", " (external)" }
+        }
+    }
+}
+
+#[component]
 pub fn AccountPage() -> Element {
     let data = use_resource(|| async { crate::api::api_get::<ViewerResponse>("/viewer").await });
+
+    // Redirect to login when the viewer resolved but is not a user.
+    let needs_login = matches!(
+        &*data.read(),
+        Some(Ok(result)) if result.viewer.as_user().is_none()
+    );
+    crate::utils::use_redirect(needs_login, Route::Login {});
+
     let binding = data.read();
 
     match &*binding {
@@ -32,8 +54,6 @@ pub fn AccountPage() -> Element {
             let user = match result.viewer.as_user() {
                 Some(u) => u,
                 None => {
-                    let nav = navigator();
-                    nav.push(Route::Login {});
                     return rsx! {
                         Layout { p { "Redirecting to login..." } }
                     };
@@ -59,6 +79,11 @@ pub fn AccountPage() -> Element {
                 });
 
             let has_plan = result.site_config.plan_management_iframe_uri.is_some();
+            let admin_portal_url = if user.can_request_admin {
+                result.site_config.admin_portal_url.clone()
+            } else {
+                None
+            };
             let display_name_change_allowed = result.site_config.display_name_change_allowed;
 
             let mut show_edit_dialog = use_signal(|| false);
@@ -89,6 +114,13 @@ pub fn AccountPage() -> Element {
                                 span { class: "sidebar-group-label", "Security" }
                                 SidebarItem { to: Route::SecurityCenter {}, "Security" }
                                 SidebarItem { to: Route::Sessions {}, "Devices" }
+                            }
+
+                            if let Some(admin_portal_url) = admin_portal_url {
+                                div { class: "sidebar-nav-group",
+                                    span { class: "sidebar-group-label", "Administration" }
+                                    SidebarExternalLink { href: admin_portal_url, "Admin Portal" }
+                                }
                             }
 
                             div { class: "sidebar-nav-group",

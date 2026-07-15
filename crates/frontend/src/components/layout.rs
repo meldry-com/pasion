@@ -1,7 +1,6 @@
 use dioxus::prelude::*;
 
 use super::footer::Footer;
-use crate::api::types::SiteConfig;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum LayoutWidth {
@@ -35,7 +34,7 @@ pub fn Layout(wide: Option<bool>, width: Option<LayoutWidth>, children: Element)
 
 #[component]
 fn FooterSection() -> Element {
-    let site_config = use_resource(fetch_footer_config);
+    let site_config = crate::use_site_config().0;
     let binding = site_config.read();
 
     match &*binding {
@@ -44,8 +43,4 @@ fn FooterSection() -> Element {
         },
         _ => rsx! {},
     }
-}
-
-async fn fetch_footer_config() -> Result<SiteConfig, String> {
-    crate::api::api_get::<SiteConfig>("/site-config").await
 }

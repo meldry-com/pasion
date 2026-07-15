@@ -2,15 +2,15 @@
 //! [`QueueWorkerRepository`].
 
 use async_trait::async_trait;
-use chrono::Duration;
+use chrono::{DateTime, Duration, Utc};
 use diesel::{
     prelude::*,
-    sql_types::{Timestamptz, Uuid as DieselUuid},
+    sql_types::{Nullable, Timestamptz, Uuid as DieselUuid},
 };
 use diesel_async::RunQueryDsl;
 use pasion_data::{
     Clock, new_id,
-    queue::{QueueWorkerRepository, Worker},
+    queue::{QueueWorkerRepository, ShutdownWorker, Worker},
 };
 use rand_core::RngCore;
 use uuid::Uuid;
@@ -39,8 +39,97 @@ impl<'c> PgQueueWorkerRepository<'c> {
 #[diesel(table_name = queue_workers)]
 struct NewWorker {
     id: Uuid,
-    registered_at: chrono::DateTime<chrono::Utc>,
-    last_seen_at: chrono::DateTime<chrono::Utc>,
+    registered_at: DateTime<Utc>,
+    last_seen_at: DateTime<Utc>,
+}
+
+#[derive(Debug, QueryableByName)]
+struct WorkerStateRow {
+    #[diesel(sql_type = DieselUuid)]
+    id: Uuid,
+    #[diesel(sql_type = Timestamptz)]
+    registered_at: DateTime<Utc>,
+    #[diesel(sql_type = Timestamptz)]
+    last_seen_at: DateTime<Utc>,
+    #[diesel(sql_type = Nullable<Timestamptz>)]
+    shutdown_at: Option<DateTime<Utc>>,
+}
+
+#[derive(Debug, QueryableByName)]
+struct ShutdownWorkerRow {
+    #[diesel(sql_type = DieselUuid)]
+    id: Uuid,
+    #[diesel(sql_type = Timestamptz)]
+    last_seen_at: DateTime<Utc>,
+    #[diesel(sql_type = Timestamptz)]
+    shutdown_at: DateTime<Utc>,
+}
+
+impl From<ShutdownWorkerRow> for ShutdownWorker {
+    fn from(value: ShutdownWorkerRow) -> Self {
+        Self {
+            id: value.id.into(),
+            last_seen_at: value.last_seen_at,
+            shutdown_at: value.shutdown_at,
+        }
+    }
+}
+
+impl<'c> PgQueueWorkerRepository<'c> {
+    async fn load_worker_state(
+        &mut self,
+        worker: &Worker,
+    ) -> Result<Option<WorkerStateRow>, DatabaseError> {
+        let state = diesel::sql_query(
+            r"
+                SELECT id, registered_at, last_seen_at, shutdown_at
+                FROM queue_workers
+                WHERE id = $1
+            ",
+        )
+        .bind::<DieselUuid, _>(Uuid::from(worker.id))
+        .get_result(self.conn)
+        .await
+        .optional()?;
+
+        Ok(state)
+    }
+
+    async fn log_worker_state(&mut self, worker: &Worker, reason: &str) {
+        match self.load_worker_state(worker).await {
+            Ok(Some(state)) => {
+                let shutdown_at = state
+                    .shutdown_at
+                    .map(|ts| ts.to_rfc3339())
+                    .unwrap_or_else(|| "null".to_owned());
+                tracing::error!(
+                    worker.id = %worker.id,
+                    stored_worker.id = %state.id,
+                    worker.registered_at = %state.registered_at,
+                    worker.last_seen_at = %state.last_seen_at,
+                    worker.shutdown_at = %shutdown_at,
+                    "{}", reason
+                );
+            }
+
+            Ok(None) => {
+                tracing::error!(
+                    worker.id = %worker.id,
+                    "{}; queue_workers row is missing",
+                    reason
+                );
+            }
+
+            Err(error) => {
+                tracing::error!(
+                    error = &error as &dyn std::error::Error,
+                    worker.id = %worker.id,
+                    "{}; failed to inspect queue_workers row",
+                    reason
+                );
+            }
+        }
+    }
 }
 
 #[async_trait]
@@ -97,7 +186,14 @@ impl QueueWorkerRepository for PgQueueWorkerRepository<'_> {
         .execute(self.conn)
         .await?;
 
-        // If no row was updated, the worker was shutdown so we return an error
+        if rows_affected != 1 {
+            self.log_worker_state(
+                worker,
+                "Heartbeat failed because the worker row was not updated",
+            )
+            .await;
+        }
+
         DatabaseError::ensure_affected_rows_usize(rows_affected, 1)?;
 
         Ok(())
@@ -144,21 +240,27 @@ impl QueueWorkerRepository for PgQueueWorkerRepository<'_> {
         &mut self,
         clock: &dyn Clock,
         threshold: Duration,
-    ) -> Result<(), Self::Error> {
+    ) -> Result<Vec<ShutdownWorker>, Self::Error> {
         // Here the threshold is usually set to a few minutes, so we don't need to use
         // the database time, as we can assume worker clocks have less than a minute
         // skew between each other, else other things would break
         let now = clock.now();
-        diesel::update(
-            queue_workers::table
-                .filter(queue_workers::shutdown_at.is_null())
-                .filter(queue_workers::last_seen_at.lt(now - threshold)),
+        let cutoff = now - threshold;
+        let workers = diesel::sql_query(
+            r"
+                UPDATE queue_workers
+                SET shutdown_at = $1
+                WHERE shutdown_at IS NULL
+                  AND last_seen_at < $2
+                RETURNING id, last_seen_at, shutdown_at
+            ",
         )
-        .set(queue_workers::shutdown_at.eq(Some(now)))
-        .execute(self.conn)
+        .bind::<Timestamptz, _>(now)
+        .bind::<Timestamptz, _>(cutoff)
+        .get_results::<ShutdownWorkerRow>(self.conn)
         .await?;
 
-        Ok(())
+        Ok(workers.into_iter().map(Into::into).collect())
     }
 
     #[tracing::instrument(name = "db.queue_worker.remove_leader_lease_if_expired", skip_all, err)]
@@ -197,7 +299,7 @@ impl QueueWorkerRepository for PgQueueWorkerRepository<'_> {
 
         // `expires_at` is a rare exception where we use the database time, as this
         // would be very sensitive to clock skew between workers.
-        let rows_affected: usize = diesel::sql_query(
+        let rows_affected: usize = match diesel::sql_query(
             r"
                 INSERT INTO queue_leader (elected_at, expires_at, queue_worker_id)
                 VALUES ($1, NOW() + INTERVAL '5 seconds', $2)
@@ -209,7 +311,18 @@ impl QueueWorkerRepository for PgQueueWorkerRepository<'_> {
         .bind::<Timestamptz, _>(now)
         .bind::<DieselUuid, _>(Uuid::from(worker.id))
         .execute(self.conn)
-        .await?;
+        .await
+        {
+            Ok(rows_affected) => rows_affected,
+            Err(error) => {
+                self.log_worker_state(
+                    worker,
+                    "Leader lease acquisition failed while inspecting worker state",
+                )
+                .await;
+                return Err(error.into());
+            }
+        };
 
         // We can then detect whether we are the leader or not by checking how many rows
         // were affected by the upsert

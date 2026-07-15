@@ -4,6 +4,8 @@ use crate::{
     api::types::{LinkedAccount, ProvidersResponse, ViewerResponse},
     components::{
         collapsible::CollapsibleSection,
+        dialog::Dialog,
+        linked_accounts::{LinkProvidersRow, LinkedAccountRow},
         loading::LoadingScreen,
         password_input::AccountManagementPasswordPreview,
         separator::{Separator, SeparatorKind},
@@ -137,46 +139,35 @@ fn SignOutButton(session_id: String) -> Element {
             "Sign out"
         }
 
-        if show_dialog() {
-            div {
-                class: "dialog-overlay",
-                onclick: move |_| show_dialog.set(false),
-                div {
-                    class: "dialog-content",
-                    onclick: move |e| e.stop_propagation(),
-
-                    h3 { class: "dialog-title", "Sign out" }
-
-                    button {
-                        class: "btn btn-destructive-solid",
-                        disabled: signing_out(),
-                        onclick: {
-                            let sid = session_id_clone.clone();
-                            let nav = nav.clone();
-                            move |_| {
-                                let sid = sid.clone();
-                                let nav = nav.clone();
-                                signing_out.set(true);
-                                spawn(async move {
-                                    let _ = crate::api::api_delete::<crate::api::types::EndSessionPayload>(
-                                        &format!("/browser-sessions/{}", sid),
-                                    ).await;
-                                    nav.push(Route::Login {});
-                                });
-                            }
-                        },
-                        if signing_out() {
-                            span { class: "loading-spinner inline" }
-                        }
-                        "Sign out"
+        Dialog { open: show_dialog, title: "Sign out".to_string(),
+            button {
+                class: "btn btn-destructive-solid",
+                disabled: signing_out(),
+                onclick: {
+                    let sid = session_id_clone.clone();
+                    let nav = nav.clone();
+                    move |_| {
+                        let sid = sid.clone();
+                        let nav = nav.clone();
+                        signing_out.set(true);
+                        spawn(async move {
+                            let _ = crate::api::api_delete::<crate::api::types::EndSessionPayload>(
+                                &format!("/browser-sessions/{}", sid),
+                            ).await;
+                            nav.push(Route::Login {});
+                        });
                     }
-
-                    button {
-                        class: "btn btn-tertiary",
-                        onclick: move |_| show_dialog.set(false),
-                        "Cancel"
-                    }
+                },
+                if signing_out() {
+                    span { class: "loading-spinner inline" }
                 }
+                "Sign out"
+            }
+
+            button {
+                class: "btn btn-tertiary",
+                onclick: move |_| show_dialog.set(false),
+                "Cancel"
             }
         }
     }
@@ -203,7 +194,7 @@ fn LinkedAccountsSection(accounts: Vec<LinkedAccount>) -> Element {
 
             // Show currently linked accounts
             if accounts_signal.read().is_empty() {
-                p { class: "text-md text-secondary", style: "font-style: italic;",
+                p { class: "text-md text-secondary text-italic",
                     "No external accounts linked."
                 }
             } else {
@@ -211,49 +202,30 @@ fn LinkedAccountsSection(accounts: Vec<LinkedAccount>) -> Element {
                     for account in accounts_signal.read().iter() {
                         {
                             let account_id = account.id.clone();
-                            let display_name = account.human_account_name.clone()
-                                .or_else(|| Some(account.subject.clone()))
-                                .unwrap_or_default();
-                            let provider_label = account.provider_name.clone()
-                                .or_else(|| account.provider_brand.clone())
-                                .unwrap_or_else(|| "External provider".to_string());
+                            let is_unlinking = unlinking_id.read().as_deref() == Some(&account_id);
                             rsx! {
-                                div {
-                                    class: "flex items-center justify-between p-3 rounded-lg border",
-                                    div { class: "flex flex-col gap-1",
-                                        span { class: "text-md font-semibold", "{provider_label}" }
-                                        span { class: "text-sm text-secondary", "{display_name}" }
-                                    }
-                                    button {
-                                        class: "btn btn-destructive btn-sm",
-                                        disabled: unlinking_id.read().is_some(),
-                                        onclick: {
-                                            let aid = account_id.clone();
-                                            move |_| {
-                                                let aid = aid.clone();
-                                                unlinking_id.set(Some(aid.clone()));
-                                                error.set(None);
-                                                spawn(async move {
-                                                    let result = crate::api::api_delete::<crate::api::types::UnlinkResponse>(
-                                                        &format!("/linked-accounts/{}", aid),
-                                                    ).await;
-                                                    match result {
-                                                        Ok(_) => {
-                                                            accounts_signal.write().retain(|a| a.id != aid);
-                                                        }
-                                                        Err(e) => {
-                                                            error.set(Some(e));
-                                                        }
-                                                    }
-                                                    unlinking_id.set(None);
-                                                });
+                                LinkedAccountRow {
+                                    account: account.clone(),
+                                    is_unlinking: is_unlinking,
+                                    unlink_disabled: unlinking_id.read().is_some(),
+                                    on_unlink: move |aid: String| {
+                                        unlinking_id.set(Some(aid.clone()));
+                                        error.set(None);
+                                        spawn(async move {
+                                            let result = crate::api::api_delete::<crate::api::types::UnlinkResponse>(
+                                                &format!("/linked-accounts/{}", aid),
+                                            ).await;
+                                            match result {
+                                                Ok(_) => {
+                                                    accounts_signal.write().retain(|a| a.id != aid);
+                                                }
+                                                Err(e) => {
+                                                    error.set(Some(e));
+                                                }
                                             }
-                                        },
-                                        if unlinking_id.read().as_deref() == Some(&account_id) {
-                                            span { class: "loading-spinner inline" }
-                                        }
-                                        "Unlink"
-                                    }
+                                            unlinking_id.set(None);
+                                        });
+                                    },
                                 }
                             }
                         }
@@ -274,17 +246,12 @@ fn LinkedAccountsSection(accounts: Vec<LinkedAccount>) -> Element {
                         .collect();
                     let unlinked: Vec<_> = providers.providers.iter()
                         .filter(|p| !linked_provider_ids.contains(&p.id))
-                        .collect();
+                        .cloned()
+                        .collect::<Vec<_>>();
                     if !unlinked.is_empty() {
                         rsx! {
-                            div { class: "flex flex-wrap gap-2 mt-3",
-                                for provider in unlinked.iter() {
-                                    a {
-                                        class: "btn btn-secondary btn-sm",
-                                        href: "{provider.authorize_url}",
-                                        "Link {provider.human_name.clone().unwrap_or_else(|| provider.id.clone())}"
-                                    }
-                                }
+                            div { class: "mt-3",
+                                LinkProvidersRow { providers: unlinked }
                             }
                         }
                     } else {
@@ -331,8 +298,7 @@ fn AccountDeleteButton(mxid: String, has_password: bool, password_login_enabled:
 
     rsx! {
         button {
-            class: "btn btn-tertiary",
-            style: "color: var(--color-destructive);",
+            class: "btn btn-tertiary text-destructive",
             onclick: move |_| {
                 erase_data.set(false);
                 error.set(None);
@@ -343,16 +309,9 @@ fn AccountDeleteButton(mxid: String, has_password: bool, password_login_enabled:
             "Deactivate account"
         }
 
-        if show_dialog() {
-            div {
-                class: "dialog-overlay",
-                onclick: move |_| show_dialog.set(false),
-                div {
-                    class: "dialog-content",
-                    onclick: move |e| e.stop_propagation(),
-
-                    h3 { class: "dialog-title", "Deactivate account" }
-
+        Dialog { open: show_dialog, title: "Deactivate account".to_string(),
+            {
+                rsx! {
                     if !mxid_clone.is_empty() {
                         p { class: "text-md",
                             "Account: "

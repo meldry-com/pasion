@@ -14,13 +14,18 @@ pub fn Consent(grant_id: String) -> Element {
         let id = gid.clone();
         async move { crate::api::api_get::<ConsentDataResponse>(&format!("/oauth2/consent/{id}")).await }
     });
+    // Redirect to login when the consent endpoint reports no session.
+    let needs_login = matches!(
+        &*data.read(),
+        Some(Ok(resp)) if resp.error.as_deref() == Some("not_authenticated")
+    );
+    crate::utils::use_redirect(needs_login, Route::Login {});
+
     let binding = data.read();
 
     match &*binding {
         Some(Ok(resp)) => {
             if resp.error.as_deref() == Some("not_authenticated") {
-                let nav = navigator();
-                nav.push(Route::Login {});
                 return rsx! { Layout { p { "Redirecting to login..." } } };
             }
             if resp.policy_violation {
@@ -118,11 +123,14 @@ fn ConsentForm(data: ConsentDataResponse, grant_id: String) -> Element {
                                         &format!("/oauth2/consent/{gid}"),
                                         serde_json::json!({ "action": "consent" }),
                                     ).await;
-                                    submitting.set(false);
                                     match result {
                                         Ok(resp) if resp.status == "success" => {
                                             if let Some(url) = resp.redirect_url {
-                                                // Navigate browser to the OAuth2 callback URL
+                                                // Keep the button disabled: we are about to
+                                                // navigate away, and re-enabling it opens a
+                                                // window for a duplicate submit that the
+                                                // backend would reject with "grant is not
+                                                // pending".
                                                 #[cfg(target_arch = "wasm32")]
                                                 {
                                                     if let Some(win) = web_sys::window() {
@@ -133,19 +141,27 @@ fn ConsentForm(data: ConsentDataResponse, grant_id: String) -> Element {
                                                     }
                                                 }
                                             } else {
+                                                submitting.set(false);
                                                 error.set(Some("No redirect URL in response.".to_string()));
                                             }
                                         }
-                                        Ok(resp) if resp.error.as_deref() == Some("not_authenticated") => {
-                                            // Session expired — redirect to login so
-                                            // the user can re-authenticate and retry.
-                                            let nav = navigator();
-                                            nav.push(Route::Login {});
-                                        }
+                                        // A 401 comes back from `api_post` as `Err`, not `Ok`
+                                        // (see `api::request`), so the session-expired case is
+                                        // handled in the `Err` arm below.
                                         Ok(resp) => {
+                                            submitting.set(false);
                                             error.set(Some(resp.error.unwrap_or_else(|| "Authorization failed.".to_string())));
                                         }
-                                        Err(e) => error.set(Some(e)),
+                                        Err(e) => {
+                                            submitting.set(false);
+                                            if e == "not_authenticated" {
+                                                // Session expired — redirect to login so the
+                                                // user can re-authenticate and retry.
+                                                navigator().push(Route::Login {});
+                                            } else {
+                                                error.set(Some(e));
+                                            }
+                                        }
                                     }
                                 });
                             }

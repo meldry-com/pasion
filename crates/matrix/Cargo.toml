@@ -11,6 +11,11 @@ publish.workspace = true
 [lints]
 workspace = true
 
+[features]
+# Exposes the in-memory `MockHomeserverAdmin` for use in downstream test
+# harnesses. Never enable this for production builds.
+test-support = []
+
 [dependencies]
 anyhow.workspace = true
 async-trait.workspace = true

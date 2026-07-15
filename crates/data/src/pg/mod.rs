@@ -45,7 +45,6 @@ pub(crate) mod telemetry;
 /// can use `pasion_data::test_utils::setup_test_pool()` in their own
 /// test code.
 pub mod test_utils;
-pub(crate) mod tracing;
 
 pub(crate) use self::errors::DatabaseInconsistencyError;
 pub use self::{

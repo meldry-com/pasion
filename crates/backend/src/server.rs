@@ -93,6 +93,10 @@ fn otel_url_scheme(req: &Request) -> &'static str {
         })
 }
 
+fn redacted_query_for_tracing(query: &str) -> Option<&'static str> {
+    (!query.is_empty()).then_some("<redacted>")
+}
+
 /// Middleware for logging responses
 #[handler]
 pub async fn log_response_middleware(
@@ -164,8 +168,10 @@ pub async fn tracing_middleware(
         { USER_AGENT_ORIGINAL } = tracing::field::Empty,
     );
 
-    if let Some(ref q) = query {
-        span.record(URL_QUERY, q.as_str());
+    if let Some(ref q) = query
+        && let Some(redacted) = redacted_query_for_tracing(q)
+    {
+        span.record(URL_QUERY, redacted);
     }
 
     if let Some(ref ua) = user_agent {
@@ -474,6 +480,9 @@ fn build_oauth_router(router: Router) -> Router {
 fn build_account_api_router(router: Router) -> Router {
     use crate::handlers::account::*;
 
+    let internal_router = Router::with_path("/api/internal/matrix")
+        .push(Router::with_path("password-login").post(crate::handlers::matrix::password_login));
+
     let api_router = Router::with_path("/api/v1")
         // Viewer
         .push(
@@ -496,6 +505,7 @@ fn build_account_api_router(router: Router) -> Router {
                 )
                 .push(Router::with_path("workflow-inbox").get(viewer::get_workflow_inbox)),
         )
+        .push(Router::with_path("bootstrap-admin-status").get(bootstrap_admin_status::get))
         // Site config
         .push(Router::with_path("site-config").get(site_config::get))
         // Sessions
@@ -554,6 +564,10 @@ fn build_account_api_router(router: Router) -> Router {
                                         .post(register::post_resend_verification),
                                 )
                                 .push(
+                                    Router::with_path("change-email")
+                                        .post(register::post_change_email),
+                                )
+                                .push(
                                     Router::with_path("display-name")
                                         .post(register::post_display_name),
                                 )
@@ -606,7 +620,10 @@ fn build_account_api_router(router: Router) -> Router {
         );
     let docs_router = openapi::build_openapi_router(&api_router);
 
-    router.push(api_router).push(docs_router)
+    router
+        .push(internal_router)
+        .push(api_router)
+        .push(docs_router)
 }
 
 fn build_admin_router(router: Router) -> Router {
@@ -992,7 +1009,10 @@ mod tests {
     use pasion_config::HttpBindConfig;
     use pasion_data::UrlBuilder;
 
-    use super::{absolute_redirect_location, build_listeners, relative_redirect_location};
+    use super::{
+        absolute_redirect_location, build_listeners, redacted_query_for_tracing,
+        relative_redirect_location,
+    };
 
     #[test]
     fn bind_error_mentions_requested_address() {
@@ -1034,5 +1054,14 @@ mod tests {
         let location = absolute_redirect_location(Some(&url_builder), "/password/change");
 
         assert_eq!(location, "https://example.com/mas/password/change");
+    }
+
+    #[test]
+    fn tracing_query_is_redacted() {
+        assert_eq!(
+            redacted_query_for_tracing("code=abc&state=def"),
+            Some("<redacted>")
+        );
+        assert_eq!(redacted_query_for_tracing(""), None);
     }
 }

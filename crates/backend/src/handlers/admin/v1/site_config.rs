@@ -31,6 +31,9 @@ pub struct SiteConfig {
     /// Whether a registration token is mandatory for sign-up
     pub registration_token_required: bool,
 
+    /// Whether a bootstrap admin token is configured
+    pub bootstrap_admin_token_enabled: bool,
+
     /// Whether users may update their email address
     pub email_change_allowed: bool,
 
@@ -45,6 +48,9 @@ pub struct SiteConfig {
 
     /// Whether users may self-deactivate their account
     pub account_deactivation_allowed: bool,
+
+    /// URL of the external admin portal shown to eligible users
+    pub admin_portal_url: Option<String>,
 
     /// Whether CAPTCHA verification is active during registration
     pub captcha_enabled: bool,
@@ -67,11 +73,13 @@ pub async fn handler(req: &mut Request, depot: &Depot) -> Result<Json<SiteConfig
         password_registration_enabled: cfg.password_registration_enabled,
         password_registration_contact_required: cfg.password_registration_contact_required,
         registration_token_required: cfg.registration_token_required,
+        bootstrap_admin_token_enabled: cfg.bootstrap_admin_token.is_some(),
         email_change_allowed: cfg.email_change_allowed,
         displayname_change_allowed: cfg.displayname_change_allowed,
         password_change_allowed: cfg.password_change_allowed,
         account_recovery_allowed: cfg.account_recovery_allowed,
         account_deactivation_allowed: cfg.account_deactivation_allowed,
+        admin_portal_url: cfg.admin_portal_url.as_ref().map(|url| url.to_string()),
         captcha_enabled: cfg.captcha.is_some(),
         minimum_password_complexity: cfg.minimum_password_complexity,
     };

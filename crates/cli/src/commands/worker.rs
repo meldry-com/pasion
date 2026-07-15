@@ -1,5 +1,6 @@
 use std::{process::ExitCode, time::Duration};
 
+use anyhow::Context;
 use clap::Parser;
 use figment::Figment;
 use pasion_backend::{
@@ -64,7 +65,10 @@ impl Options {
 
         // ── Homeserver connection ───────────────────────────────────────
         let http = pasion_backend::reqwest_client();
-        let (hs_conn, _registry) = homeserver_connection_from_config(&app_cfg.matrix, http).await?;
+        let registry = homeserver_connection_from_config(&app_cfg.matrix, http).await?;
+        let hs_conn = registry
+            .primary_homeserver()
+            .context("matrix connector registry has no primary provider")?;
 
         drop(app_cfg);
 
