@@ -5,14 +5,13 @@ use oauth2_types::{
     response_type::ResponseType,
 };
 use pasion_data::{
-    AuthorizationCode, BoxClock, BoxRepository, BoxRepositoryFactory, BoxRng, Pkce, PostAuthAction,
-    RepositoryAccess, SystemClock, UrlBuilder,
+    AuthorizationCode, BoxClock, BoxRepository, BoxRng, Pkce, PostAuthAction, RepositoryAccess,
+    SystemClock,
     oauth2::{
         OAuth2AuthorizationGrantRepository, OAuth2ClientRepository, OAuth2SessionFilter,
         OAuth2SessionRepository,
     },
 };
-use pasion_templates::Templates;
 use rand_chacha::ChaChaRng;
 use rand_core::SeedableRng;
 use salvo::prelude::*;

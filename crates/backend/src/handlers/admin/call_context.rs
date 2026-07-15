@@ -12,10 +12,7 @@ use salvo::{http::StatusCode, prelude::*};
 use ulid::Ulid;
 
 use super::response::ErrorResponse;
-use crate::{
-    handlers::{BoundActivityTracker, account::DepotExt},
-    record_error,
-};
+use crate::{handlers::account::DepotExt, record_error};
 
 #[derive(Debug, thiserror::Error)]
 pub enum Rejection {

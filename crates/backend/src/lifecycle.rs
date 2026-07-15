@@ -1,6 +1,8 @@
 use std::{process::ExitCode, time::Duration};
 
-use futures_util::future::{BoxFuture, Either};
+use futures_util::future::BoxFuture;
+#[cfg(unix)]
+use futures_util::future::Either;
 use pasion_templates::Templates;
 use tokio_util::{sync::CancellationToken, task::TaskTracker};
 
@@ -78,9 +80,6 @@ fn notify(states: &[sd_notify::NotifyState]) {
         );
     }
 }
-
-#[cfg(not(unix))]
-fn notify(_states: &[&str]) {}
 
 impl LifecycleManager {
     /// Create a new shutdown manager, installing the signal handlers
@@ -176,6 +175,7 @@ impl LifecycleManager {
     }
 
     /// Run until we finish completely shutting down.
+    #[allow(unused_mut)] // Signal receivers are mutable only on Unix.
     pub async fn run(mut self) -> ExitCode {
         #[cfg(unix)]
         notify(&[sd_notify::NotifyState::Ready]);

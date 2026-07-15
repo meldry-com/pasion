@@ -21,14 +21,13 @@ use crate::{
         RequesterFingerprint,
         account::service::registration::{
             BeginPasswordRegistrationError, BeginPasswordRegistrationRequest,
-            BeginPasswordRegistrationResult, EmailAvailabilityCheck, HomeserverCheckMode,
-            LoadRegistrationProgressError, RegistrationDisplayNameOutcome,
-            RegistrationDisplayNameWorkflowError, RegistrationEmailChangeError,
-            RegistrationEmailChangeOutcome, RegistrationFinishError, RegistrationFinishOutcome,
-            RegistrationResendError, RegistrationResendOutcome, RegistrationVerificationError,
-            RegistrationVerificationOutcome, begin_password_registration,
-            change_registration_email, finish_registration, load_registration_status,
-            next_registration_step, resend_registration_verification,
+            BeginPasswordRegistrationResult, LoadRegistrationProgressError,
+            RegistrationDisplayNameOutcome, RegistrationDisplayNameWorkflowError,
+            RegistrationEmailChangeError, RegistrationEmailChangeOutcome, RegistrationFinishError,
+            RegistrationFinishOutcome, RegistrationResendError, RegistrationResendOutcome,
+            RegistrationVerificationError, RegistrationVerificationOutcome,
+            begin_password_registration, change_registration_email, finish_registration,
+            load_registration_status, next_registration_step, resend_registration_verification,
             submit_registration_display_name, submit_registration_email_code,
             submit_registration_phone_code,
         },
@@ -128,7 +127,6 @@ pub async fn post_register(
             password_registration_contact_required: site_config
                 .password_registration_contact_required,
             terms_url: site_config.tos_uri.clone(),
-            email_availability: EmailAvailabilityCheck::Precheck,
         },
     )
     .await
@@ -690,7 +688,6 @@ pub async fn post_finish(
         homeserver.as_ref(),
         id,
         None,
-        HomeserverCheckMode::BestEffort,
         site_config.registration_token_required,
         site_config.bootstrap_admin_token.as_deref(),
         input.bootstrap_admin_token,

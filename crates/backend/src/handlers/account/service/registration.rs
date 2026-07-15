@@ -13,7 +13,7 @@ use chrono::{DateTime, Duration, Utc};
 use lettre::Address;
 use pasion_data::{
     BoxRepository, BrowserSession, Clock, RepositoryAccess, RepositoryError,
-    UpstreamOAuthAuthorizationSession, UpstreamOAuthLink, User, UserEmailAuthentication,
+    UpstreamOAuthAuthorizationSession, UpstreamOAuthLink, UserEmailAuthentication,
     UserPhoneAuthentication, UserRegistration, UserRegistrationToken,
     queue::{ProvisionUserJob, QueueJobRepositoryExt as _},
     upstream_oauth2::{UpstreamOAuthLinkRepository, UpstreamOAuthSessionRepository},
@@ -64,13 +64,6 @@ pub struct BeginPasswordRegistrationRequest {
     pub password_registration_enabled: bool,
     pub password_registration_contact_required: bool,
     pub terms_url: Option<Url>,
-    pub email_availability: EmailAvailabilityCheck,
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum EmailAvailabilityCheck {
-    Precheck,
-    Deferred,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -144,20 +137,6 @@ pub struct RegistrationStatusSummary {
     pub phone_pending: bool,
     pub steps_completed: Vec<&'static str>,
     pub next_step: &'static str,
-    pub workflow: RegistrationWorkflowSnapshot,
-}
-
-pub struct RegistrationEmailStepContext {
-    pub registration: UserRegistration,
-    pub email_authentication: UserEmailAuthentication,
-}
-
-pub struct RegistrationDisplayNameStepContext {
-    pub registration: UserRegistration,
-}
-
-pub struct RegistrationTokenStepContext {
-    pub registration: UserRegistration,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -217,9 +196,7 @@ pub struct CompleteRegistrationRequest {
 #[derive(Debug)]
 pub struct CompletedRegistration {
     pub registration: UserRegistration,
-    pub user: User,
     pub user_session: BrowserSession,
-    pub password_authenticated: bool,
 }
 
 pub struct PreparedRegistrationCompletion {
@@ -398,72 +375,6 @@ pub enum BeginPasswordRegistrationError {
 pub enum LoadRegistrationProgressError {
     #[error("registration not found")]
     NotFound,
-
-    #[error(transparent)]
-    Repository(#[from] RepositoryError),
-}
-
-#[derive(Debug, Error)]
-pub enum LoadRegistrationEmailStepError {
-    #[error("registration not found")]
-    NotFound,
-
-    #[error("registration already completed")]
-    RegistrationCompleted(UserRegistration),
-
-    #[error("registration has no email authentication")]
-    NoEmailAuthentication,
-
-    #[error("registration email authentication not found")]
-    EmailAuthenticationMissing,
-
-    #[error("email authentication already completed")]
-    EmailAlreadyVerified,
-
-    #[error(transparent)]
-    Repository(#[from] RepositoryError),
-}
-
-#[derive(Debug, Error)]
-pub enum LoadRegistrationDisplayNameStepError {
-    #[error("registration not found")]
-    NotFound,
-
-    #[error("registration already completed")]
-    RegistrationCompleted(UserRegistration),
-
-    #[error(transparent)]
-    Repository(#[from] RepositoryError),
-}
-
-#[derive(Debug, Error)]
-pub enum LoadRegistrationTokenStepError {
-    #[error("registration not found")]
-    NotFound,
-
-    #[error("registration already completed")]
-    RegistrationCompleted(UserRegistration),
-
-    #[error("registration token already attached")]
-    TokenAlreadyAttached(UserRegistration),
-
-    #[error(transparent)]
-    Repository(#[from] RepositoryError),
-}
-
-#[derive(Debug, Error)]
-pub enum AttachRegistrationTokenError {
-    #[error("registration not found")]
-    NotFound,
-
-    #[error("registration already completed")]
-    RegistrationCompleted(UserRegistration),
-
-    #[error("registration token already attached")]
-    TokenAlreadyAttached(UserRegistration),
-
-    #[error("registration token invalid")]
-    InvalidToken,
 
     #[error(transparent)]
     Repository(#[from] RepositoryError),
@@ -651,12 +562,6 @@ pub enum RegistrationFinishError {
     Internal(#[from] AnyhowError),
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum HomeserverCheckMode {
-    Strict,
-    BestEffort,
-}
-
 #[derive(Debug, Error)]
 pub enum CheckRegistrationFinishEligibilityError {
     #[error("registration session has expired")]
@@ -670,9 +575,6 @@ pub enum CheckRegistrationFinishEligibilityError {
 
     #[error("username is not available")]
     UsernameNotAvailable,
-
-    #[error("failed to verify username availability")]
-    HomeserverUnavailable(#[source] AnyhowError),
 
     #[error(transparent)]
     Repository(#[from] RepositoryError),
@@ -868,141 +770,7 @@ pub async fn load_registration_status(
         phone_pending,
         steps_completed,
         next_step,
-        workflow,
     })
-}
-
-pub async fn load_registration_email_step(
-    repo: &mut BoxRepository,
-    registration_id: Ulid,
-) -> Result<RegistrationEmailStepContext, LoadRegistrationEmailStepError> {
-    let progress = load_registration_progress(repo, registration_id)
-        .await
-        .map_err(|error| match error {
-            LoadRegistrationProgressError::NotFound => LoadRegistrationEmailStepError::NotFound,
-            LoadRegistrationProgressError::Repository(error) => {
-                LoadRegistrationEmailStepError::Repository(error)
-            }
-        })?;
-
-    let registration = progress.registration;
-
-    if registration.completed_at.is_some() {
-        return Err(LoadRegistrationEmailStepError::RegistrationCompleted(
-            registration,
-        ));
-    }
-
-    if registration.email_authentication_id.is_none() {
-        return Err(LoadRegistrationEmailStepError::NoEmailAuthentication);
-    }
-
-    let email_authentication = progress
-        .email_authentication
-        .ok_or(LoadRegistrationEmailStepError::EmailAuthenticationMissing)?;
-
-    if email_authentication.completed_at.is_some() {
-        return Err(LoadRegistrationEmailStepError::EmailAlreadyVerified);
-    }
-
-    Ok(RegistrationEmailStepContext {
-        registration,
-        email_authentication,
-    })
-}
-
-pub async fn load_registration_display_name_step(
-    repo: &mut BoxRepository,
-    registration_id: Ulid,
-) -> Result<RegistrationDisplayNameStepContext, LoadRegistrationDisplayNameStepError> {
-    let progress = load_registration_progress(repo, registration_id)
-        .await
-        .map_err(|error| match error {
-            LoadRegistrationProgressError::NotFound => {
-                LoadRegistrationDisplayNameStepError::NotFound
-            }
-            LoadRegistrationProgressError::Repository(error) => {
-                LoadRegistrationDisplayNameStepError::Repository(error)
-            }
-        })?;
-
-    let registration = progress.registration;
-
-    if registration.completed_at.is_some() {
-        return Err(LoadRegistrationDisplayNameStepError::RegistrationCompleted(
-            registration,
-        ));
-    }
-
-    Ok(RegistrationDisplayNameStepContext { registration })
-}
-
-pub async fn load_registration_token_step(
-    repo: &mut BoxRepository,
-    registration_id: Ulid,
-) -> Result<RegistrationTokenStepContext, LoadRegistrationTokenStepError> {
-    let registration = repo
-        .user_registration()
-        .lookup(registration_id)
-        .await?
-        .ok_or(LoadRegistrationTokenStepError::NotFound)?;
-
-    if registration.completed_at.is_some() {
-        return Err(LoadRegistrationTokenStepError::RegistrationCompleted(
-            registration,
-        ));
-    }
-
-    if registration.user_registration_token_id.is_some() {
-        return Err(LoadRegistrationTokenStepError::TokenAlreadyAttached(
-            registration,
-        ));
-    }
-
-    Ok(RegistrationTokenStepContext { registration })
-}
-
-pub async fn attach_registration_token(
-    mut repo: BoxRepository,
-    clock: &dyn Clock,
-    registration_id: Ulid,
-    token: &str,
-) -> Result<UserRegistration, AttachRegistrationTokenError> {
-    let registration = repo
-        .user_registration()
-        .lookup(registration_id)
-        .await?
-        .ok_or(AttachRegistrationTokenError::NotFound)?;
-
-    if registration.completed_at.is_some() {
-        return Err(AttachRegistrationTokenError::RegistrationCompleted(
-            registration,
-        ));
-    }
-
-    if registration.user_registration_token_id.is_some() {
-        return Err(AttachRegistrationTokenError::TokenAlreadyAttached(
-            registration,
-        ));
-    }
-
-    let Some(registration_token) = repo.user_registration_token().find_by_token(token).await?
-    else {
-        return Err(AttachRegistrationTokenError::InvalidToken);
-    };
-
-    if !registration_token.is_valid(clock.now()) {
-        return Err(AttachRegistrationTokenError::InvalidToken);
-    }
-
-    let registration = repo
-        .user_registration()
-        .set_registration_token(registration, &registration_token)
-        .await?;
-
-    repo.save().await?;
-
-    Ok(registration)
 }
 
 pub async fn start_password_registration(
@@ -1150,12 +918,11 @@ pub async fn begin_password_registration(
         if Address::from_str(&email_str).is_err() {
             issues.push(BeginPasswordRegistrationIssue::EmailInvalid);
             None
-        } else if matches!(request.email_availability, EmailAvailabilityCheck::Precheck)
-            && repo
-                .user_email()
-                .count(UserEmailFilter::new().for_email(&email_str))
-                .await?
-                > 0
+        } else if repo
+            .user_email()
+            .count(UserEmailFilter::new().for_email(&email_str))
+            .await?
+            > 0
         {
             issues.push(BeginPasswordRegistrationIssue::EmailInUse);
             None
@@ -1745,7 +1512,6 @@ pub async fn check_registration_finish_eligibility(
     homeserver: &dyn HomeserverAdmin,
     registration: &UserRegistration,
     browser_session_present: Option<bool>,
-    homeserver_check_mode: HomeserverCheckMode,
 ) -> Result<(), CheckRegistrationFinishEligibilityError> {
     if clock.now() - registration.created_at > Duration::hours(1) {
         return Err(CheckRegistrationFinishEligibilityError::RegistrationExpired);
@@ -1765,18 +1531,13 @@ pub async fn check_registration_finish_eligibility(
     {
         Ok(true) => Ok(()),
         Ok(false) => Err(CheckRegistrationFinishEligibilityError::UsernameNotAvailable),
-        Err(error) => match homeserver_check_mode {
-            HomeserverCheckMode::Strict => {
-                Err(CheckRegistrationFinishEligibilityError::HomeserverUnavailable(error))
-            }
-            HomeserverCheckMode::BestEffort => {
-                tracing::warn!(
-                    error = %error,
-                    "Failed to check localpart availability during finish, skipping homeserver check"
-                );
-                Ok(())
-            }
-        },
+        Err(error) => {
+            tracing::warn!(
+                error = %error,
+                "Failed to check localpart availability during finish, skipping homeserver check"
+            );
+            Ok(())
+        }
     }
 }
 
@@ -1786,7 +1547,6 @@ pub async fn load_registration_finish_preparation(
     homeserver: &dyn HomeserverAdmin,
     registration_id: Ulid,
     browser_session_present: Option<bool>,
-    homeserver_check_mode: HomeserverCheckMode,
     registration_token_required: bool,
 ) -> Result<PreparedRegistrationCompletion, LoadRegistrationFinishPreparationError> {
     let progress = load_registration_progress(repo, registration_id)
@@ -1814,7 +1574,6 @@ pub async fn load_registration_finish_preparation(
         homeserver,
         &registration,
         browser_session_present,
-        homeserver_check_mode,
     )
     .await
     .map_err(
@@ -2045,7 +1804,6 @@ pub async fn complete_registration(
             .await?;
     }
 
-    let mut password_authenticated = false;
     if let Some(password) = registration.password.clone() {
         let user_password = repo
             .user_password()
@@ -2062,8 +1820,6 @@ pub async fn complete_registration(
         repo.browser_session()
             .authenticate_with_password(rng, clock, &user_session, &user_password)
             .await?;
-
-        password_authenticated = true;
     }
 
     if let Some((upstream_session, upstream_link)) = request.upstream_oauth {
@@ -2103,9 +1859,7 @@ pub async fn complete_registration(
 
     Ok(CompletedRegistration {
         registration,
-        user,
         user_session,
-        password_authenticated,
     })
 }
 
@@ -2116,7 +1870,6 @@ pub async fn finish_registration(
     homeserver: &dyn HomeserverAdmin,
     registration_id: Ulid,
     browser_session_present: Option<bool>,
-    homeserver_check_mode: HomeserverCheckMode,
     registration_token_required: bool,
     configured_bootstrap_admin_token: Option<&str>,
     requested_bootstrap_admin_token: Option<String>,
@@ -2128,7 +1881,6 @@ pub async fn finish_registration(
         homeserver,
         registration_id,
         browser_session_present,
-        homeserver_check_mode,
         registration_token_required,
     )
     .await
@@ -2163,7 +1915,6 @@ pub async fn finish_registration(
                     "Registration browser session is required",
                 )));
             }
-            CheckRegistrationFinishEligibilityError::HomeserverUnavailable(_) => unreachable!(),
             CheckRegistrationFinishEligibilityError::Repository(error) => {
                 return Err(RegistrationFinishError::Repository(error));
             }

@@ -627,7 +627,7 @@ fn build_account_api_router(router: Router) -> Router {
 }
 
 fn build_admin_router(router: Router) -> Router {
-    use crate::handlers::{admin, admin::v1::*};
+    use crate::handlers::admin::v1::*;
 
     let admin_router = Router::with_path("/api/admin/v1")
         // Version
