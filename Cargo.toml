@@ -55,7 +55,7 @@ oauth2-types = { path = "./crates/oauth2-types/", version = "=1.8.0" }
 
 pasion-frontend = { path = "./crates/frontend/", version = "=1.8.0" }
 
-salvo = { version = "0.92", features = [
+salvo = { version = "0.94", features = [
     "oapi",
     "cors",
     "cookie",

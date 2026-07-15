@@ -7,7 +7,7 @@ use crate::{
         dialog::Dialog,
         linked_accounts::{LinkProvidersRow, LinkedAccountRow},
         loading::LoadingScreen,
-        password_input::AccountManagementPasswordPreview,
+        password_input::{AccountManagementPasswordPreview, PasswordInput},
         separator::{Separator, SeparatorKind},
         user_email::UserEmailList,
         user_profile::AddEmailForm,
@@ -343,13 +343,13 @@ fn AccountDeleteButton(mxid: String, has_password: bool, password_login_enabled:
                     // Password or MXID confirmation
                     if use_password_mode {
                         div { class: "form-field",
-                            label { class: "form-label", "Enter your password to confirm" }
-                            input {
-                                class: "form-input",
-                                r#type: "password",
-                                autocomplete: "current-password",
-                                value: "{password}",
-                                oninput: move |e| password.set(e.value()),
+                            label { class: "form-label", r#for: "deactivate-password", "Enter your password to confirm" }
+                            PasswordInput {
+                                id: "deactivate-password",
+                                name: "password",
+                                autocomplete: "current-password".to_string(),
+                                value: password.read().clone(),
+                                oninput: move |e: FormEvent| password.set(e.value()),
                             }
                         }
                     } else if !mxid_clone.is_empty() {

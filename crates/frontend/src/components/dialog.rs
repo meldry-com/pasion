@@ -18,6 +18,7 @@ pub fn Dialog(
     trigger: Option<Element>,
     children: Element,
 ) -> Element {
+    let accessible_label = title.clone().unwrap_or_else(|| "Dialog".to_string());
     rsx! {
         if let Some(trigger) = trigger {
             div {
@@ -32,6 +33,17 @@ pub fn Dialog(
                 onclick: move |_| open.set(false),
                 div {
                     class: "dialog-content",
+                    role: "dialog",
+                    aria_modal: "true",
+                    aria_label: accessible_label,
+                    tabindex: "-1",
+                    autofocus: true,
+                    onkeydown: move |event: KeyboardEvent| {
+                        if event.key() == Key::Escape {
+                            event.prevent_default();
+                            open.set(false);
+                        }
+                    },
                     onclick: move |e| e.stop_propagation(),
                     if let Some(title) = title {
                         h3 { class: "dialog-title", "{title}" }
@@ -53,7 +65,9 @@ pub fn DialogTitle(children: Element) -> Element {
 #[component]
 pub fn DialogClose(open: Signal<bool>, children: Element) -> Element {
     rsx! {
-        div {
+        button {
+            r#type: "button",
+            aria_label: "Close dialog",
             onclick: move |_| open.set(false),
             {children}
         }
