@@ -38,7 +38,6 @@ der-legacy.workspace = true
 pem-rfc7468.workspace = true
 pkcs1.workspace = true
 pkcs8.workspace = true
-spki.workspace = true
 
 # Error handling
 thiserror.workspace = true

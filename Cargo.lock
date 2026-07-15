@@ -5744,7 +5744,6 @@ dependencies = [
  "rsa",
  "sec1 0.7.3",
  "sec1 0.8.1",
- "spki",
  "thiserror 2.0.18",
 ]
 

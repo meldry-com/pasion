@@ -70,7 +70,7 @@ pub enum LoadError {
     #[error(transparent)]
     Spki {
         #[from]
-        inner: spki::Error,
+        inner: pkcs8::spki::Error,
     },
 
     #[error("Unknown Elliptic Curve OID {oid}")]
