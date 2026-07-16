@@ -41,7 +41,7 @@ jobs:
 
     steps:
       - name: Fetch repository with full history
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
         with:
           # Full clone required for accurate git describe output
           fetch-depth: 0
@@ -142,7 +142,7 @@ jobs:
 
     steps:
       - name: Fetch repository
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
 
       - name: Configure Docker Buildx
         uses: docker/setup-buildx-action@v3.11.1
