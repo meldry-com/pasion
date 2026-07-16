@@ -174,28 +174,28 @@ minijinja-contrib = { version = "2.19.0", features = ["pycompat"] }
 nonzero_ext = "0.3.0"
 opendal = { version = "0.57", features = ["services-fs", "services-s3"] }
 cedar-policy = "4"
-opentelemetry = { version = "0.31.0", features = ["trace", "metrics"] }
-opentelemetry-http = { version = "0.31.0", features = ["reqwest"] }
-opentelemetry-instrumentation-process = "0.1.2"
-opentelemetry-instrumentation-tokio = "0.1.2"
-opentelemetry-jaeger-propagator = "0.31.0"
-opentelemetry-otlp = { version = "0.31.1", default-features = false, features = [
+opentelemetry = { version = "0.32.0", features = ["trace", "metrics"] }
+opentelemetry-http = { version = "0.32.0", features = ["reqwest"] }
+opentelemetry-instrumentation-process = "0.2.0"
+opentelemetry-instrumentation-tokio = "0.2.0"
+opentelemetry-jaeger-propagator = "0.32.0"
+opentelemetry-otlp = { version = "0.32.0", default-features = false, features = [
     "trace",
     "metrics",
     "http-proto",
 ] }
-opentelemetry-prometheus-text-exporter = "0.2.1"
-opentelemetry-resource-detectors = "0.10.0"
-opentelemetry-semantic-conventions = { version = "0.31.0", features = [
+opentelemetry-prometheus-text-exporter = "0.3.0"
+opentelemetry-resource-detectors = "0.11.0"
+opentelemetry-semantic-conventions = { version = "0.32.1", features = [
     "semconv_experimental",
 ] }
-opentelemetry-stdout = { version = "0.31.0", features = ["trace", "metrics"] }
-opentelemetry_sdk = { version = "0.31.0", features = [
+opentelemetry-stdout = { version = "0.32.0", features = ["trace", "metrics"] }
+opentelemetry_sdk = { version = "0.32.1", features = [
     "experimental_trace_batch_span_processor_with_async_runtime",
     "experimental_metrics_periodicreader_with_async_runtime",
     "rt-tokio",
 ] }
-tracing-opentelemetry = { version = "0.32.1", default-features = false }
+tracing-opentelemetry = { version = "0.33.0", default-features = false }
 p256 = { version = "0.13.2", features = ["std"] }
 p384 = { version = "0.13.1", features = ["std"] }
 p521 = { version = "0.13.3", features = ["std", "ecdsa"] }
