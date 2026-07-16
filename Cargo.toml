@@ -248,7 +248,7 @@ diesel = { version = "2.3", features = [
     "r2d2",
     "network-address",
 ] }
-diesel-async = { version = "0.8", features = [
+diesel-async = { version = "0.9", features = [
     "postgres",
     "deadpool",
     "async-connection-wrapper",
