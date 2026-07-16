@@ -68,18 +68,17 @@ pub async fn request_access_token(
         .get(url)
         .send_traced()
         .await?
-        .error_for_status()
-        .map_err(reqwest::Error::from)?
+        .error_for_status()?
         .json()
         .await?;
 
-    if let Some(errcode) = response.errcode {
-        if errcode != 0 {
-            return Err(TokenRequestError::ProviderError {
-                code: errcode,
-                msg: response.errmsg.unwrap_or_default(),
-            });
-        }
+    if let Some(errcode) = response.errcode
+        && errcode != 0
+    {
+        return Err(TokenRequestError::ProviderError {
+            code: errcode,
+            msg: response.errmsg.unwrap_or_default(),
+        });
     }
 
     Ok(response)
@@ -109,24 +108,23 @@ pub async fn fetch_userinfo(
         .get(url)
         .send_traced()
         .await?
-        .error_for_status()
-        .map_err(reqwest::Error::from)?
+        .error_for_status()?
         .json()
         .await?;
 
     // Check for error
-    if let Some(errcode) = response.get("errcode").and_then(|v| v.as_i64()) {
-        if errcode != 0 {
-            let msg = response
-                .get("errmsg")
-                .and_then(|v| v.as_str())
-                .unwrap_or("unknown error")
-                .to_owned();
-            return Err(UserInfoError::ProviderError {
-                code: errcode as i32,
-                msg,
-            });
-        }
+    if let Some(errcode) = response.get("errcode").and_then(|v| v.as_i64())
+        && errcode != 0
+    {
+        let msg = response
+            .get("errmsg")
+            .and_then(|v| v.as_str())
+            .unwrap_or("unknown error")
+            .to_owned();
+        return Err(UserInfoError::ProviderError {
+            code: errcode as i32,
+            msg,
+        });
     }
 
     Ok(response)

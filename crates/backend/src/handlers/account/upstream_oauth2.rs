@@ -483,7 +483,7 @@ fn map_upstream_link_workflow_error(error: UpstreamLinkWorkflowError) -> RouteEr
         | UpstreamLinkWorkflowError::ConflictSetBlocked { .. }
         | UpstreamLinkWorkflowError::PolicyDeniedLocalpart { .. }
         | UpstreamLinkWorkflowError::LocalpartUnavailable { .. } => {
-            RouteError::BadRequest(error.to_string().into())
+            RouteError::BadRequest(error.to_string())
         }
         UpstreamLinkWorkflowError::RequiredAttributeEmpty { .. }
         | UpstreamLinkWorkflowError::RequiredAttributeRender { .. }

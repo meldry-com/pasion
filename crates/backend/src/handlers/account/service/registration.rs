@@ -2028,9 +2028,7 @@ pub async fn finish_registration(
 #[cfg(test)]
 mod tests {
     use chrono::TimeZone;
-    use pasion_data::{
-        RepositoryAccess as _, RepositoryFactory as _, clock::MockClock, user::UserRepository as _,
-    };
+    use pasion_data::{RepositoryFactory as _, clock::MockClock};
     use rand_chacha::ChaChaRng;
     use rand_core::SeedableRng;
 

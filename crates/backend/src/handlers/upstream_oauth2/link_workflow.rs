@@ -961,12 +961,11 @@ async fn validate_registration_action(
 
     if username.is_empty() {
         field_errors.insert("username".into(), serde_json::json!("required"));
-    } else if repo.user().exists(username).await? {
-        field_errors.insert("username".into(), serde_json::json!("exists"));
-    } else if !homeserver
-        .is_localpart_available(username)
-        .await
-        .map_err(UpstreamLinkWorkflowError::homeserver)?
+    } else if repo.user().exists(username).await?
+        || !homeserver
+            .is_localpart_available(username)
+            .await
+            .map_err(UpstreamLinkWorkflowError::homeserver)?
     {
         field_errors.insert("username".into(), serde_json::json!("exists"));
     }

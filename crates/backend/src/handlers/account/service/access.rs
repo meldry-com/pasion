@@ -178,7 +178,7 @@ pub async fn verify_password_login(
         Ok(PasswordVerificationResult::NotMatched) => {
             return Ok(PasswordVerificationOutcome::InvalidCredentials);
         }
-        Err(error) => return Err(PasswordLoginError::Password(error.into())),
+        Err(error) => return Err(PasswordLoginError::Password(error)),
     };
 
     if user.deactivated_at.is_some() {

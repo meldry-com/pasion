@@ -144,8 +144,7 @@ pub async fn get_app_access_token(
         .json(&body)
         .send_traced()
         .await?
-        .error_for_status()
-        .map_err(reqwest::Error::from)?
+        .error_for_status()?
         .json()
         .await?;
 
@@ -183,8 +182,7 @@ pub async fn request_access_token(
         .json(&body)
         .send_traced()
         .await?
-        .error_for_status()
-        .map_err(reqwest::Error::from)?
+        .error_for_status()?
         .json()
         .await?;
 
@@ -220,8 +218,7 @@ pub async fn fetch_userinfo(
         .bearer_auth(user_access_token)
         .send_traced()
         .await?
-        .error_for_status()
-        .map_err(reqwest::Error::from)?
+        .error_for_status()?
         .json()
         .await?;
 
