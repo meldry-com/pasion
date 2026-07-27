@@ -258,7 +258,7 @@ async fn handle_get(req: &mut Request, depot: &Depot) -> Result<(Response, Cooki
                     const CHARSET: &[u8] =
                         b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789";
                     const N: u8 = CHARSET.len() as u8; // 62
-                    const LIMIT: u8 = 256u16.saturating_sub((256 % N as u16) as u16) as u8; // 248
+                    const LIMIT: u8 = (256u16 - 256u16 % N as u16) as u8; // 248
                     let mut out = String::with_capacity(32);
                     let mut buf = [0u8; 64];
                     while out.len() < 32 {
@@ -327,7 +327,7 @@ async fn handle_get(req: &mut Request, depot: &Depot) -> Result<(Response, Cooki
                         } else {
                             format!("/register?{query_str}")
                         };
-                        salvo::writing::Redirect::other(&url_builder.relative_url(&path))
+                        salvo::writing::Redirect::other(url_builder.relative_url(&path))
                     }
                 }
 
@@ -343,7 +343,7 @@ async fn handle_get(req: &mut Request, depot: &Depot) -> Result<(Response, Cooki
                         } else {
                             format!("/login?{query_str}")
                         };
-                        salvo::writing::Redirect::other(&url_builder.relative_url(&path))
+                        salvo::writing::Redirect::other(url_builder.relative_url(&path))
                     }
                 }
 
@@ -360,7 +360,7 @@ async fn handle_get(req: &mut Request, depot: &Depot) -> Result<(Response, Cooki
                         } else {
                             format!("/register?{query_str}")
                         };
-                        salvo::writing::Redirect::other(&url_builder.relative_url(&path))
+                        salvo::writing::Redirect::other(url_builder.relative_url(&path))
                     }
                 }
 
@@ -377,7 +377,7 @@ async fn handle_get(req: &mut Request, depot: &Depot) -> Result<(Response, Cooki
                         } else {
                             format!("/login?{query_str}")
                         };
-                        salvo::writing::Redirect::other(&url_builder.relative_url(&path))
+                        salvo::writing::Redirect::other(url_builder.relative_url(&path))
                     }
                 }
 
@@ -403,13 +403,13 @@ async fn handle_get(req: &mut Request, depot: &Depot) -> Result<(Response, Cooki
                         } else {
                             format!("/login?{query_str}")
                         };
-                        salvo::writing::Redirect::other(&url_builder.relative_url(&path))
+                        salvo::writing::Redirect::other(url_builder.relative_url(&path))
                     } else {
                         activity_tracker
                             .record_browser_session(&clock, &user_session)
                             .await;
                         salvo::writing::Redirect::other(
-                            &url_builder.relative_url(&format!("/consent/{}", grant.id)),
+                            url_builder.relative_url(&format!("/consent/{}", grant.id)),
                         )
                     }
                 }

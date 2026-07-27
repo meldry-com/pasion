@@ -208,12 +208,12 @@ impl UserRegistrationTokenRepository for PgUserRegistrationTokenRepository<'_> {
             PaginationDirection::Forward => {
                 query = query
                     .order(user_registration_tokens::id.asc())
-                    .limit((pagination.count + 1) as i64);
+                    .limit(crate::pg::pagination_limit(pagination.count));
             }
             PaginationDirection::Backward => {
                 query = query
                     .order(user_registration_tokens::id.desc())
-                    .limit((pagination.count + 1) as i64);
+                    .limit(crate::pg::pagination_limit(pagination.count));
             }
         }
 
@@ -506,8 +506,8 @@ struct TimesUsedRow {
 mod tests {
     use chrono::Duration;
     use pasion_data::{
-        Clock as _, Pagination, RepositoryAccess as _, RepositoryFactory as _,
-        RepositoryTransaction as _, clock::MockClock, user::UserRegistrationTokenFilter,
+        Clock as _, Pagination, RepositoryAccess as _, RepositoryFactory as _, clock::MockClock,
+        user::UserRegistrationTokenFilter,
     };
     use rand_chacha::ChaChaRng;
     use rand_core::SeedableRng;

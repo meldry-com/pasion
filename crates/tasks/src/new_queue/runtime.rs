@@ -86,9 +86,11 @@ pub(super) async fn wait_until_wakeup(
     wakeups: &Counter<u64>,
 ) {
     let mut rng = state.rng();
-    let jitter_ms = (rng.next_u64()
-        % (MAX_SLEEP_DURATION.as_millis() as u64 - MIN_SLEEP_DURATION.as_millis() as u64))
-        + MIN_SLEEP_DURATION.as_millis() as u64;
+    let min_sleep_ms =
+        u64::try_from(MIN_SLEEP_DURATION.as_millis()).expect("minimum sleep duration fits in u64");
+    let max_sleep_ms =
+        u64::try_from(MAX_SLEEP_DURATION.as_millis()).expect("maximum sleep duration fits in u64");
+    let jitter_ms = (rng.next_u64() % (max_sleep_ms - min_sleep_ms)) + min_sleep_ms;
     let sleep_duration = std::time::Duration::from_millis(jitter_ms);
     let wakeup_sleep = tokio::time::sleep(sleep_duration);
 

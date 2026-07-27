@@ -36,15 +36,15 @@ fn normalize_scope(mut scope: Scope) -> Scope {
             let device_id = s
                 .strip_prefix("urn:matrix:client:device:")
                 .or_else(|| s.strip_prefix("urn:matrix:org.matrix.msc2967.client:device:"));
-            if let Some(device_id) = device_id {
-                if let (Ok(stable), Ok(unstable)) = (
+            if let Some(device_id) = device_id
+                && let (Ok(stable), Ok(unstable)) = (
                     format!("urn:matrix:client:device:{device_id}").parse::<ScopeToken>(),
                     format!("urn:matrix:org.matrix.msc2967.client:device:{device_id}")
                         .parse::<ScopeToken>(),
-                ) {
-                    to_add.insert(stable);
-                    to_add.insert(unstable);
-                }
+                )
+            {
+                to_add.insert(stable);
+                to_add.insert(unstable);
             }
         }
     }

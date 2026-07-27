@@ -685,7 +685,7 @@ impl AwsSesWebhookRuntime {
             "Notification" => {
                 let message: SesSnsMessage = serde_json::from_str(&envelope.message)
                     .map_err(|error| Error::BadRequest(error.to_string()))?;
-                let Some(status) = ses_event_status(&message.event_type()) else {
+                let Some(status) = ses_event_status(message.event_type()) else {
                     return Ok(ParsedWebhook {
                         updates: Vec::new(),
                         subscription_confirmed: false,
@@ -1095,15 +1095,15 @@ fn lookup_from_string_tags(
     provider_message_id: Option<String>,
 ) -> Result<DeliveryLookup, Error> {
     for tag in tags {
-        if let Some((name, value)) = parse_key_value_tag(tag) {
-            if name == DELIVERY_ID_TAG {
-                return value
-                    .parse()
-                    .map(DeliveryLookup::DeliveryId)
-                    .map_err(|error| {
-                        Error::BadRequest(format!("invalid delivery id in webhook tag: {error}"))
-                    });
-            }
+        if let Some((name, value)) = parse_key_value_tag(tag)
+            && name == DELIVERY_ID_TAG
+        {
+            return value
+                .parse()
+                .map(DeliveryLookup::DeliveryId)
+                .map_err(|error| {
+                    Error::BadRequest(format!("invalid delivery id in webhook tag: {error}"))
+                });
         }
     }
 

@@ -166,19 +166,19 @@ impl RunnableJob for ExpireInactiveOAuthSessionsJob {
         let mut next_sync_at = clock.now() + INITIAL_DEVICE_SYNC_DELAY;
 
         for edge in page.edges {
-            if let Some(user_id) = edge.node.user_id {
-                if seen_users.insert(user_id) {
-                    tracing::info!(user.id = %user_id, "Scheduling device sync after session expiry");
-                    schedule_job_later(
-                        &mut repo,
-                        &mut rng,
-                        clock,
-                        next_sync_at,
-                        SyncDevicesJob::new_for_id(user_id),
-                    )
-                    .await?;
-                    next_sync_at += DEVICE_SYNC_SPACING;
-                }
+            if let Some(user_id) = edge.node.user_id
+                && seen_users.insert(user_id)
+            {
+                tracing::info!(user.id = %user_id, "Scheduling device sync after session expiry");
+                schedule_job_later(
+                    &mut repo,
+                    &mut rng,
+                    clock,
+                    next_sync_at,
+                    SyncDevicesJob::new_for_id(user_id),
+                )
+                .await?;
+                next_sync_at += DEVICE_SYNC_SPACING;
             }
 
             repo.oauth2_session()

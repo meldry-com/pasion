@@ -82,7 +82,7 @@ pub fn EditProfileDialog(
         .to_string();
 
     rsx! {
-        Dialog { open: open, title: "Edit profile".to_string(),
+        Dialog { open: open, title: "Edit profile".to_owned(),
                 // Avatar section with upload
                 div { class: "flex flex-col items-center gap-3",
                     if let Some(ref url) = *current_avatar_url.read() {
@@ -336,6 +336,10 @@ async fn upload_selected_avatar() -> Result<Option<String>, String> {
 }
 
 #[cfg(not(target_arch = "wasm32"))]
+#[allow(
+    clippy::unused_async,
+    reason = "keep the platform-specific implementations callable through one async interface"
+)]
 async fn upload_selected_avatar() -> Result<Option<String>, String> {
-    Err("not supported on this platform".to_string())
+    Err("not supported on this platform".to_owned())
 }

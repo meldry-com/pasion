@@ -1012,6 +1012,10 @@ pub struct VerifiedProviderMetadata {
     inner: ProviderMetadata,
 }
 
+#[allow(
+    clippy::missing_panics_doc,
+    reason = "validation guarantees these required fields are present"
+)]
 impl VerifiedProviderMetadata {
     /// Authorization server's issuer identifier URL.
     #[must_use]

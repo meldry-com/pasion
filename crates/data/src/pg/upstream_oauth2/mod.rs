@@ -15,9 +15,9 @@ mod tests {
     use chrono::Duration;
     use oauth2_types::scope::{OPENID, Scope};
     use pasion_data::{
-        Pagination, RepositoryAccess, RepositoryAccess as _, RepositoryFactory as _,
-        RepositoryTransaction as _, UpstreamOAuthLinkPatch, UpstreamOAuthProviderClaimsImports,
-        UpstreamOAuthProviderOnBackchannelLogout, UpstreamOAuthProviderTokenAuthMethod,
+        Pagination, RepositoryAccess as _, RepositoryFactory as _, UpstreamOAuthLinkPatch,
+        UpstreamOAuthProviderClaimsImports, UpstreamOAuthProviderOnBackchannelLogout,
+        UpstreamOAuthProviderTokenAuthMethod,
         clock::MockClock,
         upstream_oauth2::{
             UpstreamOAuthLinkFilter, UpstreamOAuthLinkRepository, UpstreamOAuthProviderFilter,
@@ -705,8 +705,8 @@ mod tests {
                     client_id: "client".to_owned(),
                     encrypted_client_secret: None,
                     claims_imports: UpstreamOAuthProviderClaimsImports::default(),
-                    discovery_mode: Default::default(),
-                    pkce_mode: Default::default(),
+                    discovery_mode: pasion_data::UpstreamOAuthProviderDiscoveryMode::default(),
+                    pkce_mode: pasion_data::UpstreamOAuthProviderPkceMode::default(),
                     response_mode: None,
                     authorization_endpoint_override: None,
                     token_endpoint_override: None,

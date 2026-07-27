@@ -41,6 +41,7 @@ impl std::error::Error for DataError {}
 
 impl DataError {
     /// Create a new `DataError` with a static message.
+    #[must_use]
     pub fn new(msg: &'static str) -> Self {
         Self { msg, source: None }
     }

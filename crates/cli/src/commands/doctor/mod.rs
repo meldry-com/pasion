@@ -4,6 +4,12 @@
 //! and Pasion API integration.  Run with `pasion doctor` while both Pasion
 //! and Palpo are active and using the same configuration.
 
+#![allow(
+    // Doctor probes deliberately issue HTTP requests directly so they can report
+    // transport failures separately from application-level health.
+    clippy::disallowed_methods
+)]
+
 mod homeserver;
 mod well_known;
 
@@ -38,8 +44,7 @@ impl Options {
             .http
             .issuer
             .as_ref()
-            .map(url::Url::as_str)
-            .unwrap_or(public_base);
+            .map_or(public_base, url::Url::as_str);
 
         let domain: Host = Host::parse(&config.matrix.homeserver).context(
             "The homeserver host in the config (`matrix.homeserver`) is not a valid domain.\n\

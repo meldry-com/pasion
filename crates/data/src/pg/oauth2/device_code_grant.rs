@@ -407,7 +407,7 @@ impl OAuth2DeviceCodeGrantRepository for PgOAuth2DeviceCodeGrantRepository<'_> {
         // Instead, we do the aggregation on the client side, which is a little
         // less efficient, but good enough.
         let res: Vec<Uuid> = diesel::sql_query(
-            r#"
+            r"
                 WITH to_delete AS (
                     SELECT id
                     FROM oauth2_device_code_grant
@@ -420,7 +420,7 @@ impl OAuth2DeviceCodeGrantRepository for PgOAuth2DeviceCodeGrantRepository<'_> {
                 USING to_delete
                 WHERE oauth2_device_code_grant.id = to_delete.id
                 RETURNING oauth2_device_code_grant.id
-            "#,
+            ",
         )
         .bind::<diesel::sql_types::Nullable<diesel::sql_types::Uuid>, _>(since.map(Uuid::from))
         .bind::<diesel::sql_types::Uuid, _>(Uuid::from(until))

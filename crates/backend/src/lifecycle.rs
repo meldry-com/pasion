@@ -191,6 +191,9 @@ impl LifecycleManager {
         };
 
         // Wait for a first shutdown signal and trigger the soft shutdown
+        // On Windows each `select!` branch exits the loop; on Unix the watchdog and
+        // reload branches intentionally continue waiting for a shutdown signal.
+        #[allow(clippy::never_loop)]
         let likely_crashed = loop {
             #[cfg(unix)]
             {

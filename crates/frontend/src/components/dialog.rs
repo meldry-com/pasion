@@ -18,7 +18,7 @@ pub fn Dialog(
     trigger: Option<Element>,
     children: Element,
 ) -> Element {
-    let accessible_label = title.clone().unwrap_or_else(|| "Dialog".to_string());
+    let accessible_label = title.clone().unwrap_or_else(|| "Dialog".to_owned());
     rsx! {
         if let Some(trigger) = trigger {
             div {

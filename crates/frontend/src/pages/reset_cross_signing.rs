@@ -12,6 +12,10 @@ enum ResetState {
     Confirm,
     InProgress,
     Waiting,
+    #[allow(
+        dead_code,
+        reason = "reserved for the successful terminal response from Palpo"
+    )]
     Success,
     Cancelled,
     Error(String),
@@ -51,7 +55,7 @@ pub fn ResetCrossSigning() -> Element {
                     user_id.set(user.id.clone());
                     state.set(ResetState::Confirm);
                 } else {
-                    state.set(ResetState::Error("Not authenticated.".to_string()));
+                    state.set(ResetState::Error("Not authenticated.".to_owned()));
                 }
             }
             Err(e) => {
@@ -77,9 +81,9 @@ pub fn ResetCrossSigning() -> Element {
                 Layout {
                     div { class: "cross-signing-container",
                         PageHeading {
-                            icon: "🔐".to_string(),
-                            title: "Reset end-to-end encryption".to_string(),
-                            subtitle: subtitle.to_string(),
+                            icon: "🔐".to_owned(),
+                            title: "Reset end-to-end encryption".to_owned(),
+                            subtitle: subtitle.to_owned(),
                         }
 
                         if let Some(ref err) = *error.read() {
@@ -128,9 +132,9 @@ pub fn ResetCrossSigning() -> Element {
             Layout {
                 div { class: "cross-signing-container",
                     PageHeading {
-                        icon: "⏳".to_string(),
-                        title: "Processing...".to_string(),
-                        subtitle: "Sending the reset request to the server.".to_string(),
+                        icon: "⏳".to_owned(),
+                        title: "Processing...".to_owned(),
+                        subtitle: "Sending the reset request to the server.".to_owned(),
                     }
 
                     div { class: "loading-screen",
@@ -151,9 +155,9 @@ pub fn ResetCrossSigning() -> Element {
                 Layout {
                     div { class: "cross-signing-container",
                         PageHeading {
-                            icon: "⏳".to_string(),
-                            title: "Waiting for approval".to_string(),
-                            subtitle: waiting_subtitle.to_string(),
+                            icon: "⏳".to_owned(),
+                            title: "Waiting for approval".to_owned(),
+                            subtitle: waiting_subtitle.to_owned(),
                         }
 
                         div { class: "loading-screen",
@@ -176,9 +180,9 @@ pub fn ResetCrossSigning() -> Element {
             Layout {
                 div { class: "cross-signing-container",
                     PageHeading {
-                        icon: "✓".to_string(),
-                        title: "Encryption reset".to_string(),
-                        subtitle: "Your encryption keys have been reset. You will need to re-verify your sessions.".to_string(),
+                        icon: "✓".to_owned(),
+                        title: "Encryption reset".to_owned(),
+                        subtitle: "Your encryption keys have been reset. You will need to re-verify your sessions.".to_owned(),
                     }
 
                     Link { class: "btn btn-primary", to: Route::AccountSettings {},
@@ -192,9 +196,9 @@ pub fn ResetCrossSigning() -> Element {
             Layout {
                 div { class: "cross-signing-container",
                     PageHeading {
-                        icon: "✗".to_string(),
-                        title: "Reset cancelled".to_string(),
-                        subtitle: "The encryption reset was cancelled. Your encryption keys remain unchanged.".to_string(),
+                        icon: "✗".to_owned(),
+                        title: "Reset cancelled".to_owned(),
+                        subtitle: "The encryption reset was cancelled. Your encryption keys remain unchanged.".to_owned(),
                     }
 
                     Link { class: "btn btn-primary", to: Route::AccountSettings {},
@@ -208,8 +212,8 @@ pub fn ResetCrossSigning() -> Element {
             Layout {
                 div { class: "cross-signing-container",
                     PageHeading {
-                        icon: "✗".to_string(),
-                        title: "Error".to_string(),
+                        icon: "✗".to_owned(),
+                        title: "Error".to_owned(),
                         subtitle: msg.clone(),
                     }
 

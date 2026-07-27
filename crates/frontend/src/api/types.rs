@@ -1,4 +1,16 @@
 #![allow(dead_code)]
+#![allow(
+    clippy::large_enum_variant,
+    reason = "REST response enums mirror server payloads and are short-lived"
+)]
+#![allow(
+    clippy::option_option,
+    reason = "nested options encode omitted, cleared, and assigned JSON PATCH fields"
+)]
+#![allow(
+    clippy::struct_excessive_bools,
+    reason = "API DTOs mirror independent server-side configuration flags"
+)]
 
 use serde::{Deserialize, Serialize};
 
@@ -15,7 +27,7 @@ impl Viewer {
     pub fn as_user(&self) -> Option<&User> {
         match self {
             Viewer::User(u) => Some(u),
-            _ => None,
+            Viewer::Anonymous(_) => None,
         }
     }
 }
@@ -99,7 +111,7 @@ impl ViewerSession {
     pub fn as_browser_session(&self) -> Option<&BrowserSession> {
         match self {
             ViewerSession::BrowserSession(s) => Some(s),
-            _ => None,
+            ViewerSession::Anonymous(_) => None,
         }
     }
 }
@@ -675,7 +687,7 @@ pub struct StepResponse {
     #[serde(default)]
     pub error: Option<String>,
     /// Set when the registration was started as part of another flow
-    /// (e.g. an OAuth2 authorization grant continuation). The frontend
+    /// (e.g. an `OAuth2` authorization grant continuation). The frontend
     /// uses this to resume the original flow after the account is created.
     #[serde(default)]
     pub post_auth_action: Option<serde_json::Value>,

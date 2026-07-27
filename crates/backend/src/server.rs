@@ -210,7 +210,7 @@ pub async fn sentry_middleware(
     res: &mut Response,
     ctrl: &mut FlowCtrl,
 ) {
-    let path = req.uri().path().to_string();
+    let path = req.uri().path().to_owned();
     let method = otel_http_method(req.method());
 
     sentry::configure_scope(|scope| {
@@ -871,7 +871,7 @@ async fn connection_info_handler(req: &Request) -> String {
     if let Some(conn_info) = req.extensions().get::<ConnectionInfo>() {
         format!("{conn_info:?}")
     } else {
-        "No connection info available".to_string()
+        "No connection info available".to_owned()
     }
 }
 

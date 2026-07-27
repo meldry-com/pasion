@@ -375,7 +375,7 @@ fn render_get_link_outcome(
                 .consume_link(link_id)
                 .map_err(|e| RouteError::Internal(e.into()))?
                 .save(cookie_jar, clock);
-            let cookie_jar = registrations.add(&registration).save(cookie_jar, clock);
+            let cookie_jar = registrations.insert(&registration).save(cookie_jar, clock);
 
             REGISTRATION_COUNTER.add(1, &[KeyValue::new(PROVIDER, provider_id.to_string())]);
 
@@ -446,7 +446,7 @@ fn render_post_link_outcome(
                 .consume_link(link_id)
                 .map_err(|e| RouteError::Internal(e.into()))?
                 .save(cookie_jar, clock);
-            let cookie_jar = registrations.add(&registration).save(cookie_jar, clock);
+            let cookie_jar = registrations.insert(&registration).save(cookie_jar, clock);
 
             REGISTRATION_COUNTER.add(1, &[KeyValue::new(PROVIDER, provider_id.to_string())]);
 

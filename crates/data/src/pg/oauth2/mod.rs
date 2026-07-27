@@ -24,7 +24,6 @@ mod tests {
     };
     use pasion_data::{
         AuthorizationCode, Clock, Pagination, RepositoryAccess as _, RepositoryFactory as _,
-        RepositoryTransaction as _,
         clock::MockClock,
         oauth2::{OAuth2DeviceCodeGrantParams, OAuth2SessionFilter, OAuth2SessionRepository},
     };

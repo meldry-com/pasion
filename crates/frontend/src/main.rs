@@ -24,6 +24,7 @@ const MAIN_CSS: Asset = asset!("/assets/main.css");
 pub struct SiteConfigContext(pub Resource<Result<SiteConfig, String>>);
 
 /// Read the shared site-config resource from context.
+#[must_use]
 pub fn use_site_config() -> SiteConfigContext {
     use_context::<SiteConfigContext>()
 }

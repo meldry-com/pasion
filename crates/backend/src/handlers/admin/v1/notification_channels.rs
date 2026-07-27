@@ -47,11 +47,11 @@ pub async fn handler(req: &mut Request, depot: &Depot) -> JsonResult<Notificatio
 
     let channels = vec![
         ChannelStatus {
-            channel: "email".to_string(),
+            channel: "email".to_owned(),
             configured: email_configured,
         },
         ChannelStatus {
-            channel: "sms".to_string(),
+            channel: "sms".to_owned(),
             configured: sms_configured,
         },
     ];

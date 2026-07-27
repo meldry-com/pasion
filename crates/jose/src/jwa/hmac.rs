@@ -1,63 +1,62 @@
 use std::marker::PhantomData;
 
-use digest::{
-    Digest, Mac, OutputSizeUser,
-    crypto_common::BlockSizeUser,
-    generic_array::{ArrayLength, GenericArray},
-};
+use digest::{Digest, Mac, OutputSizeUser, crypto_common::BlockSizeUser, typenum::Unsigned};
 use signature::{Signer, Verifier};
 use thiserror::Error;
 
-pub struct Signature<S: ArrayLength<u8>> {
-    signature: GenericArray<u8, S>,
+pub struct Signature<S> {
+    signature: Vec<u8>,
+    size: PhantomData<S>,
 }
 
-impl<S: ArrayLength<u8>> PartialEq for Signature<S> {
+impl<S> PartialEq for Signature<S> {
     fn eq(&self, other: &Self) -> bool {
         self.signature == other.signature
     }
 }
 
-impl<S: ArrayLength<u8>> Eq for Signature<S> {}
+impl<S> Eq for Signature<S> {}
 
-impl<S: ArrayLength<u8>> std::fmt::Debug for Signature<S> {
+impl<S> std::fmt::Debug for Signature<S> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "{:?}", self.signature)
     }
 }
 
-impl<S: ArrayLength<u8>> Clone for Signature<S> {
+impl<S> Clone for Signature<S> {
     fn clone(&self) -> Self {
         Self {
             signature: self.signature.clone(),
+            size: PhantomData,
         }
     }
 }
 
-impl<S: ArrayLength<u8>> From<Signature<S>> for GenericArray<u8, S> {
+impl<S> From<Signature<S>> for Vec<u8> {
     fn from(val: Signature<S>) -> Self {
         val.signature
     }
 }
 
-impl<'a, S: ArrayLength<u8>> TryFrom<&'a [u8]> for Signature<S> {
+impl<S: Unsigned> TryFrom<&[u8]> for Signature<S> {
     type Error = InvalidLength;
 
-    fn try_from(value: &'a [u8]) -> Result<Self, Self::Error> {
-        if value.len() != S::to_usize() {
+    fn try_from(value: &[u8]) -> Result<Self, Self::Error> {
+        if value.len() != S::USIZE {
             return Err(InvalidLength);
         }
-        let mut signature = GenericArray::default();
-        signature.copy_from_slice(value);
-        Ok(Self { signature })
+        Ok(Self {
+            signature: value.to_vec(),
+            size: PhantomData,
+        })
     }
 }
 
-impl<S: ArrayLength<u8>> signature::SignatureEncoding for Signature<S> {
-    type Repr = GenericArray<u8, S>;
+impl<S: Unsigned> signature::SignatureEncoding for Signature<S> {
+    type Repr = Vec<u8>;
 }
 
-impl<S: ArrayLength<u8>> AsRef<[u8]> for Signature<S> {
+impl<S> AsRef<[u8]> for Signature<S> {
     fn as_ref(&self) -> &[u8] {
         self.signature.as_ref()
     }
@@ -101,8 +100,11 @@ impl<D: Digest + BlockSizeUser>
         let mut mac = <hmac::SimpleHmac<D> as Mac>::new_from_slice(&self.key)
             .map_err(signature::Error::from_source)?;
         mac.update(msg);
-        let signature = mac.finalize().into_bytes();
-        Ok(Signature { signature })
+        let signature = mac.finalize().into_bytes().to_vec();
+        Ok(Signature {
+            signature,
+            size: PhantomData,
+        })
     }
 }
 
