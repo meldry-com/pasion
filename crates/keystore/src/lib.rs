@@ -17,7 +17,7 @@ use pasion_jose::{
 };
 use pem_rfc7468::PemLabel;
 use pkcs1::EncodeRsaPrivateKey;
-use pkcs8::{AssociatedOid, DecodePrivateKey, PrivateKeyInfo};
+use pkcs8::{AssociatedOid, PrivateKeyInfo};
 use rand_core::{CryptoRng, RngCore};
 use rsa::BigUint;
 use thiserror::Error;
@@ -132,6 +132,12 @@ impl LoadError {
 const ED25519_ALGORITHM_OID: const_oid::ObjectIdentifier =
     const_oid::ObjectIdentifier::new_unwrap("1.3.101.112");
 
+fn ed25519_pkcs8_der(key: &ed25519_dalek::SigningKey) -> Result<Zeroizing<Vec<u8>>, pkcs8::Error> {
+    ed25519_dalek::pkcs8::EncodePrivateKey::to_pkcs8_der(key)
+        .map(|document| document.to_bytes())
+        .map_err(|_| pkcs8::Error::KeyMalformed)
+}
+
 /// A single private key
 #[non_exhaustive]
 #[derive(Debug)]
@@ -190,7 +196,11 @@ fn parse_pkcs8_key_info(info: PrivateKeyInfo) -> Result<PrivateKey, LoadError> {
 
     if algo_oid == ED25519_ALGORITHM_OID {
         let serialized = info.to_der()?;
-        let signing_key = ed25519_dalek::SigningKey::from_pkcs8_der(&serialized)?;
+        let signing_key =
+            <ed25519_dalek::SigningKey as ed25519_dalek::pkcs8::DecodePrivateKey>::from_pkcs8_der(
+                &serialized,
+            )
+            .map_err(|_| pkcs8::Error::KeyMalformed)?;
         return Ok(PrivateKey::OkpEd25519(Box::new(signing_key)));
     }
 
@@ -292,7 +302,7 @@ impl PrivateKey {
             Self::EcP384(k) => Ok(ec_to_sec1_der(k)?),
             Self::EcP521(k) => Ok(ec_to_sec1_der(k)?),
             Self::EcK256(k) => Ok(ec_to_sec1_der(k)?),
-            Self::OkpEd25519(k) => Ok(k.to_pkcs8_der()?.to_bytes()),
+            Self::OkpEd25519(k) => Ok(ed25519_pkcs8_der(k)?),
         }
     }
 
@@ -302,15 +312,14 @@ impl PrivateKey {
     ///
     /// Returns an error if the encoding failed
     pub fn to_pkcs8_der(&self) -> Result<Zeroizing<Vec<u8>>, pkcs8::Error> {
-        let doc = match self {
-            Self::Rsa(k) => k.to_pkcs8_der()?,
-            Self::EcP256(k) => k.to_pkcs8_der()?,
-            Self::EcP384(k) => k.to_pkcs8_der()?,
-            Self::EcP521(k) => k.to_pkcs8_der()?,
-            Self::EcK256(k) => k.to_pkcs8_der()?,
-            Self::OkpEd25519(k) => k.to_pkcs8_der()?,
-        };
-        Ok(doc.to_bytes())
+        match self {
+            Self::Rsa(k) => Ok(k.to_pkcs8_der()?.to_bytes()),
+            Self::EcP256(k) => Ok(k.to_pkcs8_der()?.to_bytes()),
+            Self::EcP384(k) => Ok(k.to_pkcs8_der()?.to_bytes()),
+            Self::EcP521(k) => Ok(k.to_pkcs8_der()?.to_bytes()),
+            Self::EcK256(k) => Ok(k.to_pkcs8_der()?.to_bytes()),
+            Self::OkpEd25519(k) => ed25519_pkcs8_der(k),
+        }
     }
 
     /// Serialize the key as a PEM document
@@ -332,7 +341,14 @@ impl PrivateKey {
             Self::EcP384(k) => Ok(ec_to_sec1_pem(k, line_ending)?),
             Self::EcP521(k) => Ok(ec_to_sec1_pem(k, line_ending)?),
             Self::EcK256(k) => Ok(ec_to_sec1_pem(k, line_ending)?),
-            Self::OkpEd25519(k) => Ok(k.to_pkcs8_pem(line_ending)?),
+            Self::OkpEd25519(k) => {
+                let der = ed25519_pkcs8_der(k)?;
+                Ok(Zeroizing::new(pem_rfc7468::encode_string(
+                    "PRIVATE KEY",
+                    line_ending,
+                    &der,
+                )?))
+            }
         }
     }
 
@@ -654,7 +670,9 @@ impl PrivateKey {
 
     /// Generate an Ed25519 key.
     pub fn generate_ed25519<R: RngCore + CryptoRng>(mut rng: R) -> Self {
-        Self::OkpEd25519(Box::new(ed25519_dalek::SigningKey::generate(&mut rng)))
+        let mut bytes = Zeroizing::new([0_u8; 32]);
+        rng.fill_bytes(&mut *bytes);
+        Self::OkpEd25519(Box::new(ed25519_dalek::SigningKey::from_bytes(&bytes)))
     }
 }
 

@@ -1,10 +1,11 @@
 use digest::Digest;
+use ed25519_dalek::{Signer as _, Verifier as _};
 use elliptic_curve::sec1::ToEncodedPoint;
 use pasion_iana::jose::{
     JsonWebKeyEcEllipticCurve, JsonWebKeyOkpEllipticCurve, JsonWebSignatureAlg,
 };
 use sha2::{Sha256, Sha384, Sha512};
-use signature::{Signer as _, rand_core::CryptoRngCore};
+use signature::{SignatureEncoding as _, rand_core::CryptoRngCore};
 use thiserror::Error;
 
 use super::signature::Signature;
@@ -331,7 +332,7 @@ impl signature::RandomizedSigner<Signature> for AsymmetricSigningKey {
             }
             Self::EdDsa(key) => {
                 let signature: ed25519_dalek::Signature = key.sign(msg);
-                Ok(Signature::from_signature(&signature))
+                Ok(Signature::from(signature.to_bytes().as_slice()))
             }
         }
     }
@@ -617,8 +618,11 @@ impl signature::Verifier<Signature> for AsymmetricVerifyingKey {
                 key.verify(msg, &signature)
             }
             Self::EdDsa(key) => {
-                let signature: ed25519_dalek::Signature = signature.to_signature()?;
+                let bytes = signature.to_bytes();
+                let signature = ed25519_dalek::Signature::try_from(bytes.as_ref())
+                    .map_err(|_| signature::Error::default())?;
                 key.verify(msg, &signature)
+                    .map_err(|_| signature::Error::default())
             }
         }
     }
