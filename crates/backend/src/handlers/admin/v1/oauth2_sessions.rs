@@ -354,10 +354,64 @@ pub async fn list_sessions(
 mod tests {
     use chrono::Duration;
     use hyper::{Request, StatusCode};
-    use pasion_data::{AccessToken, Clock as _};
+    use oauth2_types::requests::GrantType;
+    use pasion_data::{Clock as _, RepositoryAccess as _};
     use ulid::Ulid;
 
     use crate::handlers::test_utils::{RequestBuilderExt, ResponseExt, TestState, setup};
+
+    async fn create_oauth2_session(state: &TestState) -> Ulid {
+        let mut repo = state.repository().await.unwrap();
+        let mut rng = state.rng();
+        let client = repo
+            .oauth2_client()
+            .add(
+                &mut rng,
+                &state.clock,
+                vec![],
+                None,
+                None,
+                None,
+                vec![GrantType::AuthorizationCode],
+                Some("Test client".to_owned()),
+                None,
+                None,
+                None,
+                None,
+                None,
+                None,
+                None,
+                None,
+                None,
+                None,
+                None,
+            )
+            .await
+            .unwrap();
+        let user = repo
+            .user()
+            .add(&mut rng, &state.clock, "oauth-session-user".to_owned())
+            .await
+            .unwrap();
+        let browser_session = repo
+            .browser_session()
+            .add(&mut rng, &state.clock, &user, None)
+            .await
+            .unwrap();
+        let session = repo
+            .oauth2_session()
+            .add_from_browser_session(
+                &mut rng,
+                &state.clock,
+                &client,
+                &browser_session,
+                "urn:pasion:admin".parse().unwrap(),
+            )
+            .await
+            .unwrap();
+        repo.save().await.unwrap();
+        session.id
+    }
 
     #[tokio::test]
     async fn test_finish_session() {
@@ -366,15 +420,7 @@ mod tests {
         let mut state = TestState::from_pool(pool.clone()).await.unwrap();
         let token = state.token_with_scope("urn:pasion:admin").await;
 
-        // Get the session ID from the token we just created
-        let mut repo = state.repository().await.unwrap();
-        let AccessToken { session_id, .. } = repo
-            .oauth2_access_token()
-            .find_by_token(&token)
-            .await
-            .unwrap()
-            .unwrap();
-        repo.save().await.unwrap();
+        let session_id = create_oauth2_session(&state).await;
 
         let request = Request::post(format!("/api/admin/v1/oauth2-sessions/{session_id}/finish"))
             .bearer(&token)
@@ -399,18 +445,9 @@ mod tests {
         // Create first admin token for the API call
         let admin_token = state.token_with_scope("urn:pasion:admin").await;
 
-        // Create a second admin session that we'll finish
-        let second_admin_token = state.token_with_scope("urn:pasion:admin").await;
-
-        // Get the second session and finish it first
+        // Create an OAuth 2.0 session that we'll finish
+        let session_id = create_oauth2_session(&state).await;
         let mut repo = state.repository().await.unwrap();
-        let AccessToken { session_id, .. } = repo
-            .oauth2_access_token()
-            .find_by_token(&second_admin_token)
-            .await
-            .unwrap()
-            .unwrap();
-
         let session = repo
             .oauth2_session()
             .lookup(session_id)
@@ -475,15 +512,7 @@ mod tests {
         let mut state = TestState::from_pool(pool.clone()).await.unwrap();
         let token = state.token_with_scope("urn:pasion:admin").await;
 
-        // state.token_with_scope did create a session, so we can get it here
-        let mut repo = state.repository().await.unwrap();
-        let AccessToken { session_id, .. } = repo
-            .oauth2_access_token()
-            .find_by_token(&token)
-            .await
-            .unwrap()
-            .unwrap();
-        repo.save().await.unwrap();
+        let session_id = create_oauth2_session(&state).await;
 
         let request = Request::get(format!("/api/admin/v1/oauth2-sessions/{session_id}"))
             .bearer(&token)
@@ -496,13 +525,13 @@ mod tests {
         {
           "data": {
             "type": "oauth2-session",
-            "id": "01FSHN9AG0MKGTBNZ16RDR3PVY",
+            "id": "01FSHN9AG0F6VTN5NGKKTTP33J",
             "attributes": {
               "created_at": "2022-01-16T14:40:00Z",
               "finished_at": null,
-              "user_id": null,
-              "user_session_id": null,
-              "client_id": "01FSHN9AG0FAQ50MT1E9FFRPZR",
+              "user_id": "01FSHN9AG0ENBAKZ975MGMHW1B",
+              "user_session_id": "01FSHN9AG0FGRV6R6CZ6P45NRB",
+              "client_id": "01FSHN9AG0E6J8AS3YVE0HPDQ1",
               "scope": "urn:pasion:admin",
               "user_agent": null,
               "last_active_at": null,
@@ -510,11 +539,11 @@ mod tests {
               "human_name": null
             },
             "links": {
-              "self": "/api/admin/v1/oauth2-sessions/01FSHN9AG0MKGTBNZ16RDR3PVY"
+              "self": "/api/admin/v1/oauth2-sessions/01FSHN9AG0F6VTN5NGKKTTP33J"
             }
           },
           "links": {
-            "self": "/api/admin/v1/oauth2-sessions/01FSHN9AG0MKGTBNZ16RDR3PVY"
+            "self": "/api/admin/v1/oauth2-sessions/01FSHN9AG0F6VTN5NGKKTTP33J"
           }
         }
         "#);
@@ -542,7 +571,7 @@ mod tests {
         let mut state = TestState::from_pool(pool.clone()).await.unwrap();
         let token = state.token_with_scope("urn:pasion:admin").await;
 
-        // We already have a session because of the token above
+        create_oauth2_session(&state).await;
         let request = Request::get("/api/admin/v1/oauth2-sessions")
             .bearer(&token)
             .empty();
@@ -557,13 +586,13 @@ mod tests {
           "data": [
             {
               "type": "oauth2-session",
-              "id": "01FSHN9AG0MKGTBNZ16RDR3PVY",
+              "id": "01FSHN9AG0F6VTN5NGKKTTP33J",
               "attributes": {
                 "created_at": "2022-01-16T14:40:00Z",
                 "finished_at": null,
-                "user_id": null,
-                "user_session_id": null,
-                "client_id": "01FSHN9AG0FAQ50MT1E9FFRPZR",
+                "user_id": "01FSHN9AG0ENBAKZ975MGMHW1B",
+                "user_session_id": "01FSHN9AG0FGRV6R6CZ6P45NRB",
+                "client_id": "01FSHN9AG0E6J8AS3YVE0HPDQ1",
                 "scope": "urn:pasion:admin",
                 "user_agent": null,
                 "last_active_at": null,
@@ -571,11 +600,11 @@ mod tests {
                 "human_name": null
               },
               "links": {
-                "self": "/api/admin/v1/oauth2-sessions/01FSHN9AG0MKGTBNZ16RDR3PVY"
+                "self": "/api/admin/v1/oauth2-sessions/01FSHN9AG0F6VTN5NGKKTTP33J"
               },
               "meta": {
                 "page": {
-                  "cursor": "01FSHN9AG0MKGTBNZ16RDR3PVY"
+                  "cursor": "01FSHN9AG0F6VTN5NGKKTTP33J"
                 }
               }
             }
@@ -600,13 +629,13 @@ mod tests {
           "data": [
             {
               "type": "oauth2-session",
-              "id": "01FSHN9AG0MKGTBNZ16RDR3PVY",
+              "id": "01FSHN9AG0F6VTN5NGKKTTP33J",
               "attributes": {
                 "created_at": "2022-01-16T14:40:00Z",
                 "finished_at": null,
-                "user_id": null,
-                "user_session_id": null,
-                "client_id": "01FSHN9AG0FAQ50MT1E9FFRPZR",
+                "user_id": "01FSHN9AG0ENBAKZ975MGMHW1B",
+                "user_session_id": "01FSHN9AG0FGRV6R6CZ6P45NRB",
+                "client_id": "01FSHN9AG0E6J8AS3YVE0HPDQ1",
                 "scope": "urn:pasion:admin",
                 "user_agent": null,
                 "last_active_at": null,
@@ -614,11 +643,11 @@ mod tests {
                 "human_name": null
               },
               "links": {
-                "self": "/api/admin/v1/oauth2-sessions/01FSHN9AG0MKGTBNZ16RDR3PVY"
+                "self": "/api/admin/v1/oauth2-sessions/01FSHN9AG0F6VTN5NGKKTTP33J"
               },
               "meta": {
                 "page": {
-                  "cursor": "01FSHN9AG0MKGTBNZ16RDR3PVY"
+                  "cursor": "01FSHN9AG0F6VTN5NGKKTTP33J"
                 }
               }
             }

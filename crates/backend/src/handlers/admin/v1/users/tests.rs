@@ -190,59 +190,91 @@ async fn test_list_users() {
     response.assert_status(StatusCode::OK);
     let body: serde_json::Value = response.json();
     insta::assert_json_snapshot!(body, @r#"
+    {
+      "meta": {
+        "count": 3
+      },
+      "data": [
         {
-          "meta": {
-            "count": 2
+          "type": "user",
+          "id": "01FSHN9AG0E6J8AS3YVE0HPDQ1",
+          "attributes": {
+            "username": "alice",
+            "created_at": "2022-01-16T14:40:00Z",
+            "updated_at": "2022-01-16T14:40:00Z",
+            "locked_at": null,
+            "deactivated_at": null,
+            "admin": false,
+            "legacy_guest": false,
+            "display_name": null,
+            "avatar_url": null,
+            "preferred_locale": null
           },
-          "data": [
-            {
-              "type": "user",
-              "id": "01FSHN9AG0AJ6AC5HQ9X6H4RP4",
-              "attributes": {
-                "username": "bob",
-                "created_at": "2022-01-16T14:40:00Z",
-                "locked_at": null,
-                "deactivated_at": null,
-                "admin": false,
-                "legacy_guest": false
-              },
-              "links": {
-                "self": "/api/admin/v1/users/01FSHN9AG0AJ6AC5HQ9X6H4RP4"
-              },
-              "meta": {
-                "page": {
-                  "cursor": "01FSHN9AG0AJ6AC5HQ9X6H4RP4"
-                }
-              }
-            },
-            {
-              "type": "user",
-              "id": "01FSHN9AG0MZAA6S4AF7CTV32E",
-              "attributes": {
-                "username": "alice",
-                "created_at": "2022-01-16T14:40:00Z",
-                "locked_at": null,
-                "deactivated_at": null,
-                "admin": false,
-                "legacy_guest": false
-              },
-              "links": {
-                "self": "/api/admin/v1/users/01FSHN9AG0MZAA6S4AF7CTV32E"
-              },
-              "meta": {
-                "page": {
-                  "cursor": "01FSHN9AG0MZAA6S4AF7CTV32E"
-                }
-              }
-            }
-          ],
           "links": {
-            "self": "/api/admin/v1/users?page[first]=10",
-            "first": "/api/admin/v1/users?page[first]=10",
-            "last": "/api/admin/v1/users?page[last]=10"
+            "self": "/api/admin/v1/users/01FSHN9AG0E6J8AS3YVE0HPDQ1"
+          },
+          "meta": {
+            "page": {
+              "cursor": "01FSHN9AG0E6J8AS3YVE0HPDQ1"
+            }
+          }
+        },
+        {
+          "type": "user",
+          "id": "01FSHN9AG0E7D8TD7WYMBZJCS3",
+          "attributes": {
+            "username": "admin11399879390506077148",
+            "created_at": "2022-01-16T14:40:00Z",
+            "updated_at": "2022-01-16T14:40:00Z",
+            "locked_at": null,
+            "deactivated_at": null,
+            "admin": false,
+            "legacy_guest": false,
+            "display_name": null,
+            "avatar_url": null,
+            "preferred_locale": null
+          },
+          "links": {
+            "self": "/api/admin/v1/users/01FSHN9AG0E7D8TD7WYMBZJCS3"
+          },
+          "meta": {
+            "page": {
+              "cursor": "01FSHN9AG0E7D8TD7WYMBZJCS3"
+            }
+          }
+        },
+        {
+          "type": "user",
+          "id": "01FSHN9AG0ENBAKZ975MGMHW1B",
+          "attributes": {
+            "username": "bob",
+            "created_at": "2022-01-16T14:40:00Z",
+            "updated_at": "2022-01-16T14:40:00Z",
+            "locked_at": null,
+            "deactivated_at": null,
+            "admin": false,
+            "legacy_guest": false,
+            "display_name": null,
+            "avatar_url": null,
+            "preferred_locale": null
+          },
+          "links": {
+            "self": "/api/admin/v1/users/01FSHN9AG0ENBAKZ975MGMHW1B"
+          },
+          "meta": {
+            "page": {
+              "cursor": "01FSHN9AG0ENBAKZ975MGMHW1B"
+            }
           }
         }
-        "#);
+      ],
+      "links": {
+        "self": "/api/admin/v1/users?page[first]=10",
+        "first": "/api/admin/v1/users?page[first]=10",
+        "last": "/api/admin/v1/users?page[last]=10"
+      }
+    }
+    "#);
 
     // Test count=false
     let request = Request::get("/api/admin/v1/users?count=false")
@@ -252,56 +284,88 @@ async fn test_list_users() {
     response.assert_status(StatusCode::OK);
     let body: serde_json::Value = response.json();
     insta::assert_json_snapshot!(body, @r#"
+    {
+      "data": [
         {
-          "data": [
-            {
-              "type": "user",
-              "id": "01FSHN9AG0AJ6AC5HQ9X6H4RP4",
-              "attributes": {
-                "username": "bob",
-                "created_at": "2022-01-16T14:40:00Z",
-                "locked_at": null,
-                "deactivated_at": null,
-                "admin": false,
-                "legacy_guest": false
-              },
-              "links": {
-                "self": "/api/admin/v1/users/01FSHN9AG0AJ6AC5HQ9X6H4RP4"
-              },
-              "meta": {
-                "page": {
-                  "cursor": "01FSHN9AG0AJ6AC5HQ9X6H4RP4"
-                }
-              }
-            },
-            {
-              "type": "user",
-              "id": "01FSHN9AG0MZAA6S4AF7CTV32E",
-              "attributes": {
-                "username": "alice",
-                "created_at": "2022-01-16T14:40:00Z",
-                "locked_at": null,
-                "deactivated_at": null,
-                "admin": false,
-                "legacy_guest": false
-              },
-              "links": {
-                "self": "/api/admin/v1/users/01FSHN9AG0MZAA6S4AF7CTV32E"
-              },
-              "meta": {
-                "page": {
-                  "cursor": "01FSHN9AG0MZAA6S4AF7CTV32E"
-                }
-              }
-            }
-          ],
+          "type": "user",
+          "id": "01FSHN9AG0E6J8AS3YVE0HPDQ1",
+          "attributes": {
+            "username": "alice",
+            "created_at": "2022-01-16T14:40:00Z",
+            "updated_at": "2022-01-16T14:40:00Z",
+            "locked_at": null,
+            "deactivated_at": null,
+            "admin": false,
+            "legacy_guest": false,
+            "display_name": null,
+            "avatar_url": null,
+            "preferred_locale": null
+          },
           "links": {
-            "self": "/api/admin/v1/users?count=false&page[first]=10",
-            "first": "/api/admin/v1/users?count=false&page[first]=10",
-            "last": "/api/admin/v1/users?count=false&page[last]=10"
+            "self": "/api/admin/v1/users/01FSHN9AG0E6J8AS3YVE0HPDQ1"
+          },
+          "meta": {
+            "page": {
+              "cursor": "01FSHN9AG0E6J8AS3YVE0HPDQ1"
+            }
+          }
+        },
+        {
+          "type": "user",
+          "id": "01FSHN9AG0E7D8TD7WYMBZJCS3",
+          "attributes": {
+            "username": "admin11399879390506077148",
+            "created_at": "2022-01-16T14:40:00Z",
+            "updated_at": "2022-01-16T14:40:00Z",
+            "locked_at": null,
+            "deactivated_at": null,
+            "admin": false,
+            "legacy_guest": false,
+            "display_name": null,
+            "avatar_url": null,
+            "preferred_locale": null
+          },
+          "links": {
+            "self": "/api/admin/v1/users/01FSHN9AG0E7D8TD7WYMBZJCS3"
+          },
+          "meta": {
+            "page": {
+              "cursor": "01FSHN9AG0E7D8TD7WYMBZJCS3"
+            }
+          }
+        },
+        {
+          "type": "user",
+          "id": "01FSHN9AG0ENBAKZ975MGMHW1B",
+          "attributes": {
+            "username": "bob",
+            "created_at": "2022-01-16T14:40:00Z",
+            "updated_at": "2022-01-16T14:40:00Z",
+            "locked_at": null,
+            "deactivated_at": null,
+            "admin": false,
+            "legacy_guest": false,
+            "display_name": null,
+            "avatar_url": null,
+            "preferred_locale": null
+          },
+          "links": {
+            "self": "/api/admin/v1/users/01FSHN9AG0ENBAKZ975MGMHW1B"
+          },
+          "meta": {
+            "page": {
+              "cursor": "01FSHN9AG0ENBAKZ975MGMHW1B"
+            }
           }
         }
-        "#);
+      ],
+      "links": {
+        "self": "/api/admin/v1/users?count=false&page[first]=10",
+        "first": "/api/admin/v1/users?count=false&page[first]=10",
+        "last": "/api/admin/v1/users?count=false&page[last]=10"
+      }
+    }
+    "#);
 
     // Test count=only
     let request = Request::get("/api/admin/v1/users?count=only")
@@ -310,16 +374,16 @@ async fn test_list_users() {
     let response = state.request(request).await;
     response.assert_status(StatusCode::OK);
     let body: serde_json::Value = response.json();
-    insta::assert_json_snapshot!(body, @r###"
-        {
-          "meta": {
-            "count": 2
-          },
-          "links": {
-            "self": "/api/admin/v1/users?count=only"
-          }
-        }
-        "###);
+    insta::assert_json_snapshot!(body, @r#"
+    {
+      "meta": {
+        "count": 3
+      },
+      "links": {
+        "self": "/api/admin/v1/users?count=only"
+      }
+    }
+    "#);
 
     // Test count=false with filtering
     let request = Request::get("/api/admin/v1/users?count=false&filter[search]=alice")
@@ -329,36 +393,40 @@ async fn test_list_users() {
     response.assert_status(StatusCode::OK);
     let body: serde_json::Value = response.json();
     insta::assert_json_snapshot!(body, @r#"
+    {
+      "data": [
         {
-          "data": [
-            {
-              "type": "user",
-              "id": "01FSHN9AG0MZAA6S4AF7CTV32E",
-              "attributes": {
-                "username": "alice",
-                "created_at": "2022-01-16T14:40:00Z",
-                "locked_at": null,
-                "deactivated_at": null,
-                "admin": false,
-                "legacy_guest": false
-              },
-              "links": {
-                "self": "/api/admin/v1/users/01FSHN9AG0MZAA6S4AF7CTV32E"
-              },
-              "meta": {
-                "page": {
-                  "cursor": "01FSHN9AG0MZAA6S4AF7CTV32E"
-                }
-              }
-            }
-          ],
+          "type": "user",
+          "id": "01FSHN9AG0E6J8AS3YVE0HPDQ1",
+          "attributes": {
+            "username": "alice",
+            "created_at": "2022-01-16T14:40:00Z",
+            "updated_at": "2022-01-16T14:40:00Z",
+            "locked_at": null,
+            "deactivated_at": null,
+            "admin": false,
+            "legacy_guest": false,
+            "display_name": null,
+            "avatar_url": null,
+            "preferred_locale": null
+          },
           "links": {
-            "self": "/api/admin/v1/users?filter[search]=alice&count=false&page[first]=10",
-            "first": "/api/admin/v1/users?filter[search]=alice&count=false&page[first]=10",
-            "last": "/api/admin/v1/users?filter[search]=alice&count=false&page[last]=10"
+            "self": "/api/admin/v1/users/01FSHN9AG0E6J8AS3YVE0HPDQ1"
+          },
+          "meta": {
+            "page": {
+              "cursor": "01FSHN9AG0E6J8AS3YVE0HPDQ1"
+            }
           }
         }
-        "#);
+      ],
+      "links": {
+        "self": "/api/admin/v1/users?filter[search]=alice&count=false&page[first]=10",
+        "first": "/api/admin/v1/users?filter[search]=alice&count=false&page[first]=10",
+        "last": "/api/admin/v1/users?filter[search]=alice&count=false&page[last]=10"
+      }
+    }
+    "#);
 
     // Test count=only with filtering
     let request = Request::get("/api/admin/v1/users?count=only&filter[search]=alice")

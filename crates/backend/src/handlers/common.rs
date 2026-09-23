@@ -366,11 +366,32 @@ impl DepotExt for Depot {
     }
 }
 
+#[cfg(test)]
+tokio::task_local! {
+    pub(crate) static TEST_CLOCK: Arc<pasion_data::clock::MockClock>;
+}
+
+#[cfg(test)]
+tokio::task_local! {
+    pub(crate) static TEST_RNG: Arc<std::sync::Mutex<ChaChaRng>>;
+}
+
 pub fn make_clock() -> BoxClock {
+    #[cfg(test)]
+    if let Ok(clock) = TEST_CLOCK.try_with(Arc::clone) {
+        return Box::new(clock);
+    }
     Box::new(SystemClock::default())
 }
 
 pub fn make_rng() -> BoxRng {
+    #[cfg(test)]
+    if let Ok(rng) = TEST_RNG.try_with(|parent| {
+        let mut parent = parent.lock().expect("test RNG lock poisoned");
+        ChaChaRng::from_rng(&mut *parent).expect("could not derive test RNG")
+    }) {
+        return Box::new(rng);
+    }
     let rng = ChaChaRng::from_rng(rand_core::OsRng).expect("Failed to seed rng");
     Box::new(rng)
 }

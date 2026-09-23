@@ -33,9 +33,10 @@ jobs:
       - name: Fetch repository
         uses: actions/checkout@v7
 
-      - name: Set up nightly Rust for rustfmt
-        uses: dtolnay/rust-toolchain@nightly
+      - name: Set up pinned nightly Rust for rustfmt
+        uses: dtolnay/rust-toolchain@master
         with:
+          toolchain: nightly-2026-08-26
           components: rustfmt
 
       - name: Verify formatting
@@ -53,8 +54,8 @@ jobs:
       - name: Fetch repository
         uses: actions/checkout@v7
 
-      - name: Set up Rust 1.94.0 with Clippy
-        uses: dtolnay/rust-toolchain@1.100.0
+      - name: Set up stable Rust with Clippy
+        uses: dtolnay/rust-toolchain@stable
         with:
           components: clippy
 
@@ -152,7 +153,7 @@ jobs:
           tool: cargo-nextest
 
       - name: Compile and archive test binaries
-        run: cargo nextest archive --workspace --archive-file nextest-archive.tar.zst
+        run: cargo nextest archive --workspace --features pasion-backend/cedar --archive-file nextest-archive.tar.zst
 
       - name: Store nextest archive
         uses: actions/upload-artifact@v7.0.1
@@ -182,6 +183,7 @@ jobs:
         ports:
           - "5432:5432"
         options: >-
+          --shm-size=1g
           --health-cmd pg_isready
           --health-interval 10s
           --health-timeout 5s

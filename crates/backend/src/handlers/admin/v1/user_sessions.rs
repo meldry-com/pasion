@@ -359,28 +359,28 @@ mod tests {
         let response = state.request(request).await;
         response.assert_status(StatusCode::OK);
         let body: serde_json::Value = response.json();
-        assert_json_snapshot!(body, @r###"
+        assert_json_snapshot!(body, @r#"
         {
           "data": {
             "type": "user-session",
-            "id": "01FSHN9AG0AJ6AC5HQ9X6H4RP4",
+            "id": "01FSHN9AG0ENBAKZ975MGMHW1B",
             "attributes": {
               "created_at": "2022-01-16T14:40:00Z",
               "finished_at": null,
-              "user_id": "01FSHN9AG0MZAA6S4AF7CTV32E",
+              "user_id": "01FSHN9AG0E6J8AS3YVE0HPDQ1",
               "user_agent": null,
               "last_active_at": null,
               "last_active_ip": null
             },
             "links": {
-              "self": "/api/admin/v1/user-sessions/01FSHN9AG0AJ6AC5HQ9X6H4RP4"
+              "self": "/api/admin/v1/user-sessions/01FSHN9AG0ENBAKZ975MGMHW1B"
             }
           },
           "links": {
-            "self": "/api/admin/v1/user-sessions/01FSHN9AG0AJ6AC5HQ9X6H4RP4"
+            "self": "/api/admin/v1/user-sessions/01FSHN9AG0ENBAKZ975MGMHW1B"
           }
         }
-        "###);
+        "#);
     }
 
     #[tokio::test]
@@ -438,41 +438,41 @@ mod tests {
           "data": [
             {
               "type": "user-session",
-              "id": "01FSHNB5309NMZYX8MFYH578R9",
+              "id": "01FSHNB530F6VTN5NGKKTTP33J",
               "attributes": {
                 "created_at": "2022-01-16T14:41:00Z",
-                "finished_at": null,
-                "user_id": "01FSHN9AG0MZAA6S4AF7CTV32E",
+                "finished_at": "2022-01-16T14:42:00Z",
+                "user_id": "01FSHNB530ENBAKZ975MGMHW1B",
                 "user_agent": null,
                 "last_active_at": null,
                 "last_active_ip": null
               },
               "links": {
-                "self": "/api/admin/v1/user-sessions/01FSHNB5309NMZYX8MFYH578R9"
+                "self": "/api/admin/v1/user-sessions/01FSHNB530F6VTN5NGKKTTP33J"
               },
               "meta": {
                 "page": {
-                  "cursor": "01FSHN9AG0MZAA6S4AF7CTV32E"
+                  "cursor": "01FSHNB530F6VTN5NGKKTTP33J"
                 }
               }
             },
             {
               "type": "user-session",
-              "id": "01FSHNB530KEPHYQQXW9XPTX6Z",
+              "id": "01FSHNB530FGRV6R6CZ6P45NRB",
               "attributes": {
                 "created_at": "2022-01-16T14:41:00Z",
-                "finished_at": "2022-01-16T14:42:00Z",
-                "user_id": "01FSHNB530AJ6AC5HQ9X6H4RP4",
+                "finished_at": null,
+                "user_id": "01FSHN9AG0E6J8AS3YVE0HPDQ1",
                 "user_agent": null,
                 "last_active_at": null,
                 "last_active_ip": null
               },
               "links": {
-                "self": "/api/admin/v1/user-sessions/01FSHNB530KEPHYQQXW9XPTX6Z"
+                "self": "/api/admin/v1/user-sessions/01FSHNB530FGRV6R6CZ6P45NRB"
               },
               "meta": {
                 "page": {
-                  "cursor": "01FSHNB530AJ6AC5HQ9X6H4RP4"
+                  "cursor": "01FSHNB530FGRV6R6CZ6P45NRB"
                 }
               }
             }
@@ -503,29 +503,29 @@ mod tests {
           "data": [
             {
               "type": "user-session",
-              "id": "01FSHNB5309NMZYX8MFYH578R9",
+              "id": "01FSHNB530FGRV6R6CZ6P45NRB",
               "attributes": {
                 "created_at": "2022-01-16T14:41:00Z",
                 "finished_at": null,
-                "user_id": "01FSHN9AG0MZAA6S4AF7CTV32E",
+                "user_id": "01FSHN9AG0E6J8AS3YVE0HPDQ1",
                 "user_agent": null,
                 "last_active_at": null,
                 "last_active_ip": null
               },
               "links": {
-                "self": "/api/admin/v1/user-sessions/01FSHNB5309NMZYX8MFYH578R9"
+                "self": "/api/admin/v1/user-sessions/01FSHNB530FGRV6R6CZ6P45NRB"
               },
               "meta": {
                 "page": {
-                  "cursor": "01FSHN9AG0MZAA6S4AF7CTV32E"
+                  "cursor": "01FSHNB530FGRV6R6CZ6P45NRB"
                 }
               }
             }
           ],
           "links": {
-            "self": "/api/admin/v1/user-sessions?filter[user]=01FSHN9AG0MZAA6S4AF7CTV32E&page[first]=10",
-            "first": "/api/admin/v1/user-sessions?filter[user]=01FSHN9AG0MZAA6S4AF7CTV32E&page[first]=10",
-            "last": "/api/admin/v1/user-sessions?filter[user]=01FSHN9AG0MZAA6S4AF7CTV32E&page[last]=10"
+            "self": "/api/admin/v1/user-sessions?filter[user]=01FSHN9AG0E6J8AS3YVE0HPDQ1&page[first]=10",
+            "first": "/api/admin/v1/user-sessions?filter[user]=01FSHN9AG0E6J8AS3YVE0HPDQ1&page[first]=10",
+            "last": "/api/admin/v1/user-sessions?filter[user]=01FSHN9AG0E6J8AS3YVE0HPDQ1&page[last]=10"
           }
         }
         "#);
@@ -545,21 +545,21 @@ mod tests {
           "data": [
             {
               "type": "user-session",
-              "id": "01FSHNB5309NMZYX8MFYH578R9",
+              "id": "01FSHNB530FGRV6R6CZ6P45NRB",
               "attributes": {
                 "created_at": "2022-01-16T14:41:00Z",
                 "finished_at": null,
-                "user_id": "01FSHN9AG0MZAA6S4AF7CTV32E",
+                "user_id": "01FSHN9AG0E6J8AS3YVE0HPDQ1",
                 "user_agent": null,
                 "last_active_at": null,
                 "last_active_ip": null
               },
               "links": {
-                "self": "/api/admin/v1/user-sessions/01FSHNB5309NMZYX8MFYH578R9"
+                "self": "/api/admin/v1/user-sessions/01FSHNB530FGRV6R6CZ6P45NRB"
               },
               "meta": {
                 "page": {
-                  "cursor": "01FSHN9AG0MZAA6S4AF7CTV32E"
+                  "cursor": "01FSHNB530FGRV6R6CZ6P45NRB"
                 }
               }
             }
@@ -587,21 +587,21 @@ mod tests {
           "data": [
             {
               "type": "user-session",
-              "id": "01FSHNB530KEPHYQQXW9XPTX6Z",
+              "id": "01FSHNB530F6VTN5NGKKTTP33J",
               "attributes": {
                 "created_at": "2022-01-16T14:41:00Z",
                 "finished_at": "2022-01-16T14:42:00Z",
-                "user_id": "01FSHNB530AJ6AC5HQ9X6H4RP4",
+                "user_id": "01FSHNB530ENBAKZ975MGMHW1B",
                 "user_agent": null,
                 "last_active_at": null,
                 "last_active_ip": null
               },
               "links": {
-                "self": "/api/admin/v1/user-sessions/01FSHNB530KEPHYQQXW9XPTX6Z"
+                "self": "/api/admin/v1/user-sessions/01FSHNB530F6VTN5NGKKTTP33J"
               },
               "meta": {
                 "page": {
-                  "cursor": "01FSHNB530AJ6AC5HQ9X6H4RP4"
+                  "cursor": "01FSHNB530F6VTN5NGKKTTP33J"
                 }
               }
             }
@@ -626,41 +626,41 @@ mod tests {
           "data": [
             {
               "type": "user-session",
-              "id": "01FSHNB5309NMZYX8MFYH578R9",
+              "id": "01FSHNB530F6VTN5NGKKTTP33J",
               "attributes": {
                 "created_at": "2022-01-16T14:41:00Z",
-                "finished_at": null,
-                "user_id": "01FSHN9AG0MZAA6S4AF7CTV32E",
+                "finished_at": "2022-01-16T14:42:00Z",
+                "user_id": "01FSHNB530ENBAKZ975MGMHW1B",
                 "user_agent": null,
                 "last_active_at": null,
                 "last_active_ip": null
               },
               "links": {
-                "self": "/api/admin/v1/user-sessions/01FSHNB5309NMZYX8MFYH578R9"
+                "self": "/api/admin/v1/user-sessions/01FSHNB530F6VTN5NGKKTTP33J"
               },
               "meta": {
                 "page": {
-                  "cursor": "01FSHN9AG0MZAA6S4AF7CTV32E"
+                  "cursor": "01FSHNB530F6VTN5NGKKTTP33J"
                 }
               }
             },
             {
               "type": "user-session",
-              "id": "01FSHNB530KEPHYQQXW9XPTX6Z",
+              "id": "01FSHNB530FGRV6R6CZ6P45NRB",
               "attributes": {
                 "created_at": "2022-01-16T14:41:00Z",
-                "finished_at": "2022-01-16T14:42:00Z",
-                "user_id": "01FSHNB530AJ6AC5HQ9X6H4RP4",
+                "finished_at": null,
+                "user_id": "01FSHN9AG0E6J8AS3YVE0HPDQ1",
                 "user_agent": null,
                 "last_active_at": null,
                 "last_active_ip": null
               },
               "links": {
-                "self": "/api/admin/v1/user-sessions/01FSHNB530KEPHYQQXW9XPTX6Z"
+                "self": "/api/admin/v1/user-sessions/01FSHNB530FGRV6R6CZ6P45NRB"
               },
               "meta": {
                 "page": {
-                  "cursor": "01FSHNB530AJ6AC5HQ9X6H4RP4"
+                  "cursor": "01FSHNB530FGRV6R6CZ6P45NRB"
                 }
               }
             }
@@ -706,29 +706,29 @@ mod tests {
           "data": [
             {
               "type": "user-session",
-              "id": "01FSHNB5309NMZYX8MFYH578R9",
+              "id": "01FSHNB530FGRV6R6CZ6P45NRB",
               "attributes": {
                 "created_at": "2022-01-16T14:41:00Z",
                 "finished_at": null,
-                "user_id": "01FSHN9AG0MZAA6S4AF7CTV32E",
+                "user_id": "01FSHN9AG0E6J8AS3YVE0HPDQ1",
                 "user_agent": null,
                 "last_active_at": null,
                 "last_active_ip": null
               },
               "links": {
-                "self": "/api/admin/v1/user-sessions/01FSHNB5309NMZYX8MFYH578R9"
+                "self": "/api/admin/v1/user-sessions/01FSHNB530FGRV6R6CZ6P45NRB"
               },
               "meta": {
                 "page": {
-                  "cursor": "01FSHN9AG0MZAA6S4AF7CTV32E"
+                  "cursor": "01FSHNB530FGRV6R6CZ6P45NRB"
                 }
               }
             }
           ],
           "links": {
-            "self": "/api/admin/v1/user-sessions?filter[user]=01FSHN9AG0MZAA6S4AF7CTV32E&count=false&page[first]=10",
-            "first": "/api/admin/v1/user-sessions?filter[user]=01FSHN9AG0MZAA6S4AF7CTV32E&count=false&page[first]=10",
-            "last": "/api/admin/v1/user-sessions?filter[user]=01FSHN9AG0MZAA6S4AF7CTV32E&count=false&page[last]=10"
+            "self": "/api/admin/v1/user-sessions?filter[user]=01FSHN9AG0E6J8AS3YVE0HPDQ1&count=false&page[first]=10",
+            "first": "/api/admin/v1/user-sessions?filter[user]=01FSHN9AG0E6J8AS3YVE0HPDQ1&count=false&page[first]=10",
+            "last": "/api/admin/v1/user-sessions?filter[user]=01FSHN9AG0E6J8AS3YVE0HPDQ1&count=false&page[last]=10"
           }
         }
         "#);

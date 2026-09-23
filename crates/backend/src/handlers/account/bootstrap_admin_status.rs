@@ -166,7 +166,7 @@ mod tests {
             .await
             .unwrap();
         repo.user().set_can_request_admin(user, true).await.unwrap();
-        repo.cancel().await.unwrap();
+        repo.save().await.unwrap();
 
         let mut repo = state.repository().await.unwrap();
         let payload = load_bootstrap_admin_status_from(&state.site_config, &mut repo)

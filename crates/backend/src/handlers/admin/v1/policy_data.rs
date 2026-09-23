@@ -157,11 +157,11 @@ mod tests {
         let response = state.request(request).await;
         response.assert_status(StatusCode::OK);
         let body: serde_json::Value = response.json();
-        assert_json_snapshot!(body, @r###"
+        assert_json_snapshot!(body, @r#"
         {
           "data": {
             "type": "policy-data",
-            "id": "01FSHN9AG0MZAA6S4AF7CTV32E",
+            "id": "01FSHN9AG0E6J8AS3YVE0HPDQ1",
             "attributes": {
               "created_at": "2022-01-16T14:40:00Z",
               "data": {
@@ -169,14 +169,14 @@ mod tests {
               }
             },
             "links": {
-              "self": "/api/admin/v1/policy-data/01FSHN9AG0MZAA6S4AF7CTV32E"
+              "self": "/api/admin/v1/policy-data/01FSHN9AG0E6J8AS3YVE0HPDQ1"
             }
           },
           "links": {
-            "self": "/api/admin/v1/policy-data/01FSHN9AG0MZAA6S4AF7CTV32E"
+            "self": "/api/admin/v1/policy-data/01FSHN9AG0E6J8AS3YVE0HPDQ1"
           }
         }
-        "###);
+        "#);
     }
 
     #[tokio::test]
@@ -230,11 +230,11 @@ mod tests {
         let response = state.request(request).await;
         response.assert_status(StatusCode::OK);
         let body: serde_json::Value = response.json();
-        assert_json_snapshot!(body, @r###"
+        assert_json_snapshot!(body, @r#"
         {
           "data": {
             "type": "policy-data",
-            "id": "01FSHN9AG0MZAA6S4AF7CTV32E",
+            "id": "01FSHN9AG0E6J8AS3YVE0HPDQ1",
             "attributes": {
               "created_at": "2022-01-16T14:40:00Z",
               "data": {
@@ -242,14 +242,14 @@ mod tests {
               }
             },
             "links": {
-              "self": "/api/admin/v1/policy-data/01FSHN9AG0MZAA6S4AF7CTV32E"
+              "self": "/api/admin/v1/policy-data/01FSHN9AG0E6J8AS3YVE0HPDQ1"
             }
           },
           "links": {
-            "self": "/api/admin/v1/policy-data/01FSHN9AG0MZAA6S4AF7CTV32E"
+            "self": "/api/admin/v1/policy-data/01FSHN9AG0E6J8AS3YVE0HPDQ1"
           }
         }
-        "###);
+        "#);
     }
 
     #[tokio::test]
@@ -283,7 +283,7 @@ mod tests {
         let mut state = TestState::from_pool(pool.clone()).await.unwrap();
         let token = state.token_with_scope("urn:pasion:admin").await;
 
-        let request = Request::post("/api/admin/v1/policy-data")
+        let request = Request::put("/api/admin/v1/policy-data")
             .bearer(&token)
             .json(serde_json::json!({
                 "data": {
@@ -293,11 +293,11 @@ mod tests {
         let response = state.request(request).await;
         response.assert_status(StatusCode::CREATED);
         let body: serde_json::Value = response.json();
-        assert_json_snapshot!(body, @r###"
+        assert_json_snapshot!(body, @r#"
         {
           "data": {
             "type": "policy-data",
-            "id": "01FSHN9AG0MZAA6S4AF7CTV32E",
+            "id": "01FSHN9AG0E6J8AS3YVE0HPDQ1",
             "attributes": {
               "created_at": "2022-01-16T14:40:00Z",
               "data": {
@@ -305,13 +305,13 @@ mod tests {
               }
             },
             "links": {
-              "self": "/api/admin/v1/policy-data/01FSHN9AG0MZAA6S4AF7CTV32E"
+              "self": "/api/admin/v1/policy-data/01FSHN9AG0E6J8AS3YVE0HPDQ1"
             }
           },
           "links": {
-            "self": "/api/admin/v1/policy-data/01FSHN9AG0MZAA6S4AF7CTV32E"
+            "self": "/api/admin/v1/policy-data/01FSHN9AG0E6J8AS3YVE0HPDQ1"
           }
         }
-        "###);
+        "#);
     }
 }

@@ -13,7 +13,7 @@ if ($LASTEXITCODE -ne 0) {
     exit $LASTEXITCODE
 }
 $utf8NoBom = [System.Text.UTF8Encoding]::new($false)
-[System.IO.File]::WriteAllText($configSchema, ($configJson -join "`n"), $utf8NoBom)
+[System.IO.File]::WriteAllText($configSchema, ($configJson -join "`n") + "`n", $utf8NoBom)
 
 $oldOutDir = $env:OUT_DIR
 $env:OUT_DIR = $policiesSchemaDir

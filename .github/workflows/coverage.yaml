@@ -36,6 +36,7 @@ jobs:
         ports:
           - "5432:5432"
         options: >-
+          --shm-size=1g
           --health-cmd pg_isready
           --health-interval 10s
           --health-timeout 5s
@@ -60,7 +61,7 @@ jobs:
 
       - name: Execute tests with coverage instrumentation
         run: |
-          cargo test --no-fail-fast --workspace
+          cargo test --no-fail-fast --workspace --features pasion-backend/cedar
         env:
           DATABASE_URL: postgresql://postgres:postgres@localhost/postgres
           LLVM_PROFILE_FILE: "cargo-test-%p-%m.profraw"

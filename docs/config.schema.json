@@ -756,7 +756,7 @@
           }
         },
         "proxy_protocol": {
-          "description": "Enable HAProxy PROXY protocol v1 on accepted connections",
+          "description": "Enable `HAProxy` PROXY protocol v1 on accepted connections",
           "type": "boolean",
           "default": false
         },
@@ -1623,7 +1623,7 @@
           ]
         },
         {
-          "description": "Deliver through the SendGrid email API",
+          "description": "Deliver through the `SendGrid` email API",
           "type": "object",
           "properties": {
             "type": {
@@ -1641,7 +1641,7 @@
           ]
         },
         {
-          "description": "Deliver through Twilio SendGrid",
+          "description": "Deliver through Twilio `SendGrid`",
           "type": "object",
           "properties": {
             "type": {
@@ -1854,7 +1854,7 @@
       ]
     },
     "SendgridWebhookConfig": {
-      "description": "SendGrid event webhook verification settings",
+      "description": "`SendGrid` event webhook verification settings",
       "type": "object",
       "properties": {
         "public_key_pem": {
@@ -1867,15 +1867,15 @@
       ]
     },
     "SendgridEmailProviderConfig": {
-      "description": "SendGrid email API delivery settings",
+      "description": "`SendGrid` email API delivery settings",
       "type": "object",
       "properties": {
         "api_key": {
-          "description": "SendGrid API key",
+          "description": "`SendGrid` API key",
           "type": "string"
         },
         "base_url": {
-          "description": "Base URL for the SendGrid API",
+          "description": "Base URL for the `SendGrid` API",
           "type": "string",
           "default": "https://api.sendgrid.com"
         },
@@ -1896,15 +1896,15 @@
       ]
     },
     "TwilioEmailProviderConfig": {
-      "description": "Twilio email API delivery settings.\n\nTwilio email delivery is implemented via Twilio SendGrid's mail send API.",
+      "description": "Twilio email API delivery settings.\n\nTwilio email delivery is implemented via Twilio `SendGrid`'s mail send API.",
       "type": "object",
       "properties": {
         "api_key": {
-          "description": "Twilio SendGrid API key",
+          "description": "Twilio `SendGrid` API key",
           "type": "string"
         },
         "base_url": {
-          "description": "Base URL for the Twilio SendGrid API",
+          "description": "Base URL for the Twilio `SendGrid` API",
           "type": "string",
           "default": "https://api.sendgrid.com"
         },
@@ -3077,22 +3077,22 @@
           "const": "none"
         },
         {
-          "description": "`client_secret_basic`: HTTP Basic auth with client_id and client_secret",
+          "description": "`client_secret_basic`: HTTP Basic auth with `client_id` and\n`client_secret`",
           "type": "string",
           "const": "client_secret_basic"
         },
         {
-          "description": "`client_secret_post`: client_id and client_secret in the POST body",
+          "description": "`client_secret_post`: `client_id` and `client_secret` in the POST body",
           "type": "string",
           "const": "client_secret_post"
         },
         {
-          "description": "`client_secret_jwt`: signed client_assertion using the client_secret",
+          "description": "`client_secret_jwt`: signed `client_assertion` using the `client_secret`",
           "type": "string",
           "const": "client_secret_jwt"
         },
         {
-          "description": "`private_key_jwt`: signed client_assertion using an asymmetric key",
+          "description": "`private_key_jwt`: signed `client_assertion` using an asymmetric key",
           "type": "string",
           "const": "private_key_jwt"
         },
@@ -3102,32 +3102,32 @@
           "const": "sign_in_with_apple"
         },
         {
-          "description": "`qq_connect`: QQ Connect OAuth2 flow",
+          "description": "`qq_connect`: QQ Connect `OAuth2` flow",
           "type": "string",
           "const": "q_q_connect"
         },
         {
-          "description": "`feishu`: Feishu (Lark China) OAuth2 flow",
+          "description": "`feishu`: Feishu (Lark China) `OAuth2` flow",
           "type": "string",
           "const": "feishu"
         },
         {
-          "description": "`lark`: Lark (international Feishu) OAuth2 flow",
+          "description": "`lark`: Lark (international Feishu) `OAuth2` flow",
           "type": "string",
           "const": "lark"
         },
         {
-          "description": "`dingtalk`: DingTalk OAuth2 flow",
+          "description": "`dingtalk`: `DingTalk` `OAuth2` flow",
           "type": "string",
           "const": "ding_talk"
         },
         {
-          "description": "`wechat`: WeChat Open Platform OAuth2 flow",
+          "description": "`wechat`: `WeChat` Open Platform `OAuth2` flow",
           "type": "string",
           "const": "we_chat"
         },
         {
-          "description": "`wecom`: WeCom (Enterprise WeChat) OAuth2 flow",
+          "description": "`wecom`: `WeCom` (Enterprise `WeChat`) `OAuth2` flow",
           "type": "string",
           "const": "we_com"
         }
@@ -3721,7 +3721,7 @@
           ]
         },
         {
-          "description": "S3-compatible object storage (AWS S3, Cloudflare R2, MinIO, etc.).",
+          "description": "S3-compatible object storage (AWS S3, Cloudflare R2, `MinIO`, etc.).",
           "type": "object",
           "properties": {
             "bucket": {
@@ -3760,7 +3760,7 @@
               "default": "media/"
             },
             "path_style": {
-              "description": "Enable path-style access (required for MinIO).",
+              "description": "Enable path-style access (required for `MinIO`).",
               "type": "boolean",
               "default": false
             },

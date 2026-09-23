@@ -187,6 +187,9 @@ mod tests {
         assert_eq!(data_fetched3, policy_data2);
         assert_eq!(affected, 1);
 
+        // Commit before checking from a separate connection.
+        repo.save().await.unwrap();
+
         // Do a raw query to check the other rows were pruned
         #[derive(diesel::QueryableByName)]
         struct CountResult {
