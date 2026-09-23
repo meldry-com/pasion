@@ -115,8 +115,10 @@ pub trait RunnableJob: Send + 'static {
     /// Execute the job.
     async fn run(&self, state: &State, context: JobContext) -> Result<(), JobError>;
 
-    /// Optional per-job timeout. When elapsed the job's cancellation token is
-    /// triggered so the implementation can shut down gracefully.
+    /// Optional per-job timeout reserved for the queue runtime's cancellation
+    /// policy. Cleanup jobs already declare this value even though enforcement
+    /// is not wired into the current runner yet.
+    #[allow(dead_code)]
     fn timeout(&self) -> Option<std::time::Duration> {
         None
     }

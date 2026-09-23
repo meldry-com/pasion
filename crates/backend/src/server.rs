@@ -210,7 +210,7 @@ pub async fn sentry_middleware(
     res: &mut Response,
     ctrl: &mut FlowCtrl,
 ) {
-    let path = req.uri().path().to_string();
+    let path = req.uri().path().to_owned();
     let method = otel_http_method(req.method());
 
     sentry::configure_scope(|scope| {
@@ -505,7 +505,11 @@ fn build_account_api_router(router: Router) -> Router {
                 )
                 .push(Router::with_path("workflow-inbox").get(viewer::get_workflow_inbox)),
         )
-        .push(Router::with_path("bootstrap-admin-status").get(bootstrap_admin_status::get))
+        .push(
+            Router::with_path("bootstrap-admin-status")
+                .get(bootstrap_admin_status::get)
+                .push(Router::with_path("claim").post(bootstrap_admin_status::post_claim)),
+        )
         // Site config
         .push(Router::with_path("site-config").get(site_config::get))
         // Sessions
@@ -627,7 +631,7 @@ fn build_account_api_router(router: Router) -> Router {
 }
 
 fn build_admin_router(router: Router) -> Router {
-    use crate::handlers::{admin, admin::v1::*};
+    use crate::handlers::admin::v1::*;
 
     let admin_router = Router::with_path("/api/admin/v1")
         // Version
@@ -871,7 +875,7 @@ async fn connection_info_handler(req: &Request) -> String {
     if let Some(conn_info) = req.extensions().get::<ConnectionInfo>() {
         format!("{conn_info:?}")
     } else {
-        "No connection info available".to_string()
+        "No connection info available".to_owned()
     }
 }
 

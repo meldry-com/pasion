@@ -8,7 +8,13 @@
 //! wraps them all and exposes `check_*` methods that mirror the old
 //! governor-based API.
 
-use std::{hash::Hash, net::IpAddr, sync::Arc};
+use std::{
+    collections::HashMap,
+    hash::Hash,
+    net::IpAddr,
+    sync::Arc,
+    time::{Duration, Instant},
+};
 
 use pasion_config::{RateLimiterConfiguration, RateLimitingConfig};
 use pasion_data::{User, UserEmailAuthentication, UserPhoneAuthentication};
@@ -149,6 +155,7 @@ pub struct Limiter {
 }
 
 struct LimiterInner {
+    registration_email_resends: tokio::sync::Mutex<HashMap<Ulid, Instant>>,
     account_recovery_per_requester: KeyedLimiter<RequesterFingerprint>,
     account_recovery_per_email: KeyedLimiter<String>,
     password_check_for_requester: KeyedLimiter<RequesterFingerprint>,
@@ -167,6 +174,7 @@ struct LimiterInner {
 impl LimiterInner {
     fn new(config: &RateLimitingConfig) -> Option<Self> {
         Some(Self {
+            registration_email_resends: tokio::sync::Mutex::new(HashMap::new()),
             account_recovery_per_requester: KeyedLimiter::from_config(
                 &config.account_recovery.per_ip,
             )?,
@@ -205,6 +213,18 @@ impl LimiterInner {
 }
 
 impl Limiter {
+    /// Enforce an exact 60-second gap between registration email resends.
+    pub async fn check_registration_email_resend_cooldown(&self, registration_id: Ulid) -> bool {
+        let mut sends = self.inner.registration_email_resends.lock().await;
+        let now = Instant::now();
+        sends.retain(|_, last| now.duration_since(*last) < Duration::from_secs(60));
+        if sends.contains_key(&registration_id) {
+            return false;
+        }
+        sends.insert(registration_id, now);
+        true
+    }
+
     /// Creates a new `Limiter` based on a [`RateLimitingConfig`].
     ///
     /// Returns `None` if any individual limiter configuration is invalid.
@@ -466,6 +486,28 @@ mod tests {
     use rand_core::SeedableRng;
 
     use super::*;
+
+    #[tokio::test]
+    async fn registration_email_resend_has_sixty_second_cooldown() {
+        let limiter = Limiter::new(&RateLimitingConfig::default()).unwrap();
+        let registration_id = Ulid::new();
+
+        assert!(
+            limiter
+                .check_registration_email_resend_cooldown(registration_id)
+                .await
+        );
+        assert!(
+            !limiter
+                .check_registration_email_resend_cooldown(registration_id)
+                .await
+        );
+        assert!(
+            limiter
+                .check_registration_email_resend_cooldown(Ulid::new())
+                .await
+        );
+    }
 
     #[tokio::test]
     async fn test_password_check_limiter() {

@@ -44,37 +44,37 @@ pub enum TokenAuthMethod {
     /// `none`: No client authentication
     None,
 
-    /// `client_secret_basic`: HTTP Basic auth with client_id and client_secret
+    /// `client_secret_basic`: HTTP Basic auth with `client_id` and `client_secret`
     ClientSecretBasic,
 
-    /// `client_secret_post`: client_id and client_secret in the POST body
+    /// `client_secret_post`: `client_id` and `client_secret` in the POST body
     ClientSecretPost,
 
-    /// `client_secret_jwt`: signed client_assertion using the client_secret
+    /// `client_secret_jwt`: signed `client_assertion` using the `client_secret`
     ClientSecretJwt,
 
-    /// `private_key_jwt`: signed client_assertion using an asymmetric key
+    /// `private_key_jwt`: signed `client_assertion` using an asymmetric key
     PrivateKeyJwt,
 
     /// `sign_in_with_apple`: Apple-specific authentication flow
     SignInWithApple,
 
-    /// `qq_connect`: QQ Connect OAuth2 flow
+    /// `qq_connect`: QQ Connect `OAuth2` flow
     QQConnect,
 
-    /// `feishu`: Feishu (Lark China) OAuth2 flow
+    /// `feishu`: Feishu (Lark China) `OAuth2` flow
     Feishu,
 
-    /// `lark`: Lark (international Feishu) OAuth2 flow
+    /// `lark`: Lark (international Feishu) `OAuth2` flow
     Lark,
 
-    /// `dingtalk`: DingTalk OAuth2 flow
+    /// `dingtalk`: `DingTalk` `OAuth2` flow
     DingTalk,
 
-    /// `wechat`: WeChat Open Platform OAuth2 flow
+    /// `wechat`: `WeChat` Open Platform `OAuth2` flow
     WeChat,
 
-    /// `wecom`: WeCom (Enterprise WeChat) OAuth2 flow
+    /// `wecom`: `WeCom` (Enterprise `WeChat`) `OAuth2` flow
     WeCom,
 }
 

@@ -21,14 +21,13 @@ use crate::{
         RequesterFingerprint,
         account::service::registration::{
             BeginPasswordRegistrationError, BeginPasswordRegistrationRequest,
-            BeginPasswordRegistrationResult, EmailAvailabilityCheck, HomeserverCheckMode,
-            LoadRegistrationProgressError, RegistrationDisplayNameOutcome,
-            RegistrationDisplayNameWorkflowError, RegistrationEmailChangeError,
-            RegistrationEmailChangeOutcome, RegistrationFinishError, RegistrationFinishOutcome,
-            RegistrationResendError, RegistrationResendOutcome, RegistrationVerificationError,
-            RegistrationVerificationOutcome, begin_password_registration,
-            change_registration_email, finish_registration, load_registration_status,
-            next_registration_step, resend_registration_verification,
+            BeginPasswordRegistrationResult, LoadRegistrationProgressError,
+            RegistrationDisplayNameOutcome, RegistrationDisplayNameWorkflowError,
+            RegistrationEmailChangeError, RegistrationEmailChangeOutcome, RegistrationFinishError,
+            RegistrationFinishOutcome, RegistrationResendError, RegistrationResendOutcome,
+            RegistrationVerificationError, RegistrationVerificationOutcome,
+            begin_password_registration, change_registration_email, finish_registration,
+            load_registration_status, next_registration_step, resend_registration_verification,
             submit_registration_display_name, submit_registration_email_code,
             submit_registration_phone_code,
         },
@@ -128,7 +127,6 @@ pub async fn post_register(
             password_registration_contact_required: site_config
                 .password_registration_contact_required,
             terms_url: site_config.tos_uri.clone(),
-            email_availability: EmailAvailabilityCheck::Precheck,
         },
     )
     .await
@@ -213,10 +211,13 @@ pub async fn post_register(
 #[derive(Serialize, ToSchema)]
 pub struct RegistrationStatusResponse {
     pub id: String,
+    pub created_at: String,
     pub username: String,
     pub email_pending: bool,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub pending_email: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub pending_email_sent_at: Option<String>,
     pub phone_pending: bool,
     pub steps_completed: Vec<&'static str>,
     pub next_step: &'static str,
@@ -247,9 +248,11 @@ pub async fn get_registration(
 
     Ok(Json(RegistrationStatusResponse {
         id: status.registration.id.to_string(),
+        created_at: status.registration.created_at.to_rfc3339(),
         username: status.registration.username,
         email_pending: status.email_pending,
         pending_email: status.pending_email,
+        pending_email_sent_at: status.pending_email_sent_at.map(|at| at.to_rfc3339()),
         phone_pending: status.phone_pending,
         steps_completed: status.steps_completed,
         next_step: status.next_step,
@@ -388,6 +391,9 @@ pub async fn post_resend_verification(
         RegistrationResendOutcome::RegistrationCompleted => {
             ("error", Some("registration_already_completed".into()))
         }
+        RegistrationResendOutcome::RegistrationExpired => {
+            ("error", Some("registration_expired".into()))
+        }
         RegistrationResendOutcome::Resent => ("resent", None),
         RegistrationResendOutcome::AlreadyVerified => ("already_verified", None),
         RegistrationResendOutcome::RateLimited => ("rate_limited", None),
@@ -466,6 +472,9 @@ pub async fn post_change_email(
         RegistrationEmailChangeOutcome::Updated => ("updated", None),
         RegistrationEmailChangeOutcome::RegistrationCompleted => {
             ("error", Some("registration_already_completed".into()))
+        }
+        RegistrationEmailChangeOutcome::RegistrationExpired => {
+            ("error", Some("registration_expired".into()))
         }
         RegistrationEmailChangeOutcome::AlreadyVerified => {
             ("error", Some("email_already_verified".into()))
@@ -690,7 +699,6 @@ pub async fn post_finish(
         homeserver.as_ref(),
         id,
         None,
-        HomeserverCheckMode::BestEffort,
         site_config.registration_token_required,
         site_config.bootstrap_admin_token.as_deref(),
         input.bootstrap_admin_token,

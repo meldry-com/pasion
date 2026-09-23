@@ -11,7 +11,7 @@ pub struct AppError {
     pub description: Option<String>,
 }
 
-/// Application configuration, loaded from window.APP_CONFIG or defaults.
+/// Application configuration, loaded from `window.APP_CONFIG` or defaults.
 #[derive(Debug, Clone)]
 #[allow(dead_code)]
 pub struct AppConfig {
@@ -25,8 +25,8 @@ pub struct AppConfig {
 impl Default for AppConfig {
     fn default() -> Self {
         Self {
-            root: "/".to_string(),
-            api_endpoint: "/api/v1".to_string(),
+            root: "/".to_owned(),
+            api_endpoint: "/api/v1".to_owned(),
             error: None,
         }
     }
@@ -44,7 +44,7 @@ thread_local! {
 }
 
 /// Get the app configuration.
-/// In WASM, this reads from window.APP_CONFIG. Otherwise uses defaults.
+/// In WASM, this reads from `window.APP_CONFIG`. Otherwise uses defaults.
 /// The result is cached per thread (WASM is single-threaded) so repeated
 /// calls don't re-parse the JS config.
 pub fn get_config() -> AppConfig {

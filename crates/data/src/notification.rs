@@ -371,6 +371,11 @@ pub struct NotificationProviderBinding {
 
 #[cfg(test)]
 mod tests {
+    #![allow(
+        clippy::disallowed_methods,
+        reason = "unit tests use wall-clock timestamps only as sample data"
+    )]
+
     use super::{
         NotificationDelivery, NotificationDeliveryFailure, NotificationDeliveryStatus,
         NotificationRequestStatus,

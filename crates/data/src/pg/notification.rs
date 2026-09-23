@@ -434,7 +434,7 @@ impl NotificationRepository for PgNotificationRepository<'_> {
                 notification_request.completed_at = None;
                 notification_request.cancelled_at = None;
             }
-            NotificationRequestStatus::Processing => {
+            NotificationRequestStatus::Processing | NotificationRequestStatus::Failed => {
                 notification_request.started_at.get_or_insert(now);
                 notification_request.completed_at = None;
                 notification_request.cancelled_at = None;
@@ -442,11 +442,6 @@ impl NotificationRepository for PgNotificationRepository<'_> {
             NotificationRequestStatus::Succeeded => {
                 notification_request.started_at.get_or_insert(now);
                 notification_request.completed_at = Some(now);
-                notification_request.cancelled_at = None;
-            }
-            NotificationRequestStatus::Failed => {
-                notification_request.started_at.get_or_insert(now);
-                notification_request.completed_at = None;
                 notification_request.cancelled_at = None;
             }
             NotificationRequestStatus::Cancelled => {

@@ -543,16 +543,20 @@ struct UuidRow {
 
 #[cfg(test)]
 mod tests {
+    #![allow(
+        clippy::disallowed_methods,
+        reason = "unit tests use wall-clock timestamps only as sample data"
+    )]
+
     use std::net::{IpAddr, Ipv4Addr};
 
     use ipnetwork::IpNetwork;
     use oauth2_types::scope::Scope;
     use pasion_data::{
-        Clock, RepositoryAccess as _, RepositoryFactory as _, RepositoryTransaction as _,
-        UpstreamOAuthProviderClaimsImports, UpstreamOAuthProviderDiscoveryMode,
-        UpstreamOAuthProviderOnBackchannelLogout, UpstreamOAuthProviderPkceMode,
-        UpstreamOAuthProviderTokenAuthMethod, UserRegistration, UserRegistrationPassword,
-        clock::MockClock, upstream_oauth2::UpstreamOAuthProviderParams,
+        Clock, RepositoryAccess as _, RepositoryFactory as _, UpstreamOAuthProviderClaimsImports,
+        UpstreamOAuthProviderDiscoveryMode, UpstreamOAuthProviderOnBackchannelLogout,
+        UpstreamOAuthProviderPkceMode, UpstreamOAuthProviderTokenAuthMethod, UserRegistration,
+        UserRegistrationPassword, clock::MockClock, upstream_oauth2::UpstreamOAuthProviderParams,
     };
     use pasion_iana::jose::JsonWebSignatureAlg;
     use rand_chacha::ChaChaRng;

@@ -46,7 +46,7 @@ impl LocalizableField {
     /// unknown identifiers (which the database constraint should already
     /// reject).
     #[must_use]
-    pub fn from_str(value: &str) -> Option<Self> {
+    pub fn parse(value: &str) -> Option<Self> {
         match value {
             "client_name" => Some(Self::ClientName),
             "logo_uri" => Some(Self::LogoUri),

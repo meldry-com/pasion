@@ -51,23 +51,18 @@ pub fn AccountPage() -> Element {
 
     match &*binding {
         Some(Ok(result)) => {
-            let user = match result.viewer.as_user() {
-                Some(u) => u,
-                None => {
-                    return rsx! {
-                        Layout { p { "Redirecting to login..." } }
-                    };
-                }
+            let Some(user) = result.viewer.as_user() else {
+                return rsx! {
+                    Layout { p { "Redirecting to login..." } }
+                };
             };
 
-            let matrix = match &user.matrix {
-                Some(m) => m.clone(),
-                None => {
-                    return rsx! {
-                        Layout { p { "User data unavailable." } }
-                    };
-                }
+            let Some(matrix) = &user.matrix else {
+                return rsx! {
+                    Layout { p { "User data unavailable." } }
+                };
             };
+            let matrix = matrix.clone();
             let profile = user
                 .profile
                 .clone()
@@ -99,7 +94,7 @@ pub fn AccountPage() -> Element {
                                     matrix: current_matrix.read().clone(),
                                     profile: current_profile.read().clone(),
                                     display_name_change_allowed: display_name_change_allowed,
-                                    on_edit: move |_| show_edit_dialog.set(true),
+                                    on_edit: move |()| show_edit_dialog.set(true),
                                 }
                             }
 

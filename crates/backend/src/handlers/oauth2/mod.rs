@@ -30,7 +30,6 @@ use pasion_data::{
 use pasion_iana::jose::JsonWebSignatureAlg;
 use pasion_jose::{
     claims::{self, hash_token},
-    constraints::Constrainable,
     jwt::{JsonWebSignatureHeader, Jwt},
 };
 use pasion_keystore::Keystore;

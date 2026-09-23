@@ -116,7 +116,7 @@ where
     // -- extraction helpers -------------------------------------------------
 
     /// Decode a `serde_json::Value` into `T` and run the validator.
-    fn decode_and_validate(&self, raw: serde_json::Value, validator: V) -> Result<T, ClaimError>
+    fn decode_and_validate(&self, raw: serde_json::Value, validator: &V) -> Result<T, ClaimError>
     where
         T: DeserializeOwned,
         V::Error: std::error::Error + Send + Sync + 'static,
@@ -174,7 +174,7 @@ where
             .remove(self.key)
             .ok_or(ClaimError::MissingClaim(self.key))?;
 
-        self.decode_and_validate(raw, validator.into())
+        self.decode_and_validate(raw, &validator.into())
     }
 
     // -- optional extraction ------------------------------------------------
@@ -214,11 +214,10 @@ where
         I: Into<V>,
         V::Error: std::error::Error + Send + Sync + 'static,
     {
-        let raw = match claims.remove(self.key) {
-            Some(v) => v,
-            None => return Ok(None),
+        let Some(raw) = claims.remove(self.key) else {
+            return Ok(None);
         };
-        self.decode_and_validate(raw, validator.into()).map(Some)
+        self.decode_and_validate(raw, &validator.into()).map(Some)
     }
 
     // -- absence assertion --------------------------------------------------
@@ -259,8 +258,7 @@ impl TimeOptions {
     pub fn new(when: chrono::DateTime<chrono::Utc>) -> Self {
         Self {
             when,
-            leeway: chrono::Duration::try_seconds(DEFAULT_LEEWAY_SECS)
-                .expect("5-minute leeway is always representable"),
+            leeway: chrono::Duration::seconds(DEFAULT_LEEWAY_SECS),
         }
     }
 

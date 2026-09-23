@@ -291,10 +291,10 @@ impl AccountRepository for PgAccountRepository<'_> {
 
         Ok(AccountSecuritySummary {
             has_password,
-            active_sessions_count: active_sessions_count as usize,
-            verified_emails_count: verified_emails_count as usize,
-            verified_phones_count: verified_phones_count as usize,
-            linked_providers_count: linked_providers_count as usize,
+            active_sessions_count: crate::pg::db_count_to_usize(active_sessions_count),
+            verified_emails_count: crate::pg::db_count_to_usize(verified_emails_count),
+            verified_phones_count: crate::pg::db_count_to_usize(verified_phones_count),
+            linked_providers_count: crate::pg::db_count_to_usize(linked_providers_count),
             recent_security_events,
         })
     }

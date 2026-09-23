@@ -18,7 +18,7 @@ pasion config generate > config.yaml
 If you're using the docker container, the command `pasion` can be invoked with `docker run`:
 
 ```sh
-docker run ghcr.io/palpo-im/pasion config generate > config.yaml
+docker run ghcr.io/meldry-com/pasion config generate > config.yaml
 ```
 
 This applies to all of the `pasion` commands in this document.

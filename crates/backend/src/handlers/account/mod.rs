@@ -49,8 +49,6 @@ pub async fn get_requester(
     mut repo: BoxRepository,
     session_info: &SessionInfo,
 ) -> Result<(Requester, BoxRepository), RouteError> {
-    use crate::salvo_utils::SessionInfoExt as _;
-
     let maybe_session = session_info.load_active_session(&mut repo).await?;
 
     if let Some(session) = maybe_session.as_ref() {

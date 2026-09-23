@@ -743,7 +743,7 @@ async fn prepare_delivery(
                 .context("Recovery email user not found")?;
 
             let language: DataLocale = session.locale.parse()?;
-            let url = url_builder.account_recovery_link(payload.ticket);
+            let url = url_builder.account_recovery_link(&payload.ticket);
 
             let NotificationDestination::Email { email } = &delivery.destination else {
                 anyhow::bail!("Recovery delivery is not an email destination");

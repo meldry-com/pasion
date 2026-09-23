@@ -13,6 +13,10 @@ pub use self::{readonly::ReadOnlyHomeserverAdmin, registry::ConnectorRegistry};
 
 /// Describes what operations a connector provider supports.
 #[derive(Debug, Clone, Default)]
+#[allow(
+    clippy::struct_excessive_bools,
+    reason = "capabilities are independent feature flags"
+)]
 pub struct ConnectorCapabilities {
     /// Whether the connector can provision new users.
     pub can_provision_users: bool,
@@ -36,17 +40,12 @@ pub struct MatrixUser {
 /// Represents an optional mutation for a user profile field during
 /// provisioning. Each variant captures whether the caller wants to
 /// leave the field alone, assign a value, or clear it.
-#[derive(Debug)]
+#[derive(Debug, Default)]
 enum FieldUpdate<T> {
+    #[default]
     Unchanged,
     Assign(T),
     Clear,
-}
-
-impl<T> Default for FieldUpdate<T> {
-    fn default() -> Self {
-        Self::Unchanged
-    }
 }
 
 impl<T> FieldUpdate<T> {
@@ -441,7 +440,7 @@ trait AsAdmin {
 impl<T: HomeserverAdmin + ?Sized> AsAdmin for &T {
     type Target = T;
     fn as_admin(&self) -> &T {
-        *self
+        self
     }
 }
 

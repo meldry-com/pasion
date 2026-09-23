@@ -18,7 +18,7 @@ use pasion_jose::{
 use pem_rfc7468::PemLabel;
 use pkcs1::EncodeRsaPrivateKey;
 use pkcs8::{AssociatedOid, DecodePrivateKey, PrivateKeyInfo};
-use rand_core::{CryptoRng, OsRng, RngCore};
+use rand_core::{CryptoRng, RngCore};
 use rsa::BigUint;
 use thiserror::Error;
 
@@ -710,6 +710,8 @@ impl Thumbprint for PrivateKey {
 /// A structure to store a list of [`PrivateKey`]. The keys are held in an
 /// [`Arc`] to ensure they are only loaded once in memory and allow cheap
 /// cloning
+type SignerCache = Arc<RwLock<HashMap<(String, JsonWebSignatureAlg), Arc<AsymmetricSigningKey>>>>;
+
 #[derive(Clone, Default)]
 pub struct Keystore {
     inner: Arc<JsonWebKeySet<PrivateKey>>,
@@ -718,7 +720,7 @@ pub struct Keystore {
     public_jwks: Arc<PublicJsonWebKeySet>,
     /// Cache of prebuilt signers keyed by `(kid, alg)`, so we don't deep-clone
     /// the whole [`rsa::RsaPrivateKey`] on every ID-token / userinfo signature.
-    signer_cache: Arc<RwLock<HashMap<(String, JsonWebSignatureAlg), Arc<AsymmetricSigningKey>>>>,
+    signer_cache: SignerCache,
 }
 
 impl Keystore {
@@ -765,7 +767,7 @@ impl Keystore {
         if let Some(signer) = self
             .signer_cache
             .read()
-            .expect("keystore signer cache poisoned")
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
             .get(&cache_key)
         {
             return Some((kid, Arc::clone(signer)));
@@ -778,7 +780,7 @@ impl Keystore {
         let mut cache = self
             .signer_cache
             .write()
-            .expect("keystore signer cache poisoned");
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
         let entry = cache
             .entry(cache_key)
             .or_insert_with(|| Arc::clone(&signer));

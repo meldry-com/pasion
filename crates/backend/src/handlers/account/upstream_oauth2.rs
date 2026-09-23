@@ -1,7 +1,7 @@
 //! REST API endpoints for upstream OAuth 2.0 link flow.
 //!
-//! These endpoints replace the server-rendered HTML handlers in
-//! `upstream_oauth2::link`, providing JSON responses for the Dioxus SPA.
+//! These endpoints expose the shared upstream-link workflow as JSON responses
+//! for the Dioxus SPA.
 
 use std::sync::LazyLock;
 
@@ -375,7 +375,7 @@ fn render_get_link_outcome(
                 .consume_link(link_id)
                 .map_err(|e| RouteError::Internal(e.into()))?
                 .save(cookie_jar, clock);
-            let cookie_jar = registrations.add(&registration).save(cookie_jar, clock);
+            let cookie_jar = registrations.insert(&registration).save(cookie_jar, clock);
 
             REGISTRATION_COUNTER.add(1, &[KeyValue::new(PROVIDER, provider_id.to_string())]);
 
@@ -446,7 +446,7 @@ fn render_post_link_outcome(
                 .consume_link(link_id)
                 .map_err(|e| RouteError::Internal(e.into()))?
                 .save(cookie_jar, clock);
-            let cookie_jar = registrations.add(&registration).save(cookie_jar, clock);
+            let cookie_jar = registrations.insert(&registration).save(cookie_jar, clock);
 
             REGISTRATION_COUNTER.add(1, &[KeyValue::new(PROVIDER, provider_id.to_string())]);
 
@@ -483,7 +483,7 @@ fn map_upstream_link_workflow_error(error: UpstreamLinkWorkflowError) -> RouteEr
         | UpstreamLinkWorkflowError::ConflictSetBlocked { .. }
         | UpstreamLinkWorkflowError::PolicyDeniedLocalpart { .. }
         | UpstreamLinkWorkflowError::LocalpartUnavailable { .. } => {
-            RouteError::BadRequest(error.to_string().into())
+            RouteError::BadRequest(error.to_string())
         }
         UpstreamLinkWorkflowError::RequiredAttributeEmpty { .. }
         | UpstreamLinkWorkflowError::RequiredAttributeRender { .. }

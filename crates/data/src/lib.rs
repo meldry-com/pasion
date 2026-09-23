@@ -107,7 +107,7 @@ pub fn new_id(
     ts: chrono::DateTime<chrono::Utc>,
     rng: &mut (impl rand_core::RngCore + ?Sized),
 ) -> Ulid {
-    let millis = ts.timestamp_millis() as u64;
+    let millis = u64::try_from(ts.timestamp_millis()).unwrap_or_default();
     let mut bytes = [0u8; 16];
 
     // 48-bit Unix timestamp in milliseconds (big-endian)

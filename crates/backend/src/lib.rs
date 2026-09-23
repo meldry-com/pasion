@@ -4,6 +4,24 @@
 //! It is consumed by the CLI binary (`pasion`) and can also be used to
 //! embed Pasion as a library.
 
+#![allow(
+    // This is an application crate with a large HTTP surface. Requiring public-library
+    // documentation conventions on every handler obscures the actionable lints.
+    clippy::pedantic,
+    // The backend is the integration boundary that owns wall-clock, random-ID, and
+    // outbound HTTP access. Lower layers continue to require injected abstractions.
+    clippy::disallowed_methods,
+    // Handler outcome enums intentionally carry response-specific payloads. Boxing
+    // individual variants would complicate the API for no measurable benefit.
+    clippy::large_enum_variant,
+    // Service entry points pass explicit dependencies instead of hiding them in
+    // ambient state, which occasionally exceeds Clippy's argument-count heuristic.
+    clippy::too_many_arguments,
+    // `BoxClock` erases the concrete `SystemClock` type, so `Box::default()` cannot
+    // replace `Box::new(SystemClock::default())`.
+    clippy::box_default
+)]
+
 pub mod app_state;
 pub mod error;
 pub mod lifecycle;

@@ -2,6 +2,10 @@
 #![allow(clippy::module_name_repetitions)]
 // derive(JSONSchema) uses &str.to_string()
 #![allow(clippy::str_to_string)]
+#![allow(
+    clippy::result_large_err,
+    reason = "configuration errors intentionally retain rich source context"
+)]
 
 //! Application configuration logic
 

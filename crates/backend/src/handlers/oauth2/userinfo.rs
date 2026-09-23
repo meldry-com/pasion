@@ -1,13 +1,6 @@
 use oauth2_types::scope::OPENID;
-use pasion_data::{
-    BoxClock, BoxRepository, BoxRepositoryFactory, BoxRng, SystemClock, UrlBuilder,
-    oauth2::OAuth2ClientRepository,
-};
-use pasion_jose::{
-    constraints::Constrainable,
-    jwt::{JsonWebSignatureHeader, Jwt},
-};
-use pasion_keystore::Keystore;
+use pasion_data::{BoxClock, BoxRepository, BoxRng, SystemClock, oauth2::OAuth2ClientRepository};
+use pasion_jose::jwt::{JsonWebSignatureHeader, Jwt};
 use rand_chacha::ChaChaRng;
 use rand_core::SeedableRng;
 use salvo::{Extractible, prelude::*};

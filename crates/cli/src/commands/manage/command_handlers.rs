@@ -128,6 +128,7 @@ pub(super) async fn handle_add_email(
     Ok(ExitCode::SUCCESS)
 }
 
+#[allow(clippy::unused_async)]
 pub(super) async fn handle_verify_email(
     username: String,
     email: String,

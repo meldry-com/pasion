@@ -30,7 +30,7 @@ pub fn LinkedAccountRow(
         .provider_name
         .clone()
         .or_else(|| account.provider_brand.clone())
-        .unwrap_or_else(|| "External provider".to_string());
+        .unwrap_or_else(|| "External provider".to_owned());
 
     rsx! {
         div { class: "flex items-center justify-between p-3 rounded-lg border",
