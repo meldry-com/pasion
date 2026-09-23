@@ -1620,15 +1620,6 @@ body:has(.dialog-overlay) .theme-toggle {
     color: var(--color-success);
 }
 
-/* ─── Plan iframe ──────────────────────────────────────────── */
-
-.plan-iframe {
-    width: 100%;
-    border: none;
-    min-height: 500px;
-    border-radius: var(--radius-md);
-}
-
 /* ─── Browser sessions overview ────────────────────────────── */
 
 .browser-sessions-overview {

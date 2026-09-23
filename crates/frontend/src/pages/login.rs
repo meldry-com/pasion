@@ -315,8 +315,8 @@ fn LoginForm(providers: ProvidersResponse, initial_error: Option<String>) -> Ele
                                     if let Some(storage) = web_sys::window()
                                         .and_then(|w| w.session_storage().ok().flatten())
                                     {
-                                        let _ = storage.set_item("post_auth_kind", &kind);
-                                        let _ = storage.set_item("post_auth_id", &id);
+                                        let _ = storage.set_item("post_auth_kind", &_kind);
+                                        let _ = storage.set_item("post_auth_id", &_id);
                                     }
                                 }
                             },

@@ -137,7 +137,7 @@ fn ConsentForm(data: ConsentDataResponse, grant_id: String) -> Element {
                                                         // Use assign() for a full navigation
                                                         // (more reliable than set_href in some
                                                         // WASM scenarios).
-                                                        let _ = win.location().assign(&url);
+                                                        let _ = win.location().assign(&_url);
                                                     }
                                                 }
                                             } else {

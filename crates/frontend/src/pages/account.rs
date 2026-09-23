@@ -73,7 +73,6 @@ pub fn AccountPage() -> Element {
                     updated_at: String::new(),
                 });
 
-            let has_plan = result.site_config.plan_management_iframe_uri.is_some();
             let admin_portal_url = if user.can_request_admin {
                 result.site_config.admin_portal_url.clone()
             } else {
@@ -122,9 +121,6 @@ pub fn AccountPage() -> Element {
                                 span { class: "sidebar-group-label", "Preferences" }
                                 SidebarItem { to: Route::NotificationPreferences {}, "Notifications" }
                                 SidebarItem { to: Route::WorkflowInbox {}, "Workflows" }
-                                if has_plan {
-                                    SidebarItem { to: Route::Plan {}, "Plan" }
-                                }
                             }
                         }
 

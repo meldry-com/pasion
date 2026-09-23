@@ -403,7 +403,6 @@ fn build_human_router(router: Router, _templates: Templates) -> Router {
         .push(Router::with_path("/identities").get(spa::get))
         .push(Router::with_path("/contacts").get(spa::get))
         .push(Router::with_path("/workflows").get(spa::get))
-        .push(Router::with_path("/plan").get(spa::get))
         // Standalone pages
         .push(Router::with_path("/password/{**rest}").get(spa::get))
         .push(Router::with_path("/emails/{**rest}").get(spa::get))

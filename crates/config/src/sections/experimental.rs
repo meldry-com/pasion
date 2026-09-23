@@ -64,11 +64,6 @@ pub struct ExperimentalConfig {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub inactive_session_expiration: Option<InactiveSessionExpirationConfig>,
 
-    /// URI for an embeddable plan-management interface (forwarded to the
-    /// client verbatim without validation)
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub plan_management_iframe_uri: Option<String>,
-
     /// Limit the total number of concurrent application sessions per user
     #[serde(skip_serializing_if = "Option::is_none")]
     pub session_limit: Option<SessionLimitConfig>,
@@ -79,7 +74,6 @@ impl Default for ExperimentalConfig {
         Self {
             access_token_ttl: default_access_token_ttl(),
             inactive_session_expiration: None,
-            plan_management_iframe_uri: None,
             session_limit: None,
         }
     }
@@ -89,7 +83,6 @@ impl ExperimentalConfig {
     pub(crate) fn is_default(&self) -> bool {
         access_token_ttl_is_default(&self.access_token_ttl)
             && self.inactive_session_expiration.is_none()
-            && self.plan_management_iframe_uri.is_none()
             && self.session_limit.is_none()
     }
 }

@@ -299,8 +299,6 @@ pub struct SiteConfig {
     pub policy_uri: Option<String>,
     #[serde(default)]
     pub admin_portal_url: Option<String>,
-    #[serde(default)]
-    pub plan_management_iframe_uri: Option<String>,
 }
 
 // ── Mutation payloads ──────────────────────────────────────────
@@ -477,11 +475,6 @@ pub type SetDisplayNameResult = SetDisplayNamePayload;
 pub type AddEmailResult = AddEmailPayload;
 pub type EndBrowserSessionResult = EndSessionPayload;
 pub type EndOauth2SessionResult = EndSessionPayload;
-
-#[derive(Debug, Clone, PartialEq, Deserialize)]
-pub struct PlanManagementData {
-    pub site_config: SiteConfig,
-}
 
 // REST API returns session directly (it IS the node)
 pub type SessionDetailData = SessionNode;
