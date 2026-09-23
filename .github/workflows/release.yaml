@@ -8,17 +8,19 @@ on:
     tags:
       - "v*"
 
-  # Trigger on pull request label changes; only runs when 'Z-Build-Workflow' label is present
   pull_request:
-    types: [labeled]
+    branches:
+      - main
+
+  workflow_dispatch:
 
 env:
   CARGO_NET_GIT_FETCH_WITH_CLI: "true"
   CARGO_TERM_COLOR: always
   RUSTC_WRAPPER: "sccache"
   SCCACHE_GHA_ENABLED: "true"
-  IMAGE: ghcr.io/palpo-im/pasion
-  BUILDCACHE: ghcr.io/palpo-im/pasion/buildcache
+  IMAGE: ghcr.io/${{ github.repository }}
+  BUILDCACHE: ghcr.io/${{ github.repository }}
 
 concurrency:
   group: build-${{ github.ref }}
@@ -30,7 +32,6 @@ jobs:
   compute-version:
     name: Derive version from git tags
     runs-on: ubuntu-24.04
-    if: github.event_name == 'push' || github.event.label.name == 'Z-Build-Workflow'
 
     permissions:
       contents: read
@@ -57,7 +58,6 @@ jobs:
   prepare-image-build:
     name: Resolve container image tags
     runs-on: ubuntu-24.04
-    if: github.event_name == 'push' || github.event.label.name == 'Z-Build-Workflow'
 
     outputs:
       regular_suffixes: ${{ steps.tags.outputs.regular_suffixes }}
@@ -116,7 +116,6 @@ jobs:
   build-image-arch:
     name: Build and publish container image (${{ matrix.arch }})
     runs-on: ${{ matrix.runner }}
-    if: github.event_name == 'push' || github.event.label.name == 'Z-Build-Workflow'
     needs:
       - compute-version
       - prepare-image-build
@@ -152,6 +151,7 @@ jobs:
               mirrors = ["mirror.gcr.io"]
 
       - name: Authenticate with GitHub Container Registry
+        if: github.event_name != 'pull_request'
         uses: docker/login-action@v4.1.0
         with:
           registry: ghcr.io
@@ -185,14 +185,15 @@ jobs:
           file: Dockerfile
           platforms: ${{ matrix.platform }}
           pull: true
-          push: true
+          push: ${{ github.event_name != 'pull_request' }}
+          load: ${{ github.event_name == 'pull_request' }}
           provenance: false
           sbom: false
           build-args: |
             VERGEN_GIT_DESCRIBE=${{ needs.compute-version.outputs.describe }}
           tags: ${{ steps.arch-tags.outputs.release }}
           cache-from: type=registry,ref=${{ env.BUILDCACHE }}:buildcache-${{ matrix.arch }}
-          cache-to: type=registry,ref=${{ env.BUILDCACHE }}:buildcache-${{ matrix.arch }},mode=max
+          cache-to: ${{ github.event_name != 'pull_request' && format('type=registry,ref={0}:buildcache-{1},mode=max', env.BUILDCACHE, matrix.arch) || '' }}
 
       - name: Smoke test release image for ${{ matrix.arch }}
         shell: bash
@@ -207,13 +208,15 @@ jobs:
             exit 1
           fi
 
-          docker pull "$image"
+          if [ "${{ github.event_name }}" != "pull_request" ]; then
+            docker pull "$image"
+          fi
           docker run --rm "$image" --version
 
   build-image:
     name: Publish container image manifests
     runs-on: ubuntu-24.04
-    if: github.event_name == 'push' || github.event.label.name == 'Z-Build-Workflow'
+    if: github.event_name != 'pull_request'
     needs:
       - prepare-image-build
       - build-image-arch
