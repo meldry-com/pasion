@@ -304,6 +304,9 @@ jobs:
     needs:
       - build-image
 
+    permissions:
+      contents: write
+
     steps:
 
       - name: Create GitHub release
