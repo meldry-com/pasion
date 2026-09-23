@@ -68,23 +68,6 @@ pub struct TencentCloudSmsProviderConfig {
     pub template_id: String,
 }
 
-/// Paloud internal notification SMS delivery settings
-#[derive(Clone, Debug, Serialize, Deserialize, JsonSchema)]
-pub struct PaloudInternalSmsProviderConfig {
-    /// Fully qualified Paloud internal SMS dispatch endpoint
-    pub url: String,
-
-    /// Shared key identifier sent in `X-Paloud-Key-Id`
-    pub key_id: String,
-
-    /// Shared secret used to sign the request with `HMAC-SHA256`
-    pub secret: String,
-
-    /// Optional workspace UUID or subdomain used for provider routing
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub workspace: Option<String>,
-}
-
 /// Which provider delivers outbound SMS messages
 #[derive(Clone, Debug, Serialize, Deserialize, JsonSchema, Default)]
 #[serde(tag = "type", rename_all = "snake_case")]
@@ -104,9 +87,6 @@ pub enum SmsProviderConfig {
 
     /// Deliver through Tencent Cloud SMS
     TencentCloudSms(TencentCloudSmsProviderConfig),
-
-    /// Submit SMS payloads to Paloud's internal notification API
-    PaloudInternal(PaloudInternalSmsProviderConfig),
 }
 
 /// Configuration related to sending SMS messages
@@ -194,12 +174,6 @@ impl ConfigurationSection for SmsConfig {
                 ensure_non_empty(&provider.sign_name, "provider.sign_name")?;
                 ensure_non_empty(&provider.template_id, "provider.template_id")?;
             }
-
-            SmsProviderConfig::PaloudInternal(provider) => {
-                ensure_valid_url(&provider.url, "provider.url")?;
-                ensure_non_empty(&provider.key_id, "provider.key_id")?;
-                ensure_non_empty(&provider.secret, "provider.secret")?;
-            }
         }
 
         Ok(())
@@ -242,69 +216,6 @@ mod tests {
                 }
                 other => panic!("expected twilio provider, got {other:?}"),
             }
-
-            Ok(())
-        });
-    }
-
-    #[test]
-    fn load_paloud_internal_provider_config() {
-        Jail::expect_with(|jail| {
-            jail.create_file(
-                "config.yaml",
-                r"
-                    sms:
-                      provider:
-                        type: paloud_internal
-                        url: https://tenant.meldry.com/api/v1/internal/notifications/sms/send
-                        key_id: pasion-control-dev
-                        secret: super-secret
-                        workspace: demo
-                ",
-            )?;
-
-            let figment = Figment::new().merge(Yaml::file("config.yaml"));
-            let config = figment.extract_inner::<SmsConfig>("sms")?;
-
-            match config.provider {
-                SmsProviderConfig::PaloudInternal(provider) => {
-                    assert_eq!(
-                        provider.url,
-                        "https://tenant.meldry.com/api/v1/internal/notifications/sms/send"
-                    );
-                    assert_eq!(provider.key_id, "pasion-control-dev");
-                    assert_eq!(provider.secret, "super-secret");
-                    assert_eq!(provider.workspace.as_deref(), Some("demo"));
-                }
-                other => panic!("unexpected provider: {other:?}"),
-            }
-
-            Ok(())
-        });
-    }
-
-    #[test]
-    fn reject_invalid_paloud_internal_url() {
-        Jail::expect_with(|jail| {
-            jail.create_file(
-                "config.yaml",
-                r"
-                    sms:
-                      provider:
-                        type: paloud_internal
-                        url: '::not-a-url::'
-                        key_id: pasion-control-dev
-                        secret: super-secret
-                ",
-            )?;
-
-            let figment = Figment::new().merge(Yaml::file("config.yaml"));
-            let config = figment.extract_inner::<SmsConfig>("sms")?;
-            let error = config
-                .validate(&figment)
-                .expect_err("config should be invalid");
-
-            assert!(error.to_string().contains("provider.url"));
 
             Ok(())
         });

@@ -16,7 +16,6 @@ pub mod notification_preferences;
 pub mod password_change;
 pub mod password_change_success;
 pub mod password_recovery;
-pub mod plan;
 pub mod recovery_progress;
 pub mod recovery_start;
 pub mod register;
@@ -45,7 +44,6 @@ use notification_preferences::NotificationPreferences;
 use password_change::PasswordChange;
 use password_change_success::PasswordChangeSuccess;
 use password_recovery::PasswordRecovery;
-use plan::Plan;
 use recovery_progress::RecoveryProgress;
 use recovery_start::RecoveryStart;
 use register::{
@@ -100,8 +98,6 @@ pub enum Route {
         Sessions {},
         #[route("/sessions/browsers")]
         BrowserSessions {},
-        #[route("/plan")]
-        Plan {},
         #[route("/security")]
         SecurityCenter {},
         #[route("/notifications")]
@@ -141,8 +137,7 @@ pub enum Route {
     PageNotFound { route: Vec<String> },
 }
 
-/// Account layout wrapping the account-related pages (settings, sessions,
-/// plan).
+/// Account layout wrapping the account-related pages (settings and sessions).
 #[component]
 fn AccountLayout() -> Element {
     rsx! {

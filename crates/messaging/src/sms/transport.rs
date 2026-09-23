@@ -1,21 +1,13 @@
 //! SMS transport backends
 
-use std::sync::{
-    Arc,
-    atomic::{AtomicU64, Ordering},
-};
+use std::sync::Arc;
 
 use base64::{Engine as _, engine::general_purpose::STANDARD as BASE64};
-use chrono::Utc;
-use hmac::{Hmac, Mac};
-use reqwest::{Client, Method};
-use sha2::{Digest, Sha256};
+use reqwest::Client;
 use thiserror::Error;
 use url::Url;
 
 use super::{aliyun::AliyunSmsTransport, tencent::TencentSmsTransport};
-
-type HmacSha256 = Hmac<Sha256>;
 
 /// Errors that can occur when sending an SMS
 #[derive(Debug, Error)]
@@ -53,13 +45,6 @@ enum SmsTransportInner {
         url: Url,
         api_key: Option<String>,
         from_number: String,
-    },
-    PaloudInternal {
-        client: Client,
-        url: Url,
-        key_id: String,
-        secret: String,
-        workspace: Option<String>,
     },
     AliyunSms(AliyunSmsTransport),
     TencentCloudSms(TencentSmsTransport),
@@ -102,23 +87,6 @@ impl SmsTransport {
             url,
             api_key,
             from_number,
-        })
-    }
-
-    /// Construct a Paloud internal notification API transport
-    #[must_use]
-    pub fn paloud_internal(
-        url: Url,
-        key_id: String,
-        secret: String,
-        workspace: Option<String>,
-    ) -> Self {
-        Self::new(SmsTransportInner::PaloudInternal {
-            client: Client::new(),
-            url,
-            key_id,
-            secret,
-            workspace,
         })
     }
 
@@ -177,7 +145,6 @@ impl SmsTransport {
             SmsTransportInner::Blackhole => "sms.blackhole",
             SmsTransportInner::Twilio { .. } => "sms.twilio",
             SmsTransportInner::HttpWebhook { .. } => "sms.http_webhook",
-            SmsTransportInner::PaloudInternal { .. } => "sms.paloud_internal",
             SmsTransportInner::AliyunSms(_) => "sms.aliyun",
             SmsTransportInner::TencentCloudSms(_) => "sms.tencent_cloud",
         }
@@ -188,11 +155,6 @@ impl SmsTransport {
     /// # Errors
     ///
     /// Returns an error if the underlying transport fails to send the message
-    ///
-    /// # Panics
-    ///
-    /// Panics only if an internally constructed provider payload cannot
-    /// serialize.
     pub async fn send(&self, to: &str, body: &str) -> Result<(), SmsTransportError> {
         println!("[SMS] send called: to={to}, body={body}");
 
@@ -266,55 +228,6 @@ impl SmsTransport {
                 println!("[SMS] http_webhook send SUCCESS");
             }
 
-            SmsTransportInner::PaloudInternal {
-                client,
-                url,
-                key_id,
-                secret,
-                workspace,
-            } => {
-                println!("[SMS] transport=paloud_internal, sending SMS...");
-                let payload = serde_json::json!({
-                    "workspace": workspace.as_deref().filter(|value| !value.trim().is_empty()),
-                    "recipient": to,
-                    "body": body,
-                });
-                let body = serde_json::to_vec(&payload)
-                    .expect("paloud internal sms payload should serialize");
-                let timestamp = Utc::now().timestamp();
-                let nonce = paloud_internal_nonce(timestamp);
-                let signature = sign_paloud_internal_request(
-                    secret,
-                    Method::POST.as_str(),
-                    url.path(),
-                    timestamp,
-                    &nonce,
-                    &body,
-                );
-
-                let response = client
-                    .post(url.clone())
-                    .header("X-Paloud-Key-Id", key_id)
-                    .header("X-Paloud-Timestamp", timestamp.to_string())
-                    .header("X-Paloud-Nonce", nonce)
-                    .header("X-Paloud-Signature", signature)
-                    .header("Content-Type", "application/json")
-                    .body(body)
-                    .send()
-                    .await?;
-
-                let status = response.status();
-                if !status.is_success() {
-                    let body = response.text().await.unwrap_or_default();
-                    println!("[SMS] paloud_internal send FAILED: status={status}, body={body}");
-                    return Err(SmsTransportError::ProviderError {
-                        status: status.as_u16(),
-                        body,
-                    });
-                }
-                println!("[SMS] paloud_internal send SUCCESS");
-            }
-
             SmsTransportInner::AliyunSms(transport) => {
                 println!("[SMS] transport=aliyun, sending SMS...");
                 // Parse body as template params: try JSON first, fall back to
@@ -344,84 +257,61 @@ impl SmsTransport {
     }
 }
 
-fn hex_sha256(data: &[u8]) -> String {
-    hex::encode(Sha256::digest(data))
-}
-
-fn paloud_internal_nonce(timestamp: i64) -> String {
-    static COUNTER: AtomicU64 = AtomicU64::new(1);
-    format!(
-        "{timestamp:x}-{:x}-{:x}",
-        std::process::id(),
-        COUNTER.fetch_add(1, Ordering::Relaxed)
-    )
-}
-
-fn sign_paloud_internal_request(
-    secret: &str,
-    method: &str,
-    path: &str,
-    timestamp: i64,
-    nonce: &str,
-    body: &[u8],
-) -> String {
-    let payload = format!(
-        "{}\n{}\n{}\n{}\n{}",
-        method.trim().to_ascii_uppercase(),
-        path.trim(),
-        timestamp,
-        nonce.trim(),
-        hex_sha256(body)
-    );
-    let mut mac =
-        HmacSha256::new_from_slice(secret.as_bytes()).expect("HMAC accepts arbitrary key lengths");
-    mac.update(payload.as_bytes());
-    hex::encode(mac.finalize().into_bytes())
-}
-
 #[cfg(test)]
 mod tests {
     use serde_json::json;
     use wiremock::{
         Mock, MockServer, ResponseTemplate,
-        matchers::{body_partial_json, header, header_exists, method, path},
+        matchers::{body_json, header, method, path},
     };
 
     use super::*;
 
     #[tokio::test]
-    async fn paloud_internal_transport_signs_request() {
-        let mock_server = MockServer::start().await;
-
+    async fn http_webhook_sends_provider_independent_payload() {
+        let server = MockServer::start().await;
         Mock::given(method("POST"))
-            .and(path("/api/v1/internal/notifications/sms/send"))
-            .and(header("x-paloud-key-id", "pasion-control-dev"))
-            .and(header_exists("x-paloud-timestamp"))
-            .and(header_exists("x-paloud-nonce"))
-            .and(header_exists("x-paloud-signature"))
-            .and(body_partial_json(json!({
-                "workspace": "demo",
-                "recipient": "+8613711112222",
-                "body": "123456"
+            .and(path("/messages"))
+            .and(header("authorization", "Bearer test-key"))
+            .and(body_json(json!({
+                "to": "+12065550123",
+                "from": "Pasion",
+                "body": "Your verification code is 123456"
             })))
-            .respond_with(ResponseTemplate::new(200).set_body_json(json!({
-                "status": "accepted",
-                "channel": "sms"
-            })))
+            .respond_with(ResponseTemplate::new(202))
             .expect(1)
-            .mount(&mock_server)
+            .mount(&server)
             .await;
 
-        let transport = SmsTransport::paloud_internal(
-            Url::parse(&mock_server.uri())
-                .unwrap()
-                .join("/api/v1/internal/notifications/sms/send")
-                .unwrap(),
-            "pasion-control-dev".to_owned(),
-            "super-secret".to_owned(),
-            Some("demo".to_owned()),
+        let transport = SmsTransport::http_webhook(
+            Url::parse(&format!("{}/messages", server.uri())).unwrap(),
+            Some("test-key".to_owned()),
+            "Pasion".to_owned(),
         );
+        assert_eq!(transport.binding_key(), "sms.http_webhook");
+        transport
+            .send("+12065550123", "Your verification code is 123456")
+            .await
+            .unwrap();
+    }
 
-        transport.send("+8613711112222", "123456").await.unwrap();
+    #[tokio::test]
+    async fn http_webhook_preserves_provider_errors() {
+        let server = MockServer::start().await;
+        Mock::given(method("POST"))
+            .respond_with(ResponseTemplate::new(429).set_body_string("Rate limit exceeded"))
+            .expect(1)
+            .mount(&server)
+            .await;
+        let transport = SmsTransport::http_webhook(
+            Url::parse(&server.uri()).unwrap(),
+            None,
+            "Pasion".to_owned(),
+        );
+        assert!(matches!(
+            transport.send("+12065550123", "123456").await,
+            Err(SmsTransportError::ProviderError { status: 429, body })
+                if body == "Rate limit exceeded"
+        ));
     }
 }

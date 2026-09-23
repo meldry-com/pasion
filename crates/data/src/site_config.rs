@@ -107,9 +107,6 @@ pub struct SiteConfig {
     /// URL of the external admin portal shown to eligible users.
     pub admin_portal_url: Option<Url>,
 
-    /// Pasion-original: the iframe URL to show in the plan tab of the UI
-    pub plan_management_iframe_uri: Option<String>,
-
     /// Pasion-original: limits on the number of application sessions that each
     /// user can have
     pub session_limit: Option<SessionLimitConfig>,

@@ -186,17 +186,10 @@ sms:
   #  sign_name: 你的签名
   #  template_id: "1234567"
 
-  # Paloud internal notification API
-  #provider:
-  #  type: paloud_internal
-  #  url: https://admin.example.com/api/v1/internal/notifications/sms/send
-  #  key_id: pasion-service
-  #  secret: super-secret
-  #  workspace: demo
 ```
 
 `sms.provider.type` 支持 `blackhole`、`twilio`、`http_webhook`、
-`aliyun_sms`、`tencent_cloud_sms` 和 `paloud_internal`。
+`aliyun_sms` 和 `tencent_cloud_sms`。
 
 ### `telemetry` — 可观测性
 

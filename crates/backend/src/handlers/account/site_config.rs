@@ -18,7 +18,6 @@ pub struct SiteConfigResponse {
     pub tos_uri: Option<String>,
     pub policy_uri: Option<String>,
     pub admin_portal_url: Option<String>,
-    pub plan_management_iframe_uri: Option<String>,
 }
 
 /// Build a [`SiteConfigResponse`] from the domain [`SiteConfig`].
@@ -36,7 +35,6 @@ pub fn from_site_config(config: &SiteConfig) -> SiteConfigResponse {
         tos_uri: config.tos_uri.as_ref().map(|u| u.to_string()),
         policy_uri: config.policy_uri.as_ref().map(|u| u.to_string()),
         admin_portal_url: config.admin_portal_url.as_ref().map(|u| u.to_string()),
-        plan_management_iframe_uri: config.plan_management_iframe_uri.clone(),
     }
 }
 
