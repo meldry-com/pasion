@@ -54,8 +54,8 @@ jobs:
       - name: Fetch repository
         uses: actions/checkout@v7
 
-      - name: Set up Rust 1.94.0 with Clippy
-        uses: dtolnay/rust-toolchain@1.100.0
+      - name: Set up stable Rust with Clippy
+        uses: dtolnay/rust-toolchain@stable
         with:
           components: clippy
 
