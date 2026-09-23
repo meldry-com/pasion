@@ -33,9 +33,10 @@ jobs:
       - name: Fetch repository
         uses: actions/checkout@v7
 
-      - name: Set up nightly Rust for rustfmt
-        uses: dtolnay/rust-toolchain@nightly
+      - name: Set up pinned nightly Rust for rustfmt
+        uses: dtolnay/rust-toolchain@master
         with:
+          toolchain: nightly-2026-08-26
           components: rustfmt
 
       - name: Verify formatting
