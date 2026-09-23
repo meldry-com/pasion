@@ -134,6 +134,7 @@ pub struct RegistrationStatusSummary {
     pub registration: UserRegistration,
     pub email_pending: bool,
     pub pending_email: Option<String>,
+    pub pending_email_sent_at: Option<DateTime<Utc>>,
     pub phone_pending: bool,
     pub steps_completed: Vec<&'static str>,
     pub next_step: &'static str,
@@ -383,6 +384,7 @@ pub enum LoadRegistrationProgressError {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ResendRegistrationVerificationStatus {
     RegistrationCompleted,
+    RegistrationExpired,
     Resent,
     AlreadyVerified,
 }
@@ -494,6 +496,7 @@ pub enum RegistrationResendOutcome {
     Resent,
     AlreadyVerified,
     RegistrationCompleted,
+    RegistrationExpired,
     RateLimited,
 }
 
@@ -511,6 +514,7 @@ pub enum RegistrationEmailChangeOutcome {
     Updated,
     AlreadyVerified,
     RegistrationCompleted,
+    RegistrationExpired,
     InvalidEmail,
     EmailInUse,
     RateLimited,
@@ -660,6 +664,46 @@ enum PrepareAdminBootstrapError {
     Repository(#[from] RepositoryError),
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ClaimBootstrapAdminOutcome {
+    Claimed,
+    Unavailable,
+    InvalidToken,
+}
+
+#[derive(Debug, Error)]
+pub enum ClaimBootstrapAdminError {
+    #[error("user not found")]
+    NotFound,
+    #[error(transparent)]
+    Repository(#[from] RepositoryError),
+}
+
+pub async fn claim_bootstrap_admin(
+    repo: &mut BoxRepository,
+    user_id: Ulid,
+    configured_token: Option<&str>,
+    submitted_token: &str,
+) -> Result<ClaimBootstrapAdminOutcome, ClaimBootstrapAdminError> {
+    let user = repo
+        .user()
+        .lookup(user_id)
+        .await?
+        .ok_or(ClaimBootstrapAdminError::NotFound)?;
+
+    match prepare_admin_bootstrap(repo, configured_token, Some(submitted_token)).await {
+        Ok(true) => {
+            repo.user().set_can_request_admin(user, true).await?;
+            Ok(ClaimBootstrapAdminOutcome::Claimed)
+        }
+        Ok(false) => Ok(ClaimBootstrapAdminOutcome::Unavailable),
+        Err(PrepareAdminBootstrapError::InvalidToken) => {
+            Ok(ClaimBootstrapAdminOutcome::InvalidToken)
+        }
+        Err(PrepareAdminBootstrapError::Repository(error)) => Err(error.into()),
+    }
+}
+
 #[must_use]
 pub fn next_registration_step(
     registration: &UserRegistration,
@@ -758,6 +802,11 @@ pub async fn load_registration_status(
         .as_ref()
         .filter(|auth| auth.completed_at.is_none())
         .map(|auth| auth.email.clone());
+    let pending_email_sent_at = progress
+        .email_authentication
+        .as_ref()
+        .filter(|auth| auth.completed_at.is_none())
+        .map(|auth| auth.created_at);
     let phone_pending =
         progress.registration.phone_authentication_id.is_some() && !progress.phone_verified();
     let steps_completed = workflow.completed_steps.clone();
@@ -767,6 +816,7 @@ pub async fn load_registration_status(
         registration: progress.registration,
         email_pending,
         pending_email,
+        pending_email_sent_at,
         phone_pending,
         steps_completed,
         next_step,
@@ -1076,6 +1126,10 @@ pub async fn resend_pending_registration_verification(
         return Ok(ResendRegistrationVerificationStatus::RegistrationCompleted);
     }
 
+    if registration_has_expired(registration.created_at, clock.now()) {
+        return Ok(ResendRegistrationVerificationStatus::RegistrationExpired);
+    }
+
     if let Some(email_authentication_id) = registration.email_authentication_id {
         let auth = repo
             .user_email()
@@ -1084,11 +1138,21 @@ pub async fn resend_pending_registration_verification(
             .ok_or(ResendRegistrationVerificationError::NotFound)?;
 
         if auth.completed_at.is_none() {
+            if clock.now() < auth.created_at + Duration::seconds(60) {
+                return Err(ResendRegistrationVerificationError::RateLimited);
+            }
             if let Err(error) = limiter
                 .check_email_authentication_send_code(requester, &auth)
                 .await
             {
                 tracing::warn!(error = &error as &dyn std::error::Error);
+                return Err(ResendRegistrationVerificationError::RateLimited);
+            }
+
+            if !limiter
+                .check_registration_email_resend_cooldown(registration.id)
+                .await
+            {
                 return Err(ResendRegistrationVerificationError::RateLimited);
             }
 
@@ -1135,6 +1199,10 @@ pub async fn resend_pending_registration_verification(
     }
 
     Ok(ResendRegistrationVerificationStatus::AlreadyVerified)
+}
+
+fn registration_has_expired(created_at: DateTime<Utc>, now: DateTime<Utc>) -> bool {
+    now >= created_at + Duration::hours(1)
 }
 
 pub async fn verify_registration_email_code(
@@ -1322,6 +1390,9 @@ pub async fn resend_registration_verification(
         Ok(ResendRegistrationVerificationStatus::RegistrationCompleted) => {
             Ok(RegistrationResendOutcome::RegistrationCompleted)
         }
+        Ok(ResendRegistrationVerificationStatus::RegistrationExpired) => {
+            Ok(RegistrationResendOutcome::RegistrationExpired)
+        }
         Err(ResendRegistrationVerificationError::NotFound) => {
             Err(RegistrationResendError::NotFound)
         }
@@ -1357,6 +1428,10 @@ pub async fn change_registration_email(
         return Ok(RegistrationEmailChangeOutcome::RegistrationCompleted);
     }
 
+    if registration_has_expired(progress.registration.created_at, clock.now()) {
+        return Ok(RegistrationEmailChangeOutcome::RegistrationExpired);
+    }
+
     if progress.registration.email_authentication_id.is_none() {
         return Err(RegistrationEmailChangeError::NotAvailable);
     }
@@ -1383,6 +1458,14 @@ pub async fn change_registration_email(
         .await
     {
         tracing::warn!(error = &error as &dyn std::error::Error);
+        return Ok(RegistrationEmailChangeOutcome::RateLimited);
+    }
+
+    if clock.now() < current_auth.created_at + Duration::seconds(60)
+        || !limiter
+            .check_registration_email_resend_cooldown(progress.registration.id)
+            .await
+    {
         return Ok(RegistrationEmailChangeOutcome::RateLimited);
     }
 
@@ -2033,6 +2116,20 @@ mod tests {
     use rand_core::SeedableRng;
 
     use super::*;
+
+    #[test]
+    fn registration_resend_rejects_at_expiration_boundary() {
+        let created_at = Utc.timestamp_opt(1_700_000_000, 0).unwrap();
+        assert!(!registration_has_expired(
+            created_at,
+            created_at + Duration::hours(1) - Duration::milliseconds(1)
+        ));
+        assert!(registration_has_expired(
+            created_at,
+            created_at + Duration::hours(1)
+        ));
+    }
+
     fn sample_registration(created_at: DateTime<Utc>) -> UserRegistration {
         UserRegistration {
             id: Ulid::new(),
@@ -2117,6 +2214,47 @@ mod tests {
             )
             .await
             .unwrap()
+        );
+
+        repo.cancel().await.unwrap();
+    }
+
+    #[tokio::test]
+    async fn existing_user_can_claim_only_the_first_admin_role() {
+        let mut repo = test_repo().await;
+        let mut rng = ChaChaRng::seed_from_u64(43);
+        let clock = MockClock::default();
+        let user = repo
+            .user()
+            .add(&mut rng, &clock, "first-admin".to_owned())
+            .await
+            .unwrap();
+
+        assert_eq!(
+            claim_bootstrap_admin(&mut repo, user.id, Some("secret"), "wrong")
+                .await
+                .unwrap(),
+            ClaimBootstrapAdminOutcome::InvalidToken
+        );
+        assert_eq!(
+            claim_bootstrap_admin(&mut repo, user.id, Some("secret"), "secret")
+                .await
+                .unwrap(),
+            ClaimBootstrapAdminOutcome::Claimed
+        );
+        assert!(
+            repo.user()
+                .lookup(user.id)
+                .await
+                .unwrap()
+                .unwrap()
+                .can_request_admin
+        );
+        assert_eq!(
+            claim_bootstrap_admin(&mut repo, user.id, Some("secret"), "secret")
+                .await
+                .unwrap(),
+            ClaimBootstrapAdminOutcome::Unavailable
         );
 
         repo.cancel().await.unwrap();

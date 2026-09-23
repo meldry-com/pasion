@@ -1,7 +1,10 @@
 use dioxus::prelude::*;
 
 use crate::{
-    api::types::{LinkedAccount, ProvidersResponse, ViewerResponse},
+    api::types::{
+        BootstrapAdminStatus, ClaimBootstrapAdminResponse, LinkedAccount, ProvidersResponse,
+        ViewerResponse,
+    },
     components::{
         collapsible::CollapsibleSection,
         dialog::Dialog,
@@ -18,6 +21,9 @@ use crate::{
 #[component]
 pub fn AccountSettings() -> Element {
     let data = use_resource(|| async { crate::api::api_get::<ViewerResponse>("/viewer").await });
+    let bootstrap_status = use_resource(|| async {
+        crate::api::api_get::<BootstrapAdminStatus>("/bootstrap-admin-status").await
+    });
     let nav = navigator();
     let binding = data.read();
 
@@ -43,6 +49,8 @@ pub fn AccountSettings() -> Element {
             let email_change_allowed = result.site_config.email_change_allowed;
             let password_login_enabled = result.site_config.password_login_enabled;
             let account_deactivation_allowed = result.site_config.account_deactivation_allowed;
+            let can_claim_admin = !user.can_request_admin
+                && matches!(&*bootstrap_status.read(), Some(Ok(status)) if status.setup_required);
             let session_id = session.id.clone();
             let user_mxid = user
                 .matrix
@@ -95,6 +103,11 @@ pub fn AccountSettings() -> Element {
                     }
                     Separator { kind: SeparatorKind::Section }
 
+                    if can_claim_admin {
+                        ClaimAdminSection {}
+                        Separator { kind: SeparatorKind::Section }
+                    }
+
                     // Sign out
                     SignOutButton { session_id: session_id.clone() }
 
@@ -116,6 +129,98 @@ pub fn AccountSettings() -> Element {
             div { class: "alert alert-critical", "{e}" }
         },
         None => rsx! { LoadingScreen {} },
+    }
+}
+
+#[component]
+fn ClaimAdminSection() -> Element {
+    let mut show_dialog = use_signal(|| false);
+    let mut token = use_signal(String::new);
+    let mut submitting = use_signal(|| false);
+    let mut error = use_signal(|| None::<String>);
+
+    rsx! {
+        CollapsibleSection { title: "Administrator access".to_owned(), default_open: true,
+            p { class: "text-md text-secondary",
+                "This site has no administrator yet. Enter the bootstrap token to claim the first administrator account."
+            }
+            button {
+                class: "btn btn-secondary",
+                r#type: "button",
+                onclick: move |_| {
+                    token.set(String::new());
+                    error.set(None);
+                    show_dialog.set(true);
+                },
+                "Become an administrator"
+            }
+        }
+
+        Dialog { open: show_dialog, title: "Become an administrator".to_owned(),
+            form {
+                class: "form-root",
+                onsubmit: move |event| {
+                    event.prevent_default();
+                    let submitted_token = token.to_string();
+                    if submitted_token.trim().is_empty() {
+                        error.set(Some("Enter the bootstrap token.".to_owned()));
+                        return;
+                    }
+                    submitting.set(true);
+                    error.set(None);
+                    spawn(async move {
+                        let result = crate::api::api_post::<ClaimBootstrapAdminResponse>(
+                            "/bootstrap-admin-status/claim",
+                            serde_json::json!({ "token": submitted_token }),
+                        ).await;
+                        submitting.set(false);
+                        match result {
+                            Ok(response) if response.status == "claimed" => {
+                                token.set(String::new());
+                                if let Some(window) = web_sys::window() {
+                                    let _ = window.location().reload();
+                                }
+                            }
+                            Ok(response) if response.status == "invalid_token" => {
+                                error.set(Some("The bootstrap token is invalid.".to_owned()));
+                            }
+                            Ok(response) if response.status == "unavailable" => {
+                                error.set(Some("Administrator setup is no longer available.".to_owned()));
+                            }
+                            Ok(_) => error.set(Some("Could not claim administrator access.".to_owned())),
+                            Err(message) => error.set(Some(message)),
+                        }
+                    });
+                },
+                div { class: "form-field",
+                    label { class: "form-label", r#for: "bootstrap-admin-token", "Bootstrap token" }
+                    PasswordInput {
+                        id: "bootstrap-admin-token",
+                        name: "bootstrap_admin_token",
+                        autocomplete: "off".to_owned(),
+                        value: token.read().clone(),
+                        oninput: move |event: FormEvent| token.set(event.value()),
+                    }
+                }
+                if let Some(ref message) = *error.read() {
+                    div { class: "alert alert-critical", role: "alert", "{message}" }
+                }
+                button {
+                    class: "btn btn-primary",
+                    r#type: "submit",
+                    disabled: submitting() || token.read().trim().is_empty(),
+                    if submitting() { span { class: "loading-spinner inline" } }
+                    "Claim administrator access"
+                }
+                button {
+                    class: "btn btn-tertiary",
+                    r#type: "button",
+                    disabled: submitting(),
+                    onclick: move |_| show_dialog.set(false),
+                    "Cancel"
+                }
+            }
+        }
     }
 }
 

@@ -266,6 +266,11 @@ pub struct BootstrapAdminStatus {
     pub setup_required: bool,
 }
 
+#[derive(Debug, Clone, PartialEq, Deserialize)]
+pub struct ClaimBootstrapAdminResponse {
+    pub status: String,
+}
+
 // ── Site Config ────────────────────────────────────────────────
 
 #[derive(Debug, Clone, PartialEq, Deserialize, Serialize)]
@@ -584,6 +589,8 @@ pub type VerifyEmailData = UserEmailAuthentication;
 #[derive(Debug, Clone, PartialEq, Deserialize)]
 pub struct ResendEmailAuthCodePayload {
     pub status: String,
+    #[serde(default)]
+    pub error: Option<String>,
 }
 
 pub type ResendEmailAuthCodeResult = ResendEmailAuthCodePayload;
@@ -658,11 +665,15 @@ pub struct RegisterResponse {
 #[derive(Debug, Clone, PartialEq, Deserialize, Serialize)]
 pub struct RegisterStatusResponse {
     pub id: String,
+    #[serde(default)]
+    pub created_at: Option<String>,
     pub username: String,
     #[serde(default)]
     pub email_pending: bool,
     #[serde(default)]
     pub pending_email: Option<String>,
+    #[serde(default)]
+    pub pending_email_sent_at: Option<String>,
     pub next_step: String,
 }
 

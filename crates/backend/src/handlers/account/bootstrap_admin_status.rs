@@ -1,8 +1,14 @@
 use pasion_data::{BoxRepository, RepositoryAccess, RepositoryError, SiteConfig, user::UserFilter};
 use salvo::{oapi::ToSchema, prelude::*};
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 
-use super::{DepotExt, RouteError};
+use super::{
+    DepotExt, RouteError, extract_bound_activity_tracker, extract_session_info, get_requester,
+    make_clock,
+};
+use crate::handlers::account::service::registration::{
+    ClaimBootstrapAdminError, ClaimBootstrapAdminOutcome, claim_bootstrap_admin,
+};
 
 #[derive(Debug, Serialize, ToSchema)]
 pub struct BootstrapAdminStatusResponse {
@@ -44,6 +50,67 @@ pub async fn get(depot: &Depot) -> Result<Json<BootstrapAdminStatusResponse>, Ro
     Ok(Json(
         load_bootstrap_admin_status_from(&config, &mut repo).await?,
     ))
+}
+
+#[derive(Deserialize, ToSchema)]
+pub struct ClaimBootstrapAdminInput {
+    pub token: String,
+}
+
+#[derive(Serialize, ToSchema)]
+pub struct ClaimBootstrapAdminResponse {
+    pub status: &'static str,
+}
+
+#[endpoint]
+pub async fn post_claim(
+    req: &mut Request,
+    depot: &Depot,
+) -> Result<Json<ClaimBootstrapAdminResponse>, RouteError> {
+    let input: ClaimBootstrapAdminInput = req
+        .parse_json()
+        .await
+        .map_err(|_| RouteError::BadRequest("invalid json body".into()))?;
+    let config = depot.site_config()?;
+    let limiter = depot.limiter()?;
+    let clock = make_clock();
+    let activity_tracker = extract_bound_activity_tracker(req, depot);
+    let session_info = extract_session_info(req, depot);
+    let repo = depot.repo_factory()?.create().await?;
+    let (requester, mut repo) =
+        get_requester(&clock, &activity_tracker, repo, &session_info).await?;
+    let user = requester
+        .browser_session()
+        .map(|session| &session.user)
+        .ok_or(RouteError::Unauthorized)?;
+
+    limiter
+        .check_password(requester.fingerprint(), user)
+        .await
+        .map_err(|_| RouteError::RateLimited)?;
+
+    let outcome = claim_bootstrap_admin(
+        &mut repo,
+        user.id,
+        config.bootstrap_admin_token.as_deref(),
+        &input.token,
+    )
+    .await
+    .map_err(|error| match error {
+        ClaimBootstrapAdminError::NotFound => RouteError::NotFound,
+        ClaimBootstrapAdminError::Repository(error) => error.into(),
+    })?;
+
+    if outcome == ClaimBootstrapAdminOutcome::Claimed {
+        repo.save().await?;
+    }
+
+    let status = match outcome {
+        ClaimBootstrapAdminOutcome::Claimed => "claimed",
+        ClaimBootstrapAdminOutcome::Unavailable => "unavailable",
+        ClaimBootstrapAdminOutcome::InvalidToken => "invalid_token",
+    };
+    Ok(Json(ClaimBootstrapAdminResponse { status }))
 }
 
 #[cfg(test)]

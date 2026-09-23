@@ -225,6 +225,7 @@ fn RegisterPage(providers: ProvidersResponse) -> Element {
 /// Email verification step during registration.
 #[component]
 pub fn RegisterVerifyEmail(id: String) -> Element {
+    let storage_id = id.clone();
     let mut code = use_signal(String::new);
     let mut email = use_signal(String::new);
     let mut editing_email = use_signal(|| false);
@@ -233,6 +234,16 @@ pub fn RegisterVerifyEmail(id: String) -> Element {
     let mut changing_email = use_signal(|| false);
     let mut error = use_signal(|| None::<String>);
     let mut resend_message = use_signal(|| None::<String>);
+    let mut last_email_sent_at = use_signal(move || stored_email_send_time(&storage_id));
+    let mut now_ms = use_signal(js_sys::Date::now);
+    use_effect(move || {
+        spawn(async move {
+            loop {
+                gloo_timers::future::TimeoutFuture::new(1000).await;
+                now_ms.set(js_sys::Date::now());
+            }
+        });
+    });
     let nav = navigator();
     let reg_id = id.clone();
     let resend_id = id.clone();
@@ -254,6 +265,17 @@ pub fn RegisterVerifyEmail(id: String) -> Element {
         .as_deref()
         .map_or_else(|| "your email address".to_owned(), mask_email_address);
     let change_email_seed = pending_email.clone().unwrap_or_default();
+    let initial_sent_at = match &*status_binding {
+        Some(Ok(data)) => data
+            .pending_email_sent_at
+            .as_deref()
+            .map(js_sys::Date::parse)
+            .or_else(|| data.created_at.as_deref().map(js_sys::Date::parse))
+            .unwrap_or(0.0),
+        _ => 0.0,
+    };
+    let sent_at = initial_sent_at.max(last_email_sent_at());
+    let resend_seconds = ((sent_at + 60_000.0 - now_ms()) / 1000.0).ceil().max(0.0) as u32;
 
     rsx! {
         Layout {
@@ -306,6 +328,9 @@ pub fn RegisterVerifyEmail(id: String) -> Element {
                                     changing_email.set(false);
                                     match result {
                                         Ok(resp) if resp.status == "updated" => {
+                                            let sent_at = js_sys::Date::now();
+                                            store_email_send_time(&rid, sent_at);
+                                            last_email_sent_at.set(sent_at);
                                             code.set(String::new());
                                             editing_email.set(false);
                                             resend_message.set(Some("Your email has been updated and a new code has been sent.".to_owned()));
@@ -339,11 +364,15 @@ pub fn RegisterVerifyEmail(id: String) -> Element {
                             button {
                                 class: "btn btn-primary btn-block",
                                 r#type: "submit",
-                                disabled: changing_email(),
+                                disabled: changing_email() || resend_seconds > 0,
                                 if changing_email() {
                                     LoadingSpinner { inline: true }
                                 }
-                                "Save new email"
+                                if resend_seconds > 0 {
+                                    "Save new email ({resend_seconds}s)"
+                                } else {
+                                    "Save new email"
+                                }
                             }
                         }
                     }
@@ -427,7 +456,7 @@ pub fn RegisterVerifyEmail(id: String) -> Element {
                         button {
                             class: "btn btn-secondary btn-block",
                             r#type: "button",
-                            disabled: resending(),
+                            disabled: resending() || resend_seconds > 0,
                             onclick: move |_| {
                                 let rid = resend_id.clone();
                                 resending.set(true);
@@ -441,13 +470,16 @@ pub fn RegisterVerifyEmail(id: String) -> Element {
                                     resending.set(false);
                                     match result {
                                         Ok(resp) if resp.status == "resent" => {
+                                            let sent_at = js_sys::Date::now();
+                                            store_email_send_time(&rid, sent_at);
+                                            last_email_sent_at.set(sent_at);
                                             resend_message.set(Some("A new verification code has been sent.".to_owned()));
                                         }
                                         Ok(resp) => {
-                                            let message = match resp.status.as_str() {
+                                            let message = match resp.error.as_deref().unwrap_or(&resp.status) {
                                                 "already_verified" => "This email has already been verified.".to_owned(),
                                                 "rate_limited" => "Please wait before requesting another code.".to_owned(),
-                                                _ => "Could not resend the verification code.".to_owned(),
+                                                code => registration_error_message(code),
                                             };
                                             error.set(Some(message));
                                         }
@@ -460,7 +492,11 @@ pub fn RegisterVerifyEmail(id: String) -> Element {
                             if resending() {
                                 LoadingSpinner { inline: true }
                             }
-                            "Resend code"
+                            if resend_seconds > 0 {
+                                "Resend code ({resend_seconds}s)"
+                            } else {
+                                "Resend code"
+                            }
                         }
                     }
                 }
@@ -483,6 +519,30 @@ fn mask_email_address(email: &str) -> String {
     format!("{visible}***@{domain}")
 }
 
+fn stored_email_send_time(registration_id: &str) -> f64 {
+    web_sys::window()
+        .and_then(|window| window.local_storage().ok().flatten())
+        .and_then(|storage| {
+            storage
+                .get_item(&format!("registration-email-sent:{registration_id}"))
+                .ok()
+                .flatten()
+        })
+        .and_then(|value| value.parse().ok())
+        .unwrap_or(0.0)
+}
+
+fn store_email_send_time(registration_id: &str, sent_at: f64) {
+    if let Some(storage) =
+        web_sys::window().and_then(|window| window.local_storage().ok().flatten())
+    {
+        let _ = storage.set_item(
+            &format!("registration-email-sent:{registration_id}"),
+            &sent_at.to_string(),
+        );
+    }
+}
+
 fn registration_error_message(code: &str) -> String {
     match code {
         "invalid_code" => "Incorrect code. Please try again.".to_owned(),
@@ -490,6 +550,7 @@ fn registration_error_message(code: &str) -> String {
         "registration_already_completed" => {
             "This registration has already been completed.".to_owned()
         }
+        "registration_expired" => "This registration has expired. Please start again.".to_owned(),
         "email_already_verified" => "This email has already been verified.".to_owned(),
         "email_invalid" => "Please enter a valid email address.".to_owned(),
         "email_in_use" => "This email is already in use.".to_owned(),
