@@ -120,10 +120,10 @@ pub async fn password_login(
         PasswordVerificationOutcome::RateLimited => {
             return Err(RouteError::RateLimited);
         }
-        PasswordVerificationOutcome::AccountDeactivated { .. } => {
+        PasswordVerificationOutcome::AccountDeactivated => {
             return Err(RouteError::BadRequest("account_deactivated".into()));
         }
-        PasswordVerificationOutcome::AccountLocked { .. } => {
+        PasswordVerificationOutcome::AccountLocked => {
             return Err(RouteError::BadRequest("account_locked".into()));
         }
         PasswordVerificationOutcome::Authenticated { user, .. } => user,

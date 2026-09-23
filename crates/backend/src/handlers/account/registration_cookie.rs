@@ -74,7 +74,7 @@ impl UserRegistrationSessions {
     }
 
     /// Add a new session, for a provider and a random state
-    pub fn add(mut self, user_registration: &UserRegistration) -> Self {
+    pub fn insert(mut self, user_registration: &UserRegistration) -> Self {
         self.0.insert(user_registration.id);
         self
     }

@@ -221,8 +221,8 @@ pub(super) async fn run_leader_duties(
             .await?;
     }
 
-    let scheduled = repo.queue_job().schedule_available_jobs(clock).await?;
-    match scheduled {
+    let scheduled_count = repo.queue_job().schedule_available_jobs(clock).await?;
+    match scheduled_count {
         0 => {}
         1 => tracing::info!("One scheduled job marked as available"),
         n => tracing::info!("{n} scheduled jobs marked as available"),
@@ -257,12 +257,12 @@ mod tests {
         let schedules = vec![schedule("alpha"), schedule("beta"), schedule("gamma")];
         let statuses = vec![
             ScheduleStatus {
-                schedule_name: "alpha".to_string(),
+                schedule_name: "alpha".to_owned(),
                 last_scheduled_at: Some(Utc::now()),
                 last_scheduled_job_completed: Some(true),
             },
             ScheduleStatus {
-                schedule_name: "gamma".to_string(),
+                schedule_name: "gamma".to_owned(),
                 last_scheduled_at: None,
                 last_scheduled_job_completed: None,
             },

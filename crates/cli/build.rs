@@ -1,8 +1,6 @@
-use std::{
-    env,
-    path::{Path, PathBuf},
-    process::Command,
-};
+use std::{env, process::Command};
+
+use camino::{Utf8Path, Utf8PathBuf};
 
 fn main() {
     println!("cargo::rustc-check-cfg=cfg(tokio_unstable)");
@@ -12,7 +10,7 @@ fn main() {
     if let Some(root) = workspace_root() {
         let git_head = root.join(".git").join("HEAD");
         if git_head.exists() {
-            println!("cargo:rerun-if-changed={}", git_head.display());
+            println!("cargo:rerun-if-changed={git_head}");
         }
     }
 
@@ -54,11 +52,11 @@ fn package_version_fallback() -> String {
     format!("v{version}")
 }
 
-fn workspace_root() -> Option<PathBuf> {
-    let manifest_dir = PathBuf::from(env::var("CARGO_MANIFEST_DIR").ok()?);
+fn workspace_root() -> Option<Utf8PathBuf> {
+    let manifest_dir = Utf8PathBuf::from(env::var("CARGO_MANIFEST_DIR").ok()?);
     ancestor_path(&manifest_dir, 2)
 }
 
-fn ancestor_path(path: &Path, depth: usize) -> Option<PathBuf> {
-    path.ancestors().nth(depth).map(PathBuf::from)
+fn ancestor_path(path: &Utf8Path, depth: usize) -> Option<Utf8PathBuf> {
+    path.ancestors().nth(depth).map(Utf8PathBuf::from)
 }

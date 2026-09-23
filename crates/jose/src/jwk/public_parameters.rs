@@ -324,8 +324,8 @@ mod ec_impls {
                 .get(..field_size)
                 .ok_or(elliptic_curve::Error)?;
 
-            let x_field = FieldBytes::<C>::from_slice(x_bytes);
-            let y_field = FieldBytes::<C>::from_slice(y_bytes);
+            let x_field: &FieldBytes<C> = x_bytes.into();
+            let y_field: &FieldBytes<C> = y_bytes.into();
 
             let encoded = EncodedPoint::<C>::from_affine_coordinates(x_field, y_field, false);
             let maybe_key: Option<_> = PublicKey::from_encoded_point(&encoded).into();

@@ -65,16 +65,16 @@ pub struct SiteFeatures {
 }
 
 impl SiteFeatures {
-    fn resolve(&self, name: &str) -> Option<bool> {
+    fn resolve(self, name: &str) -> Option<bool> {
         FEATURE_FIELDS
             .iter()
-            .find_map(|field| (field.name == name).then(|| (field.read)(self)))
+            .find_map(|field| (field.name == name).then(|| (field.read)(&self)))
     }
 }
 
 impl Object for SiteFeatures {
     fn get_value(self: &Arc<Self>, field: &Value) -> Option<Value> {
-        self.resolve(field.as_str()?).map(Value::from)
+        (**self).resolve(field.as_str()?).map(Value::from)
     }
 
     fn enumerate(self: &Arc<Self>) -> Enumerator {

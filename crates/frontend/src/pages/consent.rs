@@ -6,7 +6,7 @@ use crate::{
     pages::Route,
 };
 
-/// OAuth2 consent page — shows what permissions a client is requesting.
+/// `OAuth2` consent page — shows what permissions a client is requesting.
 #[component]
 pub fn Consent(grant_id: String) -> Element {
     let gid = grant_id.clone();
@@ -125,7 +125,7 @@ fn ConsentForm(data: ConsentDataResponse, grant_id: String) -> Element {
                                     ).await;
                                     match result {
                                         Ok(resp) if resp.status == "success" => {
-                                            if let Some(url) = resp.redirect_url {
+                                            if let Some(_url) = resp.redirect_url {
                                                 // Keep the button disabled: we are about to
                                                 // navigate away, and re-enabling it opens a
                                                 // window for a duplicate submit that the
@@ -142,7 +142,7 @@ fn ConsentForm(data: ConsentDataResponse, grant_id: String) -> Element {
                                                 }
                                             } else {
                                                 submitting.set(false);
-                                                error.set(Some("No redirect URL in response.".to_string()));
+                                                error.set(Some("No redirect URL in response.".to_owned()));
                                             }
                                         }
                                         // A 401 comes back from `api_post` as `Err`, not `Ok`
@@ -150,7 +150,7 @@ fn ConsentForm(data: ConsentDataResponse, grant_id: String) -> Element {
                                         // handled in the `Err` arm below.
                                         Ok(resp) => {
                                             submitting.set(false);
-                                            error.set(Some(resp.error.unwrap_or_else(|| "Authorization failed.".to_string())));
+                                            error.set(Some(resp.error.unwrap_or_else(|| "Authorization failed.".to_owned())));
                                         }
                                         Err(e) => {
                                             submitting.set(false);
@@ -184,18 +184,18 @@ fn ConsentForm(data: ConsentDataResponse, grant_id: String) -> Element {
 
 fn scope_description(scope: &str) -> String {
     match scope {
-        "openid" => "Verify your identity".to_string(),
-        "profile" => "View your profile information".to_string(),
-        "email" => "View your email address".to_string(),
-        "phone" => "View your phone number".to_string(),
-        "address" => "View your address".to_string(),
+        "openid" => "Verify your identity".to_owned(),
+        "profile" => "View your profile information".to_owned(),
+        "email" => "View your email address".to_owned(),
+        "phone" => "View your phone number".to_owned(),
+        "address" => "View your address".to_owned(),
         "urn:matrix:org.matrix.msc2967.client:api:*" => {
-            "Access the Matrix API on your behalf".to_string()
+            "Access the Matrix API on your behalf".to_owned()
         }
-        "urn:matrix:org.matrix.msc2967.client:device:*" => "Manage your devices".to_string(),
+        "urn:matrix:org.matrix.msc2967.client:device:*" => "Manage your devices".to_owned(),
         other if other.starts_with("urn:pasion:admin") || other.starts_with("urn:mas:admin") => {
-            "Administrative access".to_string()
+            "Administrative access".to_owned()
         }
-        other => other.to_string(),
+        other => other.to_owned(),
     }
 }

@@ -3,6 +3,10 @@
 //! Provides email and SMS transports behind a common trait interface.
 
 #![deny(missing_docs)]
+#![allow(
+    clippy::disallowed_methods,
+    reason = "provider transports are the HTTP and wall-clock integration boundary"
+)]
 
 pub mod email;
 mod notification;

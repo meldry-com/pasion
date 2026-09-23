@@ -261,10 +261,9 @@ pub trait DepotExt {
 
 fn depot_get<T: Send + Sync + Clone + 'static>(depot: &Depot, key: &str) -> Result<T, RouteError> {
     depot.get::<T>(key).cloned().map_err(|_| {
-        RouteError::Internal(Box::new(std::io::Error::new(
-            std::io::ErrorKind::Other,
-            format!("{key} not found in depot"),
-        )))
+        RouteError::Internal(Box::new(std::io::Error::other(format!(
+            "{key} not found in depot"
+        ))))
     })
 }
 
@@ -272,8 +271,7 @@ impl DepotExt for Depot {
     fn repo_factory(&self) -> Result<&BoxRepositoryFactory, RouteError> {
         self.get::<BoxRepositoryFactory>("box_repository_factory")
             .map_err(|_| {
-                RouteError::Internal(Box::new(std::io::Error::new(
-                    std::io::ErrorKind::Other,
+                RouteError::Internal(Box::new(std::io::Error::other(
                     "box_repository_factory not found in depot",
                 )))
             })

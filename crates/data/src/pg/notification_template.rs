@@ -37,7 +37,8 @@ struct TemplateVersionRow {
     template_key: String,
     version: i32,
     channel: String,
-    locale: String,
+    #[diesel(column_name = locale)]
+    _locale: String,
     subject_template: Option<String>,
     body_template: String,
     created_at: DateTime<Utc>,
@@ -59,7 +60,7 @@ impl From<TemplateVersionRow> for NotificationTemplateVersion {
         NotificationTemplateVersion {
             id: row.id.into(),
             template_key: row.template_key,
-            version: row.version as u32,
+            version: row.version.cast_unsigned(),
             channel,
             subject_template: row.subject_template,
             body_template: row.body_template,
@@ -171,7 +172,7 @@ impl NotificationTemplateRepository for PgNotificationTemplateRepository<'_> {
         Ok(NotificationTemplateVersion {
             id,
             template_key,
-            version: next_version as u32,
+            version: next_version.cast_unsigned(),
             channel: ch,
             subject_template,
             body_template,

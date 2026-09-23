@@ -134,11 +134,15 @@ fn hmac_sha256(key: &[u8], data: &[u8]) -> Vec<u8> {
 
 /// Private hex encoding module to avoid adding hex as a dependency
 mod hex {
+    use std::fmt::Write as _;
+
     /// Encode bytes as lowercase hex string
     pub fn encode(data: impl AsRef<[u8]>) -> String {
-        data.as_ref()
-            .iter()
-            .map(|byte| format!("{byte:02x}"))
-            .collect()
+        let data = data.as_ref();
+        let mut encoded = String::with_capacity(data.len() * 2);
+        for byte in data {
+            let _ = write!(encoded, "{byte:02x}");
+        }
+        encoded
     }
 }

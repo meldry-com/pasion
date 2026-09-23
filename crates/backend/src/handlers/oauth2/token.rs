@@ -445,7 +445,7 @@ async fn handle_post(
 
     let form = client_authorization.form.ok_or(RouteError::BadRequest)?;
 
-    let grant_type = form.grant_type().to_string();
+    let grant_type = form.grant_type().to_owned();
     tracing::info!(
         oauth2_client.id = %client.id,
         grant_type = %grant_type,

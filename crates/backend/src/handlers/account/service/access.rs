@@ -30,12 +30,8 @@ pub enum PasswordLoginOutcome {
     Disabled,
     InvalidCredentials,
     RateLimited,
-    AccountDeactivated {
-        user: User,
-    },
-    AccountLocked {
-        user: User,
-    },
+    AccountDeactivated,
+    AccountLocked,
     Authenticated {
         user: User,
         user_session: BrowserSession,
@@ -47,8 +43,8 @@ pub enum PasswordVerificationOutcome {
     Disabled,
     InvalidCredentials,
     RateLimited,
-    AccountDeactivated { user: User },
-    AccountLocked { user: User },
+    AccountDeactivated,
+    AccountLocked,
     Authenticated { user: User, user_password: Password },
 }
 
@@ -95,12 +91,10 @@ pub async fn login_with_password(
             Ok(PasswordLoginOutcome::InvalidCredentials)
         }
         PasswordVerificationOutcome::RateLimited => Ok(PasswordLoginOutcome::RateLimited),
-        PasswordVerificationOutcome::AccountDeactivated { user } => {
-            Ok(PasswordLoginOutcome::AccountDeactivated { user })
+        PasswordVerificationOutcome::AccountDeactivated => {
+            Ok(PasswordLoginOutcome::AccountDeactivated)
         }
-        PasswordVerificationOutcome::AccountLocked { user } => {
-            Ok(PasswordLoginOutcome::AccountLocked { user })
-        }
+        PasswordVerificationOutcome::AccountLocked => Ok(PasswordLoginOutcome::AccountLocked),
         PasswordVerificationOutcome::Authenticated {
             user,
             user_password,
@@ -184,15 +178,15 @@ pub async fn verify_password_login(
         Ok(PasswordVerificationResult::NotMatched) => {
             return Ok(PasswordVerificationOutcome::InvalidCredentials);
         }
-        Err(error) => return Err(PasswordLoginError::Password(error.into())),
+        Err(error) => return Err(PasswordLoginError::Password(error)),
     };
 
     if user.deactivated_at.is_some() {
-        return Ok(PasswordVerificationOutcome::AccountDeactivated { user });
+        return Ok(PasswordVerificationOutcome::AccountDeactivated);
     }
 
     if user.locked_at.is_some() {
-        return Ok(PasswordVerificationOutcome::AccountLocked { user });
+        return Ok(PasswordVerificationOutcome::AccountLocked);
     }
 
     debug_assert!(user.is_valid());

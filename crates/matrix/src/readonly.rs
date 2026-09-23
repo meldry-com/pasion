@@ -151,7 +151,7 @@ mod tests {
     use crate::mock::HomeserverAdmin as MockHomeserverAdmin;
 
     impl ConnectorProvider for MockHomeserverAdmin {
-        fn provider_name(&self) -> &str {
+        fn provider_name(&self) -> &'static str {
             "mock-homeserver"
         }
 
@@ -166,7 +166,7 @@ mod tests {
         }
     }
 
-    fn assert_all_writes_disabled(capabilities: ConnectorCapabilities) {
+    fn assert_all_writes_disabled(capabilities: &ConnectorCapabilities) {
         assert!(!capabilities.can_provision_users);
         assert!(!capabilities.can_delete_users);
         assert!(!capabilities.can_manage_devices);
@@ -205,7 +205,7 @@ mod tests {
         let connection = ReadOnlyHomeserverAdmin::new(MockHomeserverAdmin::new("example.org"));
 
         assert_eq!(connection.provider_name(), "mock-homeserver");
-        assert_all_writes_disabled(connection.capabilities());
+        assert_all_writes_disabled(&connection.capabilities());
 
         let provision_error = connection
             .provision_user(&ProvisionRequest::new("bob", "sub-bob"))

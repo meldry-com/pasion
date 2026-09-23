@@ -172,7 +172,7 @@ pub async fn login(req: &mut Request, depot: &Depot, res: &mut Response) -> Resu
             }));
             Ok(())
         }
-        PasswordLoginOutcome::AccountDeactivated { .. } => {
+        PasswordLoginOutcome::AccountDeactivated => {
             PASSWORD_LOGIN_COUNTER.add(1, &[KeyValue::new(RESULT, "error")]);
             res.render(Json(LoginResponse {
                 status: "error",
@@ -181,7 +181,7 @@ pub async fn login(req: &mut Request, depot: &Depot, res: &mut Response) -> Resu
             }));
             Ok(())
         }
-        PasswordLoginOutcome::AccountLocked { .. } => {
+        PasswordLoginOutcome::AccountLocked => {
             PASSWORD_LOGIN_COUNTER.add(1, &[KeyValue::new(RESULT, "error")]);
             res.render(Json(LoginResponse {
                 status: "error",

@@ -38,12 +38,6 @@ pub use self::{
 static FLOW_SESSION_STORE: LazyLock<RwLock<HashMap<Ulid, (FlowPlan, FlowSession)>>> =
     LazyLock::new(|| RwLock::new(HashMap::new()));
 
-/// Get a read lock on the flow session store.
-pub(crate) async fn flow_session_store_read()
--> tokio::sync::RwLockReadGuard<'static, HashMap<Ulid, (FlowPlan, FlowSession)>> {
-    FLOW_SESSION_STORE.read().await
-}
-
 /// Get a write lock on the flow session store.
 pub(crate) async fn flow_session_store_write()
 -> tokio::sync::RwLockWriteGuard<'static, HashMap<Ulid, (FlowPlan, FlowSession)>> {

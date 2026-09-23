@@ -3,6 +3,7 @@
 use std::{
     collections::BTreeMap,
     ffi::OsString,
+    fmt::Write as _,
     num::NonZeroU16,
     sync::{
         Arc,
@@ -198,7 +199,7 @@ impl Transport {
         })
     }
 
-    /// Construct a SendGrid email API transport.
+    /// Construct a `SendGrid` email API transport.
     #[must_use]
     pub fn sendgrid(client: Client, base_url: Url, api_key: String) -> Self {
         Self::new(SendgridLikeProvider {
@@ -209,7 +210,7 @@ impl Transport {
         })
     }
 
-    /// Construct a Twilio SendGrid email API transport.
+    /// Construct a Twilio `SendGrid` email API transport.
     #[must_use]
     pub fn twilio(client: Client, base_url: Url, api_key: String) -> Self {
         Self::new(SendgridLikeProvider {
@@ -231,6 +232,10 @@ impl Transport {
     }
 
     /// Construct an AWS SES v2 email API transport.
+    ///
+    /// # Panics
+    ///
+    /// Panics if the built-in AWS endpoint template produces an invalid URL.
     #[must_use]
     pub fn aws_ses(
         client: Client,
@@ -258,11 +263,19 @@ impl Transport {
     }
 
     /// Send an outbound email through the configured provider.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the provider rejects the message or the request fails.
     pub async fn send(&self, email: &OutboundEmail) -> Result<SendResult, Error> {
         self.inner.send(email).await
     }
 
     /// Test the connection to the underlying transport when supported.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the provider connection check fails.
     pub async fn test_connection(&self, from: &Mailbox) -> Result<(), Error> {
         self.inner.test_connection(from).await
     }
@@ -460,9 +473,9 @@ impl EmailProvider for PaloudInternalProvider {
             _ => {
                 return Err(Error::ProviderError {
                     status: 400,
-                    code: Some("unsupported_recipient_count".to_string()),
+                    code: Some("unsupported_recipient_count".to_owned()),
                     body: "Paloud internal email transport requires exactly one recipient"
-                        .to_string(),
+                        .to_owned(),
                     retryable: false,
                 });
             }
@@ -899,7 +912,7 @@ impl EmailProvider for AwsSesProvider {
             url,
             Some(body),
             Some("application/json"),
-        )?)
+        ))
         .await
     }
 
@@ -910,7 +923,7 @@ impl EmailProvider for AwsSesProvider {
                 provider_url(&self.endpoint, "/v2/email/account"),
                 None,
                 None,
-            )?)
+            ))
             .await?;
 
         if !account.sending_enabled {
@@ -938,7 +951,7 @@ impl AwsSesProvider {
         url: Url,
         body: Option<String>,
         content_type: Option<&str>,
-    ) -> Result<RequestBuilder, Error> {
+    ) -> RequestBuilder {
         let host = url
             .host_str()
             .expect("AWS SES endpoint must contain a hostname");
@@ -962,10 +975,14 @@ impl AwsSesProvider {
             canonical_headers.insert("x-amz-security-token".to_owned(), session_token.clone());
         }
 
-        let canonical_headers_text = canonical_headers
-            .iter()
-            .map(|(name, value)| format!("{name}:{}\n", normalize_aws_header_value(value)))
-            .collect::<String>();
+        let mut canonical_headers_text = String::new();
+        for (name, value) in &canonical_headers {
+            let _ = writeln!(
+                canonical_headers_text,
+                "{name}:{}",
+                normalize_aws_header_value(value)
+            );
+        }
         let signed_headers = canonical_headers
             .keys()
             .map(String::as_str)
@@ -1010,7 +1027,7 @@ impl AwsSesProvider {
             request = request.body(body);
         }
 
-        Ok(request)
+        request
     }
 
     async fn ensure_verified_sender(&self, from: &Mailbox) -> Result<(), Error> {
@@ -1020,15 +1037,13 @@ impl AwsSesProvider {
             .get_email_identity(&sender_email)
             .await?
             .filter(|identity| identity.verified_for_sending_status)
-        {
-            if identity
+            && identity
                 .verification_status
                 .as_deref()
                 .unwrap_or("SUCCESS")
                 .eq_ignore_ascii_case("SUCCESS")
-            {
-                return Ok(());
-            }
+        {
+            return Ok(());
         }
 
         let sender_domain = sender_domain(from).ok_or_else(|| {
@@ -1042,15 +1057,13 @@ impl AwsSesProvider {
             .get_email_identity(&sender_domain)
             .await?
             .filter(|identity| identity.verified_for_sending_status)
-        {
-            if identity
+            && identity
                 .verification_status
                 .as_deref()
                 .unwrap_or("SUCCESS")
                 .eq_ignore_ascii_case("SUCCESS")
-            {
-                return Ok(());
-            }
+        {
+            return Ok(());
         }
 
         Err(provider_client_error(
@@ -1067,7 +1080,7 @@ impl AwsSesProvider {
     ) -> Result<Option<AwsSesIdentityResponse>, Error> {
         let mut url = self.endpoint.clone();
         {
-            let mut segments = url.path_segments_mut().map_err(|_| {
+            let mut segments = url.path_segments_mut().map_err(|()| {
                 provider_client_error("invalid_endpoint", "AWS SES endpoint path is invalid")
             })?;
             segments.clear();
@@ -1077,7 +1090,7 @@ impl AwsSesProvider {
         url.set_fragment(None);
 
         execute_optional_provider_json_request(
-            self.aws_signed_request(Method::GET, url, None, None)?,
+            self.aws_signed_request(Method::GET, url, None, None),
             &[StatusCode::NOT_FOUND],
         )
         .await
@@ -1391,7 +1404,7 @@ fn aws_percent_encode(value: &str, keep_slash: bool) -> String {
             encoded.push(char::from(*byte));
         } else {
             encoded.push('%');
-            encoded.push_str(&format!("{byte:02X}"));
+            let _ = write!(encoded, "{byte:02X}");
         }
     }
 
@@ -1483,12 +1496,12 @@ struct ProviderResponseError {
 
 fn extract_provider_message_id(headers: &reqwest::header::HeaderMap, body: &str) -> Option<String> {
     for header_name in ["x-provider-message-id", "x-message-id", "x-request-id"] {
-        if let Some(value) = headers.get(header_name) {
-            if let Ok(value) = value.to_str() {
-                let value = value.trim();
-                if !value.is_empty() {
-                    return Some(value.to_owned());
-                }
+        if let Some(value) = headers.get(header_name)
+            && let Ok(value) = value.to_str()
+        {
+            let value = value.trim();
+            if !value.is_empty() {
+                return Some(value.to_owned());
             }
         }
     }
@@ -1608,8 +1621,8 @@ mod tests {
             html_body: Some("<p>HTML body</p>".to_owned()),
             headers: BTreeMap::new(),
             tags: BTreeMap::from([(
-                "pasion_notification_request_id".to_string(),
-                "req-123".to_string(),
+                "pasion_notification_request_id".to_owned(),
+                "req-123".to_owned(),
             )]),
         };
 

@@ -75,7 +75,7 @@ impl From<ShutdownWorkerRow> for ShutdownWorker {
     }
 }
 
-impl<'c> PgQueueWorkerRepository<'c> {
+impl PgQueueWorkerRepository<'_> {
     async fn load_worker_state(
         &mut self,
         worker: &Worker,
@@ -100,8 +100,7 @@ impl<'c> PgQueueWorkerRepository<'c> {
             Ok(Some(state)) => {
                 let shutdown_at = state
                     .shutdown_at
-                    .map(|ts| ts.to_rfc3339())
-                    .unwrap_or_else(|| "null".to_owned());
+                    .map_or_else(|| "null".to_owned(), |ts| ts.to_rfc3339());
                 tracing::error!(
                     worker.id = %worker.id,
                     stored_worker.id = %state.id,

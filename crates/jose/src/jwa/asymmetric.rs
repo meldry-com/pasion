@@ -121,7 +121,15 @@ impl AsymmetricSigningKey {
 
     /// Create a new signing key with the ES512 algorithm from the given ECDSA
     /// private key.
+    ///
+    /// # Panics
+    ///
+    /// Panics if the valid P-521 secret key cannot be converted to a signing key.
     #[must_use]
+    #[allow(
+        clippy::needless_pass_by_value,
+        reason = "keep all signing-key constructors consistent and consume key material"
+    )]
     pub fn es512(key: elliptic_curve::SecretKey<p521::NistP521>) -> Self {
         let bytes = key.to_bytes();
         let key = super::Es512SigningKey::from_bytes(&bytes)
@@ -136,7 +144,7 @@ impl AsymmetricSigningKey {
         Self::Es256K(ecdsa::SigningKey::from(key))
     }
 
-    /// Create a new signing key with the EdDSA algorithm from the given OKP
+    /// Create a new signing key with the `EdDSA` algorithm from the given OKP
     /// private key.
     #[must_use]
     pub fn eddsa(key: ed25519_dalek::SigningKey) -> Self {
@@ -404,7 +412,15 @@ impl AsymmetricVerifyingKey {
 
     /// Create a new verifying key with the ES512 algorithm from the given
     /// ECDSA public key.
+    ///
+    /// # Panics
+    ///
+    /// Panics if the valid P-521 public key cannot be converted to a verifying key.
     #[must_use]
+    #[allow(
+        clippy::needless_pass_by_value,
+        reason = "keep all verifying-key constructors consistent"
+    )]
     pub fn es512(key: elliptic_curve::PublicKey<p521::NistP521>) -> Self {
         let encoded = key.to_encoded_point(false);
         let key = super::Es512VerifyingKey::from_sec1_bytes(encoded.as_bytes())
@@ -419,7 +435,7 @@ impl AsymmetricVerifyingKey {
         Self::Es256K(ecdsa::VerifyingKey::from(key))
     }
 
-    /// Create a new verifying key with the EdDSA algorithm from the given OKP
+    /// Create a new verifying key with the `EdDSA` algorithm from the given OKP
     /// public key.
     #[must_use]
     pub fn eddsa(key: ed25519_dalek::VerifyingKey) -> Self {
@@ -642,7 +658,7 @@ mod tests {
             Err(AsymmetricKeyFromJwkError::KeyNotSuitable {
                 alg: JsonWebSignatureAlg::Es512,
             }) => {}
-            Err(_) => panic!("unexpected error variant"),
+            Err(error) => panic!("unexpected error variant: {error:?}"),
             Ok(_) => panic!("expected ES512 to reject a P-256 key"),
         }
     }
@@ -668,7 +684,7 @@ mod tests {
             Err(AsymmetricKeyFromJwkError::KeyNotSuitable {
                 alg: JsonWebSignatureAlg::EdDsa,
             }) => {}
-            Err(_) => panic!("unexpected error variant"),
+            Err(error) => panic!("unexpected error variant: {error:?}"),
             Ok(_) => panic!("expected EdDSA to reject an Ed448 key"),
         }
     }

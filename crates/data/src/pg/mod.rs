@@ -53,6 +53,14 @@ pub use self::{
     repository::{PgRepository, PgRepositoryFactory},
 };
 
+pub(crate) fn pagination_limit(count: usize) -> i64 {
+    i64::try_from(count.saturating_add(1)).unwrap_or(i64::MAX)
+}
+
+pub(crate) fn db_count_to_usize(count: i64) -> usize {
+    usize::try_from(count.max(0)).unwrap_or(usize::MAX)
+}
+
 /// Embedded Diesel migrations.
 pub const MIGRATIONS: EmbeddedMigrations = embed_migrations!("migrations");
 
@@ -123,7 +131,10 @@ pub async fn migrate(
             .run_pending_migrations(MIGRATIONS)
             .map_err(|e| anyhow::anyhow!("could not run migrations: {e}"))?;
         // Convert MigrationVersion (which borrows wrapper) to owned strings
-        let versions: Vec<String> = applied.iter().map(|v| v.to_string()).collect();
+        let versions: Vec<String> = applied
+            .iter()
+            .map(std::string::ToString::to_string)
+            .collect();
         Ok::<_, anyhow::Error>(versions)
     })
     .await

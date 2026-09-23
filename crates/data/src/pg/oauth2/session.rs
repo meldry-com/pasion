@@ -33,7 +33,7 @@ impl<'c> PgOAuth2SessionRepository<'c> {
     }
 }
 
-/// Row type for loading OAuth2 sessions from the database
+/// Row type for loading `OAuth2` sessions from the database
 #[derive(Debug, Clone, Queryable, Selectable)]
 #[diesel(table_name = oauth2_sessions)]
 struct OAuthSessionLookup {
@@ -94,7 +94,7 @@ impl TryFrom<OAuthSessionLookup> for Session {
     }
 }
 
-/// Insertable row for creating a new OAuth2 session
+/// Insertable row for creating a new `OAuth2` session
 #[derive(Insertable)]
 #[diesel(table_name = oauth2_sessions)]
 struct NewOAuthSession {
@@ -373,12 +373,12 @@ impl OAuth2SessionRepository for PgOAuth2SessionRepository<'_> {
             PaginationDirection::Forward => {
                 query = query
                     .order(oauth2_sessions::id.asc())
-                    .limit((pagination.count + 1) as i64);
+                    .limit(crate::pg::pagination_limit(pagination.count));
             }
             PaginationDirection::Backward => {
                 query = query
                     .order(oauth2_sessions::id.desc())
-                    .limit((pagination.count + 1) as i64);
+                    .limit(crate::pg::pagination_limit(pagination.count));
             }
         }
 
@@ -421,7 +421,7 @@ impl OAuth2SessionRepository for PgOAuth2SessionRepository<'_> {
         let expected = ids.len();
 
         let rows_affected = diesel::sql_query(
-            r#"
+            r"
                 UPDATE oauth2_sessions
                 SET last_active_at = GREATEST(t.last_active_at, oauth2_sessions.last_active_at)
                   , last_active_ip = COALESCE(t.last_active_ip, oauth2_sessions.last_active_ip)
@@ -431,7 +431,7 @@ impl OAuth2SessionRepository for PgOAuth2SessionRepository<'_> {
                         AS t(id, last_active_at, last_active_ip)
                 ) AS t
                 WHERE oauth2_sessions.id = t.id
-            "#,
+            ",
         )
         .bind::<diesel::sql_types::Array<diesel::sql_types::Uuid>, _>(&ids)
         .bind::<diesel::sql_types::Array<diesel::sql_types::Timestamptz>, _>(&last_activities)
@@ -517,7 +517,7 @@ impl OAuth2SessionRepository for PgOAuth2SessionRepository<'_> {
         limit: usize,
     ) -> Result<(usize, Option<DateTime<Utc>>), Self::Error> {
         let res: CleanupResult = diesel::sql_query(
-            r#"
+            r"
                 WITH
                     to_delete AS (
                         SELECT id, finished_at
@@ -543,7 +543,7 @@ impl OAuth2SessionRepository for PgOAuth2SessionRepository<'_> {
                         RETURNING oauth2_sessions.finished_at
                     )
                 SELECT COUNT(*) as count, MAX(finished_at) as last_ts FROM deleted_sessions
-            "#,
+            ",
         )
         .bind::<diesel::sql_types::Nullable<diesel::sql_types::Timestamptz>, _>(since)
         .bind::<diesel::sql_types::Timestamptz, _>(until)
@@ -571,7 +571,7 @@ impl OAuth2SessionRepository for PgOAuth2SessionRepository<'_> {
         limit: usize,
     ) -> Result<(usize, Option<DateTime<Utc>>), Self::Error> {
         let res: CleanupResult = diesel::sql_query(
-            r#"
+            r"
                 WITH to_update AS (
                     SELECT id, last_active_at
                     FROM oauth2_sessions
@@ -591,7 +591,7 @@ impl OAuth2SessionRepository for PgOAuth2SessionRepository<'_> {
                     RETURNING oauth2_sessions.last_active_at
                 )
                 SELECT COUNT(*) AS count, MAX(last_active_at) AS last_ts FROM updated
-            "#,
+            ",
         )
         .bind::<diesel::sql_types::Nullable<diesel::sql_types::Timestamptz>, _>(since)
         .bind::<diesel::sql_types::Timestamptz, _>(threshold)

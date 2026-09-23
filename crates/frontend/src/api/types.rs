@@ -1,4 +1,16 @@
 #![allow(dead_code)]
+#![allow(
+    clippy::large_enum_variant,
+    reason = "REST response enums mirror server payloads and are short-lived"
+)]
+#![allow(
+    clippy::option_option,
+    reason = "nested options encode omitted, cleared, and assigned JSON PATCH fields"
+)]
+#![allow(
+    clippy::struct_excessive_bools,
+    reason = "API DTOs mirror independent server-side configuration flags"
+)]
 
 use serde::{Deserialize, Serialize};
 
@@ -15,7 +27,7 @@ impl Viewer {
     pub fn as_user(&self) -> Option<&User> {
         match self {
             Viewer::User(u) => Some(u),
-            _ => None,
+            Viewer::Anonymous(_) => None,
         }
     }
 }
@@ -99,7 +111,7 @@ impl ViewerSession {
     pub fn as_browser_session(&self) -> Option<&BrowserSession> {
         match self {
             ViewerSession::BrowserSession(s) => Some(s),
-            _ => None,
+            ViewerSession::Anonymous(_) => None,
         }
     }
 }
@@ -252,6 +264,11 @@ pub struct BootstrapAdminStatus {
     /// exists yet — i.e. the very first admin can still be claimed.
     #[serde(default)]
     pub setup_required: bool,
+}
+
+#[derive(Debug, Clone, PartialEq, Deserialize)]
+pub struct ClaimBootstrapAdminResponse {
+    pub status: String,
 }
 
 // ── Site Config ────────────────────────────────────────────────
@@ -572,6 +589,8 @@ pub type VerifyEmailData = UserEmailAuthentication;
 #[derive(Debug, Clone, PartialEq, Deserialize)]
 pub struct ResendEmailAuthCodePayload {
     pub status: String,
+    #[serde(default)]
+    pub error: Option<String>,
 }
 
 pub type ResendEmailAuthCodeResult = ResendEmailAuthCodePayload;
@@ -646,11 +665,15 @@ pub struct RegisterResponse {
 #[derive(Debug, Clone, PartialEq, Deserialize, Serialize)]
 pub struct RegisterStatusResponse {
     pub id: String,
+    #[serde(default)]
+    pub created_at: Option<String>,
     pub username: String,
     #[serde(default)]
     pub email_pending: bool,
     #[serde(default)]
     pub pending_email: Option<String>,
+    #[serde(default)]
+    pub pending_email_sent_at: Option<String>,
     pub next_step: String,
 }
 
@@ -675,7 +698,7 @@ pub struct StepResponse {
     #[serde(default)]
     pub error: Option<String>,
     /// Set when the registration was started as part of another flow
-    /// (e.g. an OAuth2 authorization grant continuation). The frontend
+    /// (e.g. an `OAuth2` authorization grant continuation). The frontend
     /// uses this to resume the original flow after the account is created.
     #[serde(default)]
     pub post_auth_action: Option<serde_json::Value>,

@@ -38,6 +38,10 @@ impl<T> Localized<T> {
     }
 
     /// Get the non-localized variant.
+    ///
+    /// # Panics
+    ///
+    /// Panics if the internal invariant requiring a default value is broken.
     pub fn non_localized(&self) -> &T {
         self.default_value
             .as_ref()
@@ -45,6 +49,10 @@ impl<T> Localized<T> {
     }
 
     /// Get the non-localized variant.
+    ///
+    /// # Panics
+    ///
+    /// Panics if the internal invariant requiring a default value is broken.
     pub fn to_non_localized(self) -> T {
         self.default_value
             .expect("Localized must have a default value")

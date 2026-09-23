@@ -4,7 +4,7 @@
 use std::{collections::BTreeMap, fmt::Formatter};
 
 use http::{Method, Uri, Version};
-use pasion_data::{UrlBuilder, User};
+use pasion_data::UrlBuilder;
 use rand_core::RngCore as Rng;
 use serde::Serialize;
 
@@ -57,7 +57,7 @@ pub struct AppErrorState {
     pub description: Option<String>,
 }
 
-/// Frontend application configuration serialized as snake_case JSON.
+/// Frontend application configuration serialized as `snake_case` JSON.
 #[derive(Serialize)]
 pub struct AppConfig {
     root: String,
@@ -242,37 +242,5 @@ impl TemplateContext for NotFoundContext {
                 &"/foo?bar=baz".parse().unwrap(),
             ),
         ])
-    }
-}
-
-// -- Account state pages ----------------------------------------------------
-
-/// Data for the `account/deactivated.html` and `account/locked.html`
-/// templates.
-#[derive(Serialize)]
-pub struct AccountInactiveContext {
-    user: User,
-}
-
-impl AccountInactiveContext {
-    /// Build the account-inactive page context.
-    #[must_use]
-    pub fn new(user: User) -> Self {
-        Self { user }
-    }
-}
-
-impl TemplateContext for AccountInactiveContext {
-    fn sample<R: Rng>(
-        now: chrono::DateTime<chrono::Utc>,
-        rng: &mut R,
-        _locales: &[pasion_i18n::DataLocale],
-    ) -> BTreeMap<SampleIdentifier, Self> {
-        sample_list(
-            User::samples(now, rng)
-                .into_iter()
-                .map(|u| Self { user: u })
-                .collect(),
-        )
     }
 }

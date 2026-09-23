@@ -504,11 +504,19 @@ impl ClientMetadata {
         }
 
         // Return collected errors or the validated metadata
-        match collected_errors.len() {
-            0 => Ok(VerifiedClientMetadata::new(self)),
-            1 => Err(collected_errors.into_iter().next().expect("validated")),
-            _ => Err(ClientMetadataVerificationError::Multiple(collected_errors)),
-        }
+        let mut errors = collected_errors.into_iter();
+        let Some(first) = errors.next() else {
+            return Ok(VerifiedClientMetadata::new(self));
+        };
+        let Some(second) = errors.next() else {
+            return Err(first);
+        };
+        Err(ClientMetadataVerificationError::Multiple(
+            std::iter::once(first)
+                .chain(std::iter::once(second))
+                .chain(errors)
+                .collect(),
+        ))
     }
 
     /// Sort the properties. This is inteded to ensure a stable serialization

@@ -9,11 +9,15 @@ pub use session::PgPersonalSessionRepository;
 
 #[cfg(test)]
 mod tests {
+    #![allow(
+        clippy::items_after_statements,
+        reason = "test constants are kept next to the scenarios that use them"
+    )]
+
     use chrono::Duration;
     use oauth2_types::scope::{OPENID, PROFILE, Scope};
     use pasion_data::{
-        Clock, Pagination, RepositoryAccess, RepositoryAccess as _, RepositoryFactory as _,
-        RepositoryTransaction as _,
+        Clock, Pagination, RepositoryAccess as _, RepositoryFactory as _,
         clock::MockClock,
         personal::{
             PersonalAccessTokenRepository, PersonalSessionFilter, PersonalSessionRepository,
