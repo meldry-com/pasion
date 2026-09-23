@@ -80,7 +80,7 @@ pub struct ResendWebhookConfig {
     pub max_age_seconds: u64,
 }
 
-/// SendGrid event webhook verification settings
+/// `SendGrid` event webhook verification settings
 #[derive(Clone, Debug, Serialize, Deserialize, JsonSchema)]
 pub struct SendgridWebhookConfig {
     /// PEM-encoded public key used to verify signed event webhooks
@@ -168,13 +168,13 @@ pub struct ResendEmailProviderConfig {
     pub webhook: Option<ResendWebhookConfig>,
 }
 
-/// SendGrid email API delivery settings
+/// `SendGrid` email API delivery settings
 #[derive(Clone, Debug, Serialize, Deserialize, JsonSchema)]
 pub struct SendgridEmailProviderConfig {
-    /// SendGrid API key
+    /// `SendGrid` API key
     pub api_key: String,
 
-    /// Base URL for the SendGrid API
+    /// Base URL for the `SendGrid` API
     #[serde(default = "sendgrid_base_url_default")]
     pub base_url: String,
 
@@ -185,13 +185,13 @@ pub struct SendgridEmailProviderConfig {
 
 /// Twilio email API delivery settings.
 ///
-/// Twilio email delivery is implemented via Twilio SendGrid's mail send API.
+/// Twilio email delivery is implemented via Twilio `SendGrid`'s mail send API.
 #[derive(Clone, Debug, Serialize, Deserialize, JsonSchema)]
 pub struct TwilioEmailProviderConfig {
-    /// Twilio SendGrid API key
+    /// Twilio `SendGrid` API key
     pub api_key: String,
 
-    /// Base URL for the Twilio SendGrid API
+    /// Base URL for the Twilio `SendGrid` API
     #[serde(default = "sendgrid_base_url_default")]
     pub base_url: String,
 
@@ -267,10 +267,10 @@ pub enum EmailProviderConfig {
     /// Deliver through the Resend email API
     Resend(ResendEmailProviderConfig),
 
-    /// Deliver through the SendGrid email API
+    /// Deliver through the `SendGrid` email API
     Sendgrid(SendgridEmailProviderConfig),
 
-    /// Deliver through Twilio SendGrid
+    /// Deliver through Twilio `SendGrid`
     Twilio(TwilioEmailProviderConfig),
 
     /// Deliver through the Brevo transactional email API
@@ -428,16 +428,14 @@ impl ConfigurationSection for EmailConfig {
             EmailProviderConfig::Brevo(provider) => {
                 ensure_non_empty(&provider.api_key, "provider.api_key")?;
                 ensure_valid_url(&provider.base_url, "provider.base_url")?;
-                if let Some(webhook) = &provider.webhook {
-                    if webhook.headers.is_empty() {
-                        return Err(error_on_field(
-                            figment::error::Error::custom(
-                                "provider.webhook.headers must not be empty",
-                            ),
-                            "provider.webhook.headers",
-                        )
-                        .into());
-                    }
+                if let Some(webhook) = &provider.webhook
+                    && webhook.headers.is_empty()
+                {
+                    return Err(error_on_field(
+                        figment::error::Error::custom("provider.webhook.headers must not be empty"),
+                        "provider.webhook.headers",
+                    )
+                    .into());
                 }
             }
 
@@ -483,7 +481,7 @@ mod tests {
         Jail::expect_with(|jail| {
             jail.create_file(
                 "config.yaml",
-                r#"
+                r"
                     email:
                       from: 'Pasion <noreply@example.com>'
                       reply_to: 'Support <support@example.com>'
@@ -494,7 +492,7 @@ mod tests {
                         port: 465
                         username: smtp-user
                         password: smtp-password
-                "#,
+                ",
             )?;
 
             let config = Figment::new()
@@ -519,7 +517,7 @@ mod tests {
         Jail::expect_with(|jail| {
             jail.create_file(
                 "config.yaml",
-                r#"
+                r"
                     email:
                       from: 'Pasion <noreply@example.com>'
                       reply_to: 'Support <support@example.com>'
@@ -529,7 +527,7 @@ mod tests {
                         base_url: https://api.resend.com
                         webhook:
                           signing_secret: whsec_test_123
-                "#,
+                ",
             )?;
 
             let config = Figment::new()
@@ -560,7 +558,7 @@ mod tests {
         Jail::expect_with(|jail| {
             jail.create_file(
                 "config.yaml",
-                r#"
+                r"
                     email:
                       from: 'Pasion <noreply@example.com>'
                       reply_to: 'Support <support@example.com>'
@@ -569,7 +567,7 @@ mod tests {
                         mode: starttls
                         hostname: smtp.example.com
                         username: smtp-user
-                "#,
+                ",
             )?;
 
             let figment = Figment::new().merge(Yaml::file("config.yaml"));
@@ -589,14 +587,14 @@ mod tests {
         Jail::expect_with(|jail| {
             jail.create_file(
                 "config.yaml",
-                r#"
+                r"
                     email:
                       from: 'Pasion <noreply@example.com>'
                       reply_to: 'Support <support@example.com>'
                       provider:
                         type: http_webhook
                         url: '::not-a-url::'
-                "#,
+                ",
             )?;
 
             let figment = Figment::new().merge(Yaml::file("config.yaml"));
@@ -616,7 +614,7 @@ mod tests {
         Jail::expect_with(|jail| {
             jail.create_file(
                 "config.yaml",
-                r#"
+                r"
                     email:
                       from: 'Pasion <noreply@example.com>'
                       reply_to: 'Support <support@example.com>'
@@ -624,7 +622,7 @@ mod tests {
                         type: sendgrid
                         api_key: SG.test
                         base_url: '::not-a-url::'
-                "#,
+                ",
             )?;
 
             let figment = Figment::new().merge(Yaml::file("config.yaml"));
@@ -644,7 +642,7 @@ mod tests {
         Jail::expect_with(|jail| {
             jail.create_file(
                 "config.yaml",
-                r#"
+                r"
                     email:
                       from: 'Pasion <noreply@example.com>'
                       reply_to: 'Support <support@example.com>'
@@ -653,7 +651,7 @@ mod tests {
                         region: ''
                         access_key_id: AKIATEST
                         secret_access_key: secret
-                "#,
+                ",
             )?;
 
             let figment = Figment::new().merge(Yaml::file("config.yaml"));
@@ -673,7 +671,7 @@ mod tests {
         Jail::expect_with(|jail| {
             jail.create_file(
                 "config.yaml",
-                r#"
+                r"
                     email:
                       from: 'Pasion <noreply@example.com>'
                       reply_to: 'Support <support@example.com>'
@@ -682,7 +680,7 @@ mod tests {
                         api_key: brevo_test
                         webhook:
                           headers: {}
-                "#,
+                ",
             )?;
 
             let figment = Figment::new().merge(Yaml::file("config.yaml"));

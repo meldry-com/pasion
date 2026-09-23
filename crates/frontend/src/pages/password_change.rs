@@ -19,9 +19,8 @@ pub fn PasswordChange() -> Element {
 
     match &*binding {
         Some(Ok(result)) => {
-            let user = match result.viewer.as_user() {
-                Some(u) => u,
-                None => return rsx! { Layout { p { "Not authenticated." } } },
+            let Some(user) = result.viewer.as_user() else {
+                return rsx! { Layout { p { "Not authenticated." } } };
             };
             let user_id = user.id.clone();
 
@@ -55,9 +54,9 @@ fn PasswordChangeForm(user_id: String) -> Element {
     rsx! {
         div { class: "flex flex-col gap-10",
             PageHeading {
-                icon: "🔒".to_string(),
-                title: "Change password".to_string(),
-                subtitle: "Choose a new password for your account.".to_string(),
+                icon: "🔒".to_owned(),
+                title: "Change password".to_owned(),
+                subtitle: "Choose a new password for your account.".to_owned(),
             }
 
             form {
@@ -70,7 +69,7 @@ fn PasswordChangeForm(user_id: String) -> Element {
                     let new_pw2 = new_password_again.to_string();
 
                     if new_pw != new_pw2 {
-                        error.set(Some("Passwords do not match.".to_string()));
+                        error.set(Some("Passwords do not match.".to_owned()));
                         return;
                     }
 
@@ -79,7 +78,7 @@ fn PasswordChangeForm(user_id: String) -> Element {
                     error.set(None);
                     wrong_password.set(false);
                     invalid_new.set(false);
-                    let nav = nav.clone();
+                    let nav = nav;
 
                     spawn(async move {
                         let result = crate::api::api_post::<crate::api::types::SetPasswordPayload>(
@@ -98,14 +97,14 @@ fn PasswordChangeForm(user_id: String) -> Element {
                                 }
                                 SetPasswordStatus::WrongPassword => {
                                     wrong_password.set(true);
-                                    error.set(Some("Current password is incorrect.".to_string()));
+                                    error.set(Some("Current password is incorrect.".to_owned()));
                                 }
                                 SetPasswordStatus::InvalidNewPassword => {
                                     invalid_new.set(true);
-                                    error.set(Some("New password does not meet the requirements.".to_string()));
+                                    error.set(Some("New password does not meet the requirements.".to_owned()));
                                 }
                                 _ => {
-                                    error.set(Some("An error occurred while changing your password.".to_string()));
+                                    error.set(Some("An error occurred while changing your password.".to_owned()));
                                 }
                             },
                             Err(e) => {
@@ -128,7 +127,7 @@ fn PasswordChangeForm(user_id: String) -> Element {
                         class: if wrong_password() { "form-input invalid" } else { "form-input" },
                         id: "current-password",
                         name: "current_password",
-                        autocomplete: "current-password".to_string(),
+                        autocomplete: "current-password".to_owned(),
                         required: true,
                         value: current_password.read().clone(),
                         oninput: move |e: FormEvent| current_password.set(e.value()),

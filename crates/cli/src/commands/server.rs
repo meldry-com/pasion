@@ -217,7 +217,7 @@ impl Options {
         // Activity is flushed every minute
         let activity_tracker = ActivityTracker::new(
             PgRepositoryFactory::new(pool.clone()).boxed(),
-            Duration::from_secs(60),
+            Duration::from_mins(1),
             shutdown.task_tracker(),
             shutdown.soft_shutdown_token(),
         );
@@ -335,7 +335,7 @@ impl Options {
                     }
                 })
                 .join(", ");
-            let resources = format!("{:?}", &config.resources);
+            let resources = format!("{:?}", config.resources);
             let announcement = if config.proxy_protocol {
                 format!("Listening on {addresses} with resources {resources} (with Proxy Protocol)")
             } else {

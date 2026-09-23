@@ -3,7 +3,7 @@
 //! Wraps any [`PolicyEvaluator`] implementation to log evaluation results
 //! and timing information via the `tracing` crate.
 
-use std::time::Instant;
+use std::time::{Duration, Instant};
 
 use async_trait::async_trait;
 use tracing::{info, warn};
@@ -26,6 +26,10 @@ use crate::{
 /// - The wall-clock duration of the evaluation
 pub struct AuditingEvaluator<E> {
     inner: E,
+}
+
+fn duration_millis(duration: Duration) -> u64 {
+    u64::try_from(duration.as_millis()).unwrap_or(u64::MAX)
 }
 
 impl<E> AuditingEvaluator<E> {
@@ -52,14 +56,14 @@ impl<E: PolicyEvaluator + Send> PolicyEvaluator for AuditingEvaluator<E> {
                     warn!(
                         action = "email",
                         violations = violation_count,
-                        duration_ms = duration.as_millis() as u64,
+                        duration_ms = duration_millis(duration),
                         "policy evaluation completed with violations"
                     );
                 } else {
                     info!(
                         action = "email",
                         violations = 0,
-                        duration_ms = duration.as_millis() as u64,
+                        duration_ms = duration_millis(duration),
                         "policy evaluation completed"
                     );
                 }
@@ -68,7 +72,7 @@ impl<E: PolicyEvaluator + Send> PolicyEvaluator for AuditingEvaluator<E> {
                 warn!(
                     action = "email",
                     error = %e,
-                    duration_ms = duration.as_millis() as u64,
+                    duration_ms = duration_millis(duration),
                     "policy evaluation failed"
                 );
             }
@@ -92,14 +96,14 @@ impl<E: PolicyEvaluator + Send> PolicyEvaluator for AuditingEvaluator<E> {
                     warn!(
                         action = "register",
                         violations = violation_count,
-                        duration_ms = duration.as_millis() as u64,
+                        duration_ms = duration_millis(duration),
                         "policy evaluation completed with violations"
                     );
                 } else {
                     info!(
                         action = "register",
                         violations = 0,
-                        duration_ms = duration.as_millis() as u64,
+                        duration_ms = duration_millis(duration),
                         "policy evaluation completed"
                     );
                 }
@@ -108,7 +112,7 @@ impl<E: PolicyEvaluator + Send> PolicyEvaluator for AuditingEvaluator<E> {
                 warn!(
                     action = "register",
                     error = %e,
-                    duration_ms = duration.as_millis() as u64,
+                    duration_ms = duration_millis(duration),
                     "policy evaluation failed"
                 );
             }
@@ -132,14 +136,14 @@ impl<E: PolicyEvaluator + Send> PolicyEvaluator for AuditingEvaluator<E> {
                     warn!(
                         action = "client_registration",
                         violations = violation_count,
-                        duration_ms = duration.as_millis() as u64,
+                        duration_ms = duration_millis(duration),
                         "policy evaluation completed with violations"
                     );
                 } else {
                     info!(
                         action = "client_registration",
                         violations = 0,
-                        duration_ms = duration.as_millis() as u64,
+                        duration_ms = duration_millis(duration),
                         "policy evaluation completed"
                     );
                 }
@@ -148,7 +152,7 @@ impl<E: PolicyEvaluator + Send> PolicyEvaluator for AuditingEvaluator<E> {
                 warn!(
                     action = "client_registration",
                     error = %e,
-                    duration_ms = duration.as_millis() as u64,
+                    duration_ms = duration_millis(duration),
                     "policy evaluation failed"
                 );
             }
@@ -172,14 +176,14 @@ impl<E: PolicyEvaluator + Send> PolicyEvaluator for AuditingEvaluator<E> {
                     warn!(
                         action = "authorization_grant",
                         violations = violation_count,
-                        duration_ms = duration.as_millis() as u64,
+                        duration_ms = duration_millis(duration),
                         "policy evaluation completed with violations"
                     );
                 } else {
                     info!(
                         action = "authorization_grant",
                         violations = 0,
-                        duration_ms = duration.as_millis() as u64,
+                        duration_ms = duration_millis(duration),
                         "policy evaluation completed"
                     );
                 }
@@ -188,7 +192,7 @@ impl<E: PolicyEvaluator + Send> PolicyEvaluator for AuditingEvaluator<E> {
                 warn!(
                     action = "authorization_grant",
                     error = %e,
-                    duration_ms = duration.as_millis() as u64,
+                    duration_ms = duration_millis(duration),
                     "policy evaluation failed"
                 );
             }

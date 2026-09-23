@@ -50,7 +50,7 @@ impl Mailer {
     fn outbound_email(
         &self,
         to: Mailbox,
-        subject: String,
+        subject: &str,
         text_body: String,
         html_body: Option<String>,
         tags: &BTreeMap<String, String>,
@@ -77,7 +77,7 @@ impl Mailer {
         let html_body = self.templates.render_email_verification_html(context)?;
         let subject = self.templates.render_email_verification_subject(context)?;
 
-        Ok(self.outbound_email(to, subject, text_body, Some(html_body), tags))
+        Ok(self.outbound_email(to, &subject, text_body, Some(html_body), tags))
     }
 
     fn prepare_recovery_email(
@@ -90,7 +90,7 @@ impl Mailer {
         let html_body = self.templates.render_email_recovery_html(context)?;
         let subject = self.templates.render_email_recovery_subject(context)?;
 
-        Ok(self.outbound_email(to, subject, text_body, Some(html_body), tags))
+        Ok(self.outbound_email(to, &subject, text_body, Some(html_body), tags))
     }
 
     /// Send the verification email to a user.

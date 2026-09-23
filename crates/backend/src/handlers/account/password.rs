@@ -410,9 +410,9 @@ mod tests {
                 &mut rng,
                 &state.clock,
                 user_email.email.clone(),
-                "test-agent".to_string(),
+                "test-agent".to_owned(),
                 None,
-                "en".to_string(),
+                "en".to_owned(),
             )
             .await
             .unwrap();
@@ -448,7 +448,7 @@ mod tests {
         let state = TestState::from_pool(pool).await.unwrap();
 
         let (_session, ticket) =
-            create_recovery_ticket(&state, "alice@example.com".to_string()).await;
+            create_recovery_ticket(&state, "alice@example.com".to_owned()).await;
 
         let response = state
             .request(Request::get(format!("/api/v1/password-recovery/{ticket}")).empty())
@@ -471,7 +471,7 @@ mod tests {
         let pool = pasion_data::test_utils::setup_test_pool().await;
         let state = TestState::from_pool(pool).await.unwrap();
 
-        let (session, ticket) = create_recovery_ticket(&state, "bob@example.com".to_string()).await;
+        let (session, ticket) = create_recovery_ticket(&state, "bob@example.com".to_owned()).await;
 
         let response = state
             .request(

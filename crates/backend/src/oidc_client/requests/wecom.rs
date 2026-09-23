@@ -73,8 +73,7 @@ pub async fn get_corp_access_token(
         .get(url)
         .send_traced()
         .await?
-        .error_for_status()
-        .map_err(reqwest::Error::from)?
+        .error_for_status()?
         .json()
         .await?;
 
@@ -110,8 +109,7 @@ pub async fn get_user_identity(
         .get(url)
         .send_traced()
         .await?
-        .error_for_status()
-        .map_err(reqwest::Error::from)?
+        .error_for_status()?
         .json()
         .await?;
 
@@ -148,24 +146,23 @@ pub async fn fetch_userinfo(
         .get(url)
         .send_traced()
         .await?
-        .error_for_status()
-        .map_err(reqwest::Error::from)?
+        .error_for_status()?
         .json()
         .await?;
 
     // Check for error
-    if let Some(errcode) = response.get("errcode").and_then(|v| v.as_i64()) {
-        if errcode != 0 {
-            let msg = response
-                .get("errmsg")
-                .and_then(|v| v.as_str())
-                .unwrap_or("unknown error")
-                .to_owned();
-            return Err(UserInfoError::ProviderError {
-                code: errcode as i32,
-                msg,
-            });
-        }
+    if let Some(errcode) = response.get("errcode").and_then(|v| v.as_i64())
+        && errcode != 0
+    {
+        let msg = response
+            .get("errmsg")
+            .and_then(|v| v.as_str())
+            .unwrap_or("unknown error")
+            .to_owned();
+        return Err(UserInfoError::ProviderError {
+            code: errcode as i32,
+            msg,
+        });
     }
 
     Ok(response)

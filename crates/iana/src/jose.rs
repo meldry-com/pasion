@@ -35,13 +35,13 @@ open_enum! {
         Ps512 => "PS512",
         /// No digital signature or MAC performed
         None => "none",
-        /// EdDSA signature algorithms
+        /// `EdDSA` signature algorithms
         EdDsa => "EdDSA",
         /// ECDSA using secp256k1 curve and SHA-256
         Es256K => "ES256K",
-        /// EdDSA using Ed25519 curve
+        /// `EdDSA` using Ed25519 curve
         Ed25519 => "Ed25519",
-        /// EdDSA using Ed448 curve
+        /// `EdDSA` using Ed448 curve
         Ed448 => "Ed448",
     }
 }
@@ -97,11 +97,11 @@ open_enum! {
     ///
     /// Source: <https://www.iana.org/assignments/jose/web-signature-encryption-algorithms.csv>
     pub enum JsonWebEncryptionEnc {
-        /// AES_128_CBC_HMAC_SHA_256 authenticated encryption
+        /// `AES_128_CBC_HMAC_SHA_256` authenticated encryption
         A128CbcHs256 => "A128CBC-HS256",
-        /// AES_192_CBC_HMAC_SHA_384 authenticated encryption
+        /// `AES_192_CBC_HMAC_SHA_384` authenticated encryption
         A192CbcHs384 => "A192CBC-HS384",
-        /// AES_256_CBC_HMAC_SHA_512 authenticated encryption
+        /// `AES_256_CBC_HMAC_SHA_512` authenticated encryption
         A256CbcHs512 => "A256CBC-HS512",
         /// AES-GCM using 128-bit key
         A128Gcm => "A128GCM",

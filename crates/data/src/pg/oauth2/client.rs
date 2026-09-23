@@ -61,7 +61,7 @@ impl<'c> PgOAuth2ClientRepository<'c> {
 
         let mut by_client: BTreeMap<Uuid, LocalizedClientMetadata> = BTreeMap::new();
         for (client_id, locale, field, value) in rows {
-            let Some(field_kind) = LocalizableField::from_str(&field) else {
+            let Some(field_kind) = LocalizableField::parse(&field) else {
                 // The CHECK constraint should make this unreachable; if a
                 // future migration adds a new field that this binary does
                 // not yet know about, skip it instead of erroring out so
@@ -81,7 +81,7 @@ impl<'c> PgOAuth2ClientRepository<'c> {
     }
 }
 
-/// Row type for loading OAuth2 clients from the database
+/// Row type for loading `OAuth2` clients from the database
 #[allow(clippy::struct_excessive_bools)]
 #[derive(Debug, Queryable, Selectable)]
 #[diesel(table_name = oauth2_clients)]
@@ -288,7 +288,7 @@ impl TryFrom<OAuth2ClientRow> for Client {
     }
 }
 
-/// Insertable row for creating a new OAuth2 client
+/// Insertable row for creating a new `OAuth2` client
 #[derive(Insertable)]
 #[diesel(table_name = oauth2_clients)]
 struct NewOAuth2Client {

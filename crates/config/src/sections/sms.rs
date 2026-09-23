@@ -220,14 +220,14 @@ mod tests {
         Jail::expect_with(|jail| {
             jail.create_file(
                 "config.yaml",
-                r#"
+                r"
                     sms:
                       provider:
                         type: twilio
                         account_sid: AC123
                         auth_token: secret
                         from_number: +12065550123
-                "#,
+                ",
             )?;
 
             let config = Figment::new()
@@ -252,7 +252,7 @@ mod tests {
         Jail::expect_with(|jail| {
             jail.create_file(
                 "config.yaml",
-                r#"
+                r"
                     sms:
                       provider:
                         type: paloud_internal
@@ -260,7 +260,7 @@ mod tests {
                         key_id: pasion-control-dev
                         secret: super-secret
                         workspace: demo
-                "#,
+                ",
             )?;
 
             let figment = Figment::new().merge(Yaml::file("config.yaml"));
@@ -288,14 +288,14 @@ mod tests {
         Jail::expect_with(|jail| {
             jail.create_file(
                 "config.yaml",
-                r#"
+                r"
                     sms:
                       provider:
                         type: paloud_internal
                         url: '::not-a-url::'
                         key_id: pasion-control-dev
                         secret: super-secret
-                "#,
+                ",
             )?;
 
             let figment = Figment::new().merge(Yaml::file("config.yaml"));

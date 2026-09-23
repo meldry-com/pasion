@@ -113,8 +113,6 @@ pub struct LoadedUpstreamLinkContext {
 }
 
 pub struct UpstreamRegisterScreen {
-    pub link: UpstreamOAuthLink,
-    pub provider: UpstreamOAuthProvider,
     pub suggested_username: Option<String>,
     pub username_forced: bool,
     pub suggested_display_name: Option<String>,
@@ -585,8 +583,6 @@ async fn load_upstream_registration_screen(
     let provider_name = provider.human_name.clone();
     Ok(LoadUpstreamLinkOutcome::Register {
         screen: UpstreamRegisterScreen {
-            link,
-            provider,
             suggested_username: localpart,
             username_forced,
             suggested_display_name: suggestions.suggested_display_name,
@@ -965,12 +961,11 @@ async fn validate_registration_action(
 
     if username.is_empty() {
         field_errors.insert("username".into(), serde_json::json!("required"));
-    } else if repo.user().exists(username).await? {
-        field_errors.insert("username".into(), serde_json::json!("exists"));
-    } else if !homeserver
-        .is_localpart_available(username)
-        .await
-        .map_err(UpstreamLinkWorkflowError::homeserver)?
+    } else if repo.user().exists(username).await?
+        || !homeserver
+            .is_localpart_available(username)
+            .await
+            .map_err(UpstreamLinkWorkflowError::homeserver)?
     {
         field_errors.insert("username".into(), serde_json::json!("exists"));
     }

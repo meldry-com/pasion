@@ -182,8 +182,8 @@ struct NewPersonalSession {
 }
 
 /// Build the tuple of columns selected from the LEFT JOIN of
-/// personal_sessions with personal_access_tokens.
-fn session_with_token_select() -> (
+/// `personal_sessions` with `personal_access_tokens`.
+type SessionWithTokenSelect = (
     personal_sessions::id,
     personal_sessions::owner_user_id,
     personal_sessions::owner_oauth2_client_id,
@@ -197,7 +197,9 @@ fn session_with_token_select() -> (
     diesel::dsl::Nullable<personal_access_tokens::id>,
     diesel::dsl::Nullable<personal_access_tokens::created_at>,
     diesel::dsl::Nullable<personal_access_tokens::expires_at>,
-) {
+);
+
+fn session_with_token_select() -> SessionWithTokenSelect {
     (
         personal_sessions::id,
         personal_sessions::owner_user_id,
@@ -530,12 +532,12 @@ impl PersonalSessionRepository for PgPersonalSessionRepository<'_> {
             PaginationDirection::Forward => {
                 query = query
                     .order(personal_sessions::id.asc())
-                    .limit((pagination.count + 1) as i64);
+                    .limit(crate::pg::pagination_limit(pagination.count));
             }
             PaginationDirection::Backward => {
                 query = query
                     .order(personal_sessions::id.desc())
-                    .limit((pagination.count + 1) as i64);
+                    .limit(crate::pg::pagination_limit(pagination.count));
             }
         }
 
@@ -655,7 +657,7 @@ impl PersonalSessionRepository for PgPersonalSessionRepository<'_> {
         let expected = ids.len();
 
         let rows_affected = diesel::sql_query(
-            r#"
+            r"
                 UPDATE personal_sessions
                 SET last_active_at = GREATEST(t.last_active_at, personal_sessions.last_active_at)
                   , last_active_ip = COALESCE(t.last_active_ip, personal_sessions.last_active_ip)
@@ -665,7 +667,7 @@ impl PersonalSessionRepository for PgPersonalSessionRepository<'_> {
                         AS t(personal_session_id, last_active_at, last_active_ip)
                 ) AS t
                 WHERE personal_sessions.id = t.personal_session_id
-            "#,
+            ",
         )
         .bind::<diesel::sql_types::Array<diesel::sql_types::Uuid>, _>(&ids)
         .bind::<diesel::sql_types::Array<diesel::sql_types::Timestamptz>, _>(&last_activities)

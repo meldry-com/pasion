@@ -677,12 +677,12 @@ impl UpstreamOAuthProviderRepository for PgUpstreamOAuthProviderRepository<'_> {
             PaginationDirection::Forward => {
                 query = query
                     .order(upstream_oauth_providers::id.asc())
-                    .limit((pagination.count + 1) as i64);
+                    .limit(crate::pg::pagination_limit(pagination.count));
             }
             PaginationDirection::Backward => {
                 query = query
                     .order(upstream_oauth_providers::id.desc())
-                    .limit((pagination.count + 1) as i64);
+                    .limit(crate::pg::pagination_limit(pagination.count));
             }
         }
 

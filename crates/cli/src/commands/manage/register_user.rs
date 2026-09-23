@@ -345,7 +345,7 @@ impl std::fmt::Display for UserCreationCommand<'_> {
 }
 
 /// Handle the interactive register-user subcommand.
-#[expect(clippy::too_many_arguments)]
+#[expect(clippy::too_many_arguments, clippy::fn_params_excessive_bools)]
 pub(super) async fn handle_register_user(
     figment: &Figment,
     username: Option<String>,

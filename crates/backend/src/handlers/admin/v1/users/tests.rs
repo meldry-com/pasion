@@ -4,196 +4,192 @@
 
 //! Integration tests for the admin users endpoints.
 //!
-//! Was the larger half of the original `admin/v1/users.rs`. Wrapping the
-//! body in a single `mod tests` keeps the original imports and helper
-//! visibility intact, so the move is purely textual.
+//! Was the larger half of the original `admin/v1/users.rs`. The parent module
+//! includes this file as its `tests` module.
+use chrono::Duration;
+use hyper::{Request, StatusCode};
+use pasion_data::{
+    RepositoryAccess,
+    user::{UserPasswordRepository, UserRepository},
+};
+use pasion_matrix::{HomeserverAdmin, ProvisionRequest};
+use rand_chacha::ChaChaRng;
+use rand_core::SeedableRng;
+use ulid::Ulid;
+use zeroize::Zeroizing;
 
-#[cfg(test)]
-mod tests {
-    use chrono::Duration;
-    use hyper::{Request, StatusCode};
-    use pasion_data::{
-        RepositoryAccess,
-        user::{UserPasswordRepository, UserRepository},
-    };
-    use pasion_matrix::{HomeserverAdmin, ProvisionRequest};
-    use rand_chacha::ChaChaRng;
-    use rand_core::SeedableRng;
-    use ulid::Ulid;
-    use zeroize::Zeroizing;
+use crate::handlers::{
+    passwords::{PasswordManager, PasswordVerificationResult},
+    test_utils::{RequestBuilderExt, ResponseExt, TestState, setup, unique_test_nonce},
+};
 
-    use crate::handlers::{
-        passwords::{PasswordManager, PasswordVerificationResult},
-        test_utils::{RequestBuilderExt, ResponseExt, TestState, setup, unique_test_nonce},
-    };
+#[tokio::test]
+async fn test_add_user() {
+    setup();
+    let pool = pasion_data::test_utils::setup_test_pool().await;
+    let mut state = TestState::from_pool(pool.clone()).await.unwrap();
+    let token = state.token_with_scope("urn:pasion:admin").await;
 
-    #[tokio::test]
-    async fn test_add_user() {
-        setup();
-        let pool = pasion_data::test_utils::setup_test_pool().await;
-        let mut state = TestState::from_pool(pool.clone()).await.unwrap();
-        let token = state.token_with_scope("urn:pasion:admin").await;
+    let request = Request::post("/api/admin/v1/users")
+        .bearer(&token)
+        .json(serde_json::json!({
+            "username": "alice",
+        }));
 
-        let request = Request::post("/api/admin/v1/users")
-            .bearer(&token)
-            .json(serde_json::json!({
-                "username": "alice",
-            }));
+    let response = state.request(request).await;
+    response.assert_status(StatusCode::CREATED);
 
-        let response = state.request(request).await;
-        response.assert_status(StatusCode::CREATED);
+    let body: serde_json::Value = response.json();
+    assert_eq!(body["data"]["type"], "user");
+    let id = body["data"]["id"].as_str().unwrap();
+    assert_eq!(body["data"]["attributes"]["username"], "alice");
 
-        let body: serde_json::Value = response.json();
-        assert_eq!(body["data"]["type"], "user");
-        let id = body["data"]["id"].as_str().unwrap();
-        assert_eq!(body["data"]["attributes"]["username"], "alice");
+    // Check that the user was created in the database
+    let mut repo = state.repository().await.unwrap();
+    let user = repo
+        .user()
+        .lookup(id.parse().unwrap())
+        .await
+        .unwrap()
+        .unwrap();
 
-        // Check that the user was created in the database
-        let mut repo = state.repository().await.unwrap();
-        let user = repo
-            .user()
-            .lookup(id.parse().unwrap())
-            .await
-            .unwrap()
-            .unwrap();
+    assert_eq!(user.username, "alice");
 
-        assert_eq!(user.username, "alice");
+    // Check that the user was created on the homeserver
+    let result = state.homeserver_admin.query_user("alice").await;
+    assert!(result.is_ok());
+}
 
-        // Check that the user was created on the homeserver
-        let result = state.homeserver_admin.query_user("alice").await;
-        assert!(result.is_ok());
-    }
+#[tokio::test]
+async fn test_add_user_invalid_username() {
+    setup();
+    let pool = pasion_data::test_utils::setup_test_pool().await;
+    let mut state = TestState::from_pool(pool.clone()).await.unwrap();
+    let token = state.token_with_scope("urn:pasion:admin").await;
 
-    #[tokio::test]
-    async fn test_add_user_invalid_username() {
-        setup();
-        let pool = pasion_data::test_utils::setup_test_pool().await;
-        let mut state = TestState::from_pool(pool.clone()).await.unwrap();
-        let token = state.token_with_scope("urn:pasion:admin").await;
+    let request = Request::post("/api/admin/v1/users")
+        .bearer(&token)
+        .json(serde_json::json!({
+            "username": "this is invalid",
+        }));
 
-        let request = Request::post("/api/admin/v1/users")
-            .bearer(&token)
-            .json(serde_json::json!({
-                "username": "this is invalid",
-            }));
+    let response = state.request(request).await;
+    response.assert_status(StatusCode::BAD_REQUEST);
 
-        let response = state.request(request).await;
-        response.assert_status(StatusCode::BAD_REQUEST);
+    let body: serde_json::Value = response.json();
+    assert_eq!(body["errors"][0]["title"], "Username is not valid");
+}
 
-        let body: serde_json::Value = response.json();
-        assert_eq!(body["errors"][0]["title"], "Username is not valid");
-    }
+#[tokio::test]
+async fn test_add_user_exists() {
+    setup();
+    let pool = pasion_data::test_utils::setup_test_pool().await;
+    let mut state = TestState::from_pool(pool.clone()).await.unwrap();
+    let token = state.token_with_scope("urn:pasion:admin").await;
 
-    #[tokio::test]
-    async fn test_add_user_exists() {
-        setup();
-        let pool = pasion_data::test_utils::setup_test_pool().await;
-        let mut state = TestState::from_pool(pool.clone()).await.unwrap();
-        let token = state.token_with_scope("urn:pasion:admin").await;
+    let request = Request::post("/api/admin/v1/users")
+        .bearer(&token)
+        .json(serde_json::json!({
+            "username": "alice",
+        }));
 
-        let request = Request::post("/api/admin/v1/users")
-            .bearer(&token)
-            .json(serde_json::json!({
-                "username": "alice",
-            }));
+    let response = state.request(request).await;
+    response.assert_status(StatusCode::CREATED);
 
-        let response = state.request(request).await;
-        response.assert_status(StatusCode::CREATED);
+    let body: serde_json::Value = response.json();
+    assert_eq!(body["data"]["type"], "user");
+    assert_eq!(body["data"]["attributes"]["username"], "alice");
 
-        let body: serde_json::Value = response.json();
-        assert_eq!(body["data"]["type"], "user");
-        assert_eq!(body["data"]["attributes"]["username"], "alice");
+    let request = Request::post("/api/admin/v1/users")
+        .bearer(&token)
+        .json(serde_json::json!({
+            "username": "alice",
+        }));
 
-        let request = Request::post("/api/admin/v1/users")
-            .bearer(&token)
-            .json(serde_json::json!({
-                "username": "alice",
-            }));
+    let response = state.request(request).await;
+    response.assert_status(StatusCode::CONFLICT);
 
-        let response = state.request(request).await;
-        response.assert_status(StatusCode::CONFLICT);
+    let body: serde_json::Value = response.json();
+    assert_eq!(body["errors"][0]["title"], "User already exists");
+}
 
-        let body: serde_json::Value = response.json();
-        assert_eq!(body["errors"][0]["title"], "User already exists");
-    }
+#[tokio::test]
+async fn test_add_user_reserved() {
+    setup();
+    let pool = pasion_data::test_utils::setup_test_pool().await;
+    let mut state = TestState::from_pool(pool.clone()).await.unwrap();
+    let token = state.token_with_scope("urn:pasion:admin").await;
 
-    #[tokio::test]
-    async fn test_add_user_reserved() {
-        setup();
-        let pool = pasion_data::test_utils::setup_test_pool().await;
-        let mut state = TestState::from_pool(pool.clone()).await.unwrap();
-        let token = state.token_with_scope("urn:pasion:admin").await;
+    // Reserve a username on the homeserver and try to add it
+    state.homeserver_admin.reserve_localpart("bob").await;
 
-        // Reserve a username on the homeserver and try to add it
-        state.homeserver_admin.reserve_localpart("bob").await;
+    let request = Request::post("/api/admin/v1/users")
+        .bearer(&token)
+        .json(serde_json::json!({
+            "username": "bob",
+        }));
 
-        let request = Request::post("/api/admin/v1/users")
-            .bearer(&token)
-            .json(serde_json::json!({
-                "username": "bob",
-            }));
+    let response = state.request(request).await;
 
-        let response = state.request(request).await;
+    let body: serde_json::Value = response.json();
+    assert_eq!(
+        body["errors"][0]["title"],
+        "Username is reserved by the homeserver"
+    );
 
-        let body: serde_json::Value = response.json();
-        assert_eq!(
-            body["errors"][0]["title"],
-            "Username is reserved by the homeserver"
-        );
+    // But we can force it with the skip_homeserver_check flag
+    let request = Request::post("/api/admin/v1/users")
+        .bearer(&token)
+        .json(serde_json::json!({
+            "username": "bob",
+            "skip_homeserver_check": true,
+        }));
 
-        // But we can force it with the skip_homeserver_check flag
-        let request = Request::post("/api/admin/v1/users")
-            .bearer(&token)
-            .json(serde_json::json!({
-                "username": "bob",
-                "skip_homeserver_check": true,
-            }));
+    let response = state.request(request).await;
+    response.assert_status(StatusCode::CREATED);
 
-        let response = state.request(request).await;
-        response.assert_status(StatusCode::CREATED);
+    let body: serde_json::Value = response.json();
+    let id = body["data"]["id"].as_str().unwrap();
+    assert_eq!(body["data"]["attributes"]["username"], "bob");
 
-        let body: serde_json::Value = response.json();
-        let id = body["data"]["id"].as_str().unwrap();
-        assert_eq!(body["data"]["attributes"]["username"], "bob");
+    // Check that the user was created in the database
+    let mut repo = state.repository().await.unwrap();
+    let user = repo
+        .user()
+        .lookup(id.parse().unwrap())
+        .await
+        .unwrap()
+        .unwrap();
 
-        // Check that the user was created in the database
-        let mut repo = state.repository().await.unwrap();
-        let user = repo
-            .user()
-            .lookup(id.parse().unwrap())
-            .await
-            .unwrap()
-            .unwrap();
+    assert_eq!(user.username, "bob");
+}
 
-        assert_eq!(user.username, "bob");
-    }
+#[tokio::test]
+async fn test_list_users() {
+    setup();
+    let pool = pasion_data::test_utils::setup_test_pool().await;
+    let mut state = TestState::from_pool(pool.clone()).await.unwrap();
+    let token = state.token_with_scope("urn:pasion:admin").await;
+    let mut rng = state.rng();
 
-    #[tokio::test]
-    async fn test_list_users() {
-        setup();
-        let pool = pasion_data::test_utils::setup_test_pool().await;
-        let mut state = TestState::from_pool(pool.clone()).await.unwrap();
-        let token = state.token_with_scope("urn:pasion:admin").await;
-        let mut rng = state.rng();
+    // Provision two users
+    let mut repo = state.repository().await.unwrap();
+    repo.user()
+        .add(&mut rng, &state.clock, "alice".to_owned())
+        .await
+        .unwrap();
+    repo.user()
+        .add(&mut rng, &state.clock, "bob".to_owned())
+        .await
+        .unwrap();
+    repo.save().await.unwrap();
 
-        // Provision two users
-        let mut repo = state.repository().await.unwrap();
-        repo.user()
-            .add(&mut rng, &state.clock, "alice".to_owned())
-            .await
-            .unwrap();
-        repo.user()
-            .add(&mut rng, &state.clock, "bob".to_owned())
-            .await
-            .unwrap();
-        repo.save().await.unwrap();
-
-        // Test default behavior (count=true)
-        let request = Request::get("/api/admin/v1/users").bearer(&token).empty();
-        let response = state.request(request).await;
-        response.assert_status(StatusCode::OK);
-        let body: serde_json::Value = response.json();
-        insta::assert_json_snapshot!(body, @r#"
+    // Test default behavior (count=true)
+    let request = Request::get("/api/admin/v1/users").bearer(&token).empty();
+    let response = state.request(request).await;
+    response.assert_status(StatusCode::OK);
+    let body: serde_json::Value = response.json();
+    insta::assert_json_snapshot!(body, @r#"
         {
           "meta": {
             "count": 2
@@ -248,14 +244,14 @@ mod tests {
         }
         "#);
 
-        // Test count=false
-        let request = Request::get("/api/admin/v1/users?count=false")
-            .bearer(&token)
-            .empty();
-        let response = state.request(request).await;
-        response.assert_status(StatusCode::OK);
-        let body: serde_json::Value = response.json();
-        insta::assert_json_snapshot!(body, @r#"
+    // Test count=false
+    let request = Request::get("/api/admin/v1/users?count=false")
+        .bearer(&token)
+        .empty();
+    let response = state.request(request).await;
+    response.assert_status(StatusCode::OK);
+    let body: serde_json::Value = response.json();
+    insta::assert_json_snapshot!(body, @r#"
         {
           "data": [
             {
@@ -307,14 +303,14 @@ mod tests {
         }
         "#);
 
-        // Test count=only
-        let request = Request::get("/api/admin/v1/users?count=only")
-            .bearer(&token)
-            .empty();
-        let response = state.request(request).await;
-        response.assert_status(StatusCode::OK);
-        let body: serde_json::Value = response.json();
-        insta::assert_json_snapshot!(body, @r###"
+    // Test count=only
+    let request = Request::get("/api/admin/v1/users?count=only")
+        .bearer(&token)
+        .empty();
+    let response = state.request(request).await;
+    response.assert_status(StatusCode::OK);
+    let body: serde_json::Value = response.json();
+    insta::assert_json_snapshot!(body, @r###"
         {
           "meta": {
             "count": 2
@@ -325,14 +321,14 @@ mod tests {
         }
         "###);
 
-        // Test count=false with filtering
-        let request = Request::get("/api/admin/v1/users?count=false&filter[search]=alice")
-            .bearer(&token)
-            .empty();
-        let response = state.request(request).await;
-        response.assert_status(StatusCode::OK);
-        let body: serde_json::Value = response.json();
-        insta::assert_json_snapshot!(body, @r#"
+    // Test count=false with filtering
+    let request = Request::get("/api/admin/v1/users?count=false&filter[search]=alice")
+        .bearer(&token)
+        .empty();
+    let response = state.request(request).await;
+    response.assert_status(StatusCode::OK);
+    let body: serde_json::Value = response.json();
+    insta::assert_json_snapshot!(body, @r#"
         {
           "data": [
             {
@@ -364,14 +360,14 @@ mod tests {
         }
         "#);
 
-        // Test count=only with filtering
-        let request = Request::get("/api/admin/v1/users?count=only&filter[search]=alice")
-            .bearer(&token)
-            .empty();
-        let response = state.request(request).await;
-        response.assert_status(StatusCode::OK);
-        let body: serde_json::Value = response.json();
-        insta::assert_json_snapshot!(body, @r#"
+    // Test count=only with filtering
+    let request = Request::get("/api/admin/v1/users?count=only&filter[search]=alice")
+        .bearer(&token)
+        .empty();
+    let response = state.request(request).await;
+    response.assert_status(StatusCode::OK);
+    let body: serde_json::Value = response.json();
+    insta::assert_json_snapshot!(body, @r#"
         {
           "meta": {
             "count": 1
@@ -381,259 +377,258 @@ mod tests {
           }
         }
         "#);
-    }
+}
 
-    #[tokio::test]
-    async fn test_set_password() {
-        setup();
-        let pool = pasion_data::test_utils::setup_test_pool().await;
-        let mut state = TestState::from_pool(pool.clone()).await.unwrap();
-        let token = state.token_with_scope("urn:pasion:admin").await;
+#[tokio::test]
+async fn test_set_password() {
+    setup();
+    let pool = pasion_data::test_utils::setup_test_pool().await;
+    let mut state = TestState::from_pool(pool.clone()).await.unwrap();
+    let token = state.token_with_scope("urn:pasion:admin").await;
 
-        // Create a user
-        let mut repo = state.repository().await.unwrap();
-        let user = repo
-            .user()
-            .add(&mut state.rng(), &state.clock, "alice".to_owned())
-            .await
-            .unwrap();
+    // Create a user
+    let mut repo = state.repository().await.unwrap();
+    let user = repo
+        .user()
+        .add(&mut state.rng(), &state.clock, "alice".to_owned())
+        .await
+        .unwrap();
 
-        // Double-check that the user doesn't have a password
-        let user_password = repo.user_password().active(&user).await.unwrap();
-        assert!(user_password.is_none());
+    // Double-check that the user doesn't have a password
+    let user_password = repo.user_password().active(&user).await.unwrap();
+    assert!(user_password.is_none());
 
-        repo.save().await.unwrap();
+    repo.save().await.unwrap();
 
-        let user_id = user.id;
+    let user_id = user.id;
 
-        // Set the password through the API
-        let request = Request::post(format!("/api/admin/v1/users/{user_id}/set-password"))
-            .bearer(&token)
-            .json(serde_json::json!({
-                "password": "this is a good enough password",
-            }));
+    // Set the password through the API
+    let request = Request::post(format!("/api/admin/v1/users/{user_id}/set-password"))
+        .bearer(&token)
+        .json(serde_json::json!({
+            "password": "this is a good enough password",
+        }));
 
-        let response = state.request(request).await;
-        response.assert_status(StatusCode::NO_CONTENT);
+    let response = state.request(request).await;
+    response.assert_status(StatusCode::NO_CONTENT);
 
-        // Check that the user now has a password
-        let mut repo = state.repository().await.unwrap();
-        let user_password = repo.user_password().active(&user).await.unwrap().unwrap();
-        let password = Zeroizing::new(String::from("this is a good enough password"));
-        let res = state
-            .password_manager
-            .verify(
-                user_password.version,
-                password,
-                user_password.hashed_password,
-            )
-            .await
-            .unwrap();
-        assert_eq!(res, PasswordVerificationResult::Matched(()));
-    }
+    // Check that the user now has a password
+    let mut repo = state.repository().await.unwrap();
+    let user_password = repo.user_password().active(&user).await.unwrap().unwrap();
+    let password = Zeroizing::new(String::from("this is a good enough password"));
+    let res = state
+        .password_manager
+        .verify(
+            user_password.version,
+            password,
+            user_password.hashed_password,
+        )
+        .await
+        .unwrap();
+    assert_eq!(res, PasswordVerificationResult::Matched(()));
+}
 
-    #[tokio::test]
-    async fn test_weak_password() {
-        setup();
-        let pool = pasion_data::test_utils::setup_test_pool().await;
-        let mut state = TestState::from_pool(pool.clone()).await.unwrap();
-        let token = state.token_with_scope("urn:pasion:admin").await;
+#[tokio::test]
+async fn test_weak_password() {
+    setup();
+    let pool = pasion_data::test_utils::setup_test_pool().await;
+    let mut state = TestState::from_pool(pool.clone()).await.unwrap();
+    let token = state.token_with_scope("urn:pasion:admin").await;
 
-        // Create a user
-        let mut repo = state.repository().await.unwrap();
-        let user = repo
-            .user()
-            .add(&mut state.rng(), &state.clock, "alice".to_owned())
-            .await
-            .unwrap();
-        repo.save().await.unwrap();
+    // Create a user
+    let mut repo = state.repository().await.unwrap();
+    let user = repo
+        .user()
+        .add(&mut state.rng(), &state.clock, "alice".to_owned())
+        .await
+        .unwrap();
+    repo.save().await.unwrap();
 
-        let user_id = user.id;
+    let user_id = user.id;
 
-        // Set a weak password through the API
-        let request = Request::post(format!("/api/admin/v1/users/{user_id}/set-password"))
-            .bearer(&token)
-            .json(serde_json::json!({
-                "password": "password",
-            }));
+    // Set a weak password through the API
+    let request = Request::post(format!("/api/admin/v1/users/{user_id}/set-password"))
+        .bearer(&token)
+        .json(serde_json::json!({
+            "password": "password",
+        }));
 
-        let response = state.request(request).await;
-        response.assert_status(StatusCode::BAD_REQUEST);
+    let response = state.request(request).await;
+    response.assert_status(StatusCode::BAD_REQUEST);
 
-        // Check that the user still has a password
-        let mut repo = state.repository().await.unwrap();
-        let user_password = repo.user_password().active(&user).await.unwrap();
-        assert!(user_password.is_none());
-        repo.save().await.unwrap();
+    // Check that the user still has a password
+    let mut repo = state.repository().await.unwrap();
+    let user_password = repo.user_password().active(&user).await.unwrap();
+    assert!(user_password.is_none());
+    repo.save().await.unwrap();
 
-        // Now try with the skip_password_check flag
-        let request = Request::post(format!("/api/admin/v1/users/{user_id}/set-password"))
-            .bearer(&token)
-            .json(serde_json::json!({
-                "password": "password",
-                "skip_password_check": true,
-            }));
+    // Now try with the skip_password_check flag
+    let request = Request::post(format!("/api/admin/v1/users/{user_id}/set-password"))
+        .bearer(&token)
+        .json(serde_json::json!({
+            "password": "password",
+            "skip_password_check": true,
+        }));
 
-        let response = state.request(request).await;
-        response.assert_status(StatusCode::NO_CONTENT);
+    let response = state.request(request).await;
+    response.assert_status(StatusCode::NO_CONTENT);
 
-        // Check that the user now has a password
-        let mut repo = state.repository().await.unwrap();
-        let user_password = repo.user_password().active(&user).await.unwrap().unwrap();
-        let password = Zeroizing::new("password".to_owned());
-        let res = state
-            .password_manager
-            .verify(
-                user_password.version,
-                password,
-                user_password.hashed_password,
-            )
-            .await
-            .unwrap();
-        assert_eq!(res, PasswordVerificationResult::Matched(()));
-    }
+    // Check that the user now has a password
+    let mut repo = state.repository().await.unwrap();
+    let user_password = repo.user_password().active(&user).await.unwrap().unwrap();
+    let password = Zeroizing::new("password".to_owned());
+    let res = state
+        .password_manager
+        .verify(
+            user_password.version,
+            password,
+            user_password.hashed_password,
+        )
+        .await
+        .unwrap();
+    assert_eq!(res, PasswordVerificationResult::Matched(()));
+}
 
-    #[tokio::test]
-    async fn test_unknown_user() {
-        setup();
-        let pool = pasion_data::test_utils::setup_test_pool().await;
-        let mut state = TestState::from_pool(pool.clone()).await.unwrap();
-        let token = state.token_with_scope("urn:pasion:admin").await;
+#[tokio::test]
+async fn test_unknown_user() {
+    setup();
+    let pool = pasion_data::test_utils::setup_test_pool().await;
+    let mut state = TestState::from_pool(pool.clone()).await.unwrap();
+    let token = state.token_with_scope("urn:pasion:admin").await;
 
-        // Set the password through the API
-        let request = Request::post("/api/admin/v1/users/01040G2081040G2081040G2081/set-password")
-            .bearer(&token)
-            .json(serde_json::json!({
-                "password": "this is a good enough password",
-            }));
+    // Set the password through the API
+    let request = Request::post("/api/admin/v1/users/01040G2081040G2081040G2081/set-password")
+        .bearer(&token)
+        .json(serde_json::json!({
+            "password": "this is a good enough password",
+        }));
 
-        let response = state.request(request).await;
-        response.assert_status(StatusCode::NOT_FOUND);
+    let response = state.request(request).await;
+    response.assert_status(StatusCode::NOT_FOUND);
 
-        let body: serde_json::Value = response.json();
-        assert_eq!(
-            body["errors"][0]["title"],
-            "User ID 01040G2081040G2081040G2081 not found"
-        );
-    }
+    let body: serde_json::Value = response.json();
+    assert_eq!(
+        body["errors"][0]["title"],
+        "User ID 01040G2081040G2081040G2081 not found"
+    );
+}
 
-    #[tokio::test]
-    async fn test_disabled() {
-        setup();
-        let pool = pasion_data::test_utils::setup_test_pool().await;
-        let mut state = TestState::from_pool(pool.clone()).await.unwrap();
-        state.password_manager = PasswordManager::disabled();
-        let token = state.token_with_scope("urn:pasion:admin").await;
+#[tokio::test]
+async fn test_disabled() {
+    setup();
+    let pool = pasion_data::test_utils::setup_test_pool().await;
+    let mut state = TestState::from_pool(pool.clone()).await.unwrap();
+    state.password_manager = PasswordManager::disabled();
+    let token = state.token_with_scope("urn:pasion:admin").await;
 
-        let request = Request::post("/api/admin/v1/users/01040G2081040G2081040G2081/set-password")
-            .bearer(&token)
-            .json(serde_json::json!({
-                "password": "hunter2",
-            }));
+    let request = Request::post("/api/admin/v1/users/01040G2081040G2081040G2081/set-password")
+        .bearer(&token)
+        .json(serde_json::json!({
+            "password": "hunter2",
+        }));
 
-        let response = state.request(request).await;
-        response.assert_status(StatusCode::FORBIDDEN);
+    let response = state.request(request).await;
+    response.assert_status(StatusCode::FORBIDDEN);
 
-        let body: serde_json::Value = response.json();
-        assert_eq!(body["errors"][0]["title"], "Password auth is disabled");
-    }
+    let body: serde_json::Value = response.json();
+    assert_eq!(body["errors"][0]["title"], "Password auth is disabled");
+}
 
-    #[tokio::test]
-    async fn test_patch_user_profile_and_state() {
-        setup();
-        let pool = pasion_data::test_utils::setup_test_pool().await;
-        let mut state = TestState::from_pool(pool.clone()).await.unwrap();
-        let unique = unique_test_nonce();
-        state.clock.advance(Duration::seconds(unique as i64));
-        let token = state.token_with_scope("urn:pasion:admin").await;
-        let username = format!("alice{}", Ulid::new().to_string().to_lowercase());
-        let mut rng = ChaChaRng::seed_from_u64(unique);
+#[tokio::test]
+async fn test_patch_user_profile_and_state() {
+    setup();
+    let pool = pasion_data::test_utils::setup_test_pool().await;
+    let mut state = TestState::from_pool(pool.clone()).await.unwrap();
+    let unique = unique_test_nonce();
+    state.clock.advance(Duration::seconds(unique as i64));
+    let token = state.token_with_scope("urn:pasion:admin").await;
+    let username = format!("alice{}", Ulid::new().to_string().to_lowercase());
+    let mut rng = ChaChaRng::seed_from_u64(unique);
 
-        let mut repo = state.repository().await.unwrap();
-        let user = repo
-            .user()
-            .add(&mut rng, &state.clock, username.clone())
-            .await
-            .unwrap();
-        state
-            .homeserver_admin
-            .provision_user(&ProvisionRequest::new(&user.username, &user.sub))
-            .await
-            .unwrap();
-        repo.save().await.unwrap();
+    let mut repo = state.repository().await.unwrap();
+    let user = repo
+        .user()
+        .add(&mut rng, &state.clock, username.clone())
+        .await
+        .unwrap();
+    state
+        .homeserver_admin
+        .provision_user(&ProvisionRequest::new(&user.username, &user.sub))
+        .await
+        .unwrap();
+    repo.save().await.unwrap();
 
-        let request = Request::patch(format!("/api/admin/v1/users/{}", user.id))
-            .bearer(&token)
-            .json(serde_json::json!({
-                "display_name": "Alice Admin",
-                "preferred_locale": "zh-CN",
-                "admin": true,
-                "locked": true
-            }));
+    let request = Request::patch(format!("/api/admin/v1/users/{}", user.id))
+        .bearer(&token)
+        .json(serde_json::json!({
+            "display_name": "Alice Admin",
+            "preferred_locale": "zh-CN",
+            "admin": true,
+            "locked": true
+        }));
 
-        let response = state.request(request).await;
-        response.assert_status(StatusCode::OK);
-        let body: serde_json::Value = response.json();
+    let response = state.request(request).await;
+    response.assert_status(StatusCode::OK);
+    let body: serde_json::Value = response.json();
 
-        assert_eq!(body["data"]["attributes"]["display_name"], "Alice Admin");
-        assert_eq!(body["data"]["attributes"]["preferred_locale"], "zh-CN");
-        assert_eq!(body["data"]["attributes"]["admin"], true);
-        assert!(body["data"]["attributes"]["locked_at"].is_string());
+    assert_eq!(body["data"]["attributes"]["display_name"], "Alice Admin");
+    assert_eq!(body["data"]["attributes"]["preferred_locale"], "zh-CN");
+    assert_eq!(body["data"]["attributes"]["admin"], true);
+    assert!(body["data"]["attributes"]["locked_at"].is_string());
 
-        let user = state.homeserver_admin.query_user(&username).await.unwrap();
-        assert_eq!(user.displayname.as_deref(), Some("Alice Admin"));
-    }
+    let user = state.homeserver_admin.query_user(&username).await.unwrap();
+    assert_eq!(user.displayname.as_deref(), Some("Alice Admin"));
+}
 
-    #[tokio::test]
-    async fn test_patch_user_reactivate() {
-        setup();
-        let pool = pasion_data::test_utils::setup_test_pool().await;
-        let mut state = TestState::from_pool(pool.clone()).await.unwrap();
-        let unique = unique_test_nonce();
-        state.clock.advance(Duration::seconds(unique as i64));
-        let token = state.token_with_scope("urn:pasion:admin").await;
-        let username = format!("alice{}", Ulid::new().to_string().to_lowercase());
-        let mut rng = ChaChaRng::seed_from_u64(unique);
+#[tokio::test]
+async fn test_patch_user_reactivate() {
+    setup();
+    let pool = pasion_data::test_utils::setup_test_pool().await;
+    let mut state = TestState::from_pool(pool.clone()).await.unwrap();
+    let unique = unique_test_nonce();
+    state.clock.advance(Duration::seconds(unique as i64));
+    let token = state.token_with_scope("urn:pasion:admin").await;
+    let username = format!("alice{}", Ulid::new().to_string().to_lowercase());
+    let mut rng = ChaChaRng::seed_from_u64(unique);
 
-        let mut repo = state.repository().await.unwrap();
-        let user = repo
-            .user()
-            .add(&mut rng, &state.clock, username)
-            .await
-            .unwrap();
-        let user = repo.user().deactivate(&state.clock, user).await.unwrap();
-        repo.save().await.unwrap();
+    let mut repo = state.repository().await.unwrap();
+    let user = repo
+        .user()
+        .add(&mut rng, &state.clock, username)
+        .await
+        .unwrap();
+    let user = repo.user().deactivate(&state.clock, user).await.unwrap();
+    repo.save().await.unwrap();
 
-        state
-            .homeserver_admin
-            .provision_user(&ProvisionRequest::new(&user.username, &user.sub))
-            .await
-            .unwrap();
-        state
-            .homeserver_admin
-            .delete_user(&user.username, true)
-            .await
-            .unwrap();
+    state
+        .homeserver_admin
+        .provision_user(&ProvisionRequest::new(&user.username, &user.sub))
+        .await
+        .unwrap();
+    state
+        .homeserver_admin
+        .delete_user(&user.username, true)
+        .await
+        .unwrap();
 
-        let request = Request::patch(format!("/api/admin/v1/users/{}", user.id))
-            .bearer(&token)
-            .json(serde_json::json!({
-                "deactivated": false
-            }));
+    let request = Request::patch(format!("/api/admin/v1/users/{}", user.id))
+        .bearer(&token)
+        .json(serde_json::json!({
+            "deactivated": false
+        }));
 
-        let response = state.request(request).await;
-        response.assert_status(StatusCode::OK);
-        let body: serde_json::Value = response.json();
-        assert_eq!(
-            body["data"]["attributes"]["deactivated_at"],
-            serde_json::Value::Null
-        );
+    let response = state.request(request).await;
+    response.assert_status(StatusCode::OK);
+    let body: serde_json::Value = response.json();
+    assert_eq!(
+        body["data"]["attributes"]["deactivated_at"],
+        serde_json::Value::Null
+    );
 
-        let matrix_user = state
-            .homeserver_admin
-            .query_user(&user.username)
-            .await
-            .unwrap();
-        assert!(!matrix_user.deactivated);
-    }
+    let matrix_user = state
+        .homeserver_admin
+        .query_user(&user.username)
+        .await
+        .unwrap();
+    assert!(!matrix_user.deactivated);
 }

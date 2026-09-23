@@ -150,7 +150,7 @@ impl FromIterator<ResponseTypeToken> for ResponseType {
 impl From<OAuthAuthorizationEndpointResponseType> for ResponseType {
     fn from(iana: OAuthAuthorizationEndpointResponseType) -> Self {
         use OAuthAuthorizationEndpointResponseType as I;
-        use ResponseTypeToken::*;
+        use ResponseTypeToken::{Code, IdToken, Token};
 
         let tokens: &[ResponseTypeToken] = match iana {
             I::Code => &[Code],
@@ -171,7 +171,7 @@ impl TryFrom<ResponseType> for OAuthAuthorizationEndpointResponseType {
 
     fn try_from(rt: ResponseType) -> Result<Self, Self::Error> {
         use OAuthAuthorizationEndpointResponseType as O;
-        use ResponseTypeToken::*;
+        use ResponseTypeToken::{Code, IdToken, Token, Unknown};
 
         // Reject if any unknown tokens are present
         if rt.iter().any(|t| matches!(t, Unknown(_))) {
@@ -180,7 +180,6 @@ impl TryFrom<ResponseType> for OAuthAuthorizationEndpointResponseType {
 
         let sorted: Vec<_> = rt.iter().collect();
         Ok(match sorted.as_slice() {
-            [] => O::None,
             [Code] => O::Code,
             [IdToken] => O::IdToken,
             [Token] => O::Token,

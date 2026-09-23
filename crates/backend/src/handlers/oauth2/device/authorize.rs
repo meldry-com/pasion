@@ -193,7 +193,7 @@ async fn handle_post(
         device_code: device_code.device_code,
         user_code: device_code.user_code.clone(),
         verification_uri: url_builder.device_code_link(),
-        verification_uri_complete: Some(url_builder.device_code_link_full(device_code.user_code)),
+        verification_uri_complete: Some(url_builder.device_code_link_full(&device_code.user_code)),
         expires_in,
         interval: Some(Duration::microseconds(5 * 1000 * 1000)),
     };

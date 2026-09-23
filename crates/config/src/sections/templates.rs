@@ -42,6 +42,10 @@ fn is_default_translations_path(value: &Utf8PathBuf) -> bool {
     *value == default_translations_path()
 }
 
+#[allow(
+    clippy::ref_option,
+    reason = "serde skip_serializing_if requires a shared-reference predicate"
+)]
 fn is_default_default_locale(value: &Option<String>) -> bool {
     value.is_none()
 }

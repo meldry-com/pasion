@@ -13,6 +13,19 @@
 //! * [`init`] registers every handler and returns an idle [`QueueWorker`].
 //! * [`init_and_run`] does the same but immediately spawns the worker.
 
+#![allow(
+    // This application-facing crate exposes many queue handlers; enforcing
+    // public-library documentation conventions on each handler is noise.
+    clippy::pedantic,
+    // Queue scheduling and test setup are integration boundaries that own access
+    // to the wall clock and random identifiers.
+    clippy::disallowed_methods,
+    // Job payloads and explicit dependency lists are intentionally shaped around
+    // their individual handlers rather than Clippy's size/count heuristics.
+    clippy::large_enum_variant,
+    clippy::too_many_arguments
+)]
+
 use std::sync::{Arc, LazyLock};
 
 use diesel_async::{AsyncPgConnection, pooled_connection::deadpool::Pool as DieselPool};

@@ -106,7 +106,7 @@ impl AccessToken {
     }
 }
 
-/// Pasion-original: RefreshTokenState extended with `Revoked` variant and
+/// Pasion-original: `RefreshTokenState` extended with `Revoked` variant and
 /// `next_refresh_token_id` tracking (replacing the simple Apache 2.0
 /// `Consumed` state).
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
@@ -226,7 +226,7 @@ impl RefreshToken {
 
 /// Type of token to generate or validate
 ///
-/// Pasion-original: replaces Compat* token types with PersonalAccessToken.
+/// Pasion-original: replaces Compat* token types with `PersonalAccessToken`.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum TokenType {
     /// An access token, used by Relying Parties to authenticate requests

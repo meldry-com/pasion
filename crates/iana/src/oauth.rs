@@ -11,7 +11,7 @@ open_enum! {
     pub enum OAuthAccessTokenType {
         /// Bearer token
         Bearer => "Bearer",
-        /// N_A
+        /// `N_A`
         Na => "N_A",
         /// Proof of Possession
         PoP => "PoP",
@@ -27,15 +27,15 @@ closed_enum! {
     pub enum OAuthAuthorizationEndpointResponseType {
         /// Authorization Code Grant
         Code => "code",
-        /// Hybrid: code + id_token
+        /// Hybrid: code + `id_token`
         CodeIdToken => "code id_token",
-        /// Hybrid: code + id_token + token
+        /// Hybrid: code + `id_token` + token
         CodeIdTokenToken => "code id_token token",
         /// Hybrid: code + token
         CodeToken => "code token",
-        /// Implicit: id_token only
+        /// Implicit: `id_token` only
         IdToken => "id_token",
-        /// Implicit: id_token + token
+        /// Implicit: `id_token` + token
         IdTokenToken => "id_token token",
         /// None
         None => "none",

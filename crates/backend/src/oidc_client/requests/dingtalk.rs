@@ -80,8 +80,7 @@ pub async fn request_access_token(
         .json(&body)
         .send_traced()
         .await?
-        .error_for_status()
-        .map_err(reqwest::Error::from)?
+        .error_for_status()?
         .json()
         .await?;
 
@@ -107,8 +106,7 @@ pub async fn fetch_userinfo(
         .header("x-acs-dingtalk-access-token", access_token)
         .send_traced()
         .await?
-        .error_for_status()
-        .map_err(reqwest::Error::from)?
+        .error_for_status()?
         .json()
         .await?;
 

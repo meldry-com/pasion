@@ -125,10 +125,15 @@ impl PolicyDataRepository for PgPolicyDataRepository<'_> {
 
 #[cfg(test)]
 mod tests {
+    #![allow(
+        clippy::items_after_statements,
+        reason = "test-only helper types are scoped near their scenarios"
+    )]
+
     use diesel_async::RunQueryDsl;
     use pasion_data::{
-        RepositoryAccess as _, RepositoryFactory as _, RepositoryTransaction as _,
-        clock::MockClock, policy_data::PolicyDataRepository,
+        RepositoryAccess as _, RepositoryFactory as _, clock::MockClock,
+        policy_data::PolicyDataRepository,
     };
     use rand_chacha::ChaChaRng;
     use rand_core::SeedableRng;

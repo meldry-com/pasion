@@ -28,7 +28,7 @@ impl<'c> PgAppSessionRepository<'c> {
     }
 }
 
-/// Row type for loading an OAuth2 session as an app session
+/// Row type for loading an `OAuth2` session as an app session
 #[derive(Debug, Clone, Queryable, Selectable)]
 #[diesel(table_name = oauth2_sessions)]
 struct AppSessionLookup {
@@ -92,7 +92,7 @@ impl TryFrom<AppSessionLookup> for AppSession {
     }
 }
 
-/// Apply the [`AppSessionFilter`] to a boxed select query on oauth2_sessions.
+/// Apply the [`AppSessionFilter`] to a boxed select query on `oauth2_sessions`.
 macro_rules! apply_app_session_filter {
     ($query:expr, $filter:expr) => {{
         let mut query = $query;
@@ -173,12 +173,12 @@ impl AppSessionRepository for PgAppSessionRepository<'_> {
             PaginationDirection::Forward => {
                 query = query
                     .order(oauth2_sessions::id.asc())
-                    .limit((pagination.count + 1) as i64);
+                    .limit(crate::pg::pagination_limit(pagination.count));
             }
             PaginationDirection::Backward => {
                 query = query
                     .order(oauth2_sessions::id.desc())
-                    .limit((pagination.count + 1) as i64);
+                    .limit(crate::pg::pagination_limit(pagination.count));
             }
         }
 
@@ -246,8 +246,7 @@ mod tests {
         scope::{OPENID, Scope},
     };
     use pasion_data::{
-        Pagination, RepositoryAccess, RepositoryAccess as _, RepositoryFactory as _,
-        RepositoryTransaction as _,
+        Pagination, RepositoryAccess as _, RepositoryFactory as _,
         app_session::{AppSession, AppSessionFilter},
         clock::MockClock,
         oauth2::OAuth2SessionRepository,

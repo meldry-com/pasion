@@ -83,21 +83,21 @@ fn RegisterPage(providers: ProvidersResponse) -> Element {
                             let pw2 = new_password_again.to_string();
 
                             if user.is_empty() {
-                                error.set(Some("Username is required.".to_string()));
+                                error.set(Some("Username is required.".to_owned()));
                                 return;
                             }
                             if pw.is_empty() {
-                                error.set(Some("Password is required.".to_string()));
+                                error.set(Some("Password is required.".to_owned()));
                                 return;
                             }
                             if pw != pw2 {
-                                error.set(Some("Passwords do not match.".to_string()));
+                                error.set(Some("Passwords do not match.".to_owned()));
                                 return;
                             }
 
                             submitting.set(true);
                             error.set(None);
-                            let nav = nav.clone();
+                            let nav = nav;
 
                             spawn(async move {
                                 let result = crate::api::api_post::<RegisterResponse>(
@@ -131,7 +131,7 @@ fn RegisterPage(providers: ProvidersResponse) -> Element {
                                         }
                                     }
                                     Ok(resp) => {
-                                        let msg = resp.error.unwrap_or_else(|| "Registration failed.".to_string());
+                                        let msg = resp.error.unwrap_or_else(|| "Registration failed.".to_owned());
                                         error.set(Some(msg));
                                     }
                                     Err(e) => error.set(Some(e)),
@@ -225,6 +225,7 @@ fn RegisterPage(providers: ProvidersResponse) -> Element {
 /// Email verification step during registration.
 #[component]
 pub fn RegisterVerifyEmail(id: String) -> Element {
+    let storage_id = id.clone();
     let mut code = use_signal(String::new);
     let mut email = use_signal(String::new);
     let mut editing_email = use_signal(|| false);
@@ -233,6 +234,16 @@ pub fn RegisterVerifyEmail(id: String) -> Element {
     let mut changing_email = use_signal(|| false);
     let mut error = use_signal(|| None::<String>);
     let mut resend_message = use_signal(|| None::<String>);
+    let mut last_email_sent_at = use_signal(move || stored_email_send_time(&storage_id));
+    let mut now_ms = use_signal(js_sys::Date::now);
+    use_effect(move || {
+        spawn(async move {
+            loop {
+                gloo_timers::future::TimeoutFuture::new(1000).await;
+                now_ms.set(js_sys::Date::now());
+            }
+        });
+    });
     let nav = navigator();
     let reg_id = id.clone();
     let resend_id = id.clone();
@@ -252,9 +263,19 @@ pub fn RegisterVerifyEmail(id: String) -> Element {
     };
     let masked_email = pending_email
         .as_deref()
-        .map(mask_email_address)
-        .unwrap_or_else(|| "your email address".to_string());
+        .map_or_else(|| "your email address".to_owned(), mask_email_address);
     let change_email_seed = pending_email.clone().unwrap_or_default();
+    let initial_sent_at = match &*status_binding {
+        Some(Ok(data)) => data
+            .pending_email_sent_at
+            .as_deref()
+            .map(js_sys::Date::parse)
+            .or_else(|| data.created_at.as_deref().map(js_sys::Date::parse))
+            .unwrap_or(0.0),
+        _ => 0.0,
+    };
+    let sent_at = initial_sent_at.max(last_email_sent_at());
+    let resend_seconds = ((sent_at + 60_000.0 - now_ms()) / 1000.0).ceil().max(0.0) as u32;
 
     rsx! {
         Layout {
@@ -290,7 +311,7 @@ pub fn RegisterVerifyEmail(id: String) -> Element {
                                 e.stop_propagation();
                                 let new_email = email.to_string();
                                 if new_email.trim().is_empty() {
-                                    error.set(Some("Please enter your email address.".to_string()));
+                                    error.set(Some("Please enter your email address.".to_owned()));
                                     return;
                                 }
 
@@ -307,17 +328,18 @@ pub fn RegisterVerifyEmail(id: String) -> Element {
                                     changing_email.set(false);
                                     match result {
                                         Ok(resp) if resp.status == "updated" => {
+                                            let sent_at = js_sys::Date::now();
+                                            store_email_send_time(&rid, sent_at);
+                                            last_email_sent_at.set(sent_at);
                                             code.set(String::new());
                                             editing_email.set(false);
-                                            resend_message.set(Some("Your email has been updated and a new code has been sent.".to_string()));
+                                            resend_message.set(Some("Your email has been updated and a new code has been sent.".to_owned()));
                                             status.restart();
                                         }
                                         Ok(resp) => {
                                             let message = resp
                                                 .error
-                                                .as_deref()
-                                                .map(registration_error_message)
-                                                .unwrap_or_else(|| "Could not update your email address.".to_string());
+                                                .as_deref().map_or_else(|| "Could not update your email address.".to_owned(), registration_error_message);
                                             error.set(Some(message));
                                         }
                                         Err(e) => error.set(Some(e)),
@@ -342,11 +364,15 @@ pub fn RegisterVerifyEmail(id: String) -> Element {
                             button {
                                 class: "btn btn-primary btn-block",
                                 r#type: "submit",
-                                disabled: changing_email(),
+                                disabled: changing_email() || resend_seconds > 0,
                                 if changing_email() {
                                     LoadingSpinner { inline: true }
                                 }
-                                "Save new email"
+                                if resend_seconds > 0 {
+                                    "Save new email ({resend_seconds}s)"
+                                } else {
+                                    "Save new email"
+                                }
                             }
                         }
                     }
@@ -370,14 +396,14 @@ pub fn RegisterVerifyEmail(id: String) -> Element {
                             e.stop_propagation();
                             let c = code.to_string();
                             if c.is_empty() {
-                                error.set(Some("Please enter the verification code.".to_string()));
+                                error.set(Some("Please enter the verification code.".to_owned()));
                                 return;
                             }
 
                             submitting.set(true);
                             error.set(None);
                             resend_message.set(None);
-                            let nav = nav.clone();
+                            let nav = nav;
                             let rid = reg_id.clone();
 
                             spawn(async move {
@@ -396,9 +422,7 @@ pub fn RegisterVerifyEmail(id: String) -> Element {
                                     Ok(resp) => {
                                         let message = resp
                                             .error
-                                            .as_deref()
-                                            .map(registration_error_message)
-                                            .unwrap_or_else(|| "Incorrect code. Please try again.".to_string());
+                                            .as_deref().map_or_else(|| "Incorrect code. Please try again.".to_owned(), registration_error_message);
                                         error.set(Some(message));
                                     }
                                     Err(e) => error.set(Some(e)),
@@ -432,7 +456,7 @@ pub fn RegisterVerifyEmail(id: String) -> Element {
                         button {
                             class: "btn btn-secondary btn-block",
                             r#type: "button",
-                            disabled: resending(),
+                            disabled: resending() || resend_seconds > 0,
                             onclick: move |_| {
                                 let rid = resend_id.clone();
                                 resending.set(true);
@@ -446,13 +470,16 @@ pub fn RegisterVerifyEmail(id: String) -> Element {
                                     resending.set(false);
                                     match result {
                                         Ok(resp) if resp.status == "resent" => {
-                                            resend_message.set(Some("A new verification code has been sent.".to_string()));
+                                            let sent_at = js_sys::Date::now();
+                                            store_email_send_time(&rid, sent_at);
+                                            last_email_sent_at.set(sent_at);
+                                            resend_message.set(Some("A new verification code has been sent.".to_owned()));
                                         }
                                         Ok(resp) => {
-                                            let message = match resp.status.as_str() {
-                                                "already_verified" => "This email has already been verified.".to_string(),
-                                                "rate_limited" => "Please wait before requesting another code.".to_string(),
-                                                _ => "Could not resend the verification code.".to_string(),
+                                            let message = match resp.error.as_deref().unwrap_or(&resp.status) {
+                                                "already_verified" => "This email has already been verified.".to_owned(),
+                                                "rate_limited" => "Please wait before requesting another code.".to_owned(),
+                                                code => registration_error_message(code),
                                             };
                                             error.set(Some(message));
                                         }
@@ -465,7 +492,11 @@ pub fn RegisterVerifyEmail(id: String) -> Element {
                             if resending() {
                                 LoadingSpinner { inline: true }
                             }
-                            "Resend code"
+                            if resend_seconds > 0 {
+                                "Resend code ({resend_seconds}s)"
+                            } else {
+                                "Resend code"
+                            }
                         }
                     }
                 }
@@ -477,31 +508,56 @@ pub fn RegisterVerifyEmail(id: String) -> Element {
 fn mask_email_address(email: &str) -> String {
     let trimmed = email.trim();
     let Some((local, domain)) = trimmed.split_once('@') else {
-        return trimmed.to_string();
+        return trimmed.to_owned();
     };
 
     if local.is_empty() || domain.is_empty() {
-        return trimmed.to_string();
+        return trimmed.to_owned();
     }
 
     let visible = local.chars().take(2).collect::<String>();
     format!("{visible}***@{domain}")
 }
 
+fn stored_email_send_time(registration_id: &str) -> f64 {
+    web_sys::window()
+        .and_then(|window| window.local_storage().ok().flatten())
+        .and_then(|storage| {
+            storage
+                .get_item(&format!("registration-email-sent:{registration_id}"))
+                .ok()
+                .flatten()
+        })
+        .and_then(|value| value.parse().ok())
+        .unwrap_or(0.0)
+}
+
+fn store_email_send_time(registration_id: &str, sent_at: f64) {
+    if let Some(storage) =
+        web_sys::window().and_then(|window| window.local_storage().ok().flatten())
+    {
+        let _ = storage.set_item(
+            &format!("registration-email-sent:{registration_id}"),
+            &sent_at.to_string(),
+        );
+    }
+}
+
 fn registration_error_message(code: &str) -> String {
     match code {
-        "invalid_code" => "Incorrect code. Please try again.".to_string(),
-        "rate_limited" => "Please wait a moment and try again.".to_string(),
+        "invalid_code" => "Incorrect code. Please try again.".to_owned(),
+        "rate_limited" => "Please wait a moment and try again.".to_owned(),
         "registration_already_completed" => {
-            "This registration has already been completed.".to_string()
+            "This registration has already been completed.".to_owned()
         }
-        "email_already_verified" => "This email has already been verified.".to_string(),
-        "email_invalid" => "Please enter a valid email address.".to_string(),
-        "email_in_use" => "This email is already in use.".to_string(),
+        "registration_expired" => "This registration has expired. Please start again.".to_owned(),
+        "email_already_verified" => "This email has already been verified.".to_owned(),
+        "email_invalid" => "Please enter a valid email address.".to_owned(),
+        "email_in_use" => "This email is already in use.".to_owned(),
         "bootstrap_admin_token_invalid" => {
-            "That admin bootstrap token is not valid. Clear the field to continue as a regular user, or enter the correct token to claim the first administrator account.".to_string()
+            "That admin bootstrap token is not valid. Clear the field to continue as a regular user, or enter the correct token to claim the first administrator account.".to_owned()
         }
-        other => other.to_string(),
+        other => other.to_owned(),
     }
 }
 
@@ -556,14 +612,14 @@ pub fn RegisterVerifyPhone(id: String) -> Element {
                             e.stop_propagation();
                             let c = code.to_string();
                             if c.is_empty() {
-                                error.set(Some("Please enter the verification code.".to_string()));
+                                error.set(Some("Please enter the verification code.".to_owned()));
                                 return;
                             }
 
                             submitting.set(true);
                             error.set(None);
                             resend_message.set(None);
-                            let nav = nav.clone();
+                            let nav = nav;
                             let rid = reg_id.clone();
 
                             spawn(async move {
@@ -581,7 +637,7 @@ pub fn RegisterVerifyPhone(id: String) -> Element {
                                         }
                                     }
                                     Ok(resp) => {
-                                        error.set(Some(resp.error.unwrap_or_else(|| "Invalid code.".to_string())));
+                                        error.set(Some(resp.error.unwrap_or_else(|| "Invalid code.".to_owned())));
                                     }
                                     Err(e) => error.set(Some(e)),
                                 }
@@ -628,7 +684,7 @@ pub fn RegisterVerifyPhone(id: String) -> Element {
                                     resending.set(false);
                                     match result {
                                         Ok(_) => {
-                                            resend_message.set(Some("Verification code resent.".to_string()));
+                                            resend_message.set(Some("Verification code resent.".to_owned()));
                                         }
                                         Err(err) => {
                                             error.set(Some(err));
@@ -679,7 +735,7 @@ pub fn RegisterDisplayName(id: String) -> Element {
                             let name = display_name.to_string();
                             submitting.set(true);
                             error.set(None);
-                            let nav = nav.clone();
+                            let nav = nav;
                             let rid = reg_id.clone();
 
                             spawn(async move {
@@ -693,7 +749,7 @@ pub fn RegisterDisplayName(id: String) -> Element {
                                         nav.push(Route::RegisterFinish { id: rid });
                                     }
                                     Ok(resp) => {
-                                        error.set(Some(resp.error.unwrap_or_else(|| "Failed.".to_string())));
+                                        error.set(Some(resp.error.unwrap_or_else(|| "Failed.".to_owned())));
                                     }
                                     Err(e) => error.set(Some(e)),
                                 }
@@ -728,7 +784,7 @@ pub fn RegisterDisplayName(id: String) -> Element {
                             onclick: move |_| {
                                 submitting.set(true);
                                 error.set(None);
-                                let nav = nav.clone();
+                                let nav = nav;
                                 let rid = reg_id2.clone();
 
                                 spawn(async move {
@@ -862,7 +918,7 @@ pub fn RegisterFinish(id: String) -> Element {
                     div { class: "login-container",
                         h1 { class: "heading-md login-title", "Registration failed" }
                         div { class: "alert alert-critical",
-                            p { {resp.error.clone().unwrap_or_else(|| "Could not complete registration.".to_string())} }
+                            p { {resp.error.clone().unwrap_or_else(|| "Could not complete registration.".to_owned())} }
                         }
                         Link { class: "btn btn-primary", to: Route::Register {},
                             "Try again"
