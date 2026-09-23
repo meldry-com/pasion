@@ -220,14 +220,14 @@ mod tests {
         Jail::expect_with(|jail| {
             jail.create_file(
                 "config.yaml",
-                r"
+                r#"
                     sms:
                       provider:
                         type: twilio
                         account_sid: AC123
                         auth_token: secret
-                        from_number: +12065550123
-                ",
+                        from_number: "+12065550123"
+                "#,
             )?;
 
             let config = Figment::new()

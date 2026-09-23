@@ -31,6 +31,11 @@ ignore = [
     # diesel-async warning affects the MySQL backend. Pasion enables and uses
     # only PostgreSQL.
     "RUSTSEC-2026-0138",
+
+    # The Prometheus exporter still pulls in smartstring. This is an
+    # unmaintained notice, not a vulnerability; replace the dependency when
+    # the exporter supports an alternative.
+    "RUSTSEC-2026-0249",
 ]
 
 # ── Allowed licenses ────────────────────────────────────────────────────────

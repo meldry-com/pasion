@@ -52,7 +52,8 @@ impl AliyunSmsTransport {
     ///
     /// # Panics
     ///
-    /// Panics only if the HMAC implementation rejects a valid arbitrary-length key.
+    /// Panics only if the HMAC implementation rejects a valid arbitrary-length
+    /// key.
     pub async fn send(
         &self,
         to: &str,

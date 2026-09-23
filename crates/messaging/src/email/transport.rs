@@ -266,7 +266,8 @@ impl Transport {
     ///
     /// # Errors
     ///
-    /// Returns an error if the provider rejects the message or the request fails.
+    /// Returns an error if the provider rejects the message or the request
+    /// fails.
     pub async fn send(&self, email: &OutboundEmail) -> Result<SendResult, Error> {
         self.inner.send(email).await
     }

@@ -125,7 +125,8 @@ impl AsymmetricSigningKey {
     ///
     /// # Panics
     ///
-    /// Panics if the valid P-521 secret key cannot be converted to a signing key.
+    /// Panics if the valid P-521 secret key cannot be converted to a signing
+    /// key.
     #[must_use]
     #[allow(
         clippy::needless_pass_by_value,
@@ -416,7 +417,8 @@ impl AsymmetricVerifyingKey {
     ///
     /// # Panics
     ///
-    /// Panics if the valid P-521 public key cannot be converted to a verifying key.
+    /// Panics if the valid P-521 public key cannot be converted to a verifying
+    /// key.
     #[must_use]
     #[allow(
         clippy::needless_pass_by_value,
