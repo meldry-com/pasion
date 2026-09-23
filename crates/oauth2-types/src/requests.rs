@@ -126,6 +126,7 @@ string_enum! {
 // ---------------------------------------------------------------------------
 
 string_enum! {
+    #[derive(Default)]
     /// Value that specifies how the Authorization Server displays the
     /// authentication and consent user interface pages to the End-User.
     ///
@@ -135,6 +136,7 @@ string_enum! {
         /// UI consistent with a full User Agent page view.
         ///
         /// This is the default display mode.
+        #[default]
         Page => "page",
 
         /// The Authorization Server should display the authentication and consent
@@ -152,12 +154,6 @@ string_enum! {
         @unknown
         /// An unknown value.
         Unknown(String),
-    }
-}
-
-impl Default for Display {
-    fn default() -> Self {
-        Self::Page
     }
 }
 

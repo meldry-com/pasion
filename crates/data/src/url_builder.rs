@@ -53,6 +53,10 @@ impl UrlBuilder {
     }
 
     /// Create an absolute URL for a path.
+    ///
+    /// # Panics
+    ///
+    /// Panics if `path` cannot be joined to the configured HTTP base URL.
     #[must_use]
     pub fn absolute_url(&self, path: &str) -> Url {
         let path = path.trim_start_matches('/');
@@ -149,7 +153,7 @@ impl UrlBuilder {
 
     /// OAuth 2.0 device code link full URL.
     #[must_use]
-    pub fn device_code_link_full(&self, code: String) -> Url {
+    pub fn device_code_link_full(&self, code: &str) -> Url {
         let mut url = self.absolute_url("/link");
         url.set_query(Some(&format!("code={code}")));
         url
@@ -169,7 +173,7 @@ impl UrlBuilder {
 
     /// Static asset URL.
     #[must_use]
-    pub fn static_asset(&self, path: String) -> Url {
+    pub fn static_asset(&self, path: &str) -> Url {
         self.absolute_url(&format!("/assets/{path}"))
     }
 
@@ -199,7 +203,7 @@ impl UrlBuilder {
 
     /// Account recovery link.
     #[must_use]
-    pub fn account_recovery_link(&self, ticket: String) -> Url {
+    pub fn account_recovery_link(&self, ticket: &str) -> Url {
         let mut url = self.absolute_url("/account/password/recovery");
         url.set_query(Some(&format!("ticket={ticket}")));
         url

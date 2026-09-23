@@ -318,6 +318,10 @@ impl UserRepository for PgUserRepository<'_> {
         .await
     }
 
+    #[allow(
+        clippy::disallowed_methods,
+        reason = "this legacy repository method does not yet accept a Clock"
+    )]
     #[tracing::instrument(
         name = "db.user.unlock",
         skip_all,
@@ -364,6 +368,10 @@ impl UserRepository for PgUserRepository<'_> {
         .await
     }
 
+    #[allow(
+        clippy::disallowed_methods,
+        reason = "this legacy repository method does not yet accept a Clock"
+    )]
     #[tracing::instrument(
         name = "db.user.reactivate",
         skip_all,
@@ -389,6 +397,10 @@ impl UserRepository for PgUserRepository<'_> {
         Ok(user)
     }
 
+    #[allow(
+        clippy::disallowed_methods,
+        reason = "this legacy repository method does not yet accept a Clock"
+    )]
     #[tracing::instrument(
         name = "db.user.set_can_request_admin",
         skip_all,
@@ -465,12 +477,12 @@ impl UserRepository for PgUserRepository<'_> {
             PaginationDirection::Forward => {
                 query = query
                     .order(users::id.asc())
-                    .limit((pagination.count + 1) as i64);
+                    .limit(crate::pg::pagination_limit(pagination.count));
             }
             PaginationDirection::Backward => {
                 query = query
                     .order(users::id.desc())
-                    .limit((pagination.count + 1) as i64);
+                    .limit(crate::pg::pagination_limit(pagination.count));
             }
         }
 

@@ -74,8 +74,8 @@ pub async fn handler(req: &mut Request, depot: &Depot) -> JsonResult<ConnectorHe
             Err(e) => ("unhealthy", Some(e.to_string())),
         };
         vec![ProviderHealth {
-            provider: "palpo".to_string(),
-            homeserver: homeserver.homeserver().to_string(),
+            provider: "palpo".to_owned(),
+            homeserver: homeserver.homeserver().to_owned(),
             status,
             error,
         }]

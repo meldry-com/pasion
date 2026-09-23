@@ -188,6 +188,10 @@ impl SmsTransport {
     /// # Errors
     ///
     /// Returns an error if the underlying transport fails to send the message
+    ///
+    /// # Panics
+    ///
+    /// Panics only if an internally constructed provider payload cannot serialize.
     pub async fn send(&self, to: &str, body: &str) -> Result<(), SmsTransportError> {
         println!("[SMS] send called: to={to}, body={body}");
 

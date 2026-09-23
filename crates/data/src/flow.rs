@@ -30,7 +30,7 @@ pub enum FlowDesignation {
     PasswordChange,
     /// Authentication / login flow.
     Authentication,
-    /// OAuth2 authorization consent flow.
+    /// `OAuth2` authorization consent flow.
     Authorization,
     /// MFA device enrollment flow.
     Enrollment,
@@ -108,14 +108,14 @@ pub enum StageKind {
     },
     /// Display a CAPTCHA challenge.
     Captcha,
-    /// Display an OAuth2 consent screen.
+    /// Display an `OAuth2` consent screen.
     Consent,
     /// Collect arbitrary prompted fields.
     Prompt {
         /// The fields to present to the user.
         fields: Vec<PromptField>,
     },
-    /// Validate a second factor (TOTP, WebAuthn, etc.)
+    /// Validate a second factor (TOTP, `WebAuthn`, etc.)
     AuthenticatorValidate {
         /// Which authenticator types are accepted.
         allowed_types: Vec<AuthenticatorType>,
@@ -146,7 +146,7 @@ pub enum IdentificationField {
 pub enum AuthenticatorType {
     /// Time-based one-time password (RFC 6238).
     Totp,
-    /// WebAuthn / FIDO2 security key or passkey.
+    /// `WebAuthn` / FIDO2 security key or passkey.
     WebAuthn,
 }
 
@@ -314,7 +314,7 @@ pub enum StageChallenge {
         /// The CAPTCHA provider's public site key.
         site_key: String,
     },
-    /// OAuth2 consent challenge.
+    /// `OAuth2` consent challenge.
     Consent {
         /// The requested scope string.
         scope: String,
@@ -396,7 +396,7 @@ pub enum StageResponse {
     AuthenticatorValidate {
         /// The type of authenticator the user chose.
         authenticator_type: AuthenticatorType,
-        /// The one-time code (for TOTP) or assertion payload (for WebAuthn).
+        /// The one-time code (for TOTP) or assertion payload (for `WebAuthn`).
         code: String,
     },
     /// Response to an enrollment token challenge.

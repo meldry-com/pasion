@@ -23,6 +23,10 @@ pub enum PolicyEngine {
     Remote,
 }
 
+#[allow(
+    clippy::trivially_copy_pass_by_ref,
+    reason = "serde skip_serializing_if requires a shared-reference predicate"
+)]
 fn is_default_engine(value: &PolicyEngine) -> bool {
     *value == PolicyEngine::default()
 }
@@ -31,7 +35,7 @@ fn is_default_engine(value: &PolicyEngine) -> bool {
 ///
 /// Supports multiple backends: Cedar (default) and Remote HTTP.
 #[serde_as]
-#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema, Default)]
 pub struct PolicyConfig {
     /// The policy engine to use.
     ///
@@ -61,17 +65,6 @@ pub struct PolicyConfig {
     /// type, result (violation count or error), and evaluation duration.
     #[serde(default)]
     pub audit_logging: bool,
-}
-
-impl Default for PolicyConfig {
-    fn default() -> Self {
-        Self {
-            engine: PolicyEngine::default(),
-            cedar_policy_file: None,
-            remote_endpoint: None,
-            audit_logging: false,
-        }
-    }
 }
 
 impl PolicyConfig {

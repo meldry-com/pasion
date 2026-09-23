@@ -271,6 +271,10 @@ struct TranslateHandle {
     locale: DataLocale,
 }
 
+#[allow(
+    clippy::missing_fields_in_debug,
+    reason = "the shared translator is intentionally omitted from debug output"
+)]
 impl fmt::Debug for TranslateHandle {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.debug_struct("TranslateHandle")
@@ -382,9 +386,9 @@ impl Object for TranslateHandle {
                 // would require storing the user's preferred TZ and is not
                 // yet modelled.
                 let time_of_day = pasion_i18n::icu_datetime::input::Time::try_new(
-                    parsed_date.hour() as u8,
-                    parsed_date.minute() as u8,
-                    parsed_date.second() as u8,
+                    u8::try_from(parsed_date.hour()).unwrap_or_default(),
+                    u8::try_from(parsed_date.minute()).unwrap_or_default(),
+                    u8::try_from(parsed_date.second()).unwrap_or_default(),
                     parsed_date.nanosecond(),
                 )
                 .map_err(|_| Error::new(ErrorKind::InvalidOperation, "Failed to convert time"))?;

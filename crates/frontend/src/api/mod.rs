@@ -1,3 +1,8 @@
+#![allow(
+    clippy::disallowed_methods,
+    reason = "the browser client owns its HTTP client and cannot use backend-only tracing helpers"
+)]
+
 pub mod types;
 
 use reqwest::{Client, Method};
@@ -14,7 +19,7 @@ thread_local! {
 }
 
 fn client() -> Client {
-    CLIENT.with(|c| c.clone())
+    CLIENT.with(std::clone::Clone::clone)
 }
 
 /// Shared request implementation for all REST verbs.
@@ -88,12 +93,4 @@ pub async fn api_patch<T: for<'de> Deserialize<'de>>(path: &str, body: Value) ->
 /// Execute a DELETE request to the REST API.
 pub async fn api_delete<T: for<'de> Deserialize<'de>>(path: &str) -> Result<T, String> {
     request(Method::DELETE, path, None).await
-}
-
-/// Execute a DELETE request with a JSON body.
-pub async fn api_delete_with_body<T: for<'de> Deserialize<'de>>(
-    path: &str,
-    body: Value,
-) -> Result<T, String> {
-    request(Method::DELETE, path, Some(body)).await
 }

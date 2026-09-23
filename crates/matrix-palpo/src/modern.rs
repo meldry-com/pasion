@@ -1,3 +1,8 @@
+#![allow(
+    clippy::disallowed_methods,
+    reason = "this connector cannot depend on the backend crate's traced request extension"
+)]
+
 use std::collections::HashSet;
 
 use anyhow::Context as _;
@@ -129,6 +134,10 @@ impl HomeserverAdmin for PalpoAdmin {
     )]
     async fn provision_user(&self, request: &ProvisionRequest) -> Result<bool, anyhow::Error> {
         #[derive(Serialize)]
+        #[allow(
+            clippy::struct_excessive_bools,
+            reason = "the Palpo provisioning API represents independent mutations as flags"
+        )]
         struct Request<'a> {
             localpart: &'a str,
             #[serde(skip_serializing_if = "Option::is_none")]
@@ -573,7 +582,7 @@ impl HomeserverAdmin for PalpoAdmin {
 }
 
 impl ConnectorProvider for PalpoAdmin {
-    fn provider_name(&self) -> &str {
+    fn provider_name(&self) -> &'static str {
         "palpo"
     }
 

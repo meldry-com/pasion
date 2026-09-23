@@ -81,8 +81,7 @@ pub async fn request_access_token(
         .form(&body)
         .send_traced()
         .await?
-        .error_for_status()
-        .map_err(reqwest::Error::from)?
+        .error_for_status()?
         .json()
         .await?;
 
@@ -125,8 +124,7 @@ pub async fn fetch_openid(
         .get(url)
         .send_traced()
         .await?
-        .error_for_status()
-        .map_err(reqwest::Error::from)?
+        .error_for_status()?
         .text()
         .await?;
 
@@ -183,24 +181,23 @@ pub async fn fetch_userinfo(
         .get(url)
         .send_traced()
         .await?
-        .error_for_status()
-        .map_err(reqwest::Error::from)?
+        .error_for_status()?
         .json()
         .await?;
 
     // QQ userinfo uses "ret" field for error code (0 = success)
-    if let Some(ret) = response.get("ret").and_then(|v| v.as_i64()) {
-        if ret != 0 {
-            let msg = response
-                .get("msg")
-                .and_then(|v| v.as_str())
-                .unwrap_or("unknown error")
-                .to_owned();
-            return Err(UserInfoError::ProviderError {
-                code: ret as i32,
-                msg,
-            });
-        }
+    if let Some(ret) = response.get("ret").and_then(|v| v.as_i64())
+        && ret != 0
+    {
+        let msg = response
+            .get("msg")
+            .and_then(|v| v.as_str())
+            .unwrap_or("unknown error")
+            .to_owned();
+        return Err(UserInfoError::ProviderError {
+            code: ret as i32,
+            msg,
+        });
     }
 
     Ok(response)

@@ -1,9 +1,14 @@
+#![allow(
+    clippy::items_after_statements,
+    reason = "test-only helper items are scoped near their scenarios"
+)]
+
 use chrono::Duration;
 use diesel_async::RunQueryDsl;
 use oauth2_types::scope::{OPENID, Scope};
 use pasion_data::{
-    Clock, Pagination, RepositoryAccess, RepositoryAccess as _, RepositoryFactory as _,
-    RepositoryTransaction as _, UserEmailPatch, UserPatch, UserProfilePatch,
+    Clock, Pagination, RepositoryAccess as _, RepositoryFactory as _, UserEmailPatch, UserPatch,
+    UserProfilePatch,
     clock::MockClock,
     upstream_oauth2::{UpstreamOAuthProviderParams, UpstreamOAuthSessionFilter},
     user::{

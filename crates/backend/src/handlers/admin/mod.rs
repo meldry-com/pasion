@@ -11,8 +11,6 @@
 use salvo::prelude::*;
 use serde::Serialize;
 
-use crate::{handlers::account::DepotExt, salvo_utils::InternalError};
-
 mod call_context;
 mod model;
 mod params;

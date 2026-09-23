@@ -47,7 +47,7 @@ pub struct PublishTemplateRequest {
 }
 
 fn default_locale() -> String {
-    "en".to_string()
+    "en".to_owned()
 }
 
 /// Published template version response.
@@ -153,7 +153,7 @@ pub async fn publish_handler(
         template_key: record.template_key,
         version: record.version,
         channel: channel_str,
-        locale: "en".to_string(),
+        locale: "en".to_owned(),
         subject_template: record.subject_template,
         body_template: record.body_template,
         created_at: record.created_at.to_rfc3339(),

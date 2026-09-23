@@ -140,6 +140,10 @@ where
 }
 
 /// Wraps a [`PrivateKey`] into a [`KeyConfig`] carrying its PEM encoding
+#[allow(
+    clippy::needless_pass_by_value,
+    reason = "take ownership so private key material is dropped immediately after encoding"
+)]
 fn into_key_config(pk: PrivateKey) -> anyhow::Result<KeyConfig> {
     Ok(KeyConfig {
         kid: None,

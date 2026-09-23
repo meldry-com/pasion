@@ -81,8 +81,8 @@ pub async fn risk_action(req: &mut Request, depot: &Depot) -> JsonResult<RiskAct
 
         "force_password_reset" => {
             // Lock the user account so they must reset their password
-            let user = repo.user().lock(&clock, user).await?;
-            user
+
+            repo.user().lock(&clock, user).await?
         }
 
         "terminate_sessions" => {

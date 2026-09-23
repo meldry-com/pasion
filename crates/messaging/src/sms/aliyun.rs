@@ -1,6 +1,6 @@
 //! Aliyun SMS (阿里云短信) transport
 
-use std::collections::HashMap;
+use std::{collections::HashMap, fmt::Write as _};
 
 use base64::{Engine as _, engine::general_purpose::STANDARD as BASE64};
 use hmac::{Hmac, Mac};
@@ -35,7 +35,7 @@ fn percent_encode(s: &str) -> String {
             }
             _ => {
                 result.push('%');
-                result.push_str(&format!("{byte:02X}"));
+                let _ = write!(result, "{byte:02X}");
             }
         }
     }
@@ -49,6 +49,10 @@ impl AliyunSmsTransport {
     ///
     /// Returns an error if the HTTP request fails or the provider returns an
     /// error
+    ///
+    /// # Panics
+    ///
+    /// Panics only if the HMAC implementation rejects a valid arbitrary-length key.
     pub async fn send(
         &self,
         to: &str,
