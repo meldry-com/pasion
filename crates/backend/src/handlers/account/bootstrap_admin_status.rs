@@ -1,8 +1,14 @@
 use pasion_data::{BoxRepository, RepositoryAccess, RepositoryError, SiteConfig, user::UserFilter};
 use salvo::{oapi::ToSchema, prelude::*};
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 
-use super::{DepotExt, RouteError};
+use super::{
+    DepotExt, RouteError, extract_bound_activity_tracker, extract_session_info, get_requester,
+    make_clock,
+};
+use crate::handlers::account::service::registration::{
+    ClaimBootstrapAdminError, ClaimBootstrapAdminOutcome, claim_bootstrap_admin,
+};
 
 #[derive(Debug, Serialize, ToSchema)]
 pub struct BootstrapAdminStatusResponse {
@@ -28,7 +34,7 @@ async fn load_bootstrap_admin_status_from(
         .count(UserFilter::new().can_request_admin_only())
         .await?
         > 0;
-    let token_configured = bootstrap_token_configured(&config);
+    let token_configured = bootstrap_token_configured(config);
 
     Ok(BootstrapAdminStatusResponse {
         has_admin,
@@ -46,6 +52,67 @@ pub async fn get(depot: &Depot) -> Result<Json<BootstrapAdminStatusResponse>, Ro
     ))
 }
 
+#[derive(Deserialize, ToSchema)]
+pub struct ClaimBootstrapAdminInput {
+    pub token: String,
+}
+
+#[derive(Serialize, ToSchema)]
+pub struct ClaimBootstrapAdminResponse {
+    pub status: &'static str,
+}
+
+#[endpoint]
+pub async fn post_claim(
+    req: &mut Request,
+    depot: &Depot,
+) -> Result<Json<ClaimBootstrapAdminResponse>, RouteError> {
+    let input: ClaimBootstrapAdminInput = req
+        .parse_json()
+        .await
+        .map_err(|_| RouteError::BadRequest("invalid json body".into()))?;
+    let config = depot.site_config()?;
+    let limiter = depot.limiter()?;
+    let clock = make_clock();
+    let activity_tracker = extract_bound_activity_tracker(req, depot);
+    let session_info = extract_session_info(req, depot);
+    let repo = depot.repo_factory()?.create().await?;
+    let (requester, mut repo) =
+        get_requester(&clock, &activity_tracker, repo, &session_info).await?;
+    let user = requester
+        .browser_session()
+        .map(|session| &session.user)
+        .ok_or(RouteError::Unauthorized)?;
+
+    limiter
+        .check_password(requester.fingerprint(), user)
+        .await
+        .map_err(|_| RouteError::RateLimited)?;
+
+    let outcome = claim_bootstrap_admin(
+        &mut repo,
+        user.id,
+        config.bootstrap_admin_token.as_deref(),
+        &input.token,
+    )
+    .await
+    .map_err(|error| match error {
+        ClaimBootstrapAdminError::NotFound => RouteError::NotFound,
+        ClaimBootstrapAdminError::Repository(error) => error.into(),
+    })?;
+
+    if outcome == ClaimBootstrapAdminOutcome::Claimed {
+        repo.save().await?;
+    }
+
+    let status = match outcome {
+        ClaimBootstrapAdminOutcome::Claimed => "claimed",
+        ClaimBootstrapAdminOutcome::Unavailable => "unavailable",
+        ClaimBootstrapAdminOutcome::InvalidToken => "invalid_token",
+    };
+    Ok(Json(ClaimBootstrapAdminResponse { status }))
+}
+
 #[cfg(test)]
 mod tests {
     use super::load_bootstrap_admin_status_from;
@@ -58,7 +125,7 @@ mod tests {
         let state = TestState::from_pool_with_site_config(
             pool,
             pasion_data::SiteConfig {
-                bootstrap_admin_token: Some("bootstrap-secret".to_string()),
+                bootstrap_admin_token: Some("bootstrap-secret".to_owned()),
                 ..test_site_config()
             },
         )
@@ -77,13 +144,14 @@ mod tests {
     }
 
     #[tokio::test]
+    #[allow(clippy::await_holding_lock)]
     async fn setup_not_required_after_first_admin_exists() {
         setup();
         let pool = pasion_data::test_utils::setup_test_pool().await;
         let state = TestState::from_pool_with_site_config(
             pool,
             pasion_data::SiteConfig {
-                bootstrap_admin_token: Some("bootstrap-secret".to_string()),
+                bootstrap_admin_token: Some("bootstrap-secret".to_owned()),
                 ..test_site_config()
             },
         )
@@ -94,7 +162,7 @@ mod tests {
         let mut rng = state.rng.lock().unwrap();
         let user = repo
             .user()
-            .add(&mut *rng, state.clock.as_ref(), "admin".to_string())
+            .add(&mut *rng, state.clock.as_ref(), "admin".to_owned())
             .await
             .unwrap();
         repo.user().set_can_request_admin(user, true).await.unwrap();

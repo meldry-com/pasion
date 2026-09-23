@@ -91,7 +91,6 @@ impl JsonWebKeyCapability {
             | JsonWebSignatureAlg::Es256K
             | JsonWebSignatureAlg::Ed25519
             | JsonWebSignatureAlg::Ed448 => Some(Self::Signature),
-            JsonWebSignatureAlg::None => None,
             _ => None,
         }
     }
@@ -339,13 +338,12 @@ where
         if let (Some(use_capability), Some(alg_capability)) = (
             JsonWebKeyCapability::for_use(use_),
             JsonWebKeyCapability::for_alg(alg),
-        ) {
-            if use_capability != alg_capability {
-                return Err(JsonWebKeyValidationError::IncompatibleUseAndAlgorithm {
-                    use_: use_.clone(),
-                    alg: alg.clone(),
-                });
-            }
+        ) && use_capability != alg_capability
+        {
+            return Err(JsonWebKeyValidationError::IncompatibleUseAndAlgorithm {
+                use_: use_.clone(),
+                alg: alg.clone(),
+            });
         }
 
         Ok(())
@@ -358,13 +356,12 @@ where
         if let (Some(use_capability), Some(key_op_capability)) = (
             JsonWebKeyCapability::for_use(use_),
             JsonWebKeyCapability::for_key_op(key_op),
-        ) {
-            if use_capability != key_op_capability {
-                return Err(JsonWebKeyValidationError::IncompatibleUseAndKeyOperation {
-                    use_: use_.clone(),
-                    key_op: key_op.clone(),
-                });
-            }
+        ) && use_capability != key_op_capability
+        {
+            return Err(JsonWebKeyValidationError::IncompatibleUseAndKeyOperation {
+                use_: use_.clone(),
+                key_op: key_op.clone(),
+            });
         }
 
         Ok(())
@@ -377,15 +374,14 @@ where
         if let (Some(alg_capability), Some(key_op_capability)) = (
             JsonWebKeyCapability::for_alg(alg),
             JsonWebKeyCapability::for_key_op(key_op),
-        ) {
-            if alg_capability != key_op_capability {
-                return Err(
-                    JsonWebKeyValidationError::IncompatibleAlgorithmAndKeyOperation {
-                        alg: alg.clone(),
-                        key_op: key_op.clone(),
-                    },
-                );
-            }
+        ) && alg_capability != key_op_capability
+        {
+            return Err(
+                JsonWebKeyValidationError::IncompatibleAlgorithmAndKeyOperation {
+                    alg: alg.clone(),
+                    key_op: key_op.clone(),
+                },
+            );
         }
 
         Ok(())

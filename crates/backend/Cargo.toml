@@ -57,7 +57,6 @@ opentelemetry-semantic-conventions.workspace = true
 opentelemetry-stdout.workspace = true
 opentelemetry_sdk.workspace = true
 sentry.workspace = true
-sentry-tracing.workspace = true
 
 pasion-config.workspace = true
 pasion-data.workspace = true
@@ -69,7 +68,6 @@ pasion-keystore.workspace = true
 pasion-matrix.workspace = true
 pasion-matrix-palpo.workspace = true
 pasion-policy.workspace = true
-pasion-tasks.workspace = true
 pasion-templates.workspace = true
 oauth2-types.workspace = true
 

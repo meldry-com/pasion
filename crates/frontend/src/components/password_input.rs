@@ -30,7 +30,7 @@ impl PasswordStrength {
         }
     }
 
-    fn label(&self) -> &'static str {
+    fn label(self) -> &'static str {
         match self {
             PasswordStrength::Empty => "",
             PasswordStrength::Weak => "Weak",
@@ -42,7 +42,7 @@ impl PasswordStrength {
 
     /// Stable slug used as a `data-strength` attribute so styling (colors,
     /// bar width) lives in CSS and adapts to light/dark mode.
-    fn slug(&self) -> &'static str {
+    fn slug(self) -> &'static str {
         match self {
             PasswordStrength::Empty => "empty",
             PasswordStrength::Weak => "weak",
@@ -61,7 +61,7 @@ fn estimate_strength(password: &str) -> PasswordStrength {
     PasswordStrength::from_score(u8::from(zxcvbn::zxcvbn(password, &[]).score()))
 }
 
-const PASSWORD_INPUT_CSS: &str = r#"
+const PASSWORD_INPUT_CSS: &str = r"
 .password-field-control{position:relative;display:block;width:100%}
 .password-field-control .form-input{padding-right:44px}
 .password-visibility-toggle{
@@ -76,14 +76,14 @@ const PASSWORD_INPUT_CSS: &str = r#"
 .pw-policy{display:block;margin-top:4px;font-size:12px}
 .pw-policy.met{color:var(--success)}
 .pw-policy.unmet{color:var(--critical)}
-"#;
+";
 
 #[component]
 pub fn PasswordInput(
     value: String,
     oninput: EventHandler<FormEvent>,
-    #[props(default = "form-input".to_string())] class: String,
-    #[props(default = "current-password".to_string())] autocomplete: String,
+    #[props(default = "form-input".to_owned())] class: String,
+    #[props(default = "current-password".to_owned())] autocomplete: String,
     #[props(default)] placeholder: String,
     #[props(default)] required: bool,
     #[props(default)] id: String,
@@ -153,7 +153,9 @@ pub fn PasswordCreationDoubleInput(
     let minimum_complexity = {
         let binding = site_config.read();
         match &*binding {
-            Some(Ok(config)) => config.minimum_password_complexity.clamp(0, 4) as u8,
+            Some(Ok(config)) => {
+                u8::try_from(config.minimum_password_complexity.clamp(0, 4)).unwrap_or_default()
+            }
             _ => 0,
         }
     };
@@ -165,7 +167,7 @@ pub fn PasswordCreationDoubleInput(
                 class: if force_invalid { "form-input invalid" } else { "form-input" },
                 id: "new-password",
                 name: "new_password",
-                autocomplete: "new-password".to_string(),
+                autocomplete: "new-password".to_owned(),
                 required: true,
                 value: new_password.read().clone(),
                 oninput: move |e: FormEvent| new_password.set(e.value()),
@@ -207,7 +209,7 @@ pub fn PasswordCreationDoubleInput(
                 class: if show_mismatch { "form-input invalid" } else { "form-input" },
                 id: "confirm-new-password",
                 name: "confirm_new_password",
-                autocomplete: "new-password".to_string(),
+                autocomplete: "new-password".to_owned(),
                 required: true,
                 value: new_password_again.read().clone(),
                 oninput: move |e: FormEvent| new_password_again.set(e.value()),

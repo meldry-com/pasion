@@ -29,14 +29,12 @@ pub fn BrowserSessions() -> Element {
 
     match &*binding {
         Some(Ok(result)) => {
-            let session = match result.viewer_session.as_browser_session() {
-                Some(s) => s,
-                None => return rsx! { p { "Not authenticated." } },
+            let Some(session) = result.viewer_session.as_browser_session() else {
+                return rsx! { p { "Not authenticated." } };
             };
 
-            let user = match &session.user {
-                Some(u) => u,
-                None => return rsx! { p { "User data unavailable." } },
+            let Some(user) = &session.user else {
+                return rsx! { p { "User data unavailable." } };
             };
 
             let browser_sessions: Vec<_> = user
@@ -48,19 +46,15 @@ pub fn BrowserSessions() -> Element {
             let total_count = user
                 .browser_sessions
                 .as_ref()
-                .map(|bs| bs.total_count)
-                .unwrap_or(0);
+                .map_or(0, |bs| bs.total_count);
 
             let page_info = user
                 .browser_sessions
                 .as_ref()
                 .map(|bs| bs.page_info.clone());
 
-            let has_previous = page_info
-                .as_ref()
-                .map(|p| p.has_previous_page)
-                .unwrap_or(false);
-            let has_next = page_info.as_ref().map(|p| p.has_next_page).unwrap_or(false);
+            let has_previous = page_info.as_ref().is_some_and(|p| p.has_previous_page);
+            let has_next = page_info.as_ref().is_some_and(|p| p.has_next_page);
             let start_cursor = page_info.as_ref().and_then(|p| p.start_cursor.clone());
             let end_cursor = page_info.as_ref().and_then(|p| p.end_cursor.clone());
 
@@ -96,7 +90,7 @@ pub fn BrowserSessions() -> Element {
                     PaginationControls {
                         has_previous: has_previous,
                         has_next: has_next,
-                        on_previous: move |_| {
+                        on_previous: move |()| {
                             if let Some(ref cursor) = start_cursor {
                                 pagination.set(PaginationState {
                                     page_size: 6,
@@ -104,7 +98,7 @@ pub fn BrowserSessions() -> Element {
                                 });
                             }
                         },
-                        on_next: move |_| {
+                        on_next: move |()| {
                             if let Some(ref cursor) = end_cursor {
                                 pagination.set(PaginationState {
                                     page_size: 6,

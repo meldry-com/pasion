@@ -66,16 +66,21 @@ pub fn IdentityBindings() -> Element {
                                     let account_id = account.id.clone();
                                     let provider_label = account.provider_name.clone()
                                         .or_else(|| account.provider_brand.clone())
-                                        .unwrap_or_else(|| "External provider".to_string());
+                                        .unwrap_or_else(|| "External provider".to_owned());
                                     let is_unlinking = unlinking_id.read().as_deref() == Some(&account_id);
                                     // Prevent unlinking the last linked account
                                     let can_unlink = account_count > 1;
+                                    let unlink_title = if can_unlink {
+                                        "Unlink this account".to_owned()
+                                    } else {
+                                        "Cannot unlink last connected account".to_owned()
+                                    };
                                     rsx! {
                                         LinkedAccountRow {
                                             account: account.clone(),
                                             is_unlinking: is_unlinking,
                                             unlink_disabled: !can_unlink || unlinking_id.read().is_some(),
-                                            title: if !can_unlink { "Cannot unlink last connected account".to_string() } else { "Unlink this account".to_string() },
+                                            title: unlink_title,
                                             on_unlink: move |aid: String| {
                                                 let label = provider_label.clone();
                                                 unlinking_id.set(Some(aid.clone()));
@@ -119,7 +124,9 @@ pub fn IdentityBindings() -> Element {
                                 .filter(|p| !linked_ids.contains(&p.id))
                                 .cloned()
                                 .collect::<Vec<_>>();
-                            if !unlinked.is_empty() {
+                            if unlinked.is_empty() {
+                                rsx! {}
+                            } else {
                                 rsx! {
                                     div { class: "flex flex-col gap-2",
                                         h4 { class: "text-md font-semibold", "Link a new provider" }
@@ -130,8 +137,6 @@ pub fn IdentityBindings() -> Element {
                                     LinkProvidersRow { providers: unlinked }
                                     Separator {}
                                 }
-                            } else {
-                                rsx! {}
                             }
                         }
                     }

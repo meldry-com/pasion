@@ -197,7 +197,7 @@ pub async fn handler(
     // Without this check, an attacker could begin an authorization flow on
     // their own account and trick the victim into completing it, federating
     // the attacker's identity into the victim's pasion account.
-    if params.state.as_deref().map_or(true, str::is_empty) {
+    if params.state.as_deref().is_none_or(str::is_empty) {
         return Err(RouteError::MissingState);
     }
 
@@ -791,7 +791,7 @@ pub async fn handler(
     cookie_jar.finalize(
         res,
         salvo::writing::Redirect::other(
-            &url_builder.relative_url(&format!("/upstream/link/{}", link.id)),
+            url_builder.relative_url(&format!("/upstream/link/{}", link.id)),
         ),
     );
     Ok(())

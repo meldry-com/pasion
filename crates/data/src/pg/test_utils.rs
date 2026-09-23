@@ -14,6 +14,14 @@ use diesel_async::{
 /// This connects to the database specified by `DATABASE_URL` env var
 /// (set by the test harness or CI) and returns a pool.
 /// Migrations should already be applied to the test database.
+///
+/// # Panics
+///
+/// Panics if `DATABASE_URL` is unset or the connection pool cannot be built.
+#[allow(
+    clippy::unused_async,
+    reason = "callers use this as the first step in async database tests"
+)]
 pub async fn setup_test_pool() -> Pool<AsyncPgConnection> {
     let database_url = std::env::var("DATABASE_URL").expect("DATABASE_URL must be set for tests");
     let manager = AsyncDieselConnectionManager::<AsyncPgConnection>::new(&database_url);

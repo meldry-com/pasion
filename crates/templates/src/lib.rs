@@ -420,7 +420,7 @@ register_templates! {
     /// Render the frontend app (Dioxus SPA shell)
     pub fn render_app(WithLanguage<AppContext>) { "app.html" }
 
-    /// Render the form used by the `form_post` response mode (OAuth2 protocol)
+    /// Render the form used by the `form_post` response mode (`OAuth2` protocol)
     pub fn render_form_post<#[sample(EmptyContext)] T: Serialize>(WithLanguage<FormPostContext<T>>) { "form_post.html" }
 
     /// Render the email recovery email (plain text variant)

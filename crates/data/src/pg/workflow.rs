@@ -368,10 +368,7 @@ impl WorkflowRepository for PgWorkflowRepository<'_> {
                 workflow_instance.started_at.get_or_insert(now);
                 workflow_instance.failed_at = Some(now);
             }
-            WorkflowInstanceStatus::Cancelled => {
-                workflow_instance.cancelled_at = Some(now);
-            }
-            WorkflowInstanceStatus::Expired => {
+            WorkflowInstanceStatus::Cancelled | WorkflowInstanceStatus::Expired => {
                 workflow_instance.cancelled_at = Some(now);
             }
         }
@@ -548,17 +545,11 @@ impl WorkflowRepository for PgWorkflowRepository<'_> {
                 workflow_step.attempt_count = workflow_step.attempt_count.saturating_add(1);
             }
             WorkflowStepStatus::Waiting => {}
-            WorkflowStepStatus::Succeeded => {
+            WorkflowStepStatus::Succeeded | WorkflowStepStatus::Skipped => {
                 workflow_step.completed_at = Some(now);
             }
-            WorkflowStepStatus::Failed => {
+            WorkflowStepStatus::Failed | WorkflowStepStatus::Cancelled => {
                 workflow_step.failed_at = Some(now);
-            }
-            WorkflowStepStatus::Cancelled => {
-                workflow_step.failed_at = Some(now);
-            }
-            WorkflowStepStatus::Skipped => {
-                workflow_step.completed_at = Some(now);
             }
         }
 
