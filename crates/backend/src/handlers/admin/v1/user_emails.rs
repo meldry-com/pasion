@@ -413,25 +413,28 @@ mod tests {
         let response = state.request(request).await;
         response.assert_status(StatusCode::CREATED);
         let body: serde_json::Value = response.json();
-        assert_json_snapshot!(body, @r###"
+        assert_json_snapshot!(body, @r#"
         {
           "data": {
             "type": "user-email",
-            "id": "01FSHN9AG07HNEZXNQM2KNBNF6",
+            "id": "01FSHN9AG0EJKVNRAEHJPXJYCA",
             "attributes": {
               "created_at": "2022-01-16T14:40:00Z",
-              "user_id": "01FSHN9AG0MZAA6S4AF7CTV32E",
-              "email": "alice@example.com"
+              "updated_at": "2022-01-16T14:40:00Z",
+              "user_id": "01FSHN9AG0E6J8AS3YVE0HPDQ1",
+              "email": "alice@example.com",
+              "confirmed_at": "2022-01-16T14:40:00Z",
+              "is_primary": true
             },
             "links": {
-              "self": "/api/admin/v1/user-emails/01FSHN9AG07HNEZXNQM2KNBNF6"
+              "self": "/api/admin/v1/user-emails/01FSHN9AG0EJKVNRAEHJPXJYCA"
             }
           },
           "links": {
-            "self": "/api/admin/v1/user-emails/01FSHN9AG07HNEZXNQM2KNBNF6"
+            "self": "/api/admin/v1/user-emails/01FSHN9AG0EJKVNRAEHJPXJYCA"
           }
         }
-        "###);
+        "#);
     }
 
     #[tokio::test]
@@ -637,25 +640,28 @@ mod tests {
         response.assert_status(StatusCode::OK);
         let body: serde_json::Value = response.json();
         assert_eq!(body["data"]["type"], "user-email");
-        insta::assert_json_snapshot!(body, @r###"
+        insta::assert_json_snapshot!(body, @r#"
         {
           "data": {
             "type": "user-email",
-            "id": "01FSHN9AG0AJ6AC5HQ9X6H4RP4",
+            "id": "01FSHN9AG0ENBAKZ975MGMHW1B",
             "attributes": {
               "created_at": "2022-01-16T14:40:00Z",
-              "user_id": "01FSHN9AG0MZAA6S4AF7CTV32E",
-              "email": "alice@example.com"
+              "updated_at": "2022-01-16T14:40:00Z",
+              "user_id": "01FSHN9AG0E6J8AS3YVE0HPDQ1",
+              "email": "alice@example.com",
+              "confirmed_at": "2022-01-16T14:40:00Z",
+              "is_primary": true
             },
             "links": {
-              "self": "/api/admin/v1/user-emails/01FSHN9AG0AJ6AC5HQ9X6H4RP4"
+              "self": "/api/admin/v1/user-emails/01FSHN9AG0ENBAKZ975MGMHW1B"
             }
           },
           "links": {
-            "self": "/api/admin/v1/user-emails/01FSHN9AG0AJ6AC5HQ9X6H4RP4"
+            "self": "/api/admin/v1/user-emails/01FSHN9AG0ENBAKZ975MGMHW1B"
           }
         }
-        "###);
+        "#);
     }
 
     #[tokio::test]
@@ -723,35 +729,41 @@ mod tests {
           "data": [
             {
               "type": "user-email",
-              "id": "01FSHN9AG09NMZYX8MFYH578R9",
+              "id": "01FSHN9AG0F6VTN5NGKKTTP33J",
               "attributes": {
                 "created_at": "2022-01-16T14:40:00Z",
-                "user_id": "01FSHN9AG0MZAA6S4AF7CTV32E",
-                "email": "alice@example.com"
+                "updated_at": "2022-01-16T14:40:00Z",
+                "user_id": "01FSHN9AG0ENBAKZ975MGMHW1B",
+                "email": "bob@example.com",
+                "confirmed_at": "2022-01-16T14:40:00Z",
+                "is_primary": true
               },
               "links": {
-                "self": "/api/admin/v1/user-emails/01FSHN9AG09NMZYX8MFYH578R9"
+                "self": "/api/admin/v1/user-emails/01FSHN9AG0F6VTN5NGKKTTP33J"
               },
               "meta": {
                 "page": {
-                  "cursor": "01FSHN9AG09NMZYX8MFYH578R9"
+                  "cursor": "01FSHN9AG0F6VTN5NGKKTTP33J"
                 }
               }
             },
             {
               "type": "user-email",
-              "id": "01FSHN9AG0KEPHYQQXW9XPTX6Z",
+              "id": "01FSHN9AG0FGRV6R6CZ6P45NRB",
               "attributes": {
                 "created_at": "2022-01-16T14:40:00Z",
-                "user_id": "01FSHN9AG0AJ6AC5HQ9X6H4RP4",
-                "email": "bob@example.com"
+                "updated_at": "2022-01-16T14:40:00Z",
+                "user_id": "01FSHN9AG0E6J8AS3YVE0HPDQ1",
+                "email": "alice@example.com",
+                "confirmed_at": "2022-01-16T14:40:00Z",
+                "is_primary": true
               },
               "links": {
-                "self": "/api/admin/v1/user-emails/01FSHN9AG0KEPHYQQXW9XPTX6Z"
+                "self": "/api/admin/v1/user-emails/01FSHN9AG0FGRV6R6CZ6P45NRB"
               },
               "meta": {
                 "page": {
-                  "cursor": "01FSHN9AG0KEPHYQQXW9XPTX6Z"
+                  "cursor": "01FSHN9AG0FGRV6R6CZ6P45NRB"
                 }
               }
             }
@@ -782,26 +794,29 @@ mod tests {
           "data": [
             {
               "type": "user-email",
-              "id": "01FSHN9AG09NMZYX8MFYH578R9",
+              "id": "01FSHN9AG0FGRV6R6CZ6P45NRB",
               "attributes": {
                 "created_at": "2022-01-16T14:40:00Z",
-                "user_id": "01FSHN9AG0MZAA6S4AF7CTV32E",
-                "email": "alice@example.com"
+                "updated_at": "2022-01-16T14:40:00Z",
+                "user_id": "01FSHN9AG0E6J8AS3YVE0HPDQ1",
+                "email": "alice@example.com",
+                "confirmed_at": "2022-01-16T14:40:00Z",
+                "is_primary": true
               },
               "links": {
-                "self": "/api/admin/v1/user-emails/01FSHN9AG09NMZYX8MFYH578R9"
+                "self": "/api/admin/v1/user-emails/01FSHN9AG0FGRV6R6CZ6P45NRB"
               },
               "meta": {
                 "page": {
-                  "cursor": "01FSHN9AG09NMZYX8MFYH578R9"
+                  "cursor": "01FSHN9AG0FGRV6R6CZ6P45NRB"
                 }
               }
             }
           ],
           "links": {
-            "self": "/api/admin/v1/user-emails?filter[user]=01FSHN9AG0MZAA6S4AF7CTV32E&page[first]=10",
-            "first": "/api/admin/v1/user-emails?filter[user]=01FSHN9AG0MZAA6S4AF7CTV32E&page[first]=10",
-            "last": "/api/admin/v1/user-emails?filter[user]=01FSHN9AG0MZAA6S4AF7CTV32E&page[last]=10"
+            "self": "/api/admin/v1/user-emails?filter[user]=01FSHN9AG0E6J8AS3YVE0HPDQ1&page[first]=10",
+            "first": "/api/admin/v1/user-emails?filter[user]=01FSHN9AG0E6J8AS3YVE0HPDQ1&page[first]=10",
+            "last": "/api/admin/v1/user-emails?filter[user]=01FSHN9AG0E6J8AS3YVE0HPDQ1&page[last]=10"
           }
         }
         "#);
@@ -821,18 +836,21 @@ mod tests {
           "data": [
             {
               "type": "user-email",
-              "id": "01FSHN9AG09NMZYX8MFYH578R9",
+              "id": "01FSHN9AG0FGRV6R6CZ6P45NRB",
               "attributes": {
                 "created_at": "2022-01-16T14:40:00Z",
-                "user_id": "01FSHN9AG0MZAA6S4AF7CTV32E",
-                "email": "alice@example.com"
+                "updated_at": "2022-01-16T14:40:00Z",
+                "user_id": "01FSHN9AG0E6J8AS3YVE0HPDQ1",
+                "email": "alice@example.com",
+                "confirmed_at": "2022-01-16T14:40:00Z",
+                "is_primary": true
               },
               "links": {
-                "self": "/api/admin/v1/user-emails/01FSHN9AG09NMZYX8MFYH578R9"
+                "self": "/api/admin/v1/user-emails/01FSHN9AG0FGRV6R6CZ6P45NRB"
               },
               "meta": {
                 "page": {
-                  "cursor": "01FSHN9AG09NMZYX8MFYH578R9"
+                  "cursor": "01FSHN9AG0FGRV6R6CZ6P45NRB"
                 }
               }
             }
@@ -857,35 +875,41 @@ mod tests {
           "data": [
             {
               "type": "user-email",
-              "id": "01FSHN9AG09NMZYX8MFYH578R9",
+              "id": "01FSHN9AG0F6VTN5NGKKTTP33J",
               "attributes": {
                 "created_at": "2022-01-16T14:40:00Z",
-                "user_id": "01FSHN9AG0MZAA6S4AF7CTV32E",
-                "email": "alice@example.com"
+                "updated_at": "2022-01-16T14:40:00Z",
+                "user_id": "01FSHN9AG0ENBAKZ975MGMHW1B",
+                "email": "bob@example.com",
+                "confirmed_at": "2022-01-16T14:40:00Z",
+                "is_primary": true
               },
               "links": {
-                "self": "/api/admin/v1/user-emails/01FSHN9AG09NMZYX8MFYH578R9"
+                "self": "/api/admin/v1/user-emails/01FSHN9AG0F6VTN5NGKKTTP33J"
               },
               "meta": {
                 "page": {
-                  "cursor": "01FSHN9AG09NMZYX8MFYH578R9"
+                  "cursor": "01FSHN9AG0F6VTN5NGKKTTP33J"
                 }
               }
             },
             {
               "type": "user-email",
-              "id": "01FSHN9AG0KEPHYQQXW9XPTX6Z",
+              "id": "01FSHN9AG0FGRV6R6CZ6P45NRB",
               "attributes": {
                 "created_at": "2022-01-16T14:40:00Z",
-                "user_id": "01FSHN9AG0AJ6AC5HQ9X6H4RP4",
-                "email": "bob@example.com"
+                "updated_at": "2022-01-16T14:40:00Z",
+                "user_id": "01FSHN9AG0E6J8AS3YVE0HPDQ1",
+                "email": "alice@example.com",
+                "confirmed_at": "2022-01-16T14:40:00Z",
+                "is_primary": true
               },
               "links": {
-                "self": "/api/admin/v1/user-emails/01FSHN9AG0KEPHYQQXW9XPTX6Z"
+                "self": "/api/admin/v1/user-emails/01FSHN9AG0FGRV6R6CZ6P45NRB"
               },
               "meta": {
                 "page": {
-                  "cursor": "01FSHN9AG0KEPHYQQXW9XPTX6Z"
+                  "cursor": "01FSHN9AG0FGRV6R6CZ6P45NRB"
                 }
               }
             }
@@ -931,26 +955,29 @@ mod tests {
           "data": [
             {
               "type": "user-email",
-              "id": "01FSHN9AG09NMZYX8MFYH578R9",
+              "id": "01FSHN9AG0FGRV6R6CZ6P45NRB",
               "attributes": {
                 "created_at": "2022-01-16T14:40:00Z",
-                "user_id": "01FSHN9AG0MZAA6S4AF7CTV32E",
-                "email": "alice@example.com"
+                "updated_at": "2022-01-16T14:40:00Z",
+                "user_id": "01FSHN9AG0E6J8AS3YVE0HPDQ1",
+                "email": "alice@example.com",
+                "confirmed_at": "2022-01-16T14:40:00Z",
+                "is_primary": true
               },
               "links": {
-                "self": "/api/admin/v1/user-emails/01FSHN9AG09NMZYX8MFYH578R9"
+                "self": "/api/admin/v1/user-emails/01FSHN9AG0FGRV6R6CZ6P45NRB"
               },
               "meta": {
                 "page": {
-                  "cursor": "01FSHN9AG09NMZYX8MFYH578R9"
+                  "cursor": "01FSHN9AG0FGRV6R6CZ6P45NRB"
                 }
               }
             }
           ],
           "links": {
-            "self": "/api/admin/v1/user-emails?filter[user]=01FSHN9AG0MZAA6S4AF7CTV32E&count=false&page[first]=10",
-            "first": "/api/admin/v1/user-emails?filter[user]=01FSHN9AG0MZAA6S4AF7CTV32E&count=false&page[first]=10",
-            "last": "/api/admin/v1/user-emails?filter[user]=01FSHN9AG0MZAA6S4AF7CTV32E&count=false&page[last]=10"
+            "self": "/api/admin/v1/user-emails?filter[user]=01FSHN9AG0E6J8AS3YVE0HPDQ1&count=false&page[first]=10",
+            "first": "/api/admin/v1/user-emails?filter[user]=01FSHN9AG0E6J8AS3YVE0HPDQ1&count=false&page[first]=10",
+            "last": "/api/admin/v1/user-emails?filter[user]=01FSHN9AG0E6J8AS3YVE0HPDQ1&count=false&page[last]=10"
           }
         }
         "#);
@@ -971,7 +998,7 @@ mod tests {
             "count": 1
           },
           "links": {
-            "self": "/api/admin/v1/user-emails?filter[user]=01FSHN9AG0MZAA6S4AF7CTV32E&count=only"
+            "self": "/api/admin/v1/user-emails?filter[user]=01FSHN9AG0E6J8AS3YVE0HPDQ1&count=only"
           }
         }
         "#);

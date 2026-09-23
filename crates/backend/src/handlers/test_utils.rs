@@ -24,7 +24,7 @@ use oauth2_types::scope::Scope;
 use pasion_config::RateLimitingConfig;
 use pasion_data::{
     AppVersion, BoxRepository, PgRepositoryFactory, RepositoryAccess, RepositoryError,
-    RepositoryFactory, SiteConfig, SystemClock, TokenType, UrlBuilder,
+    RepositoryFactory, SiteConfig, TokenType, UrlBuilder,
     clock::MockClock,
     personal::{
         PersonalAccessTokenRepository, PersonalSessionRepository, session::PersonalSessionOwner,
@@ -36,7 +36,7 @@ use pasion_matrix::{HomeserverAdmin, MockHomeserverAdmin};
 use pasion_policy::PolicyFactory;
 use pasion_templates::{SiteConfigExt, Templates};
 use rand_chacha::ChaChaRng;
-use rand_core::SeedableRng;
+use rand_core::{RngCore as _, SeedableRng};
 use salvo::{
     prelude::*,
     test::{ResponseExt as SalvoResponseExt, TestClient},
@@ -46,7 +46,6 @@ use tokio_util::{
     sync::{CancellationToken, DropGuard},
     task::TaskTracker,
 };
-use ulid::Ulid;
 use url::Url;
 
 use crate::{
@@ -610,7 +609,12 @@ impl TestState {
             test_req = test_req.bytes(body.into_bytes());
         }
 
-        let mut salvo_res = test_req.send(&service).await;
+        let mut salvo_res = super::common::TEST_CLOCK
+            .scope(
+                Arc::clone(&self.clock),
+                super::common::TEST_RNG.scope(Arc::clone(&self.rng), test_req.send(&service)),
+            )
+            .await;
         let status = salvo_res.status_code.unwrap_or(StatusCode::OK);
         let response_headers = salvo_res.headers().clone();
         let body_str = salvo_res.take_string().await.unwrap_or_default();
@@ -630,16 +634,12 @@ impl TestState {
         };
 
         let mut repo = self.repository().await.unwrap();
-        let unique = unique_test_nonce();
-        let clock = SystemClock::default();
-        let mut rng = ChaChaRng::seed_from_u64(unique);
+        let clock = Arc::clone(&self.clock);
+        let mut rng = self.rng();
+        let unique = rng.next_u64();
         let user = repo
             .user()
-            .add(
-                &mut rng,
-                &clock,
-                format!("admin{}", Ulid::new().to_string().to_lowercase()),
-            )
+            .add(&mut rng, &clock, format!("admin{unique}"))
             .await
             .unwrap();
 

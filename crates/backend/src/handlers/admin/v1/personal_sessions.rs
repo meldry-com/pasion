@@ -617,26 +617,26 @@ mod tests {
         {
           "data": {
             "type": "personal-session",
-            "id": "01FSHN9AG07HNEZXNQM2KNBNF6",
+            "id": "01FSHN9AG0EJKVNRAEHJPXJYCA",
             "attributes": {
               "created_at": "2022-01-16T14:40:00Z",
               "revoked_at": null,
-              "owner_user_id": null,
-              "owner_client_id": "01FSHN9AG0FAQ50MT1E9FFRPZR",
-              "actor_user_id": "01FSHN9AG0MZAA6S4AF7CTV32E",
+              "owner_user_id": "01FSHN9AG0E7D8TD7WYMBZJCS3",
+              "owner_client_id": null,
+              "actor_user_id": "01FSHN9AG0E6J8AS3YVE0HPDQ1",
               "human_name": "Test Session",
               "scope": "openid urn:pasion:admin",
               "last_active_at": null,
               "last_active_ip": null,
               "expires_at": "2022-01-16T15:40:00Z",
-              "access_token": "mpt_FM44zJN5qePGMLvvMXC4Ds1A3lCWc6_bJ9Wj1"
+              "access_token": "mpt_QWWCKkSPR3WqrP2uJnVmDU3HxftMl2_9abmP1"
             },
             "links": {
-              "self": "/api/admin/v1/personal-sessions/01FSHN9AG07HNEZXNQM2KNBNF6"
+              "self": "/api/admin/v1/personal-sessions/01FSHN9AG0EJKVNRAEHJPXJYCA"
             }
           },
           "links": {
-            "self": "/api/admin/v1/personal-sessions/01FSHN9AG07HNEZXNQM2KNBNF6"
+            "self": "/api/admin/v1/personal-sessions/01FSHN9AG0EJKVNRAEHJPXJYCA"
           }
         }
         "#);
@@ -746,13 +746,13 @@ mod tests {
         {
           "data": {
             "type": "personal-session",
-            "id": "01FSHN9AG0AJ6AC5HQ9X6H4RP4",
+            "id": "01FSHN9AG0ENBAKZ975MGMHW1B",
             "attributes": {
               "created_at": "2022-01-16T14:40:00Z",
               "revoked_at": null,
-              "owner_user_id": "01FSHN9AG0MZAA6S4AF7CTV32E",
+              "owner_user_id": "01FSHN9AG0E6J8AS3YVE0HPDQ1",
               "owner_client_id": null,
-              "actor_user_id": "01FSHN9AG0MZAA6S4AF7CTV32E",
+              "actor_user_id": "01FSHN9AG0E6J8AS3YVE0HPDQ1",
               "human_name": "Test session",
               "scope": "openid",
               "last_active_at": null,
@@ -760,11 +760,11 @@ mod tests {
               "expires_at": null
             },
             "links": {
-              "self": "/api/admin/v1/personal-sessions/01FSHN9AG0AJ6AC5HQ9X6H4RP4"
+              "self": "/api/admin/v1/personal-sessions/01FSHN9AG0ENBAKZ975MGMHW1B"
             }
           },
           "links": {
-            "self": "/api/admin/v1/personal-sessions/01FSHN9AG0AJ6AC5HQ9X6H4RP4"
+            "self": "/api/admin/v1/personal-sessions/01FSHN9AG0ENBAKZ975MGMHW1B"
           }
         }
         "#);
@@ -812,6 +812,7 @@ mod tests {
             )
             .await
             .unwrap();
+        let sess_a_id = sess_a.id.to_string();
         repo.personal_access_token()
             .add(
                 &mut rng,
@@ -837,6 +838,7 @@ mod tests {
             )
             .await
             .unwrap();
+        let sess_b_id = sess_b.id.to_string();
         repo.personal_access_token()
             .add(
                 &mut rng,
@@ -866,6 +868,7 @@ mod tests {
             )
             .await
             .unwrap();
+        let sess_c_id = sess_c.id.to_string();
         repo.personal_access_token()
             .add(
                 &mut rng,
@@ -880,6 +883,16 @@ mod tests {
         repo.save().await.unwrap();
 
         let token = state.token_with_scope("urn:pasion:admin").await;
+        let mut repo = state.repository().await.unwrap();
+        let admin_session_id = repo
+            .personal_access_token()
+            .find_by_token(&token)
+            .await
+            .unwrap()
+            .unwrap()
+            .session_id
+            .to_string();
+        repo.cancel().await.unwrap();
         let request = Request::get("/api/admin/v1/personal-sessions")
             .bearer(&token)
             .empty();
@@ -889,18 +902,18 @@ mod tests {
         assert_json_snapshot!(body, @r#"
         {
           "meta": {
-            "count": 3
+            "count": 4
           },
           "data": [
             {
               "type": "personal-session",
-              "id": "01FSHN9AG0YQYAR04VCYTHJ8SK",
+              "id": "01FSHN9AG0FKTSFY9K4CCVASWV",
               "attributes": {
                 "created_at": "2022-01-16T14:40:00Z",
                 "revoked_at": null,
-                "owner_user_id": "01FSHN9AG09FE39KETP6F390F8",
+                "owner_user_id": "01FSHN9AG0FH5TJ4F8G4T9XCET",
                 "owner_client_id": null,
-                "actor_user_id": "01FSHN9AG09FE39KETP6F390F8",
+                "actor_user_id": "01FSHN9AG0FH5TJ4F8G4T9XCET",
                 "human_name": "Test session",
                 "scope": "openid",
                 "last_active_at": null,
@@ -908,23 +921,23 @@ mod tests {
                 "expires_at": "2022-02-27T14:40:00Z"
               },
               "links": {
-                "self": "/api/admin/v1/personal-sessions/01FSHN9AG0YQYAR04VCYTHJ8SK"
+                "self": "/api/admin/v1/personal-sessions/01FSHN9AG0FKTSFY9K4CCVASWV"
               },
               "meta": {
                 "page": {
-                  "cursor": "01FSHN9AG0YQYAR04VCYTHJ8SK"
+                  "cursor": "01FSHN9AG0FKTSFY9K4CCVASWV"
                 }
               }
             },
             {
               "type": "personal-session",
-              "id": "01FSM7P1G0VBGAMK9D9QMGQ5MY",
+              "id": "01FSM7P1G0E3D81FMYJR5YJK9D",
               "attributes": {
                 "created_at": "2022-01-17T14:40:00Z",
                 "revoked_at": "2022-01-17T14:40:00Z",
-                "owner_user_id": "01FSHN9AG09FE39KETP6F390F8",
+                "owner_user_id": "01FSHN9AG0FH5TJ4F8G4T9XCET",
                 "owner_client_id": null,
-                "actor_user_id": "01FSHN9AG09FE39KETP6F390F8",
+                "actor_user_id": "01FSHN9AG0FH5TJ4F8G4T9XCET",
                 "human_name": "Another test session",
                 "scope": "openid",
                 "last_active_at": null,
@@ -932,23 +945,47 @@ mod tests {
                 "expires_at": null
               },
               "links": {
-                "self": "/api/admin/v1/personal-sessions/01FSM7P1G0VBGAMK9D9QMGQ5MY"
+                "self": "/api/admin/v1/personal-sessions/01FSM7P1G0E3D81FMYJR5YJK9D"
               },
               "meta": {
                 "page": {
-                  "cursor": "01FSM7P1G0VBGAMK9D9QMGQ5MY"
+                  "cursor": "01FSM7P1G0E3D81FMYJR5YJK9D"
                 }
               }
             },
             {
               "type": "personal-session",
-              "id": "01FSPT2RG08Y11Y5BM4VZ4CN8K",
+              "id": "01FSPT2RG0E0NSKF8W64SP1K7S",
               "attributes": {
                 "created_at": "2022-01-18T14:40:00Z",
                 "revoked_at": null,
-                "owner_user_id": "01FSHN9AG09FE39KETP6F390F8",
+                "owner_user_id": "01FSPT2RG0EVGSF9B5ATMZT9SD",
                 "owner_client_id": null,
-                "actor_user_id": "01FSHN9AG09FE39KETP6F390F8",
+                "actor_user_id": "01FSPT2RG0EVGSF9B5ATMZT9SD",
+                "human_name": "Admin test token",
+                "scope": "urn:pasion:admin",
+                "last_active_at": null,
+                "last_active_ip": null,
+                "expires_at": "2022-01-18T14:45:00Z"
+              },
+              "links": {
+                "self": "/api/admin/v1/personal-sessions/01FSPT2RG0E0NSKF8W64SP1K7S"
+              },
+              "meta": {
+                "page": {
+                  "cursor": "01FSPT2RG0E0NSKF8W64SP1K7S"
+                }
+              }
+            },
+            {
+              "type": "personal-session",
+              "id": "01FSPT2RG0E93SC6GKAN3FW9KM",
+              "attributes": {
+                "created_at": "2022-01-18T14:40:00Z",
+                "revoked_at": null,
+                "owner_user_id": "01FSHN9AG0FH5TJ4F8G4T9XCET",
+                "owner_client_id": null,
+                "actor_user_id": "01FSHN9AG0FH5TJ4F8G4T9XCET",
                 "human_name": "Another test session",
                 "scope": "openid urn:pasion:admin",
                 "last_active_at": null,
@@ -956,11 +993,11 @@ mod tests {
                 "expires_at": "2022-02-01T14:40:00Z"
               },
               "links": {
-                "self": "/api/admin/v1/personal-sessions/01FSPT2RG08Y11Y5BM4VZ4CN8K"
+                "self": "/api/admin/v1/personal-sessions/01FSPT2RG0E93SC6GKAN3FW9KM"
               },
               "meta": {
                 "page": {
-                  "cursor": "01FSPT2RG08Y11Y5BM4VZ4CN8K"
+                  "cursor": "01FSPT2RG0E93SC6GKAN3FW9KM"
                 }
               }
             }
@@ -974,32 +1011,32 @@ mod tests {
         "#);
 
         // Validate individual filters against expected ID sets
-        let cases: &[(&str, &[&str])] = &[
+        let cases: Vec<(&str, Vec<&str>)> = vec![
             (
                 "filter[expires_before]=2022-02-15T00:00:00Z",
-                &["01FSPT2RG08Y11Y5BM4VZ4CN8K"],
+                vec![&admin_session_id, &sess_c_id],
             ),
             (
                 "filter[expires_after]=2022-02-15T00:00:00Z",
-                &["01FSHN9AG0YQYAR04VCYTHJ8SK"],
+                vec![&sess_a_id],
             ),
             (
                 "filter[status]=active",
-                &["01FSHN9AG0YQYAR04VCYTHJ8SK", "01FSPT2RG08Y11Y5BM4VZ4CN8K"],
+                vec![&admin_session_id, &sess_a_id, &sess_c_id],
             ),
-            ("filter[status]=revoked", &["01FSM7P1G0VBGAMK9D9QMGQ5MY"]),
+            ("filter[status]=revoked", vec![&sess_b_id]),
             (
                 "filter[expires]=true",
-                &["01FSHN9AG0YQYAR04VCYTHJ8SK", "01FSPT2RG08Y11Y5BM4VZ4CN8K"],
+                vec![&admin_session_id, &sess_a_id, &sess_c_id],
             ),
-            ("filter[expires]=false", &["01FSM7P1G0VBGAMK9D9QMGQ5MY"]),
+            ("filter[expires]=false", vec![&sess_b_id]),
             (
                 "filter[scope]=urn:pasion:admin",
-                &["01FSPT2RG08Y11Y5BM4VZ4CN8K"],
+                vec![&admin_session_id, &sess_c_id],
             ),
         ];
 
-        for (qs, want_ids) in cases {
+        for (qs, want_ids) in &cases {
             let request = Request::get(format!("/api/admin/v1/personal-sessions?{qs}"))
                 .bearer(&token)
                 .empty();
@@ -1070,26 +1107,26 @@ mod tests {
         {
           "data": {
             "type": "personal-session",
-            "id": "01FSHN9AG07HNEZXNQM2KNBNF6",
+            "id": "01FSHN9AG0EJKVNRAEHJPXJYCA",
             "attributes": {
               "created_at": "2022-01-16T14:40:00Z",
               "revoked_at": null,
-              "owner_user_id": null,
-              "owner_client_id": "01FSHN9AG0FAQ50MT1E9FFRPZR",
-              "actor_user_id": "01FSHN9AG0MZAA6S4AF7CTV32E",
+              "owner_user_id": "01FSHN9AG0E7D8TD7WYMBZJCS3",
+              "owner_client_id": null,
+              "actor_user_id": "01FSHN9AG0E6J8AS3YVE0HPDQ1",
               "human_name": "SuperDuperAdminCLITool Token",
               "scope": "openid urn:pasion:admin",
               "last_active_at": null,
               "last_active_ip": null,
               "expires_at": "2022-01-17T14:43:00Z",
-              "access_token": "mpt_6cq7FqNSYoosbXl3bbpfh9yNy9NzuR_0vOV2O"
+              "access_token": "mpt_s8WlsbXrk781G44UjEAwyvEnGuEmVV_FHKIb1"
             },
             "links": {
-              "self": "/api/admin/v1/personal-sessions/01FSHN9AG07HNEZXNQM2KNBNF6"
+              "self": "/api/admin/v1/personal-sessions/01FSHN9AG0EJKVNRAEHJPXJYCA"
             }
           },
           "links": {
-            "self": "/api/admin/v1/personal-sessions/01FSHN9AG07HNEZXNQM2KNBNF6"
+            "self": "/api/admin/v1/personal-sessions/01FSHN9AG0EJKVNRAEHJPXJYCA"
           }
         }
         "#);

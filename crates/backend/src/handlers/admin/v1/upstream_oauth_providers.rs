@@ -87,7 +87,9 @@ pub async fn list_providers(
     let ctx = extract_call_context(req, depot).await?;
     let crate::handlers::admin::call_context::CallContext { mut repo, .. } = ctx;
     let (pagination, include_count) = extract_pagination(req)?;
-    let params: FilterParams = req.parse_queries().unwrap_or_default();
+    let params: FilterParams = req
+        .parse_queries()
+        .map_err(|error| AppError::bad_request(format!("Invalid filter parameters: {error}")))?;
 
     let base_url = format!("{path}{params}", path = UpstreamOAuthProvider::PATH);
     let base_url = include_count.add_to_base(&base_url);
@@ -604,27 +606,28 @@ mod tests {
         assert_eq!(body["data"]["id"], provider.id.to_string());
         assert_eq!(body["data"]["attributes"]["human_name"], "Google");
 
-        insta::assert_json_snapshot!(body, @r###"
+        insta::assert_json_snapshot!(body, @r#"
         {
           "data": {
             "type": "upstream-oauth-provider",
-            "id": "01FSHN9AG0MZAA6S4AF7CTV32E",
+            "id": "01FSHN9AG0E6J8AS3YVE0HPDQ1",
             "attributes": {
               "issuer": "https://accounts.google.com",
               "human_name": "Google",
               "brand_name": "google",
               "created_at": "2022-01-16T14:40:00Z",
-              "disabled_at": null
+              "disabled_at": null,
+              "source": "config"
             },
             "links": {
-              "self": "/api/admin/v1/upstream-oauth-providers/01FSHN9AG0MZAA6S4AF7CTV32E"
+              "self": "/api/admin/v1/upstream-oauth-providers/01FSHN9AG0E6J8AS3YVE0HPDQ1"
             }
           },
           "links": {
-            "self": "/api/admin/v1/upstream-oauth-providers/01FSHN9AG0MZAA6S4AF7CTV32E"
+            "self": "/api/admin/v1/upstream-oauth-providers/01FSHN9AG0E6J8AS3YVE0HPDQ1"
           }
         }
-        "###);
+        "#);
     }
 
     #[tokio::test]
@@ -784,58 +787,61 @@ mod tests {
           "data": [
             {
               "type": "upstream-oauth-provider",
-              "id": "01FSHN9AG07HNEZXNQM2KNBNF6",
-              "attributes": {
-                "issuer": "https://appleid.apple.com",
-                "human_name": "Apple ID",
-                "brand_name": "apple",
-                "created_at": "2022-01-16T14:40:00Z",
-                "disabled_at": "2022-01-16T14:40:00Z"
-              },
-              "links": {
-                "self": "/api/admin/v1/upstream-oauth-providers/01FSHN9AG07HNEZXNQM2KNBNF6"
-              },
-              "meta": {
-                "page": {
-                  "cursor": "01FSHN9AG07HNEZXNQM2KNBNF6"
-                }
-              }
-            },
-            {
-              "type": "upstream-oauth-provider",
-              "id": "01FSHN9AG09AVTNSQFMSR34AJC",
-              "attributes": {
-                "issuer": "https://login.microsoftonline.com/common/v2.0",
-                "human_name": "Microsoft",
-                "brand_name": "microsoft",
-                "created_at": "2022-01-16T14:40:00Z",
-                "disabled_at": null
-              },
-              "links": {
-                "self": "/api/admin/v1/upstream-oauth-providers/01FSHN9AG09AVTNSQFMSR34AJC"
-              },
-              "meta": {
-                "page": {
-                  "cursor": "01FSHN9AG09AVTNSQFMSR34AJC"
-                }
-              }
-            },
-            {
-              "type": "upstream-oauth-provider",
-              "id": "01FSHN9AG0MZAA6S4AF7CTV32E",
+              "id": "01FSHN9AG0E6J8AS3YVE0HPDQ1",
               "attributes": {
                 "issuer": "https://accounts.google.com",
                 "human_name": "Google",
                 "brand_name": "google",
                 "created_at": "2022-01-16T14:40:00Z",
-                "disabled_at": null
+                "disabled_at": null,
+                "source": "config"
               },
               "links": {
-                "self": "/api/admin/v1/upstream-oauth-providers/01FSHN9AG0MZAA6S4AF7CTV32E"
+                "self": "/api/admin/v1/upstream-oauth-providers/01FSHN9AG0E6J8AS3YVE0HPDQ1"
               },
               "meta": {
                 "page": {
-                  "cursor": "01FSHN9AG0MZAA6S4AF7CTV32E"
+                  "cursor": "01FSHN9AG0E6J8AS3YVE0HPDQ1"
+                }
+              }
+            },
+            {
+              "type": "upstream-oauth-provider",
+              "id": "01FSHN9AG0EJKVNRAEHJPXJYCA",
+              "attributes": {
+                "issuer": "https://appleid.apple.com",
+                "human_name": "Apple ID",
+                "brand_name": "apple",
+                "created_at": "2022-01-16T14:40:00Z",
+                "disabled_at": "2022-01-16T14:40:00Z",
+                "source": "config"
+              },
+              "links": {
+                "self": "/api/admin/v1/upstream-oauth-providers/01FSHN9AG0EJKVNRAEHJPXJYCA"
+              },
+              "meta": {
+                "page": {
+                  "cursor": "01FSHN9AG0EJKVNRAEHJPXJYCA"
+                }
+              }
+            },
+            {
+              "type": "upstream-oauth-provider",
+              "id": "01FSHN9AG0F8Y98RZ6TNATF85Q",
+              "attributes": {
+                "issuer": "https://login.microsoftonline.com/common/v2.0",
+                "human_name": "Microsoft",
+                "brand_name": "microsoft",
+                "created_at": "2022-01-16T14:40:00Z",
+                "disabled_at": null,
+                "source": "config"
+              },
+              "links": {
+                "self": "/api/admin/v1/upstream-oauth-providers/01FSHN9AG0F8Y98RZ6TNATF85Q"
+              },
+              "meta": {
+                "page": {
+                  "cursor": "01FSHN9AG0F8Y98RZ6TNATF85Q"
                 }
               }
             }
@@ -873,39 +879,41 @@ mod tests {
           "data": [
             {
               "type": "upstream-oauth-provider",
-              "id": "01FSHN9AG09AVTNSQFMSR34AJC",
-              "attributes": {
-                "issuer": "https://login.microsoftonline.com/common/v2.0",
-                "human_name": "Microsoft",
-                "brand_name": "microsoft",
-                "created_at": "2022-01-16T14:40:00Z",
-                "disabled_at": null
-              },
-              "links": {
-                "self": "/api/admin/v1/upstream-oauth-providers/01FSHN9AG09AVTNSQFMSR34AJC"
-              },
-              "meta": {
-                "page": {
-                  "cursor": "01FSHN9AG09AVTNSQFMSR34AJC"
-                }
-              }
-            },
-            {
-              "type": "upstream-oauth-provider",
-              "id": "01FSHN9AG0MZAA6S4AF7CTV32E",
+              "id": "01FSHN9AG0E6J8AS3YVE0HPDQ1",
               "attributes": {
                 "issuer": "https://accounts.google.com",
                 "human_name": "Google",
                 "brand_name": "google",
                 "created_at": "2022-01-16T14:40:00Z",
-                "disabled_at": null
+                "disabled_at": null,
+                "source": "config"
               },
               "links": {
-                "self": "/api/admin/v1/upstream-oauth-providers/01FSHN9AG0MZAA6S4AF7CTV32E"
+                "self": "/api/admin/v1/upstream-oauth-providers/01FSHN9AG0E6J8AS3YVE0HPDQ1"
               },
               "meta": {
                 "page": {
-                  "cursor": "01FSHN9AG0MZAA6S4AF7CTV32E"
+                  "cursor": "01FSHN9AG0E6J8AS3YVE0HPDQ1"
+                }
+              }
+            },
+            {
+              "type": "upstream-oauth-provider",
+              "id": "01FSHN9AG0F8Y98RZ6TNATF85Q",
+              "attributes": {
+                "issuer": "https://login.microsoftonline.com/common/v2.0",
+                "human_name": "Microsoft",
+                "brand_name": "microsoft",
+                "created_at": "2022-01-16T14:40:00Z",
+                "disabled_at": null,
+                "source": "config"
+              },
+              "links": {
+                "self": "/api/admin/v1/upstream-oauth-providers/01FSHN9AG0F8Y98RZ6TNATF85Q"
+              },
+              "meta": {
+                "page": {
+                  "cursor": "01FSHN9AG0F8Y98RZ6TNATF85Q"
                 }
               }
             }
@@ -943,20 +951,21 @@ mod tests {
           "data": [
             {
               "type": "upstream-oauth-provider",
-              "id": "01FSHN9AG07HNEZXNQM2KNBNF6",
+              "id": "01FSHN9AG0EJKVNRAEHJPXJYCA",
               "attributes": {
                 "issuer": "https://appleid.apple.com",
                 "human_name": "Apple ID",
                 "brand_name": "apple",
                 "created_at": "2022-01-16T14:40:00Z",
-                "disabled_at": "2022-01-16T14:40:00Z"
+                "disabled_at": "2022-01-16T14:40:00Z",
+                "source": "config"
               },
               "links": {
-                "self": "/api/admin/v1/upstream-oauth-providers/01FSHN9AG07HNEZXNQM2KNBNF6"
+                "self": "/api/admin/v1/upstream-oauth-providers/01FSHN9AG0EJKVNRAEHJPXJYCA"
               },
               "meta": {
                 "page": {
-                  "cursor": "01FSHN9AG07HNEZXNQM2KNBNF6"
+                  "cursor": "01FSHN9AG0EJKVNRAEHJPXJYCA"
                 }
               }
             }
@@ -995,39 +1004,41 @@ mod tests {
           "data": [
             {
               "type": "upstream-oauth-provider",
-              "id": "01FSHN9AG07HNEZXNQM2KNBNF6",
+              "id": "01FSHN9AG0E6J8AS3YVE0HPDQ1",
               "attributes": {
-                "issuer": "https://appleid.apple.com",
-                "human_name": "Apple ID",
-                "brand_name": "apple",
+                "issuer": "https://accounts.google.com",
+                "human_name": "Google",
+                "brand_name": "google",
                 "created_at": "2022-01-16T14:40:00Z",
-                "disabled_at": "2022-01-16T14:40:00Z"
+                "disabled_at": null,
+                "source": "config"
               },
               "links": {
-                "self": "/api/admin/v1/upstream-oauth-providers/01FSHN9AG07HNEZXNQM2KNBNF6"
+                "self": "/api/admin/v1/upstream-oauth-providers/01FSHN9AG0E6J8AS3YVE0HPDQ1"
               },
               "meta": {
                 "page": {
-                  "cursor": "01FSHN9AG07HNEZXNQM2KNBNF6"
+                  "cursor": "01FSHN9AG0E6J8AS3YVE0HPDQ1"
                 }
               }
             },
             {
               "type": "upstream-oauth-provider",
-              "id": "01FSHN9AG09AVTNSQFMSR34AJC",
+              "id": "01FSHN9AG0EJKVNRAEHJPXJYCA",
               "attributes": {
-                "issuer": "https://login.microsoftonline.com/common/v2.0",
-                "human_name": "Microsoft",
-                "brand_name": "microsoft",
+                "issuer": "https://appleid.apple.com",
+                "human_name": "Apple ID",
+                "brand_name": "apple",
                 "created_at": "2022-01-16T14:40:00Z",
-                "disabled_at": null
+                "disabled_at": "2022-01-16T14:40:00Z",
+                "source": "config"
               },
               "links": {
-                "self": "/api/admin/v1/upstream-oauth-providers/01FSHN9AG09AVTNSQFMSR34AJC"
+                "self": "/api/admin/v1/upstream-oauth-providers/01FSHN9AG0EJKVNRAEHJPXJYCA"
               },
               "meta": {
                 "page": {
-                  "cursor": "01FSHN9AG09AVTNSQFMSR34AJC"
+                  "cursor": "01FSHN9AG0EJKVNRAEHJPXJYCA"
                 }
               }
             }
@@ -1036,7 +1047,7 @@ mod tests {
             "self": "/api/admin/v1/upstream-oauth-providers?page[first]=2",
             "first": "/api/admin/v1/upstream-oauth-providers?page[first]=2",
             "last": "/api/admin/v1/upstream-oauth-providers?page[last]=2",
-            "next": "/api/admin/v1/upstream-oauth-providers?page[after]=01FSHN9AG09AVTNSQFMSR34AJC&page[first]=2"
+            "next": "/api/admin/v1/upstream-oauth-providers?page[after]=01FSHN9AG0EJKVNRAEHJPXJYCA&page[first]=2"
           }
         }
         "#);
@@ -1061,26 +1072,27 @@ mod tests {
           "data": [
             {
               "type": "upstream-oauth-provider",
-              "id": "01FSHN9AG0MZAA6S4AF7CTV32E",
+              "id": "01FSHN9AG0F8Y98RZ6TNATF85Q",
               "attributes": {
-                "issuer": "https://accounts.google.com",
-                "human_name": "Google",
-                "brand_name": "google",
+                "issuer": "https://login.microsoftonline.com/common/v2.0",
+                "human_name": "Microsoft",
+                "brand_name": "microsoft",
                 "created_at": "2022-01-16T14:40:00Z",
-                "disabled_at": null
+                "disabled_at": null,
+                "source": "config"
               },
               "links": {
-                "self": "/api/admin/v1/upstream-oauth-providers/01FSHN9AG0MZAA6S4AF7CTV32E"
+                "self": "/api/admin/v1/upstream-oauth-providers/01FSHN9AG0F8Y98RZ6TNATF85Q"
               },
               "meta": {
                 "page": {
-                  "cursor": "01FSHN9AG0MZAA6S4AF7CTV32E"
+                  "cursor": "01FSHN9AG0F8Y98RZ6TNATF85Q"
                 }
               }
             }
           ],
           "links": {
-            "self": "/api/admin/v1/upstream-oauth-providers?page[after]=01FSHN9AG09AVTNSQFMSR34AJC&page[first]=2",
+            "self": "/api/admin/v1/upstream-oauth-providers?page[after]=01FSHN9AG0EJKVNRAEHJPXJYCA&page[first]=2",
             "first": "/api/admin/v1/upstream-oauth-providers?page[first]=2",
             "last": "/api/admin/v1/upstream-oauth-providers?page[last]=2"
           }
@@ -1125,58 +1137,61 @@ mod tests {
           "data": [
             {
               "type": "upstream-oauth-provider",
-              "id": "01FSHN9AG07HNEZXNQM2KNBNF6",
-              "attributes": {
-                "issuer": "https://appleid.apple.com",
-                "human_name": "Apple ID",
-                "brand_name": "apple",
-                "created_at": "2022-01-16T14:40:00Z",
-                "disabled_at": "2022-01-16T14:40:00Z"
-              },
-              "links": {
-                "self": "/api/admin/v1/upstream-oauth-providers/01FSHN9AG07HNEZXNQM2KNBNF6"
-              },
-              "meta": {
-                "page": {
-                  "cursor": "01FSHN9AG07HNEZXNQM2KNBNF6"
-                }
-              }
-            },
-            {
-              "type": "upstream-oauth-provider",
-              "id": "01FSHN9AG09AVTNSQFMSR34AJC",
-              "attributes": {
-                "issuer": "https://login.microsoftonline.com/common/v2.0",
-                "human_name": "Microsoft",
-                "brand_name": "microsoft",
-                "created_at": "2022-01-16T14:40:00Z",
-                "disabled_at": null
-              },
-              "links": {
-                "self": "/api/admin/v1/upstream-oauth-providers/01FSHN9AG09AVTNSQFMSR34AJC"
-              },
-              "meta": {
-                "page": {
-                  "cursor": "01FSHN9AG09AVTNSQFMSR34AJC"
-                }
-              }
-            },
-            {
-              "type": "upstream-oauth-provider",
-              "id": "01FSHN9AG0MZAA6S4AF7CTV32E",
+              "id": "01FSHN9AG0E6J8AS3YVE0HPDQ1",
               "attributes": {
                 "issuer": "https://accounts.google.com",
                 "human_name": "Google",
                 "brand_name": "google",
                 "created_at": "2022-01-16T14:40:00Z",
-                "disabled_at": null
+                "disabled_at": null,
+                "source": "config"
               },
               "links": {
-                "self": "/api/admin/v1/upstream-oauth-providers/01FSHN9AG0MZAA6S4AF7CTV32E"
+                "self": "/api/admin/v1/upstream-oauth-providers/01FSHN9AG0E6J8AS3YVE0HPDQ1"
               },
               "meta": {
                 "page": {
-                  "cursor": "01FSHN9AG0MZAA6S4AF7CTV32E"
+                  "cursor": "01FSHN9AG0E6J8AS3YVE0HPDQ1"
+                }
+              }
+            },
+            {
+              "type": "upstream-oauth-provider",
+              "id": "01FSHN9AG0EJKVNRAEHJPXJYCA",
+              "attributes": {
+                "issuer": "https://appleid.apple.com",
+                "human_name": "Apple ID",
+                "brand_name": "apple",
+                "created_at": "2022-01-16T14:40:00Z",
+                "disabled_at": "2022-01-16T14:40:00Z",
+                "source": "config"
+              },
+              "links": {
+                "self": "/api/admin/v1/upstream-oauth-providers/01FSHN9AG0EJKVNRAEHJPXJYCA"
+              },
+              "meta": {
+                "page": {
+                  "cursor": "01FSHN9AG0EJKVNRAEHJPXJYCA"
+                }
+              }
+            },
+            {
+              "type": "upstream-oauth-provider",
+              "id": "01FSHN9AG0F8Y98RZ6TNATF85Q",
+              "attributes": {
+                "issuer": "https://login.microsoftonline.com/common/v2.0",
+                "human_name": "Microsoft",
+                "brand_name": "microsoft",
+                "created_at": "2022-01-16T14:40:00Z",
+                "disabled_at": null,
+                "source": "config"
+              },
+              "links": {
+                "self": "/api/admin/v1/upstream-oauth-providers/01FSHN9AG0F8Y98RZ6TNATF85Q"
+              },
+              "meta": {
+                "page": {
+                  "cursor": "01FSHN9AG0F8Y98RZ6TNATF85Q"
                 }
               }
             }
@@ -1222,39 +1237,41 @@ mod tests {
           "data": [
             {
               "type": "upstream-oauth-provider",
-              "id": "01FSHN9AG09AVTNSQFMSR34AJC",
-              "attributes": {
-                "issuer": "https://login.microsoftonline.com/common/v2.0",
-                "human_name": "Microsoft",
-                "brand_name": "microsoft",
-                "created_at": "2022-01-16T14:40:00Z",
-                "disabled_at": null
-              },
-              "links": {
-                "self": "/api/admin/v1/upstream-oauth-providers/01FSHN9AG09AVTNSQFMSR34AJC"
-              },
-              "meta": {
-                "page": {
-                  "cursor": "01FSHN9AG09AVTNSQFMSR34AJC"
-                }
-              }
-            },
-            {
-              "type": "upstream-oauth-provider",
-              "id": "01FSHN9AG0MZAA6S4AF7CTV32E",
+              "id": "01FSHN9AG0E6J8AS3YVE0HPDQ1",
               "attributes": {
                 "issuer": "https://accounts.google.com",
                 "human_name": "Google",
                 "brand_name": "google",
                 "created_at": "2022-01-16T14:40:00Z",
-                "disabled_at": null
+                "disabled_at": null,
+                "source": "config"
               },
               "links": {
-                "self": "/api/admin/v1/upstream-oauth-providers/01FSHN9AG0MZAA6S4AF7CTV32E"
+                "self": "/api/admin/v1/upstream-oauth-providers/01FSHN9AG0E6J8AS3YVE0HPDQ1"
               },
               "meta": {
                 "page": {
-                  "cursor": "01FSHN9AG0MZAA6S4AF7CTV32E"
+                  "cursor": "01FSHN9AG0E6J8AS3YVE0HPDQ1"
+                }
+              }
+            },
+            {
+              "type": "upstream-oauth-provider",
+              "id": "01FSHN9AG0F8Y98RZ6TNATF85Q",
+              "attributes": {
+                "issuer": "https://login.microsoftonline.com/common/v2.0",
+                "human_name": "Microsoft",
+                "brand_name": "microsoft",
+                "created_at": "2022-01-16T14:40:00Z",
+                "disabled_at": null,
+                "source": "config"
+              },
+              "links": {
+                "self": "/api/admin/v1/upstream-oauth-providers/01FSHN9AG0F8Y98RZ6TNATF85Q"
+              },
+              "meta": {
+                "page": {
+                  "cursor": "01FSHN9AG0F8Y98RZ6TNATF85Q"
                 }
               }
             }

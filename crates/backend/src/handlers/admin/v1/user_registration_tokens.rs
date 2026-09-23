@@ -185,7 +185,9 @@ pub async fn list_tokens(
         mut repo, clock, ..
     } = ctx;
     let (pagination, include_count) = extract_pagination(req)?;
-    let params: FilterParams = req.parse_queries().unwrap_or_default();
+    let params: FilterParams = req
+        .parse_queries()
+        .map_err(|error| AppError::bad_request(format!("Invalid filter parameters: {error}")))?;
 
     let base_url = format!("{path}{params}", path = UserRegistrationToken::PATH);
     let base_url = include_count.add_to_base(&base_url);
@@ -432,7 +434,7 @@ mod tests {
         {
           "data": {
             "type": "user-registration_token",
-            "id": "01FSHN9AG0MZAA6S4AF7CTV32E",
+            "id": "01FSHN9AG0E6J8AS3YVE0HPDQ1",
             "attributes": {
               "token": "test_token_123",
               "valid": true,
@@ -444,11 +446,11 @@ mod tests {
               "revoked_at": null
             },
             "links": {
-              "self": "/api/admin/v1/user-registration-tokens/01FSHN9AG0MZAA6S4AF7CTV32E"
+              "self": "/api/admin/v1/user-registration-tokens/01FSHN9AG0E6J8AS3YVE0HPDQ1"
             }
           },
           "links": {
-            "self": "/api/admin/v1/user-registration-tokens/01FSHN9AG0MZAA6S4AF7CTV32E"
+            "self": "/api/admin/v1/user-registration-tokens/01FSHN9AG0E6J8AS3YVE0HPDQ1"
           }
         }
         "#);
@@ -469,15 +471,17 @@ mod tests {
         let response = state.request(request).await;
         response.assert_status(StatusCode::CREATED);
 
-        let body: serde_json::Value = response.json();
+        let mut body: serde_json::Value = response.json();
+        assert!(body["data"]["attributes"]["token"].as_str().is_some());
+        body["data"]["attributes"]["token"] = serde_json::json!("<generated>");
 
         assert_json_snapshot!(body, @r#"
         {
           "data": {
             "type": "user-registration_token",
-            "id": "01FSHN9AG0QMGC989M0XSFVF2X",
+            "id": "01FSHN9AG0E6J8AS3YVE0HPDQ1",
             "attributes": {
-              "token": "42oTpLoieH5I",
+              "token": "<generated>",
               "valid": true,
               "usage_limit": 1,
               "times_used": 0,
@@ -487,11 +491,11 @@ mod tests {
               "revoked_at": null
             },
             "links": {
-              "self": "/api/admin/v1/user-registration-tokens/01FSHN9AG0QMGC989M0XSFVF2X"
+              "self": "/api/admin/v1/user-registration-tokens/01FSHN9AG0E6J8AS3YVE0HPDQ1"
             }
           },
           "links": {
-            "self": "/api/admin/v1/user-registration-tokens/01FSHN9AG0QMGC989M0XSFVF2X"
+            "self": "/api/admin/v1/user-registration-tokens/01FSHN9AG0E6J8AS3YVE0HPDQ1"
           }
         }
         "#);
@@ -519,7 +523,7 @@ mod tests {
         {
           "data": {
             "type": "user-registration_token",
-            "id": "01FSHN9AG0MZAA6S4AF7CTV32E",
+            "id": "01FSHN9AG0E6J8AS3YVE0HPDQ1",
             "attributes": {
               "token": "test_token_123",
               "valid": true,
@@ -531,11 +535,11 @@ mod tests {
               "revoked_at": null
             },
             "links": {
-              "self": "/api/admin/v1/user-registration-tokens/01FSHN9AG0MZAA6S4AF7CTV32E"
+              "self": "/api/admin/v1/user-registration-tokens/01FSHN9AG0E6J8AS3YVE0HPDQ1"
             }
           },
           "links": {
-            "self": "/api/admin/v1/user-registration-tokens/01FSHN9AG0MZAA6S4AF7CTV32E"
+            "self": "/api/admin/v1/user-registration-tokens/01FSHN9AG0E6J8AS3YVE0HPDQ1"
           }
         }
         "#);
@@ -585,7 +589,7 @@ mod tests {
         {
           "data": {
             "type": "user-registration_token",
-            "id": "01FSHN9AG0MZAA6S4AF7CTV32E",
+            "id": "01FSHN9AG0E6J8AS3YVE0HPDQ1",
             "attributes": {
               "token": "test_token_123",
               "valid": true,
@@ -597,11 +601,11 @@ mod tests {
               "revoked_at": null
             },
             "links": {
-              "self": "/api/admin/v1/user-registration-tokens/01FSHN9AG0MZAA6S4AF7CTV32E"
+              "self": "/api/admin/v1/user-registration-tokens/01FSHN9AG0E6J8AS3YVE0HPDQ1"
             }
           },
           "links": {
-            "self": "/api/admin/v1/user-registration-tokens/01FSHN9AG0MZAA6S4AF7CTV32E"
+            "self": "/api/admin/v1/user-registration-tokens/01FSHN9AG0E6J8AS3YVE0HPDQ1"
           }
         }
         "#);
@@ -748,73 +752,7 @@ mod tests {
           "data": [
             {
               "type": "user-registration_token",
-              "id": "01FSHN9AG064K8BYZXSY5G511Z",
-              "attributes": {
-                "token": "token_expired",
-                "valid": false,
-                "usage_limit": 5,
-                "times_used": 0,
-                "created_at": "2022-01-16T14:40:00Z",
-                "last_used_at": null,
-                "expires_at": "2022-01-15T14:40:00Z",
-                "revoked_at": null
-              },
-              "links": {
-                "self": "/api/admin/v1/user-registration-tokens/01FSHN9AG064K8BYZXSY5G511Z"
-              },
-              "meta": {
-                "page": {
-                  "cursor": "01FSHN9AG064K8BYZXSY5G511Z"
-                }
-              }
-            },
-            {
-              "type": "user-registration_token",
-              "id": "01FSHN9AG07HNEZXNQM2KNBNF6",
-              "attributes": {
-                "token": "token_used",
-                "valid": true,
-                "usage_limit": 10,
-                "times_used": 1,
-                "created_at": "2022-01-16T14:40:00Z",
-                "last_used_at": "2022-01-16T14:40:00Z",
-                "expires_at": null,
-                "revoked_at": null
-              },
-              "links": {
-                "self": "/api/admin/v1/user-registration-tokens/01FSHN9AG07HNEZXNQM2KNBNF6"
-              },
-              "meta": {
-                "page": {
-                  "cursor": "01FSHN9AG07HNEZXNQM2KNBNF6"
-                }
-              }
-            },
-            {
-              "type": "user-registration_token",
-              "id": "01FSHN9AG09AVTNSQFMSR34AJC",
-              "attributes": {
-                "token": "token_revoked",
-                "valid": false,
-                "usage_limit": 10,
-                "times_used": 0,
-                "created_at": "2022-01-16T14:40:00Z",
-                "last_used_at": null,
-                "expires_at": null,
-                "revoked_at": "2022-01-16T14:40:00Z"
-              },
-              "links": {
-                "self": "/api/admin/v1/user-registration-tokens/01FSHN9AG09AVTNSQFMSR34AJC"
-              },
-              "meta": {
-                "page": {
-                  "cursor": "01FSHN9AG09AVTNSQFMSR34AJC"
-                }
-              }
-            },
-            {
-              "type": "user-registration_token",
-              "id": "01FSHN9AG0MZAA6S4AF7CTV32E",
+              "id": "01FSHN9AG0E6J8AS3YVE0HPDQ1",
               "attributes": {
                 "token": "token_unused",
                 "valid": true,
@@ -826,17 +764,39 @@ mod tests {
                 "revoked_at": null
               },
               "links": {
-                "self": "/api/admin/v1/user-registration-tokens/01FSHN9AG0MZAA6S4AF7CTV32E"
+                "self": "/api/admin/v1/user-registration-tokens/01FSHN9AG0E6J8AS3YVE0HPDQ1"
               },
               "meta": {
                 "page": {
-                  "cursor": "01FSHN9AG0MZAA6S4AF7CTV32E"
+                  "cursor": "01FSHN9AG0E6J8AS3YVE0HPDQ1"
                 }
               }
             },
             {
               "type": "user-registration_token",
-              "id": "01FSHN9AG0S3ZJD8CXQ7F11KXN",
+              "id": "01FSHN9AG0EJKVNRAEHJPXJYCA",
+              "attributes": {
+                "token": "token_used",
+                "valid": true,
+                "usage_limit": 10,
+                "times_used": 1,
+                "created_at": "2022-01-16T14:40:00Z",
+                "last_used_at": "2022-01-16T14:40:00Z",
+                "expires_at": null,
+                "revoked_at": null
+              },
+              "links": {
+                "self": "/api/admin/v1/user-registration-tokens/01FSHN9AG0EJKVNRAEHJPXJYCA"
+              },
+              "meta": {
+                "page": {
+                  "cursor": "01FSHN9AG0EJKVNRAEHJPXJYCA"
+                }
+              }
+            },
+            {
+              "type": "user-registration_token",
+              "id": "01FSHN9AG0EX5B1TJC58S719QF",
               "attributes": {
                 "token": "token_used_revoked",
                 "valid": false,
@@ -848,11 +808,55 @@ mod tests {
                 "revoked_at": "2022-01-16T14:40:00Z"
               },
               "links": {
-                "self": "/api/admin/v1/user-registration-tokens/01FSHN9AG0S3ZJD8CXQ7F11KXN"
+                "self": "/api/admin/v1/user-registration-tokens/01FSHN9AG0EX5B1TJC58S719QF"
               },
               "meta": {
                 "page": {
-                  "cursor": "01FSHN9AG0S3ZJD8CXQ7F11KXN"
+                  "cursor": "01FSHN9AG0EX5B1TJC58S719QF"
+                }
+              }
+            },
+            {
+              "type": "user-registration_token",
+              "id": "01FSHN9AG0F8Y98RZ6TNATF85Q",
+              "attributes": {
+                "token": "token_revoked",
+                "valid": false,
+                "usage_limit": 10,
+                "times_used": 0,
+                "created_at": "2022-01-16T14:40:00Z",
+                "last_used_at": null,
+                "expires_at": null,
+                "revoked_at": "2022-01-16T14:40:00Z"
+              },
+              "links": {
+                "self": "/api/admin/v1/user-registration-tokens/01FSHN9AG0F8Y98RZ6TNATF85Q"
+              },
+              "meta": {
+                "page": {
+                  "cursor": "01FSHN9AG0F8Y98RZ6TNATF85Q"
+                }
+              }
+            },
+            {
+              "type": "user-registration_token",
+              "id": "01FSHN9AG0FZ4BMENNSW8DXECX",
+              "attributes": {
+                "token": "token_expired",
+                "valid": false,
+                "usage_limit": 5,
+                "times_used": 0,
+                "created_at": "2022-01-16T14:40:00Z",
+                "last_used_at": null,
+                "expires_at": "2022-01-15T14:40:00Z",
+                "revoked_at": null
+              },
+              "links": {
+                "self": "/api/admin/v1/user-registration-tokens/01FSHN9AG0FZ4BMENNSW8DXECX"
+              },
+              "meta": {
+                "page": {
+                  "cursor": "01FSHN9AG0FZ4BMENNSW8DXECX"
                 }
               }
             }
@@ -890,7 +894,7 @@ mod tests {
           "data": [
             {
               "type": "user-registration_token",
-              "id": "01FSHN9AG07HNEZXNQM2KNBNF6",
+              "id": "01FSHN9AG0EJKVNRAEHJPXJYCA",
               "attributes": {
                 "token": "token_used",
                 "valid": true,
@@ -902,17 +906,17 @@ mod tests {
                 "revoked_at": null
               },
               "links": {
-                "self": "/api/admin/v1/user-registration-tokens/01FSHN9AG07HNEZXNQM2KNBNF6"
+                "self": "/api/admin/v1/user-registration-tokens/01FSHN9AG0EJKVNRAEHJPXJYCA"
               },
               "meta": {
                 "page": {
-                  "cursor": "01FSHN9AG07HNEZXNQM2KNBNF6"
+                  "cursor": "01FSHN9AG0EJKVNRAEHJPXJYCA"
                 }
               }
             },
             {
               "type": "user-registration_token",
-              "id": "01FSHN9AG0S3ZJD8CXQ7F11KXN",
+              "id": "01FSHN9AG0EX5B1TJC58S719QF",
               "attributes": {
                 "token": "token_used_revoked",
                 "valid": false,
@@ -924,11 +928,11 @@ mod tests {
                 "revoked_at": "2022-01-16T14:40:00Z"
               },
               "links": {
-                "self": "/api/admin/v1/user-registration-tokens/01FSHN9AG0S3ZJD8CXQ7F11KXN"
+                "self": "/api/admin/v1/user-registration-tokens/01FSHN9AG0EX5B1TJC58S719QF"
               },
               "meta": {
                 "page": {
-                  "cursor": "01FSHN9AG0S3ZJD8CXQ7F11KXN"
+                  "cursor": "01FSHN9AG0EX5B1TJC58S719QF"
                 }
               }
             }
@@ -957,51 +961,7 @@ mod tests {
           "data": [
             {
               "type": "user-registration_token",
-              "id": "01FSHN9AG064K8BYZXSY5G511Z",
-              "attributes": {
-                "token": "token_expired",
-                "valid": false,
-                "usage_limit": 5,
-                "times_used": 0,
-                "created_at": "2022-01-16T14:40:00Z",
-                "last_used_at": null,
-                "expires_at": "2022-01-15T14:40:00Z",
-                "revoked_at": null
-              },
-              "links": {
-                "self": "/api/admin/v1/user-registration-tokens/01FSHN9AG064K8BYZXSY5G511Z"
-              },
-              "meta": {
-                "page": {
-                  "cursor": "01FSHN9AG064K8BYZXSY5G511Z"
-                }
-              }
-            },
-            {
-              "type": "user-registration_token",
-              "id": "01FSHN9AG09AVTNSQFMSR34AJC",
-              "attributes": {
-                "token": "token_revoked",
-                "valid": false,
-                "usage_limit": 10,
-                "times_used": 0,
-                "created_at": "2022-01-16T14:40:00Z",
-                "last_used_at": null,
-                "expires_at": null,
-                "revoked_at": "2022-01-16T14:40:00Z"
-              },
-              "links": {
-                "self": "/api/admin/v1/user-registration-tokens/01FSHN9AG09AVTNSQFMSR34AJC"
-              },
-              "meta": {
-                "page": {
-                  "cursor": "01FSHN9AG09AVTNSQFMSR34AJC"
-                }
-              }
-            },
-            {
-              "type": "user-registration_token",
-              "id": "01FSHN9AG0MZAA6S4AF7CTV32E",
+              "id": "01FSHN9AG0E6J8AS3YVE0HPDQ1",
               "attributes": {
                 "token": "token_unused",
                 "valid": true,
@@ -1013,11 +973,55 @@ mod tests {
                 "revoked_at": null
               },
               "links": {
-                "self": "/api/admin/v1/user-registration-tokens/01FSHN9AG0MZAA6S4AF7CTV32E"
+                "self": "/api/admin/v1/user-registration-tokens/01FSHN9AG0E6J8AS3YVE0HPDQ1"
               },
               "meta": {
                 "page": {
-                  "cursor": "01FSHN9AG0MZAA6S4AF7CTV32E"
+                  "cursor": "01FSHN9AG0E6J8AS3YVE0HPDQ1"
+                }
+              }
+            },
+            {
+              "type": "user-registration_token",
+              "id": "01FSHN9AG0F8Y98RZ6TNATF85Q",
+              "attributes": {
+                "token": "token_revoked",
+                "valid": false,
+                "usage_limit": 10,
+                "times_used": 0,
+                "created_at": "2022-01-16T14:40:00Z",
+                "last_used_at": null,
+                "expires_at": null,
+                "revoked_at": "2022-01-16T14:40:00Z"
+              },
+              "links": {
+                "self": "/api/admin/v1/user-registration-tokens/01FSHN9AG0F8Y98RZ6TNATF85Q"
+              },
+              "meta": {
+                "page": {
+                  "cursor": "01FSHN9AG0F8Y98RZ6TNATF85Q"
+                }
+              }
+            },
+            {
+              "type": "user-registration_token",
+              "id": "01FSHN9AG0FZ4BMENNSW8DXECX",
+              "attributes": {
+                "token": "token_expired",
+                "valid": false,
+                "usage_limit": 5,
+                "times_used": 0,
+                "created_at": "2022-01-16T14:40:00Z",
+                "last_used_at": null,
+                "expires_at": "2022-01-15T14:40:00Z",
+                "revoked_at": null
+              },
+              "links": {
+                "self": "/api/admin/v1/user-registration-tokens/01FSHN9AG0FZ4BMENNSW8DXECX"
+              },
+              "meta": {
+                "page": {
+                  "cursor": "01FSHN9AG0FZ4BMENNSW8DXECX"
                 }
               }
             }
@@ -1055,29 +1059,7 @@ mod tests {
           "data": [
             {
               "type": "user-registration_token",
-              "id": "01FSHN9AG09AVTNSQFMSR34AJC",
-              "attributes": {
-                "token": "token_revoked",
-                "valid": false,
-                "usage_limit": 10,
-                "times_used": 0,
-                "created_at": "2022-01-16T14:40:00Z",
-                "last_used_at": null,
-                "expires_at": null,
-                "revoked_at": "2022-01-16T14:40:00Z"
-              },
-              "links": {
-                "self": "/api/admin/v1/user-registration-tokens/01FSHN9AG09AVTNSQFMSR34AJC"
-              },
-              "meta": {
-                "page": {
-                  "cursor": "01FSHN9AG09AVTNSQFMSR34AJC"
-                }
-              }
-            },
-            {
-              "type": "user-registration_token",
-              "id": "01FSHN9AG0S3ZJD8CXQ7F11KXN",
+              "id": "01FSHN9AG0EX5B1TJC58S719QF",
               "attributes": {
                 "token": "token_used_revoked",
                 "valid": false,
@@ -1089,11 +1071,33 @@ mod tests {
                 "revoked_at": "2022-01-16T14:40:00Z"
               },
               "links": {
-                "self": "/api/admin/v1/user-registration-tokens/01FSHN9AG0S3ZJD8CXQ7F11KXN"
+                "self": "/api/admin/v1/user-registration-tokens/01FSHN9AG0EX5B1TJC58S719QF"
               },
               "meta": {
                 "page": {
-                  "cursor": "01FSHN9AG0S3ZJD8CXQ7F11KXN"
+                  "cursor": "01FSHN9AG0EX5B1TJC58S719QF"
+                }
+              }
+            },
+            {
+              "type": "user-registration_token",
+              "id": "01FSHN9AG0F8Y98RZ6TNATF85Q",
+              "attributes": {
+                "token": "token_revoked",
+                "valid": false,
+                "usage_limit": 10,
+                "times_used": 0,
+                "created_at": "2022-01-16T14:40:00Z",
+                "last_used_at": null,
+                "expires_at": null,
+                "revoked_at": "2022-01-16T14:40:00Z"
+              },
+              "links": {
+                "self": "/api/admin/v1/user-registration-tokens/01FSHN9AG0F8Y98RZ6TNATF85Q"
+              },
+              "meta": {
+                "page": {
+                  "cursor": "01FSHN9AG0F8Y98RZ6TNATF85Q"
                 }
               }
             }
@@ -1122,51 +1126,7 @@ mod tests {
           "data": [
             {
               "type": "user-registration_token",
-              "id": "01FSHN9AG064K8BYZXSY5G511Z",
-              "attributes": {
-                "token": "token_expired",
-                "valid": false,
-                "usage_limit": 5,
-                "times_used": 0,
-                "created_at": "2022-01-16T14:40:00Z",
-                "last_used_at": null,
-                "expires_at": "2022-01-15T14:40:00Z",
-                "revoked_at": null
-              },
-              "links": {
-                "self": "/api/admin/v1/user-registration-tokens/01FSHN9AG064K8BYZXSY5G511Z"
-              },
-              "meta": {
-                "page": {
-                  "cursor": "01FSHN9AG064K8BYZXSY5G511Z"
-                }
-              }
-            },
-            {
-              "type": "user-registration_token",
-              "id": "01FSHN9AG07HNEZXNQM2KNBNF6",
-              "attributes": {
-                "token": "token_used",
-                "valid": true,
-                "usage_limit": 10,
-                "times_used": 1,
-                "created_at": "2022-01-16T14:40:00Z",
-                "last_used_at": "2022-01-16T14:40:00Z",
-                "expires_at": null,
-                "revoked_at": null
-              },
-              "links": {
-                "self": "/api/admin/v1/user-registration-tokens/01FSHN9AG07HNEZXNQM2KNBNF6"
-              },
-              "meta": {
-                "page": {
-                  "cursor": "01FSHN9AG07HNEZXNQM2KNBNF6"
-                }
-              }
-            },
-            {
-              "type": "user-registration_token",
-              "id": "01FSHN9AG0MZAA6S4AF7CTV32E",
+              "id": "01FSHN9AG0E6J8AS3YVE0HPDQ1",
               "attributes": {
                 "token": "token_unused",
                 "valid": true,
@@ -1178,11 +1138,55 @@ mod tests {
                 "revoked_at": null
               },
               "links": {
-                "self": "/api/admin/v1/user-registration-tokens/01FSHN9AG0MZAA6S4AF7CTV32E"
+                "self": "/api/admin/v1/user-registration-tokens/01FSHN9AG0E6J8AS3YVE0HPDQ1"
               },
               "meta": {
                 "page": {
-                  "cursor": "01FSHN9AG0MZAA6S4AF7CTV32E"
+                  "cursor": "01FSHN9AG0E6J8AS3YVE0HPDQ1"
+                }
+              }
+            },
+            {
+              "type": "user-registration_token",
+              "id": "01FSHN9AG0EJKVNRAEHJPXJYCA",
+              "attributes": {
+                "token": "token_used",
+                "valid": true,
+                "usage_limit": 10,
+                "times_used": 1,
+                "created_at": "2022-01-16T14:40:00Z",
+                "last_used_at": "2022-01-16T14:40:00Z",
+                "expires_at": null,
+                "revoked_at": null
+              },
+              "links": {
+                "self": "/api/admin/v1/user-registration-tokens/01FSHN9AG0EJKVNRAEHJPXJYCA"
+              },
+              "meta": {
+                "page": {
+                  "cursor": "01FSHN9AG0EJKVNRAEHJPXJYCA"
+                }
+              }
+            },
+            {
+              "type": "user-registration_token",
+              "id": "01FSHN9AG0FZ4BMENNSW8DXECX",
+              "attributes": {
+                "token": "token_expired",
+                "valid": false,
+                "usage_limit": 5,
+                "times_used": 0,
+                "created_at": "2022-01-16T14:40:00Z",
+                "last_used_at": null,
+                "expires_at": "2022-01-15T14:40:00Z",
+                "revoked_at": null
+              },
+              "links": {
+                "self": "/api/admin/v1/user-registration-tokens/01FSHN9AG0FZ4BMENNSW8DXECX"
+              },
+              "meta": {
+                "page": {
+                  "cursor": "01FSHN9AG0FZ4BMENNSW8DXECX"
                 }
               }
             }
@@ -1220,7 +1224,7 @@ mod tests {
           "data": [
             {
               "type": "user-registration_token",
-              "id": "01FSHN9AG064K8BYZXSY5G511Z",
+              "id": "01FSHN9AG0FZ4BMENNSW8DXECX",
               "attributes": {
                 "token": "token_expired",
                 "valid": false,
@@ -1232,11 +1236,11 @@ mod tests {
                 "revoked_at": null
               },
               "links": {
-                "self": "/api/admin/v1/user-registration-tokens/01FSHN9AG064K8BYZXSY5G511Z"
+                "self": "/api/admin/v1/user-registration-tokens/01FSHN9AG0FZ4BMENNSW8DXECX"
               },
               "meta": {
                 "page": {
-                  "cursor": "01FSHN9AG064K8BYZXSY5G511Z"
+                  "cursor": "01FSHN9AG0FZ4BMENNSW8DXECX"
                 }
               }
             }
@@ -1265,51 +1269,7 @@ mod tests {
           "data": [
             {
               "type": "user-registration_token",
-              "id": "01FSHN9AG07HNEZXNQM2KNBNF6",
-              "attributes": {
-                "token": "token_used",
-                "valid": true,
-                "usage_limit": 10,
-                "times_used": 1,
-                "created_at": "2022-01-16T14:40:00Z",
-                "last_used_at": "2022-01-16T14:40:00Z",
-                "expires_at": null,
-                "revoked_at": null
-              },
-              "links": {
-                "self": "/api/admin/v1/user-registration-tokens/01FSHN9AG07HNEZXNQM2KNBNF6"
-              },
-              "meta": {
-                "page": {
-                  "cursor": "01FSHN9AG07HNEZXNQM2KNBNF6"
-                }
-              }
-            },
-            {
-              "type": "user-registration_token",
-              "id": "01FSHN9AG09AVTNSQFMSR34AJC",
-              "attributes": {
-                "token": "token_revoked",
-                "valid": false,
-                "usage_limit": 10,
-                "times_used": 0,
-                "created_at": "2022-01-16T14:40:00Z",
-                "last_used_at": null,
-                "expires_at": null,
-                "revoked_at": "2022-01-16T14:40:00Z"
-              },
-              "links": {
-                "self": "/api/admin/v1/user-registration-tokens/01FSHN9AG09AVTNSQFMSR34AJC"
-              },
-              "meta": {
-                "page": {
-                  "cursor": "01FSHN9AG09AVTNSQFMSR34AJC"
-                }
-              }
-            },
-            {
-              "type": "user-registration_token",
-              "id": "01FSHN9AG0MZAA6S4AF7CTV32E",
+              "id": "01FSHN9AG0E6J8AS3YVE0HPDQ1",
               "attributes": {
                 "token": "token_unused",
                 "valid": true,
@@ -1321,17 +1281,39 @@ mod tests {
                 "revoked_at": null
               },
               "links": {
-                "self": "/api/admin/v1/user-registration-tokens/01FSHN9AG0MZAA6S4AF7CTV32E"
+                "self": "/api/admin/v1/user-registration-tokens/01FSHN9AG0E6J8AS3YVE0HPDQ1"
               },
               "meta": {
                 "page": {
-                  "cursor": "01FSHN9AG0MZAA6S4AF7CTV32E"
+                  "cursor": "01FSHN9AG0E6J8AS3YVE0HPDQ1"
                 }
               }
             },
             {
               "type": "user-registration_token",
-              "id": "01FSHN9AG0S3ZJD8CXQ7F11KXN",
+              "id": "01FSHN9AG0EJKVNRAEHJPXJYCA",
+              "attributes": {
+                "token": "token_used",
+                "valid": true,
+                "usage_limit": 10,
+                "times_used": 1,
+                "created_at": "2022-01-16T14:40:00Z",
+                "last_used_at": "2022-01-16T14:40:00Z",
+                "expires_at": null,
+                "revoked_at": null
+              },
+              "links": {
+                "self": "/api/admin/v1/user-registration-tokens/01FSHN9AG0EJKVNRAEHJPXJYCA"
+              },
+              "meta": {
+                "page": {
+                  "cursor": "01FSHN9AG0EJKVNRAEHJPXJYCA"
+                }
+              }
+            },
+            {
+              "type": "user-registration_token",
+              "id": "01FSHN9AG0EX5B1TJC58S719QF",
               "attributes": {
                 "token": "token_used_revoked",
                 "valid": false,
@@ -1343,11 +1325,33 @@ mod tests {
                 "revoked_at": "2022-01-16T14:40:00Z"
               },
               "links": {
-                "self": "/api/admin/v1/user-registration-tokens/01FSHN9AG0S3ZJD8CXQ7F11KXN"
+                "self": "/api/admin/v1/user-registration-tokens/01FSHN9AG0EX5B1TJC58S719QF"
               },
               "meta": {
                 "page": {
-                  "cursor": "01FSHN9AG0S3ZJD8CXQ7F11KXN"
+                  "cursor": "01FSHN9AG0EX5B1TJC58S719QF"
+                }
+              }
+            },
+            {
+              "type": "user-registration_token",
+              "id": "01FSHN9AG0F8Y98RZ6TNATF85Q",
+              "attributes": {
+                "token": "token_revoked",
+                "valid": false,
+                "usage_limit": 10,
+                "times_used": 0,
+                "created_at": "2022-01-16T14:40:00Z",
+                "last_used_at": null,
+                "expires_at": null,
+                "revoked_at": "2022-01-16T14:40:00Z"
+              },
+              "links": {
+                "self": "/api/admin/v1/user-registration-tokens/01FSHN9AG0F8Y98RZ6TNATF85Q"
+              },
+              "meta": {
+                "page": {
+                  "cursor": "01FSHN9AG0F8Y98RZ6TNATF85Q"
                 }
               }
             }
@@ -1385,29 +1389,7 @@ mod tests {
           "data": [
             {
               "type": "user-registration_token",
-              "id": "01FSHN9AG07HNEZXNQM2KNBNF6",
-              "attributes": {
-                "token": "token_used",
-                "valid": true,
-                "usage_limit": 10,
-                "times_used": 1,
-                "created_at": "2022-01-16T14:40:00Z",
-                "last_used_at": "2022-01-16T14:40:00Z",
-                "expires_at": null,
-                "revoked_at": null
-              },
-              "links": {
-                "self": "/api/admin/v1/user-registration-tokens/01FSHN9AG07HNEZXNQM2KNBNF6"
-              },
-              "meta": {
-                "page": {
-                  "cursor": "01FSHN9AG07HNEZXNQM2KNBNF6"
-                }
-              }
-            },
-            {
-              "type": "user-registration_token",
-              "id": "01FSHN9AG0MZAA6S4AF7CTV32E",
+              "id": "01FSHN9AG0E6J8AS3YVE0HPDQ1",
               "attributes": {
                 "token": "token_unused",
                 "valid": true,
@@ -1419,11 +1401,33 @@ mod tests {
                 "revoked_at": null
               },
               "links": {
-                "self": "/api/admin/v1/user-registration-tokens/01FSHN9AG0MZAA6S4AF7CTV32E"
+                "self": "/api/admin/v1/user-registration-tokens/01FSHN9AG0E6J8AS3YVE0HPDQ1"
               },
               "meta": {
                 "page": {
-                  "cursor": "01FSHN9AG0MZAA6S4AF7CTV32E"
+                  "cursor": "01FSHN9AG0E6J8AS3YVE0HPDQ1"
+                }
+              }
+            },
+            {
+              "type": "user-registration_token",
+              "id": "01FSHN9AG0EJKVNRAEHJPXJYCA",
+              "attributes": {
+                "token": "token_used",
+                "valid": true,
+                "usage_limit": 10,
+                "times_used": 1,
+                "created_at": "2022-01-16T14:40:00Z",
+                "last_used_at": "2022-01-16T14:40:00Z",
+                "expires_at": null,
+                "revoked_at": null
+              },
+              "links": {
+                "self": "/api/admin/v1/user-registration-tokens/01FSHN9AG0EJKVNRAEHJPXJYCA"
+              },
+              "meta": {
+                "page": {
+                  "cursor": "01FSHN9AG0EJKVNRAEHJPXJYCA"
                 }
               }
             }
@@ -1452,51 +1456,7 @@ mod tests {
           "data": [
             {
               "type": "user-registration_token",
-              "id": "01FSHN9AG064K8BYZXSY5G511Z",
-              "attributes": {
-                "token": "token_expired",
-                "valid": false,
-                "usage_limit": 5,
-                "times_used": 0,
-                "created_at": "2022-01-16T14:40:00Z",
-                "last_used_at": null,
-                "expires_at": "2022-01-15T14:40:00Z",
-                "revoked_at": null
-              },
-              "links": {
-                "self": "/api/admin/v1/user-registration-tokens/01FSHN9AG064K8BYZXSY5G511Z"
-              },
-              "meta": {
-                "page": {
-                  "cursor": "01FSHN9AG064K8BYZXSY5G511Z"
-                }
-              }
-            },
-            {
-              "type": "user-registration_token",
-              "id": "01FSHN9AG09AVTNSQFMSR34AJC",
-              "attributes": {
-                "token": "token_revoked",
-                "valid": false,
-                "usage_limit": 10,
-                "times_used": 0,
-                "created_at": "2022-01-16T14:40:00Z",
-                "last_used_at": null,
-                "expires_at": null,
-                "revoked_at": "2022-01-16T14:40:00Z"
-              },
-              "links": {
-                "self": "/api/admin/v1/user-registration-tokens/01FSHN9AG09AVTNSQFMSR34AJC"
-              },
-              "meta": {
-                "page": {
-                  "cursor": "01FSHN9AG09AVTNSQFMSR34AJC"
-                }
-              }
-            },
-            {
-              "type": "user-registration_token",
-              "id": "01FSHN9AG0S3ZJD8CXQ7F11KXN",
+              "id": "01FSHN9AG0EX5B1TJC58S719QF",
               "attributes": {
                 "token": "token_used_revoked",
                 "valid": false,
@@ -1508,11 +1468,55 @@ mod tests {
                 "revoked_at": "2022-01-16T14:40:00Z"
               },
               "links": {
-                "self": "/api/admin/v1/user-registration-tokens/01FSHN9AG0S3ZJD8CXQ7F11KXN"
+                "self": "/api/admin/v1/user-registration-tokens/01FSHN9AG0EX5B1TJC58S719QF"
               },
               "meta": {
                 "page": {
-                  "cursor": "01FSHN9AG0S3ZJD8CXQ7F11KXN"
+                  "cursor": "01FSHN9AG0EX5B1TJC58S719QF"
+                }
+              }
+            },
+            {
+              "type": "user-registration_token",
+              "id": "01FSHN9AG0F8Y98RZ6TNATF85Q",
+              "attributes": {
+                "token": "token_revoked",
+                "valid": false,
+                "usage_limit": 10,
+                "times_used": 0,
+                "created_at": "2022-01-16T14:40:00Z",
+                "last_used_at": null,
+                "expires_at": null,
+                "revoked_at": "2022-01-16T14:40:00Z"
+              },
+              "links": {
+                "self": "/api/admin/v1/user-registration-tokens/01FSHN9AG0F8Y98RZ6TNATF85Q"
+              },
+              "meta": {
+                "page": {
+                  "cursor": "01FSHN9AG0F8Y98RZ6TNATF85Q"
+                }
+              }
+            },
+            {
+              "type": "user-registration_token",
+              "id": "01FSHN9AG0FZ4BMENNSW8DXECX",
+              "attributes": {
+                "token": "token_expired",
+                "valid": false,
+                "usage_limit": 5,
+                "times_used": 0,
+                "created_at": "2022-01-16T14:40:00Z",
+                "last_used_at": null,
+                "expires_at": "2022-01-15T14:40:00Z",
+                "revoked_at": null
+              },
+              "links": {
+                "self": "/api/admin/v1/user-registration-tokens/01FSHN9AG0FZ4BMENNSW8DXECX"
+              },
+              "meta": {
+                "page": {
+                  "cursor": "01FSHN9AG0FZ4BMENNSW8DXECX"
                 }
               }
             }
@@ -1552,7 +1556,7 @@ mod tests {
           "data": [
             {
               "type": "user-registration_token",
-              "id": "01FSHN9AG0S3ZJD8CXQ7F11KXN",
+              "id": "01FSHN9AG0EX5B1TJC58S719QF",
               "attributes": {
                 "token": "token_used_revoked",
                 "valid": false,
@@ -1564,11 +1568,11 @@ mod tests {
                 "revoked_at": "2022-01-16T14:40:00Z"
               },
               "links": {
-                "self": "/api/admin/v1/user-registration-tokens/01FSHN9AG0S3ZJD8CXQ7F11KXN"
+                "self": "/api/admin/v1/user-registration-tokens/01FSHN9AG0EX5B1TJC58S719QF"
               },
               "meta": {
                 "page": {
-                  "cursor": "01FSHN9AG0S3ZJD8CXQ7F11KXN"
+                  "cursor": "01FSHN9AG0EX5B1TJC58S719QF"
                 }
               }
             }
@@ -1606,29 +1610,29 @@ mod tests {
           "data": [
             {
               "type": "user-registration_token",
-              "id": "01FSHN9AG064K8BYZXSY5G511Z",
+              "id": "01FSHN9AG0E6J8AS3YVE0HPDQ1",
               "attributes": {
-                "token": "token_expired",
-                "valid": false,
-                "usage_limit": 5,
+                "token": "token_unused",
+                "valid": true,
+                "usage_limit": 10,
                 "times_used": 0,
                 "created_at": "2022-01-16T14:40:00Z",
                 "last_used_at": null,
-                "expires_at": "2022-01-15T14:40:00Z",
+                "expires_at": null,
                 "revoked_at": null
               },
               "links": {
-                "self": "/api/admin/v1/user-registration-tokens/01FSHN9AG064K8BYZXSY5G511Z"
+                "self": "/api/admin/v1/user-registration-tokens/01FSHN9AG0E6J8AS3YVE0HPDQ1"
               },
               "meta": {
                 "page": {
-                  "cursor": "01FSHN9AG064K8BYZXSY5G511Z"
+                  "cursor": "01FSHN9AG0E6J8AS3YVE0HPDQ1"
                 }
               }
             },
             {
               "type": "user-registration_token",
-              "id": "01FSHN9AG07HNEZXNQM2KNBNF6",
+              "id": "01FSHN9AG0EJKVNRAEHJPXJYCA",
               "attributes": {
                 "token": "token_used",
                 "valid": true,
@@ -1640,11 +1644,11 @@ mod tests {
                 "revoked_at": null
               },
               "links": {
-                "self": "/api/admin/v1/user-registration-tokens/01FSHN9AG07HNEZXNQM2KNBNF6"
+                "self": "/api/admin/v1/user-registration-tokens/01FSHN9AG0EJKVNRAEHJPXJYCA"
               },
               "meta": {
                 "page": {
-                  "cursor": "01FSHN9AG07HNEZXNQM2KNBNF6"
+                  "cursor": "01FSHN9AG0EJKVNRAEHJPXJYCA"
                 }
               }
             }
@@ -1653,7 +1657,7 @@ mod tests {
             "self": "/api/admin/v1/user-registration-tokens?page[first]=2",
             "first": "/api/admin/v1/user-registration-tokens?page[first]=2",
             "last": "/api/admin/v1/user-registration-tokens?page[last]=2",
-            "next": "/api/admin/v1/user-registration-tokens?page[after]=01FSHN9AG07HNEZXNQM2KNBNF6&page[first]=2"
+            "next": "/api/admin/v1/user-registration-tokens?page[after]=01FSHN9AG0EJKVNRAEHJPXJYCA&page[first]=2"
           }
         }
         "#);
@@ -1674,29 +1678,7 @@ mod tests {
           "data": [
             {
               "type": "user-registration_token",
-              "id": "01FSHN9AG09AVTNSQFMSR34AJC",
-              "attributes": {
-                "token": "token_revoked",
-                "valid": false,
-                "usage_limit": 10,
-                "times_used": 0,
-                "created_at": "2022-01-16T14:40:00Z",
-                "last_used_at": null,
-                "expires_at": null,
-                "revoked_at": "2022-01-16T14:40:00Z"
-              },
-              "links": {
-                "self": "/api/admin/v1/user-registration-tokens/01FSHN9AG09AVTNSQFMSR34AJC"
-              },
-              "meta": {
-                "page": {
-                  "cursor": "01FSHN9AG09AVTNSQFMSR34AJC"
-                }
-              }
-            },
-            {
-              "type": "user-registration_token",
-              "id": "01FSHN9AG0MZAA6S4AF7CTV32E",
+              "id": "01FSHN9AG0E6J8AS3YVE0HPDQ1",
               "attributes": {
                 "token": "token_unused",
                 "valid": true,
@@ -1708,11 +1690,33 @@ mod tests {
                 "revoked_at": null
               },
               "links": {
-                "self": "/api/admin/v1/user-registration-tokens/01FSHN9AG0MZAA6S4AF7CTV32E"
+                "self": "/api/admin/v1/user-registration-tokens/01FSHN9AG0E6J8AS3YVE0HPDQ1"
               },
               "meta": {
                 "page": {
-                  "cursor": "01FSHN9AG0MZAA6S4AF7CTV32E"
+                  "cursor": "01FSHN9AG0E6J8AS3YVE0HPDQ1"
+                }
+              }
+            },
+            {
+              "type": "user-registration_token",
+              "id": "01FSHN9AG0EJKVNRAEHJPXJYCA",
+              "attributes": {
+                "token": "token_used",
+                "valid": true,
+                "usage_limit": 10,
+                "times_used": 1,
+                "created_at": "2022-01-16T14:40:00Z",
+                "last_used_at": "2022-01-16T14:40:00Z",
+                "expires_at": null,
+                "revoked_at": null
+              },
+              "links": {
+                "self": "/api/admin/v1/user-registration-tokens/01FSHN9AG0EJKVNRAEHJPXJYCA"
+              },
+              "meta": {
+                "page": {
+                  "cursor": "01FSHN9AG0EJKVNRAEHJPXJYCA"
                 }
               }
             }
@@ -1721,7 +1725,7 @@ mod tests {
             "self": "/api/admin/v1/user-registration-tokens?page[after]=01FSHN9AG07HNEZXNQM2KNBNF6&page[first]=2",
             "first": "/api/admin/v1/user-registration-tokens?page[first]=2",
             "last": "/api/admin/v1/user-registration-tokens?page[last]=2",
-            "next": "/api/admin/v1/user-registration-tokens?page[after]=01FSHN9AG0MZAA6S4AF7CTV32E&page[first]=2"
+            "next": "/api/admin/v1/user-registration-tokens?page[after]=01FSHN9AG0EJKVNRAEHJPXJYCA&page[first]=2"
           }
         }
         "#);
@@ -1742,23 +1746,23 @@ mod tests {
           "data": [
             {
               "type": "user-registration_token",
-              "id": "01FSHN9AG0S3ZJD8CXQ7F11KXN",
+              "id": "01FSHN9AG0FZ4BMENNSW8DXECX",
               "attributes": {
-                "token": "token_used_revoked",
+                "token": "token_expired",
                 "valid": false,
-                "usage_limit": 10,
-                "times_used": 1,
+                "usage_limit": 5,
+                "times_used": 0,
                 "created_at": "2022-01-16T14:40:00Z",
-                "last_used_at": "2022-01-16T14:40:00Z",
-                "expires_at": null,
-                "revoked_at": "2022-01-16T14:40:00Z"
+                "last_used_at": null,
+                "expires_at": "2022-01-15T14:40:00Z",
+                "revoked_at": null
               },
               "links": {
-                "self": "/api/admin/v1/user-registration-tokens/01FSHN9AG0S3ZJD8CXQ7F11KXN"
+                "self": "/api/admin/v1/user-registration-tokens/01FSHN9AG0FZ4BMENNSW8DXECX"
               },
               "meta": {
                 "page": {
-                  "cursor": "01FSHN9AG0S3ZJD8CXQ7F11KXN"
+                  "cursor": "01FSHN9AG0FZ4BMENNSW8DXECX"
                 }
               }
             }
@@ -1767,7 +1771,7 @@ mod tests {
             "self": "/api/admin/v1/user-registration-tokens?page[last]=1",
             "first": "/api/admin/v1/user-registration-tokens?page[first]=1",
             "last": "/api/admin/v1/user-registration-tokens?page[last]=1",
-            "prev": "/api/admin/v1/user-registration-tokens?page[before]=01FSHN9AG0S3ZJD8CXQ7F11KXN&page[last]=1"
+            "prev": "/api/admin/v1/user-registration-tokens?page[before]=01FSHN9AG0FZ4BMENNSW8DXECX&page[last]=1"
           }
         }
         "#);
@@ -1815,73 +1819,7 @@ mod tests {
           "data": [
             {
               "type": "user-registration_token",
-              "id": "01FSHN9AG064K8BYZXSY5G511Z",
-              "attributes": {
-                "token": "token_expired",
-                "valid": false,
-                "usage_limit": 5,
-                "times_used": 0,
-                "created_at": "2022-01-16T14:40:00Z",
-                "last_used_at": null,
-                "expires_at": "2022-01-15T14:40:00Z",
-                "revoked_at": null
-              },
-              "links": {
-                "self": "/api/admin/v1/user-registration-tokens/01FSHN9AG064K8BYZXSY5G511Z"
-              },
-              "meta": {
-                "page": {
-                  "cursor": "01FSHN9AG064K8BYZXSY5G511Z"
-                }
-              }
-            },
-            {
-              "type": "user-registration_token",
-              "id": "01FSHN9AG07HNEZXNQM2KNBNF6",
-              "attributes": {
-                "token": "token_used",
-                "valid": true,
-                "usage_limit": 10,
-                "times_used": 1,
-                "created_at": "2022-01-16T14:40:00Z",
-                "last_used_at": "2022-01-16T14:40:00Z",
-                "expires_at": null,
-                "revoked_at": null
-              },
-              "links": {
-                "self": "/api/admin/v1/user-registration-tokens/01FSHN9AG07HNEZXNQM2KNBNF6"
-              },
-              "meta": {
-                "page": {
-                  "cursor": "01FSHN9AG07HNEZXNQM2KNBNF6"
-                }
-              }
-            },
-            {
-              "type": "user-registration_token",
-              "id": "01FSHN9AG09AVTNSQFMSR34AJC",
-              "attributes": {
-                "token": "token_revoked",
-                "valid": false,
-                "usage_limit": 10,
-                "times_used": 0,
-                "created_at": "2022-01-16T14:40:00Z",
-                "last_used_at": null,
-                "expires_at": null,
-                "revoked_at": "2022-01-16T14:40:00Z"
-              },
-              "links": {
-                "self": "/api/admin/v1/user-registration-tokens/01FSHN9AG09AVTNSQFMSR34AJC"
-              },
-              "meta": {
-                "page": {
-                  "cursor": "01FSHN9AG09AVTNSQFMSR34AJC"
-                }
-              }
-            },
-            {
-              "type": "user-registration_token",
-              "id": "01FSHN9AG0MZAA6S4AF7CTV32E",
+              "id": "01FSHN9AG0E6J8AS3YVE0HPDQ1",
               "attributes": {
                 "token": "token_unused",
                 "valid": true,
@@ -1893,17 +1831,39 @@ mod tests {
                 "revoked_at": null
               },
               "links": {
-                "self": "/api/admin/v1/user-registration-tokens/01FSHN9AG0MZAA6S4AF7CTV32E"
+                "self": "/api/admin/v1/user-registration-tokens/01FSHN9AG0E6J8AS3YVE0HPDQ1"
               },
               "meta": {
                 "page": {
-                  "cursor": "01FSHN9AG0MZAA6S4AF7CTV32E"
+                  "cursor": "01FSHN9AG0E6J8AS3YVE0HPDQ1"
                 }
               }
             },
             {
               "type": "user-registration_token",
-              "id": "01FSHN9AG0S3ZJD8CXQ7F11KXN",
+              "id": "01FSHN9AG0EJKVNRAEHJPXJYCA",
+              "attributes": {
+                "token": "token_used",
+                "valid": true,
+                "usage_limit": 10,
+                "times_used": 1,
+                "created_at": "2022-01-16T14:40:00Z",
+                "last_used_at": "2022-01-16T14:40:00Z",
+                "expires_at": null,
+                "revoked_at": null
+              },
+              "links": {
+                "self": "/api/admin/v1/user-registration-tokens/01FSHN9AG0EJKVNRAEHJPXJYCA"
+              },
+              "meta": {
+                "page": {
+                  "cursor": "01FSHN9AG0EJKVNRAEHJPXJYCA"
+                }
+              }
+            },
+            {
+              "type": "user-registration_token",
+              "id": "01FSHN9AG0EX5B1TJC58S719QF",
               "attributes": {
                 "token": "token_used_revoked",
                 "valid": false,
@@ -1915,11 +1875,55 @@ mod tests {
                 "revoked_at": "2022-01-16T14:40:00Z"
               },
               "links": {
-                "self": "/api/admin/v1/user-registration-tokens/01FSHN9AG0S3ZJD8CXQ7F11KXN"
+                "self": "/api/admin/v1/user-registration-tokens/01FSHN9AG0EX5B1TJC58S719QF"
               },
               "meta": {
                 "page": {
-                  "cursor": "01FSHN9AG0S3ZJD8CXQ7F11KXN"
+                  "cursor": "01FSHN9AG0EX5B1TJC58S719QF"
+                }
+              }
+            },
+            {
+              "type": "user-registration_token",
+              "id": "01FSHN9AG0F8Y98RZ6TNATF85Q",
+              "attributes": {
+                "token": "token_revoked",
+                "valid": false,
+                "usage_limit": 10,
+                "times_used": 0,
+                "created_at": "2022-01-16T14:40:00Z",
+                "last_used_at": null,
+                "expires_at": null,
+                "revoked_at": "2022-01-16T14:40:00Z"
+              },
+              "links": {
+                "self": "/api/admin/v1/user-registration-tokens/01FSHN9AG0F8Y98RZ6TNATF85Q"
+              },
+              "meta": {
+                "page": {
+                  "cursor": "01FSHN9AG0F8Y98RZ6TNATF85Q"
+                }
+              }
+            },
+            {
+              "type": "user-registration_token",
+              "id": "01FSHN9AG0FZ4BMENNSW8DXECX",
+              "attributes": {
+                "token": "token_expired",
+                "valid": false,
+                "usage_limit": 5,
+                "times_used": 0,
+                "created_at": "2022-01-16T14:40:00Z",
+                "last_used_at": null,
+                "expires_at": "2022-01-15T14:40:00Z",
+                "revoked_at": null
+              },
+              "links": {
+                "self": "/api/admin/v1/user-registration-tokens/01FSHN9AG0FZ4BMENNSW8DXECX"
+              },
+              "meta": {
+                "page": {
+                  "cursor": "01FSHN9AG0FZ4BMENNSW8DXECX"
                 }
               }
             }
@@ -1963,29 +1967,7 @@ mod tests {
           "data": [
             {
               "type": "user-registration_token",
-              "id": "01FSHN9AG07HNEZXNQM2KNBNF6",
-              "attributes": {
-                "token": "token_used",
-                "valid": true,
-                "usage_limit": 10,
-                "times_used": 1,
-                "created_at": "2022-01-16T14:40:00Z",
-                "last_used_at": "2022-01-16T14:40:00Z",
-                "expires_at": null,
-                "revoked_at": null
-              },
-              "links": {
-                "self": "/api/admin/v1/user-registration-tokens/01FSHN9AG07HNEZXNQM2KNBNF6"
-              },
-              "meta": {
-                "page": {
-                  "cursor": "01FSHN9AG07HNEZXNQM2KNBNF6"
-                }
-              }
-            },
-            {
-              "type": "user-registration_token",
-              "id": "01FSHN9AG0MZAA6S4AF7CTV32E",
+              "id": "01FSHN9AG0E6J8AS3YVE0HPDQ1",
               "attributes": {
                 "token": "token_unused",
                 "valid": true,
@@ -1997,11 +1979,33 @@ mod tests {
                 "revoked_at": null
               },
               "links": {
-                "self": "/api/admin/v1/user-registration-tokens/01FSHN9AG0MZAA6S4AF7CTV32E"
+                "self": "/api/admin/v1/user-registration-tokens/01FSHN9AG0E6J8AS3YVE0HPDQ1"
               },
               "meta": {
                 "page": {
-                  "cursor": "01FSHN9AG0MZAA6S4AF7CTV32E"
+                  "cursor": "01FSHN9AG0E6J8AS3YVE0HPDQ1"
+                }
+              }
+            },
+            {
+              "type": "user-registration_token",
+              "id": "01FSHN9AG0EJKVNRAEHJPXJYCA",
+              "attributes": {
+                "token": "token_used",
+                "valid": true,
+                "usage_limit": 10,
+                "times_used": 1,
+                "created_at": "2022-01-16T14:40:00Z",
+                "last_used_at": "2022-01-16T14:40:00Z",
+                "expires_at": null,
+                "revoked_at": null
+              },
+              "links": {
+                "self": "/api/admin/v1/user-registration-tokens/01FSHN9AG0EJKVNRAEHJPXJYCA"
+              },
+              "meta": {
+                "page": {
+                  "cursor": "01FSHN9AG0EJKVNRAEHJPXJYCA"
                 }
               }
             }
@@ -2183,7 +2187,7 @@ mod tests {
         {
           "data": {
             "type": "user-registration_token",
-            "id": "01FSHN9AG0MZAA6S4AF7CTV32E",
+            "id": "01FSHN9AG0E6J8AS3YVE0HPDQ1",
             "attributes": {
               "token": "test_token_456",
               "valid": true,
@@ -2195,11 +2199,11 @@ mod tests {
               "revoked_at": null
             },
             "links": {
-              "self": "/api/admin/v1/user-registration-tokens/01FSHN9AG0MZAA6S4AF7CTV32E"
+              "self": "/api/admin/v1/user-registration-tokens/01FSHN9AG0E6J8AS3YVE0HPDQ1"
             }
           },
           "links": {
-            "self": "/api/admin/v1/user-registration-tokens/01FSHN9AG0MZAA6S4AF7CTV32E/unrevoke"
+            "self": "/api/admin/v1/user-registration-tokens/01FSHN9AG0E6J8AS3YVE0HPDQ1/unrevoke"
           }
         }
         "#);
@@ -2305,7 +2309,7 @@ mod tests {
         {
           "data": {
             "type": "user-registration_token",
-            "id": "01FSHN9AG0MZAA6S4AF7CTV32E",
+            "id": "01FSHN9AG0E6J8AS3YVE0HPDQ1",
             "attributes": {
               "token": "test_update_expiry",
               "valid": true,
@@ -2317,11 +2321,11 @@ mod tests {
               "revoked_at": null
             },
             "links": {
-              "self": "/api/admin/v1/user-registration-tokens/01FSHN9AG0MZAA6S4AF7CTV32E"
+              "self": "/api/admin/v1/user-registration-tokens/01FSHN9AG0E6J8AS3YVE0HPDQ1"
             }
           },
           "links": {
-            "self": "/api/admin/v1/user-registration-tokens/01FSHN9AG0MZAA6S4AF7CTV32E"
+            "self": "/api/admin/v1/user-registration-tokens/01FSHN9AG0E6J8AS3YVE0HPDQ1"
           }
         }
         "#);
@@ -2344,7 +2348,7 @@ mod tests {
         {
           "data": {
             "type": "user-registration_token",
-            "id": "01FSHN9AG0MZAA6S4AF7CTV32E",
+            "id": "01FSHN9AG0E6J8AS3YVE0HPDQ1",
             "attributes": {
               "token": "test_update_expiry",
               "valid": true,
@@ -2356,11 +2360,11 @@ mod tests {
               "revoked_at": null
             },
             "links": {
-              "self": "/api/admin/v1/user-registration-tokens/01FSHN9AG0MZAA6S4AF7CTV32E"
+              "self": "/api/admin/v1/user-registration-tokens/01FSHN9AG0E6J8AS3YVE0HPDQ1"
             }
           },
           "links": {
-            "self": "/api/admin/v1/user-registration-tokens/01FSHN9AG0MZAA6S4AF7CTV32E"
+            "self": "/api/admin/v1/user-registration-tokens/01FSHN9AG0E6J8AS3YVE0HPDQ1"
           }
         }
         "#);
@@ -2407,7 +2411,7 @@ mod tests {
         {
           "data": {
             "type": "user-registration_token",
-            "id": "01FSHN9AG0MZAA6S4AF7CTV32E",
+            "id": "01FSHN9AG0E6J8AS3YVE0HPDQ1",
             "attributes": {
               "token": "test_update_limit",
               "valid": true,
@@ -2419,11 +2423,11 @@ mod tests {
               "revoked_at": null
             },
             "links": {
-              "self": "/api/admin/v1/user-registration-tokens/01FSHN9AG0MZAA6S4AF7CTV32E"
+              "self": "/api/admin/v1/user-registration-tokens/01FSHN9AG0E6J8AS3YVE0HPDQ1"
             }
           },
           "links": {
-            "self": "/api/admin/v1/user-registration-tokens/01FSHN9AG0MZAA6S4AF7CTV32E"
+            "self": "/api/admin/v1/user-registration-tokens/01FSHN9AG0E6J8AS3YVE0HPDQ1"
           }
         }
         "#);
@@ -2446,7 +2450,7 @@ mod tests {
         {
           "data": {
             "type": "user-registration_token",
-            "id": "01FSHN9AG0MZAA6S4AF7CTV32E",
+            "id": "01FSHN9AG0E6J8AS3YVE0HPDQ1",
             "attributes": {
               "token": "test_update_limit",
               "valid": true,
@@ -2458,11 +2462,11 @@ mod tests {
               "revoked_at": null
             },
             "links": {
-              "self": "/api/admin/v1/user-registration-tokens/01FSHN9AG0MZAA6S4AF7CTV32E"
+              "self": "/api/admin/v1/user-registration-tokens/01FSHN9AG0E6J8AS3YVE0HPDQ1"
             }
           },
           "links": {
-            "self": "/api/admin/v1/user-registration-tokens/01FSHN9AG0MZAA6S4AF7CTV32E"
+            "self": "/api/admin/v1/user-registration-tokens/01FSHN9AG0E6J8AS3YVE0HPDQ1"
           }
         }
         "#);
@@ -2510,7 +2514,7 @@ mod tests {
         {
           "data": {
             "type": "user-registration_token",
-            "id": "01FSHN9AG0MZAA6S4AF7CTV32E",
+            "id": "01FSHN9AG0E6J8AS3YVE0HPDQ1",
             "attributes": {
               "token": "test_update_multiple",
               "valid": true,
@@ -2522,11 +2526,11 @@ mod tests {
               "revoked_at": null
             },
             "links": {
-              "self": "/api/admin/v1/user-registration-tokens/01FSHN9AG0MZAA6S4AF7CTV32E"
+              "self": "/api/admin/v1/user-registration-tokens/01FSHN9AG0E6J8AS3YVE0HPDQ1"
             }
           },
           "links": {
-            "self": "/api/admin/v1/user-registration-tokens/01FSHN9AG0MZAA6S4AF7CTV32E"
+            "self": "/api/admin/v1/user-registration-tokens/01FSHN9AG0E6J8AS3YVE0HPDQ1"
           }
         }
         "#);
@@ -2571,7 +2575,7 @@ mod tests {
         {
           "data": {
             "type": "user-registration_token",
-            "id": "01FSHN9AG0MZAA6S4AF7CTV32E",
+            "id": "01FSHN9AG0E6J8AS3YVE0HPDQ1",
             "attributes": {
               "token": "test_update_none",
               "valid": true,
@@ -2583,11 +2587,11 @@ mod tests {
               "revoked_at": null
             },
             "links": {
-              "self": "/api/admin/v1/user-registration-tokens/01FSHN9AG0MZAA6S4AF7CTV32E"
+              "self": "/api/admin/v1/user-registration-tokens/01FSHN9AG0E6J8AS3YVE0HPDQ1"
             }
           },
           "links": {
-            "self": "/api/admin/v1/user-registration-tokens/01FSHN9AG0MZAA6S4AF7CTV32E"
+            "self": "/api/admin/v1/user-registration-tokens/01FSHN9AG0E6J8AS3YVE0HPDQ1"
           }
         }
         "#);

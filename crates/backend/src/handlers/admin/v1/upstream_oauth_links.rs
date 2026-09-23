@@ -543,27 +543,28 @@ mod tests {
         let response = state.request(request).await;
         response.assert_status(StatusCode::CREATED);
         let body: serde_json::Value = response.json();
-        assert_json_snapshot!(body, @r###"
+        assert_json_snapshot!(body, @r#"
         {
           "data": {
             "type": "upstream-oauth-link",
-            "id": "01FSHN9AG07HNEZXNQM2KNBNF6",
+            "id": "01FSHN9AG0EJKVNRAEHJPXJYCA",
             "attributes": {
               "created_at": "2022-01-16T14:40:00Z",
-              "provider_id": "01FSHN9AG0AJ6AC5HQ9X6H4RP4",
+              "updated_at": "2022-01-16T14:40:00Z",
+              "provider_id": "01FSHN9AG0ENBAKZ975MGMHW1B",
               "subject": "subject1",
-              "user_id": "01FSHN9AG0MZAA6S4AF7CTV32E",
+              "user_id": "01FSHN9AG0E6J8AS3YVE0HPDQ1",
               "human_account_name": null
             },
             "links": {
-              "self": "/api/admin/v1/upstream-oauth-links/01FSHN9AG07HNEZXNQM2KNBNF6"
+              "self": "/api/admin/v1/upstream-oauth-links/01FSHN9AG0EJKVNRAEHJPXJYCA"
             }
           },
           "links": {
-            "self": "/api/admin/v1/upstream-oauth-links/01FSHN9AG07HNEZXNQM2KNBNF6"
+            "self": "/api/admin/v1/upstream-oauth-links/01FSHN9AG0EJKVNRAEHJPXJYCA"
           }
         }
-        "###);
+        "#);
     }
 
     #[tokio::test]
@@ -613,29 +614,30 @@ mod tests {
                 "subject": "subject1"
             }));
         let response = state.request(request).await;
-        response.assert_status(StatusCode::OK);
+        response.assert_status(StatusCode::CREATED);
         let body: serde_json::Value = response.json();
-        assert_json_snapshot!(body, @r###"
+        assert_json_snapshot!(body, @r#"
         {
           "data": {
             "type": "upstream-oauth-link",
-            "id": "01FSHN9AG09NMZYX8MFYH578R9",
+            "id": "01FSHN9AG0FGRV6R6CZ6P45NRB",
             "attributes": {
               "created_at": "2022-01-16T14:40:00Z",
-              "provider_id": "01FSHN9AG0AJ6AC5HQ9X6H4RP4",
+              "updated_at": "2022-01-16T14:40:00Z",
+              "provider_id": "01FSHN9AG0ENBAKZ975MGMHW1B",
               "subject": "subject1",
-              "user_id": "01FSHN9AG0MZAA6S4AF7CTV32E",
+              "user_id": "01FSHN9AG0E6J8AS3YVE0HPDQ1",
               "human_account_name": null
             },
             "links": {
-              "self": "/api/admin/v1/upstream-oauth-links/01FSHN9AG09NMZYX8MFYH578R9"
+              "self": "/api/admin/v1/upstream-oauth-links/01FSHN9AG0FGRV6R6CZ6P45NRB"
             }
           },
           "links": {
-            "self": "/api/admin/v1/upstream-oauth-links/01FSHN9AG09NMZYX8MFYH578R9"
+            "self": "/api/admin/v1/upstream-oauth-links/01FSHN9AG0FGRV6R6CZ6P45NRB"
           }
         }
-        "###);
+        "#);
     }
 
     #[tokio::test]
@@ -698,15 +700,15 @@ mod tests {
         let response = state.request(request).await;
         response.assert_status(StatusCode::CONFLICT);
         let body: serde_json::Value = response.json();
-        assert_json_snapshot!(body, @r###"
+        assert_json_snapshot!(body, @r#"
         {
           "errors": [
             {
-              "title": "Upstream Oauth 2.0 Provider ID 01FSHN9AG09NMZYX8MFYH578R9 with subject subject1 is already linked to a user"
+              "title": "Upstream Oauth 2.0 Provider ID 01FSHN9AG0FGRV6R6CZ6P45NRB with subject subject1 is already linked to a user"
             }
           ]
         }
-        "###);
+        "#);
     }
 
     #[tokio::test]
@@ -935,28 +937,30 @@ mod tests {
             .empty();
         let response = state.request(request).await;
         response.assert_status(StatusCode::OK);
-        let body: serde_json::Value = response.json();
-        assert_json_snapshot!(body, @r###"
+        let mut body: serde_json::Value = response.json();
+        body["data"]["attributes"]["updated_at"] = serde_json::json!("<updated>");
+        assert_json_snapshot!(body, @r#"
         {
           "data": {
             "type": "upstream-oauth-link",
-            "id": "01FSHN9AG09NMZYX8MFYH578R9",
+            "id": "01FSHN9AG0FGRV6R6CZ6P45NRB",
             "attributes": {
               "created_at": "2022-01-16T14:40:00Z",
-              "provider_id": "01FSHN9AG0MZAA6S4AF7CTV32E",
+              "updated_at": "<updated>",
+              "provider_id": "01FSHN9AG0E6J8AS3YVE0HPDQ1",
               "subject": "subject1",
-              "user_id": "01FSHN9AG0AJ6AC5HQ9X6H4RP4",
+              "user_id": "01FSHN9AG0ENBAKZ975MGMHW1B",
               "human_account_name": null
             },
             "links": {
-              "self": "/api/admin/v1/upstream-oauth-links/01FSHN9AG09NMZYX8MFYH578R9"
+              "self": "/api/admin/v1/upstream-oauth-links/01FSHN9AG0FGRV6R6CZ6P45NRB"
             }
           },
           "links": {
-            "self": "/api/admin/v1/upstream-oauth-links/01FSHN9AG09NMZYX8MFYH578R9"
+            "self": "/api/admin/v1/upstream-oauth-links/01FSHN9AG0FGRV6R6CZ6P45NRB"
           }
         }
-        "###);
+        "#);
     }
 
     #[tokio::test]
@@ -1067,7 +1071,10 @@ mod tests {
             .empty();
         let response = state.request(request).await;
         response.assert_status(StatusCode::OK);
-        let body: serde_json::Value = response.json();
+        let mut body: serde_json::Value = response.json();
+        for link in body["data"].as_array_mut().unwrap() {
+            link["attributes"]["updated_at"] = serde_json::json!("<updated>");
+        }
         assert_json_snapshot!(body, @r#"
         {
           "meta": {
@@ -1076,58 +1083,61 @@ mod tests {
           "data": [
             {
               "type": "upstream-oauth-link",
-              "id": "01FSHN9AG0AQZQP8DX40GD59PW",
+              "id": "01FSHN9AG0ECR8H0BE36DG9KS7",
               "attributes": {
                 "created_at": "2022-01-16T14:40:00Z",
-                "provider_id": "01FSHN9AG09NMZYX8MFYH578R9",
-                "subject": "subject1",
-                "user_id": "01FSHN9AG0MZAA6S4AF7CTV32E",
-                "human_account_name": "alice@acme"
-              },
-              "links": {
-                "self": "/api/admin/v1/upstream-oauth-links/01FSHN9AG0AQZQP8DX40GD59PW"
-              },
-              "meta": {
-                "page": {
-                  "cursor": "01FSHN9AG0AQZQP8DX40GD59PW"
-                }
-              }
-            },
-            {
-              "type": "upstream-oauth-link",
-              "id": "01FSHN9AG0PJZ6DZNTAA1XKPT4",
-              "attributes": {
-                "created_at": "2022-01-16T14:40:00Z",
-                "provider_id": "01FSHN9AG09NMZYX8MFYH578R9",
+                "updated_at": "<updated>",
+                "provider_id": "01FSHN9AG0FGRV6R6CZ6P45NRB",
                 "subject": "subject3",
-                "user_id": "01FSHN9AG0AJ6AC5HQ9X6H4RP4",
+                "user_id": "01FSHN9AG0ENBAKZ975MGMHW1B",
                 "human_account_name": "bob@acme"
               },
               "links": {
-                "self": "/api/admin/v1/upstream-oauth-links/01FSHN9AG0PJZ6DZNTAA1XKPT4"
+                "self": "/api/admin/v1/upstream-oauth-links/01FSHN9AG0ECR8H0BE36DG9KS7"
               },
               "meta": {
                 "page": {
-                  "cursor": "01FSHN9AG0PJZ6DZNTAA1XKPT4"
+                  "cursor": "01FSHN9AG0ECR8H0BE36DG9KS7"
                 }
               }
             },
             {
               "type": "upstream-oauth-link",
-              "id": "01FSHN9AG0QHEHKX2JNQ2A2D07",
+              "id": "01FSHN9AG0EKBVXT4NTWXV9R5V",
               "attributes": {
                 "created_at": "2022-01-16T14:40:00Z",
-                "provider_id": "01FSHN9AG0KEPHYQQXW9XPTX6Z",
+                "updated_at": "<updated>",
+                "provider_id": "01FSHN9AG0F6VTN5NGKKTTP33J",
                 "subject": "subject2",
-                "user_id": "01FSHN9AG0MZAA6S4AF7CTV32E",
+                "user_id": "01FSHN9AG0E6J8AS3YVE0HPDQ1",
                 "human_account_name": "alice@example"
               },
               "links": {
-                "self": "/api/admin/v1/upstream-oauth-links/01FSHN9AG0QHEHKX2JNQ2A2D07"
+                "self": "/api/admin/v1/upstream-oauth-links/01FSHN9AG0EKBVXT4NTWXV9R5V"
               },
               "meta": {
                 "page": {
-                  "cursor": "01FSHN9AG0QHEHKX2JNQ2A2D07"
+                  "cursor": "01FSHN9AG0EKBVXT4NTWXV9R5V"
+                }
+              }
+            },
+            {
+              "type": "upstream-oauth-link",
+              "id": "01FSHN9AG0FV1A43W15ECPKZJG",
+              "attributes": {
+                "created_at": "2022-01-16T14:40:00Z",
+                "updated_at": "<updated>",
+                "provider_id": "01FSHN9AG0FGRV6R6CZ6P45NRB",
+                "subject": "subject1",
+                "user_id": "01FSHN9AG0E6J8AS3YVE0HPDQ1",
+                "human_account_name": "alice@acme"
+              },
+              "links": {
+                "self": "/api/admin/v1/upstream-oauth-links/01FSHN9AG0FV1A43W15ECPKZJG"
+              },
+              "meta": {
+                "page": {
+                  "cursor": "01FSHN9AG0FV1A43W15ECPKZJG"
                 }
               }
             }
@@ -1150,7 +1160,10 @@ mod tests {
 
         let response = state.request(request).await;
         response.assert_status(StatusCode::OK);
-        let body: serde_json::Value = response.json();
+        let mut body: serde_json::Value = response.json();
+        for link in body["data"].as_array_mut().unwrap() {
+            link["attributes"]["updated_at"] = serde_json::json!("<updated>");
+        }
         assert_json_snapshot!(body, @r#"
         {
           "meta": {
@@ -1159,47 +1172,49 @@ mod tests {
           "data": [
             {
               "type": "upstream-oauth-link",
-              "id": "01FSHN9AG0AQZQP8DX40GD59PW",
+              "id": "01FSHN9AG0EKBVXT4NTWXV9R5V",
               "attributes": {
                 "created_at": "2022-01-16T14:40:00Z",
-                "provider_id": "01FSHN9AG09NMZYX8MFYH578R9",
-                "subject": "subject1",
-                "user_id": "01FSHN9AG0MZAA6S4AF7CTV32E",
-                "human_account_name": "alice@acme"
+                "updated_at": "<updated>",
+                "provider_id": "01FSHN9AG0F6VTN5NGKKTTP33J",
+                "subject": "subject2",
+                "user_id": "01FSHN9AG0E6J8AS3YVE0HPDQ1",
+                "human_account_name": "alice@example"
               },
               "links": {
-                "self": "/api/admin/v1/upstream-oauth-links/01FSHN9AG0AQZQP8DX40GD59PW"
+                "self": "/api/admin/v1/upstream-oauth-links/01FSHN9AG0EKBVXT4NTWXV9R5V"
               },
               "meta": {
                 "page": {
-                  "cursor": "01FSHN9AG0AQZQP8DX40GD59PW"
+                  "cursor": "01FSHN9AG0EKBVXT4NTWXV9R5V"
                 }
               }
             },
             {
               "type": "upstream-oauth-link",
-              "id": "01FSHN9AG0QHEHKX2JNQ2A2D07",
+              "id": "01FSHN9AG0FV1A43W15ECPKZJG",
               "attributes": {
                 "created_at": "2022-01-16T14:40:00Z",
-                "provider_id": "01FSHN9AG0KEPHYQQXW9XPTX6Z",
-                "subject": "subject2",
-                "user_id": "01FSHN9AG0MZAA6S4AF7CTV32E",
-                "human_account_name": "alice@example"
+                "updated_at": "<updated>",
+                "provider_id": "01FSHN9AG0FGRV6R6CZ6P45NRB",
+                "subject": "subject1",
+                "user_id": "01FSHN9AG0E6J8AS3YVE0HPDQ1",
+                "human_account_name": "alice@acme"
               },
               "links": {
-                "self": "/api/admin/v1/upstream-oauth-links/01FSHN9AG0QHEHKX2JNQ2A2D07"
+                "self": "/api/admin/v1/upstream-oauth-links/01FSHN9AG0FV1A43W15ECPKZJG"
               },
               "meta": {
                 "page": {
-                  "cursor": "01FSHN9AG0QHEHKX2JNQ2A2D07"
+                  "cursor": "01FSHN9AG0FV1A43W15ECPKZJG"
                 }
               }
             }
           ],
           "links": {
-            "self": "/api/admin/v1/upstream-oauth-links?filter[user]=01FSHN9AG0MZAA6S4AF7CTV32E&page[first]=10",
-            "first": "/api/admin/v1/upstream-oauth-links?filter[user]=01FSHN9AG0MZAA6S4AF7CTV32E&page[first]=10",
-            "last": "/api/admin/v1/upstream-oauth-links?filter[user]=01FSHN9AG0MZAA6S4AF7CTV32E&page[last]=10"
+            "self": "/api/admin/v1/upstream-oauth-links?filter[user]=01FSHN9AG0E6J8AS3YVE0HPDQ1&page[first]=10",
+            "first": "/api/admin/v1/upstream-oauth-links?filter[user]=01FSHN9AG0E6J8AS3YVE0HPDQ1&page[first]=10",
+            "last": "/api/admin/v1/upstream-oauth-links?filter[user]=01FSHN9AG0E6J8AS3YVE0HPDQ1&page[last]=10"
           }
         }
         "#);
@@ -1214,7 +1229,10 @@ mod tests {
 
         let response = state.request(request).await;
         response.assert_status(StatusCode::OK);
-        let body: serde_json::Value = response.json();
+        let mut body: serde_json::Value = response.json();
+        for link in body["data"].as_array_mut().unwrap() {
+            link["attributes"]["updated_at"] = serde_json::json!("<updated>");
+        }
         assert_json_snapshot!(body, @r#"
         {
           "meta": {
@@ -1223,47 +1241,49 @@ mod tests {
           "data": [
             {
               "type": "upstream-oauth-link",
-              "id": "01FSHN9AG0AQZQP8DX40GD59PW",
+              "id": "01FSHN9AG0ECR8H0BE36DG9KS7",
               "attributes": {
                 "created_at": "2022-01-16T14:40:00Z",
-                "provider_id": "01FSHN9AG09NMZYX8MFYH578R9",
-                "subject": "subject1",
-                "user_id": "01FSHN9AG0MZAA6S4AF7CTV32E",
-                "human_account_name": "alice@acme"
+                "updated_at": "<updated>",
+                "provider_id": "01FSHN9AG0FGRV6R6CZ6P45NRB",
+                "subject": "subject3",
+                "user_id": "01FSHN9AG0ENBAKZ975MGMHW1B",
+                "human_account_name": "bob@acme"
               },
               "links": {
-                "self": "/api/admin/v1/upstream-oauth-links/01FSHN9AG0AQZQP8DX40GD59PW"
+                "self": "/api/admin/v1/upstream-oauth-links/01FSHN9AG0ECR8H0BE36DG9KS7"
               },
               "meta": {
                 "page": {
-                  "cursor": "01FSHN9AG0AQZQP8DX40GD59PW"
+                  "cursor": "01FSHN9AG0ECR8H0BE36DG9KS7"
                 }
               }
             },
             {
               "type": "upstream-oauth-link",
-              "id": "01FSHN9AG0PJZ6DZNTAA1XKPT4",
+              "id": "01FSHN9AG0FV1A43W15ECPKZJG",
               "attributes": {
                 "created_at": "2022-01-16T14:40:00Z",
-                "provider_id": "01FSHN9AG09NMZYX8MFYH578R9",
-                "subject": "subject3",
-                "user_id": "01FSHN9AG0AJ6AC5HQ9X6H4RP4",
-                "human_account_name": "bob@acme"
+                "updated_at": "<updated>",
+                "provider_id": "01FSHN9AG0FGRV6R6CZ6P45NRB",
+                "subject": "subject1",
+                "user_id": "01FSHN9AG0E6J8AS3YVE0HPDQ1",
+                "human_account_name": "alice@acme"
               },
               "links": {
-                "self": "/api/admin/v1/upstream-oauth-links/01FSHN9AG0PJZ6DZNTAA1XKPT4"
+                "self": "/api/admin/v1/upstream-oauth-links/01FSHN9AG0FV1A43W15ECPKZJG"
               },
               "meta": {
                 "page": {
-                  "cursor": "01FSHN9AG0PJZ6DZNTAA1XKPT4"
+                  "cursor": "01FSHN9AG0FV1A43W15ECPKZJG"
                 }
               }
             }
           ],
           "links": {
-            "self": "/api/admin/v1/upstream-oauth-links?filter[provider]=01FSHN9AG09NMZYX8MFYH578R9&page[first]=10",
-            "first": "/api/admin/v1/upstream-oauth-links?filter[provider]=01FSHN9AG09NMZYX8MFYH578R9&page[first]=10",
-            "last": "/api/admin/v1/upstream-oauth-links?filter[provider]=01FSHN9AG09NMZYX8MFYH578R9&page[last]=10"
+            "self": "/api/admin/v1/upstream-oauth-links?filter[provider]=01FSHN9AG0FGRV6R6CZ6P45NRB&page[first]=10",
+            "first": "/api/admin/v1/upstream-oauth-links?filter[provider]=01FSHN9AG0FGRV6R6CZ6P45NRB&page[first]=10",
+            "last": "/api/admin/v1/upstream-oauth-links?filter[provider]=01FSHN9AG0FGRV6R6CZ6P45NRB&page[last]=10"
           }
         }
         "#);
@@ -1278,7 +1298,10 @@ mod tests {
 
         let response = state.request(request).await;
         response.assert_status(StatusCode::OK);
-        let body: serde_json::Value = response.json();
+        let mut body: serde_json::Value = response.json();
+        for link in body["data"].as_array_mut().unwrap() {
+            link["attributes"]["updated_at"] = serde_json::json!("<updated>");
+        }
         assert_json_snapshot!(body, @r#"
         {
           "meta": {
@@ -1287,20 +1310,21 @@ mod tests {
           "data": [
             {
               "type": "upstream-oauth-link",
-              "id": "01FSHN9AG0AQZQP8DX40GD59PW",
+              "id": "01FSHN9AG0FV1A43W15ECPKZJG",
               "attributes": {
                 "created_at": "2022-01-16T14:40:00Z",
-                "provider_id": "01FSHN9AG09NMZYX8MFYH578R9",
+                "updated_at": "<updated>",
+                "provider_id": "01FSHN9AG0FGRV6R6CZ6P45NRB",
                 "subject": "subject1",
-                "user_id": "01FSHN9AG0MZAA6S4AF7CTV32E",
+                "user_id": "01FSHN9AG0E6J8AS3YVE0HPDQ1",
                 "human_account_name": "alice@acme"
               },
               "links": {
-                "self": "/api/admin/v1/upstream-oauth-links/01FSHN9AG0AQZQP8DX40GD59PW"
+                "self": "/api/admin/v1/upstream-oauth-links/01FSHN9AG0FV1A43W15ECPKZJG"
               },
               "meta": {
                 "page": {
-                  "cursor": "01FSHN9AG0AQZQP8DX40GD59PW"
+                  "cursor": "01FSHN9AG0FV1A43W15ECPKZJG"
                 }
               }
             }
@@ -1319,64 +1343,70 @@ mod tests {
             .empty();
         let response = state.request(request).await;
         response.assert_status(StatusCode::OK);
-        let body: serde_json::Value = response.json();
+        let mut body: serde_json::Value = response.json();
+        for link in body["data"].as_array_mut().unwrap() {
+            link["attributes"]["updated_at"] = serde_json::json!("<updated>");
+        }
         assert_json_snapshot!(body, @r#"
         {
           "data": [
             {
               "type": "upstream-oauth-link",
-              "id": "01FSHN9AG0AQZQP8DX40GD59PW",
+              "id": "01FSHN9AG0ECR8H0BE36DG9KS7",
               "attributes": {
                 "created_at": "2022-01-16T14:40:00Z",
-                "provider_id": "01FSHN9AG09NMZYX8MFYH578R9",
-                "subject": "subject1",
-                "user_id": "01FSHN9AG0MZAA6S4AF7CTV32E",
-                "human_account_name": "alice@acme"
-              },
-              "links": {
-                "self": "/api/admin/v1/upstream-oauth-links/01FSHN9AG0AQZQP8DX40GD59PW"
-              },
-              "meta": {
-                "page": {
-                  "cursor": "01FSHN9AG0AQZQP8DX40GD59PW"
-                }
-              }
-            },
-            {
-              "type": "upstream-oauth-link",
-              "id": "01FSHN9AG0PJZ6DZNTAA1XKPT4",
-              "attributes": {
-                "created_at": "2022-01-16T14:40:00Z",
-                "provider_id": "01FSHN9AG09NMZYX8MFYH578R9",
+                "updated_at": "<updated>",
+                "provider_id": "01FSHN9AG0FGRV6R6CZ6P45NRB",
                 "subject": "subject3",
-                "user_id": "01FSHN9AG0AJ6AC5HQ9X6H4RP4",
+                "user_id": "01FSHN9AG0ENBAKZ975MGMHW1B",
                 "human_account_name": "bob@acme"
               },
               "links": {
-                "self": "/api/admin/v1/upstream-oauth-links/01FSHN9AG0PJZ6DZNTAA1XKPT4"
+                "self": "/api/admin/v1/upstream-oauth-links/01FSHN9AG0ECR8H0BE36DG9KS7"
               },
               "meta": {
                 "page": {
-                  "cursor": "01FSHN9AG0PJZ6DZNTAA1XKPT4"
+                  "cursor": "01FSHN9AG0ECR8H0BE36DG9KS7"
                 }
               }
             },
             {
               "type": "upstream-oauth-link",
-              "id": "01FSHN9AG0QHEHKX2JNQ2A2D07",
+              "id": "01FSHN9AG0EKBVXT4NTWXV9R5V",
               "attributes": {
                 "created_at": "2022-01-16T14:40:00Z",
-                "provider_id": "01FSHN9AG0KEPHYQQXW9XPTX6Z",
+                "updated_at": "<updated>",
+                "provider_id": "01FSHN9AG0F6VTN5NGKKTTP33J",
                 "subject": "subject2",
-                "user_id": "01FSHN9AG0MZAA6S4AF7CTV32E",
+                "user_id": "01FSHN9AG0E6J8AS3YVE0HPDQ1",
                 "human_account_name": "alice@example"
               },
               "links": {
-                "self": "/api/admin/v1/upstream-oauth-links/01FSHN9AG0QHEHKX2JNQ2A2D07"
+                "self": "/api/admin/v1/upstream-oauth-links/01FSHN9AG0EKBVXT4NTWXV9R5V"
               },
               "meta": {
                 "page": {
-                  "cursor": "01FSHN9AG0QHEHKX2JNQ2A2D07"
+                  "cursor": "01FSHN9AG0EKBVXT4NTWXV9R5V"
+                }
+              }
+            },
+            {
+              "type": "upstream-oauth-link",
+              "id": "01FSHN9AG0FV1A43W15ECPKZJG",
+              "attributes": {
+                "created_at": "2022-01-16T14:40:00Z",
+                "updated_at": "<updated>",
+                "provider_id": "01FSHN9AG0FGRV6R6CZ6P45NRB",
+                "subject": "subject1",
+                "user_id": "01FSHN9AG0E6J8AS3YVE0HPDQ1",
+                "human_account_name": "alice@acme"
+              },
+              "links": {
+                "self": "/api/admin/v1/upstream-oauth-links/01FSHN9AG0FV1A43W15ECPKZJG"
+              },
+              "meta": {
+                "page": {
+                  "cursor": "01FSHN9AG0FV1A43W15ECPKZJG"
                 }
               }
             }
@@ -1416,53 +1446,58 @@ mod tests {
         .empty();
         let response = state.request(request).await;
         response.assert_status(StatusCode::OK);
-        let body: serde_json::Value = response.json();
+        let mut body: serde_json::Value = response.json();
+        for link in body["data"].as_array_mut().unwrap() {
+            link["attributes"]["updated_at"] = serde_json::json!("<updated>");
+        }
         assert_json_snapshot!(body, @r#"
         {
           "data": [
             {
               "type": "upstream-oauth-link",
-              "id": "01FSHN9AG0AQZQP8DX40GD59PW",
+              "id": "01FSHN9AG0EKBVXT4NTWXV9R5V",
               "attributes": {
                 "created_at": "2022-01-16T14:40:00Z",
-                "provider_id": "01FSHN9AG09NMZYX8MFYH578R9",
-                "subject": "subject1",
-                "user_id": "01FSHN9AG0MZAA6S4AF7CTV32E",
-                "human_account_name": "alice@acme"
+                "updated_at": "<updated>",
+                "provider_id": "01FSHN9AG0F6VTN5NGKKTTP33J",
+                "subject": "subject2",
+                "user_id": "01FSHN9AG0E6J8AS3YVE0HPDQ1",
+                "human_account_name": "alice@example"
               },
               "links": {
-                "self": "/api/admin/v1/upstream-oauth-links/01FSHN9AG0AQZQP8DX40GD59PW"
+                "self": "/api/admin/v1/upstream-oauth-links/01FSHN9AG0EKBVXT4NTWXV9R5V"
               },
               "meta": {
                 "page": {
-                  "cursor": "01FSHN9AG0AQZQP8DX40GD59PW"
+                  "cursor": "01FSHN9AG0EKBVXT4NTWXV9R5V"
                 }
               }
             },
             {
               "type": "upstream-oauth-link",
-              "id": "01FSHN9AG0QHEHKX2JNQ2A2D07",
+              "id": "01FSHN9AG0FV1A43W15ECPKZJG",
               "attributes": {
                 "created_at": "2022-01-16T14:40:00Z",
-                "provider_id": "01FSHN9AG0KEPHYQQXW9XPTX6Z",
-                "subject": "subject2",
-                "user_id": "01FSHN9AG0MZAA6S4AF7CTV32E",
-                "human_account_name": "alice@example"
+                "updated_at": "<updated>",
+                "provider_id": "01FSHN9AG0FGRV6R6CZ6P45NRB",
+                "subject": "subject1",
+                "user_id": "01FSHN9AG0E6J8AS3YVE0HPDQ1",
+                "human_account_name": "alice@acme"
               },
               "links": {
-                "self": "/api/admin/v1/upstream-oauth-links/01FSHN9AG0QHEHKX2JNQ2A2D07"
+                "self": "/api/admin/v1/upstream-oauth-links/01FSHN9AG0FV1A43W15ECPKZJG"
               },
               "meta": {
                 "page": {
-                  "cursor": "01FSHN9AG0QHEHKX2JNQ2A2D07"
+                  "cursor": "01FSHN9AG0FV1A43W15ECPKZJG"
                 }
               }
             }
           ],
           "links": {
-            "self": "/api/admin/v1/upstream-oauth-links?filter[user]=01FSHN9AG0MZAA6S4AF7CTV32E&count=false&page[first]=10",
-            "first": "/api/admin/v1/upstream-oauth-links?filter[user]=01FSHN9AG0MZAA6S4AF7CTV32E&count=false&page[first]=10",
-            "last": "/api/admin/v1/upstream-oauth-links?filter[user]=01FSHN9AG0MZAA6S4AF7CTV32E&count=false&page[last]=10"
+            "self": "/api/admin/v1/upstream-oauth-links?filter[user]=01FSHN9AG0E6J8AS3YVE0HPDQ1&count=false&page[first]=10",
+            "first": "/api/admin/v1/upstream-oauth-links?filter[user]=01FSHN9AG0E6J8AS3YVE0HPDQ1&count=false&page[first]=10",
+            "last": "/api/admin/v1/upstream-oauth-links?filter[user]=01FSHN9AG0E6J8AS3YVE0HPDQ1&count=false&page[last]=10"
           }
         }
         "#);
@@ -1483,7 +1518,7 @@ mod tests {
             "count": 2
           },
           "links": {
-            "self": "/api/admin/v1/upstream-oauth-links?filter[provider]=01FSHN9AG09NMZYX8MFYH578R9&count=only"
+            "self": "/api/admin/v1/upstream-oauth-links?filter[provider]=01FSHN9AG0FGRV6R6CZ6P45NRB&count=only"
           }
         }
         "#);
