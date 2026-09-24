@@ -60,7 +60,7 @@ jobs:
           components: clippy
 
       - name: Configure sccache
-        uses: mozilla-actions/sccache-action@v0.0.9
+        uses: mozilla-actions/sccache-action@v0.0.11
 
       - name: Execute Clippy lints
         run: |
@@ -107,7 +107,7 @@ jobs:
           rustup default stable
 
       - name: Configure sccache
-        uses: mozilla-actions/sccache-action@v0.0.9
+        uses: mozilla-actions/sccache-action@v0.0.11
 
       - name: Regenerate schemas
         run: sh ./misc/update.sh
@@ -145,7 +145,7 @@ jobs:
         uses: dtolnay/rust-toolchain@stable
 
       - name: Configure sccache
-        uses: mozilla-actions/sccache-action@v0.0.9
+        uses: mozilla-actions/sccache-action@v0.0.11
 
       - name: Set up nextest
         uses: taiki-e/install-action@v2
