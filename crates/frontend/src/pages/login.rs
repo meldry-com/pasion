@@ -84,7 +84,7 @@ fn clear_preserved_login_query() {
 
 #[component]
 pub fn Login() -> Element {
-    let providers_data = use_resource(|| async {
+    let mut providers_data = use_resource(|| async {
         crate::api::api_get::<ProvidersResponse>("/auth/providers").await
     });
     let binding = providers_data.read();
@@ -99,29 +99,30 @@ pub fn Login() -> Element {
         },
         Some(Err(e)) => rsx! {
             Layout {
-                LoginFormBasic { error_msg: Some(e.clone()) }
+                div { class: "login-page",
+                    div { class: "login-container",
+                        h1 { class: "heading-md login-title", "Sign in" }
+                        div { class: "alert alert-critical",
+                            p { "Could not load sign-in methods: {e}" }
+                        }
+                        button {
+                            class: "btn btn-secondary btn-block",
+                            onclick: move |_| providers_data.restart(),
+                            "Try again"
+                        }
+                    }
+                }
             }
         },
         None => rsx! {
             Layout {
-                LoginFormBasic { error_msg: None }
+                div { class: "login-page",
+                    div { class: "login-container",
+                        LoadingSpinner {}
+                    }
+                }
             }
         },
-    }
-}
-
-#[component]
-fn LoginFormBasic(error_msg: Option<String>) -> Element {
-    rsx! {
-        LoginForm {
-            providers: ProvidersResponse {
-                providers: vec![],
-                password_login_enabled: true,
-                password_registration_enabled: false,
-                account_recovery_allowed: true,
-            },
-            initial_error: error_msg,
-        }
     }
 }
 

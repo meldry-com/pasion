@@ -1,7 +1,7 @@
 # Homeserver configuration
 
-The `pasion` is designed to be run alongside a Matrix homeserver.
-It currently only supports [Palpo](https://github.com/palpo-im/palpo) version 1.136.0 or later.
+Pasion is designed to run alongside a Matrix homeserver. The Palpo integration
+uses Palpo's `delegated_auth` configuration and Pasion's OAuth/OIDC endpoints.
 The authentication service needs to be able to call the Palpo admin API to provision users through a shared secret, and Palpo needs to be able to call the service to verify access tokens using the OAuth 2.0 token introspection endpoint.
 
 ## Configure the connection to the homeserver
@@ -25,45 +25,54 @@ matrix:
 
 ## Configure the homeserver to delegate authentication to the service
 
-Set up the delegated authentication feature **in the Palpo configuration** in the `matrix_authentication_service` section:
+Set up delegated authentication **in the Palpo configuration** in the
+`delegated_auth` section. The issuer is Pasion's public `http.public_base` URL;
+the introspection and password exchange URLs can use internal network addresses.
 
 ```yaml
-matrix_authentication_service:
-  enabled: true
-  endpoint: http://localhost:8080/
-  secret: "AVeryRandomSecretPleaseUseSomethingSecure"
-  # Alternatively, using a file:
-  #secret_file: /path/to/secret.txt
+delegated_auth:
+  enable: true
+  issuer: https://auth.example.com/
+  introspection_endpoint: http://localhost:8080/oauth2/introspect
+  client_id: palpo-legacy-sso
+  sso_callback_url: https://matrix.example.com/_matrix/client/v3/login/sso/callback
+  sso_allowed_redirect_origins:
+    - http://127.0.0.1
+    - http://localhost
+    - https://app.example.com
+
+# Palpo's admin.mas_secret must match the Pasion matrix.secret above.
+admin:
+  mas_secret: "AVeryRandomSecretPleaseUseSomethingSecure"
 ```
 
-The `endpoint` property should be set to the URL of the authentication service.
-This can be an internal URL, to avoid unnecessary round-trips.
+Register `palpo-legacy-sso` as a public OAuth client in Pasion with the exact
+`sso_callback_url` above as an allowed redirect URI. The callback URL is hosted
+by Palpo; it exchanges the authorization code and returns a short-lived Matrix
+login token to an allowed client origin. Add the actual origins of your Matrix
+clients to `sso_allowed_redirect_origins`. Only enable this flow after the
+callback and allowlist are configured.
 
-The `secret` property must match in both the Palpo configuration and the Pasion configuration.
+The shared secret must match in Palpo and Pasion. If you need legacy Matrix
+password login, additionally set Palpo's `delegated_auth.password_login_endpoint`
+to Pasion's internal `/api/internal/matrix/password-login` endpoint. Palpo does
+not advertise password login without this endpoint. Keep it unset when Pasion
+password login is disabled.
 
-## Set up the compatibility layer
+## Matrix client endpoints
 
-The service exposes a compatibility layer to allow legacy clients to authenticate using the service.
-This works by exposing a few Matrix endpoints that should be proxied to the service.
-
-The following Matrix Client-Server API endpoints need to be handled by the authentication service:
-
- - [`/_matrix/client/*/login`](https://spec.matrix.org/latest/client-server-api/#post_matrixclientv3login)
- - [`/_matrix/client/*/logout`](https://spec.matrix.org/latest/client-server-api/#post_matrixclientv3logout)
- - [`/_matrix/client/*/refresh`](https://spec.matrix.org/latest/client-server-api/#post_matrixclientv3refresh)
-
-See the [reverse proxy configuration](./reverse-proxy.md) guide for more information.
+Route `/_matrix/client/*` to Palpo. Palpo serves
+`/_matrix/client/v1/auth_metadata` using Pasion's OIDC discovery document and
+handles the legacy Matrix SSO callback and login-token exchange. Pasion itself
+does not serve the Matrix `/login`, `/logout`, or `/refresh` compatibility routes;
+its `compat` listener resource is currently a no-op. The upstream providers
+configured in Pasion are presented on Pasion's browser login page, not in the
+OAuth authorization-server metadata.
 
 
-## Migrating from the experimental MSC3861 feature
+## Migrating older Palpo configuration
 
-If you are migrating from the experimental MSC3861 feature in Palpo, you will need to migrate the `experimental_features.msc3861` section of the Palpo configuration to the `matrix_authentication_service` section.
-
-To do so, you need to:
-
- - Remove the `experimental_features.msc3861` section from the Palpo configuration
- - Add the `matrix_authentication_service` section to the Palpo configuration with:
-   - `enabled: true`
-   - `endpoint` set to the URL of the authentication service
-   - `secret` set to the same secret as the `admin_token` that was set in the `msc3861` section
- - Optionally, remove the client provisioned for Palpo in the `clients` section of the Pasion configuration
+Replace experimental MSC3861 settings with Palpo's `delegated_auth` section.
+Set the public issuer, token introspection URL, and matching shared secret as
+above. Configure the SSO callback and client origins before offering legacy SSO
+to Matrix clients.
