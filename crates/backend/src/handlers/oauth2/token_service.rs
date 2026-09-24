@@ -430,11 +430,7 @@ pub async fn exchange_authorization_code(
     // Bind the code to the redirect URI used at the authorization endpoint.
     // Matrix authorization requests always include redirect_uri, and the
     // token request must repeat that value.
-    if !grant
-        .redirect_uri
-        .as_deref()
-        .is_some_and(|uri| super::redirect_uri_matches_authorized(uri, &authz_grant.redirect_uri))
-    {
+    if grant.redirect_uri.as_deref() != Some(authz_grant.raw_redirect_uri.as_str()) {
         warn!(
             oauth2_client.id = %client.id,
             authorization_grant.id = %authz_grant.id,

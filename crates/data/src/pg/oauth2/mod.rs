@@ -124,6 +124,7 @@ mod tests {
                 &clock,
                 &client,
                 "https://example.com/redirect".parse().unwrap(),
+                "https://example.com/redirect".to_owned(),
                 Scope::from_iter([OPENID]),
                 Some(AuthorizationCode {
                     code: "code".to_owned(),
