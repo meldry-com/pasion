@@ -2,6 +2,7 @@ use std::sync::LazyLock;
 
 use oauth2_types::{
     errors::{ClientError, ClientErrorCode},
+    oidc::ApplicationType,
     registration::{
         ClientMetadata, ClientMetadataVerificationError, ClientRegistrationResponse, Localized,
         VerifiedClientMetadata,
@@ -50,6 +51,9 @@ pub(crate) enum RouteError {
 
     #[error("{0} is a public suffix, not a valid domain")]
     UrlIsPublicSuffix(&'static str),
+
+    #[error("invalid Matrix redirect URI: {0}")]
+    InvalidMatrixRedirectUri(String),
 
     #[error("client registration denied by the policy: {0}")]
     PolicyDenied(EvaluationResult),
@@ -108,6 +112,13 @@ impl Scribe for RouteError {
                 res.render(Json(
                     ClientError::from(ClientErrorCode::InvalidRedirectUri)
                         .with_description("redirect_uri is not using a valid domain".to_owned()),
+                ));
+            }
+
+            Self::InvalidMatrixRedirectUri(reason) => {
+                res.status_code(StatusCode::BAD_REQUEST);
+                res.render(Json(
+                    ClientError::from(ClientErrorCode::InvalidRedirectUri).with_description(reason),
                 ));
             }
 
@@ -189,6 +200,56 @@ fn localised_url_has_public_suffix(url: &Localized<Url>) -> bool {
     url.iter().any(|(_lang, url)| host_is_public_suffix(url))
 }
 
+/// Apply the Matrix Client-Server API redirect rules at dynamic registration.
+/// Static OAuth clients are configured by administrators and are unaffected.
+fn validate_matrix_redirect_uris(metadata: &VerifiedClientMetadata) -> Result<(), RouteError> {
+    let client_uri = metadata
+        .client_uri
+        .as_ref()
+        .map(Localized::non_localized)
+        .ok_or_else(|| RouteError::InvalidMatrixRedirectUri("client_uri is required".into()))?;
+    if client_uri.scheme() != "https"
+        || client_uri.username() != ""
+        || client_uri.password().is_some()
+    {
+        return Err(RouteError::InvalidMatrixRedirectUri(
+            "client_uri must be an HTTPS URL without credentials".into(),
+        ));
+    }
+    let base_host = client_uri.host_str().ok_or_else(|| {
+        RouteError::InvalidMatrixRedirectUri("client_uri must have a host".into())
+    })?;
+    let reverse_dns = base_host.split('.').rev().collect::<Vec<_>>().join(".");
+    let native = matches!(&metadata.application_type, Some(ApplicationType::Native));
+
+    for uri in metadata.redirect_uris() {
+        let https_client_host = uri.scheme() == "https"
+            && uri.username().is_empty()
+            && uri.password().is_none()
+            && uri
+                .host_str()
+                .is_some_and(|host| host == base_host || host.ends_with(&format!(".{base_host}")));
+        let loopback = uri.scheme() == "http"
+            && uri.port().is_none()
+            && uri.username().is_empty()
+            && uri.password().is_none()
+            && (matches!(uri.host_str(), Some("localhost" | "127.0.0.1"))
+                || matches!(uri.host(), Some(url::Host::Ipv6(ip)) if ip.is_loopback()));
+        let private_scheme = uri.host().is_none()
+            && uri.scheme() != "http"
+            && uri.scheme() != "https"
+            && (uri.scheme() == reverse_dns
+                || uri.scheme().starts_with(&format!("{reverse_dns}.")));
+
+        if !https_client_host && !(native && (loopback || private_scheme)) {
+            return Err(RouteError::InvalidMatrixRedirectUri(format!(
+                "redirect_uri is not valid for this client: {uri}"
+            )));
+        }
+    }
+    Ok(())
+}
+
 #[handler]
 #[tracing::instrument(name = "handlers.oauth2.registration.post", skip_all)]
 pub async fn post(req: &mut Request, depot: &Depot, res: &mut Response) {
@@ -238,6 +299,7 @@ async fn handle_post(req: &mut Request, depot: &Depot) -> Result<RouteResponse, 
 
     // Validate the body
     let metadata = body.validate()?;
+    validate_matrix_redirect_uris(&metadata)?;
 
     // Some extra validation that is hard to do in OPA and not done by the
     // `validate` method either
@@ -463,6 +525,62 @@ mod tests {
         assert!(!url_is_public_suffix("http://localhost"));
         assert!(!url_is_public_suffix("org.matrix:/callback"));
         assert!(!url_is_public_suffix("http://somerandominternaldomain"));
+    }
+
+    fn metadata(application_type: &str, redirect_uri: &str) -> VerifiedClientMetadata {
+        let metadata: ClientMetadata = serde_json::from_value(serde_json::json!({
+            "application_type": application_type,
+            "client_uri": "https://example.com/",
+            "redirect_uris": [redirect_uri],
+        }))
+        .unwrap();
+        metadata.validate().unwrap()
+    }
+
+    #[test]
+    fn matrix_web_redirects_require_https_and_client_uri_host() {
+        assert!(
+            validate_matrix_redirect_uris(&metadata("web", "https://app.example.com/callback"))
+                .is_ok()
+        );
+        for uri in [
+            "http://app.example.com/callback",
+            "https://evil-example.com/callback",
+            "https://example.com.evil.test/callback",
+            "http://127.0.0.1/callback",
+        ] {
+            assert!(
+                validate_matrix_redirect_uris(&metadata("web", uri)).is_err(),
+                "{uri}"
+            );
+        }
+    }
+
+    #[test]
+    fn matrix_native_redirects_allow_portless_loopback_and_reverse_dns() {
+        for uri in [
+            "http://127.0.0.1/callback",
+            "http://[::1]/callback",
+            "http://localhost/callback",
+            "com.example.app:/callback",
+            "https://app.example.com/callback",
+        ] {
+            assert!(
+                validate_matrix_redirect_uris(&metadata("native", uri)).is_ok(),
+                "{uri}"
+            );
+        }
+        for uri in [
+            "http://127.0.0.1:3568/callback",
+            "http://127.0.0.2/callback",
+            "com.evil.app:/callback",
+            "com.example.app://callback",
+        ] {
+            assert!(
+                validate_matrix_redirect_uris(&metadata("native", uri)).is_err(),
+                "{uri}"
+            );
+        }
     }
 
     // Integration tests would need to be updated for Salvo's test utilities
