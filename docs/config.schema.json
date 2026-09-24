@@ -1605,6 +1605,24 @@
           ]
         },
         {
+          "description": "Submit email payloads to Paloud's internal notification API",
+          "type": "object",
+          "properties": {
+            "type": {
+              "type": "string",
+              "const": "paloud_internal"
+            }
+          },
+          "required": [
+            "type"
+          ],
+          "allOf": [
+            {
+              "$ref": "#/definitions/PaloudInternalEmailProviderConfig"
+            }
+          ]
+        },
+        {
           "description": "Deliver through the Resend email API",
           "type": "object",
           "properties": {
@@ -1802,6 +1820,36 @@
       },
       "required": [
         "url"
+      ]
+    },
+    "PaloudInternalEmailProviderConfig": {
+      "description": "Paloud internal notification email delivery settings",
+      "type": "object",
+      "properties": {
+        "url": {
+          "description": "Fully qualified Paloud internal email dispatch endpoint",
+          "type": "string"
+        },
+        "key_id": {
+          "description": "Shared key identifier sent in `X-Paloud-Key-Id`",
+          "type": "string"
+        },
+        "secret": {
+          "description": "Shared secret used to sign the request with `HMAC-SHA256`",
+          "type": "string"
+        },
+        "workspace": {
+          "description": "Optional workspace UUID or subdomain used for provider routing",
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      },
+      "required": [
+        "url",
+        "key_id",
+        "secret"
       ]
     },
     "ResendWebhookConfig": {
@@ -2154,6 +2202,24 @@
               "$ref": "#/definitions/TencentCloudSmsProviderConfig"
             }
           ]
+        },
+        {
+          "description": "Submit SMS payloads to Paloud's internal notification API",
+          "type": "object",
+          "properties": {
+            "type": {
+              "type": "string",
+              "const": "paloud_internal"
+            }
+          },
+          "required": [
+            "type"
+          ],
+          "allOf": [
+            {
+              "$ref": "#/definitions/PaloudInternalSmsProviderConfig"
+            }
+          ]
         }
       ]
     },
@@ -2264,6 +2330,36 @@
         "sdk_app_id",
         "sign_name",
         "template_id"
+      ]
+    },
+    "PaloudInternalSmsProviderConfig": {
+      "description": "Paloud internal notification SMS delivery settings",
+      "type": "object",
+      "properties": {
+        "url": {
+          "description": "Fully qualified Paloud internal SMS dispatch endpoint",
+          "type": "string"
+        },
+        "key_id": {
+          "description": "Shared key identifier sent in `X-Paloud-Key-Id`",
+          "type": "string"
+        },
+        "secret": {
+          "description": "Shared secret used to sign the request with `HMAC-SHA256`",
+          "type": "string"
+        },
+        "workspace": {
+          "description": "Optional workspace UUID or subdomain used for provider routing",
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      },
+      "required": [
+        "url",
+        "key_id",
+        "secret"
       ]
     },
     "SecretsConfig": {
