@@ -439,7 +439,7 @@ pub async fn access_token_with_authorization_code(
         token_endpoint,
         AccessTokenRequest::AuthorizationCode(AuthorizationCodeGrant {
             code: code.clone(),
-            redirect_uri: Some(validation_data.redirect_uri),
+            redirect_uri: Some(validation_data.redirect_uri.to_string()),
             code_verifier: validation_data.code_challenge_verifier,
         }),
         now,

@@ -157,6 +157,19 @@ async fn handle_get(req: &mut Request, depot: &Depot) -> Result<(Response, Cooki
         .ok_or(RouteError::ClientNotFound)?;
 
     // And resolve the redirect_uri and response_mode
+    // Compare the exact value sent by the client. Parsing into Url can erase
+    // differences such as an explicit default port or an absent root slash.
+    if let Some(raw_redirect_uri) = req.query::<String>("redirect_uri")
+        && params
+            .auth
+            .redirect_uri
+            .as_ref()
+            .is_some_and(|uri| !super::redirect_uri_matches_authorized(&raw_redirect_uri, uri))
+    {
+        return Err(RouteError::UnknownRedirectUri(
+            pasion_data::InvalidRedirectUriError::NotAllowed,
+        ));
+    }
     let redirect_uri = client
         .resolve_redirect_uri(&params.auth.redirect_uri)?
         .clone();

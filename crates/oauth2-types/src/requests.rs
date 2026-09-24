@@ -523,7 +523,7 @@ pub struct AuthorizationCodeGrant {
     ///
     /// This field must match exactly the value passed to the authorization
     /// endpoint.
-    pub redirect_uri: Option<Url>,
+    pub redirect_uri: Option<String>,
 
     /// The code verifier that matches the code challenge that was sent to the
     /// authorization endpoint.
@@ -890,7 +890,7 @@ mod tests {
 
         let req = AccessTokenRequest::AuthorizationCode(AuthorizationCodeGrant {
             code: FIXTURE_CODE.into(),
-            redirect_uri: Some(redirect),
+            redirect_uri: Some(redirect.to_string()),
             code_verifier: None,
         });
 

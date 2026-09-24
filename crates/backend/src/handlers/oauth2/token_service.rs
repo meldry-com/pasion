@@ -427,6 +427,22 @@ pub async fn exchange_authorization_code(
         });
     }
 
+    // Bind the code to the redirect URI used at the authorization endpoint.
+    // Matrix authorization requests always include redirect_uri, and the
+    // token request must repeat that value.
+    if !grant
+        .redirect_uri
+        .as_deref()
+        .is_some_and(|uri| super::redirect_uri_matches_authorized(uri, &authz_grant.redirect_uri))
+    {
+        warn!(
+            oauth2_client.id = %client.id,
+            authorization_grant.id = %authz_grant.id,
+            "Authorization code exchange redirect URI mismatch"
+        );
+        return Err(AuthorizationCodeExchangeError::InvalidGrant(authz_grant.id));
+    }
+
     match (code.pkce.as_ref(), grant.code_verifier.as_ref()) {
         (None, None) => {}
         // We have a challenge but no verifier (or vice-versa)? Bad request.
