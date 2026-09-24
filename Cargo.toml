@@ -147,7 +147,7 @@ indexmap = { version = "2.14.0", features = ["serde"] }
 indoc = "2.0.7"
 insta = { version = "1.47.2", features = ["yaml", "json"] }
 ipnetwork = { version = "0.21", features = ["serde"] }
-itertools = "0.14.0"
+itertools = "0.15.0"
 k256 = { version = "0.13.4", features = ["std"] }
 language-tags = { version = "0.3.2", features = ["serde"] }
 lettre = { version = "0.11.21", default-features = false, features = [
