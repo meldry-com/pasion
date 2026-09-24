@@ -17,8 +17,11 @@ use crate::{
 
 #[derive(Deserialize)]
 pub struct PatchViewerProfileInput {
+    #[serde(default, deserialize_with = "crate::handlers::common::nullable_field")]
     pub display_name: Option<Option<String>>,
+    #[serde(default, deserialize_with = "crate::handlers::common::nullable_field")]
     pub avatar_url: Option<Option<String>>,
+    #[serde(default, deserialize_with = "crate::handlers::common::nullable_field")]
     pub preferred_locale: Option<Option<String>>,
 }
 
@@ -314,5 +317,23 @@ mod tests {
 
         let matrix_user = state.homeserver_admin.query_user(&username).await.unwrap();
         assert_eq!(matrix_user.displayname.as_deref(), Some("Alice Example"));
+
+        // An explicit `null` clears the field, an omitted field is left alone.
+        let request = cookies.with_cookies(
+            Request::patch("/api/v1/viewer/profile")
+                .json(serde_json::json!({ "display_name": null, "avatar_url": null })),
+        );
+        let response = state.request(request).await;
+        response.assert_status(StatusCode::OK);
+        let body: serde_json::Value = response.json();
+        assert_eq!(body["profile"]["display_name"], serde_json::Value::Null);
+        assert_eq!(body["profile"]["avatar_url"], serde_json::Value::Null);
+        assert_eq!(body["profile"]["preferred_locale"], "zh-CN");
+
+        let mut repo = state.repository().await.unwrap();
+        let stored = repo.user().lookup(user.id).await.unwrap().unwrap();
+        assert_eq!(stored.display_name, None);
+        assert_eq!(stored.avatar_url, None);
+        assert_eq!(stored.preferred_locale.as_deref(), Some("zh-CN"));
     }
 }

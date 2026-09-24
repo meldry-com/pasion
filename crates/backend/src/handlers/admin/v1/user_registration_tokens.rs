@@ -7,16 +7,19 @@ use pasion_data::{RepositoryAccess, audit::AdminOperation, user::UserRegistratio
 use rand::distr::{Alphanumeric, SampleString};
 use salvo::prelude::*;
 use schemars::JsonSchema;
-use serde::{Deserialize, Deserializer};
+use serde::Deserialize;
 
 use crate::{
     AppError, CreatedJsonResult, JsonResult,
-    handlers::admin::{
-        CreatedJson,
-        call_context::extract_call_context,
-        model::{Resource, UserRegistrationToken},
-        params::{IncludeCount, extract_pagination, extract_ulid_param},
-        response::{PaginatedResponse, SingleResponse},
+    handlers::{
+        admin::{
+            CreatedJson,
+            call_context::extract_call_context,
+            model::{Resource, UserRegistrationToken},
+            params::{IncludeCount, extract_pagination, extract_ulid_param},
+            response::{PaginatedResponse, SingleResponse},
+        },
+        common::nullable_field,
     },
 };
 
@@ -50,7 +53,10 @@ pub async fn add_token(
         ..
     } = ctx;
     let mut rng = crate::handlers::account::make_rng();
-    let body: AddRequest = req.parse_json().await.map_err(AppError::internal)?;
+    let body: AddRequest = req
+        .parse_json()
+        .await
+        .map_err(|error| AppError::bad_request(error.to_string()))?;
 
     // Fall back to a randomly generated token string
     let token_str = body
@@ -324,15 +330,6 @@ pub async fn unrevoke_token(
     )))
 }
 
-/// Treat any value that is present (including explicit `null`) as `Some`.
-fn nullable_field<'de, T, D>(deserializer: D) -> Result<Option<T>, D::Error>
-where
-    T: Deserialize<'de>,
-    D: Deserializer<'de>,
-{
-    Deserialize::deserialize(deserializer).map(Some)
-}
-
 /// Payload for `PUT /api/admin/v1/user-registration-tokens/{id}`.
 #[derive(Deserialize, JsonSchema)]
 #[serde(rename = "EditUserRegistrationTokenRequest")]
@@ -368,7 +365,10 @@ pub async fn update_token(
         mut repo, clock, ..
     } = ctx;
     let target_id = extract_ulid_param(req)?;
-    let body: UpdateRequest = req.parse_json().await.map_err(AppError::internal)?;
+    let body: UpdateRequest = req
+        .parse_json()
+        .await
+        .map_err(|error| AppError::bad_request(error.to_string()))?;
 
     let mut entry = repo
         .user_registration_token()

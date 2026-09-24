@@ -197,7 +197,10 @@ pub async fn replace_localized_metadata(
         )));
     }
 
-    let body: LocalizedMetadataPayload = req.parse_json().await.map_err(AppError::internal)?;
+    let body: LocalizedMetadataPayload = req
+        .parse_json()
+        .await
+        .map_err(|error| AppError::bad_request(error.to_string()))?;
 
     let metadata = body.into_domain().map_err(|err| {
         AppError::bad_request(format!(

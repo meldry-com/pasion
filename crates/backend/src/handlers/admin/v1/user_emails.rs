@@ -53,7 +53,10 @@ pub async fn add_email(
         ..
     } = ctx;
     let mut rng = crate::handlers::account::make_rng();
-    let body: AddRequest = req.parse_json().await.map_err(AppError::internal)?;
+    let body: AddRequest = req
+        .parse_json()
+        .await
+        .map_err(|error| AppError::bad_request(error.to_string()))?;
 
     // Resolve the target user
     let owner = repo
