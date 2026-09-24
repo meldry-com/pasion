@@ -56,6 +56,7 @@ struct ProviderLookup {
     response_mode: Option<String>,
     additional_parameters: Option<serde_json::Value>,
     forward_login_hint: bool,
+    ui_order: i32,
     on_backchannel_logout: Option<String>,
     source: String,
 }
@@ -235,6 +236,7 @@ impl TryFrom<ProviderLookup> for UpstreamOAuthProvider {
             additional_authorization_parameters,
             forward_login_hint: value.forward_login_hint,
             on_backchannel_logout,
+            ui_order: value.ui_order,
             source,
         })
     }
@@ -356,9 +358,12 @@ impl UpstreamOAuthProviderRepository for PgUpstreamOAuthProviderRepository<'_> {
             discovery_mode: params.discovery_mode.as_str().to_owned(),
             pkce_mode: params.pkce_mode.as_str().to_owned(),
             response_mode: params.response_mode.as_ref().map(ToString::to_string),
-            additional_parameters: None,
+            additional_parameters: serde_json::to_value(
+                &params.additional_authorization_parameters,
+            )
+            .ok(),
             forward_login_hint: params.forward_login_hint,
-            ui_order: 0,
+            ui_order: params.ui_order,
             on_backchannel_logout: Some(params.on_backchannel_logout.as_str().to_owned()),
             created_at,
             source: params.source.as_str().to_owned(),
@@ -395,6 +400,7 @@ impl UpstreamOAuthProviderRepository for PgUpstreamOAuthProviderRepository<'_> {
             additional_authorization_parameters: params.additional_authorization_parameters,
             forward_login_hint: params.forward_login_hint,
             on_backchannel_logout: params.on_backchannel_logout,
+            ui_order: params.ui_order,
             source: params.source,
         })
     }
@@ -499,7 +505,7 @@ impl UpstreamOAuthProviderRepository for PgUpstreamOAuthProviderRepository<'_> {
             source: params.source.as_str().to_owned(),
         };
 
-        let created_at: DateTime<Utc> = diesel::insert_into(upstream_oauth_providers::table)
+        let (created_at, disabled_at) = diesel::insert_into(upstream_oauth_providers::table)
             .values(&new_provider)
             .on_conflict(upstream_oauth_providers::id)
             .do_update()
@@ -555,8 +561,11 @@ impl UpstreamOAuthProviderRepository for PgUpstreamOAuthProviderRepository<'_> {
                     .eq(Some(params.on_backchannel_logout.as_str())),
                 upstream_oauth_providers::source.eq(params.source.as_str()),
             ))
-            .returning(upstream_oauth_providers::created_at)
-            .get_result(self.conn)
+            .returning((
+                upstream_oauth_providers::created_at,
+                upstream_oauth_providers::disabled_at,
+            ))
+            .get_result::<(DateTime<Utc>, Option<DateTime<Utc>>)>(self.conn)
             .await?;
 
         Ok(UpstreamOAuthProvider {
@@ -573,7 +582,7 @@ impl UpstreamOAuthProviderRepository for PgUpstreamOAuthProviderRepository<'_> {
             fetch_userinfo: params.fetch_userinfo,
             userinfo_signed_response_alg: params.userinfo_signed_response_alg,
             created_at,
-            disabled_at: None,
+            disabled_at,
             claims_imports: params.claims_imports,
             authorization_endpoint_override: params.authorization_endpoint_override,
             token_endpoint_override: params.token_endpoint_override,
@@ -585,6 +594,7 @@ impl UpstreamOAuthProviderRepository for PgUpstreamOAuthProviderRepository<'_> {
             additional_authorization_parameters: params.additional_authorization_parameters,
             forward_login_hint: params.forward_login_hint,
             on_backchannel_logout: params.on_backchannel_logout,
+            ui_order: params.ui_order,
             source: params.source,
         })
     }

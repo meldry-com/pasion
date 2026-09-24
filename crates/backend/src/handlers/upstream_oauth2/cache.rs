@@ -478,6 +478,7 @@ mod tests {
             additional_authorization_parameters: Vec::new(),
             forward_login_hint: false,
             on_backchannel_logout: UpstreamOAuthProviderOnBackchannelLogout::DoNothing,
+            ui_order: 0,
             source: pasion_data::UpstreamOAuthProviderSource::Config,
         };
 

@@ -363,6 +363,8 @@ pub struct UpstreamOAuthProvider {
     pub forward_login_hint: bool,
     /// Pasion-original: backchannel logout behaviour
     pub on_backchannel_logout: OnBackchannelLogout,
+    /// Display order on the login page (ascending)
+    pub ui_order: i32,
     /// Where the row originated (config file vs admin API).
     pub source: ProviderSource,
 }

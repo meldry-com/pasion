@@ -556,7 +556,21 @@ impl TestState {
                     .push(
                         Router::with_path("upstream-oauth-providers")
                             .get(upstream_oauth_providers::list_providers)
-                            .push(Router::with_path("{id}").get(upstream_oauth_providers::get_provider)),
+                            .post(upstream_oauth_providers::add_provider)
+                            .push(
+                                Router::with_path("{id}")
+                                    .get(upstream_oauth_providers::get_provider)
+                                    .patch(upstream_oauth_providers::update_provider)
+                                    .delete(upstream_oauth_providers::delete_provider)
+                                    .push(
+                                        Router::with_path("disable")
+                                            .post(upstream_oauth_providers::disable_provider),
+                                    )
+                                    .push(
+                                        Router::with_path("enable")
+                                            .post(upstream_oauth_providers::enable_provider),
+                                    ),
+                            ),
                     )
                     .push(
                         Router::with_path("upstream-oauth-links")
