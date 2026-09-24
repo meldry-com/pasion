@@ -66,7 +66,10 @@ pub async fn risk_action(req: &mut Request, depot: &Depot) -> JsonResult<RiskAct
     } = call_context;
     let id = extract_ulid_param(req)?;
     let mut rng = crate::handlers::account::make_rng();
-    let params: RiskActionRequest = req.parse_json().await.map_err(AppError::internal)?;
+    let params: RiskActionRequest = req
+        .parse_json()
+        .await
+        .map_err(|error| AppError::bad_request(error.to_string()))?;
 
     let user = repo
         .user()
@@ -166,7 +169,10 @@ pub async fn set_password(req: &mut Request, depot: &Depot) -> AppResult<StatusC
     let id = extract_ulid_param(req)?;
     let mut rng = crate::handlers::account::make_rng();
     let password_manager = depot.password_manager()?;
-    let params: SetPasswordRequest = req.parse_json().await.map_err(AppError::internal)?;
+    let params: SetPasswordRequest = req
+        .parse_json()
+        .await
+        .map_err(|error| AppError::bad_request(error.to_string()))?;
 
     if !password_manager.is_enabled() {
         return Err(AppError::forbidden("Password auth is disabled"));

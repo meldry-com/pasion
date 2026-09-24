@@ -649,6 +649,73 @@ async fn test_patch_user_profile_and_state() {
 }
 
 #[tokio::test]
+async fn test_patch_user_null_clears_field() {
+    setup();
+    let pool = pasion_data::test_utils::setup_test_pool().await;
+    let mut state = TestState::from_pool(pool.clone()).await.unwrap();
+    let unique = unique_test_nonce();
+    state.clock.advance(Duration::seconds(unique as i64));
+    let token = state.token_with_scope("urn:pasion:admin").await;
+    let username = format!("alice{}", Ulid::new().to_string().to_lowercase());
+    let mut rng = ChaChaRng::seed_from_u64(unique);
+
+    let mut repo = state.repository().await.unwrap();
+    let user = repo
+        .user()
+        .add(&mut rng, &state.clock, username.clone())
+        .await
+        .unwrap();
+    state
+        .homeserver_admin
+        .provision_user(&ProvisionRequest::new(&user.username, &user.sub))
+        .await
+        .unwrap();
+    repo.save().await.unwrap();
+
+    let request = Request::patch(format!("/api/admin/v1/users/{}", user.id))
+        .bearer(&token)
+        .json(serde_json::json!({
+            "display_name": "Alice Admin",
+            "preferred_locale": "zh-CN"
+        }));
+    state.request(request).await.assert_status(StatusCode::OK);
+
+    // An explicit `null` clears the field, an omitted field is left alone.
+    let request = Request::patch(format!("/api/admin/v1/users/{}", user.id))
+        .bearer(&token)
+        .json(serde_json::json!({ "display_name": null }));
+    let response = state.request(request).await;
+    response.assert_status(StatusCode::OK);
+    let body: serde_json::Value = response.json();
+    assert_eq!(
+        body["data"]["attributes"]["display_name"],
+        serde_json::Value::Null
+    );
+    assert_eq!(body["data"]["attributes"]["preferred_locale"], "zh-CN");
+
+    let mut repo = state.repository().await.unwrap();
+    let stored = repo.user().lookup(user.id).await.unwrap().unwrap();
+    assert_eq!(stored.display_name, None);
+    assert_eq!(stored.preferred_locale.as_deref(), Some("zh-CN"));
+}
+
+#[tokio::test]
+async fn test_add_user_rejects_malformed_body() {
+    setup();
+    let pool = pasion_data::test_utils::setup_test_pool().await;
+    let mut state = TestState::from_pool(pool).await.unwrap();
+    let token = state.token_with_scope("urn:pasion:admin").await;
+
+    let request = Request::post("/api/admin/v1/users")
+        .bearer(&token)
+        .json(serde_json::json!({ "username": 42 }));
+    state
+        .request(request)
+        .await
+        .assert_status(StatusCode::BAD_REQUEST);
+}
+
+#[tokio::test]
 async fn test_patch_user_reactivate() {
     setup();
     let pool = pasion_data::test_utils::setup_test_pool().await;

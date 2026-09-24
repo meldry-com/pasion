@@ -86,7 +86,10 @@ pub async fn set_data(
     let mut rng = crate::handlers::account::make_rng();
     let factory = depot.policy_factory()?;
 
-    let body: SetPolicyDataRequest = req.parse_json().await.map_err(AppError::internal)?;
+    let body: SetPolicyDataRequest = req
+        .parse_json()
+        .await
+        .map_err(|error| AppError::bad_request(error.to_string()))?;
 
     let record = repo.policy_data().set(&mut rng, &clock, body.data).await?;
 

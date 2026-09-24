@@ -82,7 +82,10 @@ pub async fn add_session(
     } = ctx;
     let mut rng = crate::handlers::account::make_rng();
     let homeserver = depot.homeserver()?;
-    let body: AddRequest = req.parse_json().await.map_err(AppError::internal)?;
+    let body: AddRequest = req
+        .parse_json()
+        .await
+        .map_err(|error| AppError::bad_request(error.to_string()))?;
     let owner = personal_session_owner_from_caller(&caller_session);
 
     // Look up the target user

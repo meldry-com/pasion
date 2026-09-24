@@ -15,14 +15,20 @@ use crate::{
             call_context::extract_call_context, model::User, params::extract_ulid_param,
             response::SingleResponse,
         },
-        common::DepotExt,
+        common::{DepotExt, nullable_field},
     },
 };
 
 #[derive(Deserialize, JsonSchema)]
 pub struct UpdateRequest {
+    #[expect(clippy::option_option)]
+    #[serde(default, deserialize_with = "nullable_field")]
     display_name: Option<Option<String>>,
+    #[expect(clippy::option_option)]
+    #[serde(default, deserialize_with = "nullable_field")]
     avatar_url: Option<Option<String>>,
+    #[expect(clippy::option_option)]
+    #[serde(default, deserialize_with = "nullable_field")]
     preferred_locale: Option<Option<String>>,
     admin: Option<bool>,
     locked: Option<bool>,
