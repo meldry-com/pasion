@@ -56,6 +56,61 @@ pub mod userinfo;
 /// WebFinger discovery.
 pub mod webfinger;
 
+/// Compare the redirect URI without URL normalization. An explicitly written
+/// port 80 is the one exception: URL parsing drops it, while Matrix permits
+/// any loopback port at authorization time.
+fn redirect_uri_matches_authorized(raw: &str, authorized: &url::Url) -> bool {
+    if raw == authorized.as_str() {
+        return true;
+    }
+    if authorized.scheme() != "http" || authorized.port().is_some() {
+        return false;
+    }
+    let Some(host) = authorized.host_str() else {
+        return false;
+    };
+    if host != "localhost" && host != "127.0.0.1" && host != "[::1]" {
+        return false;
+    }
+    let prefix = format!("http://{host}");
+    authorized
+        .as_str()
+        .strip_prefix(&prefix)
+        .is_some_and(|suffix| raw == format!("{prefix}:80{suffix}"))
+}
+
+#[cfg(test)]
+mod redirect_uri_tests {
+    use super::*;
+
+    #[test]
+    fn redirect_uri_comparison_is_strict_except_loopback_port() {
+        let web = url::Url::parse("https://example.org/").unwrap();
+        assert!(redirect_uri_matches_authorized(
+            "https://example.org/",
+            &web
+        ));
+        assert!(!redirect_uri_matches_authorized(
+            "https://example.org",
+            &web
+        ));
+        assert!(!redirect_uri_matches_authorized(
+            "https://example.org:443/",
+            &web
+        ));
+
+        let loopback = url::Url::parse("http://127.0.0.1/callback").unwrap();
+        assert!(redirect_uri_matches_authorized(
+            "http://127.0.0.1:80/callback",
+            &loopback
+        ));
+        assert!(!redirect_uri_matches_authorized(
+            "HTTP://127.0.0.1:80/callback",
+            &loopback
+        ));
+    }
+}
+
 #[derive(Debug, Error)]
 #[error(transparent)]
 pub(crate) enum IdTokenSignatureError {

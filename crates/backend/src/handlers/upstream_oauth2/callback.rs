@@ -606,7 +606,7 @@ pub async fn handler(
                 AccessTokenRequest::AuthorizationCode(
                     oauth2_types::requests::AuthorizationCodeGrant {
                         code: code.clone(),
-                        redirect_uri: Some(redirect_uri),
+                        redirect_uri: Some(redirect_uri.to_string()),
                         code_verifier: session.code_challenge_verifier.clone(),
                     },
                 ),

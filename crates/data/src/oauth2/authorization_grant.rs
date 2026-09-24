@@ -158,6 +158,8 @@ pub struct AuthorizationGrant {
     pub code: Option<AuthorizationCode>,
     pub client_id: Ulid,
     pub redirect_uri: Url,
+    #[serde(skip)]
+    pub raw_redirect_uri: String,
     pub scope: Scope,
     pub state: Option<String>,
     pub nonce: Option<String>,
@@ -259,6 +261,7 @@ impl AuthorizationGrant {
             }),
             client_id: crate::new_id(now, rng),
             redirect_uri: Url::parse("http://localhost:8080").unwrap(),
+            raw_redirect_uri: "http://localhost:8080/".to_owned(),
             scope: Scope::from_iter([OPENID, PROFILE]),
             state: Some(generate_alphanumeric(rng, 10)),
             nonce: Some(generate_alphanumeric(rng, 10)),

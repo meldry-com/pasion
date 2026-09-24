@@ -80,7 +80,11 @@ fn build_discovery(depot: &Depot) -> DiscoveryResponse {
     let userinfo_endpoint = Some(url_builder.oidc_userinfo_endpoint());
     let registration_endpoint = Some(url_builder.oauth_registration_endpoint());
 
-    let scopes_supported = Some(vec![scope::OPENID.to_string(), scope::EMAIL.to_string()]);
+    let scopes_supported = Some(vec![
+        scope::OPENID.to_string(),
+        scope::EMAIL.to_string(),
+        "urn:matrix:client:api:*".to_owned(),
+    ]);
 
     let response_types_supported = Some(vec![
         OAuthAuthorizationEndpointResponseType::Code.into(),
