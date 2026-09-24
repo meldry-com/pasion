@@ -67,7 +67,9 @@ handles the legacy Matrix SSO callback and login-token exchange. Pasion itself
 does not serve the Matrix `/login`, `/logout`, or `/refresh` compatibility routes;
 its `compat` listener resource is currently a no-op. The upstream providers
 configured in Pasion are presented on Pasion's browser login page, not in the
-OAuth authorization-server metadata.
+OAuth authorization-server metadata. Administrators can manage database-backed
+upstream providers from Padmin's **Pasion → Upstream Providers** page; providers
+defined in Pasion's config file remain read-only there.
 
 
 ## Migrating older Palpo configuration
