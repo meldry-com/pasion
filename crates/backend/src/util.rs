@@ -153,6 +153,16 @@ pub fn mailer_from_config(
             provider.api_key.clone(),
             provider.headers.clone(),
         ),
+        EmailProviderConfig::PaloudInternal(provider) => MailTransport::paloud_internal(
+            crate::reqwest_client(),
+            provider
+                .url
+                .parse()
+                .context("invalid email configuration: invalid provider.url")?,
+            provider.key_id.clone(),
+            provider.secret.clone(),
+            provider.workspace.clone(),
+        ),
         EmailProviderConfig::Resend(provider) => MailTransport::resend(
             crate::reqwest_client(),
             provider
@@ -232,6 +242,15 @@ pub fn sms_sender_from_config(config: &SmsConfig) -> Result<SmsSender, anyhow::E
             provider.sdk_app_id.clone(),
             provider.sign_name.clone(),
             provider.template_id.clone(),
+        ),
+        SmsProviderConfig::PaloudInternal(provider) => SmsTransport::paloud_internal(
+            provider
+                .url
+                .parse()
+                .context("invalid sms configuration: invalid provider.url")?,
+            provider.key_id.clone(),
+            provider.secret.clone(),
+            provider.workspace.clone(),
         ),
     };
 

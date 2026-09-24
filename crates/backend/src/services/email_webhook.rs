@@ -157,7 +157,8 @@ impl EmailWebhookService {
             EmailProviderConfig::Blackhole
             | EmailProviderConfig::Smtp(_)
             | EmailProviderConfig::Sendmail(_)
-            | EmailProviderConfig::HttpWebhook(_) => Ok(None),
+            | EmailProviderConfig::HttpWebhook(_)
+            | EmailProviderConfig::PaloudInternal(_) => Ok(None),
         }
     }
 

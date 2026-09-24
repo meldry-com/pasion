@@ -1,6 +1,15 @@
 //! Email transport backends
 
-use std::{collections::BTreeMap, ffi::OsString, fmt::Write as _, num::NonZeroU16, sync::Arc};
+use std::{
+    collections::BTreeMap,
+    ffi::OsString,
+    fmt::Write as _,
+    num::NonZeroU16,
+    sync::{
+        Arc,
+        atomic::{AtomicU64, Ordering},
+    },
+};
 
 use async_trait::async_trait;
 use base64::{Engine as _, engine::general_purpose::STANDARD as BASE64};
@@ -159,6 +168,24 @@ impl Transport {
             url,
             api_key,
             headers,
+        })
+    }
+
+    /// Construct a Paloud internal notification API transport.
+    #[must_use]
+    pub fn paloud_internal(
+        client: Client,
+        url: Url,
+        key_id: String,
+        secret: String,
+        workspace: Option<String>,
+    ) -> Self {
+        Self::new(PaloudInternalProvider {
+            client,
+            url,
+            key_id,
+            secret,
+            workspace,
         })
     }
 
@@ -407,6 +434,88 @@ impl EmailProvider for HttpWebhookProvider {
         for (name, value) in &self.headers {
             request = request.header(name, value);
         }
+
+        execute_provider_request(request).await
+    }
+
+    async fn test_connection(&self, _from: &Mailbox) -> Result<(), Error> {
+        Ok(())
+    }
+}
+
+struct PaloudInternalProvider {
+    client: Client,
+    url: Url,
+    key_id: String,
+    secret: String,
+    workspace: Option<String>,
+}
+
+#[derive(Serialize)]
+struct PaloudInternalRequest<'a> {
+    #[serde(skip_serializing_if = "Option::is_none")]
+    workspace: Option<&'a str>,
+    recipient: &'a str,
+    subject: &'a str,
+    body: &'a str,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    idempotency_key: Option<&'a str>,
+}
+
+#[async_trait]
+impl EmailProvider for PaloudInternalProvider {
+    fn binding_key(&self) -> &'static str {
+        "email.paloud_internal"
+    }
+
+    async fn send(&self, email: &OutboundEmail) -> Result<SendResult, Error> {
+        let recipient = match email.to.as_slice() {
+            [recipient] => recipient.to_string(),
+            _ => {
+                return Err(Error::ProviderError {
+                    status: 400,
+                    code: Some("unsupported_recipient_count".to_owned()),
+                    body: "Paloud internal email transport requires exactly one recipient"
+                        .to_owned(),
+                    retryable: false,
+                });
+            }
+        };
+        let payload = PaloudInternalRequest {
+            workspace: self
+                .workspace
+                .as_deref()
+                .filter(|value| !value.trim().is_empty()),
+            recipient: &recipient,
+            subject: &email.subject,
+            body: email.html_body.as_deref().unwrap_or(&email.text_body),
+            idempotency_key: email
+                .tags
+                .get("pasion_notification_request_id")
+                .map(String::as_str)
+                .filter(|value| !value.trim().is_empty()),
+        };
+        let body = serde_json::to_vec(&payload)?;
+        let timestamp = Utc::now().timestamp();
+        let nonce = paloud_internal_nonce(timestamp);
+        let signature = sign_paloud_internal_request(
+            &self.secret,
+            Method::POST.as_str(),
+            self.url.path(),
+            timestamp,
+            &nonce,
+            &body,
+        );
+
+        let request = self
+            .client
+            .post(self.url.clone())
+            .header("X-Paloud-Key-Id", &self.key_id)
+            .header("X-Paloud-Timestamp", timestamp.to_string())
+            .header("X-Paloud-Nonce", nonce)
+            .header("X-Paloud-Signature", signature)
+            .header("Content-Type", "application/json")
+            .body(body);
 
         execute_provider_request(request).await
     }
@@ -1311,6 +1420,37 @@ fn hex_sha256(data: &[u8]) -> String {
     hex::encode(Sha256::digest(data))
 }
 
+fn paloud_internal_nonce(timestamp: i64) -> String {
+    static COUNTER: AtomicU64 = AtomicU64::new(1);
+    format!(
+        "{timestamp:x}-{:x}-{:x}",
+        std::process::id(),
+        COUNTER.fetch_add(1, Ordering::Relaxed)
+    )
+}
+
+fn sign_paloud_internal_request(
+    secret: &str,
+    method: &str,
+    path: &str,
+    timestamp: i64,
+    nonce: &str,
+    body: &[u8],
+) -> String {
+    let payload = format!(
+        "{}\n{}\n{}\n{}\n{}",
+        method.trim().to_ascii_uppercase(),
+        path.trim(),
+        timestamp,
+        nonce.trim(),
+        hex_sha256(body)
+    );
+    let mut mac =
+        HmacSha256::new_from_slice(secret.as_bytes()).expect("HMAC accepts arbitrary key lengths");
+    mac.update(payload.as_bytes());
+    hex::encode(mac.finalize().into_bytes())
+}
+
 fn hmac_sha256(key: &[u8], data: &[u8]) -> Vec<u8> {
     let mut mac = HmacSha256::new_from_slice(key).expect("HMAC accepts arbitrary key lengths");
     mac.update(data);
@@ -1468,6 +1608,62 @@ mod tests {
         );
 
         assert_eq!(code.as_deref(), Some("personalizations.0.to.0.email"));
+    }
+
+    #[tokio::test]
+    async fn paloud_internal_transport_signs_request() {
+        let mock_server = MockServer::start().await;
+        let email = OutboundEmail {
+            from: "Pasion <noreply@example.com>".parse().unwrap(),
+            reply_to: None,
+            to: vec!["alice@example.com".parse().unwrap()],
+            subject: "Verify your email".to_owned(),
+            text_body: "Plain body".to_owned(),
+            html_body: Some("<p>HTML body</p>".to_owned()),
+            headers: BTreeMap::new(),
+            tags: BTreeMap::from([(
+                "pasion_notification_request_id".to_owned(),
+                "req-123".to_owned(),
+            )]),
+        };
+
+        Mock::given(method("POST"))
+            .and(path("/api/v1/internal/notifications/email/send"))
+            .and(header("x-paloud-key-id", "pasion-control-dev"))
+            .and(header_exists("x-paloud-timestamp"))
+            .and(header_exists("x-paloud-nonce"))
+            .and(header_exists("x-paloud-signature"))
+            .and(body_partial_json(json!({
+                "workspace": "demo",
+                "recipient": "alice@example.com",
+                "subject": "Verify your email",
+                "body": "<p>HTML body</p>",
+                "idempotency_key": "req-123"
+            })))
+            .respond_with(ResponseTemplate::new(200).set_body_json(json!({
+                "status": "accepted",
+                "delivery": {
+                    "provider_message_id": "provider-123"
+                }
+            })))
+            .expect(1)
+            .mount(&mock_server)
+            .await;
+
+        let provider = PaloudInternalProvider {
+            client: test_client(),
+            url: Url::parse(&mock_server.uri())
+                .unwrap()
+                .join("/api/v1/internal/notifications/email/send")
+                .unwrap(),
+            key_id: "pasion-control-dev".to_owned(),
+            secret: "super-secret".to_owned(),
+            workspace: Some("demo".to_owned()),
+        };
+
+        let result = provider.send(&email).await.unwrap();
+
+        assert_eq!(result.provider_message_id, None);
     }
 
     #[tokio::test]

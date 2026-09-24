@@ -41,9 +41,10 @@ pub use self::{
     email::{
         AwsSesEmailProviderConfig, AwsSesWebhookConfig, BrevoEmailProviderConfig,
         BrevoWebhookConfig, EmailConfig, EmailProviderConfig, EmailSmtpMode,
-        HttpWebhookEmailProviderConfig, ResendEmailProviderConfig, ResendWebhookConfig,
-        SendgridEmailProviderConfig, SendgridWebhookConfig, SendmailEmailProviderConfig,
-        SmtpEmailProviderConfig, TwilioEmailProviderConfig,
+        HttpWebhookEmailProviderConfig, PaloudInternalEmailProviderConfig,
+        ResendEmailProviderConfig, ResendWebhookConfig, SendgridEmailProviderConfig,
+        SendgridWebhookConfig, SendmailEmailProviderConfig, SmtpEmailProviderConfig,
+        TwilioEmailProviderConfig,
     },
     experimental::ExperimentalConfig,
     http::{
@@ -58,8 +59,8 @@ pub use self::{
     rate_limiting::{RateLimiterConfiguration, RateLimitingConfig},
     secrets::SecretsConfig,
     sms::{
-        AliyunSmsProviderConfig, HttpWebhookSmsProviderConfig, SmsConfig, SmsProviderConfig,
-        TencentCloudSmsProviderConfig, TwilioSmsProviderConfig,
+        AliyunSmsProviderConfig, HttpWebhookSmsProviderConfig, PaloudInternalSmsProviderConfig,
+        SmsConfig, SmsProviderConfig, TencentCloudSmsProviderConfig, TwilioSmsProviderConfig,
     },
     storage::StorageConfig,
     telemetry::{
