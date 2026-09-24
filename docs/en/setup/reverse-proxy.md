@@ -64,11 +64,9 @@ server {
 
 ## Compatibility layer
 
-For the compatibility layer, the following endpoints need to be proxied to the service:
-
- - `/_matrix/client/*/login`
- - `/_matrix/client/*/logout`
- - `/_matrix/client/*/refresh`
+Palpo handles the Matrix client API, including the legacy login endpoints and
+`auth_metadata`. Forward `/_matrix/client/*` to Palpo. Pasion serves its OAuth
+and browser endpoints on the separate authentication-service hostname.
 
 For example, a nginx configuration could look like:
 
@@ -78,19 +76,6 @@ server {
     listen [::]:443 ssl http2;
 
     server_name matrix.example.com;
-
-    # Forward to the auth service
-    location ~ ^/_matrix/client/(.*)/(login|logout|refresh) {
-        proxy_http_version 1.1;
-        proxy_pass http://localhost:8080;
-        # OR via the Unix domain socket
-        #proxy_pass http://unix:/var/run/pasion.sock;
-
-        # Forward the client IP address
-        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-        # or, using the PROXY protocol
-        #proxy_protocol on;
-    }
 
     # Forward to Palpo
     # as per https://palpo-im.github.io/palpo/latest/reverse_proxy.html#nginx
