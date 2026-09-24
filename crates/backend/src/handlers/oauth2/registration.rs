@@ -250,6 +250,37 @@ fn validate_matrix_redirect_uris(metadata: &VerifiedClientMetadata) -> Result<()
     Ok(())
 }
 
+/// `Url` removes an explicitly written default HTTP port. Inspect the raw
+/// registration value so `http://localhost:80` cannot pass as portless.
+fn loopback_redirect_has_explicit_port(uri: &str) -> bool {
+    let Ok(parsed) = Url::parse(uri) else {
+        return false;
+    };
+    if parsed.scheme() != "http"
+        || !(matches!(parsed.host_str(), Some("localhost" | "127.0.0.1"))
+            || matches!(parsed.host(), Some(url::Host::Ipv6(ip)) if ip.is_loopback()))
+    {
+        return false;
+    }
+    let Some((scheme, rest)) = uri.split_once("://") else {
+        return false;
+    };
+    if !scheme.eq_ignore_ascii_case("http") {
+        return false;
+    }
+    let authority = rest.split(['/', '?', '#']).next().unwrap_or_default();
+    let host_port = authority
+        .rsplit_once('@')
+        .map_or(authority, |(_, tail)| tail);
+    if let Some(after_bracket) = host_port.strip_prefix('[') {
+        after_bracket
+            .split_once(']')
+            .is_some_and(|(_, suffix)| suffix.starts_with(':'))
+    } else {
+        host_port.contains(':')
+    }
+}
+
 #[handler]
 #[tracing::instrument(name = "handlers.oauth2.registration.post", skip_all)]
 pub async fn post(req: &mut Request, depot: &Depot, res: &mut Response) {
@@ -284,10 +315,25 @@ async fn handle_post(req: &mut Request, depot: &Depot) -> Result<RouteResponse, 
     let user_agent: Option<String> = req.header("user-agent");
 
     // Parse the JSON body
-    let body: ClientMetadata = req
+    let raw_body: serde_json::Value = req
         .parse_json()
         .await
         .map_err(|e| RouteError::InvalidJson(e.to_string()))?;
+    if raw_body
+        .get("redirect_uris")
+        .and_then(serde_json::Value::as_array)
+        .is_some_and(|uris| {
+            uris.iter()
+                .filter_map(serde_json::Value::as_str)
+                .any(loopback_redirect_has_explicit_port)
+        })
+    {
+        return Err(RouteError::InvalidMatrixRedirectUri(
+            "native loopback redirect_uri must not specify a port".into(),
+        ));
+    }
+    let body: ClientMetadata =
+        serde_json::from_value(raw_body).map_err(|e| RouteError::InvalidJson(e.to_string()))?;
 
     // Sort the properties to ensure a stable serialisation order for hashing
     let body = body.sorted();
@@ -581,6 +627,25 @@ mod tests {
                 "{uri}"
             );
         }
+    }
+
+    #[test]
+    fn matrix_native_redirects_reject_even_default_http_port() {
+        assert!(loopback_redirect_has_explicit_port(
+            "http://localhost:80/callback"
+        ));
+        assert!(loopback_redirect_has_explicit_port(
+            "http://127.0.0.1:80/callback"
+        ));
+        assert!(loopback_redirect_has_explicit_port(
+            "http://[::1]:80/callback"
+        ));
+        assert!(loopback_redirect_has_explicit_port(
+            "HTTP://localhost:80/callback"
+        ));
+        assert!(!loopback_redirect_has_explicit_port(
+            "http://localhost/callback"
+        ));
     }
 
     // Integration tests would need to be updated for Salvo's test utilities
