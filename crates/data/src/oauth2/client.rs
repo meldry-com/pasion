@@ -486,5 +486,10 @@ mod tests {
             &Url::parse("http://localhost").unwrap(),
             registered_uris
         ));
+
+        assert!(uri_matches_one_of(
+            &Url::parse("http://[::1]:3568/callback").unwrap(),
+            &[Url::parse("http://[::1]/callback").unwrap()]
+        ));
     }
 }
