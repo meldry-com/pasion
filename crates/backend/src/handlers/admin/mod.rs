@@ -3,7 +3,9 @@
 //! Provides a JSON:API-style REST interface for managing users, sessions,
 //! OAuth 2.0 clients, upstream providers, and policy data. All endpoints
 //! require the `urn:pasion:admin` scope (the legacy `urn:mas:admin` scope
-//! is also accepted for backward compatibility).
+//! is also accepted for backward compatibility) *and* a requester whose
+//! `can_request_admin` flag is currently set, so revoking the flag cuts off
+//! already-issued tokens immediately.
 //!
 //! The API specification is available as an OpenAPI document served by the
 //! [`swagger`] handler.
@@ -54,6 +56,55 @@ pub fn has_admin_scope(scope: &oauth2_types::scope::Scope) -> bool {
     scope.contains(ADMIN_SCOPE) || scope.contains(ADMIN_SCOPE_LEGACY)
 }
 
+/// Returns `true` if the scope token grants administrative power over Pasion
+/// or the homeserver (`urn:pasion:admin`, `urn:mas:admin`,
+/// `urn:palpo:admin:*`, `urn:synapse:admin:*`).
+fn is_privileged_scope_token(token: &str) -> bool {
+    token == ADMIN_SCOPE
+        || token == ADMIN_SCOPE_LEGACY
+        || token.starts_with("urn:palpo:admin")
+        || token.starts_with("urn:synapse:admin")
+}
+
+/// Remove every administrative scope token from `scope` unless `is_admin`.
+///
+/// Used when reporting a token's scope to resource servers (introspection),
+/// so a demoted user's still-valid token no longer advertises admin access.
+#[must_use]
+pub fn strip_admin_scope_unless(
+    scope: oauth2_types::scope::Scope,
+    is_admin: bool,
+) -> oauth2_types::scope::Scope {
+    if is_admin {
+        return scope;
+    }
+    scope
+        .iter()
+        .filter(|token| !is_privileged_scope_token(token.as_str()))
+        .cloned()
+        .collect()
+}
+
+/// Returns `true` if the scope contains any administrative scope token.
+///
+/// Such scopes may only ever be held by a session whose user has
+/// `can_request_admin` set, see [`may_hold_admin_scope`].
+pub fn requires_admin(scope: &oauth2_types::scope::Scope) -> bool {
+    scope
+        .iter()
+        .any(|token| is_privileged_scope_token(token.as_str()))
+}
+
+/// The single source of truth for "is this user an administrator".
+///
+/// Administrative scopes are granted to, and honoured for, a session only
+/// when it is backed by a user whose `can_request_admin` flag is set. There
+/// is deliberately no bypass for user-less sessions (client credentials):
+/// the policy engine is not trusted to gate these scopes.
+pub fn may_hold_admin_scope(user: Option<&pasion_data::User>) -> bool {
+    user.is_some_and(|user| user.can_request_admin)
+}
+
 /// JSON response wrapper that sets HTTP 201 Created status code.
 ///
 /// Drop-in replacement for `(StatusCode, Json<T>)` tuples that works with
@@ -82,3 +133,35 @@ impl<T: Serialize + Send + salvo::oapi::ToSchema + 'static> salvo::oapi::Endpoin
 }
 
 pub(crate) mod audit_helper;
+
+#[cfg(test)]
+mod tests {
+    use oauth2_types::scope::Scope;
+
+    use super::{requires_admin, strip_admin_scope_unless};
+
+    #[test]
+    fn test_requires_admin() {
+        let scope = |s: &str| s.parse::<Scope>().unwrap();
+        assert!(requires_admin(&scope("urn:pasion:admin")));
+        assert!(requires_admin(&scope("openid urn:mas:admin")));
+        assert!(requires_admin(&scope("urn:palpo:admin:users")));
+        assert!(requires_admin(&scope("urn:synapse:admin:*")));
+        assert!(!requires_admin(&scope("openid")));
+        assert!(!requires_admin(&scope(
+            "openid urn:matrix:client:api:* urn:matrix:client:device:ABCDEF"
+        )));
+    }
+
+    #[test]
+    fn test_strip_admin_scope_unless() {
+        let scope: Scope = "openid urn:pasion:admin urn:palpo:admin:users urn:matrix:client:api:*"
+            .parse()
+            .unwrap();
+        assert_eq!(strip_admin_scope_unless(scope.clone(), true), scope);
+        assert_eq!(
+            strip_admin_scope_unless(scope, false).to_string(),
+            "openid urn:matrix:client:api:*"
+        );
+    }
+}

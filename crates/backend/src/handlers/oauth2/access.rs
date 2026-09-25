@@ -31,6 +31,9 @@ pub struct AuthorizationConsentInfo {
     pub client: Client,
     pub matrix_user: MatrixUser,
     pub policy_violation: bool,
+    /// The request asks for administrative scopes but the user is not an
+    /// administrator. Implies `policy_violation`.
+    pub admin_required: bool,
 }
 
 /// Simplified projection used by the REST API consent endpoints.
@@ -41,6 +44,7 @@ pub struct ConsentScreen {
     pub user_mxid: String,
     pub user_display_name: Option<String>,
     pub policy_violation: bool,
+    pub admin_required: bool,
 }
 
 impl From<AuthorizationConsentInfo> for ConsentScreen {
@@ -52,6 +56,7 @@ impl From<AuthorizationConsentInfo> for ConsentScreen {
             user_mxid: info.matrix_user.mxid,
             user_display_name: info.matrix_user.display_name,
             policy_violation: info.policy_violation,
+            admin_required: info.admin_required,
         }
     }
 }
@@ -135,6 +140,7 @@ pub async fn load_authorization_consent(
         .await?
         .ok_or(OAuth2AccessError::NotFound)?;
 
+    let admin_required = !admin_scope_allowed(&browser_session.user, &grant.scope);
     let policy_violation = has_policy_violation(
         &mut repo,
         policy_factory,
@@ -160,6 +166,7 @@ pub async fn load_authorization_consent(
             display_name: user_display_name,
         },
         policy_violation,
+        admin_required,
     })
 }
 
@@ -398,6 +405,7 @@ pub async fn load_device_consent(
         user_mxid: homeserver.mxid(localpart),
         user_display_name,
         policy_violation,
+        admin_required: !admin_scope_allowed(&browser_session.user, &grant.scope),
     })
 }
 
@@ -478,6 +486,12 @@ async fn has_policy_violation(
     requester_ip: Option<IpAddr>,
     user_agent: Option<String>,
 ) -> Result<bool, OAuth2AccessError> {
+    // Administrative scopes are gated here, in code, regardless of what the
+    // configured policy says: only users flagged `can_request_admin` get them.
+    if !admin_scope_allowed(&browser_session.user, scope) {
+        return Ok(true);
+    }
+
     let mut policy: Policy = policy_factory
         .instantiate()
         .await
@@ -502,6 +516,16 @@ async fn has_policy_violation(
         .map_err(|error| OAuth2AccessError::Internal(Box::new(error)))?;
 
     Ok(!eval_result.valid())
+}
+
+/// Whether `user` may be granted `scope`, as far as administrative scopes are
+/// concerned.
+pub(crate) fn admin_scope_allowed(
+    user: &pasion_data::User,
+    scope: &oauth2_types::scope::Scope,
+) -> bool {
+    !crate::handlers::admin::requires_admin(scope)
+        || crate::handlers::admin::may_hold_admin_scope(Some(user))
 }
 
 async fn fetch_display_name(homeserver: &dyn HomeserverAdmin, localpart: &str) -> Option<String> {

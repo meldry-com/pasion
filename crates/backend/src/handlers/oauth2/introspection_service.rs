@@ -16,7 +16,7 @@ use pasion_iana::oauth::OAuthTokenTypeHint;
 use thiserror::Error;
 use ulid::Ulid;
 
-use crate::handlers::ActivityTracker;
+use crate::handlers::{ActivityTracker, admin::strip_admin_scope_unless};
 
 const UNSTABLE_API_SCOPE: ScopeToken =
     ScopeToken::from_static("urn:matrix:org.matrix.msc2967.client:api:*");
@@ -148,7 +148,7 @@ pub async fn introspect_token(
 
             // The session might not have a user on it (for Client Credentials
             // grants for example), so we're optionally fetching the user
-            let (sub, username) = if let Some(user_id) = session.user_id {
+            let (sub, username, is_admin) = if let Some(user_id) = session.user_id {
                 let user = repo
                     .user()
                     .lookup(user_id)
@@ -159,16 +159,16 @@ pub async fn introspect_token(
                     return Err(IntrospectionError::InvalidUser(user.id));
                 }
 
-                (Some(user.sub), Some(user.username))
+                (Some(user.sub), Some(user.username), user.can_request_admin)
             } else {
-                (None, None)
+                (None, None, false)
             };
 
             activity_tracker
                 .record_oauth2_session(clock, &session, ip)
                 .await;
 
-            let scope = normalize_scope(session.scope);
+            let scope = normalize_scope(strip_admin_scope_unless(session.scope, is_admin));
 
             IntrospectionResponse {
                 active: true,
@@ -215,7 +215,7 @@ pub async fn introspect_token(
 
             // The session might not have a user on it (for Client Credentials
             // grants for example), so we're optionally fetching the user
-            let (sub, username) = if let Some(user_id) = session.user_id {
+            let (sub, username, is_admin) = if let Some(user_id) = session.user_id {
                 let user = repo
                     .user()
                     .lookup(user_id)
@@ -226,16 +226,16 @@ pub async fn introspect_token(
                     return Err(IntrospectionError::InvalidUser(user.id));
                 }
 
-                (Some(user.sub), Some(user.username))
+                (Some(user.sub), Some(user.username), user.can_request_admin)
             } else {
-                (None, None)
+                (None, None, false)
             };
 
             activity_tracker
                 .record_oauth2_session(clock, &session, ip)
                 .await;
 
-            let scope = normalize_scope(session.scope);
+            let scope = normalize_scope(strip_admin_scope_unless(session.scope, is_admin));
 
             IntrospectionResponse {
                 active: true,
@@ -288,6 +288,7 @@ pub async fn introspect_token(
                 return Err(IntrospectionError::InvalidUser(actor_user.id));
             }
 
+            let mut is_admin = actor_user.can_request_admin;
             let client_id = match session.owner {
                 PersonalSessionOwner::User(owner_user_id) => {
                     let owner_user = repo
@@ -299,6 +300,7 @@ pub async fn introspect_token(
                     if !owner_user.is_valid() {
                         return Err(IntrospectionError::InvalidUser(owner_user.id));
                     }
+                    is_admin &= owner_user.can_request_admin;
 
                     None
                 }
@@ -317,7 +319,7 @@ pub async fn introspect_token(
                 .record_personal_session(clock, &session, ip)
                 .await;
 
-            let scope = normalize_scope(session.scope);
+            let scope = normalize_scope(strip_admin_scope_unless(session.scope, is_admin));
 
             IntrospectionResponse {
                 active: true,

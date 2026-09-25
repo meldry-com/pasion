@@ -1,4 +1,7 @@
-use pasion_data::{BoxRepository, RepositoryAccess, RepositoryError, SiteConfig, user::UserFilter};
+use pasion_data::{
+    BoxRepository, RepositoryAccess, RepositoryError, SiteConfig,
+    queue::QueueJobRepositoryExt as _, user::UserFilter,
+};
 use salvo::{oapi::ToSchema, prelude::*};
 use serde::{Deserialize, Serialize};
 
@@ -102,6 +105,15 @@ pub async fn post_claim(
     })?;
 
     if outcome == ClaimBootstrapAdminOutcome::Claimed {
+        // Mirror the new admin flag onto the homeserver.
+        let mut rng = crate::handlers::account::make_rng();
+        repo.queue_job()
+            .schedule_job(
+                &mut rng,
+                &clock,
+                pasion_data::queue::ProvisionUserJob::new_for_id(user.id),
+            )
+            .await?;
         repo.save().await?;
     }
 

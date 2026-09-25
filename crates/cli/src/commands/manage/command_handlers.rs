@@ -170,6 +170,13 @@ pub(super) async fn handle_promote_admin(
 
     let user = repo.user().set_can_request_admin(user, true).await?;
 
+    // Mirror the new admin flag onto the homeserver.
+    let clock = SystemClock::default();
+    let mut rng = rand_chacha::ChaChaRng::from_entropy();
+    repo.queue_job()
+        .schedule_job(&mut rng, &clock, ProvisionUserJob::new(&user))
+        .await?;
+
     info!(%user.id, %user.username, "User promoted to admin");
 
     Ok(ExitCode::SUCCESS)
@@ -197,6 +204,13 @@ pub(super) async fn handle_demote_admin(
         .context("User not found")?;
 
     let user = repo.user().set_can_request_admin(user, false).await?;
+
+    // Mirror the new admin flag onto the homeserver.
+    let clock = SystemClock::default();
+    let mut rng = rand_chacha::ChaChaRng::from_entropy();
+    repo.queue_job()
+        .schedule_job(&mut rng, &clock, ProvisionUserJob::new(&user))
+        .await?;
 
     info!(%user.id, %user.username, "User is no longer admin");
 

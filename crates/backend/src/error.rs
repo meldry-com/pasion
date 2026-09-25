@@ -214,6 +214,7 @@ impl From<AdminCallContextRejection> for AppError {
             | AdminCallContextRejection::SessionRevoked
             | AdminCallContextRejection::UserLocked
             | AdminCallContextRejection::MissingScope => Self::unauthorized(error.to_string()),
+            AdminCallContextRejection::NotAdmin => Self::forbidden(error.to_string()),
             AdminCallContextRejection::RepositorySetup(source) => Self::with_source(
                 StatusCode::INTERNAL_SERVER_ERROR,
                 "Couldn't load the database repository",

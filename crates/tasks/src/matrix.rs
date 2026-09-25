@@ -52,6 +52,21 @@ impl RunnableJob for ProvisionUserJob {
             .context("user not found")
             .map_err(JobError::fail)?;
 
+        // Serialize with admin changes to this user (which hold the same lock
+        // until they commit) and read the user again under the lock, so a
+        // stale admin flag is never pushed over a newer one.
+        repo.user()
+            .acquire_lock_for_sync(&user)
+            .await
+            .map_err(JobError::retry)?;
+        let user = repo
+            .user()
+            .lookup(self.user_id())
+            .await
+            .map_err(JobError::retry)?
+            .context("user not found")
+            .map_err(JobError::fail)?;
+
         // Collect verified email addresses
         let emails: Vec<String> = repo
             .user_email()
@@ -73,9 +88,9 @@ impl RunnableJob for ProvisionUserJob {
             req = req.set_avatar_url(avatar_url.to_owned());
         }
 
-        if self.is_admin() {
-            req = req.set_admin();
-        }
+        // Always send the admin flag so that revoking `can_request_admin`
+        // also revokes the homeserver admin flag.
+        req = req.set_admin(user.can_request_admin);
 
         let created = matrix.provision_user(&req).await.map_err(JobError::retry)?;
 

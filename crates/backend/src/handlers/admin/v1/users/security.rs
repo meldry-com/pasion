@@ -77,6 +77,28 @@ pub async fn risk_action(req: &mut Request, depot: &Depot) -> JsonResult<RiskAct
         .await?
         .ok_or_else(|| AppError::not_found(format!("User ID {id} not found")))?;
 
+    // Locking the last active administrator would lock everybody out of the
+    // admin dashboard.
+    if matches!(params.action.as_str(), "lock" | "force_password_reset")
+        && user.can_request_admin
+        && user.is_valid()
+    {
+        repo.user().acquire_bootstrap_admin_lock().await?;
+        let active_admins = repo
+            .user()
+            .count(
+                pasion_data::user::UserFilter::new()
+                    .can_request_admin_only()
+                    .active_only(),
+            )
+            .await?;
+        if active_admins <= 1 {
+            return Err(AppError::conflict(
+                "Cannot remove the last active administrator",
+            ));
+        }
+    }
+
     let mut sessions_terminated = None;
 
     let user = match params.action.as_str() {

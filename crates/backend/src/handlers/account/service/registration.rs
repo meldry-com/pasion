@@ -1933,9 +1933,6 @@ pub async fn complete_registration(
     if let Some(avatar_url) = registration.avatar_url.clone() {
         job = job.set_avatar_url(avatar_url);
     }
-    if user.can_request_admin {
-        job = job.set_admin();
-    }
     repo.queue_job().schedule_job(rng, clock, job).await?;
 
     repo.save().await?;

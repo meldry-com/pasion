@@ -16,6 +16,7 @@ struct UserRecord {
     email_addresses: Option<Vec<String>>,
     cross_signing_reset_permitted: bool,
     is_deactivated: bool,
+    is_admin: bool,
 }
 
 /// Holds the full in-memory state backing a [`HomeserverAdmin`].
@@ -70,6 +71,17 @@ impl HomeserverAdmin {
         }
     }
 
+    /// Whether the user is a homeserver admin, `None` if not provisioned.
+    pub async fn is_admin(&self, localpart: &str) -> Option<bool> {
+        let full_id = crate::HomeserverAdmin::mxid(self, localpart);
+        self.state
+            .read()
+            .await
+            .accounts
+            .get(&full_id)
+            .map(|record| record.is_admin)
+    }
+
     pub async fn reserve_localpart(&self, localpart: &'static str) {
         self.state
             .write()
@@ -114,6 +126,7 @@ impl crate::HomeserverAdmin for HomeserverAdmin {
             email_addresses: None,
             cross_signing_reset_permitted: false,
             is_deactivated: false,
+            is_admin: false,
         });
 
         anyhow::ensure!(
@@ -132,6 +145,10 @@ impl crate::HomeserverAdmin for HomeserverAdmin {
         request.on_avatar_url(|maybe_url| {
             record.avatar_url = maybe_url.map(ToOwned::to_owned);
         });
+
+        if let Some(admin) = request.admin() {
+            record.is_admin = admin;
+        }
 
         Ok(is_new_account)
     }

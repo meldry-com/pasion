@@ -32,10 +32,15 @@ Pasion 支持以下 OAuth 2.0 作用域（scope）。客户端在请求授权时
 
 ## 作用域与策略
 
-默认策略对作用域的处理规则：
+### 管理作用域
 
-- `urn:pasion:admin`（或旧版 `urn:mas:admin`） — 仅授予配置文件中 `policy.data.admin_clients` 列表中的客户端
-- `urn:palpo:admin:api` — 同上
-- 其他作用域 — 默认允许所有客户端请求
+管理作用域（`urn:pasion:admin`、`urn:mas:admin`、`urn:palpo:admin:*`、`urn:synapse:admin:*`）只授予管理员用户，即 `admin` 标志（数据库字段 `can_request_admin`）为 `true` 的用户。该检查内置于 Pasion，策略无法放宽：
 
-你可以通过[自定义策略](../topics/policy.md)修改这些规则。
+- 登录用户不是管理员时，同意页直接拒绝；
+- 授权码、设备码、刷新令牌兑换时会重新检查用户，期间被降权的用户拿不到（也保不住）令牌；
+- `client_credentials` 授权没有用户可检查，永远拿不到管理作用域；
+- 每次调用管理 API 都会重新检查该标志，撤销后已签发的令牌立即失效。
+
+该标志变更时会同步到 homeserver（Palpo `is_admin`）。可通过管理 API（`PATCH /api/admin/v1/users/{id}`，`{"admin": true|false}`）或 CLI `manage promote-admin` / `manage demote-admin` 授予与撤销。最后一个有效管理员不能被降权、锁定或停用。
+
+其他作用域默认允许所有客户端请求，你可以通过[自定义策略](../topics/policy.md)修改这些规则。

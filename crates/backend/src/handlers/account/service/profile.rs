@@ -31,6 +31,9 @@ pub enum AccountProfileError {
     #[error("account deactivation is disabled")]
     DeactivationDisabled,
 
+    #[error("the last active administrator cannot be deactivated")]
+    LastAdmin,
+
     #[error(transparent)]
     Password(AnyhowError),
 
@@ -107,6 +110,23 @@ pub async fn deactivate_current_account(
     if !password_ok {
         repo.cancel().await?;
         return Ok(DeactivateAccountOutcome::IncorrectPassword);
+    }
+
+    // Never leave the deployment without an active administrator.
+    if browser_session.user.can_request_admin {
+        repo.user().acquire_bootstrap_admin_lock().await?;
+        let active_admins = repo
+            .user()
+            .count(
+                pasion_data::user::UserFilter::new()
+                    .can_request_admin_only()
+                    .active_only(),
+            )
+            .await?;
+        if active_admins <= 1 {
+            repo.cancel().await?;
+            return Err(AccountProfileError::LastAdmin);
+        }
     }
 
     let user = repo

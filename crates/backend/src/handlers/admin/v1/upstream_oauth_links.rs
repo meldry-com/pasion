@@ -489,6 +489,9 @@ fn map_service_error(error: crate::services::user_admin::UserAdminServiceError) 
         crate::services::user_admin::UserAdminServiceError::EmailAlreadyInUse(email) => {
             AppError::conflict(format!("User email {email:?} already in use"))
         }
+        crate::services::user_admin::UserAdminServiceError::LastAdmin => {
+            AppError::conflict("Cannot remove the last active administrator")
+        }
         crate::services::user_admin::UserAdminServiceError::Homeserver(error) => {
             AppError::internal(std::io::Error::other(error.to_string()))
         }
