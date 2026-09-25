@@ -1,3 +1,5 @@
+mod jaeger;
+
 use std::sync::{LazyLock, OnceLock};
 
 use anyhow::Context as _;
@@ -72,7 +74,7 @@ fn match_propagator(propagator: Propagator) -> Box<dyn TextMapPropagator + Send 
     match propagator {
         P::TraceContext => Box::new(TraceContextPropagator::new()),
         P::Baggage => Box::new(BaggagePropagator::new()),
-        P::Jaeger => Box::new(opentelemetry_jaeger_propagator::Propagator::new()),
+        P::Jaeger => Box::new(jaeger::Propagator),
     }
 }
 
