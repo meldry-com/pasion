@@ -2655,7 +2655,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "39cab71617ae0d63f51a36d69f866391735b51691dbda63cf6f96d042b63efeb"
 dependencies = [
  "libc",
- "windows-sys 0.61.2",
+ "windows-sys 0.52.0",
 ]
 
 [[package]]
@@ -3974,7 +3974,7 @@ dependencies = [
  "portable-atomic-util",
  "serde_core",
  "wasm-bindgen",
- "windows-sys 0.61.2",
+ "windows-sys 0.52.0",
 ]
 
 [[package]]
@@ -4766,7 +4766,7 @@ version = "0.50.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "7957b9740744892f114936ab4a57b3f487491bbeafaf8083688b16841a4240e5"
 dependencies = [
- "windows-sys 0.61.2",
+ "windows-sys 0.59.0",
 ]
 
 [[package]]
@@ -5251,19 +5251,7 @@ dependencies = [
  "js-sys",
  "pin-project-lite",
  "thiserror 2.0.18",
-]
-
-[[package]]
-name = "opentelemetry-http"
-version = "0.32.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "5683015d09e2df236ef005b17f6f196f0d5f6313c4fa43a7b6a53b52776e4331"
-dependencies = [
- "async-trait",
- "bytes",
- "http",
- "opentelemetry 0.32.0",
- "reqwest 0.13.4",
+ "tracing",
 ]
 
 [[package]]
@@ -5276,6 +5264,7 @@ dependencies = [
  "bytes",
  "http",
  "opentelemetry 0.33.0",
+ "reqwest 0.13.4",
 ]
 
 [[package]]
@@ -5310,15 +5299,16 @@ dependencies = [
 
 [[package]]
 name = "opentelemetry-otlp"
-version = "0.32.0"
+version = "0.33.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "9966929966d17620d7c316c643ba62631826e10021409357772d5eea84f62c35"
+checksum = "699a67345e21962a231955b9059a157e428b219fa5df8efe11f08346fb23a344"
 dependencies = [
  "http",
- "opentelemetry 0.32.0",
- "opentelemetry-http 0.32.0",
+ "httpdate",
+ "opentelemetry 0.33.0",
+ "opentelemetry-http",
  "opentelemetry-proto",
- "opentelemetry_sdk",
+ "opentelemetry_sdk 0.33.0",
  "prost",
  "thiserror 2.0.18",
 ]
@@ -5330,30 +5320,30 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "b4fe57ea90b12f643a366aa7c4fa5cfb54bd1cf252f55368337e40534b278a68"
 dependencies = [
  "opentelemetry 0.32.0",
- "opentelemetry_sdk",
+ "opentelemetry_sdk 0.32.1",
  "smartstring",
 ]
 
 [[package]]
 name = "opentelemetry-proto"
-version = "0.32.0"
+version = "0.33.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "56d658ba1faf63f7b9c492cfbe6e0ec365440a16132d3270c1065f7b33f1b638"
+checksum = "25da1ac11a0aeccf38d7f77ee0348715adaf8340f65ad46c94a02c6b20e2f65d"
 dependencies = [
- "opentelemetry 0.32.0",
- "opentelemetry_sdk",
+ "opentelemetry 0.33.0",
+ "opentelemetry_sdk 0.33.0",
  "prost",
 ]
 
 [[package]]
 name = "opentelemetry-resource-detectors"
-version = "0.11.0"
+version = "0.13.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "96c8b28af3391a756b248f470f59b35041dd3ac9b9633d2df40757df709314f1"
+checksum = "60ac54422fb2a7ed2e0325b5650bedff0b6e777e33dbbac7b49572d92d689a56"
 dependencies = [
- "opentelemetry 0.32.0",
- "opentelemetry-semantic-conventions 0.32.1",
- "opentelemetry_sdk",
+ "opentelemetry 0.33.0",
+ "opentelemetry-semantic-conventions 0.33.0",
+ "opentelemetry_sdk 0.33.0",
 ]
 
 [[package]]
@@ -5370,13 +5360,13 @@ checksum = "d288b1e1bc3590052fbb8f0f635ef248dd9022cf1fbaeb6582b7ad6081a17b87"
 
 [[package]]
 name = "opentelemetry-stdout"
-version = "0.32.0"
+version = "0.33.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a1b1c6a247d79091f0062a5f4bd058589525cf987a8d4c169440d9c1be72f0ad"
+checksum = "9f71803f481d3f5ccbe477edb42a78f473613712b2327835911a9ea0ab069824"
 dependencies = [
  "chrono",
- "opentelemetry 0.32.0",
- "opentelemetry_sdk",
+ "opentelemetry 0.33.0",
+ "opentelemetry_sdk 0.33.0",
 ]
 
 [[package]]
@@ -5389,6 +5379,20 @@ dependencies = [
  "futures-executor",
  "futures-util",
  "opentelemetry 0.32.0",
+ "portable-atomic",
+ "thiserror 2.0.18",
+]
+
+[[package]]
+name = "opentelemetry_sdk"
+version = "0.33.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "cb39533d9d1c912123efd7d41d7e0c29d16917b60ce15b4c8d87cb1af7f67520"
+dependencies = [
+ "futures-channel",
+ "futures-executor",
+ "futures-util",
+ "opentelemetry 0.33.0",
  "percent-encoding",
  "portable-atomic",
  "rand 0.9.4",
@@ -5516,17 +5520,17 @@ dependencies = [
  "ipnetwork",
  "itertools 0.15.0",
  "listenfd",
- "opentelemetry 0.32.0",
- "opentelemetry-http 0.32.0",
+ "opentelemetry 0.33.0",
+ "opentelemetry-http",
  "opentelemetry-instrumentation-process",
  "opentelemetry-instrumentation-tokio",
  "opentelemetry-jaeger-propagator",
  "opentelemetry-otlp",
  "opentelemetry-prometheus-text-exporter",
  "opentelemetry-resource-detectors",
- "opentelemetry-semantic-conventions 0.32.1",
+ "opentelemetry-semantic-conventions 0.33.0",
  "opentelemetry-stdout",
- "opentelemetry_sdk",
+ "opentelemetry_sdk 0.33.0",
  "pasion-backend",
  "pasion-config",
  "pasion-data",
@@ -5604,17 +5608,17 @@ dependencies = [
  "minijinja-contrib",
  "oauth2-types",
  "opendal",
- "opentelemetry 0.32.0",
- "opentelemetry-http 0.32.0",
+ "opentelemetry 0.33.0",
+ "opentelemetry-http",
  "opentelemetry-instrumentation-process",
  "opentelemetry-instrumentation-tokio",
  "opentelemetry-jaeger-propagator",
  "opentelemetry-otlp",
  "opentelemetry-prometheus-text-exporter",
  "opentelemetry-resource-detectors",
- "opentelemetry-semantic-conventions 0.32.1",
+ "opentelemetry-semantic-conventions 0.33.0",
  "opentelemetry-stdout",
- "opentelemetry_sdk",
+ "opentelemetry_sdk 0.33.0",
  "p256",
  "pasion-config",
  "pasion-data",
@@ -5720,8 +5724,8 @@ dependencies = [
  "language-tags",
  "lettre",
  "oauth2-types",
- "opentelemetry 0.32.0",
- "opentelemetry-semantic-conventions 0.32.1",
+ "opentelemetry 0.33.0",
+ "opentelemetry-semantic-conventions 0.33.0",
  "pasion-iana",
  "pasion-jose",
  "rand 0.10.3",
@@ -5945,8 +5949,8 @@ dependencies = [
  "diesel",
  "diesel-async",
  "oauth2-types",
- "opentelemetry 0.32.0",
- "opentelemetry-semantic-conventions 0.32.1",
+ "opentelemetry 0.33.0",
+ "opentelemetry-semantic-conventions 0.33.0",
  "pasion-data",
  "pasion-i18n",
  "pasion-matrix",
@@ -7216,7 +7220,7 @@ dependencies = [
  "errno",
  "libc",
  "linux-raw-sys",
- "windows-sys 0.61.2",
+ "windows-sys 0.52.0",
 ]
 
 [[package]]
@@ -7275,7 +7279,7 @@ dependencies = [
  "security-framework",
  "security-framework-sys",
  "webpki-root-certs",
- "windows-sys 0.61.2",
+ "windows-sys 0.52.0",
 ]
 
 [[package]]
@@ -7400,7 +7404,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "cadb06809f7d87a200f1887344e8b2112c3e9aed855a1ee2a6924ce61219bf26"
 dependencies = [
  "opentelemetry 0.33.0",
- "opentelemetry-http 0.33.0",
+ "opentelemetry-http",
  "opentelemetry-semantic-conventions 0.33.0",
  "percent-encoding",
  "salvo_core",
@@ -8435,7 +8439,7 @@ dependencies = [
  "getrandom 0.4.2",
  "once_cell",
  "rustix",
- "windows-sys 0.61.2",
+ "windows-sys 0.52.0",
 ]
 
 [[package]]
@@ -8444,7 +8448,7 @@ version = "1.2.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "d8c27177b12a6399ffc08b98f76f7c9a1f4fe9fc967c784c5a071fa8d93cf7e1"
 dependencies = [
- "windows-sys 0.61.2",
+ "windows-sys 0.59.0",
 ]
 
 [[package]]
@@ -9538,7 +9542,7 @@ version = "0.1.11"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "c2a7b1c03c876122aa43f3020e6c3c3ee5c05081c9a00739faf7503aeba10d22"
 dependencies = [
- "windows-sys 0.61.2",
+ "windows-sys 0.52.0",
 ]
 
 [[package]]
