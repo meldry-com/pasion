@@ -78,6 +78,10 @@ pub async fn update_user(req: &mut Request, depot: &Depot) -> JsonResult<SingleR
 
     repo.save().await?;
 
+    if body.admin == Some(true) {
+        crate::services::user_admin::push_admin_grant(homeserver.as_ref(), &user).await;
+    }
+
     Ok(Json(SingleResponse::new_canonical(User::from(user))))
 }
 

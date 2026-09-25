@@ -212,6 +212,9 @@ fn map_account_profile_error(error: AccountProfileError) -> RouteError {
         AccountProfileError::DeactivationDisabled => {
             RouteError::BadRequest("Account deactivation is not allowed".into())
         }
+        AccountProfileError::LastAdmin => RouteError::BadRequest(
+            "The last active administrator cannot deactivate their account".into(),
+        ),
         AccountProfileError::Password(error) | AccountProfileError::Homeserver(error) => {
             RouteError::Internal(error.into())
         }
@@ -335,5 +338,75 @@ mod tests {
         assert_eq!(stored.display_name, None);
         assert_eq!(stored.avatar_url, None);
         assert_eq!(stored.preferred_locale.as_deref(), Some("zh-CN"));
+    }
+
+    #[tokio::test]
+    async fn test_last_admin_cannot_deactivate_itself() {
+        setup();
+        let pool = pasion_data::test_utils::setup_test_pool().await;
+        let state = TestState::from_pool(pool.clone()).await.unwrap();
+        let unique = unique_test_nonce();
+        let mut rng = ChaChaRng::seed_from_u64(unique);
+        let mut repo = state.repository().await.unwrap();
+
+        let admin = repo
+            .user()
+            .add(
+                &mut rng,
+                &state.clock,
+                format!("admin{}", Ulid::new().to_string().to_lowercase()),
+            )
+            .await
+            .unwrap();
+        let admin = repo
+            .user()
+            .set_can_request_admin(admin, true)
+            .await
+            .unwrap();
+        let session = repo
+            .browser_session()
+            .add(&mut rng, &state.clock, &admin, None)
+            .await
+            .unwrap();
+        repo.save().await.unwrap();
+
+        let cookies = CookieHelper::new();
+        cookies.import(state.cookie_jar().set_session(&session));
+        let deactivate = || {
+            cookies.with_cookies(
+                Request::post("/api/v1/viewer/deactivate")
+                    .json(serde_json::json!({ "hs_erase": false })),
+            )
+        };
+
+        // The only administrator can't deactivate its own account.
+        state
+            .request(deactivate())
+            .await
+            .assert_status(StatusCode::BAD_REQUEST);
+        let mut repo = state.repository().await.unwrap();
+        let stored = repo.user().lookup(admin.id).await.unwrap().unwrap();
+        assert!(stored.deactivated_at.is_none());
+
+        // Once there is another active administrator it can.
+        let other = repo
+            .user()
+            .add(
+                &mut rng,
+                &state.clock,
+                format!("admin{}", Ulid::new().to_string().to_lowercase()),
+            )
+            .await
+            .unwrap();
+        repo.user()
+            .set_can_request_admin(other, true)
+            .await
+            .unwrap();
+        repo.save().await.unwrap();
+
+        let response = state.request(deactivate()).await;
+        response.assert_status(StatusCode::OK);
+        let body: serde_json::Value = response.json();
+        assert_eq!(body["status"], "DEACTIVATED");
     }
 }

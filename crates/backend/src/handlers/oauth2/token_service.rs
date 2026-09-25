@@ -400,19 +400,6 @@ pub async fn exchange_authorization_code(
         }
     };
 
-    // The user may have been demoted between consent and code exchange.
-    if !session_may_keep_admin_scope(&mut repo, &session).await? {
-        warn!(
-            oauth2_client.id = %client.id,
-            authorization_grant.id = %authz_grant.id,
-            oauth2_session.id = %session.id,
-            "Administrative scope requested by a non-admin user during code exchange"
-        );
-        repo.oauth2_session().finish(clock, session).await?;
-        repo.save().await?;
-        return Err(AuthorizationCodeExchangeError::AdminScopeNotAllowed);
-    }
-
     let requested_scopes = scope_tokens(&session.scope);
     let requested_matrix_device_ids = matrix_device_ids(&session.scope);
     debug!(
@@ -495,6 +482,21 @@ pub async fn exchange_authorization_code(
         (Some(pkce), Some(verifier)) => {
             pkce.verify(verifier)?;
         }
+    }
+
+    // The user may have been demoted between consent and code exchange.
+    // Checked only once the caller proved it owns the code, so a leaked
+    // code alone can't be used to end the session.
+    if !session_may_keep_admin_scope(&mut repo, &session).await? {
+        warn!(
+            oauth2_client.id = %client.id,
+            authorization_grant.id = %authz_grant.id,
+            oauth2_session.id = %session.id,
+            "Administrative scope requested by a non-admin user during code exchange"
+        );
+        repo.oauth2_session().finish(clock, session).await?;
+        repo.save().await?;
+        return Err(AuthorizationCodeExchangeError::AdminScopeNotAllowed);
     }
 
     let Some(user_session_id) = session.user_session_id else {

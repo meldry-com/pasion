@@ -281,6 +281,12 @@ pub async fn extract_call_context(req: &Request, depot: &Depot) -> Result<CallCo
         return Err(Rejection::NotAdmin);
     }
 
+    // A locked user may still be the actor of a personal session (to act on
+    // the homeserver), but never wields admin power.
+    if user.as_ref().is_some_and(|user| !user.is_valid()) {
+        return Err(Rejection::UserLocked);
+    }
+
     // A personal session created by a user acts with that user's authority,
     // so its owner must still be an administrator too.
     if let CallerSession::PersonalSession(personal) = &session

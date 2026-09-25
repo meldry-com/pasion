@@ -6,7 +6,7 @@ use pasion_data::{
     AdminUserPatch, BoxRepository, Clock, RepositoryAccess, RepositoryError, UpstreamOAuthLink,
     UpstreamOAuthLinkPatch, User, UserEmail, UserEmailPatch,
     audit::AdminOperation,
-    queue::{DeactivateUserJob, QueueJobRepositoryExt as _},
+    queue::{DeactivateUserJob, ProvisionUserJob, QueueJobRepositoryExt as _},
     upstream_oauth2::{UpstreamOAuthLinkRepository, UpstreamOAuthProviderRepository},
     user::{UserEmailRepository, UserFilter, UserRepository},
 };
@@ -85,6 +85,16 @@ pub async fn patch_user(
         return Ok(user);
     }
 
+    // Serialize with `ProvisionUserJob` (and concurrent patches of this user)
+    // so a job that read the old admin flag can't push it to the homeserver
+    // after this change, then re-read the user under the lock.
+    repo.user().acquire_lock_for_sync(&user).await?;
+    let user = repo
+        .user()
+        .lookup(user_id)
+        .await?
+        .ok_or(UserAdminServiceError::UserNotFound(user_id))?;
+
     let admin_changed = patch
         .can_request_admin
         .is_some_and(|admin| admin != user.can_request_admin);
@@ -97,6 +107,9 @@ pub async fn patch_user(
             || patch.locked == Some(true)
             || patch.deactivated == Some(true));
     if removes_active_admin {
+        // Two admins demoting each other at the same time must not both see
+        // the other one as still active.
+        repo.user().acquire_bootstrap_admin_lock().await?;
         let active_admins = repo
             .user()
             .count(UserFilter::new().can_request_admin_only().active_only())
@@ -119,18 +132,6 @@ pub async fn patch_user(
     if should_reactivate {
         homeserver
             .reactivate_user(&updated.username)
-            .await
-            .map_err(UserAdminServiceError::Homeserver)?;
-    }
-
-    // Mirror the admin flag onto the homeserver right away (not through the
-    // job queue) so a revocation takes effect before this request returns. If
-    // the homeserver can't be reached the whole change is rolled back.
-    if admin_changed {
-        let request = ProvisionRequest::new(updated.username.clone(), updated.sub.clone())
-            .set_admin(updated.can_request_admin);
-        homeserver
-            .provision_user(&request)
             .await
             .map_err(UserAdminServiceError::Homeserver)?;
     }
@@ -184,7 +185,44 @@ pub async fn patch_user(
     )
     .await?;
 
+    if admin_changed {
+        // Converge the homeserver on whatever ends up committed.
+        repo.queue_job()
+            .schedule_job(rng, clock, ProvisionUserJob::new_for_id(updated.id))
+            .await?;
+
+        // A revocation is pushed right away, as the last step before the
+        // commit, so it takes effect before this request returns; if the
+        // homeserver can't be reached the whole change is rolled back. A
+        // grant is only pushed once committed (`push_admin_grant`), so a
+        // failed commit can never leave the homeserver granting admin.
+        if !updated.can_request_admin {
+            let request = ProvisionRequest::new(updated.username.clone(), updated.sub.clone())
+                .set_admin(false);
+            homeserver
+                .provision_user(&request)
+                .await
+                .map_err(UserAdminServiceError::Homeserver)?;
+        }
+    }
+
     Ok(updated)
+}
+
+/// Push a committed admin grant to the homeserver without waiting for the
+/// scheduled `ProvisionUserJob`. Best effort: the job retries on failure.
+pub async fn push_admin_grant(homeserver: &dyn HomeserverAdmin, user: &User) {
+    if !user.can_request_admin {
+        return;
+    }
+    let request = ProvisionRequest::new(user.username.clone(), user.sub.clone()).set_admin(true);
+    if let Err(error) = homeserver.provision_user(&request).await {
+        tracing::warn!(
+            user.id = %user.id,
+            error = &*error as &dyn std::error::Error,
+            "failed to push admin grant to the homeserver; the provision job will retry",
+        );
+    }
 }
 
 pub async fn patch_user_email(

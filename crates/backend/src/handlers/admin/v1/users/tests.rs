@@ -906,3 +906,28 @@ async fn test_cannot_remove_last_admin() {
         Some(true)
     );
 }
+
+#[tokio::test]
+async fn test_locked_admin_cannot_use_admin_api() {
+    setup();
+    let pool = pasion_data::test_utils::setup_test_pool().await;
+    let mut state = TestState::from_pool(pool).await.unwrap();
+
+    // Another admin exists, so locking this one is allowed.
+    let _other = add_provisioned_user(&mut state, true).await;
+    let user = add_provisioned_user(&mut state, true).await;
+    let token = state.token_for_user(&user, "urn:pasion:admin").await;
+
+    let request = Request::get("/api/admin/v1/users").bearer(&token).empty();
+    state.request(request).await.assert_status(StatusCode::OK);
+
+    let mut repo = state.repository().await.unwrap();
+    repo.user().lock(&state.clock, user).await.unwrap();
+    repo.save().await.unwrap();
+
+    let request = Request::get("/api/admin/v1/users").bearer(&token).empty();
+    state
+        .request(request)
+        .await
+        .assert_status(StatusCode::UNAUTHORIZED);
+}

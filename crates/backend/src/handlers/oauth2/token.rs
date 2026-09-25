@@ -198,7 +198,8 @@ impl Scribe for RouteError {
             }
 
             Self::AdminScopeNotAllowed => {
-                res.status_code(StatusCode::FORBIDDEN);
+                // RFC 6749 §5.2: `invalid_scope` is a 400.
+                res.status_code(StatusCode::BAD_REQUEST);
                 res.render(Json(
                     ClientError::from(ClientErrorCode::InvalidScope).with_description(
                         "administrative scopes require an administrator account".to_owned(),

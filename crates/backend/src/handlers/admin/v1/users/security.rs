@@ -83,6 +83,7 @@ pub async fn risk_action(req: &mut Request, depot: &Depot) -> JsonResult<RiskAct
         && user.can_request_admin
         && user.is_valid()
     {
+        repo.user().acquire_bootstrap_admin_lock().await?;
         let active_admins = repo
             .user()
             .count(
