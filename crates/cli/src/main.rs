@@ -43,8 +43,13 @@ impl SentryTransportAdapter {
 }
 
 impl sentry::TransportFactory for SentryTransportAdapter {
-    fn create_transport(&self, opts: &sentry::ClientOptions) -> Arc<dyn sentry::Transport> {
-        let inner = sentry::transports::ReqwestHttpTransport::with_client(opts, self.http.clone());
+    fn create_transport_with_options(
+        &self,
+        opts: sentry::TransportOptions,
+    ) -> Arc<dyn sentry::Transport> {
+        let inner = sentry::transports::ReqwestHttpTransportOptions::from(opts)
+            .with_client(self.http.clone())
+            .build();
         Arc::new(inner)
     }
 }
@@ -124,17 +129,17 @@ async fn execute_command() -> anyhow::Result<ExitCode> {
         .context("Failed to load telemetry config")?;
 
     // Sentry initialisation
-    let sentry_guard = sentry::init((
-        tel_cfg.sentry.dsn.as_deref(),
-        sentry::ClientOptions {
-            transport: Some(Arc::new(SentryTransportAdapter::create())),
-            environment: tel_cfg.sentry.environment.clone().map(Into::into),
-            release: Some(VERSION.into()),
-            sample_rate: tel_cfg.sentry.sample_rate.unwrap_or(1.0),
-            traces_sample_rate: tel_cfg.sentry.traces_sample_rate.unwrap_or(0.0),
-            ..Default::default()
-        },
-    ));
+    let mut sentry_options = sentry::ClientOptions::new()
+        .transport(SentryTransportAdapter::create())
+        .release(VERSION)
+        // Both rates are bounds-checked when the telemetry config is loaded,
+        // so these setters cannot panic.
+        .sample_rate(tel_cfg.sentry.sample_rate.unwrap_or(1.0))
+        .traces_sample_rate(tel_cfg.sentry.traces_sample_rate.unwrap_or(0.0));
+    if let Some(environment) = tel_cfg.sentry.environment.clone() {
+        sentry_options = sentry_options.environment(environment);
+    }
+    let sentry_guard = sentry::init((tel_cfg.sentry.dsn.as_deref(), sentry_options));
 
     let sentry_layer = sentry_guard.is_enabled().then(|| {
         sentry_tracing::layer().event_filter(|md| {
