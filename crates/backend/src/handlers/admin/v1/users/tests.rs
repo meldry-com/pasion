@@ -228,7 +228,7 @@ async fn test_list_users() {
             "updated_at": "2022-01-16T14:40:00Z",
             "locked_at": null,
             "deactivated_at": null,
-            "admin": false,
+            "admin": true,
             "legacy_guest": false,
             "display_name": null,
             "avatar_url": null,
@@ -319,7 +319,7 @@ async fn test_list_users() {
             "updated_at": "2022-01-16T14:40:00Z",
             "locked_at": null,
             "deactivated_at": null,
-            "admin": false,
+            "admin": true,
             "legacy_guest": false,
             "display_name": null,
             "avatar_url": null,
@@ -766,4 +766,143 @@ async fn test_patch_user_reactivate() {
         .await
         .unwrap();
     assert!(!matrix_user.deactivated);
+}
+
+/// Create a user directly in the repository and provision it on the mock
+/// homeserver, optionally as an administrator.
+async fn add_provisioned_user(state: &mut TestState, admin: bool) -> pasion_data::User {
+    let unique = unique_test_nonce();
+    let username = format!("user{}", Ulid::new().to_string().to_lowercase());
+    let mut rng = ChaChaRng::seed_from_u64(unique);
+
+    let mut repo = state.repository().await.unwrap();
+    let mut user = repo
+        .user()
+        .add(&mut rng, &state.clock, username)
+        .await
+        .unwrap();
+    if admin {
+        user = repo.user().set_can_request_admin(user, true).await.unwrap();
+    }
+    repo.save().await.unwrap();
+
+    state
+        .homeserver_admin
+        .provision_user(&ProvisionRequest::new(&user.username, &user.sub).set_admin(admin))
+        .await
+        .unwrap();
+    user
+}
+
+#[tokio::test]
+async fn test_admin_scope_requires_admin_user() {
+    setup();
+    let pool = pasion_data::test_utils::setup_test_pool().await;
+    let mut state = TestState::from_pool(pool).await.unwrap();
+
+    // A regular user holding a token with the admin scope is still refused.
+    let user = add_provisioned_user(&mut state, false).await;
+    let token = state.token_for_user(&user, "urn:pasion:admin").await;
+    let request = Request::get("/api/admin/v1/users").bearer(&token).empty();
+    state
+        .request(request)
+        .await
+        .assert_status(StatusCode::FORBIDDEN);
+}
+
+#[tokio::test]
+async fn test_demoted_admin_loses_access_immediately() {
+    setup();
+    let pool = pasion_data::test_utils::setup_test_pool().await;
+    let mut state = TestState::from_pool(pool).await.unwrap();
+
+    // Keep a second administrator around so the demotion is allowed.
+    let operator_token = state.token_with_scope("urn:pasion:admin").await;
+    let user = add_provisioned_user(&mut state, true).await;
+    let token = state.token_for_user(&user, "urn:pasion:admin").await;
+
+    let request = Request::get("/api/admin/v1/users").bearer(&token).empty();
+    state.request(request).await.assert_status(StatusCode::OK);
+
+    let request = Request::patch(format!("/api/admin/v1/users/{}", user.id))
+        .bearer(&operator_token)
+        .json(serde_json::json!({ "admin": false }));
+    let response = state.request(request).await;
+    response.assert_status(StatusCode::OK);
+    let body: serde_json::Value = response.json();
+    assert_eq!(body["data"]["attributes"]["admin"], false);
+
+    // The already-issued token stops working right away...
+    let request = Request::get("/api/admin/v1/users").bearer(&token).empty();
+    state
+        .request(request)
+        .await
+        .assert_status(StatusCode::FORBIDDEN);
+
+    // ...and the homeserver admin flag was revoked as well.
+    assert_eq!(
+        state.homeserver_admin.is_admin(&user.username).await,
+        Some(false)
+    );
+}
+
+#[tokio::test]
+async fn test_patch_admin_syncs_homeserver() {
+    setup();
+    let pool = pasion_data::test_utils::setup_test_pool().await;
+    let mut state = TestState::from_pool(pool).await.unwrap();
+    let token = state.token_with_scope("urn:pasion:admin").await;
+    let user = add_provisioned_user(&mut state, false).await;
+
+    let request = Request::patch(format!("/api/admin/v1/users/{}", user.id))
+        .bearer(&token)
+        .json(serde_json::json!({ "admin": true }));
+    state.request(request).await.assert_status(StatusCode::OK);
+    assert_eq!(
+        state.homeserver_admin.is_admin(&user.username).await,
+        Some(true)
+    );
+
+    let request = Request::patch(format!("/api/admin/v1/users/{}", user.id))
+        .bearer(&token)
+        .json(serde_json::json!({ "admin": false }));
+    state.request(request).await.assert_status(StatusCode::OK);
+    assert_eq!(
+        state.homeserver_admin.is_admin(&user.username).await,
+        Some(false)
+    );
+}
+
+#[tokio::test]
+async fn test_cannot_remove_last_admin() {
+    setup();
+    let pool = pasion_data::test_utils::setup_test_pool().await;
+    let mut state = TestState::from_pool(pool).await.unwrap();
+
+    // The only administrator tries to demote, lock or deactivate itself.
+    let user = add_provisioned_user(&mut state, true).await;
+    let token = state.token_for_user(&user, "urn:pasion:admin").await;
+
+    for patch in [
+        serde_json::json!({ "admin": false }),
+        serde_json::json!({ "locked": true }),
+        serde_json::json!({ "deactivated": true }),
+    ] {
+        let request = Request::patch(format!("/api/admin/v1/users/{}", user.id))
+            .bearer(&token)
+            .json(patch);
+        state
+            .request(request)
+            .await
+            .assert_status(StatusCode::CONFLICT);
+    }
+
+    let mut repo = state.repository().await.unwrap();
+    let stored = repo.user().lookup(user.id).await.unwrap().unwrap();
+    assert!(stored.can_request_admin);
+    assert!(stored.is_valid());
+    assert_eq!(
+        state.homeserver_admin.is_admin(&user.username).await,
+        Some(true)
+    );
 }

@@ -109,7 +109,10 @@ impl RequestingEntity {
 
     pub fn is_admin(&self) -> bool {
         match self {
-            Self::OAuth2Session(tuple) => crate::handlers::admin::has_admin_scope(&tuple.0.scope),
+            Self::OAuth2Session(tuple) => {
+                crate::handlers::admin::has_admin_scope(&tuple.0.scope)
+                    && crate::handlers::admin::may_hold_admin_scope(tuple.1.as_ref())
+            }
             _ => false,
         }
     }

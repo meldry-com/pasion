@@ -206,10 +206,9 @@ Instead, it is during the creation of the session that:
  - the client asks for the corresponding scope (e.g. `urn:palpo:admin:*`)
  - the policy engine decides whether to grant it or not
 
-The default policy shipped with the service does gate access to this scope based on a user attributes (`can_request_admin`), but this is not a requirement.
-
-It does make reasoning about admin access more complicated compared to a simple boolean flag on the user like what Palpo does, but it also allows for more complex authorization logic.
-This is especially important as in the future it will make it possible to implement a more granular role-based access control system to fit more complex use cases.
+Administrative scopes are the exception: on top of the policy, Pasion only ever grants them to users whose `admin` flag (`can_request_admin`) is set, and re-checks that flag on every Admin API call and token refresh.
+A policy can further restrict who gets them, but can never grant them to a non-administrator.
+See [administrative scopes](../reference/scopes.md#administrative-scopes).
 
 To understand the authorization process and how sessions are created, refer to the [authorization and sessions](./authorization.md) section.
 

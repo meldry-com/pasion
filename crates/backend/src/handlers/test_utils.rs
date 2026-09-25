@@ -650,29 +650,66 @@ impl TestState {
         let clock = Arc::clone(&self.clock);
         let mut rng = self.rng();
         let unique = rng.next_u64();
-        let user = repo
+        let mut user = repo
             .user()
             .add(&mut rng, &clock, format!("admin{unique}"))
             .await
             .unwrap();
 
+        // Administrative scopes are only honoured for administrator users.
+        if crate::handlers::admin::requires_admin(&parsed_scope) {
+            let patch = pasion_data::UserPatch {
+                can_request_admin: Some(true),
+                ..Default::default()
+            };
+            user = repo.user().patch(&clock, user, patch).await.unwrap();
+        }
+
+        let access_token = self
+            .mint_personal_token(&mut repo, &mut rng, &user, parsed_scope)
+            .await;
+        repo.save().await.unwrap();
+        access_token
+    }
+
+    /// Mint a personal access token owned by (and acting as) `user`, without
+    /// touching the user's admin flag.
+    pub async fn token_for_user(&mut self, user: &pasion_data::User, scope: &str) -> String {
+        let parsed_scope: Scope = scope.parse().expect("test scope must parse");
+        let mut repo = self.repository().await.unwrap();
+        let mut rng = self.rng();
+        let access_token = self
+            .mint_personal_token(&mut repo, &mut rng, user, parsed_scope)
+            .await;
+        repo.save().await.unwrap();
+        access_token
+    }
+
+    async fn mint_personal_token(
+        &self,
+        repo: &mut BoxRepository,
+        rng: &mut ChaChaRng,
+        user: &pasion_data::User,
+        scope: Scope,
+    ) -> String {
+        let clock = Arc::clone(&self.clock);
         let session = repo
             .personal_session()
             .add(
-                &mut rng,
+                &mut *rng,
                 &clock,
                 PersonalSessionOwner::User(user.id),
-                &user,
+                user,
                 "Admin test token".to_owned(),
-                parsed_scope,
+                scope,
             )
             .await
             .unwrap();
 
-        let access_token = TokenType::PersonalAccessToken.generate(&mut rng);
+        let access_token = TokenType::PersonalAccessToken.generate(&mut *rng);
         repo.personal_access_token()
             .add(
-                &mut rng,
+                &mut *rng,
                 &clock,
                 &session,
                 &access_token,
@@ -680,8 +717,6 @@ impl TestState {
             )
             .await
             .unwrap();
-
-        repo.save().await.unwrap();
 
         access_token
     }

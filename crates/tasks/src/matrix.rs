@@ -73,9 +73,9 @@ impl RunnableJob for ProvisionUserJob {
             req = req.set_avatar_url(avatar_url.to_owned());
         }
 
-        if self.is_admin() {
-            req = req.set_admin();
-        }
+        // Always send the admin flag so that revoking `can_request_admin`
+        // also revokes the homeserver admin flag.
+        req = req.set_admin(user.can_request_admin);
 
         let created = matrix.provision_user(&req).await.map_err(JobError::retry)?;
 

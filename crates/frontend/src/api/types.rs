@@ -763,6 +763,10 @@ pub struct ConsentDataResponse {
     pub user: ConsentUserInfo,
     #[serde(default)]
     pub policy_violation: bool,
+    /// Denied because the request asks for administrative scopes and the
+    /// signed-in user is not an administrator.
+    #[serde(default)]
+    pub admin_required: bool,
     #[serde(default)]
     pub status: Option<String>,
     #[serde(default)]

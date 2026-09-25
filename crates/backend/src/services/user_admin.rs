@@ -8,9 +8,9 @@ use pasion_data::{
     audit::AdminOperation,
     queue::{DeactivateUserJob, QueueJobRepositoryExt as _},
     upstream_oauth2::{UpstreamOAuthLinkRepository, UpstreamOAuthProviderRepository},
-    user::{UserEmailRepository, UserRepository},
+    user::{UserEmailRepository, UserFilter, UserRepository},
 };
-use pasion_matrix::HomeserverAdmin;
+use pasion_matrix::{HomeserverAdmin, ProvisionRequest};
 use rand_core::RngCore;
 use thiserror::Error;
 use ulid::Ulid;
@@ -53,6 +53,9 @@ pub enum UserAdminServiceError {
     #[error("upstream provider {provider_id} already has subject {subject}")]
     UpstreamSubjectAlreadyLinked { provider_id: Ulid, subject: String },
 
+    #[error("cannot remove the last active administrator")]
+    LastAdmin,
+
     #[error(transparent)]
     Homeserver(AnyhowError),
 
@@ -82,6 +85,27 @@ pub async fn patch_user(
         return Ok(user);
     }
 
+    let admin_changed = patch
+        .can_request_admin
+        .is_some_and(|admin| admin != user.can_request_admin);
+
+    // Never leave the deployment without an active administrator: nobody
+    // could get back into the admin dashboard to fix it.
+    let removes_active_admin = user.can_request_admin
+        && user.is_valid()
+        && (patch.can_request_admin == Some(false)
+            || patch.locked == Some(true)
+            || patch.deactivated == Some(true));
+    if removes_active_admin {
+        let active_admins = repo
+            .user()
+            .count(UserFilter::new().can_request_admin_only().active_only())
+            .await?;
+        if active_admins <= 1 {
+            return Err(UserAdminServiceError::LastAdmin);
+        }
+    }
+
     let display_name_patch = patch.display_name.clone();
     let should_reactivate = user.deactivated_at.is_some() && patch.deactivated == Some(false);
     let should_schedule_deactivation =
@@ -95,6 +119,18 @@ pub async fn patch_user(
     if should_reactivate {
         homeserver
             .reactivate_user(&updated.username)
+            .await
+            .map_err(UserAdminServiceError::Homeserver)?;
+    }
+
+    // Mirror the admin flag onto the homeserver right away (not through the
+    // job queue) so a revocation takes effect before this request returns. If
+    // the homeserver can't be reached the whole change is rolled back.
+    if admin_changed {
+        let request = ProvisionRequest::new(updated.username.clone(), updated.sub.clone())
+            .set_admin(updated.can_request_admin);
+        homeserver
+            .provision_user(&request)
             .await
             .map_err(UserAdminServiceError::Homeserver)?;
     }

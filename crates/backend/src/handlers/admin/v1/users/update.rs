@@ -119,6 +119,9 @@ fn map_service_error(error: crate::services::user_admin::UserAdminServiceError) 
         } => AppError::conflict(format!(
             "Provider ID {provider_id} already has subject {subject}"
         )),
+        crate::services::user_admin::UserAdminServiceError::LastAdmin => {
+            AppError::conflict("Cannot remove the last active administrator")
+        }
         crate::services::user_admin::UserAdminServiceError::Homeserver(error) => {
             AppError::internal(std::io::Error::other(error.to_string()))
         }

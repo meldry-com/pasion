@@ -58,11 +58,7 @@ This scope grants access to the [Palpo admin API].
 Because of how Palpo works for now, this scope by itself isn't sufficient to access the admin API.
 A session wanting to access the admin API also needs to have the `urn:matrix:client:api:*` scope.
 
-The default policy doesn't allow everyone to request this scope.
-It allows:
-
-- users with the `can_request_admin` attribute set to `true` in the database
-- users listed in the [`policy.data.admin_users`](../reference/configuration.md#policy) configuration option
+Only administrator users can obtain this scope, see [administrative scopes](#administrative-scopes).
 
 ## Pasion-specific scopes
 
@@ -76,14 +72,29 @@ This scope grants full access to the Pasion [Admin API].
 > and behaves identically. Existing tokens that carry `urn:mas:admin` will
 > continue to work. New integrations should use `urn:pasion:admin`.
 
-The default policy doesn't allow everyone to request this scope.
-It allows:
+Only administrator users can obtain this scope, through the "[authorization code]" and "[device authorization]" grants or a personal access token.
+See [administrative scopes](#administrative-scopes).
 
-- for the "[authorization code]" and "[device authorization]" grants:
-  - users with the `can_request_admin` attribute set to `true` in the database
-  - users listed in the [`policy.data.admin_users`](../reference/configuration.md#policy) configuration option
-- for the "client credentials" grant:
-  - clients that are listed in the [`policy.data.admin_clients`](../reference/configuration.md#policy) configuration option
+## Administrative scopes
+
+Administrative scopes (`urn:pasion:admin`, `urn:mas:admin`, `urn:palpo:admin:*`
+and `urn:synapse:admin:*`) are reserved to administrator users, i.e. users whose
+`admin` flag (`can_request_admin` in the database) is `true`. This check is
+built into Pasion and cannot be relaxed by the policy:
+
+- the consent screen refuses the request when the signed-in user is not an administrator;
+- the authorization code, device code and refresh token exchanges re-check the user,
+  so a user demoted in the meantime doesn't get (or keep) a token;
+- the "client credentials" grant never receives an administrative scope, as there
+  is no user to check;
+- every Admin API call re-checks the flag, so revoking it takes effect immediately
+  on already-issued tokens.
+
+The flag is mirrored onto the homeserver (Palpo `is_admin`) whenever it changes.
+It can be granted and revoked through the Admin API
+(`PATCH /api/admin/v1/users/{id}` with `{"admin": true|false}`) or the
+`manage promote-admin` / `manage demote-admin` CLI commands.
+The last active administrator cannot be demoted, locked or deactivated.
 
 [authorization code]: ../topics/authorization.md#authorization-code-grant
 [device authorization]: ../topics/authorization.md#device-authorization-grant

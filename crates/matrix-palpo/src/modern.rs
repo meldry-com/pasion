@@ -152,8 +152,8 @@ impl HomeserverAdmin for PalpoAdmin {
             set_emails: Option<Vec<String>>,
             #[serde(skip_serializing_if = "std::ops::Not::not")]
             unset_emails: bool,
-            #[serde(skip_serializing_if = "std::ops::Not::not")]
-            admin: bool,
+            #[serde(skip_serializing_if = "Option::is_none")]
+            admin: Option<bool>,
         }
 
         let mut body = Request {
@@ -164,7 +164,7 @@ impl HomeserverAdmin for PalpoAdmin {
             unset_avatar_url: false,
             set_emails: None,
             unset_emails: false,
-            admin: request.is_admin(),
+            admin: request.admin(),
         };
 
         request.on_displayname(|displayname| match displayname {

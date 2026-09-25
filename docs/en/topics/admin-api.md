@@ -75,29 +75,22 @@ In the modal, enter the client ID and client secret **in the `authorizationCode`
 
 ### Automated tools
 
-If the intent is to build tools that are not meant to be used by humans, the client credentials grant should be used.
+Administrative scopes are only ever granted to administrator users, so the client credentials grant (which has no user) cannot be used to access the Admin API.
 
-In this case, the client must be listed in the [`policy.data.admin_clients`](../reference/configuration.md#policy) configuration option.
+Tools that are not meant to be used by humans should instead use a personal access token acting as an administrator user.
+Such a token can be created by an existing administrator with `POST /api/admin/v1/personal-sessions`:
 
-```yaml
-policy:
-  data:
-    admin_clients:
-      - 01J44QC8BCY7FCFM7WGHQGKMTJ
+```json
+{
+  "actor_user_id": "01J2KDPHTZYW3TAT1SKVAD63SQ",
+  "human_name": "Provisioning bot",
+  "scope": "urn:pasion:admin",
+  "expires_in": 31536000
+}
 ```
 
-To try it out in Swagger UI, a client can be defined statically in the configuration file like this:
-
-```yaml
-clients:
-  - client_id: 01J44QC8BCY7FCFM7WGHQGKMTJ
-    # For the client_credentials grant, Swagger UI uses the client_secret_basic authentication method
-    client_auth_method: client_secret_basic
-    client_secret: eequie6Oth4Ip2InahT5zuQu8OuPohLi
-```
-
-Then, in Swagger UI, click on the "Authorize" button.
-In the modal, enter the client ID and client secret **in the `clientCredentials` section**, select the `urn:pasion:admin` scope and click on the "Authorize" button.
+The token stops working as soon as the actor user loses its `admin` flag, is locked or is deactivated.
+It is good practice to create a dedicated administrator user for each tool.
 
 
 ## General API shape
@@ -182,34 +175,11 @@ Well-known error codes are not yet specified.
 
 ## Example
 
-With the following configuration:
-
-```yaml
-clients:
-  - client_id: 01J44RKQYM4G3TNVANTMTDYTX6
-    client_auth_method: client_secret_basic
-    client_secret: phoo8ahneir3ohY2eigh4xuu6Oodaewi
-
-policy:
-  data:
-    admin_clients:
-      - 01J44RKQYM4G3TNVANTMTDYTX6
-```
+Assuming `ACCESS_TOKEN` holds a personal access token of an administrator user with the `urn:pasion:admin` scope (see [automated tools](#automated-tools)):
 
 `curl` example to list the users that are not locked and have the `can_request_admin` flag set to `true`:
 
 ```bash
-CLIENT_ID=01J44RKQYM4G3TNVANTMTDYTX6
-CLIENT_SECRET=phoo8ahneir3ohY2eigh4xuu6Oodaewi
-
-# Get an access token
-curl \
-  -u "$CLIENT_ID:$CLIENT_SECRET" \
-  -d "grant_type=client_credentials&scope=urn:pasion:admin" \
-  https://auth.example.com/oauth2/token \
-  | jq -r '.access_token' \
-  | read -r ACCESS_TOKEN
-
 # List users (The -g flag prevents curl from interpreting the brackets in the URL)
 curl \
   -g \

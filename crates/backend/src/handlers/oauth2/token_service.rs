@@ -18,12 +18,12 @@ use oauth2_types::{
 };
 use pasion_data::{
     AuthorizationGrantStage, BoxRepository, Client, Clock, DeviceCodeGrantState, RepositoryAccess,
-    RepositoryError, SiteConfig, TokenType, UrlBuilder,
+    RepositoryError, Session, SiteConfig, TokenType, UrlBuilder,
     oauth2::{
         OAuth2AccessTokenRepository, OAuth2AuthorizationGrantRepository,
         OAuth2RefreshTokenRepository, OAuth2SessionRepository,
     },
-    user::BrowserSessionRepository,
+    user::{BrowserSessionRepository, UserRepository},
 };
 use pasion_i18n::DataLocale;
 use pasion_keystore::Keystore;
@@ -63,6 +63,9 @@ pub enum AuthorizationCodeExchangeError {
 
     #[error("bad request (missing or mismatched PKCE)")]
     BadRequest,
+
+    #[error("administrative scopes require an administrator account")]
+    AdminScopeNotAllowed,
 
     #[error("unexpected client {was} (expected {expected})")]
     UnexpectedClient { was: Ulid, expected: Ulid },
@@ -151,6 +154,9 @@ pub enum RefreshTokenExchangeError {
 /// Errors that can occur during client credentials grant.
 #[derive(Debug, Error)]
 pub enum ClientCredentialsGrantError {
+    #[error("administrative scopes require an administrator account")]
+    AdminScopeNotAllowed,
+
     #[error("client is not authorized to use the client_credentials grant type")]
     UnauthorizedClient(Ulid),
 
@@ -173,6 +179,9 @@ impl From<pasion_policy::EvaluationError> for ClientCredentialsGrantError {
 /// Errors that can occur during device code exchange.
 #[derive(Debug, Error)]
 pub enum DeviceCodeExchangeError {
+    #[error("administrative scopes require an administrator account")]
+    AdminScopeNotAllowed,
+
     #[error("client is not authorized to use the device_code grant type")]
     UnauthorizedClient(Ulid),
 
@@ -211,6 +220,22 @@ impl From<IdTokenSignatureError> for DeviceCodeExchangeError {
     fn from(e: IdTokenSignatureError) -> Self {
         Self::Internal(Box::new(e))
     }
+}
+
+/// Whether the session is allowed to keep its administrative scopes, i.e. it
+/// either has none or its user is (still) an administrator.
+async fn session_may_keep_admin_scope(
+    repo: &mut BoxRepository,
+    session: &Session,
+) -> Result<bool, RepositoryError> {
+    if !crate::handlers::admin::requires_admin(&session.scope) {
+        return Ok(true);
+    }
+    let user = match session.user_id {
+        Some(user_id) => repo.user().lookup(user_id).await?,
+        None => None,
+    };
+    Ok(crate::handlers::admin::may_hold_admin_scope(user.as_ref()))
 }
 
 fn scope_tokens(scope: &scope::Scope) -> Vec<String> {
@@ -374,6 +399,19 @@ pub async fn exchange_authorization_code(
             ));
         }
     };
+
+    // The user may have been demoted between consent and code exchange.
+    if !session_may_keep_admin_scope(&mut repo, &session).await? {
+        warn!(
+            oauth2_client.id = %client.id,
+            authorization_grant.id = %authz_grant.id,
+            oauth2_session.id = %session.id,
+            "Administrative scope requested by a non-admin user during code exchange"
+        );
+        repo.oauth2_session().finish(clock, session).await?;
+        repo.save().await?;
+        return Err(AuthorizationCodeExchangeError::AdminScopeNotAllowed);
+    }
 
     let requested_scopes = scope_tokens(&session.scope);
     let requested_matrix_device_ids = matrix_device_ids(&session.scope);
@@ -649,6 +687,15 @@ pub async fn handle_refresh_token(
         return Err(RefreshTokenExchangeError::SessionInvalid(session.id));
     }
 
+    // A session holding administrative scopes dies as soon as its user is no
+    // longer an administrator.
+    if !session_may_keep_admin_scope(&mut repo, &session).await? {
+        let session_id = session.id;
+        repo.oauth2_session().finish(clock, session).await?;
+        repo.save().await?;
+        return Err(RefreshTokenExchangeError::SessionInvalid(session_id));
+    }
+
     if client.id != session.client_id {
         // As per https://datatracker.ietf.org/doc/html/rfc6749#section-5.2
         return Err(RefreshTokenExchangeError::ClientIdMismatch {
@@ -794,6 +841,12 @@ pub async fn handle_client_credentials(
         .scope
         .clone()
         .unwrap_or_else(|| std::iter::empty::<ScopeToken>().collect());
+
+    // Administrative scopes are only ever granted to administrator users; a
+    // client acting on its own behalf has no user and never gets them.
+    if crate::handlers::admin::requires_admin(&scope) {
+        return Err(ClientCredentialsGrantError::AdminScopeNotAllowed);
+    }
 
     // Make the request go through the policy engine
     let res = policy
@@ -969,6 +1022,16 @@ pub async fn exchange_device_code(
             ));
         }
     };
+
+    // The user may have been demoted between consent and code exchange.
+    if !crate::handlers::oauth2::access::admin_scope_allowed(&browser_session.user, &grant.scope) {
+        warn!(
+            oauth2_client.id = %client.id,
+            device_code_grant.id = %grant.id,
+            "Administrative scope requested by a non-admin user during device code exchange"
+        );
+        return Err(DeviceCodeExchangeError::AdminScopeNotAllowed);
+    }
 
     // Start the session
     let mut session = repo

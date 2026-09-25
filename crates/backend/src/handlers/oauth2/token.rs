@@ -89,6 +89,9 @@ pub(crate) enum RouteError {
     #[error("policy denied the request: {0}")]
     DeniedByPolicy(pasion_policy::EvaluationResult),
 
+    #[error("administrative scopes require an administrator account")]
+    AdminScopeNotAllowed,
+
     #[error("unsupported grant type")]
     UnsupportedGrantType,
 
@@ -194,6 +197,15 @@ impl Scribe for RouteError {
                 ));
             }
 
+            Self::AdminScopeNotAllowed => {
+                res.status_code(StatusCode::FORBIDDEN);
+                res.render(Json(
+                    ClientError::from(ClientErrorCode::InvalidScope).with_description(
+                        "administrative scopes require an administrator account".to_owned(),
+                    ),
+                ));
+            }
+
             Self::DeviceCodeRejected => {
                 res.status_code(StatusCode::FORBIDDEN);
                 res.render(Json(ClientError::from(ClientErrorCode::AccessDenied)));
@@ -250,6 +262,7 @@ impl From<AuthorizationCodeExchangeError> for RouteError {
             AuthorizationCodeExchangeError::InvalidGrant(id) => Self::InvalidGrant(id),
             AuthorizationCodeExchangeError::PkceVerification(err) => Self::PkceVerification(err),
             AuthorizationCodeExchangeError::BadRequest => Self::BadRequest,
+            AuthorizationCodeExchangeError::AdminScopeNotAllowed => Self::AdminScopeNotAllowed,
             AuthorizationCodeExchangeError::UnexpectedClient { was, expected } => {
                 Self::UnexptectedClient { was, expected }
             }
@@ -300,6 +313,7 @@ impl From<ClientCredentialsGrantError> for RouteError {
         match e {
             ClientCredentialsGrantError::UnauthorizedClient(id) => Self::UnauthorizedClient(id),
             ClientCredentialsGrantError::DeniedByPolicy(res) => Self::DeniedByPolicy(res),
+            ClientCredentialsGrantError::AdminScopeNotAllowed => Self::AdminScopeNotAllowed,
             ClientCredentialsGrantError::Repository(err) => Self::Internal(Box::new(err)),
             ClientCredentialsGrantError::Internal(err) => Self::Internal(err),
         }
@@ -311,6 +325,7 @@ impl From<DeviceCodeExchangeError> for RouteError {
         match e {
             DeviceCodeExchangeError::UnauthorizedClient(id) => Self::UnauthorizedClient(id),
             DeviceCodeExchangeError::GrantNotFound => Self::GrantNotFound,
+            DeviceCodeExchangeError::AdminScopeNotAllowed => Self::AdminScopeNotAllowed,
             DeviceCodeExchangeError::ClientIdMismatch { expected, actual } => {
                 Self::ClientIDMismatch { expected, actual }
             }
