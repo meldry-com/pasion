@@ -377,7 +377,7 @@ jobs:
     steps:
 
       - name: Create GitHub release
-        uses: softprops/action-gh-release@v3.0.2
+        uses: softprops/action-gh-release@v3.0.3
         with:
           draft: true
           generate_release_notes: true
