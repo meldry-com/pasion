@@ -14,10 +14,7 @@ use clap::Parser;
 use pasion_config::{ConfigurationSectionExt, TelemetryConfig};
 use sentry_tracing::EventFilter;
 use tracing_subscriber::{
-    EnvFilter, Layer, Registry,
-    filter::{LevelFilter, filter_fn},
-    layer::SubscriberExt,
-    util::SubscriberInitExt,
+    EnvFilter, Layer, Registry, filter::LevelFilter, layer::SubscriberExt, util::SubscriberInitExt,
 };
 
 mod commands;
@@ -107,9 +104,6 @@ async fn execute_command() -> anyhow::Result<ExitCode> {
         .or_else(|_| EnvFilter::try_new("info"))
         .context("could not setup logging filter")?;
 
-    // Filter out noisy Jaeger propagator warnings about empty header values
-    let jaeger_suppression = filter_fn(|meta| meta.name() != "JaegerPropagator.InvalidHeader");
-
     // Install the default rustls crypto provider
     rustls::crypto::aws_lc_rs::default_provider()
         .install_default()
@@ -162,7 +156,6 @@ async fn execute_command() -> anyhow::Result<ExitCode> {
 
     // Assemble and install the subscriber
     Registry::default()
-        .with(jaeger_suppression)
         .with(sentry_layer)
         .with(otel_layer)
         .with(env_filter)
