@@ -15,14 +15,20 @@ use crate::{
             call_context::extract_call_context, model::User, params::extract_ulid_param,
             response::SingleResponse,
         },
-        common::DepotExt,
+        common::{DepotExt, nullable_field},
     },
 };
 
 #[derive(Deserialize, JsonSchema)]
 pub struct UpdateRequest {
+    #[expect(clippy::option_option)]
+    #[serde(default, deserialize_with = "nullable_field")]
     display_name: Option<Option<String>>,
+    #[expect(clippy::option_option)]
+    #[serde(default, deserialize_with = "nullable_field")]
     avatar_url: Option<Option<String>>,
+    #[expect(clippy::option_option)]
+    #[serde(default, deserialize_with = "nullable_field")]
     preferred_locale: Option<Option<String>>,
     admin: Option<bool>,
     locked: Option<bool>,
@@ -72,6 +78,10 @@ pub async fn update_user(req: &mut Request, depot: &Depot) -> JsonResult<SingleR
 
     repo.save().await?;
 
+    if body.admin == Some(true) {
+        crate::services::user_admin::push_admin_grant(homeserver.as_ref(), &user).await;
+    }
+
     Ok(Json(SingleResponse::new_canonical(User::from(user))))
 }
 
@@ -113,6 +123,9 @@ fn map_service_error(error: crate::services::user_admin::UserAdminServiceError) 
         } => AppError::conflict(format!(
             "Provider ID {provider_id} already has subject {subject}"
         )),
+        crate::services::user_admin::UserAdminServiceError::LastAdmin => {
+            AppError::conflict("Cannot remove the last active administrator")
+        }
         crate::services::user_admin::UserAdminServiceError::Homeserver(error) => {
             AppError::internal(std::io::Error::other(error.to_string()))
         }

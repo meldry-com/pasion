@@ -35,7 +35,11 @@ pub fn Consent(grant_id: String) -> Element {
                             div { class: "login-container",
                                 h1 { class: "heading-md login-title", "Access Denied" }
                                 div { class: "alert alert-critical",
-                                    p { "This authorization request was denied by policy." }
+                                    if resp.admin_required {
+                                        p { "This application requires an administrator account. The account you are signed in with is not an administrator." }
+                                    } else {
+                                        p { "This authorization request was denied by policy." }
+                                    }
                                 }
                             }
                         }

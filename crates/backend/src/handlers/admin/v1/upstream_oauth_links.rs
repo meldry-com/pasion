@@ -94,7 +94,10 @@ pub async fn add_link(
         ..
     } = ctx;
     let mut rng = crate::handlers::account::make_rng();
-    let body: AddRequest = req.parse_json().await.map_err(AppError::internal)?;
+    let body: AddRequest = req
+        .parse_json()
+        .await
+        .map_err(|error| AppError::bad_request(error.to_string()))?;
 
     // Resolve the target user
     let owner = repo
@@ -400,10 +403,15 @@ pub async fn list_links(
 
 #[derive(Deserialize)]
 pub struct UpdateRequest {
+    #[expect(clippy::option_option)]
+    #[serde(default, deserialize_with = "crate::handlers::common::nullable_field")]
     user_id: Option<Option<Ulid>>,
     subject: Option<String>,
+    #[expect(clippy::option_option)]
+    #[serde(default, deserialize_with = "crate::handlers::common::nullable_field")]
     human_account_name: Option<Option<String>>,
 }
+
 #[endpoint]
 #[tracing::instrument(name = "handler.admin.v1.upstream_oauth_links.update", skip_all)]
 pub async fn update_link(
@@ -480,6 +488,9 @@ fn map_service_error(error: crate::services::user_admin::UserAdminServiceError) 
         }
         crate::services::user_admin::UserAdminServiceError::EmailAlreadyInUse(email) => {
             AppError::conflict(format!("User email {email:?} already in use"))
+        }
+        crate::services::user_admin::UserAdminServiceError::LastAdmin => {
+            AppError::conflict("Cannot remove the last active administrator")
         }
         crate::services::user_admin::UserAdminServiceError::Homeserver(error) => {
             AppError::internal(std::io::Error::other(error.to_string()))
@@ -1603,6 +1614,96 @@ mod tests {
         assert_eq!(updated.human_account_name.as_deref(), Some("Bob Provider"));
 
         let _ = alice;
+    }
+
+    #[tokio::test]
+    async fn test_patch_upstream_oauth_link_null_clears_fields() {
+        setup();
+        let pool = pasion_data::test_utils::setup_test_pool().await;
+        let mut state = TestState::from_pool(pool.clone()).await.unwrap();
+        let unique = unique_test_nonce();
+        state.clock.advance(Duration::seconds(unique as i64));
+        let token = state.token_with_scope("urn:pasion:admin").await;
+        let mut rng = ChaChaRng::seed_from_u64(unique);
+        let mut repo = state.repository().await.unwrap();
+        let suffix = Ulid::new().to_string().to_lowercase();
+
+        let alice = repo
+            .user()
+            .add(&mut rng, &state.clock, format!("alice{suffix}"))
+            .await
+            .unwrap();
+        let provider = repo
+            .upstream_oauth_provider()
+            .add(
+                &mut rng,
+                &state.clock,
+                test_utils::oidc_provider_params(&format!("provider-{suffix}")),
+            )
+            .await
+            .unwrap();
+        let link = repo
+            .upstream_oauth_link()
+            .add(
+                &mut rng,
+                &state.clock,
+                &provider,
+                format!("subject-{suffix}"),
+                Some("Alice Provider".to_owned()),
+            )
+            .await
+            .unwrap();
+        repo.upstream_oauth_link()
+            .associate_to_user(&link, &alice)
+            .await
+            .unwrap();
+        repo.save().await.unwrap();
+
+        let request = Request::patch(format!("/api/admin/v1/upstream-oauth-links/{}", link.id))
+            .bearer(&token)
+            .json(serde_json::json!({
+                "user_id": null,
+                "human_account_name": null
+            }));
+
+        let response = state.request(request).await;
+        response.assert_status(StatusCode::OK);
+        let body: serde_json::Value = response.json();
+        assert_eq!(
+            body["data"]["attributes"]["user_id"],
+            serde_json::Value::Null
+        );
+        assert_eq!(
+            body["data"]["attributes"]["human_account_name"],
+            serde_json::Value::Null
+        );
+
+        let mut repo = state.repository().await.unwrap();
+        let updated = repo
+            .upstream_oauth_link()
+            .lookup(link.id)
+            .await
+            .unwrap()
+            .unwrap();
+        assert_eq!(updated.user_id, None);
+        assert_eq!(updated.human_account_name, None);
+        assert_eq!(updated.subject, format!("subject-{suffix}"));
+    }
+
+    #[tokio::test]
+    async fn test_create_rejects_malformed_body() {
+        setup();
+        let pool = pasion_data::test_utils::setup_test_pool().await;
+        let mut state = TestState::from_pool(pool).await.unwrap();
+        let token = state.token_with_scope("urn:pasion:admin").await;
+
+        let request = Request::post("/api/admin/v1/upstream-oauth-links")
+            .bearer(&token)
+            .json(serde_json::json!({ "subject": 42 }));
+        state
+            .request(request)
+            .await
+            .assert_status(StatusCode::BAD_REQUEST);
     }
 
     #[tokio::test]

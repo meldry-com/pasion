@@ -54,7 +54,10 @@ pub async fn add_user(req: &mut Request, depot: &Depot) -> CreatedJsonResult<Sin
     } = call_context;
     let mut rng = crate::handlers::account::make_rng();
     let homeserver = depot.homeserver()?;
-    let params: AddRequest = req.parse_json().await.map_err(AppError::internal)?;
+    let params: AddRequest = req
+        .parse_json()
+        .await
+        .map_err(|error| AppError::bad_request(error.to_string()))?;
 
     if repo.user().exists(&params.username).await? {
         return Err(AppError::conflict("User already exists"));
@@ -143,7 +146,10 @@ pub async fn batch_invite(
         ..
     } = call_context;
     let mut rng = crate::handlers::account::make_rng();
-    let params: BatchInviteRequest = req.parse_json().await.map_err(AppError::internal)?;
+    let params: BatchInviteRequest = req
+        .parse_json()
+        .await
+        .map_err(|error| AppError::bad_request(error.to_string()))?;
 
     if params.count == 0 || params.count > 100 {
         return Err(AppError::bad_request("Count must be between 1 and 100"));

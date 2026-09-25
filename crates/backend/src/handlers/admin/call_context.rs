@@ -63,6 +63,11 @@ pub enum Rejection {
     /// The session does not have the required admin scope
     #[error("Missing admin scope (expected urn:pasion:admin or urn:mas:admin)")]
     MissingScope,
+
+    /// The session carries the admin scope, but the user behind it is not an
+    /// administrator (or there is no user behind it at all)
+    #[error("The user is not an administrator")]
+    NotAdmin,
 }
 
 impl Scribe for Rejection {
@@ -87,6 +92,8 @@ impl Scribe for Rejection {
             | Rejection::UserLocked
             | Rejection::MissingScope
             | Rejection::InvalidAccessTokenType(_) => StatusCode::UNAUTHORIZED,
+
+            Rejection::NotAdmin => StatusCode::FORBIDDEN,
 
             Rejection::RepositorySetup(_)
             | Rejection::Repository(_)
@@ -265,6 +272,35 @@ pub async fn extract_call_context(req: &Request, depot: &Depot) -> Result<CallCo
     // Later we might want to check other route-specific scopes
     if !super::has_admin_scope(session.scope()) {
         return Err(Rejection::MissingScope);
+    }
+
+    // The scope alone is not enough: it was granted at login time, and the
+    // user may have been demoted since. `can_request_admin` is re-checked on
+    // every call so revoking it takes effect immediately.
+    if !super::may_hold_admin_scope(user.as_ref()) {
+        return Err(Rejection::NotAdmin);
+    }
+
+    // A locked user may still be the actor of a personal session (to act on
+    // the homeserver), but never wields admin power.
+    if user.as_ref().is_some_and(|user| !user.is_valid()) {
+        return Err(Rejection::UserLocked);
+    }
+
+    // A personal session created by a user acts with that user's authority,
+    // so its owner must still be an administrator too.
+    if let CallerSession::PersonalSession(personal) = &session
+        && let PersonalSessionOwner::User(owner_id) = personal.owner
+        && user.as_ref().is_none_or(|actor| actor.id != owner_id)
+    {
+        let owner = repo
+            .user()
+            .lookup(owner_id)
+            .await?
+            .ok_or_else(|| Rejection::LoadUser(owner_id))?;
+        if !super::may_hold_admin_scope(Some(&owner)) {
+            return Err(Rejection::NotAdmin);
+        }
     }
 
     Ok(CallContext {

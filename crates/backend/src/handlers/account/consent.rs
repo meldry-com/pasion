@@ -45,6 +45,9 @@ pub struct ConsentGetResponse {
     pub scope: String,
     pub user: UserInfo,
     pub policy_violation: bool,
+    /// Set when the request was denied because it asks for administrative
+    /// scopes and the user is not an administrator.
+    pub admin_required: bool,
 }
 
 #[derive(Deserialize, ToSchema)]
@@ -101,6 +104,7 @@ fn consent_get_response(screen: ConsentScreen) -> ConsentGetResponse {
             display_name: screen.user_display_name,
         },
         policy_violation: screen.policy_violation,
+        admin_required: screen.admin_required,
     }
 }
 

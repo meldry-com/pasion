@@ -53,7 +53,10 @@ pub async fn add_email(
         ..
     } = ctx;
     let mut rng = crate::handlers::account::make_rng();
-    let body: AddRequest = req.parse_json().await.map_err(AppError::internal)?;
+    let body: AddRequest = req
+        .parse_json()
+        .await
+        .map_err(|error| AppError::bad_request(error.to_string()))?;
 
     // Resolve the target user
     let owner = repo
@@ -364,6 +367,9 @@ fn map_service_error(error: crate::services::user_admin::UserAdminServiceError) 
         } => AppError::conflict(format!(
             "Provider ID {provider_id} already has subject {subject}"
         )),
+        crate::services::user_admin::UserAdminServiceError::LastAdmin => {
+            AppError::conflict("Cannot remove the last active administrator")
+        }
         crate::services::user_admin::UserAdminServiceError::Homeserver(error) => {
             AppError::internal(std::io::Error::other(error.to_string()))
         }

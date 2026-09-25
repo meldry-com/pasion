@@ -21,15 +21,20 @@ pasion manage issue-compatibility-token --scope "urn:pasion:admin" <user_id>
 
 ### 2. OAuth 2.0 令牌
 
-使用客户端凭据流程获取管理 API 的访问令牌：
+管理作用域只授予管理员用户（`admin` 标志为 `true`）。`client_credentials` 授权没有用户，**无法**获得管理 API 访问权限。
 
-```bash
-curl -X POST https://auth.example.com/oauth2/token \
-  -d "grant_type=client_credentials" \
-  -d "client_id=你的客户端ID" \
-  -d "client_secret=你的客户端密钥" \
-  -d "scope=urn:pasion:admin"
+面向自动化工具，请由已有管理员通过 `POST /api/admin/v1/personal-sessions` 为某个管理员用户创建个人访问令牌：
+
+```json
+{
+  "actor_user_id": "管理员用户ID",
+  "human_name": "Provisioning bot",
+  "scope": "urn:pasion:admin",
+  "expires_in": 31536000
+}
 ```
+
+该用户一旦被撤销管理员、锁定或停用，令牌立即失效。建议为每个工具单独建一个管理员用户。
 
 ## 响应格式
 

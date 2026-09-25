@@ -66,13 +66,38 @@ pub async fn risk_action(req: &mut Request, depot: &Depot) -> JsonResult<RiskAct
     } = call_context;
     let id = extract_ulid_param(req)?;
     let mut rng = crate::handlers::account::make_rng();
-    let params: RiskActionRequest = req.parse_json().await.map_err(AppError::internal)?;
+    let params: RiskActionRequest = req
+        .parse_json()
+        .await
+        .map_err(|error| AppError::bad_request(error.to_string()))?;
 
     let user = repo
         .user()
         .lookup(id)
         .await?
         .ok_or_else(|| AppError::not_found(format!("User ID {id} not found")))?;
+
+    // Locking the last active administrator would lock everybody out of the
+    // admin dashboard.
+    if matches!(params.action.as_str(), "lock" | "force_password_reset")
+        && user.can_request_admin
+        && user.is_valid()
+    {
+        repo.user().acquire_bootstrap_admin_lock().await?;
+        let active_admins = repo
+            .user()
+            .count(
+                pasion_data::user::UserFilter::new()
+                    .can_request_admin_only()
+                    .active_only(),
+            )
+            .await?;
+        if active_admins <= 1 {
+            return Err(AppError::conflict(
+                "Cannot remove the last active administrator",
+            ));
+        }
+    }
 
     let mut sessions_terminated = None;
 
@@ -166,7 +191,10 @@ pub async fn set_password(req: &mut Request, depot: &Depot) -> AppResult<StatusC
     let id = extract_ulid_param(req)?;
     let mut rng = crate::handlers::account::make_rng();
     let password_manager = depot.password_manager()?;
-    let params: SetPasswordRequest = req.parse_json().await.map_err(AppError::internal)?;
+    let params: SetPasswordRequest = req
+        .parse_json()
+        .await
+        .map_err(|error| AppError::bad_request(error.to_string()))?;
 
     if !password_manager.is_enabled() {
         return Err(AppError::forbidden("Password auth is disabled"));

@@ -82,7 +82,10 @@ pub async fn add_session(
     } = ctx;
     let mut rng = crate::handlers::account::make_rng();
     let homeserver = depot.homeserver()?;
-    let body: AddRequest = req.parse_json().await.map_err(AppError::internal)?;
+    let body: AddRequest = req
+        .parse_json()
+        .await
+        .map_err(|error| AppError::bad_request(error.to_string()))?;
     let owner = personal_session_owner_from_caller(&caller_session);
 
     // Look up the target user
@@ -100,6 +103,14 @@ pub async fn add_session(
         .scope
         .parse()
         .map_err(|_| AppError::bad_request("Provided scope string is malformed"))?;
+
+    if crate::handlers::admin::requires_admin(&parsed_scope)
+        && !crate::handlers::admin::may_hold_admin_scope(Some(&target_user))
+    {
+        return Err(AppError::forbidden(
+            "Administrative scopes can only be granted to administrator users",
+        ));
+    }
 
     // Persist the personal session
     let new_session = repo
@@ -594,6 +605,19 @@ mod tests {
             .add(&mut rng, &state.clock, "alice".to_owned())
             .await
             .unwrap();
+        // Administrative scopes can only be granted to administrators.
+        let user = repo
+            .user()
+            .patch(
+                &state.clock,
+                user,
+                pasion_data::UserPatch {
+                    can_request_admin: Some(true),
+                    ..Default::default()
+                },
+            )
+            .await
+            .unwrap();
 
         repo.save().await.unwrap();
 
@@ -640,6 +664,37 @@ mod tests {
           }
         }
         "#);
+    }
+
+    #[tokio::test]
+    async fn test_create_personal_session_admin_scope_for_non_admin() {
+        setup();
+        let pool = pasion_data::test_utils::setup_test_pool().await;
+        let mut state = TestState::from_pool(pool.clone()).await.unwrap();
+        let token = state.token_with_scope("urn:pasion:admin").await;
+
+        let mut repo = state.repository().await.unwrap();
+        let mut rng = state.rng();
+        let user = repo
+            .user()
+            .add(&mut rng, &state.clock, "alice".to_owned())
+            .await
+            .unwrap();
+        repo.save().await.unwrap();
+
+        for scope in ["openid urn:pasion:admin", "urn:palpo:admin:users"] {
+            let request = Request::post("/api/admin/v1/personal-sessions")
+                .bearer(&token)
+                .json(json!({
+                    "actor_user_id": user.id,
+                    "human_name": "Test Session",
+                    "scope": scope,
+                }));
+            state
+                .request(request)
+                .await
+                .assert_status(StatusCode::FORBIDDEN);
+        }
     }
 
     #[tokio::test]
@@ -1068,6 +1123,19 @@ mod tests {
         let user = repo
             .user()
             .add(&mut rng, &state.clock, "alice".to_owned())
+            .await
+            .unwrap();
+        // Administrative scopes can only be granted to administrators.
+        let user = repo
+            .user()
+            .patch(
+                &state.clock,
+                user,
+                pasion_data::UserPatch {
+                    can_request_admin: Some(true),
+                    ..Default::default()
+                },
+            )
             .await
             .unwrap();
 

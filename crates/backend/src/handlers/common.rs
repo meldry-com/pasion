@@ -19,7 +19,7 @@ use pasion_policy::{Policy, PolicyFactory};
 use rand_chacha::ChaChaRng;
 use rand_core::SeedableRng;
 use salvo::prelude::*;
-use serde::Serialize;
+use serde::{Deserialize, Deserializer, Serialize};
 use ulid::Ulid;
 
 use crate::{
@@ -109,7 +109,10 @@ impl RequestingEntity {
 
     pub fn is_admin(&self) -> bool {
         match self {
-            Self::OAuth2Session(tuple) => crate::handlers::admin::has_admin_scope(&tuple.0.scope),
+            Self::OAuth2Session(tuple) => {
+                crate::handlers::admin::has_admin_scope(&tuple.0.scope)
+                    && crate::handlers::admin::may_hold_admin_scope(tuple.1.as_ref())
+            }
             _ => false,
         }
     }
@@ -257,6 +260,21 @@ pub trait DepotExt {
     fn key_store(&self) -> Result<pasion_keystore::Keystore, RouteError>;
     fn app_version(&self) -> Result<pasion_data::AppVersion, RouteError>;
     fn cookie_jar(&self, req: &Request) -> Result<CookieJar, RouteError>;
+}
+
+/// Serde helper for PATCH-style `Option<Option<T>>` fields.
+///
+/// Use with `#[serde(default, deserialize_with = "nullable_field")]` so that an
+/// absent field stays `None` (keep), an explicit `null` becomes `Some(None)`
+/// (clear) and a value becomes `Some(Some(value))` (set). Plain
+/// `Option<Option<T>>` collapses `null` into the outer `None`, so the field
+/// could never be cleared.
+pub fn nullable_field<'de, T, D>(deserializer: D) -> Result<Option<T>, D::Error>
+where
+    T: Deserialize<'de>,
+    D: Deserializer<'de>,
+{
+    Deserialize::deserialize(deserializer).map(Some)
 }
 
 fn depot_get<T: Send + Sync + Clone + 'static>(depot: &Depot, key: &str) -> Result<T, RouteError> {

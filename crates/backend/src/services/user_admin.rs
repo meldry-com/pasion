@@ -6,11 +6,11 @@ use pasion_data::{
     AdminUserPatch, BoxRepository, Clock, RepositoryAccess, RepositoryError, UpstreamOAuthLink,
     UpstreamOAuthLinkPatch, User, UserEmail, UserEmailPatch,
     audit::AdminOperation,
-    queue::{DeactivateUserJob, QueueJobRepositoryExt as _},
+    queue::{DeactivateUserJob, ProvisionUserJob, QueueJobRepositoryExt as _},
     upstream_oauth2::{UpstreamOAuthLinkRepository, UpstreamOAuthProviderRepository},
-    user::{UserEmailRepository, UserRepository},
+    user::{UserEmailRepository, UserFilter, UserRepository},
 };
-use pasion_matrix::HomeserverAdmin;
+use pasion_matrix::{HomeserverAdmin, ProvisionRequest};
 use rand_core::RngCore;
 use thiserror::Error;
 use ulid::Ulid;
@@ -53,6 +53,9 @@ pub enum UserAdminServiceError {
     #[error("upstream provider {provider_id} already has subject {subject}")]
     UpstreamSubjectAlreadyLinked { provider_id: Ulid, subject: String },
 
+    #[error("cannot remove the last active administrator")]
+    LastAdmin,
+
     #[error(transparent)]
     Homeserver(AnyhowError),
 
@@ -80,6 +83,40 @@ pub async fn patch_user(
 
     if patch.is_empty() {
         return Ok(user);
+    }
+
+    // Serialize with `ProvisionUserJob` (and concurrent patches of this user)
+    // so a job that read the old admin flag can't push it to the homeserver
+    // after this change, then re-read the user under the lock.
+    repo.user().acquire_lock_for_sync(&user).await?;
+    let user = repo
+        .user()
+        .lookup(user_id)
+        .await?
+        .ok_or(UserAdminServiceError::UserNotFound(user_id))?;
+
+    let admin_changed = patch
+        .can_request_admin
+        .is_some_and(|admin| admin != user.can_request_admin);
+
+    // Never leave the deployment without an active administrator: nobody
+    // could get back into the admin dashboard to fix it.
+    let removes_active_admin = user.can_request_admin
+        && user.is_valid()
+        && (patch.can_request_admin == Some(false)
+            || patch.locked == Some(true)
+            || patch.deactivated == Some(true));
+    if removes_active_admin {
+        // Two admins demoting each other at the same time must not both see
+        // the other one as still active.
+        repo.user().acquire_bootstrap_admin_lock().await?;
+        let active_admins = repo
+            .user()
+            .count(UserFilter::new().can_request_admin_only().active_only())
+            .await?;
+        if active_admins <= 1 {
+            return Err(UserAdminServiceError::LastAdmin);
+        }
     }
 
     let display_name_patch = patch.display_name.clone();
@@ -148,7 +185,44 @@ pub async fn patch_user(
     )
     .await?;
 
+    if admin_changed {
+        // Converge the homeserver on whatever ends up committed.
+        repo.queue_job()
+            .schedule_job(rng, clock, ProvisionUserJob::new_for_id(updated.id))
+            .await?;
+
+        // A revocation is pushed right away, as the last step before the
+        // commit, so it takes effect before this request returns; if the
+        // homeserver can't be reached the whole change is rolled back. A
+        // grant is only pushed once committed (`push_admin_grant`), so a
+        // failed commit can never leave the homeserver granting admin.
+        if !updated.can_request_admin {
+            let request = ProvisionRequest::new(updated.username.clone(), updated.sub.clone())
+                .set_admin(false);
+            homeserver
+                .provision_user(&request)
+                .await
+                .map_err(UserAdminServiceError::Homeserver)?;
+        }
+    }
+
     Ok(updated)
+}
+
+/// Push a committed admin grant to the homeserver without waiting for the
+/// scheduled `ProvisionUserJob`. Best effort: the job retries on failure.
+pub async fn push_admin_grant(homeserver: &dyn HomeserverAdmin, user: &User) {
+    if !user.can_request_admin {
+        return;
+    }
+    let request = ProvisionRequest::new(user.username.clone(), user.sub.clone()).set_admin(true);
+    if let Err(error) = homeserver.provision_user(&request).await {
+        tracing::warn!(
+            user.id = %user.id,
+            error = &*error as &dyn std::error::Error,
+            "failed to push admin grant to the homeserver; the provision job will retry",
+        );
+    }
 }
 
 pub async fn patch_user_email(

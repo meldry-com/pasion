@@ -68,7 +68,7 @@ pub struct ProvisionRequest {
     displayname: FieldUpdate<String>,
     avatar_url: FieldUpdate<String>,
     emails: FieldUpdate<Vec<String>>,
-    admin: bool,
+    admin: Option<bool>,
 }
 
 impl ProvisionRequest {
@@ -86,7 +86,7 @@ impl ProvisionRequest {
             displayname: FieldUpdate::default(),
             avatar_url: FieldUpdate::default(),
             emails: FieldUpdate::default(),
-            admin: false,
+            admin: None,
         }
     }
 
@@ -197,16 +197,16 @@ impl ProvisionRequest {
         self
     }
 
-    /// Mark the user as a homeserver admin.
+    /// Set whether the user is a homeserver admin. `false` revokes the flag.
     #[must_use]
-    pub fn set_admin(mut self) -> Self {
-        self.admin = true;
+    pub fn set_admin(mut self, admin: bool) -> Self {
+        self.admin = Some(admin);
         self
     }
 
-    /// Whether the user should be a homeserver admin.
+    /// The admin flag to set on the homeserver, `None` to leave it unchanged.
     #[must_use]
-    pub fn is_admin(&self) -> bool {
+    pub fn admin(&self) -> Option<bool> {
         self.admin
     }
 }

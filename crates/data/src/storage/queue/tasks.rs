@@ -223,14 +223,15 @@ impl InsertableJob for ProcessNotificationDeliveriesJob {
 }
 
 /// A job to provision the user on the homeserver.
+///
+/// The homeserver admin flag is always mirrored from the user's current
+/// `can_request_admin` value when the job runs, both ways.
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct ProvisionUserJob {
     user_id: Ulid,
     set_display_name: Option<String>,
     #[serde(default)]
     set_avatar_url: Option<String>,
-    #[serde(default)]
-    admin: bool,
 }
 
 impl ProvisionUserJob {
@@ -241,7 +242,6 @@ impl ProvisionUserJob {
             user_id: user.id,
             set_display_name: None,
             set_avatar_url: None,
-            admin: false,
         }
     }
 
@@ -252,7 +252,6 @@ impl ProvisionUserJob {
             user_id,
             set_display_name: None,
             set_avatar_url: None,
-            admin: false,
         }
     }
 
@@ -270,13 +269,6 @@ impl ProvisionUserJob {
         self
     }
 
-    /// Mark the user as an admin on the homeserver.
-    #[must_use]
-    pub fn set_admin(mut self) -> Self {
-        self.admin = true;
-        self
-    }
-
     /// Get the display name to be set.
     #[must_use]
     pub fn display_name_to_set(&self) -> Option<&str> {
@@ -287,12 +279,6 @@ impl ProvisionUserJob {
     #[must_use]
     pub fn avatar_url_to_set(&self) -> Option<&str> {
         self.set_avatar_url.as_deref()
-    }
-
-    /// Whether the user should be made admin on the homeserver.
-    #[must_use]
-    pub fn is_admin(&self) -> bool {
-        self.admin
     }
 
     /// The ID of the user to provision.

@@ -403,6 +403,9 @@ impl Resource for UserRegistrationToken {
 }
 
 /// An upstream OAuth 2.0 provider
+///
+/// Exposes the full provider configuration except the client secret, which is
+/// write-only (see `has_client_secret`).
 #[derive(Serialize, JsonSchema, ToSchema)]
 pub struct UpstreamOAuthProvider {
     #[serde(skip)]
@@ -430,6 +433,67 @@ pub struct UpstreamOAuthProvider {
     /// or hard-delete them. `"manual"` rows were created via the admin API
     /// and are fully mutable from there.
     source: String,
+
+    /// The OAuth client ID registered with the provider
+    client_id: String,
+
+    /// Whether a client secret is stored. The secret itself is never returned.
+    has_client_secret: bool,
+
+    /// Space-separated scope requested from the provider
+    scope: String,
+
+    /// How the client authenticates at the token endpoint
+    token_endpoint_auth_method: String,
+
+    /// JWS algorithm used for `private_key_jwt` / `client_secret_jwt`
+    token_endpoint_signing_alg: Option<String>,
+
+    /// Expected JWS algorithm of ID tokens
+    id_token_signed_response_alg: String,
+
+    /// Whether to fetch the userinfo endpoint after the token exchange
+    fetch_userinfo: bool,
+
+    /// Expected JWS algorithm of signed userinfo responses
+    userinfo_signed_response_alg: Option<String>,
+
+    /// Claims-import configuration
+    #[schemars(with = "serde_json::Value")]
+    claims_imports: serde_json::Value,
+
+    /// Authorization endpoint override
+    authorization_endpoint_override: Option<String>,
+
+    /// Token endpoint override
+    token_endpoint_override: Option<String>,
+
+    /// Userinfo endpoint override
+    userinfo_endpoint_override: Option<String>,
+
+    /// JWKS URI override
+    jwks_uri_override: Option<String>,
+
+    /// One of: oidc, insecure, disabled
+    discovery_mode: String,
+
+    /// One of: auto, s256, disabled
+    pkce_mode: String,
+
+    /// One of: query, form_post
+    response_mode: Option<String>,
+
+    /// Extra parameters appended to the authorization request
+    additional_authorization_parameters: Vec<(String, String)>,
+
+    /// Whether to forward the `login_hint` parameter to the provider
+    forward_login_hint: bool,
+
+    /// Display order on the login page (ascending)
+    ui_order: i32,
+
+    /// One of: do_nothing, logout_browser_only, logout_all
+    on_backchannel_logout: String,
 }
 
 impl From<pasion_data::UpstreamOAuthProvider> for UpstreamOAuthProvider {
@@ -442,6 +506,33 @@ impl From<pasion_data::UpstreamOAuthProvider> for UpstreamOAuthProvider {
             created_at: provider.created_at,
             disabled_at: provider.disabled_at,
             source: provider.source.as_str().to_owned(),
+            client_id: provider.client_id,
+            has_client_secret: provider.encrypted_client_secret.is_some(),
+            scope: provider.scope.to_string(),
+            token_endpoint_auth_method: provider.token_endpoint_auth_method.as_str().to_owned(),
+            token_endpoint_signing_alg: provider
+                .token_endpoint_signing_alg
+                .map(|alg| alg.to_string()),
+            id_token_signed_response_alg: provider.id_token_signed_response_alg.to_string(),
+            fetch_userinfo: provider.fetch_userinfo,
+            userinfo_signed_response_alg: provider
+                .userinfo_signed_response_alg
+                .map(|alg| alg.to_string()),
+            claims_imports: serde_json::to_value(&provider.claims_imports)
+                .unwrap_or(serde_json::Value::Null),
+            authorization_endpoint_override: provider
+                .authorization_endpoint_override
+                .map(String::from),
+            token_endpoint_override: provider.token_endpoint_override.map(String::from),
+            userinfo_endpoint_override: provider.userinfo_endpoint_override.map(String::from),
+            jwks_uri_override: provider.jwks_uri_override.map(String::from),
+            discovery_mode: provider.discovery_mode.as_str().to_owned(),
+            pkce_mode: provider.pkce_mode.as_str().to_owned(),
+            response_mode: provider.response_mode.map(|mode| mode.as_str().to_owned()),
+            additional_authorization_parameters: provider.additional_authorization_parameters,
+            forward_login_hint: provider.forward_login_hint,
+            ui_order: provider.ui_order,
+            on_backchannel_logout: provider.on_backchannel_logout.as_str().to_owned(),
         }
     }
 }
