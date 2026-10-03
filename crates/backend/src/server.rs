@@ -342,6 +342,13 @@ pub fn build_router(
         }
     }
 
+    // State must be injected before fan-out; middleware stays inside the mount.
+    router = router
+        .hoop(inject_app_state)
+        .hoop(log_response_middleware)
+        .hoop(tracing_middleware)
+        .hoop(sentry_middleware);
+
     // Apply prefix if specified
     let prefix = format!("{}/", prefix.unwrap_or_default().trim_end_matches('/'));
     if !prefix.is_empty() && prefix != "/" {
@@ -349,12 +356,7 @@ pub fn build_router(
         router = prefixed_router.push(router);
     }
 
-    // Add middleware layers
     router
-        .hoop(inject_app_state)
-        .hoop(log_response_middleware)
-        .hoop(tracing_middleware)
-        .hoop(sentry_middleware)
 }
 
 fn build_human_router(router: Router, _templates: Templates) -> Router {
@@ -1066,5 +1068,106 @@ mod tests {
             Some("<redacted>")
         );
         assert_eq!(redacted_query_for_tracing(""), None);
+    }
+}
+
+#[cfg(all(test, feature = "cedar"))]
+mod mount_tests {
+    use diesel_async::pooled_connection::{AsyncDieselConnectionManager, deadpool::Pool};
+    use salvo::test::{ResponseExt, TestClient};
+
+    use super::*;
+    use crate::handlers::test_utils::TestState;
+
+    #[handler]
+    async fn host_probe() -> &'static str {
+        "host"
+    }
+
+    // Discovery and the SPA do not need a database connection. A deliberately
+    // unreachable DB catches accidental state-initialization/query coupling.
+    #[tokio::test]
+    async fn mounted_state_and_middleware_do_not_leak_into_host_routes() {
+        crate::handlers::test_utils::setup();
+        crate::VERSION.get_or_init(|| "test");
+        let pool = Pool::builder(AsyncDieselConnectionManager::new(
+            "postgres://localhost:1/unreachable",
+        ))
+        .build()
+        .unwrap();
+        let t = TestState::from_pool(pool).await.unwrap();
+        let matrix = serde_json::from_value(serde_json::json!({"homeserver":"example.com","endpoint":"https://example.com/","secret":"test"})).unwrap();
+        let connectors =
+            crate::util::homeserver_connection_from_config(&matrix, t.http_client.clone())
+                .await
+                .unwrap();
+        let state = AppState {
+            repository_factory: t.repository_factory.clone(),
+            templates: t.templates.clone(),
+            key_store: t.key_store.clone(),
+            cookie_manager: t.cookie_manager.clone(),
+            encrypter: t.encrypter.clone(),
+            url_builder: pasion_data::UrlBuilder::new(
+                "https://example.com/_pasion/".parse().unwrap(),
+                None,
+                None,
+            ),
+            connector_registry: connectors,
+            policy_factory: t.policy_factory.clone(),
+            http_client: t.http_client.clone(),
+            password_manager: t.password_manager.clone(),
+            metadata_cache: t.metadata_cache.clone(),
+            site_config: t.site_config.clone(),
+            matrix_shared_secret: "test".to_owned(),
+            activity_tracker: t.activity_tracker.clone(),
+            trusted_proxies: vec![],
+            limiter: t.limiter.clone(),
+            frontend_script_src: "/_pasion/assets/frontend.js".to_owned(),
+            email_webhook_service: None,
+        };
+        let service = Service::new(
+            Router::new()
+                .push(build_router(
+                    state,
+                    &[
+                        HttpResource::Discovery,
+                        HttpResource::Human,
+                        HttpResource::OAuth,
+                    ],
+                    Some("/_pasion/"),
+                    None,
+                ))
+                .push(Router::with_path("probe").get(host_probe)),
+        );
+        let mut res =
+            TestClient::get("https://example.com/_pasion/.well-known/openid-configuration")
+                .send(&service)
+                .await;
+        assert_eq!(res.status_code, Some(StatusCode::OK));
+        let document: serde_json::Value =
+            serde_json::from_str(&res.take_string().await.unwrap()).unwrap();
+        assert_eq!(document["issuer"], "https://example.com/_pasion/");
+        assert_eq!(
+            document["token_endpoint"],
+            "https://example.com/_pasion/oauth2/token"
+        );
+        let mut res = TestClient::get("https://example.com/_pasion/login")
+            .send(&service)
+            .await;
+        assert_eq!(res.status_code, Some(StatusCode::OK));
+        assert!(
+            res.take_string()
+                .await
+                .unwrap()
+                .contains("/_pasion/assets/frontend.js")
+        );
+        let mut res = TestClient::get("https://example.com/probe")
+            .send(&service)
+            .await;
+        assert_eq!(res.take_string().await.unwrap(), "host");
+        let res = TestClient::get("https://example.com/oauth2/keys.json")
+            .send(&service)
+            .await;
+        assert_eq!(res.status_code, Some(StatusCode::NOT_FOUND));
     }
 }

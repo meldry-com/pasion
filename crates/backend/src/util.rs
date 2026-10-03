@@ -269,10 +269,25 @@ pub fn notification_center_from_config(
 
 /// Test the connection to the mailer in a background task
 pub fn test_mailer_in_background(mailer: &Mailer, timeout: Duration) {
-    let mailer = mailer.clone();
+    test_mailer_in_background_with_shutdown(
+        mailer,
+        timeout,
+        CancellationToken::new(),
+        &TaskTracker::new(),
+    );
+}
 
+/// Test the mailer as part of an embedding host's cancellable task set.
+pub fn test_mailer_in_background_with_shutdown(
+    mailer: &Mailer,
+    timeout: Duration,
+    shutdown: CancellationToken,
+    tasks: &TaskTracker,
+) {
+    let mailer = mailer.clone();
     let span = tracing::info_span!("cli.test_mailer");
-    tokio::spawn(async move {
+    tasks.spawn(async move {
+        let check = async {
         match tokio::time::timeout(timeout, mailer.test_connection()).await {
             Ok(Ok(())) => {}
             Ok(Err(err)) => {
@@ -285,6 +300,8 @@ pub fn test_mailer_in_background(mailer: &Mailer, timeout: Duration) {
                 tracing::warn!("Timed out while testing the mail backend connection, tasks sending mails may fail!");
             }
         }
+        };
+        tokio::select! { () = shutdown.cancelled() => (), () = check => () }
     }
     .instrument(span));
 }

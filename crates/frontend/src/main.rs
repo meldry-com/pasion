@@ -37,6 +37,7 @@ fn main() {
 
 fn app() -> Element {
     let cfg = get_config();
+    let stylesheet = crate::config::app_path(&MAIN_CSS.to_string());
 
     // Fetch site-config once and share it app-wide via context.
     let site_config =
@@ -44,7 +45,7 @@ fn app() -> Element {
     use_context_provider(|| SiteConfigContext(site_config));
 
     rsx! {
-        document::Link { rel: "stylesheet", href: MAIN_CSS }
+        document::Link { rel: "stylesheet", href: stylesheet }
         ThemeToggle {}
 
         if let Some(error) = cfg.error {
@@ -52,7 +53,23 @@ fn app() -> Element {
             // instead of the normal SPA routes.
             ErrorPage { error }
         } else {
-            Router::<Route> {}
+            AppRouter {}
         }
     }
+}
+
+#[component]
+fn AppRouter() -> Element {
+    #[cfg(target_arch = "wasm32")]
+    {
+        let prefix = get_config().root;
+        rsx! {
+            dioxus::router::components::HistoryProvider {
+                history: move |_: ()| std::rc::Rc::new(dioxus::web::WebHistory::new(Some(prefix.clone()), true)) as std::rc::Rc<dyn dioxus_history::History>,
+                Router::<Route> {}
+            }
+        }
+    }
+    #[cfg(not(target_arch = "wasm32"))]
+    rsx! { Router::<Route> {} }
 }

@@ -5583,6 +5583,7 @@ dependencies = [
  "elliptic-curve",
  "form_urlencoded",
  "futures-util",
+ "figment",
  "headers",
  "hex",
  "hmac 0.12.1",
@@ -5627,6 +5628,7 @@ dependencies = [
  "pasion-messaging",
  "pasion-policy",
  "pasion-templates",
+ "pasion-tasks",
  "pbkdf2",
  "pin-project-lite",
  "pkcs8 0.10.2",
@@ -5749,6 +5751,7 @@ version = "1.8.0"
 dependencies = [
  "chrono",
  "dioxus",
+ "dioxus-history",
  "gloo-timers 0.4.0",
  "js-sys",
  "reqwest 0.13.4",

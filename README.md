@@ -321,3 +321,37 @@ Full documentation is available at <https://palpo-im.github.io/pasion/>.
 Pasion is distributed under the GNU Affero General Public License v3.0 only (`AGPL-3.0-only`). See [LICENSE](LICENSE).
 
 Some files retain upstream copyright and notice headers where required.
+
+### Embedding in another Salvo server
+
+`pasion_backend::PasionServer` initializes the same application state as
+`pasion server`, including migrations, configured clients/providers, policy
+refresh, notification workers and activity tracking. It opens no ports and
+installs no tracing subscriber or signal handlers. Call it once per process;
+storage and version metadata currently have process-wide state.
+
+```rust,ignore
+let pasion = pasion_backend::PasionServer::initialize(
+    &figment,
+    pasion_backend::ServerOptions::default(),
+).await?;
+let router = salvo::Router::new()
+    .push(pasion.router(&resources, Some("/_pasion/")))
+    .push(host_routes);
+// The host binds one listener, serves router and handles shutdown signals.
+// After draining incoming requests:
+pasion.shutdown().await;
+```
+
+Set `http.public_base` (and `http.issuer`, if present) to the public URL including
+its trailing-slash mount, for example `https://example.com/_pasion/`. Supply
+frontend assets, templates, translations and Cedar policy paths as in the
+standalone configuration. Build the frontend with `dx build -p pasion-frontend
+--release --base-path /_pasion/ --debug-symbols false` so generated JS loads the
+WASM under that mount. `http.listeners` is consulted for asset discovery but
+never bound by the embedding API. All middleware stays inside the mounted
+router; unrelated host routes do not need Pasion state.
+
+Hosts that already have lifecycle tokens/task tracking can use
+`initialize_with_runtime`. The standalone CLI uses this shared initializer and
+retains its listener, reload and signal handling.
