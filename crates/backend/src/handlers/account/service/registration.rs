@@ -2129,7 +2129,7 @@ mod tests {
 
     fn sample_registration(created_at: DateTime<Utc>) -> UserRegistration {
         UserRegistration {
-            id: Ulid::new(),
+            id: Ulid::generate(),
             username: "alice".into(),
             display_name: None,
             avatar_url: None,
@@ -2261,9 +2261,9 @@ mod tests {
     fn workflow_snapshot_tracks_pending_email_verification() {
         let created_at = Utc.with_ymd_and_hms(2026, 3, 30, 12, 0, 0).unwrap();
         let email_authentication = UserEmailAuthentication {
-            id: Ulid::new(),
+            id: Ulid::generate(),
             user_session_id: None,
-            user_registration_id: Some(Ulid::new()),
+            user_registration_id: Some(Ulid::generate()),
             email: "alice@example.com".into(),
             created_at: created_at + Duration::minutes(1),
             completed_at: None,
@@ -2308,9 +2308,9 @@ mod tests {
         let email_verified_at = created_at + Duration::minutes(2);
 
         let email_authentication = UserEmailAuthentication {
-            id: Ulid::new(),
+            id: Ulid::generate(),
             user_session_id: None,
-            user_registration_id: Some(Ulid::new()),
+            user_registration_id: Some(Ulid::generate()),
             email: "alice@example.com".into(),
             created_at: created_at + Duration::minutes(1),
             completed_at: Some(email_verified_at),
