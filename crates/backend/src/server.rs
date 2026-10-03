@@ -285,6 +285,7 @@ pub fn build_router(
     _name: Option<&str>,
 ) -> Router {
     let templates = state.templates.clone();
+    let mount = prefix.unwrap_or_default().trim_end_matches('/');
 
     // Create the base router with the AppState in depot
     let mut router = Router::new();
@@ -321,7 +322,7 @@ pub fn build_router(
             pasion_config::HttpResource::RestApi {
                 playground: _,
                 undocumented_oauth2_access: _,
-            } => build_account_api_router(router),
+            } => build_account_api_router(router, mount),
             pasion_config::HttpResource::Assets { path } => router.push(
                 Router::with_path("/assets/{**path}")
                     .hoop(cache_control_middleware)
@@ -336,7 +337,7 @@ pub fn build_router(
                 // Compat layer removed — pass through
                 router
             }
-            pasion_config::HttpResource::AdminApi => build_admin_router(router),
+            pasion_config::HttpResource::AdminApi => build_admin_router(router, mount),
             pasion_config::HttpResource::ConnectionInfo => {
                 router.push(Router::with_path("/connection-info").get(connection_info_handler))
             }
@@ -423,8 +424,8 @@ fn build_human_router(router: Router, _templates: Templates) -> Router {
         )
         // Legacy /account redirect
         .push(Router::with_path("/account").get(account_redirect_handler))
-        .push(Router::with_path("/account/").get(spa::get))
-        .push(Router::with_path("/account/{**rest}").get(spa::get))
+        .push(Router::with_path("/account/").get(account_redirect_handler))
+        .push(Router::with_path("/account/{**rest}").get(account_subpath_redirect_handler))
 }
 
 fn build_oauth_router(router: Router) -> Router {
@@ -479,7 +480,7 @@ fn build_oauth_router(router: Router) -> Router {
         )
 }
 
-fn build_account_api_router(router: Router) -> Router {
+fn build_account_api_router(router: Router, mount: &str) -> Router {
     use crate::handlers::account::*;
 
     let internal_router = Router::with_path("/api/internal/matrix")
@@ -624,7 +625,7 @@ fn build_account_api_router(router: Router) -> Router {
                         .push(Router::with_path("respond").post(flow::respond_flow)),
                 ),
         );
-    let docs_router = openapi::build_openapi_router(&api_router);
+    let docs_router = openapi::build_openapi_router_with_prefix(&api_router, mount);
 
     router
         .push(internal_router)
@@ -632,7 +633,7 @@ fn build_account_api_router(router: Router) -> Router {
         .push(docs_router)
 }
 
-fn build_admin_router(router: Router) -> Router {
+fn build_admin_router(router: Router, mount: &str) -> Router {
     use crate::handlers::admin::v1::*;
 
     let admin_router = Router::with_path("/api/admin/v1")
@@ -784,13 +785,18 @@ fn build_admin_router(router: Router) -> Router {
 
     // Generate OpenAPI spec and Swagger UI for the admin API
     let admin_doc = salvo::oapi::OpenApi::new("Pasion Admin API", env!("CARGO_PKG_VERSION"))
-        .merge_router(&admin_router);
+        .merge_router(&admin_router)
+        .servers([salvo::oapi::Server::new(if mount.is_empty() {
+            "/"
+        } else {
+            mount
+        })]);
 
     router
         .push(admin_router)
         .push(admin_doc.into_router("/api-doc/admin/openapi.json"))
         .push(
-            salvo::oapi::swagger_ui::SwaggerUi::new("/api-doc/admin/openapi.json")
+            salvo::oapi::swagger_ui::SwaggerUi::new(format!("{mount}/api-doc/admin/openapi.json"))
                 .into_router("admin-swagger-ui"),
         )
 }
@@ -801,10 +807,23 @@ async fn account_redirect_handler(depot: &Depot) -> impl Writer + use<> {
 
     let url_builder = depot.get_url_builder().cloned();
     if let Some(url_builder) = url_builder {
-        Redirect::found(url_builder.relative_url("/account/"))
+        Redirect::found(url_builder.relative_url("/"))
     } else {
-        Redirect::found("/account/")
+        Redirect::found("/")
     }
+}
+
+#[handler]
+async fn account_subpath_redirect_handler(req: &Request, depot: &Depot) -> impl Writer + use<> {
+    use crate::app_state::DepotExt;
+    let builder = depot.get_url_builder().cloned();
+    let rest = req.param::<String>("rest").unwrap_or_default();
+    let rest = rest.trim_start_matches(['/', '\\']);
+    Redirect::found(relative_redirect_location(
+        builder.as_ref(),
+        &format!("/{rest}"),
+        req.uri().query(),
+    ))
 }
 
 #[handler]
@@ -1134,6 +1153,11 @@ mod mount_tests {
                         HttpResource::Discovery,
                         HttpResource::Human,
                         HttpResource::OAuth,
+                        HttpResource::RestApi {
+                            playground: false,
+                            undocumented_oauth2_access: false,
+                        },
+                        HttpResource::AdminApi,
                     ],
                     Some("/_pasion/"),
                     None,
@@ -1162,6 +1186,20 @@ mod mount_tests {
                 .unwrap()
                 .contains("/_pasion/assets/frontend.js")
         );
+        let res = TestClient::get("https://example.com/_pasion/account/")
+            .send(&service)
+            .await;
+        assert_eq!(res.status_code, Some(StatusCode::FOUND));
+        assert_eq!(res.headers().get("location").unwrap(), "/_pasion/");
+        for path in ["api-doc/openapi.json", "api-doc/admin/openapi.json"] {
+            let mut res = TestClient::get(format!("https://example.com/_pasion/{path}"))
+                .send(&service)
+                .await;
+            assert_eq!(res.status_code, Some(StatusCode::OK));
+            let document: serde_json::Value =
+                serde_json::from_str(&res.take_string().await.unwrap()).unwrap();
+            assert_eq!(document["servers"][0]["url"], "/_pasion");
+        }
         let mut res = TestClient::get("https://example.com/probe")
             .send(&service)
             .await;
