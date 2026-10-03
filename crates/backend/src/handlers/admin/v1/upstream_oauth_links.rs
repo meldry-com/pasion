@@ -1545,7 +1545,7 @@ mod tests {
         let token = state.token_with_scope("urn:pasion:admin").await;
         let mut rng = ChaChaRng::seed_from_u64(unique);
         let mut repo = state.repository().await.unwrap();
-        let suffix = Ulid::new().to_string().to_lowercase();
+        let suffix = Ulid::generate().to_string().to_lowercase();
 
         let alice = repo
             .user()
@@ -1626,7 +1626,7 @@ mod tests {
         let token = state.token_with_scope("urn:pasion:admin").await;
         let mut rng = ChaChaRng::seed_from_u64(unique);
         let mut repo = state.repository().await.unwrap();
-        let suffix = Ulid::new().to_string().to_lowercase();
+        let suffix = Ulid::generate().to_string().to_lowercase();
 
         let alice = repo
             .user()
@@ -1716,7 +1716,7 @@ mod tests {
         let token = state.token_with_scope("urn:pasion:admin").await;
         let mut rng = ChaChaRng::seed_from_u64(unique);
         let mut repo = state.repository().await.unwrap();
-        let suffix = Ulid::new().to_string().to_lowercase();
+        let suffix = Ulid::generate().to_string().to_lowercase();
 
         let alice = repo
             .user()
