@@ -183,7 +183,7 @@ opentelemetry-otlp = { version = "0.33.0", default-features = false, features = 
     "metrics",
     "http-proto",
 ] }
-opentelemetry-prometheus-text-exporter = "0.3.0"
+opentelemetry-prometheus-text-exporter = { path = "./crates/telemetry-prometheus" }
 opentelemetry-resource-detectors = "0.13.0"
 opentelemetry-semantic-conventions = { version = "0.33.0", features = [
     "semconv_experimental",

@@ -1,0 +1,19 @@
+[package]
+name = "opentelemetry-prometheus-text-exporter"
+version = "0.3.0"
+edition = "2024"
+authors = ["Quentin Gliech <quentingliech@gmail.com>"]
+license = "Apache-2.0"
+description = "Prometheus text exporter adapted for Pasion's OpenTelemetry version"
+publish = false
+
+[dependencies]
+opentelemetry = { workspace = true, features = ["metrics"] }
+opentelemetry_sdk = { workspace = true, features = ["metrics", "experimental_metrics_custom_reader"] }
+smartstring = "1.0.1"
+
+[dev-dependencies]
+insta.workspace = true
+
+[[test]]
+name = "it"

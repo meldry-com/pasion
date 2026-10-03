@@ -14,7 +14,7 @@ use opentelemetry_otlp::WithExportConfig;
 use opentelemetry_prometheus_text_exporter::PrometheusExporter;
 use opentelemetry_sdk::{
     Resource,
-    metrics::{ManualReader, SdkMeterProvider, periodic_reader_with_async_runtime::PeriodicReader},
+    metrics::{SdkMeterProvider, periodic_reader_with_async_runtime::PeriodicReader},
     propagation::{BaggagePropagator, TraceContextPropagator},
     trace::{
         IdGenerator, Sampler, SdkTracerProvider, Tracer,
@@ -224,7 +224,7 @@ fn prometheus_metric_reader() -> anyhow::Result<PrometheusExporter> {
 fn init_meter(config: &MetricsConfig) -> anyhow::Result<()> {
     let meter_provider_builder = SdkMeterProvider::builder();
     let meter_provider_builder = match config.exporter {
-        MetricsExporterKind::None => meter_provider_builder.with_reader(ManualReader::default()),
+        MetricsExporterKind::None => meter_provider_builder,
         MetricsExporterKind::Stdout => meter_provider_builder.with_reader(stdout_metric_reader()),
         MetricsExporterKind::Otlp => {
             meter_provider_builder.with_reader(otlp_metric_reader(config.endpoint.as_ref())?)

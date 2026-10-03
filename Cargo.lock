@@ -5295,7 +5295,7 @@ dependencies = [
  "opentelemetry 0.33.0",
  "opentelemetry-http",
  "opentelemetry-proto",
- "opentelemetry_sdk 0.33.0",
+ "opentelemetry_sdk",
  "prost",
  "thiserror 2.0.18",
 ]
@@ -5303,11 +5303,10 @@ dependencies = [
 [[package]]
 name = "opentelemetry-prometheus-text-exporter"
 version = "0.3.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b4fe57ea90b12f643a366aa7c4fa5cfb54bd1cf252f55368337e40534b278a68"
 dependencies = [
- "opentelemetry 0.32.0",
- "opentelemetry_sdk 0.32.1",
+ "insta",
+ "opentelemetry 0.33.0",
+ "opentelemetry_sdk",
  "smartstring",
 ]
 
@@ -5318,7 +5317,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "25da1ac11a0aeccf38d7f77ee0348715adaf8340f65ad46c94a02c6b20e2f65d"
 dependencies = [
  "opentelemetry 0.33.0",
- "opentelemetry_sdk 0.33.0",
+ "opentelemetry_sdk",
  "prost",
 ]
 
@@ -5330,7 +5329,7 @@ checksum = "60ac54422fb2a7ed2e0325b5650bedff0b6e777e33dbbac7b49572d92d689a56"
 dependencies = [
  "opentelemetry 0.33.0",
  "opentelemetry-semantic-conventions 0.33.0",
- "opentelemetry_sdk 0.33.0",
+ "opentelemetry_sdk",
 ]
 
 [[package]]
@@ -5353,21 +5352,7 @@ checksum = "9f71803f481d3f5ccbe477edb42a78f473613712b2327835911a9ea0ab069824"
 dependencies = [
  "chrono",
  "opentelemetry 0.33.0",
- "opentelemetry_sdk 0.33.0",
-]
-
-[[package]]
-name = "opentelemetry_sdk"
-version = "0.32.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "9b59f80e1ac4d5ff7a2db8fb6c80badb7f0f3f858211fba08dd9aaec750894f9"
-dependencies = [
- "futures-channel",
- "futures-executor",
- "futures-util",
- "opentelemetry 0.32.0",
- "portable-atomic",
- "thiserror 2.0.18",
+ "opentelemetry_sdk",
 ]
 
 [[package]]
@@ -5516,7 +5501,7 @@ dependencies = [
  "opentelemetry-resource-detectors",
  "opentelemetry-semantic-conventions 0.33.0",
  "opentelemetry-stdout",
- "opentelemetry_sdk 0.33.0",
+ "opentelemetry_sdk",
  "pasion-backend",
  "pasion-config",
  "pasion-data",
@@ -5603,7 +5588,7 @@ dependencies = [
  "opentelemetry-resource-detectors",
  "opentelemetry-semantic-conventions 0.33.0",
  "opentelemetry-stdout",
- "opentelemetry_sdk 0.33.0",
+ "opentelemetry_sdk",
  "p256",
  "pasion-config",
  "pasion-data",
