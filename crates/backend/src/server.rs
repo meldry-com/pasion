@@ -187,7 +187,8 @@ pub async fn tracing_middleware(
         });
 
         if let Err(err) = span.set_parent(parent_context) {
-            tracing::error!(
+            // Embedding hosts may intentionally omit an OpenTelemetry layer.
+            tracing::debug!(
                 error = &err as &dyn std::error::Error,
                 "Failed to set parent context on span"
             );

@@ -606,6 +606,12 @@ pub async fn homeserver_connection_from_config(
     config: &MatrixConfig,
     http_client: reqwest::Client,
 ) -> anyhow::Result<ConnectorRegistry> {
+    let http_client = match config.endpoint.host() {
+        Some(url::Host::Ipv4(ip)) if ip.is_loopback() => crate::outbound_http::loopback_client(),
+        Some(url::Host::Ipv6(ip)) if ip.is_loopback() => crate::outbound_http::loopback_client(),
+        Some(url::Host::Domain("localhost")) => crate::outbound_http::loopback_client(),
+        _ => http_client,
+    };
     let mut registry = ConnectorRegistry::new();
 
     match config.kind {
@@ -787,5 +793,46 @@ mod tests {
 
         let drop_sql = format!("DROP TABLE IF EXISTS {table_name}");
         sql_query(&drop_sql).execute(&mut *conn).await.unwrap();
+    }
+}
+
+#[cfg(test)]
+mod embedding_tests {
+    use wiremock::{
+        Mock, MockServer, ResponseTemplate,
+        matchers::{method, path},
+    };
+
+    use super::*;
+
+    #[tokio::test]
+    async fn loopback_homeserver_bypasses_a_proxy_client() {
+        crate::handlers::test_utils::setup();
+        let mock = MockServer::start().await;
+        Mock::given(method("GET"))
+            .and(path("/_palpo/mas/is_localpart_available"))
+            .respond_with(ResponseTemplate::new(200))
+            .expect(1)
+            .mount(&mock)
+            .await;
+        let config = serde_json::from_value(serde_json::json!({
+            "homeserver":"example.com", "endpoint":mock.uri(), "secret":"test"
+        }))
+        .unwrap();
+        let proxied = reqwest::Client::builder()
+            .proxy(reqwest::Proxy::all("http://127.0.0.1:1").unwrap())
+            .build()
+            .unwrap();
+        let registry = homeserver_connection_from_config(&config, proxied)
+            .await
+            .unwrap();
+        assert!(
+            registry
+                .primary_homeserver()
+                .unwrap()
+                .is_localpart_available("alice")
+                .await
+                .unwrap()
+        );
     }
 }
