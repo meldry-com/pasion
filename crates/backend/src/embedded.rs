@@ -174,8 +174,12 @@ impl PasionServer {
         let matrix_shared_secret = config.matrix.secret().await?;
 
         if !options.no_worker {
-            let notifications =
-                notification_center_from_config(&config.email, &config.sms, &templates)?;
+            let notifications = notification_center_from_config(
+                &config.email,
+                &config.sms,
+                &templates,
+                &config.experimental,
+            )?;
 
             if let Some(mailer) = notifications.email() {
                 test_mailer_in_background_with_shutdown(

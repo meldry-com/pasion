@@ -261,10 +261,13 @@ pub fn notification_center_from_config(
     email_config: &EmailConfig,
     sms_config: &SmsConfig,
     templates: &Templates,
+    experimental: &ExperimentalConfig,
 ) -> Result<NotificationCenter, anyhow::Error> {
     let mailer = mailer_from_config(email_config, templates)?;
     let sms = sms_sender_from_config(sms_config)?;
-    Ok(NotificationCenter::email_only(mailer).with_sms(sms))
+    Ok(NotificationCenter::email_only(mailer)
+        .with_sms(sms)
+        .with_fixed_verification_code(experimental.fixed_verification_code.clone()))
 }
 
 /// Test the connection to the mailer in a background task
@@ -430,7 +433,8 @@ pub fn site_config_from_config(
                 hard_limit: c.hard_limit,
             }),
         flow_engine_enabled: false,
-        phone_verification_enabled: !matches!(&sms_config.provider, SmsProviderConfig::Blackhole),
+        phone_verification_enabled: experimental_config.fixed_verification_code.is_some()
+            || !matches!(&sms_config.provider, SmsProviderConfig::Blackhole),
     })
 }
 
@@ -653,6 +657,28 @@ mod tests {
     use zeroize::Zeroizing;
 
     use super::*;
+
+    #[test]
+    fn fixed_code_enables_phone_verification_without_delivery() {
+        let site = |experimental: &ExperimentalConfig| {
+            site_config_from_config(
+                &BrandingConfig::default(),
+                &serde_json::from_value(serde_json::json!({ "secret": "test-secret" })).unwrap(),
+                experimental,
+                &PasswordsConfig::default(),
+                &AccountConfig::default(),
+                &CaptchaConfig::default(),
+                &SmsConfig::default(),
+            )
+            .unwrap()
+        };
+        assert!(!site(&ExperimentalConfig::default()).phone_verification_enabled);
+        let experimental = ExperimentalConfig {
+            fixed_verification_code: Some("123456".to_owned()),
+            ..ExperimentalConfig::default()
+        };
+        assert!(site(&experimental).phone_verification_enabled);
+    }
 
     #[tokio::test]
     async fn test_password_manager_from_config() {
