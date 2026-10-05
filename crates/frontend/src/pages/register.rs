@@ -415,6 +415,7 @@ pub fn RegisterVerifyEmail(id: String) -> Element {
                                 match result {
                                     Ok(resp) if resp.status == "success" => {
                                         match resp.next_step.as_deref() {
+                                            Some("verify_phone") => { nav.push(Route::RegisterVerifyPhone { id: rid }); }
                                             Some("display_name") => { nav.push(Route::RegisterDisplayName { id: rid }); }
                                             _ => { nav.push(Route::RegisterFinish { id: rid }); }
                                         }

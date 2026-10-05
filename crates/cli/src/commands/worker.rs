@@ -58,7 +58,12 @@ impl Options {
         .await?;
 
         // ── Notifications ───────────────────────────────────────────────
-        let notifs = notification_center_from_config(&app_cfg.email, &app_cfg.sms, &tpl)?;
+        let notifs = notification_center_from_config(
+            &app_cfg.email,
+            &app_cfg.sms,
+            &tpl,
+            &app_cfg.experimental,
+        )?;
         if let Some(mailer) = notifs.email() {
             test_mailer_in_background(mailer, Duration::from_secs(30));
         }

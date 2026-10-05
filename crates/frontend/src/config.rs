@@ -148,3 +148,14 @@ fn resolve_api_base_url() -> String {
 
     config.api_endpoint
 }
+
+/// Resolve an application-local path under the runtime mount point.
+pub fn app_path(path: &str) -> String {
+    let root = get_config().root;
+    let prefix = root.trim_end_matches('/');
+    if !prefix.is_empty() && (path == prefix || path.starts_with(&format!("{prefix}/"))) {
+        path.to_owned()
+    } else {
+        format!("{prefix}/{}", path.trim_start_matches('/'))
+    }
+}

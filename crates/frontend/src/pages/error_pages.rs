@@ -85,7 +85,7 @@ fn SessionEnded() -> Element {
                 }
                 a {
                     class: "btn btn-primary btn-lg",
-                    href: "/login",
+                    href: crate::config::app_path("/login"),
                     "Sign in"
                 }
             }
@@ -107,7 +107,7 @@ fn GenericServerError(description: Option<String>) -> Element {
                 p { class: "text-md text-secondary text-center", "{msg}" }
                 a {
                     class: "btn btn-primary btn-lg",
-                    href: "/login",
+                    href: crate::config::app_path("/login"),
                     "Back to sign in"
                 }
             }

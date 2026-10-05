@@ -614,6 +614,17 @@ impl UserEmailRepository for PgUserEmailRepository<'_> {
 
         diesel::insert_into(user_email_authentication_codes::table)
             .values(&new_row)
+            // A fixed development code (or random collision) refreshes its lifetime.
+            .on_conflict((
+                user_email_authentication_codes::user_email_authentication_id,
+                user_email_authentication_codes::code,
+            ))
+            .do_update()
+            .set((
+                user_email_authentication_codes::id.eq(new_row.id),
+                user_email_authentication_codes::created_at.eq(created_at),
+                user_email_authentication_codes::expires_at.eq(expires_at),
+            ))
             .execute(self.conn)
             .await?;
 

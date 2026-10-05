@@ -937,6 +937,11 @@ Some of which are in this section because they don't have a stable place in the 
 
 ```yaml
 experimental:
+  # Development/test only: use the same six-digit code for email and SMS
+  # contact verification, and do not enqueue verification message delivery.
+  # Disabled by default. Stored challenges and rate limits still apply.
+  #fixed_verification_code: "123456"
+
   # Time-to-live of OAuth 2.0 access tokens in seconds. Defaults to 300, 5 minutes.
   #access_token_ttl: 300
 

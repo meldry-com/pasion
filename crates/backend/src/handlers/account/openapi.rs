@@ -24,9 +24,20 @@ use salvo::{
 /// * `GET /api-doc/openapi.json` - The generated OpenAPI 3.x JSON document.
 /// * `GET /swagger-ui/**` - The Swagger UI single-page application.
 pub fn build_openapi_router(router: &Router) -> Router {
-    let doc = OpenApi::new("Pasion REST API", env!("CARGO_PKG_VERSION")).merge_router(router);
+    build_openapi_router_with_prefix(router, "")
+}
 
+/// Build docs whose schema and Swagger requests stay under the HTTP mount.
+pub fn build_openapi_router_with_prefix(router: &Router, prefix: &str) -> Router {
+    let prefix = prefix.trim_end_matches('/');
+    let doc = OpenApi::new("Pasion REST API", env!("CARGO_PKG_VERSION"))
+        .merge_router(router)
+        .servers([salvo::oapi::Server::new(if prefix.is_empty() {
+            "/"
+        } else {
+            prefix
+        })]);
     Router::new()
         .push(doc.into_router("/api-doc/openapi.json"))
-        .push(SwaggerUi::new("/api-doc/openapi.json").into_router("swagger-ui"))
+        .push(SwaggerUi::new(format!("{prefix}/api-doc/openapi.json")).into_router("swagger-ui"))
 }
