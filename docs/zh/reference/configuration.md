@@ -200,6 +200,14 @@ sms:
 
 ### `telemetry` — 可观测性
 
+支持的传播格式为 `tracecontext`（W3C Trace Context）和 `baggage`（W3C Baggage）。
+省略 `propagators` 或设置为空列表时，不启用上下文传播。
+
+升级包含 `jaeger` 的配置时，请将其替换为 `tracecontext`，并确保调用链中的其他服务
+使用 W3C 请求头（`traceparent` 和 `tracestate`）。`jaeger` 配置选项已移除，
+不再传播 `uber-trace-id` 和 `uberctx-*` 请求头；需要传递 baggage 时请使用 `baggage`。
+仍可通过 OTLP 端点向 Jaeger 上报追踪数据。
+
 ```yaml
 telemetry:
   tracing:
