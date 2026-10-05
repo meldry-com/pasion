@@ -802,15 +802,15 @@ fn build_admin_router(router: Router, mount: &str) -> Router {
 }
 
 #[handler]
-async fn account_redirect_handler(depot: &Depot) -> impl Writer + use<> {
+async fn account_redirect_handler(req: &Request, depot: &Depot) -> impl Writer + use<> {
     use crate::app_state::DepotExt;
 
     let url_builder = depot.get_url_builder().cloned();
-    if let Some(url_builder) = url_builder {
-        Redirect::found(url_builder.relative_url("/"))
-    } else {
-        Redirect::found("/")
-    }
+    Redirect::found(relative_redirect_location(
+        url_builder.as_ref(),
+        "/",
+        req.uri().query(),
+    ))
 }
 
 #[handler]
@@ -1033,10 +1033,11 @@ mod tests {
 
     use pasion_config::HttpBindConfig;
     use pasion_data::UrlBuilder;
+    use salvo::{Depot, Router, Service, handler, test::TestClient};
 
     use super::{
-        absolute_redirect_location, build_listeners, redacted_query_for_tracing,
-        relative_redirect_location,
+        absolute_redirect_location, account_redirect_handler, build_listeners,
+        redacted_query_for_tracing, relative_redirect_location,
     };
 
     #[test]
@@ -1070,6 +1071,54 @@ mod tests {
         );
 
         assert_eq!(location, "/mas/password/recovery?ticket=abc123");
+    }
+
+    struct InjectUrlBuilder(UrlBuilder);
+
+    #[handler]
+    impl InjectUrlBuilder {
+        async fn handle(&self, depot: &mut Depot) {
+            depot.insert("url_builder", self.0.clone());
+        }
+    }
+
+    #[tokio::test]
+    async fn account_redirect_preserves_query() {
+        for base in [None, Some("/"), Some("/_pasion/")] {
+            let prefix = base.unwrap_or("/").trim_end_matches('/');
+            let mut router =
+                Router::with_path(format!("{prefix}/account")).get(account_redirect_handler);
+            if let Some(base) = base {
+                let url_builder = UrlBuilder::new(
+                    format!("https://example.com{base}").parse().unwrap(),
+                    None,
+                    None,
+                );
+                router = router.hoop(InjectUrlBuilder(url_builder));
+            }
+            let service = Service::new(router);
+
+            for slash in ["", "/"] {
+                for (query, expected_query) in [
+                    ("", ""),
+                    ("?", ""),
+                    ("?action=org.matrix.profile", "?action=org.matrix.profile"),
+                    (
+                        "?action=org.matrix.profile&next=%2Fsettings%3Ftab%3Dprofile&label=a+b",
+                        "?action=org.matrix.profile&next=%2Fsettings%3Ftab%3Dprofile&label=a+b",
+                    ),
+                ] {
+                    let url = format!("https://example.com{prefix}/account{slash}{query}");
+                    let res = TestClient::get(&url).send(&service).await;
+                    assert_eq!(res.status_code, Some(http::StatusCode::FOUND), "{url}");
+                    assert_eq!(
+                        res.headers().get("location").unwrap().to_str().unwrap(),
+                        format!("{prefix}/{expected_query}"),
+                        "{url}"
+                    );
+                }
+            }
+        }
     }
 
     #[test]
@@ -1186,11 +1235,16 @@ mod mount_tests {
                 .unwrap()
                 .contains("/_pasion/assets/frontend.js")
         );
-        let res = TestClient::get("https://example.com/_pasion/account/")
-            .send(&service)
-            .await;
-        assert_eq!(res.status_code, Some(StatusCode::FOUND));
-        assert_eq!(res.headers().get("location").unwrap(), "/_pasion/");
+        for query in ["", "?action=org.matrix.profile"] {
+            let res = TestClient::get(format!("https://example.com/_pasion/account/{query}"))
+                .send(&service)
+                .await;
+            assert_eq!(res.status_code, Some(StatusCode::FOUND));
+            assert_eq!(
+                res.headers().get("location").unwrap().to_str().unwrap(),
+                format!("/_pasion/{query}")
+            );
+        }
         for path in ["api-doc/openapi.json", "api-doc/admin/openapi.json"] {
             let mut res = TestClient::get(format!("https://example.com/_pasion/{path}"))
                 .send(&service)
