@@ -2,7 +2,7 @@ use std::num::NonZeroU64;
 
 use chrono::Duration;
 use schemars::JsonSchema;
-use serde::{Deserialize, Serialize};
+use serde::{Deserialize, Serialize, de::Error as _};
 use serde_with::serde_as;
 
 use crate::ConfigurationSection;
@@ -51,6 +51,13 @@ pub struct SessionLimitConfig {
 #[serde_as]
 #[derive(Clone, Debug, Deserialize, JsonSchema, Serialize)]
 pub struct ExperimentalConfig {
+    /// Development-only fixed six-digit email/SMS verification code.
+    /// When set, contact verification notifications are not delivered.
+    /// Leave unset outside test environments; other OTP types are unaffected.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[schemars(regex(pattern = "^[0-9]{6}$"))]
+    pub fixed_verification_code: Option<String>,
+
     /// Lifetime of access tokens (seconds). Default: 300 (5 min).
     #[schemars(with = "u64", range(min = 60, max = 86400))]
     #[serde(
@@ -72,6 +79,7 @@ pub struct ExperimentalConfig {
 impl Default for ExperimentalConfig {
     fn default() -> Self {
         Self {
+            fixed_verification_code: None,
             access_token_ttl: default_access_token_ttl(),
             inactive_session_expiration: None,
             session_limit: None,
@@ -82,6 +90,7 @@ impl Default for ExperimentalConfig {
 impl ExperimentalConfig {
     pub(crate) fn is_default(&self) -> bool {
         access_token_ttl_is_default(&self.access_token_ttl)
+            && self.fixed_verification_code.is_none()
             && self.inactive_session_expiration.is_none()
             && self.session_limit.is_none()
     }
@@ -89,4 +98,51 @@ impl ExperimentalConfig {
 
 impl ConfigurationSection for ExperimentalConfig {
     const PATH: &'static str = "experimental";
+
+    fn validate(
+        &self,
+        figment: &figment::Figment,
+    ) -> Result<(), Box<dyn std::error::Error + Send + Sync + 'static>> {
+        if let Some(code) = &self.fixed_verification_code
+            && (code.len() != 6 || !code.bytes().all(|byte| byte.is_ascii_digit()))
+        {
+            let mut error = figment::error::Error::custom("must contain exactly six ASCII digits");
+            error.metadata = figment.find_metadata(Self::PATH).cloned();
+            error.path = vec![Self::PATH.to_owned(), "fixed_verification_code".to_owned()];
+            return Err(error.into());
+        }
+        Ok(())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use figment::{Figment, providers::Serialized};
+
+    use super::*;
+
+    #[test]
+    fn fixed_code_is_opt_in_and_validated() {
+        let defaults = ExperimentalConfig::default();
+        assert!(defaults.fixed_verification_code.is_none());
+        assert!(defaults.is_default());
+        for code in ["123456", "000001"] {
+            let config = ExperimentalConfig {
+                fixed_verification_code: Some(code.to_owned()),
+                ..defaults.clone()
+            };
+            let figment = Figment::new().merge(Serialized::default("experimental", config));
+            let loaded = ExperimentalConfig::extract(&figment).unwrap();
+            assert_eq!(loaded.fixed_verification_code.as_deref(), Some(code));
+            assert!(!loaded.is_default());
+        }
+        for code in ["", "12345", "1234567", "12a456", "１２３４５６"] {
+            let config = ExperimentalConfig {
+                fixed_verification_code: Some(code.to_owned()),
+                ..defaults.clone()
+            };
+            let figment = Figment::new().merge(Serialized::default("experimental", config));
+            assert!(ExperimentalConfig::extract(&figment).is_err());
+        }
+    }
 }

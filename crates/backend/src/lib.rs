@@ -86,3 +86,6 @@ pub fn version() -> &'static str {
         .get()
         .expect("pasion_backend::set_version was not called")
 }
+
+pub mod embedded;
+pub use embedded::{PasionServer, ServerOptions};

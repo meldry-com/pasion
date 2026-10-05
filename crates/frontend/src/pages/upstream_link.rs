@@ -257,7 +257,7 @@ fn LinkMismatchView(existing_username: String) -> Element {
                     "."
                 }
                 p { class: "text-secondary", "Please log out and sign in with the correct account, or contact your administrator." }
-                a { href: "/", class: "btn btn-primary btn-block", "Go to Home" }
+                a { href: crate::config::app_path("/"), class: "btn btn-primary btn-block", "Go to Home" }
             }
         }
     }

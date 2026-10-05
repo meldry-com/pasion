@@ -32,7 +32,7 @@ pub(crate) fn preserve_login_query() {
         return;
     };
 
-    if pathname == "/login" && !search.is_empty() {
+    if pathname == crate::config::app_path("/login") && !search.is_empty() {
         let _ = Reflect::set(
             window.as_ref(),
             &JsValue::from_str(PRESERVED_LOGIN_QUERY_PROPERTY),

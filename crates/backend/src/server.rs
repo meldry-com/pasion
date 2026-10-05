@@ -187,7 +187,8 @@ pub async fn tracing_middleware(
         });
 
         if let Err(err) = span.set_parent(parent_context) {
-            tracing::error!(
+            // Embedding hosts may intentionally omit an OpenTelemetry layer.
+            tracing::debug!(
                 error = &err as &dyn std::error::Error,
                 "Failed to set parent context on span"
             );
@@ -284,6 +285,7 @@ pub fn build_router(
     _name: Option<&str>,
 ) -> Router {
     let templates = state.templates.clone();
+    let mount = prefix.unwrap_or_default().trim_end_matches('/');
 
     // Create the base router with the AppState in depot
     let mut router = Router::new();
@@ -320,7 +322,7 @@ pub fn build_router(
             pasion_config::HttpResource::RestApi {
                 playground: _,
                 undocumented_oauth2_access: _,
-            } => build_account_api_router(router),
+            } => build_account_api_router(router, mount),
             pasion_config::HttpResource::Assets { path } => router.push(
                 Router::with_path("/assets/{**path}")
                     .hoop(cache_control_middleware)
@@ -335,12 +337,19 @@ pub fn build_router(
                 // Compat layer removed — pass through
                 router
             }
-            pasion_config::HttpResource::AdminApi => build_admin_router(router),
+            pasion_config::HttpResource::AdminApi => build_admin_router(router, mount),
             pasion_config::HttpResource::ConnectionInfo => {
                 router.push(Router::with_path("/connection-info").get(connection_info_handler))
             }
         }
     }
+
+    // State must be injected before fan-out; middleware stays inside the mount.
+    router = router
+        .hoop(inject_app_state)
+        .hoop(log_response_middleware)
+        .hoop(tracing_middleware)
+        .hoop(sentry_middleware);
 
     // Apply prefix if specified
     let prefix = format!("{}/", prefix.unwrap_or_default().trim_end_matches('/'));
@@ -349,12 +358,7 @@ pub fn build_router(
         router = prefixed_router.push(router);
     }
 
-    // Add middleware layers
     router
-        .hoop(inject_app_state)
-        .hoop(log_response_middleware)
-        .hoop(tracing_middleware)
-        .hoop(sentry_middleware)
 }
 
 fn build_human_router(router: Router, _templates: Templates) -> Router {
@@ -420,8 +424,8 @@ fn build_human_router(router: Router, _templates: Templates) -> Router {
         )
         // Legacy /account redirect
         .push(Router::with_path("/account").get(account_redirect_handler))
-        .push(Router::with_path("/account/").get(spa::get))
-        .push(Router::with_path("/account/{**rest}").get(spa::get))
+        .push(Router::with_path("/account/").get(account_redirect_handler))
+        .push(Router::with_path("/account/{**rest}").get(account_subpath_redirect_handler))
 }
 
 fn build_oauth_router(router: Router) -> Router {
@@ -476,7 +480,7 @@ fn build_oauth_router(router: Router) -> Router {
         )
 }
 
-fn build_account_api_router(router: Router) -> Router {
+fn build_account_api_router(router: Router, mount: &str) -> Router {
     use crate::handlers::account::*;
 
     let internal_router = Router::with_path("/api/internal/matrix")
@@ -621,7 +625,7 @@ fn build_account_api_router(router: Router) -> Router {
                         .push(Router::with_path("respond").post(flow::respond_flow)),
                 ),
         );
-    let docs_router = openapi::build_openapi_router(&api_router);
+    let docs_router = openapi::build_openapi_router_with_prefix(&api_router, mount);
 
     router
         .push(internal_router)
@@ -629,7 +633,7 @@ fn build_account_api_router(router: Router) -> Router {
         .push(docs_router)
 }
 
-fn build_admin_router(router: Router) -> Router {
+fn build_admin_router(router: Router, mount: &str) -> Router {
     use crate::handlers::admin::v1::*;
 
     let admin_router = Router::with_path("/api/admin/v1")
@@ -781,27 +785,45 @@ fn build_admin_router(router: Router) -> Router {
 
     // Generate OpenAPI spec and Swagger UI for the admin API
     let admin_doc = salvo::oapi::OpenApi::new("Pasion Admin API", env!("CARGO_PKG_VERSION"))
-        .merge_router(&admin_router);
+        .merge_router(&admin_router)
+        .servers([salvo::oapi::Server::new(if mount.is_empty() {
+            "/"
+        } else {
+            mount
+        })]);
 
     router
         .push(admin_router)
         .push(admin_doc.into_router("/api-doc/admin/openapi.json"))
         .push(
-            salvo::oapi::swagger_ui::SwaggerUi::new("/api-doc/admin/openapi.json")
+            salvo::oapi::swagger_ui::SwaggerUi::new(format!("{mount}/api-doc/admin/openapi.json"))
                 .into_router("admin-swagger-ui"),
         )
 }
 
 #[handler]
-async fn account_redirect_handler(depot: &Depot) -> impl Writer + use<> {
+async fn account_redirect_handler(req: &Request, depot: &Depot) -> impl Writer + use<> {
     use crate::app_state::DepotExt;
 
     let url_builder = depot.get_url_builder().cloned();
-    if let Some(url_builder) = url_builder {
-        Redirect::found(url_builder.relative_url("/account/"))
-    } else {
-        Redirect::found("/account/")
-    }
+    Redirect::found(relative_redirect_location(
+        url_builder.as_ref(),
+        "/",
+        req.uri().query(),
+    ))
+}
+
+#[handler]
+async fn account_subpath_redirect_handler(req: &Request, depot: &Depot) -> impl Writer + use<> {
+    use crate::app_state::DepotExt;
+    let builder = depot.get_url_builder().cloned();
+    let rest = req.param::<String>("rest").unwrap_or_default();
+    let rest = rest.trim_start_matches(['/', '\\']);
+    Redirect::found(relative_redirect_location(
+        builder.as_ref(),
+        &format!("/{rest}"),
+        req.uri().query(),
+    ))
 }
 
 #[handler]
@@ -1011,10 +1033,11 @@ mod tests {
 
     use pasion_config::HttpBindConfig;
     use pasion_data::UrlBuilder;
+    use salvo::{Depot, Router, Service, handler, test::TestClient};
 
     use super::{
-        absolute_redirect_location, build_listeners, redacted_query_for_tracing,
-        relative_redirect_location,
+        absolute_redirect_location, account_redirect_handler, build_listeners,
+        redacted_query_for_tracing, relative_redirect_location,
     };
 
     #[test]
@@ -1050,6 +1073,54 @@ mod tests {
         assert_eq!(location, "/mas/password/recovery?ticket=abc123");
     }
 
+    struct InjectUrlBuilder(UrlBuilder);
+
+    #[handler]
+    impl InjectUrlBuilder {
+        async fn handle(&self, depot: &mut Depot) {
+            depot.insert("url_builder", self.0.clone());
+        }
+    }
+
+    #[tokio::test]
+    async fn account_redirect_preserves_query() {
+        for base in [None, Some("/"), Some("/_pasion/")] {
+            let prefix = base.unwrap_or("/").trim_end_matches('/');
+            let mut router =
+                Router::with_path(format!("{prefix}/account")).get(account_redirect_handler);
+            if let Some(base) = base {
+                let url_builder = UrlBuilder::new(
+                    format!("https://example.com{base}").parse().unwrap(),
+                    None,
+                    None,
+                );
+                router = router.hoop(InjectUrlBuilder(url_builder));
+            }
+            let service = Service::new(router);
+
+            for slash in ["", "/"] {
+                for (query, expected_query) in [
+                    ("", ""),
+                    ("?", ""),
+                    ("?action=org.matrix.profile", "?action=org.matrix.profile"),
+                    (
+                        "?action=org.matrix.profile&next=%2Fsettings%3Ftab%3Dprofile&label=a+b",
+                        "?action=org.matrix.profile&next=%2Fsettings%3Ftab%3Dprofile&label=a+b",
+                    ),
+                ] {
+                    let url = format!("https://example.com{prefix}/account{slash}{query}");
+                    let res = TestClient::get(&url).send(&service).await;
+                    assert_eq!(res.status_code, Some(http::StatusCode::FOUND), "{url}");
+                    assert_eq!(
+                        res.headers().get("location").unwrap().to_str().unwrap(),
+                        format!("{prefix}/{expected_query}"),
+                        "{url}"
+                    );
+                }
+            }
+        }
+    }
+
     #[test]
     fn change_password_discovery_uses_frontend_route() {
         let url_builder = UrlBuilder::new("https://example.com/mas/".parse().unwrap(), None, None);
@@ -1066,5 +1137,130 @@ mod tests {
             Some("<redacted>")
         );
         assert_eq!(redacted_query_for_tracing(""), None);
+    }
+}
+
+#[cfg(all(test, feature = "cedar"))]
+mod mount_tests {
+    use diesel_async::pooled_connection::{AsyncDieselConnectionManager, deadpool::Pool};
+    use salvo::test::{ResponseExt, TestClient};
+
+    use super::*;
+    use crate::handlers::test_utils::TestState;
+
+    #[handler]
+    async fn host_probe() -> &'static str {
+        "host"
+    }
+
+    // Discovery and the SPA do not need a database connection. A deliberately
+    // unreachable DB catches accidental state-initialization/query coupling.
+    #[tokio::test]
+    async fn mounted_state_and_middleware_do_not_leak_into_host_routes() {
+        crate::handlers::test_utils::setup();
+        crate::VERSION.get_or_init(|| "test");
+        let pool = Pool::builder(AsyncDieselConnectionManager::new(
+            "postgres://localhost:1/unreachable",
+        ))
+        .build()
+        .unwrap();
+        let t = TestState::from_pool(pool).await.unwrap();
+        let matrix = serde_json::from_value(serde_json::json!({"homeserver":"example.com","endpoint":"https://example.com/","secret":"test"})).unwrap();
+        let connectors =
+            crate::util::homeserver_connection_from_config(&matrix, t.http_client.clone())
+                .await
+                .unwrap();
+        let state = AppState {
+            repository_factory: t.repository_factory.clone(),
+            templates: t.templates.clone(),
+            key_store: t.key_store.clone(),
+            cookie_manager: t.cookie_manager.clone(),
+            encrypter: t.encrypter.clone(),
+            url_builder: pasion_data::UrlBuilder::new(
+                "https://example.com/_pasion/".parse().unwrap(),
+                None,
+                None,
+            ),
+            connector_registry: connectors,
+            policy_factory: t.policy_factory.clone(),
+            http_client: t.http_client.clone(),
+            password_manager: t.password_manager.clone(),
+            metadata_cache: t.metadata_cache.clone(),
+            site_config: t.site_config.clone(),
+            matrix_shared_secret: "test".to_owned(),
+            activity_tracker: t.activity_tracker.clone(),
+            trusted_proxies: vec![],
+            limiter: t.limiter.clone(),
+            frontend_script_src: "/_pasion/assets/frontend.js".to_owned(),
+            email_webhook_service: None,
+        };
+        let service = Service::new(
+            Router::new()
+                .push(build_router(
+                    state,
+                    &[
+                        HttpResource::Discovery,
+                        HttpResource::Human,
+                        HttpResource::OAuth,
+                        HttpResource::RestApi {
+                            playground: false,
+                            undocumented_oauth2_access: false,
+                        },
+                        HttpResource::AdminApi,
+                    ],
+                    Some("/_pasion/"),
+                    None,
+                ))
+                .push(Router::with_path("probe").get(host_probe)),
+        );
+        let mut res =
+            TestClient::get("https://example.com/_pasion/.well-known/openid-configuration")
+                .send(&service)
+                .await;
+        assert_eq!(res.status_code, Some(StatusCode::OK));
+        let document: serde_json::Value =
+            serde_json::from_str(&res.take_string().await.unwrap()).unwrap();
+        assert_eq!(document["issuer"], "https://example.com/_pasion/");
+        assert_eq!(
+            document["token_endpoint"],
+            "https://example.com/_pasion/oauth2/token"
+        );
+        let mut res = TestClient::get("https://example.com/_pasion/login")
+            .send(&service)
+            .await;
+        assert_eq!(res.status_code, Some(StatusCode::OK));
+        assert!(
+            res.take_string()
+                .await
+                .unwrap()
+                .contains("/_pasion/assets/frontend.js")
+        );
+        for query in ["", "?action=org.matrix.profile"] {
+            let res = TestClient::get(format!("https://example.com/_pasion/account/{query}"))
+                .send(&service)
+                .await;
+            assert_eq!(res.status_code, Some(StatusCode::FOUND));
+            assert_eq!(
+                res.headers().get("location").unwrap().to_str().unwrap(),
+                format!("/_pasion/{query}")
+            );
+        }
+        for path in ["api-doc/openapi.json", "api-doc/admin/openapi.json"] {
+            let mut res = TestClient::get(format!("https://example.com/_pasion/{path}"))
+                .send(&service)
+                .await;
+            assert_eq!(res.status_code, Some(StatusCode::OK));
+            let document: serde_json::Value =
+                serde_json::from_str(&res.take_string().await.unwrap()).unwrap();
+            assert_eq!(document["servers"][0]["url"], "/_pasion");
+        }
+        let mut res = TestClient::get("https://example.com/probe")
+            .send(&service)
+            .await;
+        assert_eq!(res.take_string().await.unwrap(), "host");
+        let res = TestClient::get("https://example.com/oauth2/keys.json")
+            .send(&service)
+            .await;
+        assert_eq!(res.status_code, Some(StatusCode::NOT_FOUND));
     }
 }

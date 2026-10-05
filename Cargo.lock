@@ -5642,6 +5642,7 @@ dependencies = [
  "diesel-async",
  "diesel_migrations",
  "elliptic-curve",
+ "figment",
  "form_urlencoded",
  "futures-util",
  "headers",
@@ -5687,6 +5688,7 @@ dependencies = [
  "pasion-matrix-palpo",
  "pasion-messaging",
  "pasion-policy",
+ "pasion-tasks",
  "pasion-templates",
  "pbkdf2",
  "pin-project-lite",
@@ -5810,6 +5812,7 @@ version = "1.8.0"
 dependencies = [
  "chrono",
  "dioxus",
+ "dioxus-history",
  "gloo-timers 0.4.0",
  "js-sys",
  "reqwest 0.13.4",

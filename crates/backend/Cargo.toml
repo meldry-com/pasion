@@ -9,6 +9,8 @@ workspace = true
 
 [dependencies]
 anyhow.workspace = true
+figment.workspace = true
+pasion-tasks.workspace = true
 bytes.workspace = true
 chrono.workspace = true
 deadpool.workspace = true
@@ -125,6 +127,8 @@ wiremock.workspace = true
 
 [build-dependencies]
 anyhow.workspace = true
+figment.workspace = true
+pasion-tasks.workspace = true
 vergen-gitcl.workspace = true
 
 [features]

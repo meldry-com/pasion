@@ -3718,6 +3718,14 @@
       "description": "Experimental feature flags -- change at your own risk",
       "type": "object",
       "properties": {
+        "fixed_verification_code": {
+          "description": "Development-only fixed six-digit email/SMS verification code.\nWhen set, contact verification notifications are not delivered.\nLeave unset outside test environments; other OTP types are unaffected.",
+          "type": [
+            "string",
+            "null"
+          ],
+          "pattern": "^[0-9]{6}$"
+        },
         "access_token_ttl": {
           "description": "Lifetime of access tokens (seconds). Default: 300 (5 min).",
           "type": "integer",

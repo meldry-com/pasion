@@ -86,17 +86,30 @@ impl reqwest::dns::Resolve for TracingResolver {
 /// Panics if the client fails to build, which should never happen.
 #[must_use]
 pub fn reqwest_client() -> reqwest::Client {
+    build_client(false)
+}
+
+/// Loopback homeserver calls must bypass ambient/system HTTP proxies.
+pub(crate) fn loopback_client() -> reqwest::Client {
+    build_client(true)
+}
+
+fn build_client(no_proxy: bool) -> reqwest::Client {
     let tls_config: rustls::ClientConfig =
         rustls::ClientConfig::with_platform_verifier().expect("failed to create TLS config");
 
-    reqwest::Client::builder()
+    let builder = reqwest::Client::builder()
         .dns_resolver(Arc::new(TracingResolver::new()))
         .use_preconfigured_tls(tls_config)
         .user_agent(USER_AGENT)
         .timeout(Duration::from_secs(60))
-        .connect_timeout(Duration::from_secs(30))
-        .build()
-        .expect("failed to create HTTP client")
+        .connect_timeout(Duration::from_secs(30));
+    let builder = if no_proxy {
+        builder.no_proxy()
+    } else {
+        builder
+    };
+    builder.build().expect("failed to create HTTP client")
 }
 
 /// Build the loggable form of an outbound request URL: drop the query

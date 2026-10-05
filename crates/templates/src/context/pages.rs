@@ -78,7 +78,7 @@ impl AppContext {
     /// (resolved from the Dioxus build output at startup).
     #[must_use]
     pub fn new(url_builder: &UrlBuilder, script_src: &str) -> Self {
-        let root = url_builder.relative_url("/account/");
+        let root = url_builder.relative_url("/");
         let prefix = url_builder.prefix().unwrap_or_default();
         Self {
             app_config: AppConfig {
@@ -242,5 +242,18 @@ impl TemplateContext for NotFoundContext {
                 &"/foo?bar=baz".parse().unwrap(),
             ),
         ])
+    }
+}
+
+#[cfg(test)]
+mod mount_tests {
+    use super::*;
+
+    #[test]
+    fn spa_root_and_api_share_the_mount() {
+        let builder = UrlBuilder::new("https://example.com/_pasion/".parse().unwrap(), None, None);
+        let context = AppContext::new(&builder, "/_pasion/assets/frontend.js");
+        assert_eq!(context.app_config.root, "/_pasion/");
+        assert_eq!(context.app_config.api_endpoint, "/_pasion/api/v1");
     }
 }

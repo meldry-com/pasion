@@ -1,3 +1,4 @@
+#[cfg(not(test))]
 use std::sync::OnceLock;
 
 use oauth2_types::{
@@ -18,6 +19,7 @@ use serde::Serialize;
 /// Cached, pre-built discovery document. The metadata only depends on
 /// process-stable inputs (`UrlBuilder`, `Keystore`, `SiteConfig`), so we build
 /// it once on the first request and clone the cached value thereafter.
+#[cfg(not(test))]
 static DISCOVERY: OnceLock<DiscoveryResponse> = OnceLock::new();
 
 #[derive(Debug, Clone, Serialize)]
@@ -40,7 +42,13 @@ pub async fn get(depot: &Depot) -> Json<DiscoveryResponse> {
 }
 
 fn get_inner(depot: &Depot) -> Json<DiscoveryResponse> {
-    Json(DISCOVERY.get_or_init(|| build_discovery(depot)).clone())
+    // Unit tests construct independent AppStates in a shared process. Unlike
+    // a running server, their issuer/key/site inputs are not process-stable.
+    #[cfg(test)]
+    let document = build_discovery(depot);
+    #[cfg(not(test))]
+    let document = DISCOVERY.get_or_init(|| build_discovery(depot)).clone();
+    Json(document)
 }
 
 fn build_discovery(depot: &Depot) -> DiscoveryResponse {
