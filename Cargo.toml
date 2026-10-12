@@ -227,7 +227,7 @@ reqwest = { version = "0.13.2", default-features = false, features = [
 ] }
 rsa = { version = "0.9.10", features = ["std", "pem"] }
 rustc-hash = "2.1.2"
-ruma-common = "0.17.1"
+ruma-common = "0.19.0"
 rustls = "0.23.38"
 rustls-pki-types = "1.14.0"
 rustls-platform-verifier = "0.7.0"
