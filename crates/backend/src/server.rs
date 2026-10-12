@@ -37,6 +37,23 @@ use crate::{
 /// point. Returns a URL path like `/assets/pasion-frontend-dxh<hash>.js`.
 pub fn discover_frontend_script(assets_root: &camino::Utf8Path) -> Option<String> {
     let assets_dir = assets_root.join("assets");
+    // Cached Dioxus builds can leave older hashed bundles in assets/. The
+    // generated shell identifies the bundle from this build unambiguously.
+    if let Ok(index) = std::fs::read_to_string(assets_root.join("index.html")) {
+        for attribute in ["src=\"", "src='"] {
+            let quote = attribute.chars().last().unwrap();
+            for value in index.split(attribute).skip(1) {
+                let src = value.split(quote).next().unwrap_or_default();
+                let name = src.rsplit('/').next().unwrap_or_default();
+                if name.starts_with("pasion-frontend-")
+                    && name.ends_with(".js")
+                    && assets_dir.join(name).is_file()
+                {
+                    return Some(format!("/assets/{name}"));
+                }
+            }
+        }
+    }
     let dir = std::fs::read_dir(&assets_dir).ok()?;
     for entry in dir.flatten() {
         let name = entry.file_name();
@@ -50,6 +67,35 @@ pub fn discover_frontend_script(assets_root: &camino::Utf8Path) -> Option<String
         return Some("/assets/pasion-frontend.js".into());
     }
     None
+}
+
+#[cfg(test)]
+mod frontend_script_tests {
+    use super::discover_frontend_script;
+
+    #[test]
+    fn generated_shell_selects_current_bundle_with_stale_assets_present() {
+        let temp = std::env::temp_dir().join(format!("pasion-entrypoint-{}", ulid::Ulid::new()));
+        let root = camino::Utf8Path::from_path(&temp).unwrap();
+        std::fs::create_dir(root).unwrap();
+        std::fs::create_dir(root.join("assets")).unwrap();
+        std::fs::write(root.join("assets/pasion-frontend-old.js"), "old").unwrap();
+        std::fs::write(root.join("assets/pasion-frontend-current.js"), "current").unwrap();
+        std::fs::write(
+            root.join("index.html"),
+            r#"<script src="/./assets/pasion-frontend-current.js"></script>"#,
+        )
+        .unwrap();
+        assert_eq!(
+            discover_frontend_script(root).as_deref(),
+            Some("/assets/pasion-frontend-current.js")
+        );
+        for file in ["assets/pasion-frontend-old.js", "assets/pasion-frontend-current.js", "index.html"] {
+            std::fs::remove_file(root.join(file)).unwrap();
+        }
+        std::fs::remove_dir(root.join("assets")).unwrap();
+        std::fs::remove_dir(root).unwrap();
+    }
 }
 
 #[inline]
