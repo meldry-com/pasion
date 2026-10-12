@@ -75,7 +75,8 @@ mod frontend_script_tests {
 
     #[test]
     fn generated_shell_selects_current_bundle_with_stale_assets_present() {
-        let temp = std::env::temp_dir().join(format!("pasion-entrypoint-{}", ulid::Ulid::generate()));
+        let temp =
+            std::env::temp_dir().join(format!("pasion-entrypoint-{}", ulid::Ulid::generate()));
         let root = camino::Utf8Path::from_path(&temp).unwrap();
         std::fs::create_dir(root).unwrap();
         std::fs::create_dir(root.join("assets")).unwrap();
@@ -90,7 +91,11 @@ mod frontend_script_tests {
             discover_frontend_script(root).as_deref(),
             Some("/assets/pasion-frontend-current.js")
         );
-        for file in ["assets/pasion-frontend-old.js", "assets/pasion-frontend-current.js", "index.html"] {
+        for file in [
+            "assets/pasion-frontend-old.js",
+            "assets/pasion-frontend-current.js",
+            "index.html",
+        ] {
             std::fs::remove_file(root.join(file)).unwrap();
         }
         std::fs::remove_dir(root.join("assets")).unwrap();
