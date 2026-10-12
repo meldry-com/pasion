@@ -75,7 +75,7 @@ mod frontend_script_tests {
 
     #[test]
     fn generated_shell_selects_current_bundle_with_stale_assets_present() {
-        let temp = std::env::temp_dir().join(format!("pasion-entrypoint-{}", ulid::Ulid::new()));
+        let temp = std::env::temp_dir().join(format!("pasion-entrypoint-{}", ulid::Ulid::generate()));
         let root = camino::Utf8Path::from_path(&temp).unwrap();
         std::fs::create_dir(root).unwrap();
         std::fs::create_dir(root.join("assets")).unwrap();
