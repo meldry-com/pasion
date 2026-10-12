@@ -17,7 +17,7 @@ use pasion_data::{
 };
 use pasion_i18n::DataLocale;
 use pasion_messaging::{
-    Address, Mailbox, NotificationError, NotificationRequest,
+    Address, Mailbox, NotificationCenter, NotificationError, NotificationRequest,
     email::{DELIVERY_ID_TAG, REQUEST_ID_TAG},
 };
 use pasion_templates::{EmailRecoveryContext, EmailVerificationContext, TemplateContext as _};
@@ -36,6 +36,13 @@ const TEMPLATE_EMAIL_VERIFICATION: &str = "email_verification";
 const TEMPLATE_SMS_VERIFICATION: &str = "sms_verification_code";
 const TEMPLATE_EMAIL_RECOVERY: &str = "email_recovery";
 const EMAIL_VERIFICATION_LANGUAGE: &str = "en";
+
+fn verification_code(notifications: &NotificationCenter, rng: &mut impl RngCore) -> String {
+    notifications.fixed_verification_code().map_or_else(
+        || format!("{:06}", rng.next_u32() % 1_000_000),
+        str::to_owned,
+    )
+}
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 struct EmailVerificationPayload {
@@ -209,7 +216,7 @@ pub(crate) async fn send_email_authentication_code(
         return Ok(());
     }
 
-    let code = format!("{:06}", rng.next_u32() % 1_000_000);
+    let code = verification_code(notifications, &mut rng);
     let code = repo
         .user_email()
         .add_authentication_code(
@@ -227,6 +234,13 @@ pub(crate) async fn send_email_authentication_code(
         code = %code.code,
         "Email verification code generated"
     );
+
+    if notifications.fixed_verification_code().is_some() {
+        // Keep normal stored-code verification, expiration metadata and rate limits.
+        // Test environments never enqueue an outbound contact notification.
+        repo.save().await.map_err(JobError::fail)?;
+        return Ok(());
+    }
 
     enqueue_notification_request(
         &mut repo,
@@ -263,6 +277,7 @@ pub(crate) async fn send_sms_authentication_code(
     language: &str,
 ) -> Result<(), JobError> {
     let clock = state.clock();
+    let notifications = state.notifications();
     let mut rng = state.rng();
     let mut repo = state.repository().await.map_err(JobError::retry)?;
 
@@ -281,7 +296,7 @@ pub(crate) async fn send_sms_authentication_code(
         return Ok(());
     }
 
-    let code = format!("{:06}", rng.next_u32() % 1_000_000);
+    let code = verification_code(notifications, &mut rng);
     let code = repo
         .user_phone()
         .add_authentication_code(
@@ -299,6 +314,11 @@ pub(crate) async fn send_sms_authentication_code(
         code = %code.code,
         "SMS verification code generated"
     );
+
+    if notifications.fixed_verification_code().is_some() {
+        repo.save().await.map_err(JobError::fail)?;
+        return Ok(());
+    }
 
     enqueue_notification_request(
         &mut repo,
@@ -1110,9 +1130,36 @@ impl RunnableJob for ProcessNotificationDeliveriesJob {
 
 #[cfg(test)]
 mod tests {
+    use pasion_messaging::NotificationCenter;
+    use rand_core::SeedableRng;
     use thiserror::Error;
 
     use super::{EMAIL_VERIFICATION_LANGUAGE, is_permanent_tls_validation_error};
+
+    #[test]
+    fn fixed_code_only_applies_when_explicitly_enabled() {
+        let mut rng = rand_chacha::ChaChaRng::from_seed([7; 32]);
+        let normal = NotificationCenter::default();
+        let codes: std::collections::BTreeSet<_> = (0..32)
+            .map(|_| super::verification_code(&normal, &mut rng))
+            .collect();
+        assert!(codes.len() > 1);
+        assert!(
+            codes
+                .iter()
+                .all(|code| code.len() == 6 && code.bytes().all(|c| c.is_ascii_digit()))
+        );
+        let fixed = normal.with_fixed_verification_code(Some("123456".to_owned()));
+        for _ in 0..32 {
+            assert_eq!(super::verification_code(&fixed, &mut rng), "123456");
+        }
+        assert!(
+            fixed
+                .with_fixed_verification_code(None)
+                .fixed_verification_code()
+                .is_none()
+        );
+    }
 
     #[derive(Debug, Error)]
     #[error("{message}")]

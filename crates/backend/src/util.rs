@@ -261,18 +261,36 @@ pub fn notification_center_from_config(
     email_config: &EmailConfig,
     sms_config: &SmsConfig,
     templates: &Templates,
+    experimental: &ExperimentalConfig,
 ) -> Result<NotificationCenter, anyhow::Error> {
     let mailer = mailer_from_config(email_config, templates)?;
     let sms = sms_sender_from_config(sms_config)?;
-    Ok(NotificationCenter::email_only(mailer).with_sms(sms))
+    Ok(NotificationCenter::email_only(mailer)
+        .with_sms(sms)
+        .with_fixed_verification_code(experimental.fixed_verification_code.clone()))
 }
 
 /// Test the connection to the mailer in a background task
 pub fn test_mailer_in_background(mailer: &Mailer, timeout: Duration) {
-    let mailer = mailer.clone();
+    test_mailer_in_background_with_shutdown(
+        mailer,
+        timeout,
+        CancellationToken::new(),
+        &TaskTracker::new(),
+    );
+}
 
+/// Test the mailer as part of an embedding host's cancellable task set.
+pub fn test_mailer_in_background_with_shutdown(
+    mailer: &Mailer,
+    timeout: Duration,
+    shutdown: CancellationToken,
+    tasks: &TaskTracker,
+) {
+    let mailer = mailer.clone();
     let span = tracing::info_span!("cli.test_mailer");
-    tokio::spawn(async move {
+    tasks.spawn(async move {
+        let check = async {
         match tokio::time::timeout(timeout, mailer.test_connection()).await {
             Ok(Ok(())) => {}
             Ok(Err(err)) => {
@@ -285,6 +303,8 @@ pub fn test_mailer_in_background(mailer: &Mailer, timeout: Duration) {
                 tracing::warn!("Timed out while testing the mail backend connection, tasks sending mails may fail!");
             }
         }
+        };
+        tokio::select! { () = shutdown.cancelled() => (), () = check => () }
     }
     .instrument(span));
 }
@@ -413,7 +433,8 @@ pub fn site_config_from_config(
                 hard_limit: c.hard_limit,
             }),
         flow_engine_enabled: false,
-        phone_verification_enabled: !matches!(&sms_config.provider, SmsProviderConfig::Blackhole),
+        phone_verification_enabled: experimental_config.fixed_verification_code.is_some()
+            || !matches!(&sms_config.provider, SmsProviderConfig::Blackhole),
     })
 }
 
@@ -589,6 +610,12 @@ pub async fn homeserver_connection_from_config(
     config: &MatrixConfig,
     http_client: reqwest::Client,
 ) -> anyhow::Result<ConnectorRegistry> {
+    let http_client = match config.endpoint.host() {
+        Some(url::Host::Ipv4(ip)) if ip.is_loopback() => crate::outbound_http::loopback_client(),
+        Some(url::Host::Ipv6(ip)) if ip.is_loopback() => crate::outbound_http::loopback_client(),
+        Some(url::Host::Domain("localhost")) => crate::outbound_http::loopback_client(),
+        _ => http_client,
+    };
     let mut registry = ConnectorRegistry::new();
 
     match config.kind {
@@ -630,6 +657,28 @@ mod tests {
     use zeroize::Zeroizing;
 
     use super::*;
+
+    #[test]
+    fn fixed_code_enables_phone_verification_without_delivery() {
+        let site = |experimental: &ExperimentalConfig| {
+            site_config_from_config(
+                &BrandingConfig::default(),
+                &serde_json::from_value(serde_json::json!({ "secret": "test-secret" })).unwrap(),
+                experimental,
+                &PasswordsConfig::default(),
+                &AccountConfig::default(),
+                &CaptchaConfig::default(),
+                &SmsConfig::default(),
+            )
+            .unwrap()
+        };
+        assert!(!site(&ExperimentalConfig::default()).phone_verification_enabled);
+        let experimental = ExperimentalConfig {
+            fixed_verification_code: Some("123456".to_owned()),
+            ..ExperimentalConfig::default()
+        };
+        assert!(site(&experimental).phone_verification_enabled);
+    }
 
     #[tokio::test]
     async fn test_password_manager_from_config() {
@@ -770,5 +819,46 @@ mod tests {
 
         let drop_sql = format!("DROP TABLE IF EXISTS {table_name}");
         sql_query(&drop_sql).execute(&mut *conn).await.unwrap();
+    }
+}
+
+#[cfg(test)]
+mod embedding_tests {
+    use wiremock::{
+        Mock, MockServer, ResponseTemplate,
+        matchers::{method, path},
+    };
+
+    use super::*;
+
+    #[tokio::test]
+    async fn loopback_homeserver_bypasses_a_proxy_client() {
+        crate::handlers::test_utils::setup();
+        let mock = MockServer::start().await;
+        Mock::given(method("GET"))
+            .and(path("/_palpo/mas/is_localpart_available"))
+            .respond_with(ResponseTemplate::new(200))
+            .expect(1)
+            .mount(&mock)
+            .await;
+        let config = serde_json::from_value(serde_json::json!({
+            "homeserver":"example.com", "endpoint":mock.uri(), "secret":"test"
+        }))
+        .unwrap();
+        let proxied = reqwest::Client::builder()
+            .proxy(reqwest::Proxy::all("http://127.0.0.1:1").unwrap())
+            .build()
+            .unwrap();
+        let registry = homeserver_connection_from_config(&config, proxied)
+            .await
+            .unwrap();
+        assert!(
+            registry
+                .primary_homeserver()
+                .unwrap()
+                .is_localpart_available("alice")
+                .await
+                .unwrap()
+        );
     }
 }

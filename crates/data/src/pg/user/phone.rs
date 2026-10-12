@@ -389,6 +389,10 @@ impl UserPhoneRepository for PgUserPhoneRepository<'_> {
                     .eq(Uuid::from(authentication.id)),
             )
             .filter(user_phone_authentication_codes::code.eq(code))
+            .order_by((
+                user_phone_authentication_codes::created_at.desc(),
+                user_phone_authentication_codes::id.desc(),
+            ))
             .select(UserPhoneAuthenticationCodeRow::as_select())
             .first::<UserPhoneAuthenticationCodeRow>(self.conn)
             .await

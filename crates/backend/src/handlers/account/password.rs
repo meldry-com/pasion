@@ -392,7 +392,7 @@ mod tests {
     ) -> (pasion_data::UserRecoverySession, String) {
         let mut rng = state.rng();
         let mut repo = state.repository().await.unwrap();
-        let username = format!("recover-{}", Ulid::new().to_string().to_lowercase());
+        let username = format!("recover-{}", Ulid::generate().to_string().to_lowercase());
 
         let user = repo
             .user()
@@ -423,7 +423,7 @@ mod tests {
                 &state.clock,
                 &session,
                 &user_email,
-                format!("ticket-{}", Ulid::new().to_string().to_lowercase()),
+                format!("ticket-{}", Ulid::generate().to_string().to_lowercase()),
             )
             .await
             .unwrap();

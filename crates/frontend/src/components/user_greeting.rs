@@ -290,8 +290,11 @@ async fn upload_selected_avatar() -> Result<Option<String>, String> {
     init.set_credentials(RequestCredentials::SameOrigin);
     init.set_body(&JsValue::from(form_data));
 
-    let request = Request::new_with_str_and_init("/api/v1/viewer/avatar", &init)
-        .map_err(|e| format!("failed to build request: {e:?}"))?;
+    let request = Request::new_with_str_and_init(
+        &format!("{}/viewer/avatar", crate::config::api_base_url()),
+        &init,
+    )
+    .map_err(|e| format!("failed to build request: {e:?}"))?;
 
     let response_value = JsFuture::from(window.fetch_with_request(&request))
         .await

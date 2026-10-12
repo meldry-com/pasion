@@ -92,7 +92,14 @@ COPY --from=frontend-build /frontend-dist/ /
 FROM scratch AS frontend-prebuilt
 COPY --from=frontend-dist / /frontend-dist
 
-FROM ${FRONTEND_DIST_SOURCE} AS frontend-assets
+FROM ${FRONTEND_DIST_SOURCE} AS frontend-assets-source
+
+# Resolve Dioxus' absolute WASM bootstrap URL next to the JS module so
+# the same image works at /, /auth and embedded mounts.
+FROM --platform=${BUILDPLATFORM} alpine:3.22 AS frontend-assets
+COPY --from=frontend-assets-source /frontend-dist/ /frontend-dist/
+RUN find /frontend-dist -name '*.js' -exec sed -E -i \
+    's@module_or_path:"/(\./)?assets/([^" ]+\.wasm)"@module_or_path:new URL("\2",import.meta.url).href@g' {} +
 
 ########################################
 ## Build stage that builds the binary ##

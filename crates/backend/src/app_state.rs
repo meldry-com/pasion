@@ -95,12 +95,27 @@ impl AppState {
 
     /// Init the metadata cache in the background
     pub fn init_metadata_cache(&self) {
+        self.init_metadata_cache_with_shutdown(
+            tokio_util::sync::CancellationToken::new(),
+            tokio_util::task::TaskTracker::new(),
+        );
+    }
+
+    /// Track and cancel the cache worker with the owning server.
+    pub fn init_metadata_cache_with_shutdown(
+        &self,
+        shutdown: tokio_util::sync::CancellationToken,
+        tasks: tokio_util::task::TaskTracker,
+    ) {
         let factory = self.repository_factory.clone();
         let metadata_cache = self.metadata_cache.clone();
         let http_client = self.http_client.clone();
 
-        tokio::spawn(
+        tasks.spawn(
             async move {
+                tokio::select! {
+                    () = shutdown.cancelled() => (),
+                    () = async {
                 let mut repo = match factory.create().await {
                     Ok(conn) => conn,
                     Err(e) => {
@@ -124,6 +139,8 @@ impl AppState {
                         error = &e as &dyn std::error::Error,
                         "Failed to warm up the metadata cache"
                     );
+                }
+                    } => (),
                 }
             }
             .instrument(tracing::info_span!("metadata_cache.background_warmup")),

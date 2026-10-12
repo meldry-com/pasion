@@ -490,7 +490,7 @@ mod tests {
     #[tokio::test]
     async fn registration_email_resend_has_sixty_second_cooldown() {
         let limiter = Limiter::new(&RateLimitingConfig::default()).unwrap();
-        let registration_id = Ulid::new();
+        let registration_id = Ulid::generate();
 
         assert!(
             limiter
@@ -504,7 +504,7 @@ mod tests {
         );
         assert!(
             limiter
-                .check_registration_email_resend_cooldown(Ulid::new())
+                .check_registration_email_resend_cooldown(Ulid::generate())
                 .await
         );
     }

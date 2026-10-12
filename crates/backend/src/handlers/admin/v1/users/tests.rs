@@ -610,7 +610,7 @@ async fn test_patch_user_profile_and_state() {
     let unique = unique_test_nonce();
     state.clock.advance(Duration::seconds(unique as i64));
     let token = state.token_with_scope("urn:pasion:admin").await;
-    let username = format!("alice{}", Ulid::new().to_string().to_lowercase());
+    let username = format!("alice{}", Ulid::generate().to_string().to_lowercase());
     let mut rng = ChaChaRng::seed_from_u64(unique);
 
     let mut repo = state.repository().await.unwrap();
@@ -656,7 +656,7 @@ async fn test_patch_user_null_clears_field() {
     let unique = unique_test_nonce();
     state.clock.advance(Duration::seconds(unique as i64));
     let token = state.token_with_scope("urn:pasion:admin").await;
-    let username = format!("alice{}", Ulid::new().to_string().to_lowercase());
+    let username = format!("alice{}", Ulid::generate().to_string().to_lowercase());
     let mut rng = ChaChaRng::seed_from_u64(unique);
 
     let mut repo = state.repository().await.unwrap();
@@ -723,7 +723,7 @@ async fn test_patch_user_reactivate() {
     let unique = unique_test_nonce();
     state.clock.advance(Duration::seconds(unique as i64));
     let token = state.token_with_scope("urn:pasion:admin").await;
-    let username = format!("alice{}", Ulid::new().to_string().to_lowercase());
+    let username = format!("alice{}", Ulid::generate().to_string().to_lowercase());
     let mut rng = ChaChaRng::seed_from_u64(unique);
 
     let mut repo = state.repository().await.unwrap();
@@ -772,7 +772,7 @@ async fn test_patch_user_reactivate() {
 /// homeserver, optionally as an administrator.
 async fn add_provisioned_user(state: &mut TestState, admin: bool) -> pasion_data::User {
     let unique = unique_test_nonce();
-    let username = format!("user{}", Ulid::new().to_string().to_lowercase());
+    let username = format!("user{}", Ulid::generate().to_string().to_lowercase());
     let mut rng = ChaChaRng::seed_from_u64(unique);
 
     let mut repo = state.repository().await.unwrap();

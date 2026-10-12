@@ -640,17 +640,41 @@ async fn test_user_email_repo_authentications() {
     assert_eq!(lookup.created_at, clock.now());
     assert_eq!(lookup.expires_at, clock.now() + Duration::minutes(5));
 
+    // Resending a fixed development code must return its newest lifetime,
+    // rather than the expired row carrying the same code.
+    let authentication_created_at = authentication.created_at;
+    clock.advance(Duration::minutes(6));
+    let refreshed = repo
+        .user_email()
+        .add_authentication_code(
+            &mut rng,
+            &clock,
+            Duration::minutes(5),
+            &authentication,
+            "123456".to_owned(),
+        )
+        .await
+        .unwrap();
+    let lookup = repo
+        .user_email()
+        .find_authentication_code(&authentication, "123456")
+        .await
+        .unwrap()
+        .unwrap();
+    assert_eq!(lookup.id, refreshed.id);
+    assert_eq!(lookup.expires_at, clock.now() + Duration::minutes(5));
+
     // Complete the authentication
     let authentication = repo
         .user_email()
-        .complete_authentication_with_code(&clock, authentication, &code)
+        .complete_authentication_with_code(&clock, authentication, &refreshed)
         .await
         .unwrap();
 
     assert_eq!(authentication.id, authentication.id);
     assert_eq!(authentication.email, "alice@example.com");
     assert_eq!(authentication.user_session_id, Some(browser_session.id));
-    assert_eq!(authentication.created_at, clock.now());
+    assert_eq!(authentication.created_at, authentication_created_at);
     assert_eq!(authentication.completed_at, Some(clock.now()));
 
     // Check that we can find the completed authentication by its ID
@@ -663,7 +687,7 @@ async fn test_user_email_repo_authentications() {
     assert_eq!(lookup.id, authentication.id);
     assert_eq!(lookup.email, "alice@example.com");
     assert_eq!(lookup.user_session_id, Some(browser_session.id));
-    assert_eq!(lookup.created_at, clock.now());
+    assert_eq!(lookup.created_at, authentication_created_at);
     assert_eq!(lookup.completed_at, Some(clock.now()));
 
     // Completing a second time should fail

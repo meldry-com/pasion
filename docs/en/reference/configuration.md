@@ -500,6 +500,15 @@ rate_limiting:
 
 Settings related to metrics and traces
 
+Supported propagators are `tracecontext` (W3C Trace Context) and `baggage`
+(W3C Baggage). Propagation is disabled when `propagators` is omitted or empty.
+
+When upgrading a configuration that uses `jaeger`, replace it with
+`tracecontext` and ensure peer services use W3C headers (`traceparent` and
+`tracestate`). The `jaeger` option is no longer accepted, and `uber-trace-id`
+and `uberctx-*` headers are no longer propagated. Use `baggage` for W3C baggage
+when needed. Trace export to Jaeger through an OTLP endpoint is still supported.
+
 ```yaml
 telemetry:
   tracing:
@@ -509,8 +518,6 @@ telemetry:
       - tracecontext
       # Propagate according to the W3C Baggage specification
       - baggage
-      # Propagate trace context with Jaeger compatible headers
-      - jaeger
 
     # The default: don't export traces
     exporter: none
@@ -930,6 +937,11 @@ Some of which are in this section because they don't have a stable place in the 
 
 ```yaml
 experimental:
+  # Development/test only: use the same six-digit code for email and SMS
+  # contact verification, and do not enqueue verification message delivery.
+  # Disabled by default. Stored challenges and rate limits still apply.
+  #fixed_verification_code: "123456"
+
   # Time-to-live of OAuth 2.0 access tokens in seconds. Defaults to 300, 5 minutes.
   #access_token_ttl: 300
 

@@ -17,6 +17,7 @@ use crate::{
 pub struct NotificationCenter {
     email: Option<Mailer>,
     sms: Option<SmsSender>,
+    fixed_verification_code: Option<String>,
 }
 
 /// Result returned after a notification provider accepted a delivery.
@@ -67,7 +68,11 @@ impl NotificationCenter {
     /// Create a new notification center with the provided channels.
     #[must_use]
     pub fn new(email: Option<Mailer>, sms: Option<SmsSender>) -> Self {
-        Self { email, sms }
+        Self {
+            email,
+            sms,
+            fixed_verification_code: None,
+        }
     }
 
     /// Create a notification center configured only for email delivery.
@@ -94,6 +99,21 @@ impl NotificationCenter {
     pub fn with_sms(mut self, sender: SmsSender) -> Self {
         self.sms = Some(sender);
         self
+    }
+
+    /// Configure a fixed contact verification code for development.
+    /// The worker persists this code and skips email/SMS notification delivery.
+    /// The application configuration validates it before calling this method.
+    #[must_use]
+    pub fn with_fixed_verification_code(mut self, code: Option<String>) -> Self {
+        self.fixed_verification_code = code;
+        self
+    }
+
+    /// Return the explicitly configured development verification code, if any.
+    #[must_use]
+    pub fn fixed_verification_code(&self) -> Option<&str> {
+        self.fixed_verification_code.as_deref()
     }
 
     /// Access the configured email channel, if any.
