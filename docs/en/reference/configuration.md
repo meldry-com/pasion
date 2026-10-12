@@ -500,6 +500,15 @@ rate_limiting:
 
 Settings related to metrics and traces
 
+Supported propagators are `tracecontext` (W3C Trace Context) and `baggage`
+(W3C Baggage). Propagation is disabled when `propagators` is omitted or empty.
+
+When upgrading a configuration that uses `jaeger`, replace it with
+`tracecontext` and ensure peer services use W3C headers (`traceparent` and
+`tracestate`). The `jaeger` option is no longer accepted, and `uber-trace-id`
+and `uberctx-*` headers are no longer propagated. Use `baggage` for W3C baggage
+when needed. Trace export to Jaeger through an OTLP endpoint is still supported.
+
 ```yaml
 telemetry:
   tracing:
@@ -509,8 +518,6 @@ telemetry:
       - tracecontext
       # Propagate according to the W3C Baggage specification
       - baggage
-      # Propagate trace context with Jaeger compatible headers
-      - jaeger
 
     # The default: don't export traces
     exporter: none

@@ -13,8 +13,6 @@ pub enum Propagator {
     TraceContext,
     /// W3C Baggage specification
     Baggage,
-    /// Jaeger-native propagation headers
-    Jaeger,
 }
 
 /// Default OTLP collector endpoint used when none is explicitly configured
@@ -207,5 +205,44 @@ impl ConfigurationSection for TelemetryConfig {
         )?;
         check_sample_rate_bounds(self.tracing.sample_rate, "Tracing", "tracing.sample_rate")?;
         Ok(())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use figment::{
+        Figment,
+        providers::{Format, Yaml},
+    };
+
+    use super::{Propagator, TelemetryConfig};
+
+    #[test]
+    fn loads_w3c_propagators() {
+        let config: TelemetryConfig = Figment::from(Yaml::string(
+            "tracing:\n  propagators: [tracecontext, baggage]",
+        ))
+        .extract()
+        .unwrap();
+
+        assert_eq!(
+            config.tracing.propagators,
+            [Propagator::TraceContext, Propagator::Baggage]
+        );
+    }
+
+    #[test]
+    fn rejects_removed_jaeger_propagator() {
+        let error = Figment::from(Yaml::string(
+            "tracing:\n  propagators: [tracecontext, jaeger]",
+        ))
+        .extract::<TelemetryConfig>()
+        .unwrap_err();
+
+        let message = error.to_string();
+        assert!(message.contains("unknown variant"), "{message}");
+        assert!(message.contains("`jaeger`"), "{message}");
+        assert!(message.contains("tracecontext"), "{message}");
+        assert!(message.contains("baggage"), "{message}");
     }
 }

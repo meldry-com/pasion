@@ -1370,11 +1370,6 @@
           "description": "W3C Baggage specification",
           "type": "string",
           "const": "baggage"
-        },
-        {
-          "description": "Jaeger-native propagation headers",
-          "type": "string",
-          "const": "jaeger"
         }
       ]
     },
