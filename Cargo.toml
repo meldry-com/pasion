@@ -176,8 +176,8 @@ opendal = { version = "0.59", features = ["services-fs", "services-s3"] }
 cedar-policy = "4"
 opentelemetry = { version = "0.33.0", features = ["trace", "metrics"] }
 opentelemetry-http = { version = "0.33.0", features = ["reqwest"] }
-opentelemetry-instrumentation-process = "0.2.0"
-opentelemetry-instrumentation-tokio = "0.2.0"
+opentelemetry-instrumentation-process = "0.3.0"
+opentelemetry-instrumentation-tokio = "0.3.0"
 opentelemetry-otlp = { version = "0.33.0", default-features = false, features = [
     "trace",
     "metrics",
