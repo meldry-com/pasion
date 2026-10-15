@@ -5726,6 +5726,7 @@ dependencies = [
  "base64ct",
  "chrono",
  "crc",
+ "deadpool 0.13.1",
  "diesel",
  "diesel-async",
  "diesel_migrations",

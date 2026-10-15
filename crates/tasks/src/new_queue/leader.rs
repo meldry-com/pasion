@@ -141,11 +141,7 @@ pub(super) async fn run_leader_duties(
     let clock = state.clock();
     let mut rng = state.rng();
 
-    let mut conn = state
-        .pool()
-        .get()
-        .await
-        .map_err(|e| QueueRunnerError::Pool(Box::new(e)))?;
+    let mut conn = pasion_data::pg::get_connection(state.pool()).await?;
 
     let lock_key = advisory_lock_key("leader-duties");
     let lock_result: AdvisoryLockResult = sql_query(format!(

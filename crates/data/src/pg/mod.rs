@@ -50,7 +50,7 @@ pub(crate) use self::errors::DatabaseInconsistencyError;
 pub use self::{
     errors::DatabaseError,
     notification_template::PgNotificationTemplateRepository,
-    repository::{PgRepository, PgRepositoryFactory},
+    repository::{PgRepository, PgRepositoryFactory, get_connection},
 };
 
 pub(crate) fn pagination_limit(count: usize) -> i64 {

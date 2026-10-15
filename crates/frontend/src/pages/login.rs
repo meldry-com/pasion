@@ -102,7 +102,7 @@ pub fn Login() -> Element {
                 div { class: "login-page",
                     div { class: "login-container",
                         h1 { class: "heading-md login-title", "Sign in" }
-                        div { class: "alert alert-critical",
+                        div { class: "alert alert-critical", role: "alert",
                             p { "Could not load sign-in methods: {e}" }
                         }
                         button {

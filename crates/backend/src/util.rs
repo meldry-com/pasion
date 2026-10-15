@@ -33,9 +33,15 @@ fn cleanup_pooled_postgres_connection() -> DieselPoolHook<AsyncPgConnection> {
             // Pooled sessions must be reset before reuse. `ROLLBACK` clears any
             // leaked transaction, and `pg_advisory_unlock_all()` clears leader
             // locks that are session-scoped.
-            conn.batch_execute("ROLLBACK; SELECT pg_advisory_unlock_all();")
-                .await
-                .map_err(|error| DieselPoolHookError::Backend(AsyncPoolError::QueryError(error)))?;
+            tokio::time::timeout(
+                Duration::from_secs(5),
+                conn.batch_execute("ROLLBACK; SELECT pg_advisory_unlock_all();"),
+            )
+            .await
+            .map_err(|_| {
+                DieselPoolHookError::Message("PostgreSQL session cleanup timed out".into())
+            })?
+            .map_err(|error| DieselPoolHookError::Backend(AsyncPoolError::QueryError(error)))?;
 
             Ok(())
         })
