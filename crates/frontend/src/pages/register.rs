@@ -14,7 +14,11 @@ use crate::{
 /// Registration entry page — shows password registration form and/or upstream
 /// provider buttons.
 #[component]
-pub fn Register() -> Element {
+pub fn Register(kind: Option<String>, id: Option<String>) -> Element {
+    let authorization_grant_id = match kind.as_deref() {
+        Some("continue_authorization_grant") => id,
+        _ => None,
+    };
     let providers_data = use_resource(|| async {
         crate::api::api_get::<ProvidersResponse>("/auth/providers").await
     });
@@ -23,7 +27,7 @@ pub fn Register() -> Element {
     match &*binding {
         Some(Ok(data)) => rsx! {
             Layout {
-                RegisterPage { providers: data.clone() }
+                RegisterPage { providers: data.clone(), authorization_grant_id: authorization_grant_id.clone() }
             }
         },
         Some(Err(e)) => rsx! {
@@ -34,6 +38,7 @@ pub fn Register() -> Element {
         None => rsx! {
             Layout {
                 RegisterPage {
+                    authorization_grant_id: authorization_grant_id.clone(),
                     providers: ProvidersResponse {
                         providers: vec![],
                         password_login_enabled: true,
@@ -47,7 +52,7 @@ pub fn Register() -> Element {
 }
 
 #[component]
-fn RegisterPage(providers: ProvidersResponse) -> Element {
+fn RegisterPage(providers: ProvidersResponse, authorization_grant_id: Option<String>) -> Element {
     let mut username = use_signal(String::new);
     let mut email = use_signal(String::new);
     let mut phone = use_signal(String::new);
@@ -98,6 +103,7 @@ fn RegisterPage(providers: ProvidersResponse) -> Element {
                             submitting.set(true);
                             error.set(None);
                             let nav = nav;
+                            let authorization_grant_id = authorization_grant_id.clone();
 
                             spawn(async move {
                                 let result = crate::api::api_post::<RegisterResponse>(
@@ -108,6 +114,7 @@ fn RegisterPage(providers: ProvidersResponse) -> Element {
                                         "phone": if ph.is_empty() { serde_json::Value::Null } else { serde_json::Value::String(ph) },
                                         "password": pw,
                                         "password_confirm": pw2,
+                                        "authorization_grant_id": authorization_grant_id,
                                     }),
                                 ).await;
                                 submitting.set(false);
@@ -849,8 +856,7 @@ pub fn RegisterFinish(id: String) -> Element {
 
     // Resolve the post-registration destination once the finish call succeeds.
     // The backend may return a `post_auth_action` to resume a pending OAuth
-    // grant; for password registration we fall back to sessionStorage values
-    // saved by the manual register flow. The redirect happens after render via
+    // grant persisted with this registration. The redirect happens after render via
     // an effect so we never call `nav.push()` during the render phase.
     let success_grant_id: Option<String> = match finish_result.read().as_ref() {
         Some(Ok(resp)) if resp.status == "success" => {
@@ -881,22 +887,6 @@ pub fn RegisterFinish(id: String) -> Element {
             return;
         }
 
-        #[cfg(target_arch = "wasm32")]
-        if let Some(storage) = web_sys::window().and_then(|w| w.session_storage().ok().flatten()) {
-            let kind = storage.get_item("post_auth_kind").ok().flatten();
-            let id = storage.get_item("post_auth_id").ok().flatten();
-            // Clean up regardless
-            let _ = storage.remove_item("post_auth_kind");
-            let _ = storage.remove_item("post_auth_id");
-
-            if kind.as_deref() == Some("continue_authorization_grant")
-                && let Some(grant_id) = id
-            {
-                nav.push(Route::Consent { grant_id });
-                return;
-            }
-        }
-
         nav.push(Route::AccountOverview {});
     }));
 
@@ -921,7 +911,7 @@ pub fn RegisterFinish(id: String) -> Element {
                         div { class: "alert alert-critical",
                             p { {resp.error.clone().unwrap_or_else(|| "Could not complete registration.".to_owned())} }
                         }
-                        Link { class: "btn btn-primary", to: Route::Register {},
+                        Link { class: "btn btn-primary", to: Route::Register { kind: None, id: None },
                             "Try again"
                         }
                     }
@@ -933,7 +923,7 @@ pub fn RegisterFinish(id: String) -> Element {
                 div { class: "login-page",
                     div { class: "login-container",
                         div { class: "alert alert-critical", "{e}" }
-                        Link { class: "btn btn-primary", to: Route::Register {},
+                        Link { class: "btn btn-primary", to: Route::Register { kind: None, id: None },
                             "Try again"
                         }
                     }

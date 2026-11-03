@@ -7,6 +7,7 @@
 
 use chrono::Utc;
 use pasion_data::{
+    PostAuthAction,
     flow::{FlowSession, FlowSessionStatus},
     new_id,
 };
@@ -47,6 +48,8 @@ pub struct RegisterInput {
     pub phone: Option<String>,
     pub password: String,
     pub password_confirm: String,
+    /// Resume this OAuth authorization after completing registration.
+    pub authorization_grant_id: Option<Ulid>,
 }
 
 #[derive(Serialize, ToSchema)]
@@ -122,7 +125,9 @@ pub async fn post_register(
             ip_address,
             requester,
             notification_language,
-            post_auth_action: None,
+            post_auth_action: input
+                .authorization_grant_id
+                .map(|id| serde_json::json!(PostAuthAction::ContinueAuthorizationGrant { id })),
             password_registration_enabled: site_config.password_registration_enabled,
             password_registration_contact_required: site_config
                 .password_registration_contact_required,

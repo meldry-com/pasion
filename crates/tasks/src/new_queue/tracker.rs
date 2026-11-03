@@ -196,9 +196,6 @@ impl JobTracker {
     /// processing.
     pub(super) async fn collect_next_job(&mut self) {
         if self.last_join_result.is_some() {
-            tracing::error!(
-                "Job tracker already had a job result stored, this should never happen!"
-            );
             return;
         }
 
@@ -207,21 +204,16 @@ impl JobTracker {
 
     /// Drain finished job results, updating the database for each one.
     ///
-    /// When `blocking` is `true` we wait for *all* tasks to complete; otherwise
-    /// we only handle tasks that have already finished.
+    /// Only handles tasks that have already finished. Waiting for jobs while
+    /// holding a repository could prevent those jobs from getting a connection.
     pub(super) async fn process_jobs<E: std::error::Error + Send + Sync + 'static>(
         &mut self,
         rng: &mut (dyn RngCore + Send),
         clock: &dyn Clock,
         repo: &mut dyn RepositoryAccess<Error = E>,
-        blocking: bool,
     ) -> Result<(), E> {
         if self.last_join_result.is_none() {
-            if blocking {
-                self.last_join_result = self.running_jobs.join_next_with_id().await;
-            } else {
-                self.last_join_result = self.running_jobs.try_join_next_with_id();
-            }
+            self.last_join_result = self.running_jobs.try_join_next_with_id();
         }
 
         while let Some(result) = self.last_join_result.take() {
@@ -379,13 +371,110 @@ impl JobTracker {
                 }
             }
 
-            if blocking {
-                self.last_join_result = self.running_jobs.join_next_with_id().await;
-            } else {
-                self.last_join_result = self.running_jobs.try_join_next_with_id();
-            }
+            self.last_join_result = self.running_jobs.try_join_next_with_id();
         }
 
         Ok(())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::time::Duration;
+
+    use diesel_async::RunQueryDsl as _;
+    use pasion_data::{PgRepository, RepositoryAccess, clock::SystemClock};
+    use rand_core::SeedableRng as _;
+    use tokio_util::sync::CancellationToken;
+
+    use super::{JobContext, JobTracker};
+
+    #[tokio::test]
+    async fn draining_jobs_leaves_the_single_pool_connection_available() {
+        let pool = pasion_data::test_utils::setup_test_pool().await;
+        pool.resize(1);
+        let clock = SystemClock::default();
+        let mut rng = rand_chacha::ChaChaRng::seed_from_u64(42);
+        let mut repo = PgRepository::new(pasion_data::pg::get_connection(&pool).await.unwrap());
+        let worker = repo
+            .queue_worker()
+            .register(&mut rng, &clock)
+            .await
+            .unwrap();
+        repo.queue_job()
+            .schedule(
+                &mut rng,
+                &clock,
+                "checkout-test",
+                serde_json::json!({}),
+                serde_json::json!({}),
+            )
+            .await
+            .unwrap();
+        let job = repo
+            .queue_job()
+            .reserve(&clock, &worker, &["checkout-test"], 1)
+            .await
+            .unwrap()
+            .pop()
+            .unwrap();
+        drop(repo);
+
+        let mut tracker = JobTracker::new();
+        let job_pool = pool.clone();
+        let (release, start) = tokio::sync::oneshot::channel();
+        let handle = tracker.running_jobs.spawn(async move {
+            start.await.unwrap();
+            let mut conn = pasion_data::pg::get_connection(&job_pool).await.unwrap();
+            diesel::sql_query("SELECT 1")
+                .execute(&mut *conn)
+                .await
+                .unwrap();
+            (Duration::ZERO, Ok(()))
+        });
+        tracker.job_contexts.insert(
+            handle.id(),
+            JobContext {
+                id: job.id,
+                metadata: job.metadata,
+                queue_name: job.queue_name,
+                attempt: job.attempt,
+                start: tokio::time::Instant::now(),
+                cancellation_token: CancellationToken::new(),
+            },
+        );
+
+        // Processing pending tasks with a repository must return immediately.
+        let mut repo = PgRepository::new(pasion_data::pg::get_connection(&pool).await.unwrap());
+        tokio::time::timeout(
+            Duration::from_millis(200),
+            tracker.process_jobs(&mut rng, &clock, &mut repo),
+        )
+        .await
+        .unwrap()
+        .unwrap();
+        drop(repo);
+        release.send(()).unwrap();
+
+        tokio::time::timeout(
+            Duration::from_secs(2),
+            super::super::repository::drain_jobs(&pool, &clock, &mut tracker),
+        )
+        .await
+        .unwrap()
+        .unwrap();
+        assert_eq!(tracker.running_jobs(), 0);
+        let mut conn = pasion_data::pg::get_connection(&pool).await.unwrap();
+        #[derive(diesel::QueryableByName)]
+        struct JobStatus {
+            #[diesel(sql_type = diesel::sql_types::Text)]
+            status: String,
+        }
+        let status: JobStatus =
+            diesel::sql_query("SELECT status FROM queue_jobs WHERE queue_name = 'checkout-test'")
+                .get_result(&mut *conn)
+                .await
+                .unwrap();
+        assert_eq!(status.status, "completed");
     }
 }
