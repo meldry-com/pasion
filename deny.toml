@@ -36,6 +36,16 @@ ignore = [
     # unmaintained notice, not a vulnerability; replace the dependency when
     # the exporter supports an alternative.
     "RUSTSEC-2026-0249",
+
+    # crypto-bigint 0.5 is pulled in by the stable RustCrypto elliptic-curve
+    # stack. The fix is only available in crypto-bigint 0.7 and requires a
+    # coordinated major-version migration of p256/p384/p521/k256.
+    "RUSTSEC-2026-0387",
+
+    # figment still depends on the deprecated serde_yaml implementation. This
+    # is an unmaintained notice rather than a known vulnerability; migrate the
+    # configuration loader when figment supports a maintained YAML backend.
+    "RUSTSEC-2024-0449",
 ]
 
 # ── Allowed licenses ────────────────────────────────────────────────────────
