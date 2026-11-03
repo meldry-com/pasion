@@ -303,23 +303,9 @@ fn LoginForm(providers: ProvidersResponse, initial_error: Option<String>) -> Ele
                         span { "Don't have an account? " }
                         Link {
                             class: "link",
-                            to: Route::Register {},
-                            onclick: move |_| {
-                                // Carry forward any OAuth continuation so the
-                                // registration finish step can redirect to
-                                // the consent page instead of the account
-                                // overview.
-                                let continuation =
-                                    get_query_param("kind").zip(get_query_param("id"));
-                                if let Some((_kind, _id)) = continuation {
-                                    #[cfg(target_arch = "wasm32")]
-                                    if let Some(storage) = web_sys::window()
-                                        .and_then(|w| w.session_storage().ok().flatten())
-                                    {
-                                        let _ = storage.set_item("post_auth_kind", &_kind);
-                                        let _ = storage.set_item("post_auth_id", &_id);
-                                    }
-                                }
+                            to: Route::Register {
+                                kind: get_query_param("kind"),
+                                id: get_query_param("id"),
                             },
                             "Create account"
                         }
