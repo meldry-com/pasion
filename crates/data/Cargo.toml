@@ -46,3 +46,6 @@ ulid.workspace = true
 url.workspace = true
 uuid.workspace = true
 woothee.workspace = true
+
+[dev-dependencies]
+deadpool.workspace = true

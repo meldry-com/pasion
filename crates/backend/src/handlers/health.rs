@@ -17,12 +17,17 @@ pub async fn get(depot: &Depot) -> Result<String, InternalError> {
         .get::<DieselPool<AsyncPgConnection>>("pg_pool")
         .map_err(|_| InternalError::from_anyhow(anyhow::anyhow!("pg_pool not found in depot")))?;
 
-    let mut conn = pool.get().await?;
-
-    diesel::sql_query("SELECT 1")
-        .execute(&mut *conn)
-        .instrument(info_span!("DB health"))
-        .await?;
+    tokio::time::timeout(std::time::Duration::from_secs(5), async {
+        let mut conn = pasion_data::pg::get_connection(pool).await?;
+        diesel::sql_query("SELECT 1")
+            .execute(&mut *conn)
+            .instrument(info_span!("DB health"))
+            .await?;
+        Ok::<_, anyhow::Error>(())
+    })
+    .await
+    .map_err(|error| InternalError::from_anyhow(error.into()))?
+    .map_err(InternalError::from_anyhow)?;
 
     Ok("ok".to_owned())
 }
