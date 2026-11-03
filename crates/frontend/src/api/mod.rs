@@ -5,6 +5,8 @@
 
 pub mod types;
 
+use std::time::Duration;
+
 use reqwest::{Client, Method};
 use serde::Deserialize;
 use serde_json::Value;
@@ -32,7 +34,17 @@ async fn request<T: for<'de> Deserialize<'de>>(
     body: Option<Value>,
 ) -> Result<T, String> {
     let url = format!("{}{}", api_base_url(), path);
-    let mut builder = client().request(method, &url);
+    // Reqwest keeps its browser AbortGuard alive through response body reads,
+    // including non-success responses. Never automatically retry mutations.
+    let timeout = if method == Method::GET {
+        match path.split('?').next().unwrap_or(path) {
+            "/site-config" | "/viewer" | "/auth/providers" => Duration::from_secs(5),
+            _ => Duration::from_secs(15),
+        }
+    } else {
+        Duration::from_secs(60)
+    };
+    let mut builder = client().request(method, &url).timeout(timeout);
 
     if let Some(body) = body {
         builder = builder

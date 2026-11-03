@@ -62,6 +62,28 @@ use crate::{
     workflow::PgWorkflowRepository,
 };
 
+/// Get a pooled connection within one deadline, including all pool hooks.
+///
+/// # Errors
+/// Returns a pool error when checkout fails or exceeds the configured wait
+/// timeout (five seconds when the pool has no wait timeout).
+pub async fn get_connection(
+    pool: &Pool<AsyncPgConnection>,
+) -> Result<PooledConnection<AsyncPgConnection>, DatabaseError> {
+    let deadline = pool
+        .timeouts()
+        .wait
+        .unwrap_or(std::time::Duration::from_secs(5));
+    tokio::time::timeout(deadline, pool.get())
+        .await
+        .map_err(|source| DatabaseError::Pool {
+            source: Box::new(source),
+        })?
+        .map_err(|source| DatabaseError::Pool {
+            source: Box::new(source),
+        })
+}
+
 /// An implementation of the [`RepositoryFactory`] trait backed by a
 /// diesel-async deadpool connection pool.
 #[derive(Clone)]
@@ -94,19 +116,24 @@ impl PgRepositoryFactory {
 impl RepositoryFactory for PgRepositoryFactory {
     async fn create(&self) -> Result<BoxRepository, RepositoryError> {
         let start = std::time::Instant::now();
-        let mut conn = self.pool.get().await.map_err(|e| {
-            RepositoryError::from_error(DatabaseError::Pool {
-                source: Box::new(e),
-            })
-        })?;
+        let mut conn = get_connection(&self.pool)
+            .await
+            .map_err(RepositoryError::from_error)?;
 
         // Start a transaction so that all operations within one request are
         // atomic. The transaction is committed by `save()` or rolled back by
         // `cancel()` / on drop.
-        diesel::sql_query("BEGIN")
-            .execute(&mut *conn)
-            .await
-            .map_err(|e| RepositoryError::from_error(DatabaseError::from(e)))?;
+        tokio::time::timeout(
+            std::time::Duration::from_secs(5),
+            diesel::sql_query("BEGIN").execute(&mut *conn),
+        )
+        .await
+        .map_err(|source| {
+            RepositoryError::from_error(DatabaseError::Pool {
+                source: Box::new(source),
+            })
+        })?
+        .map_err(|e| RepositoryError::from_error(DatabaseError::from(e)))?;
 
         let repo = PgRepository::new(conn).boxed();
 
@@ -126,8 +153,8 @@ impl RepositoryFactory for PgRepositoryFactory {
 /// [`PgRepositoryFactory::create`]). Calling [`RepositoryTransaction::save`]
 /// issues `COMMIT`; calling [`RepositoryTransaction::cancel`] issues
 /// `ROLLBACK`. If the repository is dropped without either, the connection is
-/// returned to the pool and PostgreSQL will automatically roll back the
-/// incomplete transaction.
+/// returned to the pool. Production pools roll back incomplete transactions in
+/// their pre-recycle hook before the connection can be reused.
 pub struct PgRepository {
     conn: PooledConnection<AsyncPgConnection>,
 }
@@ -343,5 +370,57 @@ impl RepositoryAccess for PgRepository {
 
     fn workflow<'c>(&'c mut self) -> Box<dyn WorkflowRepository<Error = Self::Error> + 'c> {
         Box::new(PgWorkflowRepository::new(&mut self.conn))
+    }
+}
+
+#[cfg(test)]
+mod checkout_tests {
+    use std::time::Duration;
+
+    use diesel_async::pooled_connection::{
+        AsyncDieselConnectionManager,
+        deadpool::{Hook, Pool},
+    };
+
+    use super::{AsyncPgConnection, PgRepositoryFactory, RepositoryFactory};
+
+    #[tokio::test]
+    async fn checkout_deadline_covers_pool_exhaustion_and_hooks() {
+        let url =
+            std::env::var("DATABASE_URL").expect("DATABASE_URL must point to a test database");
+        for stage in ["exhaustion", "pre_recycle", "post_create"] {
+            let manager = AsyncDieselConnectionManager::<AsyncPgConnection>::new(&url);
+            let mut builder = Pool::builder(manager)
+                .max_size(1)
+                .wait_timeout(Some(Duration::from_millis(100)))
+                .runtime(deadpool::Runtime::Tokio1);
+            let hook = || Hook::async_fn(|_, _| Box::pin(std::future::pending()));
+            if stage == "pre_recycle" {
+                builder = builder.pre_recycle(hook());
+            }
+            if stage == "post_create" {
+                builder = builder.post_create(hook());
+            }
+            let pool = builder.build().unwrap();
+            let held = if stage == "post_create" {
+                None
+            } else {
+                Some(pool.get().await.unwrap())
+            };
+            let held = if stage == "pre_recycle" {
+                drop(held);
+                None
+            } else {
+                held
+            };
+            let factory = PgRepositoryFactory::new(pool);
+            let start = std::time::Instant::now();
+            let result = tokio::time::timeout(Duration::from_secs(2), factory.create())
+                .await
+                .expect("repository checkout must not wait forever");
+            assert!(result.is_err(), "expected a deadline for {stage}");
+            assert!(start.elapsed() >= Duration::from_millis(80));
+            drop(held);
+        }
     }
 }

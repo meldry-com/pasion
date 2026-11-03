@@ -23,11 +23,7 @@ pub(super) async fn register_worker(
     let mut rng = state.rng();
     let clock = state.clock();
 
-    let conn = state
-        .pool()
-        .get()
-        .await
-        .map_err(|e| QueueRunnerError::Pool(Box::new(e)))?;
+    let conn = pasion_data::pg::get_connection(state.pool()).await?;
     let mut repo = PgRepository::new(conn);
 
     let registration = repo.queue_worker().register(&mut rng, clock).await?;
@@ -43,11 +39,7 @@ pub(super) async fn setup_schedules(
         .map(|schedule| schedule.schedule_name)
         .collect();
 
-    let conn = state
-        .pool()
-        .get()
-        .await
-        .map_err(|e| QueueRunnerError::Pool(Box::new(e)))?;
+    let conn = pasion_data::pg::get_connection(state.pool()).await?;
 
     let mut repo = PgRepository::new(conn);
     repo.queue_schedule().setup(&schedule_names).await?;
@@ -60,24 +52,15 @@ pub(super) async fn shutdown_worker(
     tracker: &mut JobTracker,
 ) -> Result<(), QueueRunnerError> {
     let clock = state.clock();
-    let mut rng = state.rng();
-
-    let conn = state
-        .pool()
-        .get()
-        .await
-        .map_err(|e| QueueRunnerError::Pool(Box::new(e)))?;
-    let mut repo = PgRepository::new(conn);
-
     match tracker.running_jobs() {
         0 => {}
         1 => tracing::warn!("There is one job still running, waiting for it to finish"),
         count => tracing::warn!("There are {count} jobs still running, waiting for them to finish"),
     }
 
-    tracker
-        .process_jobs(&mut rng, clock, &mut repo, true)
-        .await?;
+    drain_jobs(state.pool(), clock, tracker).await?;
+    let conn = pasion_data::pg::get_connection(state.pool()).await?;
+    let mut repo = PgRepository::new(conn);
     repo.queue_worker().shutdown(clock, registration).await?;
     Ok(())
 }
@@ -94,11 +77,7 @@ pub(super) async fn tick_worker(
     let now = clock.now();
     let heartbeat_age = now - *last_heartbeat;
 
-    let conn = state
-        .pool()
-        .get()
-        .await
-        .map_err(|e| QueueRunnerError::Pool(Box::new(e)))?;
+    let conn = pasion_data::pg::get_connection(state.pool()).await?;
     let mut repo = PgRepository::new(conn);
 
     if heartbeat_age >= chrono::Duration::seconds(90) {
@@ -130,9 +109,7 @@ pub(super) async fn tick_worker(
         .try_get_leader_lease(clock, registration)
         .await?;
 
-    tracker
-        .process_jobs(&mut rng, clock, &mut repo, false)
-        .await?;
+    tracker.process_jobs(&mut rng, clock, &mut repo).await?;
 
     let running_jobs = tracker.running_jobs();
     let max_jobs_to_fetch = jobs_to_fetch_capacity(running_jobs);
@@ -174,13 +151,7 @@ pub(super) async fn process_all_jobs_in_tests(
     cancellation_token: &CancellationToken,
 ) -> Result<(), QueueRunnerError> {
     let clock = state.clock();
-    let mut rng = state.rng();
-
-    let conn = state
-        .pool()
-        .get()
-        .await
-        .map_err(|e| QueueRunnerError::Pool(Box::new(e)))?;
+    let conn = pasion_data::pg::get_connection(state.pool()).await?;
     let mut repo = PgRepository::new(conn);
 
     let queues = tracker.queues();
@@ -188,11 +159,28 @@ pub(super) async fn process_all_jobs_in_tests(
         .queue_job()
         .reserve(clock, registration, &queues, 10_000)
         .await?;
+    drop(repo);
 
     runtime::spawn_reserved_jobs(tracker, state, cancellation_token, jobs);
-    tracker
-        .process_jobs(&mut rng, clock, &mut repo, true)
-        .await?;
+    drain_jobs(state.pool(), clock, tracker).await?;
+    Ok(())
+}
+
+pub(super) async fn drain_jobs(
+    pool: &diesel_async::pooled_connection::deadpool::Pool<diesel_async::AsyncPgConnection>,
+    clock: &dyn pasion_data::Clock,
+    tracker: &mut JobTracker,
+) -> Result<(), QueueRunnerError> {
+    use rand_core::SeedableRng as _;
+    let mut rng = rand_chacha::ChaChaRng::from_rng(rand_core::OsRng).expect("failed to seed rng");
+    while tracker.running_jobs() > 0 {
+        // Jobs may need this same pool. Wait before taking a connection, even
+        // when the pool has only one slot.
+        tracker.collect_next_job().await;
+        let conn = pasion_data::pg::get_connection(pool).await?;
+        let mut repo = PgRepository::new(conn);
+        tracker.process_jobs(&mut rng, clock, &mut repo).await?;
+    }
     Ok(())
 }
 
