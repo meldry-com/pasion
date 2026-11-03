@@ -65,8 +65,8 @@ pub enum Route {
     // Auth pages (public)
     #[route("/login")]
     Login {},
-    #[route("/register")]
-    Register {},
+    #[route("/register?:kind&:id")]
+    Register { kind: Option<String>, id: Option<String> },
     #[route("/register/steps/:id/verify-email")]
     RegisterVerifyEmail { id: String },
     #[route("/register/steps/:id/verify-phone")]
@@ -152,5 +152,31 @@ fn PageNotFound(route: Vec<String>) -> Element {
         Layout {
             NotFound {}
         }
+    }
+}
+
+#[cfg(test)]
+mod registration_route_tests {
+    use super::Route;
+
+    #[test]
+    fn registration_route_keeps_the_original_oauth_grant() {
+        let url = "/register?kind=continue_authorization_grant&id=01KMQPADM1N000000000000000";
+        let route: Route = url.parse().unwrap();
+        assert_eq!(
+            route,
+            Route::Register {
+                kind: Some("continue_authorization_grant".to_owned()),
+                id: Some("01KMQPADM1N000000000000000".to_owned()),
+            }
+        );
+        assert_eq!(route.to_string(), url);
+        assert_eq!(
+            "/register".parse::<Route>().unwrap(),
+            Route::Register {
+                kind: None,
+                id: None,
+            }
+        );
     }
 }
