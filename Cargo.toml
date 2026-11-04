@@ -72,7 +72,7 @@ assert_matches = "1.5.0"
 cookie = { version = "0.18", features = ["private", "key-expansion"] }
 aead = { version = "0.5.2", features = ["std"] }
 argon2 = { version = "0.5.3", features = ["password-hash", "std"] }
-base64 = "0.22.1"
+base64 = "0.23.1"
 base64ct = { version = "1.8.3", features = ["std"] }
 bcrypt = "0.19.0"
 bitflags = "2.11.1"
