@@ -5895,7 +5895,7 @@ name = "pasion-messaging"
 version = "1.8.0"
 dependencies = [
  "async-trait",
- "base64 0.22.1",
+ "base64 0.23.1",
  "chrono",
  "hex",
  "hmac 0.12.1",
