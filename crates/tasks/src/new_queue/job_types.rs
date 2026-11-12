@@ -144,6 +144,10 @@ pub(super) async fn run_with_timeout(
     }
 }
 
+pub(super) fn box_runnable_job<T: RunnableJob + 'static>(job: T) -> Box<dyn RunnableJob> {
+    Box::new(job)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -180,8 +184,4 @@ mod tests {
         }
         assert!(!token.is_cancelled());
     }
-}
-
-pub(super) fn box_runnable_job<T: RunnableJob + 'static>(job: T) -> Box<dyn RunnableJob> {
-    Box::new(job)
 }
