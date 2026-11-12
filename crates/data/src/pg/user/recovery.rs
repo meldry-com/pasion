@@ -296,7 +296,9 @@ impl UserRecoveryRepository for PgUserRecoveryRepository<'_> {
         let consumed_at = clock.now();
 
         let rows_affected = diesel::update(
-            user_recovery_sessions::table.find(Uuid::from(user_recovery_session.id)),
+            user_recovery_sessions::table
+                .find(Uuid::from(user_recovery_session.id))
+                .filter(user_recovery_sessions::consumed_at.is_null()),
         )
         .set(user_recovery_sessions::consumed_at.eq(Some(consumed_at)))
         .execute(self.conn)
@@ -357,5 +359,65 @@ impl UserRecoveryRepository for PgUserRecoveryRepository<'_> {
         let max_id = res.into_iter().max();
 
         Ok((count, max_id.map(Ulid::from)))
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use pasion_data::{PgRepositoryFactory, RepositoryFactory, clock::SystemClock};
+    use rand_core::SeedableRng as _;
+
+    use super::*;
+
+    #[tokio::test]
+    async fn concurrent_consumers_cannot_reuse_a_recovery_session() {
+        let pool = crate::test_utils::setup_test_pool().await;
+        let factory = PgRepositoryFactory::new(pool);
+        let clock = SystemClock::default();
+        let mut rng = rand_chacha::ChaChaRng::seed_from_u64(42);
+        let mut setup = factory.create().await.unwrap();
+        let session = setup
+            .user_recovery()
+            .add_session(
+                &mut rng,
+                &clock,
+                "test@example.com".to_owned(),
+                "test".to_owned(),
+                None,
+                "en".to_owned(),
+            )
+            .await
+            .unwrap();
+        setup.save().await.unwrap();
+        let consume = || {
+            let factory = factory.clone();
+            let session = session.clone();
+            let clock = clock.clone();
+            async move {
+                let mut repo = factory.create().await.unwrap();
+                // Both requests retain an unconsumed snapshot. The ticket is
+                // only a capability marker in consume_ticket, not dereferenced.
+                let ticket = UserRecoveryTicket {
+                    id: Ulid::from(1_u128),
+                    user_recovery_session_id: session.id,
+                    user_email_id: Ulid::from(1_u128),
+                    ticket: "test".to_owned(),
+                    created_at: clock.now(),
+                    expires_at: clock.now() + Duration::minutes(10),
+                };
+                let result = repo
+                    .user_recovery()
+                    .consume_ticket(&clock, ticket, session)
+                    .await;
+                if result.is_ok() {
+                    repo.save().await.unwrap();
+                } else {
+                    repo.cancel().await.unwrap();
+                }
+                result.is_ok()
+            }
+        };
+        let (a, b) = tokio::join!(consume(), consume());
+        assert_ne!(a, b, "exactly one concurrent consumer must succeed");
     }
 }
