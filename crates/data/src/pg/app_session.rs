@@ -253,6 +253,8 @@ mod tests {
     #[test]
     fn legacy_device_scope_stays_grouped_under_the_owner_predicate() {
         use diesel::prelude::*;
+        use pasion_data::app_session::AppSessionState;
+        use uuid::Uuid;
 
         use super::oauth2_sessions;
 
