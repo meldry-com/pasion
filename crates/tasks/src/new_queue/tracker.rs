@@ -12,7 +12,7 @@ use tracing::Instrument as _;
 
 use super::{
     FromJob, JobContext, JobError, JobErrorDecision, MAX_ATTEMPTS, RunnableJob,
-    job_types::{JobPayload, box_runnable_job},
+    job_types::{JobPayload, box_runnable_job, run_with_timeout},
     retry_delay,
 };
 use crate::{METER, State};
@@ -114,7 +114,12 @@ impl JobTracker {
                     job.attempt = %context.attempt,
                     "Running job"
                 );
-                let result = job.run(&state, context.clone()).await;
+                let result = run_with_timeout(
+                    job.run(&state, context.clone()),
+                    job.timeout(),
+                    &context.cancellation_token,
+                )
+                .await;
 
                 match &result {
                     Ok(()) => {
