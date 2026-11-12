@@ -1,100 +1,109 @@
 use dioxus::prelude::*;
+use serde::Deserialize;
 
-use crate::{
-    api::types::{AppSession, ViewerResponse},
-    components::{layout::Layout, loading::LoadingScreen, page_heading::PageHeading},
-    pages::Route,
-};
+use crate::components::{layout::Layout, loading::LoadingScreen};
+
+#[derive(Deserialize)]
+struct DeviceDetail {
+    device_id: String,
+    session_count: usize,
+}
+
+#[derive(Deserialize)]
+struct DeviceCollection {
+    devices: Vec<DeviceDetail>,
+}
+
+fn device_query(device: &str) -> String {
+    if device.is_empty() {
+        return "/devices".into();
+    }
+    // Query encoding preserves IDs containing '/' without route ambiguity.
+    let encoded: String = device.bytes().map(|byte| format!("%{byte:02X}")).collect();
+    format!("/devices?device_id={encoded}")
+}
+
+#[component]
+pub fn Devices() -> Element {
+    rsx! { DeviceRedirect { route: Vec::new() } }
+}
 
 #[component]
 pub fn DeviceRedirect(route: Vec<String>) -> Element {
-    let device_id = route.join("/");
-
-    let data = use_resource(move || {
-        let _device_id = device_id.clone();
-        async move {
-            // Get the combined viewer data (includes app sessions)
-            crate::api::api_get::<ViewerResponse>("/viewer").await
-        }
+    let device = route.join("/");
+    let listing = device.is_empty();
+    let query = use_memo(use_reactive!(|device| device_query(&device)));
+    let data =
+        use_resource(
+            move || async move { crate::api::api_get::<DeviceCollection>(&query()).await },
+        );
+    let mut deleting = use_signal(|| false);
+    let mut deleted = use_signal(|| false);
+    let mut error = use_signal(|| None::<String>);
+    use_effect(move || {
+        let _ = query();
+        deleted.set(false);
+        error.set(None);
     });
 
-    // Resolve the target session (if any) and redirect to its detail page.
-    let target_session_id: Option<String> = match &*data.read() {
-        Some(Ok(result)) => result
-            .viewer
-            .as_user()
-            .and_then(|user| user.app_sessions.as_ref())
-            .and_then(|app_sessions| app_sessions.edges.first())
-            .map(|edge| match &edge.node {
-                AppSession::Oauth2Session(s) => s.id.clone(),
-            }),
-        _ => None,
-    };
-    crate::utils::use_redirect(
-        target_session_id.is_some(),
-        Route::SessionDetail {
-            id: target_session_id.clone().unwrap_or_default(),
-        },
-    );
-
-    let binding = data.read();
-
-    match &*binding {
-        Some(Ok(result)) => {
-            let Some(user) = result.viewer.as_user() else {
-                return rsx! {
-                    Layout {
-                        div { class: "flex flex-col gap-10",
-                            PageHeading {
-                                icon: "🔒".to_owned(),
-                                title: "Not authenticated".to_owned(),
-                                subtitle: "Please sign in to view device information.".to_owned(),
-                            }
-                            Link { class: "btn btn-primary", to: Route::Login {},
-                                "Sign in"
-                            }
+    rsx! {
+        Layout {
+            if deleted() {
+                h1 { "Device signed out" }
+            } else {
+                match &*data.read() {
+                    Some(Ok(collection)) if listing => rsx! {
+                        h1 { "Your devices" }
+                        if collection.devices.is_empty() { p { "No active devices." } }
+                        for detail in &collection.devices {
+                            p { Link { to: crate::pages::Route::DeviceRedirect { route: detail.device_id.split('/').map(str::to_owned).collect() }, "{detail.device_id} ({detail.session_count} sessions)" } }
                         }
-                    }
-                };
-            };
-
-            // A matching session triggers a redirect (handled by use_redirect
-            // above); show a loading screen while it happens.
-            if let Some(ref app_sessions) = user.app_sessions
-                && !app_sessions.edges.is_empty()
-            {
-                return rsx! { LoadingScreen {} };
-            }
-
-            rsx! {
-                Layout {
-                    div { class: "flex flex-col gap-10",
-                        PageHeading {
-                            icon: "?".to_owned(),
-                            title: "Device not found".to_owned(),
-                            subtitle: "The device you are looking for could not be found.".to_owned(),
+                    },
+                    Some(Ok(collection)) => rsx! {
+                        for detail in &collection.devices {
+                        h1 { "Device {detail.device_id}" }
+                        p { "{detail.session_count} active session(s) belong to this device." }
+                        p { "Signing out revokes all sessions for this device. Other devices stay signed in." }
+                        button {
+                            class: "btn btn-danger",
+                            disabled: deleting(),
+                            onclick: move |_| {
+                                let path = query();
+                                deleting.set(true);
+                                spawn(async move {
+                                    match crate::api::api_delete::<serde_json::Value>(&path).await {
+                                        Ok(_) if query() == path => deleted.set(true),
+                                        Ok(_) => {},
+                                        Err(message) => error.set(Some(message)),
+                                    }
+                                    deleting.set(false);
+                                });
+                            },
+                            "Sign out this device"
                         }
-                        Link { class: "btn btn-primary", to: Route::Sessions {},
-                            "Back to sessions"
                         }
-                    }
+                    },
+                    Some(Err(message)) => rsx! { p { role: "alert", "{message}" } },
+                    None => rsx! { LoadingScreen {} },
                 }
+            }
+            if let Some(message) = error() {
+                p { role: "alert", "{message}" }
             }
         }
-        Some(Err(e)) => rsx! {
-            Layout {
-                div { class: "flex flex-col gap-10",
-                    PageHeading {
-                        icon: "!".to_owned(),
-                        title: "Error".to_owned(),
-                        subtitle: e.clone(),
-                    }
-                    Link { class: "btn btn-primary", to: Route::Sessions {},
-                        "Back to sessions"
-                    }
-                }
-            }
-        },
-        None => rsx! { LoadingScreen {} },
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn device_ids_cannot_add_query_parameters_or_change_the_target() {
+        assert_eq!(device_query(""), "/devices");
+        assert_eq!(
+            device_query("A/B&device_id=C"),
+            "/devices?device_id=%41%2F%42%26%64%65%76%69%63%65%5F%69%64%3D%43"
+        );
     }
 }
