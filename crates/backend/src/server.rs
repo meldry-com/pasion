@@ -442,6 +442,7 @@ fn build_human_router(router: Router, _templates: Templates) -> Router {
         // Root & auth pages
         .push(Router::with_path("/").get(spa::get))
         .push(Router::with_path("/login").get(spa::get))
+        .push(Router::with_path("/manage").get(spa::get))
         .push(Router::with_path("/register").get(spa::get))
         .push(Router::with_path("/register/{**rest}").get(spa::get))
         .push(Router::with_path("/recover").get(spa::get))
@@ -865,7 +866,7 @@ async fn account_redirect_handler(req: &Request, depot: &Depot) -> impl Writer +
     let url_builder = depot.get_url_builder().cloned();
     Redirect::found(relative_redirect_location(
         url_builder.as_ref(),
-        "/",
+        "/manage",
         req.uri().query(),
     ))
 }
@@ -1170,7 +1171,7 @@ mod tests {
                     assert_eq!(res.status_code, Some(http::StatusCode::FOUND), "{url}");
                     assert_eq!(
                         res.headers().get("location").unwrap().to_str().unwrap(),
-                        format!("{prefix}/{expected_query}"),
+                        format!("{prefix}/manage{expected_query}"),
                         "{url}"
                     );
                 }
@@ -1299,7 +1300,7 @@ mod mount_tests {
             assert_eq!(res.status_code, Some(StatusCode::FOUND));
             assert_eq!(
                 res.headers().get("location").unwrap().to_str().unwrap(),
-                format!("/_pasion/{query}")
+                format!("/_pasion/manage{query}")
             );
         }
         for path in ["api-doc/openapi.json", "api-doc/admin/openapi.json"] {

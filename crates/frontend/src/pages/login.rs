@@ -32,7 +32,10 @@ pub(crate) fn preserve_login_query() {
         return;
     };
 
-    if pathname == crate::config::app_path("/login") && !search.is_empty() {
+    if (pathname == crate::config::app_path("/login")
+        || pathname == crate::config::app_path("/manage"))
+        && !search.is_empty()
+    {
         let _ = Reflect::set(
             window.as_ref(),
             &JsValue::from_str(PRESERVED_LOGIN_QUERY_PROPERTY),
@@ -60,7 +63,7 @@ fn get_query_param(name: &str) -> Option<String> {
 
 /// Return the current page's query string (without leading `?`), falling
 /// back to the preserved one if Dioxus has already rewritten the URL.
-fn current_query_string() -> String {
+pub(crate) fn current_query_string() -> String {
     if let Some(window) = web_sys::window()
         && let Ok(search) = window.location().search()
         && !search.is_empty()
@@ -73,7 +76,7 @@ fn current_query_string() -> String {
         .unwrap_or_default()
 }
 
-fn clear_preserved_login_query() {
+pub(crate) fn clear_preserved_login_query() {
     if let Some(window) = web_sys::window() {
         let _ = Reflect::delete_property(
             window.as_ref(),
@@ -180,10 +183,19 @@ fn LoginForm(providers: ProvidersResponse, initial_error: Option<String>) -> Ele
                                     Ok(resp) if resp.status == "success" => {
                                         let continuation =
                                             get_query_param("kind").zip(get_query_param("id"));
-                                        clear_preserved_login_query();
+                                        let manage_account = get_query_param("kind").as_deref() == Some("manage_account");
+                                        if manage_account {
+                                            if let Some(window) = web_sys::window() {
+                                                let _ = Reflect::set(window.as_ref(), &JsValue::from_str(PRESERVED_LOGIN_QUERY_PROPERTY), &JsValue::from_str(&current_query_string()));
+                                            }
+                                        } else {
+                                            clear_preserved_login_query();
+                                        }
 
                                         // Check if this login is part of an OAuth authorization flow
-                                        if let Some((kind, id)) = continuation {
+                                        if manage_account {
+                                            nav.push(Route::ManageAccount {});
+                                        } else if let Some((kind, id)) = continuation {
                                             if kind == "continue_authorization_grant" {
                                                 nav.push(Route::Consent { grant_id: id });
                                             } else {
