@@ -132,7 +132,7 @@ pub struct NotificationDelivery {
     pub created_at: DateTime<Utc>,
     /// When a worker reserved this delivery for processing.
     pub reserved_at: Option<DateTime<Utc>>,
-    /// When the provider accepted the outbound payload.
+    /// When the current attempt began contacting the provider.
     pub sent_at: Option<DateTime<Utc>>,
     /// When the platform observed terminal success.
     pub delivered_at: Option<DateTime<Utc>>,
@@ -231,6 +231,24 @@ pub struct NotificationDeliveryFailure {
     pub message: Option<String>,
     /// Whether the failure is eligible for retry.
     pub retryable: bool,
+}
+
+impl NotificationDeliveryFailure {
+    /// An ambiguous send must never be automatically replayed.
+    #[must_use]
+    pub fn outcome_unknown(message: impl Into<String>) -> Self {
+        Self {
+            code: Some("delivery_outcome_unknown".to_owned()),
+            message: Some(message.into()),
+            retryable: false,
+        }
+    }
+
+    /// Whether provider acceptance must be reconciled before retrying.
+    #[must_use]
+    pub fn is_outcome_unknown(&self) -> bool {
+        self.code.as_deref() == Some("delivery_outcome_unknown")
+    }
 }
 
 /// Immutable audit events emitted by the notification subsystem.
