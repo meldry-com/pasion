@@ -31,6 +31,9 @@ pub enum AccountSessionError {
 
     #[error(transparent)]
     Repository(#[from] RepositoryError),
+
+    #[error("failed to rename Matrix device: {0}")]
+    Homeserver(#[source] anyhow::Error),
 }
 
 pub async fn load_browser_session_detail(
@@ -170,18 +173,66 @@ pub async fn set_oauth2_session_human_name(
         .await?;
 
     if let (Some(name), Some(user)) = (&human_name, session_user.as_ref()) {
-        for token in session.scope.iter() {
-            if let Some(device_id) =
-                token.strip_prefix("urn:matrix:org.matrix.msc2967.client:device:")
-            {
-                let _ = homeserver
-                    .update_device_display_name(&user.username, device_id, name)
-                    .await;
-            }
-        }
+        sync_device_names(homeserver, &user.username, &session.scope, name).await?;
     }
 
     repo.save().await?;
 
     Ok(())
+}
+
+fn device_ids(scope: &oauth2_types::scope::Scope) -> std::collections::BTreeSet<&str> {
+    scope
+        .iter()
+        .filter_map(|token| {
+            token
+                .strip_prefix("urn:matrix:client:device:")
+                .or_else(|| token.strip_prefix("urn:matrix:org.matrix.msc2967.client:device:"))
+                .filter(|id| !id.is_empty())
+        })
+        .collect()
+}
+
+async fn sync_device_names(
+    homeserver: &dyn HomeserverAdmin,
+    username: &str,
+    scope: &oauth2_types::scope::Scope,
+    name: &str,
+) -> Result<(), AccountSessionError> {
+    for device_id in device_ids(scope) {
+        homeserver
+            .update_device_display_name(username, device_id, name)
+            .await
+            .map_err(AccountSessionError::Homeserver)?;
+    }
+    Ok(())
+}
+
+#[cfg(test)]
+mod matrix_name_tests {
+    use super::*;
+
+    #[test]
+    fn stable_and_legacy_device_names_share_one_target() {
+        let scope = "openid urn:matrix:client:device:A urn:matrix:org.matrix.msc2967.client:device:A urn:matrix:client:device:B urn:matrix:client:device:".parse().unwrap();
+        assert_eq!(
+            device_ids(&scope).into_iter().collect::<Vec<_>>(),
+            ["A", "B"]
+        );
+    }
+
+    #[tokio::test]
+    async fn stable_device_rename_failure_is_reported() {
+        let homeserver = pasion_matrix::ReadOnlyHomeserverAdmin::new(
+            pasion_matrix::MockHomeserverAdmin::new("example.com"),
+        );
+        for scope in [
+            "urn:matrix:client:device:A",
+            "urn:matrix:org.matrix.msc2967.client:device:A",
+        ] {
+            let result =
+                sync_device_names(&homeserver, "alice", &scope.parse().unwrap(), "Phone").await;
+            assert!(matches!(result, Err(AccountSessionError::Homeserver(_))));
+        }
+    }
 }
