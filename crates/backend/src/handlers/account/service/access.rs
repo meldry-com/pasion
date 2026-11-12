@@ -63,82 +63,6 @@ pub async fn load_enabled_upstream_providers<R: RepositoryAccess>(
     repo.upstream_oauth_provider().all_enabled().await
 }
 
-#[cfg(test)]
-mod enumeration_tests {
-    use pasion_data::{PgRepositoryFactory, RepositoryFactory as _, clock::MockClock};
-    use pasion_matrix::MockHomeserverAdmin;
-    use rand_core::SeedableRng as _;
-
-    use super::*;
-    use crate::handlers::{passwords::Hasher, test_utils::test_site_config};
-
-    #[tokio::test]
-    async fn missing_accounts_spend_the_same_requester_budget_as_existing_accounts() {
-        if std::env::var_os("DATABASE_URL").is_none() {
-            return;
-        }
-        let pool = pasion_data::test_utils::setup_test_pool().await;
-        let factory = PgRepositoryFactory::new(pool);
-        let clock = MockClock::default();
-        let mut rng = rand_chacha::ChaChaRng::seed_from_u64(51);
-        let manager = PasswordManager::new(0, [(1, Hasher::bcrypt(Some(4), None, false))]).unwrap();
-        let mut repo = factory.create().await.unwrap();
-        let user = repo
-            .user()
-            .add(&mut rng, &clock, "existing".to_owned())
-            .await
-            .unwrap();
-        let (version, hash) = manager
-            .hash(&mut rng, Zeroizing::new("correct".to_owned()))
-            .await
-            .unwrap();
-        repo.user_password()
-            .add(&mut rng, &clock, &user, version, hash, None)
-            .await
-            .unwrap();
-        repo.save().await.unwrap();
-        let homeserver = MockHomeserverAdmin::new("example.com");
-        let config = test_site_config();
-        for first in ["missing", "existing"] {
-            let limiter = Limiter::new(&pasion_config::RateLimitingConfig::default()).unwrap();
-            for attempt in 0..4 {
-                let mut repo = factory.create().await.unwrap();
-                let outcome = verify_password_login(
-                    &mut repo,
-                    &mut rng,
-                    &clock,
-                    &manager,
-                    &limiter,
-                    &homeserver,
-                    &config,
-                    PasswordLoginRequest {
-                        username_or_email: if attempt < 3 {
-                            first.to_owned()
-                        } else {
-                            "existing".to_owned()
-                        },
-                        password: Zeroizing::new("wrong".to_owned()),
-                        user_agent: None,
-                        requester: RequesterFingerprint::new([127, 0, 0, 1].into()),
-                        skip_requester_limit: false,
-                    },
-                )
-                .await
-                .unwrap();
-                if attempt < 3 {
-                    assert!(matches!(
-                        outcome,
-                        PasswordVerificationOutcome::InvalidCredentials
-                    ));
-                } else {
-                    assert!(matches!(outcome, PasswordVerificationOutcome::RateLimited));
-                }
-                repo.cancel().await.unwrap();
-            }
-        }
-    }
-}
-
 pub async fn login_with_password(
     mut repo: BoxRepository,
     rng: &mut (dyn CryptoRngCore + Send),
@@ -215,18 +139,22 @@ pub async fn verify_password_login(
         return Ok(PasswordVerificationOutcome::RateLimited);
     }
 
+    let Some(permit) = password_manager
+        .try_login_verification()
+        .map_err(|error| PasswordLoginError::Password(error.into()))?
+    else {
+        return Ok(PasswordVerificationOutcome::RateLimited);
+    };
+
     let username = homeserver
         .localpart(&request.username_or_email)
         .unwrap_or(&request.username_or_email);
 
     let Some(user) = find_user_by_email_or_by_username(site_config, repo, username).await? else {
-        if !password_manager
-            .dummy_verify(request.password)
+        password_manager
+            .dummy_verify(request.password, permit)
             .await
-            .map_err(PasswordLoginError::Password)?
-        {
-            return Ok(PasswordVerificationOutcome::RateLimited);
-        }
+            .map_err(PasswordLoginError::Password)?;
         return Ok(PasswordVerificationOutcome::InvalidCredentials);
     };
 
@@ -235,22 +163,20 @@ pub async fn verify_password_login(
     }
 
     let Some(user_password) = repo.user_password().active(&user).await? else {
-        if !password_manager
-            .dummy_verify(request.password)
+        password_manager
+            .dummy_verify(request.password, permit)
             .await
-            .map_err(PasswordLoginError::Password)?
-        {
-            return Ok(PasswordVerificationOutcome::RateLimited);
-        }
+            .map_err(PasswordLoginError::Password)?;
         return Ok(PasswordVerificationOutcome::InvalidCredentials);
     };
 
     let user_password = match password_manager
-        .verify_and_upgrade(
+        .verify_and_upgrade_admitted(
             &mut *rng,
             user_password.version,
             request.password,
             user_password.hashed_password.clone(),
+            permit,
         )
         .await
     {
@@ -336,4 +262,120 @@ async fn find_user_by_email_or_by_username(
     }
 
     repo.user().find_by_username(username_or_email).await
+}
+
+#[cfg(test)]
+mod enumeration_tests {
+    use pasion_data::{PgRepositoryFactory, RepositoryFactory as _, clock::MockClock};
+    use pasion_matrix::MockHomeserverAdmin;
+    use rand_core::SeedableRng as _;
+
+    use super::*;
+    use crate::handlers::{passwords::Hasher, test_utils::test_site_config};
+
+    #[tokio::test]
+    async fn missing_accounts_spend_the_same_requester_budget_as_existing_accounts() {
+        if std::env::var_os("DATABASE_URL").is_none() {
+            return;
+        }
+        let pool = pasion_data::test_utils::setup_test_pool().await;
+        let factory = PgRepositoryFactory::new(pool);
+        let clock = MockClock::default();
+        let mut rng = rand_chacha::ChaChaRng::seed_from_u64(51);
+        let manager = PasswordManager::new(0, [(1, Hasher::bcrypt(Some(4), None, false))]).unwrap();
+        let mut repo = factory.create().await.unwrap();
+        let user = repo
+            .user()
+            .add(&mut rng, &clock, "existing".to_owned())
+            .await
+            .unwrap();
+        let (version, hash) = manager
+            .hash(&mut rng, Zeroizing::new("correct".to_owned()))
+            .await
+            .unwrap();
+        repo.user_password()
+            .add(&mut rng, &clock, &user, version, hash, None)
+            .await
+            .unwrap();
+        repo.user()
+            .add(&mut rng, &clock, "no-local-password".to_owned())
+            .await
+            .unwrap();
+        repo.save().await.unwrap();
+        let homeserver = MockHomeserverAdmin::new("example.com");
+        let config = test_site_config();
+        // A full shared budget must reject before the lookup, irrespective of
+        // account existence or whether a local password has been configured.
+        let slots: Vec<_> = (0..4)
+            .map(|_| manager.try_login_verification().unwrap().unwrap())
+            .collect();
+        let limiter = Limiter::new(&pasion_config::RateLimitingConfig::default()).unwrap();
+        for (index, username) in ["missing", "existing", "no-local-password"]
+            .into_iter()
+            .enumerate()
+        {
+            let mut repo = factory.create().await.unwrap();
+            let outcome = verify_password_login(
+                &mut repo,
+                &mut rng,
+                &clock,
+                &manager,
+                &limiter,
+                &homeserver,
+                &config,
+                PasswordLoginRequest {
+                    username_or_email: username.to_owned(),
+                    password: Zeroizing::new("wrong".to_owned()),
+                    user_agent: None,
+                    requester: RequesterFingerprint::new([127, 0, 0, 10 + index as u8].into()),
+                    skip_requester_limit: false,
+                },
+            )
+            .await
+            .unwrap();
+            assert!(
+                matches!(outcome, PasswordVerificationOutcome::RateLimited),
+                "{username}"
+            );
+            repo.cancel().await.unwrap();
+        }
+        drop(slots);
+        for first in ["missing", "existing"] {
+            let limiter = Limiter::new(&pasion_config::RateLimitingConfig::default()).unwrap();
+            for attempt in 0..4 {
+                let mut repo = factory.create().await.unwrap();
+                let outcome = verify_password_login(
+                    &mut repo,
+                    &mut rng,
+                    &clock,
+                    &manager,
+                    &limiter,
+                    &homeserver,
+                    &config,
+                    PasswordLoginRequest {
+                        username_or_email: if attempt < 3 {
+                            first.to_owned()
+                        } else {
+                            "existing".to_owned()
+                        },
+                        password: Zeroizing::new("wrong".to_owned()),
+                        user_agent: None,
+                        requester: RequesterFingerprint::new([127, 0, 0, 1].into()),
+                        skip_requester_limit: false,
+                    },
+                )
+                .await
+                .unwrap();
+                if attempt < 3 {
+                    assert!(matches!(
+                        outcome,
+                        PasswordVerificationOutcome::InvalidCredentials
+                    ));
+                } else {
+                    assert!(matches!(outcome, PasswordVerificationOutcome::RateLimited));
+                }
+                repo.cancel().await.unwrap();
+            }
+        }
+    }
 }
