@@ -24,6 +24,7 @@
 
 pub mod app_state;
 pub mod error;
+mod jwks_http;
 pub mod lifecycle;
 /// Network listener infrastructure: TCP/Unix sockets, TLS, and PROXY protocol.
 pub mod listener;

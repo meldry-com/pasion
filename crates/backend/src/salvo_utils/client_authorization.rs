@@ -20,7 +20,7 @@ use serde::{Deserialize, de::DeserializeOwned};
 use serde_json::Value;
 use thiserror::Error;
 
-use crate::{outbound_http::RequestBuilderExt, record_error};
+use crate::record_error;
 
 static JWT_BEARER_CLIENT_ASSERTION: &str = "urn:ietf:params:oauth:client-assertion-type:jwt-bearer";
 
@@ -292,7 +292,7 @@ fn validate_client_assertion_audience(
 }
 
 async fn fetch_jwks(
-    http_client: &reqwest::Client,
+    _http_client: &reqwest::Client,
     jwks: &JwksOrJwksUri,
 ) -> Result<PublicJsonWebKeySet, Box<dyn std::error::Error + Send + Sync>> {
     let uri = match jwks {
@@ -300,15 +300,7 @@ async fn fetch_jwks(
         JwksOrJwksUri::JwksUri(u) => u,
     };
 
-    let response = http_client
-        .get(uri.as_str())
-        .send_traced()
-        .await?
-        .error_for_status()?
-        .json()
-        .await?;
-
-    Ok(response)
+    crate::jwks_http::fetch(uri).await.map_err(Into::into)
 }
 
 #[derive(Debug, Error)]
