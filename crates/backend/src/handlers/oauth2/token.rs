@@ -594,7 +594,7 @@ mod tests {
             let mut response = Response::new();
             error.render(&mut response);
             assert_eq!(response.status_code, Some(StatusCode::BAD_REQUEST));
-            match response.body() {
+            match &response.body {
                 salvo::http::ResBody::Once(bytes) => {
                     let body: serde_json::Value = serde_json::from_slice(bytes).unwrap();
                     assert_eq!(body["error"], "invalid_scope");
