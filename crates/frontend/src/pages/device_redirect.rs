@@ -23,6 +23,13 @@ fn device_query(device: &str) -> String {
     format!("/devices?device_id={encoded}")
 }
 
+/// Only a detail currently displayed for the selected device may be revoked.
+/// Resources can retain the previous device's response during navigation.
+fn deletion_query(rendered_device: &str, current_query: &str) -> Option<String> {
+    let rendered_query = device_query(rendered_device);
+    (!rendered_device.is_empty() && rendered_query == current_query).then_some(rendered_query)
+}
+
 #[component]
 pub fn Devices() -> Element {
     rsx! { DeviceRedirect { route: Vec::new() } }
@@ -61,14 +68,17 @@ pub fn DeviceRedirect(route: Vec<String>) -> Element {
                     },
                     Some(Ok(collection)) => rsx! {
                         for detail in &collection.devices {
+                        {
+                        let rendered_device = detail.device_id.clone();
+                        rsx! {
                         h1 { "Device {detail.device_id}" }
                         p { "{detail.session_count} active session(s) belong to this device." }
                         p { "Signing out revokes all sessions for this device. Other devices stay signed in." }
                         button {
                             class: "btn btn-danger",
-                            disabled: deleting(),
+                            disabled: deleting() || deletion_query(&detail.device_id, &query()).is_none(),
                             onclick: move |_| {
-                                let path = query();
+                                let Some(path) = deletion_query(&rendered_device, &query()) else { return; };
                                 deleting.set(true);
                                 spawn(async move {
                                     match crate::api::api_delete::<serde_json::Value>(&path).await {
@@ -80,6 +90,8 @@ pub fn DeviceRedirect(route: Vec<String>) -> Element {
                                 });
                             },
                             "Sign out this device"
+                        }
+                        }
                         }
                         }
                     },
@@ -105,5 +117,16 @@ mod tests {
             device_query("A/B&device_id=C"),
             "/devices?device_id=%41%2F%42%26%64%65%76%69%63%65%5F%69%64%3D%43"
         );
+    }
+
+    #[test]
+    fn stale_device_details_cannot_revoke_the_new_navigation_target() {
+        let selected_a = device_query("A");
+        let selected_b = device_query("B");
+        assert_eq!(deletion_query("A", &selected_a), Some(selected_a));
+        // B is selected, but use_resource still displays A until B completes.
+        assert_eq!(deletion_query("A", &selected_b), None);
+        assert_eq!(deletion_query("B", &selected_b), Some(selected_b));
+        assert_eq!(deletion_query("", "/devices"), None);
     }
 }
