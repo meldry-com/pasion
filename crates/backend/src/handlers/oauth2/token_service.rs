@@ -52,6 +52,7 @@ use crate::{
 pub enum AuthorizationCodeExchangeError {
     #[error(transparent)]
     InvalidMatrixScope(#[from] InvalidMatrixLoginScope),
+
     #[error("client is not authorized to use the authorization_code grant type")]
     UnauthorizedClient(Ulid),
 
@@ -184,6 +185,7 @@ impl From<pasion_policy::EvaluationError> for ClientCredentialsGrantError {
 pub enum DeviceCodeExchangeError {
     #[error(transparent)]
     InvalidMatrixScope(#[from] InvalidMatrixLoginScope),
+
     #[error("administrative scopes require an administrator account")]
     AdminScopeNotAllowed,
 

@@ -579,8 +579,6 @@ async fn handle_post(
 
 #[cfg(test)]
 mod tests {
-    use salvo::Scribe as _;
-
     use super::*;
 
     #[test]
@@ -605,5 +603,4 @@ mod tests {
             }
         }
     }
-    // Tests would need to be updated for Salvo's test utilities
 }
