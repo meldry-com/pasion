@@ -116,10 +116,10 @@ pub trait RunnableJob: Send + 'static {
     async fn run(&self, state: &State, context: JobContext) -> Result<(), JobError>;
 
     /// Optional execution deadline enforced by the runner. Expiration cancels
-    /// the job token, drops the execution future and records a permanent failure.
-    /// A timeout cannot prove that external side effects did not happen, so the
-    /// runner must not automatically retry it. Jobs must not detach untracked
-    /// side-effecting tasks from their execution future.
+    /// the job token, drops the execution future and records a permanent
+    /// failure. A timeout cannot prove that external side effects did not
+    /// happen, so the runner must not automatically retry it. Jobs must not
+    /// detach untracked side-effecting tasks from their execution future.
     fn timeout(&self) -> Option<std::time::Duration> {
         None
     }
