@@ -180,10 +180,15 @@ fn LoginForm(providers: ProvidersResponse, initial_error: Option<String>) -> Ele
                                     Ok(resp) if resp.status == "success" => {
                                         let continuation =
                                             get_query_param("kind").zip(get_query_param("id"));
+                                        let manage_account = get_query_param("kind").as_deref() == Some("manage_account");
+                                        let action = get_query_param("action");
+                                        let device_id = get_query_param("device_id");
                                         clear_preserved_login_query();
 
                                         // Check if this login is part of an OAuth authorization flow
-                                        if let Some((kind, id)) = continuation {
+                                        if manage_account {
+                                            nav.push(Route::ManageAccount { action, device_id });
+                                        } else if let Some((kind, id)) = continuation {
                                             if kind == "continue_authorization_grant" {
                                                 nav.push(Route::Consent { grant_id: id });
                                             } else {
