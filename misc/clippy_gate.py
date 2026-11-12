@@ -70,17 +70,31 @@ def lint(root, output):
         return diagnostics(stream)
 
 
+def comparison_base(root, requested, pr_head):
+    if pr_head:
+        parents = subprocess.check_output(
+            ["git", "rev-list", "--parents", "-n", "1", "HEAD"],
+            cwd=root, text=True).split()
+        # GitHub may build a newer merge preview while the event still names
+        # the old base SHA. Only trust the preview's first parent when its
+        # second parent is exactly this PR's head, not an author's own merge.
+        if len(parents) == 3 and parents[2] == pr_head:
+            return parents[1]
+    return subprocess.check_output(
+        ["git", "rev-parse", "--verify", requested + "^{commit}"],
+        cwd=root, text=True).strip()
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--base-ref", required=True)
+    parser.add_argument("--pr-head", default="")
     args = parser.parse_args()
     root = Path(subprocess.check_output(
         ["git", "rev-parse", "--show-toplevel"], text=True).strip())
     # The caller supplies an exact commit from the event, never a PR-controlled
     # executable or shell expression. Keep both checkouts on the same toolchain.
-    base = subprocess.check_output(
-        ["git", "rev-parse", "--verify", args.base_ref + "^{commit}"],
-        cwd=root, text=True).strip()
+    base = comparison_base(root, args.base_ref, args.pr_head)
     with tempfile.TemporaryDirectory(prefix="pasion-clippy-") as directory:
         scratch = Path(directory)
         checkout = scratch / "base"

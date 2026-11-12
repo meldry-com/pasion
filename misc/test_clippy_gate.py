@@ -7,7 +7,7 @@ import tempfile
 import unittest
 from unittest.mock import patch
 
-from clippy_gate import diagnostics, lint
+from clippy_gate import comparison_base, diagnostics, lint
 
 
 def warning(line=1, source="unsafe { call() }", target="lib"):
@@ -24,6 +24,19 @@ def warning(line=1, source="unsafe { call() }", target="lib"):
 
 
 class DiagnosticGateTests(unittest.TestCase):
+    def test_merge_preview_uses_current_base_instead_of_stale_event(self):
+        with patch("clippy_gate.subprocess.check_output", return_value="preview current-main pr-head\n"):
+            self.assertEqual(comparison_base(Path("."), "old-main", "pr-head"), "current-main")
+
+    def test_unrelated_merge_cannot_override_requested_base(self):
+        with patch("clippy_gate.subprocess.check_output", side_effect=["author-merge hidden-base other-head\n", "event-base\n"]):
+            self.assertEqual(comparison_base(Path("."), "event-base", "pr-head"), "event-base")
+
+    def test_push_uses_the_explicit_previous_revision(self):
+        with patch("clippy_gate.subprocess.check_output", return_value="previous\n") as git:
+            self.assertEqual(comparison_base(Path("."), "previous", ""), "previous")
+            self.assertIn("previous^{commit}", git.call_args.args[0])
+
     def test_cargo_failure_preserves_compiler_details_for_either_checkout(self):
         for checkout in ("base", "head"):
             with self.subTest(checkout=checkout), tempfile.TemporaryDirectory() as directory:

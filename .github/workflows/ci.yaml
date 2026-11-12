@@ -68,6 +68,7 @@ jobs:
       - name: Execute Clippy lints
         env:
           BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.before }}
+          PR_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
         run: |
           set -euo pipefail
           base="$BASE_SHA"
@@ -75,7 +76,7 @@ jobs:
             base="$(git rev-parse HEAD^)"
           fi
           python3 -m unittest discover -s misc -p test_clippy_gate.py
-          python3 misc/clippy_gate.py --base-ref "$base"
+          python3 misc/clippy_gate.py --base-ref "$base" --pr-head "$PR_HEAD_SHA"
 
   cargo-deny:
     name: Audit dependencies with cargo-deny
