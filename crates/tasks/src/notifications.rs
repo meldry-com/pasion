@@ -883,7 +883,16 @@ fn failure_after_dispatch(error: &NotificationError) -> NotificationDeliveryFail
         failure.code.as_deref(),
         Some("email_provider_429" | "sms_provider_429")
     );
-    if (failure.retryable && !known_rejection) || failure.code.as_deref() == Some("email_json") {
+    // Aliyun/Tencent encode malformed successful HTTP responses using the
+    // ProviderError variant with a 2xx status. That is not proof of rejection.
+    let ambiguous_success_response = matches!(error,
+        NotificationError::Sms(pasion_messaging::SmsTransportError::ProviderError { status, .. })
+            if (200..300).contains(status)
+    );
+    if (failure.retryable && !known_rejection)
+        || failure.code.as_deref() == Some("email_json")
+        || ambiguous_success_response
+    {
         NotificationDeliveryFailure::outcome_unknown(error.to_string())
     } else {
         failure
@@ -1208,7 +1217,9 @@ mod tests {
         .unwrap_err();
         assert!(failure.is_outcome_unknown());
         assert!(!failure.retryable);
-        for (status, retryable, unknown) in [(429, true, false), (500, false, true)] {
+        for (status, retryable, unknown) in
+            [(200, false, true), (429, true, false), (500, false, true)]
+        {
             let error = pasion_messaging::NotificationError::Sms(
                 pasion_messaging::SmsTransportError::ProviderError {
                     status,
@@ -1219,6 +1230,15 @@ mod tests {
             assert_eq!(failure.retryable, retryable);
             assert_eq!(failure.is_outcome_unknown(), unknown);
         }
+        let invalid_json = serde_json::from_str::<serde_json::Value>("{").unwrap_err();
+        let error = pasion_messaging::NotificationError::Email(
+            pasion_messaging::email::MailerError::Transport(
+                pasion_messaging::email::EmailTransportError::Json(invalid_json),
+            ),
+        );
+        let failure = super::failure_after_dispatch(&error);
+        assert!(failure.is_outcome_unknown());
+        assert!(!failure.retryable);
     }
 
     #[test]
