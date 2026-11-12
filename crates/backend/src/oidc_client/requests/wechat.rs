@@ -136,8 +136,9 @@ pub async fn fetch_userinfo(
 
 #[cfg(test)]
 mod tests {
-    use super::*;
     use wiremock::{Mock, MockServer, ResponseTemplate, matchers::path};
+
+    use super::*;
 
     #[tokio::test]
     async fn token_status_and_decode_errors_do_not_expose_query_secrets() {

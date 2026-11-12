@@ -264,9 +264,11 @@ impl RequestBuilderExt for reqwest::RequestBuilder {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
     use std::sync::Mutex;
+
     use tracing_subscriber::fmt::format::FmtSpan;
+
+    use super::*;
 
     #[derive(Clone)]
     struct Capture(Arc<Mutex<Vec<u8>>>);
