@@ -130,6 +130,10 @@ impl UserRecoveryRepository for PgUserRecoveryRepository<'_> {
         let row = user_recovery_sessions::table
             .find(Uuid::from(id))
             .select(UserRecoverySessionRow::as_select())
+            // Recovery services check consumed_at before hashing a replacement
+            // password. Serialize these checks so a competing service request
+            // returns AlreadyConsumed rather than a generic repository error.
+            .for_update()
             .first::<UserRecoverySessionRow>(self.conn)
             .await
             .optional()?;
