@@ -57,6 +57,7 @@ pub async fn set_password(
     let repo_factory = depot.repo_factory()?;
     let config = depot.site_config()?;
     let password_manager = depot.password_manager()?;
+    let limiter = depot.limiter()?;
     let clock = make_clock();
     let mut rng = make_rng();
 
@@ -77,6 +78,8 @@ pub async fn set_password(
         &mut rng,
         &clock,
         &password_manager,
+        &limiter,
+        requester.fingerprint(),
         user_id,
         input.current_password.map(Zeroizing::new),
         Zeroizing::new(input.new_password),
@@ -129,6 +132,7 @@ pub async fn set_password(
             status: "PASSWORD_CHANGES_DISABLED",
             flow_session_id: None,
         })),
+        Err(ChangePasswordError::RateLimited) => Err(RouteError::RateLimited),
         Err(ChangePasswordError::PasswordTooWeak) => Ok(Json(SetPasswordResponse {
             status: "INVALID_NEW_PASSWORD",
             flow_session_id: None,

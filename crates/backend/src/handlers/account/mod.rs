@@ -74,6 +74,7 @@ pub async fn verify_password_if_needed(
     requester: &Requester,
     config: &SiteConfig,
     password_manager: &PasswordManager,
+    limiter: &crate::handlers::Limiter,
     password: Option<String>,
     user: &User,
     repo: &mut BoxRepository,
@@ -82,12 +83,19 @@ pub async fn verify_password_if_needed(
         requester.is_admin(),
         config.password_login_enabled,
         password_manager,
+        limiter,
+        requester.fingerprint(),
         password,
         user,
         repo,
     )
     .await
-    .map_err(|error| RouteError::Internal(Box::new(error)))
+    .map_err(|error| match error {
+        crate::handlers::account::service::password::VerifyPasswordIfNeededError::RateLimited => {
+            RouteError::RateLimited
+        }
+        error => RouteError::Internal(Box::new(error)),
+    })
 }
 
 // ── Node ID helpers ────────────────────────────────────────────
