@@ -193,3 +193,136 @@ impl PolicyEvaluator for RemoteEvaluator {
         self.evaluate_remote("authorization_grant", &input).await
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use std::time::Duration;
+
+    use tokio::{
+        io::{AsyncReadExt, AsyncWriteExt},
+        net::TcpListener,
+    };
+
+    use super::*;
+
+    fn client_builder() -> reqwest::ClientBuilder {
+        let _ = rustls::crypto::aws_lc_rs::default_provider().install_default();
+        reqwest::Client::builder().no_proxy()
+    }
+
+    async fn server(
+        status: u16,
+        body: &'static str,
+        delay: Duration,
+    ) -> (String, tokio::task::JoinHandle<()>) {
+        let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let address = listener.local_addr().unwrap();
+        let task = tokio::spawn(async move {
+            let (mut socket, _) = listener.accept().await.unwrap();
+            let mut request = Vec::new();
+            let mut buffer = [0; 1024];
+            loop {
+                let count = socket.read(&mut buffer).await.unwrap();
+                assert_ne!(count, 0);
+                request.extend_from_slice(&buffer[..count]);
+                if let Some(end) = request.windows(4).position(|window| window == b"\r\n\r\n") {
+                    let headers = std::str::from_utf8(&request[..end]).unwrap();
+                    let body_length: usize = headers
+                        .lines()
+                        .filter_map(|line| line.split_once(':'))
+                        .find(|(name, _)| name.eq_ignore_ascii_case("content-length"))
+                        .unwrap()
+                        .1
+                        .trim()
+                        .parse()
+                        .unwrap();
+                    if request.len() >= end + 4 + body_length {
+                        break;
+                    }
+                }
+            }
+            assert!(request.starts_with(b"POST /evaluate/register HTTP/1.1\r\n"));
+            tokio::time::sleep(delay).await;
+            let response = format!(
+                "HTTP/1.1 {status} Response\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{body}",
+                body.len()
+            );
+            // A timeout test intentionally closes the client first.
+            let _ = socket.write_all(response.as_bytes()).await;
+        });
+        (format!("http://{address}"), task)
+    }
+
+    async fn evaluate(
+        status: u16,
+        body: &'static str,
+    ) -> Result<EvaluationResult, EvaluationError> {
+        let (base_url, task) = server(status, body, Duration::ZERO).await;
+        let evaluator = RemoteEvaluator {
+            client: client_builder().build().unwrap(),
+            base_url,
+        };
+        let result = evaluator
+            .evaluate_remote("register", &serde_json::json!({}))
+            .await;
+        task.await.unwrap();
+        result
+    }
+
+    #[tokio::test]
+    async fn allows_empty_violations_and_preserves_denials() {
+        assert!(
+            evaluate(200, r#"{"violations":[]}"#)
+                .await
+                .unwrap()
+                .violations
+                .is_empty()
+        );
+        let denied = evaluate(200, r#"{"violations":[{"msg":"denied","field":"username","code":"username-banned","redirect_uri":null}]}"#).await.unwrap();
+        assert_eq!(denied.violations.len(), 1);
+        assert_eq!(denied.violations[0].msg, "denied");
+    }
+
+    #[tokio::test]
+    async fn rejects_http_errors_and_invalid_responses() {
+        assert!(evaluate(503, r#"{"violations":[]}"#).await.is_err());
+        assert!(evaluate(200, "invalid JSON").await.is_err());
+        assert!(evaluate(200, "{}").await.is_err());
+    }
+
+    #[tokio::test]
+    async fn timeout_is_an_error_instead_of_an_allow_decision() {
+        let (base_url, task) = server(200, r#"{"violations":[]}"#, Duration::from_secs(1)).await;
+        let evaluator = RemoteEvaluator {
+            client: client_builder()
+                .timeout(Duration::from_millis(50))
+                .build()
+                .unwrap(),
+            base_url,
+        };
+        assert!(
+            evaluator
+                .evaluate_remote("register", &serde_json::json!({}))
+                .await
+                .is_err()
+        );
+        task.abort();
+    }
+
+    #[tokio::test]
+    async fn unavailable_service_is_an_error() {
+        let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let base_url = format!("http://{}", listener.local_addr().unwrap());
+        drop(listener);
+        let evaluator = RemoteEvaluator {
+            client: client_builder().build().unwrap(),
+            base_url,
+        };
+        assert!(
+            evaluator
+                .evaluate_remote("register", &serde_json::json!({}))
+                .await
+                .is_err()
+        );
+    }
+}
