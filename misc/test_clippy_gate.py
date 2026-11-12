@@ -1,7 +1,13 @@
 import json
+import contextlib
+import io
+from pathlib import Path
+import subprocess
+import tempfile
 import unittest
+from unittest.mock import patch
 
-from clippy_gate import diagnostics
+from clippy_gate import diagnostics, lint
 
 
 def warning(line=1, source="unsafe { call() }", target="lib"):
@@ -18,6 +24,26 @@ def warning(line=1, source="unsafe { call() }", target="lib"):
 
 
 class DiagnosticGateTests(unittest.TestCase):
+    def test_cargo_failure_preserves_compiler_details_for_either_checkout(self):
+        for checkout in ("base", "head"):
+            with self.subTest(checkout=checkout), tempfile.TemporaryDirectory() as directory:
+                output = Path(directory) / "diagnostics.jsonl"
+                rendered = f"error[E0308]: mismatched types\n --> {checkout}/src/lib.rs:7:9"
+
+                def failing_cargo(command, **kwargs):
+                    json.dump({"reason": "compiler-message", "message": {
+                        "message": "mismatched types", "rendered": rendered,
+                    }}, kwargs["stdout"])
+                    kwargs["stdout"].write("\n")
+                    return subprocess.CompletedProcess(command, 101)
+
+                captured = io.StringIO()
+                with patch("clippy_gate.subprocess.run", side_effect=failing_cargo), contextlib.redirect_stderr(captured):
+                    with self.assertRaises(subprocess.CalledProcessError) as error:
+                        lint(Path(checkout), output)
+                self.assertEqual(error.exception.returncode, 101)
+                self.assertIn(rendered, captured.getvalue())
+
     def test_existing_warning_may_move_without_failing(self):
         self.assertFalse(diagnostics([warning(20)]) - diagnostics([warning(1)]))
 

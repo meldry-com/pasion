@@ -6,6 +6,7 @@ from collections import Counter
 import json
 from pathlib import Path
 import subprocess
+import sys
 import tempfile
 
 
@@ -48,7 +49,23 @@ def lint(root, output):
     # The cap allows collecting the entire backlog. The comparison below is the
     # actual gate: new diagnostics, including normally-denied lints, fail it.
     with output.open("w", encoding="utf-8") as stream:
-        subprocess.run(command, cwd=root, stdout=stream, check=True)
+        result = subprocess.run(command, cwd=root, stdout=stream, check=False)
+    if result.returncode:
+        # Cargo puts compiler diagnostics on JSON stdout, not stderr. Emit
+        # them before raising: the caller will remove the temporary checkout
+        # and JSON files even when the baseline fails to compile.
+        with output.open(encoding="utf-8") as stream:
+            for line in stream:
+                try:
+                    record = json.loads(line)
+                except ValueError:
+                    print(line.rstrip(), file=sys.stderr)
+                    continue
+                if record.get("reason") == "compiler-message":
+                    message = record["message"]
+                    print(message.get("rendered") or message.get("message", ""),
+                          file=sys.stderr)
+        result.check_returncode()
     with output.open(encoding="utf-8") as stream:
         return diagnostics(stream)
 
