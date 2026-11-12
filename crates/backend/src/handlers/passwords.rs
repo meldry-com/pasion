@@ -73,6 +73,8 @@ pub struct PasswordManager {
 }
 
 struct InnerPasswordManager {
+    dummy_hash: std::sync::OnceLock<Result<String, String>>,
+    dummy_budget: Arc<tokio::sync::Semaphore>,
     /// Minimum complexity score of new passwords (between 0 and 4) as evaluated
     /// by zxcvbn.
     minimum_complexity: u8,
@@ -107,6 +109,8 @@ impl PasswordManager {
 
         Ok(Self {
             inner: Some(Arc::new(InnerPasswordManager {
+                dummy_hash: std::sync::OnceLock::new(),
+                dummy_budget: Arc::new(tokio::sync::Semaphore::new(4)),
                 minimum_complexity,
                 current_hasher,
                 current_version,
@@ -125,6 +129,34 @@ impl PasswordManager {
     #[must_use]
     pub const fn is_enabled(&self) -> bool {
         self.inner.is_some()
+    }
+
+    /// Spend the normal current-scheme verification cost for a missing account.
+    /// Returns false if the bounded dummy-work budget is busy. Never use this
+    /// result as an authentication decision.
+    pub async fn dummy_verify(&self, password: Zeroizing<String>) -> Result<bool, anyhow::Error> {
+        let inner = self.get_inner()?;
+        let Ok(permit) = Arc::clone(&inner.dummy_budget).try_acquire_owned() else {
+            return Ok(false);
+        };
+        tokio::task::spawn_blocking(move || {
+            // Keep the permit in the blocking closure even if the request is
+            // cancelled; dropping its JoinHandle cannot cancel CPU work.
+            let _permit = permit;
+            let hash = inner.dummy_hash.get_or_init(|| {
+                inner
+                    .current_hasher
+                    .hash_blocking(
+                        rand_chacha::ChaChaRng::from_entropy(),
+                        Zeroizing::new("pasion dummy verification".to_owned()),
+                    )
+                    .map_err(|error| error.to_string())
+            });
+            let hash = hash.as_ref().map_err(|error| anyhow::anyhow!("{error}"))?;
+            let _ = inner.current_hasher.verify_blocking(hash, password)?;
+            Ok::<_, anyhow::Error>(true)
+        })
+        .await?
     }
 
     /// Get the inner password manager
@@ -463,6 +495,36 @@ impl Algorithm {
 
 #[cfg(test)]
 mod tests {
+    #[tokio::test]
+    async fn dummy_verification_is_cached_and_bounded() {
+        use super::*;
+        let manager = PasswordManager::new(0, [(1, Hasher::bcrypt(Some(4), None, false))]).unwrap();
+        assert!(
+            manager
+                .dummy_verify(Zeroizing::new("wrong".to_owned()))
+                .await
+                .unwrap()
+        );
+        let inner = manager.get_inner().unwrap();
+        let initial_hash = inner.dummy_hash.get().unwrap().as_ref().unwrap().clone();
+        assert!(
+            manager
+                .dummy_verify(Zeroizing::new("another".to_owned()))
+                .await
+                .unwrap()
+        );
+        assert_eq!(
+            inner.dummy_hash.get().unwrap().as_ref().unwrap(),
+            &initial_hash
+        );
+        let _permits = inner.dummy_budget.acquire_many(4).await.unwrap();
+        assert!(
+            !manager
+                .dummy_verify(Zeroizing::new("excess".to_owned()))
+                .await
+                .unwrap()
+        );
+    }
     use rand_core::SeedableRng;
 
     use super::*;
