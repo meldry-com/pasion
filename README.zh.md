@@ -12,7 +12,7 @@ Pasion 不仅仅是一个认证服务，而是围绕 Palpo Matrix 服务器构�
 - **统一通知中心** — Email + SMS 发送，支持多渠道抽象（SMTP、Twilio、阿里云短信、腾讯云短信）
 - **Connector 平台** — 可插拔的外部系统接入（Palpo Matrix homeserver、上游 OAuth2 提供商）
 - **中国生态 SSO** — 原生支持 QQ、微信、企业微信、飞书、Lark、钉钉等中国平台的非标准 OAuth 流程
-- **Cedar + OPA 策略引擎** — 双策略后端支持，基于 WebAssembly 的细粒度访问控制
+- **策略引擎** — 默认使用原生 Rust Cedar 后端，也可委托远程 HTTP 策略服务
 - **Dioxus 前端** — 全 Rust 构建的 SPA 前端，无需 TypeScript/React
 - **运营管理 API** — 用户运营、风险处置、审计日志，RESTful JSON 接口
 - **多渠道验证** — 邮箱 + 手机短信验证码，覆盖国内外用户

@@ -21,7 +21,7 @@ To get Pasion running locally from source you will need to:
 
 - [Install Rust and Cargo](https://www.rust-lang.org/learn/get-started). We recommend using the latest stable version of Rust.
 - [Install Node.js and npm](https://nodejs.org/). We recommend using the latest LTS version of Node.js.
-- [Install Open Policy Agent](https://www.openpolicyagent.org/docs#1-download-opa)
+- Enable the `cedar` Cargo feature for local Cedar policies, or `remote` for an HTTP policy service. No policy compiler is required.
 
 ## 4. Get the source
 
@@ -46,21 +46,18 @@ If you need help getting started with git, this is beyond the scope of the docum
   npm run build # Build the frontend
   cd ..
   ```
-- Build the Open Policy Agent policies
+- Build the server with the Cedar policy backend:
   ```sh
-  cd policies
-  make
-  # OR, if you don't have `opa` installed and want to build through the OPA docker image
-  make DOCKER=1
-  cd ..
+  cargo build --features cedar
   ```
+- Set `policy.engine: cedar` and `policy.cedar_policy_file: ./policies/cedar/default.cedar` in the generated configuration. Cedar source is loaded directly; no WASM compilation is required.
 - Generate the sample config via `cargo run -- config generate > config.yaml`
 - Run a PostgreSQL database locally
   ```sh
   docker run -p 5432:5432 -e 'POSTGRES_USER=postgres' -e 'POSTGRES_PASSWORD=postgres' -e 'POSTGRES_DATABASE=postgres' postgres
   ```
 - Update the database URI in `config.yaml` to `postgresql://postgres:postgres@localhost/postgres`
-- Run the server via `cargo run -- server -c config.yaml`
+- Run the server via `cargo run --features cedar -- server -c config.yaml`
 - Go to <http://localhost:8080/>
 
 ## 6. Update generated files and format your code
@@ -75,7 +72,7 @@ Make sure your code adheres to our Rust and TypeScript code style by running:
 
  - `cargo +nightly fmt` (with the nightly toolchain installed)
  - `npm run format` in the `frontend` directory
- - `make fmt` in the `policies` directory (if changed)
+ - Review Cedar source changes in `policies/cedar` directly; no OPA build or formatter is used.
 
 ## 7. Test, test, test!
 

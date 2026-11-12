@@ -12,7 +12,7 @@ Pasion is a comprehensive user operations platform built for Palpo. While it imp
 - **Unified Notification Center** — Email + SMS dispatch with provider abstraction (SMTP, Sendmail, Resend, SendGrid, Twilio SendGrid, Brevo, AWS SES for email; Twilio, Aliyun SMS, and Tencent Cloud SMS for messaging)
 - **Connector Platform** — Pluggable external system integration: Palpo Matrix homeserver provisioning and upstream OAuth 2.0 identity provider federation
 - **Chinese Ecosystem SSO** — Native support for QQ, WeChat, WeCom, Feishu, Lark, and DingTalk with their non-standard OAuth2 flows
-- **Cedar + OPA Policy Engine** — Dual policy backend: Amazon Cedar policies evaluated natively in Rust, OPA/Rego compiled to WebAssembly, or remote HTTP delegation
+- **Policy Engine** — Amazon Cedar policies evaluated natively in Rust (default), or remote HTTP delegation
 - **Dioxus Frontend** — Full-Rust SPA built with Dioxus (no TypeScript or React)
 - **Admin Operational API** — User management, session oversight, OAuth 2.0 client administration, upstream provider management, and policy data control
 - **Multi-Channel Verification** — Email and SMS verification codes with configurable templates, language selection, and background job dispatch
@@ -202,7 +202,7 @@ Pasion is deployed alongside a Palpo Matrix homeserver behind a reverse proxy. I
          │  │    ├── Connectors                    │
          │  │    │     (Palpo Matrix, upstream SSO) │
          │  │    └── Policy Engine                 │
-         │  │          (Cedar / OPA / Remote)       │
+         │  │          (Cedar / Remote)             │
          │  └─────────────────────────────────────┘
          │
     ┌────▼──────┐
