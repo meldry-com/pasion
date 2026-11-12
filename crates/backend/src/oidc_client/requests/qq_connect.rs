@@ -81,9 +81,11 @@ pub async fn request_access_token(
         .form(&body)
         .send_traced()
         .await?
-        .error_for_status()?
+        .error_for_status()
+        .map_err(reqwest::Error::without_url)?
         .json()
-        .await?;
+        .await
+        .map_err(reqwest::Error::without_url)?;
 
     Ok(response)
 }
@@ -124,9 +126,11 @@ pub async fn fetch_openid(
         .get(url)
         .send_traced()
         .await?
-        .error_for_status()?
+        .error_for_status()
+        .map_err(reqwest::Error::without_url)?
         .text()
-        .await?;
+        .await
+        .map_err(reqwest::Error::without_url)?;
 
     // QQ may return JSONP format even with fmt=json; handle both.
     let json_str = strip_jsonp(&response_text);
@@ -181,9 +185,11 @@ pub async fn fetch_userinfo(
         .get(url)
         .send_traced()
         .await?
-        .error_for_status()?
+        .error_for_status()
+        .map_err(reqwest::Error::without_url)?
         .json()
-        .await?;
+        .await
+        .map_err(reqwest::Error::without_url)?;
 
     // QQ userinfo uses "ret" field for error code (0 = success)
     if let Some(ret) = response.get("ret").and_then(|v| v.as_i64())
