@@ -65,11 +65,12 @@ pub async fn load_enabled_upstream_providers<R: RepositoryAccess>(
 
 #[cfg(test)]
 mod enumeration_tests {
-    use super::*;
-    use crate::handlers::{passwords::Hasher, test_utils::test_site_config};
     use pasion_data::{PgRepositoryFactory, RepositoryFactory as _, clock::MockClock};
     use pasion_matrix::MockHomeserverAdmin;
     use rand_core::SeedableRng as _;
+
+    use super::*;
+    use crate::handlers::{passwords::Hasher, test_utils::test_site_config};
 
     #[tokio::test]
     async fn missing_accounts_spend_the_same_requester_budget_as_existing_accounts() {
