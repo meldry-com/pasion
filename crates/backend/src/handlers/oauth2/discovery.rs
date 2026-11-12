@@ -205,10 +205,13 @@ fn build_discovery(depot: &Depot) -> DiscoveryResponse {
         standard,
         api_endpoint: format!("{}/api/v1", url_builder.prefix().unwrap_or_default()),
         account_management_uri: url_builder.account_management_uri(),
-        // This needs to be kept in sync with what is supported in the frontend,
-        // see frontend/src/routes/__root.tsx
+        // Keep these names in sync with the frontend account action dispatcher.
+        // Retain the older session aliases for clients using MSC-era metadata.
         account_management_actions_supported: vec![
             "org.matrix.profile".to_owned(),
+            "org.matrix.devices_list".to_owned(),
+            "org.matrix.device_view".to_owned(),
+            "org.matrix.device_delete".to_owned(),
             "org.matrix.sessions_list".to_owned(),
             "org.matrix.session_view".to_owned(),
             "org.matrix.session_end".to_owned(),
@@ -245,6 +248,31 @@ mod tests {
             crate::handlers::test_utils::test_site_config(),
         );
         depot
+    }
+
+    #[tokio::test]
+    async fn discovery_advertises_standard_device_actions_and_legacy_aliases() {
+        crate::handlers::test_utils::setup();
+        let Json(response) = get_inner(&test_depot());
+        let body = serde_json::to_value(response).unwrap();
+        let actions = body["account_management_actions_supported"]
+            .as_array()
+            .unwrap();
+        for action in [
+            "org.matrix.devices_list",
+            "org.matrix.device_view",
+            "org.matrix.device_delete",
+            "org.matrix.sessions_list",
+            "org.matrix.session_view",
+            "org.matrix.session_end",
+        ] {
+            assert!(actions.iter().any(|value| value == action), "{action}");
+        }
+        let unique: std::collections::HashSet<_> = actions
+            .iter()
+            .filter_map(serde_json::Value::as_str)
+            .collect();
+        assert_eq!(actions.len(), unique.len());
     }
 
     #[tokio::test]
