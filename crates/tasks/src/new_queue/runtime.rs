@@ -132,26 +132,6 @@ async fn next_notification(
     }
 }
 
-#[cfg(test)]
-mod tests {
-    #[tokio::test]
-    async fn disconnected_listener_preserves_polling_backoff() {
-        let (sender, mut receiver) = tokio::sync::mpsc::unbounded_channel();
-        drop(sender);
-        // Repeat to cover subsequent worker ticks, not only the first EOF.
-        for _ in 0..3 {
-            assert!(
-                tokio::time::timeout(
-                    std::time::Duration::from_millis(20),
-                    super::next_notification(&mut receiver),
-                )
-                .await
-                .is_err()
-            );
-        }
-    }
-}
-
 pub(super) fn spawn_reserved_jobs(
     tracker: &mut JobTracker,
     state: &State,
@@ -175,5 +155,25 @@ fn build_context(
         attempt: job.attempt,
         start: tokio::time::Instant::now(),
         cancellation_token: cancellation_token.child_token(),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    #[tokio::test]
+    async fn disconnected_listener_preserves_polling_backoff() {
+        let (sender, mut receiver) = tokio::sync::mpsc::unbounded_channel();
+        drop(sender);
+        // Repeat to cover subsequent worker ticks, not only the first EOF.
+        for _ in 0..3 {
+            assert!(
+                tokio::time::timeout(
+                    std::time::Duration::from_millis(20),
+                    super::next_notification(&mut receiver),
+                )
+                .await
+                .is_err()
+            );
+        }
     }
 }
