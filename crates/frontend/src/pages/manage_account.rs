@@ -45,8 +45,30 @@ fn login_path(action: Option<&str>, device: Option<&str>) -> String {
     crate::config::app_path(&path)
 }
 
+fn management_intent(query: &str) -> (Option<String>, Option<String>) {
+    let mut action = None;
+    let mut device = None;
+    for (name, value) in form_urlencoded::parse(query.trim_start_matches('?').as_bytes()) {
+        match name.as_ref() {
+            "action" if action.is_none() => action = Some(value.into_owned()),
+            "device_id" if device.is_none() => device = Some(value.into_owned()),
+            _ => {}
+        }
+    }
+    (action, device)
+}
+
 #[component]
-pub fn ManageAccount(action: Option<String>, device_id: Option<String>) -> Element {
+pub fn ManageAccount() -> Element {
+    // Dioxus decodes a complete query before splitting its arguments. Read
+    // the original browser query retained before Router initialization so a
+    // device ID containing '&' remains one value.
+    let intent = use_signal(|| {
+        let intent = management_intent(&super::login::current_query_string());
+        super::login::clear_preserved_login_query();
+        intent
+    });
+    let (action, device_id) = intent();
     let viewer = use_resource(|| async { crate::api::api_get::<ViewerResponse>("/viewer").await });
     let authenticated =
         matches!(&*viewer.read(), Some(Ok(data)) if data.viewer.as_user().is_some());
@@ -105,14 +127,9 @@ mod tests {
     #[test]
     fn login_continuation_cannot_inject_query_parameters() {
         assert_eq!(encode_query("A&B=C"), "%41%26%42%3D%43");
-    }
-
-    #[test]
-    fn management_route_preserves_action_and_device_across_navigation() {
-        let route = Route::ManageAccount {
-            action: Some("org.matrix.device_view".into()),
-            device_id: Some("A/B&C".into()),
-        };
-        assert_eq!(route.to_string().parse::<Route>().unwrap(), route);
+        assert_eq!(
+            management_intent("action=org.matrix.device_view&device_id=A%2FB%26C"),
+            (Some("org.matrix.device_view".into()), Some("A/B&C".into()))
+        );
     }
 }

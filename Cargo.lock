@@ -5750,6 +5750,7 @@ dependencies = [
  "chrono",
  "dioxus",
  "dioxus-history",
+ "form_urlencoded",
  "gloo-timers 0.4.0",
  "js-sys",
  "reqwest 0.13.4",

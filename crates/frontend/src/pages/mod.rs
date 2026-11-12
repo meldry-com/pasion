@@ -67,8 +67,8 @@ pub enum Route {
     // Auth pages (public)
     #[route("/login")]
     Login {},
-    #[route("/manage?:action&:device_id")]
-    ManageAccount { action: Option<String>, device_id: Option<String> },
+    #[route("/manage")]
+    ManageAccount {},
     #[route("/register?:kind&:id")]
     Register { kind: Option<String>, id: Option<String> },
     #[route("/register/steps/:id/verify-email")]
