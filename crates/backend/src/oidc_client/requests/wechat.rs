@@ -68,9 +68,11 @@ pub async fn request_access_token(
         .get(url)
         .send_traced()
         .await?
-        .error_for_status()?
+        .error_for_status()
+        .map_err(reqwest::Error::without_url)?
         .json()
-        .await?;
+        .await
+        .map_err(reqwest::Error::without_url)?;
 
     if let Some(errcode) = response.errcode
         && errcode != 0
@@ -108,9 +110,11 @@ pub async fn fetch_userinfo(
         .get(url)
         .send_traced()
         .await?
-        .error_for_status()?
+        .error_for_status()
+        .map_err(reqwest::Error::without_url)?
         .json()
-        .await?;
+        .await
+        .map_err(reqwest::Error::without_url)?;
 
     // Check for error
     if let Some(errcode) = response.get("errcode").and_then(|v| v.as_i64())
@@ -128,4 +132,44 @@ pub async fn fetch_userinfo(
     }
 
     Ok(response)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use wiremock::{Mock, MockServer, ResponseTemplate, matchers::path};
+
+    #[tokio::test]
+    async fn token_status_and_decode_errors_do_not_expose_query_secrets() {
+        let server = MockServer::start().await;
+        Mock::given(path("/status"))
+            .respond_with(ResponseTemplate::new(503))
+            .mount(&server)
+            .await;
+        Mock::given(path("/decode"))
+            .respond_with(ResponseTemplate::new(200).set_body_string("invalid json"))
+            .mount(&server)
+            .await;
+        let client = reqwest::Client::builder().no_proxy().build().unwrap();
+        for route in ["/status", "/decode"] {
+            let endpoint = format!("{}{route}", server.uri()).parse().unwrap();
+            let error = request_access_token(
+                &client,
+                &endpoint,
+                "app",
+                "UNIQUE_APP_SECRET",
+                "UNIQUE_CODE",
+            )
+            .await
+            .unwrap_err();
+            let rendered = format!("{error} {error:?}");
+            assert!(!rendered.contains("UNIQUE_APP_SECRET"));
+            assert!(!rendered.contains("UNIQUE_CODE"));
+            let mut source = std::error::Error::source(&error);
+            while let Some(error) = source {
+                assert!(!format!("{error} {error:?}").contains("UNIQUE_APP_SECRET"));
+                source = error.source();
+            }
+        }
+    }
 }
