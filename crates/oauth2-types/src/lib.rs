@@ -10,6 +10,7 @@
 #![allow(clippy::module_name_repetitions)]
 
 pub mod errors;
+pub mod matrix_scope;
 pub mod oidc;
 pub mod pkce;
 pub mod registration;

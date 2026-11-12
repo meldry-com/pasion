@@ -92,6 +92,9 @@ pub(crate) enum RouteError {
     #[error("administrative scopes require an administrator account")]
     AdminScopeNotAllowed,
 
+    #[error(transparent)]
+    InvalidMatrixScope(oauth2_types::matrix_scope::InvalidMatrixLoginScope),
+
     #[error("unsupported grant type")]
     UnsupportedGrantType,
 
@@ -197,6 +200,14 @@ impl Scribe for RouteError {
                 ));
             }
 
+            Self::InvalidMatrixScope(error) => {
+                res.status_code(StatusCode::BAD_REQUEST);
+                res.render(Json(
+                    ClientError::from(ClientErrorCode::InvalidScope)
+                        .with_description(error.to_string()),
+                ));
+            }
+
             Self::AdminScopeNotAllowed => {
                 // RFC 6749 §5.2: `invalid_scope` is a 400.
                 res.status_code(StatusCode::BAD_REQUEST);
@@ -258,6 +269,9 @@ impl_from_error_for_route!(crate::salvo_utils::client_authorization::ClientAutho
 impl From<AuthorizationCodeExchangeError> for RouteError {
     fn from(e: AuthorizationCodeExchangeError) -> Self {
         match e {
+            AuthorizationCodeExchangeError::InvalidMatrixScope(error) => {
+                Self::InvalidMatrixScope(error)
+            }
             AuthorizationCodeExchangeError::UnauthorizedClient(id) => Self::UnauthorizedClient(id),
             AuthorizationCodeExchangeError::GrantNotFound => Self::GrantNotFound,
             AuthorizationCodeExchangeError::InvalidGrant(id) => Self::InvalidGrant(id),
@@ -324,6 +338,7 @@ impl From<ClientCredentialsGrantError> for RouteError {
 impl From<DeviceCodeExchangeError> for RouteError {
     fn from(e: DeviceCodeExchangeError) -> Self {
         match e {
+            DeviceCodeExchangeError::InvalidMatrixScope(error) => Self::InvalidMatrixScope(error),
             DeviceCodeExchangeError::UnauthorizedClient(id) => Self::UnauthorizedClient(id),
             DeviceCodeExchangeError::GrantNotFound => Self::GrantNotFound,
             DeviceCodeExchangeError::AdminScopeNotAllowed => Self::AdminScopeNotAllowed,
@@ -564,5 +579,31 @@ async fn handle_post(
 
 #[cfg(test)]
 mod tests {
+    use salvo::Scribe as _;
+
+    use super::*;
+
+    #[test]
+    fn malformed_matrix_scope_is_a_client_error_for_both_login_grants() {
+        for error in [
+            RouteError::from(AuthorizationCodeExchangeError::InvalidMatrixScope(
+                oauth2_types::matrix_scope::InvalidMatrixLoginScope,
+            )),
+            RouteError::from(DeviceCodeExchangeError::InvalidMatrixScope(
+                oauth2_types::matrix_scope::InvalidMatrixLoginScope,
+            )),
+        ] {
+            let mut response = Response::new();
+            error.render(&mut response);
+            assert_eq!(response.status_code, Some(StatusCode::BAD_REQUEST));
+            match response.body() {
+                salvo::http::ResBody::Once(bytes) => {
+                    let body: serde_json::Value = serde_json::from_slice(bytes).unwrap();
+                    assert_eq!(body["error"], "invalid_scope");
+                }
+                _ => panic!("expected JSON error body"),
+            }
+        }
+    }
     // Tests would need to be updated for Salvo's test utilities
 }

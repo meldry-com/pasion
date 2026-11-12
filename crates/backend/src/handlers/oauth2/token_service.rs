@@ -9,6 +9,7 @@ use std::sync::Arc;
 
 use chrono::Duration;
 use oauth2_types::{
+    matrix_scope::{InvalidMatrixLoginScope, validate_matrix_login_scope},
     pkce::CodeChallengeError,
     requests::{
         AccessTokenResponse, AuthorizationCodeGrant, ClientCredentialsGrant, DeviceCodeGrant,
@@ -49,6 +50,8 @@ use crate::{
 /// Errors that can occur during authorization code exchange.
 #[derive(Debug, Error)]
 pub enum AuthorizationCodeExchangeError {
+    #[error(transparent)]
+    InvalidMatrixScope(#[from] InvalidMatrixLoginScope),
     #[error("client is not authorized to use the authorization_code grant type")]
     UnauthorizedClient(Ulid),
 
@@ -179,6 +182,8 @@ impl From<pasion_policy::EvaluationError> for ClientCredentialsGrantError {
 /// Errors that can occur during device code exchange.
 #[derive(Debug, Error)]
 pub enum DeviceCodeExchangeError {
+    #[error(transparent)]
+    InvalidMatrixScope(#[from] InvalidMatrixLoginScope),
     #[error("administrative scopes require an administrator account")]
     AdminScopeNotAllowed,
 
@@ -255,6 +260,8 @@ fn matrix_device_ids(scope: &scope::Scope) -> Vec<String> {
                 .or_else(|| token.strip_prefix("urn:matrix:org.matrix.msc2967.client:device:"))
                 .map(str::to_owned)
         })
+        .collect::<std::collections::BTreeSet<_>>()
+        .into_iter()
         .collect()
 }
 
@@ -400,6 +407,9 @@ pub async fn exchange_authorization_code(
         }
     };
 
+    // Also guard grants issued before the authorization endpoint validation.
+    // This precedes token issuance and all remote device provisioning.
+    validate_matrix_login_scope(&session.scope)?;
     let requested_scopes = scope_tokens(&session.scope);
     let requested_matrix_device_ids = matrix_device_ids(&session.scope);
     debug!(
@@ -686,6 +696,10 @@ pub async fn handle_refresh_token(
     }
 
     if !session.is_valid() {
+        return Err(RefreshTokenExchangeError::SessionInvalid(session.id));
+    }
+
+    if session.user_id.is_some() && validate_matrix_login_scope(&session.scope).is_err() {
         return Err(RefreshTokenExchangeError::SessionInvalid(session.id));
     }
 
@@ -980,6 +994,7 @@ pub async fn exchange_device_code(
         return Err(DeviceCodeExchangeError::DeviceCodeExpired);
     }
 
+    validate_matrix_login_scope(&grant.scope)?;
     let browser_session_id = match &grant.state {
         DeviceCodeGrantState::Pending => {
             debug!(
