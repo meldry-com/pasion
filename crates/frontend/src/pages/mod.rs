@@ -34,7 +34,7 @@ use client_detail::ClientDetail;
 use consent::Consent;
 use device_consent::DeviceConsent;
 use device_link::DeviceLink;
-use device_redirect::DeviceRedirect;
+use device_redirect::{DeviceRedirect, Devices};
 use dioxus::prelude::*;
 use email_in_use::EmailInUse;
 use email_verify::EmailVerify;
@@ -125,6 +125,8 @@ pub enum Route {
     ResetCrossSigning {},
     #[route("/clients/:id")]
     ClientDetail { id: String },
+    #[route("/devices")]
+    Devices {},
     #[route("/devices/:..route")]
     DeviceRedirect { route: Vec<String> },
 

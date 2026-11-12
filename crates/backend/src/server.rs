@@ -463,6 +463,7 @@ fn build_human_router(router: Router, _templates: Templates) -> Router {
         .push(Router::with_path("/emails/{**rest}").get(spa::get))
         .push(Router::with_path("/reset-cross-signing").get(spa::get))
         .push(Router::with_path("/clients/{**rest}").get(spa::get))
+        .push(Router::with_path("/devices").get(spa::get))
         .push(Router::with_path("/devices/{**rest}").get(spa::get))
         // Legacy account password routes
         .push(
@@ -567,6 +568,11 @@ fn build_account_api_router(router: Router, mount: &str) -> Router {
         // Site config
         .push(Router::with_path("site-config").get(site_config::get))
         // Sessions
+        .push(
+            Router::with_path("devices")
+                .get(devices::get_device)
+                .delete(devices::delete_device),
+        )
         .push(Router::with_path("sessions/{id}").get(sessions::get_session))
         .push(Router::with_path("browser-sessions/{id}").delete(sessions::end_browser_session))
         .push(
