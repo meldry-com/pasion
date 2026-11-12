@@ -142,10 +142,19 @@ impl RunnableJob for DeleteDeviceJob {
 
 /// Shared helper for the two deprecated device jobs.
 async fn schedule_device_sync(state: &State, user_id: ulid::Ulid) -> Result<(), JobError> {
-    let mut repo = state.repository().await.map_err(JobError::retry)?;
+    let repo = state.repository().await.map_err(JobError::retry)?;
     let mut rng = state.rng();
     let clock = state.clock();
 
+    persist_device_sync(repo, &mut rng, clock, user_id).await
+}
+
+async fn persist_device_sync(
+    mut repo: pasion_data::BoxRepository,
+    rng: &mut (dyn rand_core::CryptoRngCore + Send),
+    clock: &dyn pasion_data::Clock,
+    user_id: ulid::Ulid,
+) -> Result<(), JobError> {
     let user = repo
         .user()
         .lookup(user_id)
@@ -155,11 +164,53 @@ async fn schedule_device_sync(state: &State, user_id: ulid::Ulid) -> Result<(), 
         .map_err(JobError::fail)?;
 
     repo.queue_job()
-        .schedule_job(&mut rng, clock, SyncDevicesJob::new(&user))
+        .schedule_job(rng, clock, SyncDevicesJob::new(&user))
         .await
         .map_err(JobError::retry)?;
 
+    // The legacy job can only complete after its replacement is durable.
+    repo.save().await.map_err(JobError::retry)?;
     Ok(())
+}
+
+#[cfg(test)]
+mod legacy_tests {
+    use super::*;
+    use diesel_async::RunQueryDsl as _;
+    use pasion_data::{PgRepositoryFactory, RepositoryFactory as _, clock::SystemClock};
+    use rand_core::SeedableRng as _;
+
+    #[tokio::test]
+    async fn legacy_device_forwarding_commits_its_replacement() {
+        let pool = pasion_data::test_utils::setup_test_pool().await;
+        let factory = PgRepositoryFactory::new(pool.clone());
+        let clock = SystemClock::default();
+        let mut rng = rand_chacha::ChaChaRng::seed_from_u64(42);
+        let mut repo = factory.create().await.unwrap();
+        let user = repo
+            .user()
+            .add(&mut rng, &clock, "legacy".to_owned())
+            .await
+            .unwrap();
+        repo.save().await.unwrap();
+
+        persist_device_sync(factory.create().await.unwrap(), &mut rng, &clock, user.id)
+            .await
+            .unwrap();
+
+        // Read on a fresh checkout, after the helper's transaction is gone.
+        let mut conn = pasion_data::pg::get_connection(&pool).await.unwrap();
+        #[derive(diesel::QueryableByName)]
+        struct Count {
+            #[diesel(sql_type = diesel::sql_types::BigInt)]
+            count: i64,
+        }
+        let count: Count = diesel::sql_query("SELECT count(*) AS count FROM queue_jobs")
+            .get_result(&mut *conn)
+            .await
+            .unwrap();
+        assert_eq!(count.count, 1);
+    }
 }
 
 // ── Sync devices ─────────────────────────────────────────────────────
