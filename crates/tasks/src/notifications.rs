@@ -5,9 +5,9 @@ use async_trait::async_trait;
 use chrono::{Duration, Utc};
 use pasion_data::{
     BoxRepository, NotificationChannel, NotificationDelivery, NotificationDeliveryFailure,
-    NotificationDestination, NotificationEventActor, NotificationEventKind,
-    NotificationRequest as PersistedNotificationRequest, NotificationRequestSource,
-    NotificationRequestStatus, Pagination, RepositoryAccess,
+    NotificationDeliveryStatus, NotificationDestination, NotificationEventActor,
+    NotificationEventKind, NotificationRequest as PersistedNotificationRequest,
+    NotificationRequestSource, NotificationRequestStatus, Pagination, RepositoryAccess,
     notification::{NewNotificationDelivery, NewNotificationEventLog, NewNotificationRequest},
     queue::{
         ContactVerificationTarget, DispatchNotificationJob, ProcessNotificationDeliveriesJob,
@@ -875,6 +875,43 @@ async fn complete_delivery_with_failure(
     Ok(())
 }
 
+// Explicit provider rejection can be retried. Transport failures, server errors
+// and malformed success responses cannot prove that a message was not accepted.
+fn failure_after_dispatch(error: &NotificationError) -> NotificationDeliveryFailure {
+    let failure = notification_failure_from_error(error);
+    let known_rejection = matches!(
+        failure.code.as_deref(),
+        Some("email_provider_429" | "sms_provider_429")
+    );
+    // Aliyun/Tencent encode malformed successful HTTP responses using the
+    // ProviderError variant with a 2xx status. That is not proof of rejection.
+    let ambiguous_success_response = matches!(error,
+        NotificationError::Sms(pasion_messaging::SmsTransportError::ProviderError { status, .. })
+            if (200..300).contains(status)
+    );
+    if (failure.retryable && !known_rejection)
+        || failure.code.as_deref() == Some("email_json")
+        || ambiguous_success_response
+    {
+        NotificationDeliveryFailure::outcome_unknown(error.to_string())
+    } else {
+        failure
+    }
+}
+
+async fn dispatch_with_deadline<T>(
+    future: impl std::future::Future<Output = Result<T, NotificationError>>,
+    deadline: std::time::Duration,
+) -> Result<T, NotificationDeliveryFailure> {
+    match tokio::time::timeout(deadline, future).await {
+        Ok(Ok(result)) => Ok(result),
+        Ok(Err(error)) => Err(failure_after_dispatch(&error)),
+        Err(_) => Err(NotificationDeliveryFailure::outcome_unknown(
+            "Provider send timed out; reconcile before retrying",
+        )),
+    }
+}
+
 async fn process_single_delivery(state: &State) -> Result<bool, JobError> {
     let clock = state.clock();
     let notifications = state.notifications();
@@ -890,7 +927,9 @@ async fn process_single_delivery(state: &State) -> Result<bool, JobError> {
         .into_iter()
         .next()
     else {
-        repo.cancel().await.map_err(JobError::retry)?;
+        // reserve_deliveries also reconciles expired sending leases, even
+        // when there is no new outbound work to claim.
+        repo.save().await.map_err(JobError::retry)?;
         return Ok(false);
     };
 
@@ -988,7 +1027,40 @@ async fn process_single_delivery(state: &State) -> Result<bool, JobError> {
             )
             .await?;
 
-            match notifications.dispatch(outbound_request).await {
+            // Durable intent precedes the external side effect. Release all
+            // database resources while waiting for the provider.
+            repo.save().await.map_err(JobError::fail)?;
+            let outcome = dispatch_with_deadline(
+                notifications.dispatch(outbound_request),
+                std::time::Duration::from_secs(60),
+            )
+            .await;
+            repo = state.repository().await.map_err(JobError::retry)?;
+            let Some(current) = repo
+                .notification()
+                .lookup_delivery(delivery.id)
+                .await
+                .map_err(JobError::retry)?
+            else {
+                return Err(JobError::fail(anyhow::anyhow!(
+                    "Sending delivery disappeared"
+                )));
+            };
+            if current.status != NotificationDeliveryStatus::Sending
+                || current.attempt_count != delivery.attempt_count
+            {
+                // A callback or lease sweep has already resolved this attempt.
+                repo.cancel().await.map_err(JobError::retry)?;
+                return Ok(true);
+            }
+            let delivery = current;
+            request = repo
+                .notification()
+                .lookup_request(delivery.notification_request_id)
+                .await
+                .map_err(JobError::retry)?
+                .ok_or_else(|| JobError::fail(anyhow::anyhow!("Sending request disappeared")))?;
+            match outcome {
                 Ok(result) => {
                     let delivery = repo
                         .notification()
@@ -1034,10 +1106,9 @@ async fn process_single_delivery(state: &State) -> Result<bool, JobError> {
                     )
                     .await?;
                 }
-                Err(error) => {
-                    let failure = notification_failure_from_error(&error);
+                Err(failure) => {
                     error!(
-                        error = &error as &dyn std::error::Error,
+                        failure = ?failure,
                         notification_request.id = %request.id,
                         notification_delivery.id = %delivery.id,
                         "Failed to deliver notification"
@@ -1135,6 +1206,40 @@ mod tests {
     use thiserror::Error;
 
     use super::{EMAIL_VERIFICATION_LANGUAGE, is_permanent_tls_validation_error};
+
+    #[tokio::test]
+    async fn ambiguous_dispatch_is_not_automatically_retried() {
+        let failure = super::dispatch_with_deadline::<()>(
+            std::future::pending(),
+            std::time::Duration::from_millis(10),
+        )
+        .await
+        .unwrap_err();
+        assert!(failure.is_outcome_unknown());
+        assert!(!failure.retryable);
+        for (status, retryable, unknown) in
+            [(200, false, true), (429, true, false), (500, false, true)]
+        {
+            let error = pasion_messaging::NotificationError::Sms(
+                pasion_messaging::SmsTransportError::ProviderError {
+                    status,
+                    body: "test".to_owned(),
+                },
+            );
+            let failure = super::failure_after_dispatch(&error);
+            assert_eq!(failure.retryable, retryable);
+            assert_eq!(failure.is_outcome_unknown(), unknown);
+        }
+        let invalid_json = serde_json::from_str::<serde_json::Value>("{").unwrap_err();
+        let error = pasion_messaging::NotificationError::Email(
+            pasion_messaging::email::MailerError::Transport(
+                pasion_messaging::email::EmailTransportError::Json(invalid_json),
+            ),
+        );
+        let failure = super::failure_after_dispatch(&error);
+        assert!(failure.is_outcome_unknown());
+        assert!(!failure.retryable);
+    }
 
     #[test]
     fn fixed_code_only_applies_when_explicitly_enabled() {

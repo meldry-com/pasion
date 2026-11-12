@@ -198,6 +198,17 @@ async fn handle_get(req: &mut Request, depot: &Depot) -> Result<(Response, Cooki
             let maybe_session = session_info.load_active_session(&mut repo).await?;
             let prompt = params.auth.prompt.as_deref().unwrap_or_default();
 
+            if let Err(error) =
+                oauth2_types::matrix_scope::validate_matrix_login_scope(&params.auth.scope)
+            {
+                return Ok(callback_destination.go(
+                    &templates,
+                    &locale,
+                    ClientError::from(ClientErrorCode::InvalidScope)
+                        .with_description(error.to_string()),
+                )?);
+            }
+
             // Check if the request/request_uri/registration params are used. If so, reply
             // with the right error since we don't support them.
             if params.auth.request.is_some() {

@@ -1,4 +1,5 @@
 use chrono::{DateTime, Utc};
+use diesel_async::RunQueryDsl as _;
 use pasion_data::{PgRepository, RepositoryAccess, queue::Worker};
 use tokio_util::sync::CancellationToken;
 
@@ -10,6 +11,18 @@ use super::{
     tracker::JobTracker,
 };
 use crate::State;
+
+/// Queue transitions must commit together, including replacement attempts.
+pub(super) async fn begin_queue_transaction(
+    pool: &diesel_async::pooled_connection::deadpool::Pool<diesel_async::AsyncPgConnection>,
+) -> Result<PgRepository, QueueRunnerError> {
+    let mut conn = pasion_data::pg::get_connection(pool).await?;
+    diesel::sql_query("BEGIN")
+        .execute(&mut *conn)
+        .await
+        .map_err(pasion_data::DatabaseError::from)?;
+    Ok(PgRepository::new(conn))
+}
 
 fn jobs_to_fetch_capacity(running_jobs: usize) -> usize {
     MAX_CONCURRENT_JOBS
@@ -77,8 +90,7 @@ pub(super) async fn tick_worker(
     let now = clock.now();
     let heartbeat_age = now - *last_heartbeat;
 
-    let conn = pasion_data::pg::get_connection(state.pool()).await?;
-    let mut repo = PgRepository::new(conn);
+    let mut repo = begin_queue_transaction(state.pool()).await?;
 
     if heartbeat_age >= chrono::Duration::seconds(90) {
         tracing::warn!(
@@ -114,6 +126,7 @@ pub(super) async fn tick_worker(
     let running_jobs = tracker.running_jobs();
     let max_jobs_to_fetch = jobs_to_fetch_capacity(running_jobs);
 
+    let mut reserved_jobs = Vec::new();
     if max_jobs_to_fetch == 0 {
         tracing::warn!(
             worker.id = %registration.id,
@@ -138,9 +151,11 @@ pub(super) async fn tick_worker(
             );
         }
 
-        runtime::spawn_reserved_jobs(tracker, state, cancellation_token, jobs);
+        reserved_jobs = jobs;
     }
 
+    repo.boxed().save().await?;
+    runtime::spawn_reserved_jobs(tracker, state, cancellation_token, reserved_jobs);
     Ok(leader)
 }
 
@@ -177,9 +192,9 @@ pub(super) async fn drain_jobs(
         // Jobs may need this same pool. Wait before taking a connection, even
         // when the pool has only one slot.
         tracker.collect_next_job().await;
-        let conn = pasion_data::pg::get_connection(pool).await?;
-        let mut repo = PgRepository::new(conn);
+        let mut repo = begin_queue_transaction(pool).await?;
         tracker.process_jobs(&mut rng, clock, &mut repo).await?;
+        repo.boxed().save().await?;
     }
     Ok(())
 }
@@ -187,6 +202,72 @@ pub(super) async fn drain_jobs(
 #[cfg(test)]
 mod tests {
     use super::jobs_to_fetch_capacity;
+
+    #[tokio::test]
+    async fn retry_failure_rolls_back_the_failed_transition() {
+        use diesel_async::RunQueryDsl as _;
+        use pasion_data::{PgRepository, RepositoryAccess, clock::SystemClock};
+        use rand_core::SeedableRng as _;
+
+        let pool = pasion_data::test_utils::setup_test_pool().await;
+        let clock = SystemClock::default();
+        let mut rng = rand_chacha::ChaChaRng::seed_from_u64(7);
+        let mut repo = PgRepository::new(pasion_data::pg::get_connection(&pool).await.unwrap());
+        let worker = repo
+            .queue_worker()
+            .register(&mut rng, &clock)
+            .await
+            .unwrap();
+        repo.queue_job()
+            .schedule(
+                &mut rng,
+                &clock,
+                "atomic-retry",
+                serde_json::json!({}),
+                serde_json::json!({}),
+            )
+            .await
+            .unwrap();
+        let job = repo
+            .queue_job()
+            .reserve(&clock, &worker, &["atomic-retry"], 1)
+            .await
+            .unwrap()
+            .pop()
+            .unwrap();
+        let mut conn = repo.into_inner();
+        diesel::sql_query("CREATE FUNCTION reject_retry() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN IF NEW.attempt > 0 THEN RAISE EXCEPTION 'injected retry failure'; END IF; RETURN NEW; END $$")
+            .execute(&mut *conn).await.unwrap();
+        diesel::sql_query("CREATE TRIGGER reject_retry BEFORE INSERT ON queue_jobs FOR EACH ROW EXECUTE FUNCTION reject_retry()")
+            .execute(&mut *conn).await.unwrap();
+        drop(conn);
+
+        let mut repo = super::begin_queue_transaction(&pool).await.unwrap();
+        repo.queue_job()
+            .mark_as_failed(&clock, job.id, "retryable")
+            .await
+            .unwrap();
+        assert!(
+            repo.queue_job()
+                .retry(&mut rng, &clock, job.id, chrono::Duration::zero())
+                .await
+                .is_err()
+        );
+        repo.boxed().cancel().await.unwrap();
+
+        let mut conn = pasion_data::pg::get_connection(&pool).await.unwrap();
+        #[derive(diesel::QueryableByName)]
+        struct Count {
+            #[diesel(sql_type = diesel::sql_types::BigInt)]
+            count: i64,
+        }
+        let row: Count =
+            diesel::sql_query("SELECT COUNT(*) AS count FROM queue_jobs WHERE status = 'running'")
+                .get_result(&mut *conn)
+                .await
+                .unwrap();
+        assert_eq!(row.count, 1, "the original attempt must remain recoverable");
+    }
 
     #[test]
     fn limits_fetch_to_remaining_capacity() {

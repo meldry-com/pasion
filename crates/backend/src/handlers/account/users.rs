@@ -174,6 +174,7 @@ pub async fn deactivate_user(
     let repo_factory = depot.repo_factory()?;
     let config = depot.site_config()?;
     let password_manager = depot.password_manager()?;
+    let limiter = depot.limiter()?;
     let clock = make_clock();
     let mut rng = make_rng();
 
@@ -190,6 +191,7 @@ pub async fn deactivate_user(
         &clock,
         &config,
         &password_manager,
+        &limiter,
         input.password,
         input.hs_erase,
     )
@@ -205,6 +207,7 @@ pub async fn deactivate_user(
 
 fn map_account_profile_error(error: AccountProfileError) -> RouteError {
     match error {
+        AccountProfileError::RateLimited => RouteError::RateLimited,
         AccountProfileError::NotFound => RouteError::NotFound,
         AccountProfileError::Unauthorized | AccountProfileError::BrowserSessionRequired => {
             RouteError::Unauthorized

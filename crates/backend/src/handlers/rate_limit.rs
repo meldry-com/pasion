@@ -285,11 +285,19 @@ impl Limiter {
         key: RequesterFingerprint,
         user: &User,
     ) -> Result<(), PasswordCheckLimitedError> {
+        self.check_password_for_requester(key).await?;
+        self.check_password_for_user(user).await
+    }
+
+    /// Apply the IP budget before looking up whether an account exists.
+    pub async fn check_password_for_requester(
+        &self,
+        key: RequesterFingerprint,
+    ) -> Result<(), PasswordCheckLimitedError> {
         if !self.inner.password_check_for_requester.check(&key).await {
             return Err(PasswordCheckLimitedError::Requester(key));
         }
-
-        self.check_password_for_user(user).await
+        Ok(())
     }
 
     /// Check if a password check can be performed for a user, without applying

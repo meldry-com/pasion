@@ -28,6 +28,14 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  # Run the same checks against this workflow's exact checkout, including tags
+  # and manual runs. No registry writes happen before this gate succeeds.
+  quality:
+    name: Verify release quality
+    uses: ./.github/workflows/ci.yaml
+    permissions:
+      contents: read
+
   # -- Version computation --
 
   compute-version:
@@ -118,6 +126,7 @@ jobs:
     name: Build and publish container image (${{ matrix.arch }})
     runs-on: ${{ matrix.runner }}
     needs:
+      - quality
       - compute-version
       - prepare-image-build
 
@@ -153,7 +162,7 @@ jobs:
 
       - name: Authenticate with GitHub Container Registry
         if: github.event_name != 'pull_request'
-        uses: docker/login-action@v4.7.0
+        uses: docker/login-action@v4.8.0
         with:
           registry: ghcr.io
           username: ${{ github.repository_owner }}
@@ -176,7 +185,7 @@ jobs:
 
       - name: Authenticate with Docker Hub
         if: github.event_name != 'pull_request' && steps.dockerhub.outputs.enabled == 'true'
-        uses: docker/login-action@v4.7.0
+        uses: docker/login-action@v4.8.0
         with:
           registry: docker.io
           username: ${{ secrets.DOCKERHUB_USERNAME }}
@@ -260,7 +269,7 @@ jobs:
 
     steps:
       - name: Set up Cosign
-        uses: sigstore/cosign-installer@v4.1.2
+        uses: sigstore/cosign-installer@v4.1.3
 
       - name: Configure Docker Buildx
         uses: docker/setup-buildx-action@v4.4.1
@@ -270,7 +279,7 @@ jobs:
               mirrors = ["mirror.gcr.io"]
 
       - name: Authenticate with GitHub Container Registry
-        uses: docker/login-action@v4.7.0
+        uses: docker/login-action@v4.8.0
         with:
           registry: ghcr.io
           username: ${{ github.repository_owner }}
@@ -293,7 +302,7 @@ jobs:
 
       - name: Authenticate with Docker Hub
         if: steps.dockerhub.outputs.enabled == 'true'
-        uses: docker/login-action@v4.7.0
+        uses: docker/login-action@v4.8.0
         with:
           registry: docker.io
           username: ${{ secrets.DOCKERHUB_USERNAME }}
@@ -377,7 +386,7 @@ jobs:
     steps:
 
       - name: Create GitHub release
-        uses: softprops/action-gh-release@v3.0.3
+        uses: softprops/action-gh-release@v3.0.4
         with:
           draft: true
           generate_release_notes: true

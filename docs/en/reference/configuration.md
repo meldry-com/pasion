@@ -405,11 +405,11 @@ captcha:
 
 ## `policy`
 
-Policy engine configuration. Pasion supports multiple policy backends: OPA/WASM (default), Cedar, and Remote HTTP. See the [policy engine topic](../topics/policy.md) for detailed documentation on each backend.
+Policy engine configuration. Pasion supports multiple policy backends: Cedar (default) and Remote HTTP. See the [policy engine topic](../topics/policy.md) for detailed documentation on each backend.
 
 ### `policy.engine`
 
-The policy engine backend to use. Defaults to `opa`.
+The policy engine backend to use. Defaults to `cedar`.
 
 | Value | Description | Feature Flag |
 |-------|-------------|--------------|

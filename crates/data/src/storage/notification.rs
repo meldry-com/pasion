@@ -270,6 +270,8 @@ pub trait NotificationRepository: Send + Sync {
     ) -> Result<NotificationDelivery, Self::Error>;
 
     /// Reserve a batch of due deliveries for processing.
+    /// Also resolves expired sending leases into a non-retryable unknown
+    /// failure. Commit the transaction even when no deliveries are returned.
     async fn reserve_deliveries(
         &mut self,
         clock: &dyn Clock,

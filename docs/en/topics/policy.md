@@ -14,6 +14,8 @@ Pasion supports multiple policy engine backends through an abstraction layer, al
 | **Cedar** (default) | Cedar | Excellent (native Rust) | Medium | `cedar` |
 | **Remote HTTP** | Any | Depends on network | Maximum | `remote` |
 
+The backend is selected with `policy.engine`; its Cargo feature must be enabled in the binary. Pasion does not embed an OPA/Rego WASM runtime. An external OPA deployment requires an adapter implementing the Remote HTTP protocol below.
+
 ## Cedar backend (default)
 
 [Amazon Cedar](https://www.cedarpolicy.com/) is a policy language designed for simplicity and performance. Since Cedar is natively written in Rust, it integrates directly into Pasion with no WebAssembly overhead.

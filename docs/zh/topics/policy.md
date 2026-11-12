@@ -9,6 +9,8 @@ Pasion 内置了一个可扩展的策略引擎，用于控制用户注册、客�
 | **Cedar**（默认） | Cedar | 极高（原生 Rust） | 中 | `cedar` |
 | **Remote HTTP** | 任意语言 | 取决于网络 | 最高 | `remote` |
 
+使用 `policy.engine` 选择后端，并确保二进制启用了相应 Cargo 特性。Pasion 不内置 OPA/Rego WASM 运行时；外部 OPA 服务需要适配下述 Remote HTTP 协议。
+
 ## 工作原理
 
 策略引擎基于两个核心 Trait 构建：
@@ -176,25 +178,6 @@ def evaluate_register():
 
 ## 策略数据
 
-可以通过配置文件或管理 API 向策略引擎传递数据。这些数据可在策略规则中引用：
+Remote HTTP 后端支持通过管理 API 更新动态策略数据，并使用 `POST /data` 推送到远程服务。Cedar 后端不消费动态策略数据，应直接修改 Cedar 策略文件。`policy` 配置不包含 `data` 字段。
 
-```yaml
-policy:
-  data:
-    admin_clients:
-      - "client_id_1"
-    allowed_domains:
-      - "example.com"
-```
-
-在 OPA Rego 策略中使用：
-
-```rego
-package register
-
-violation contains {"msg": "email domain not allowed"} if {
-    email := input.registration_request.email
-    domain := split(email, "@")[1]
-    not domain in data.allowed_domains
-}
-```
+若远程服务使用 OPA，需要提供适配 Pasion `/evaluate/*` 和 `/data` 协议的服务；Pasion 本身没有进程内 OPA/Rego WASM 后端。
