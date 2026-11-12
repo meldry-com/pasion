@@ -116,15 +116,9 @@ macro_rules! apply_app_session_filter {
             let stable_scope = format!("urn:matrix:client:device:{device}");
             let unstable_scope = format!("urn:matrix:org.matrix.msc2967.client:device:{device}");
             query = query.filter(
-                diesel::dsl::sql::<diesel::sql_types::Bool>("")
-                    .bind::<diesel::sql_types::Text, _>(stable_scope)
-                    .sql(" = ANY(")
-                    .sql("oauth2_sessions.scope_list")
-                    .sql(") OR ")
-                    .bind::<diesel::sql_types::Text, _>(unstable_scope)
-                    .sql(" = ANY(")
-                    .sql("oauth2_sessions.scope_list")
-                    .sql(")"),
+                oauth2_sessions::scope_list
+                    .contains(vec![stable_scope])
+                    .or(oauth2_sessions::scope_list.contains(vec![unstable_scope])),
             );
         }
 
@@ -255,6 +249,21 @@ mod tests {
     use rand_core::SeedableRng;
 
     use crate::PgRepositoryFactory;
+
+    #[test]
+    fn legacy_device_scope_stays_grouped_under_the_owner_predicate() {
+        use diesel::prelude::*;
+
+        use super::oauth2_sessions;
+
+        let query = oauth2_sessions::table
+            .filter(oauth2_sessions::user_id.eq(uuid::Uuid::nil()))
+            .into_boxed::<diesel::pg::Pg>();
+        let filter = AppSessionFilter::new().for_device("A").active_only();
+        let query = apply_app_session_filter!(query, filter);
+        let sql = diesel::debug_query::<diesel::pg::Pg, _>(&query).to_string();
+        assert!(sql.contains("AND ((\"oauth2_sessions\".\"scope_list\" @> $2) OR (\"oauth2_sessions\".\"scope_list\" @> $3))"), "{sql}");
+    }
 
     #[tokio::test]
     async fn test_app_repo() {
