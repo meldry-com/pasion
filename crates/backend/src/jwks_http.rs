@@ -132,7 +132,8 @@ mod tests {
         let server = tokio::spawn(async move {
             let (mut stream, _) = listener.accept().await.unwrap();
             let mut request = [0; 4096];
-            stream.read(&mut request).await.unwrap();
+            let received = stream.read(&mut request).await.unwrap();
+            assert!(received > 0, "client disconnected before sending a request");
             stream
                 .write_all(
                     b"HTTP/1.1 200 OK\r\nTransfer-Encoding: chunked\r\nConnection: close\r\n\r\n",
