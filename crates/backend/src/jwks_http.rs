@@ -1,11 +1,12 @@
 //! Network boundary for untrusted OAuth client JWKS locations.
-use anyhow::{bail, ensure};
-use pasion_jose::jwk::PublicJsonWebKeySet;
-use rustls_platform_verifier::ConfigVerifierExt as _;
 use std::{
     net::{IpAddr, SocketAddr},
     time::Duration,
 };
+
+use anyhow::{bail, ensure};
+use pasion_jose::jwk::PublicJsonWebKeySet;
+use rustls_platform_verifier::ConfigVerifierExt as _;
 
 const MAX_JWKS_BYTES: usize = 256 * 1024;
 static FETCH_BUDGET: tokio::sync::Semaphore = tokio::sync::Semaphore::const_new(8);
