@@ -141,11 +141,12 @@ pub(super) async fn run_leader_duties(
     let clock = state.clock();
     let mut rng = state.rng();
 
-    let mut conn = pasion_data::pg::get_connection(state.pool()).await?;
+    let repo = super::repository::begin_queue_transaction(state.pool()).await?;
+    let mut conn = repo.into_inner();
 
     let lock_key = advisory_lock_key("leader-duties");
     let lock_result: AdvisoryLockResult = sql_query(format!(
-        "SELECT pg_try_advisory_lock({lock_key}) AS acquired"
+        "SELECT pg_try_advisory_xact_lock({lock_key}) AS acquired"
     ))
     .get_result(&mut *conn)
     .await
@@ -153,6 +154,7 @@ pub(super) async fn run_leader_duties(
 
     if !lock_result.acquired {
         tracing::error!("Another worker has the leader lock, aborting");
+        PgRepository::new(conn).boxed().cancel().await?;
         return Ok(());
     }
 
@@ -224,10 +226,9 @@ pub(super) async fn run_leader_duties(
         n => tracing::info!("{n} scheduled jobs marked as available"),
     }
 
-    let mut conn = repo.into_inner();
-    let _ = sql_query(format!("SELECT pg_advisory_unlock({lock_key})"))
-        .execute(&mut *conn)
-        .await;
+    // Commit recovery, retry creation and schedule pointers together. The
+    // transaction-scoped leader lock is released even on rollback.
+    repo.boxed().save().await?;
 
     Ok(())
 }
