@@ -109,21 +109,46 @@ pub(super) async fn wait_until_wakeup(
             wakeups.add(1, &[KeyValue::new("reason", "task")]);
         },
 
-        notification = notifications.recv() => {
+        notification = next_notification(notifications) => {
             wakeups.add(1, &[KeyValue::new("reason", "notification")]);
-            match notification {
-                Some(notification) => {
-                    tracing::debug!(
-                        notification.channel = notification.channel(),
-                        notification.payload = notification.payload(),
-                        "Woke up from notification"
-                    );
-                },
-                None => {
-                    tracing::error!("Notification channel closed unexpectedly");
-                }
-            }
+            tracing::debug!(
+                notification.channel = notification.channel(),
+                notification.payload = notification.payload(),
+                "Woke up from notification"
+            );
         },
+    }
+}
+
+/// A disconnected LISTEN session must not turn its closed receiver into an
+/// always-ready wakeup. The normal polling timer remains active, so jobs and
+/// leader duties continue without requiring notifications to be reliable.
+async fn next_notification(
+    notifications: &mut tokio::sync::mpsc::UnboundedReceiver<Notification>,
+) -> Notification {
+    match notifications.recv().await {
+        Some(notification) => notification,
+        None => std::future::pending().await,
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    #[tokio::test]
+    async fn disconnected_listener_preserves_polling_backoff() {
+        let (sender, mut receiver) = tokio::sync::mpsc::unbounded_channel();
+        drop(sender);
+        // Repeat to cover subsequent worker ticks, not only the first EOF.
+        for _ in 0..3 {
+            assert!(
+                tokio::time::timeout(
+                    std::time::Duration::from_millis(20),
+                    super::next_notification(&mut receiver),
+                )
+                .await
+                .is_err()
+            );
+        }
     }
 }
 
