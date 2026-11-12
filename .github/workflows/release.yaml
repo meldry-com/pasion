@@ -28,6 +28,14 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  # Run the same checks against this workflow's exact checkout, including tags
+  # and manual runs. No registry writes happen before this gate succeeds.
+  quality:
+    name: Verify release quality
+    uses: ./.github/workflows/ci.yaml
+    permissions:
+      contents: read
+
   # -- Version computation --
 
   compute-version:
@@ -118,6 +126,7 @@ jobs:
     name: Build and publish container image (${{ matrix.arch }})
     runs-on: ${{ matrix.runner }}
     needs:
+      - quality
       - compute-version
       - prepare-image-build
 
