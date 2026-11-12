@@ -248,7 +248,7 @@ mod tests {
             (&alice, "urn:matrix:client:device:A"),
             (&alice, "urn:matrix:org.matrix.msc2967.client:device:A"),
             (&alice, "urn:matrix:client:device:B"),
-            (&bob, "urn:matrix:client:device:A"),
+            (&bob, "urn:matrix:org.matrix.msc2967.client:device:A"),
         ] {
             repo.personal_session()
                 .add(
