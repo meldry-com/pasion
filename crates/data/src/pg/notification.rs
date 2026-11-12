@@ -480,6 +480,7 @@ impl NotificationRepository for PgNotificationRepository<'_> {
         let delivery = notification_deliveries::table
             .find(Uuid::from(id))
             .select(NotificationDeliveryRow::as_select())
+            .for_update()
             .first::<NotificationDeliveryRow>(self.conn)
             .await
             .optional()?;
@@ -506,6 +507,7 @@ impl NotificationRepository for PgNotificationRepository<'_> {
         dsl::notification_deliveries
             .filter(dsl::provider_binding_key.eq(provider_binding_key))
             .filter(dsl::provider_message_id.eq(provider_message_id))
+            .for_update()
             .first::<NotificationDeliveryRow>(self.conn)
             .await
             .optional()?
@@ -617,6 +619,35 @@ impl NotificationRepository for PgNotificationRepository<'_> {
         let now = clock.now();
         let max_count = i64::try_from(limit).unwrap_or(i64::MAX);
 
+        // A sending lease is committed before I/O. A crashed worker cannot
+        // prove whether the provider accepted the send; expire to an explicit
+        // reconciliation state, never back to pending. Bounded and SKIP LOCKED
+        // so finalization and callbacks do not block the sweep.
+        diesel::sql_query(r#"
+            WITH expired AS (
+                SELECT id FROM notification_deliveries
+                WHERE status = 'sending' AND sent_at < $1 - INTERVAL '5 minutes'
+                ORDER BY sent_at, id LIMIT 100 FOR UPDATE SKIP LOCKED
+            ), marked AS (
+                UPDATE notification_deliveries d
+                SET status = 'failed', failed_at = $1, next_retry_at = NULL,
+                    last_failure = '{"code":"delivery_outcome_unknown","message":"Sending lease expired; reconcile provider acceptance before retrying","retryable":false}'::jsonb
+                FROM expired WHERE d.id = expired.id
+                RETURNING d.id, d.notification_request_id
+            ), audit AS (
+                INSERT INTO notification_event_logs
+                    (id, notification_request_id, notification_delivery_id, kind, actor, summary, metadata, occurred_at)
+                SELECT gen_random_uuid(), notification_request_id, id, 'delivery_failed',
+                    '{"type":"system"}'::jsonb,
+                    'Sending lease expired; delivery outcome unknown',
+                    '{"failure_code":"delivery_outcome_unknown","requires_reconciliation":true}'::jsonb, $1
+                FROM marked RETURNING id
+            )
+            UPDATE notification_requests SET status = 'failed'
+            WHERE id IN (SELECT notification_request_id FROM marked)
+              AND status = 'processing'
+        "#).bind::<Timestamptz, _>(now).execute(self.conn).await?;
+
         let rows: Vec<ReservedDeliveryRow> = diesel::sql_query(
             r"
                 WITH locked_deliveries AS (
@@ -682,7 +713,8 @@ impl NotificationRepository for PgNotificationRepository<'_> {
     ) -> Result<NotificationDelivery, Self::Error> {
         let now = clock.now();
         notification_delivery.status = NotificationDeliveryStatus::Sending;
-        notification_delivery.sent_at.get_or_insert(now);
+        // The lease belongs to this attempt, not the first rejected attempt.
+        notification_delivery.sent_at = Some(now);
         notification_delivery.provider_message_id =
             provider_message_id.or(notification_delivery.provider_message_id.take());
         notification_delivery.last_failure = None;
@@ -739,8 +771,12 @@ impl NotificationRepository for PgNotificationRepository<'_> {
         notification_delivery.status = NotificationDeliveryStatus::Failed;
         notification_delivery.delivered_at = None;
         notification_delivery.failed_at = Some(now);
+        notification_delivery.next_retry_at = if failure.is_outcome_unknown() {
+            None
+        } else {
+            next_retry_at
+        };
         notification_delivery.last_failure = Some(failure);
-        notification_delivery.next_retry_at = next_retry_at;
         notification_delivery.provider_message_id =
             provider_message_id.or(notification_delivery.provider_message_id.take());
 
@@ -1090,4 +1126,121 @@ where
             .row(row)
             .source(e)
     })
+}
+
+#[cfg(test)]
+mod lease_tests {
+    use pasion_data::{
+        NotificationDestination, PgRepositoryFactory, RepositoryFactory, clock::MockClock,
+    };
+    use rand_core::SeedableRng as _;
+
+    use super::*;
+
+    #[tokio::test]
+    async fn committed_send_is_not_replayed_after_a_worker_crash() {
+        let pool = crate::test_utils::setup_test_pool().await;
+        let factory = PgRepositoryFactory::new(pool);
+        let clock = MockClock::default();
+        let mut rng = rand_chacha::ChaChaRng::seed_from_u64(19);
+        let mut repo = factory.create().await.unwrap();
+        let request = repo
+            .notification()
+            .add_request(
+                &mut rng,
+                &clock,
+                NewNotificationRequest::new(
+                    "test",
+                    "en",
+                    pasion_data::NotificationRequestSource::System {
+                        source_key: "test".to_owned(),
+                    },
+                    serde_json::json!({}),
+                ),
+            )
+            .await
+            .unwrap();
+        repo.notification()
+            .set_request_status(
+                &clock,
+                request.clone(),
+                NotificationRequestStatus::Processing,
+            )
+            .await
+            .unwrap();
+        repo.notification()
+            .add_delivery(
+                &mut rng,
+                &clock,
+                &request,
+                NewNotificationDelivery::new(
+                    NotificationChannel::Sms,
+                    NotificationDestination::Sms {
+                        phone_number: "+12025550123".to_owned(),
+                    },
+                ),
+            )
+            .await
+            .unwrap();
+        let delivery = repo
+            .notification()
+            .reserve_deliveries(&clock, 1)
+            .await
+            .unwrap()
+            .pop()
+            .unwrap();
+        let delivery = repo
+            .notification()
+            .mark_delivery_sending(&clock, delivery, None)
+            .await
+            .unwrap();
+        repo.save().await.unwrap();
+
+        // Provider may have accepted the message before the process crashed.
+        let mut repo = factory.create().await.unwrap();
+        assert!(
+            repo.notification()
+                .reserve_deliveries(&clock, 1)
+                .await
+                .unwrap()
+                .is_empty()
+        );
+        repo.save().await.unwrap();
+        clock.advance(chrono::Duration::minutes(6));
+        let mut repo = factory.create().await.unwrap();
+        assert!(
+            repo.notification()
+                .reserve_deliveries(&clock, 1)
+                .await
+                .unwrap()
+                .is_empty()
+        );
+        let unknown = repo
+            .notification()
+            .lookup_delivery(delivery.id)
+            .await
+            .unwrap()
+            .unwrap();
+        assert_eq!(unknown.status, NotificationDeliveryStatus::Failed);
+        assert!(unknown.last_failure.as_ref().unwrap().is_outcome_unknown());
+        assert!(unknown.next_retry_at.is_none());
+        assert!(!unknown.last_failure.as_ref().unwrap().retryable);
+        assert_eq!(
+            repo.notification()
+                .lookup_request(request.id)
+                .await
+                .unwrap()
+                .unwrap()
+                .status,
+            NotificationRequestStatus::Failed
+        );
+        // An authoritative callback can still reconcile the ambiguous result.
+        let reconciled = repo
+            .notification()
+            .mark_delivery_delivered(&clock, unknown, Some("provider-1".to_owned()))
+            .await
+            .unwrap();
+        assert_eq!(reconciled.status, NotificationDeliveryStatus::Delivered);
+        repo.save().await.unwrap();
+    }
 }

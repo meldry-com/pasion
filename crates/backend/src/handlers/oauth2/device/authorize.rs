@@ -27,6 +27,9 @@ pub enum RouteError {
     #[error("client {0} is not allowed to use the device code grant")]
     ClientNotAllowed(Ulid),
 
+    #[error(transparent)]
+    InvalidMatrixScope(#[from] oauth2_types::matrix_scope::InvalidMatrixLoginScope),
+
     #[error("invalid client credentials for client {client_id}")]
     InvalidClientCredentials {
         client_id: Ulid,
@@ -51,6 +54,11 @@ impl Scribe for RouteError {
         let sentry_event_id = record_error!(self, Self::Internal(_));
 
         let (status, body) = match self {
+            Self::InvalidMatrixScope(error) => (
+                StatusCode::BAD_REQUEST,
+                ClientError::from(ClientErrorCode::InvalidScope)
+                    .with_description(error.to_string()),
+            ),
             Self::Internal(_) | Self::ClientCredentialsVerification { .. } => (
                 StatusCode::INTERNAL_SERVER_ERROR,
                 ClientError::from(ClientErrorCode::ServerError),
@@ -161,6 +169,8 @@ async fn handle_post(
         // XXX: Is this really how we do empty scopes?
         .unwrap_or(std::iter::empty::<ScopeToken>().collect());
 
+    oauth2_types::matrix_scope::validate_matrix_login_scope(&scope)?;
+
     let expires_in = Duration::microseconds(20 * 60 * 1000 * 1000);
 
     let ip_address = activity_tracker.ip();
@@ -229,6 +239,24 @@ mod tests {
 
         let response: ClientRegistrationResponse = response.json();
         let client_id = response.client_id;
+
+        // Matrix login invariants are enforced before persisting a grant,
+        // independently of the configurable authorization policy.
+        for scope in [
+            "urn:matrix:client:api:*",
+            "urn:matrix:client:api:* urn:matrix:client:device:A urn:matrix:client:device:B",
+            "urn:matrix:client:device:",
+        ] {
+            let response = state
+                .request(Request::post("/oauth2/device").form(serde_json::json!({
+                    "client_id": &client_id,
+                    "scope": scope,
+                })))
+                .await;
+            response.assert_status(StatusCode::BAD_REQUEST);
+            let body: serde_json::Value = response.json();
+            assert_eq!(body["error"], "invalid_scope");
+        }
 
         // Test the happy path: the client is allowed to use the device code grant type
         let request = Request::post("/oauth2/device").form(serde_json::json!({

@@ -328,6 +328,7 @@ pub async fn remove_email(
     let repo_factory = depot.repo_factory()?;
     let config = depot.site_config()?;
     let password_manager = depot.password_manager()?;
+    let limiter = depot.limiter()?;
     let clock = make_clock();
     let mut rng = make_rng();
 
@@ -342,6 +343,8 @@ pub async fn remove_email(
         &mut rng,
         &clock,
         &password_manager,
+        &limiter,
+        requester.fingerprint(),
         requester.user().map(|user| user.id),
         requester.is_admin(),
         config.password_login_enabled,
@@ -352,6 +355,7 @@ pub async fn remove_email(
     {
         Ok(()) => Ok(Json(RemoveEmailResponse { status: "REMOVED" })),
         Err(RemoveUserEmailError::Unauthorized) => Err(RouteError::Unauthorized),
+        Err(RemoveUserEmailError::RateLimited) => Err(RouteError::RateLimited),
         Err(RemoveUserEmailError::NotFound) => Err(RouteError::NotFound),
         Err(RemoveUserEmailError::UserNotFound) => Err(RouteError::LoadFailed),
         Err(RemoveUserEmailError::IncorrectPassword) => Ok(Json(RemoveEmailResponse {

@@ -140,7 +140,7 @@ async fn send_traced(
 ) -> Result<reqwest::Response, reqwest::Error> {
     let start = Instant::now();
     let (client, request) = request.build_split();
-    let mut request = request?;
+    let mut request = request.map_err(reqwest::Error::without_url)?;
 
     let headers = request.headers();
     let server_address = request.url().host_str().map(ToOwned::to_owned);
@@ -231,6 +231,10 @@ async fn send_traced(
                 Ok(response)
             }
             Err(err) => {
+                // reqwest's Display/Debug include the complete request URL.
+                // Strip it before either tracing or returning the error, so
+                // upper-layer error chains cannot reveal query credentials.
+                let err = err.without_url();
                 span.record("otel.status_code", "ERROR");
                 span.record("rust.error", &err as &dyn std::error::Error);
 
@@ -255,5 +259,89 @@ pub(crate) trait RequestBuilderExt {
 impl RequestBuilderExt for reqwest::RequestBuilder {
     fn send_traced(self) -> impl Future<Output = Result<reqwest::Response, reqwest::Error>> + Send {
         send_traced(self)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::sync::Mutex;
+
+    use tracing_subscriber::fmt::format::FmtSpan;
+
+    use super::*;
+
+    #[derive(Clone)]
+    struct Capture(Arc<Mutex<Vec<u8>>>);
+    impl std::io::Write for Capture {
+        fn write(&mut self, bytes: &[u8]) -> std::io::Result<usize> {
+            self.0.lock().unwrap().extend_from_slice(bytes);
+            Ok(bytes.len())
+        }
+        fn flush(&mut self) -> std::io::Result<()> {
+            Ok(())
+        }
+    }
+    impl<'a> tracing_subscriber::fmt::MakeWriter<'a> for Capture {
+        type Writer = Self;
+        fn make_writer(&'a self) -> Self {
+            self.clone()
+        }
+    }
+
+    #[tokio::test]
+    async fn transport_failures_redact_query_from_trace_and_error_chain() {
+        let output = Capture(Arc::new(Mutex::new(Vec::new())));
+        let subscriber = tracing_subscriber::fmt()
+            .with_writer(output.clone())
+            .with_ansi(false)
+            .with_span_events(FmtSpan::CLOSE)
+            .finish();
+        let _guard = tracing::subscriber::set_default(subscriber);
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let address = listener.local_addr().unwrap();
+        drop(listener);
+        let client = reqwest::Client::builder().no_proxy().build().unwrap();
+        let error = client
+            .get(format!(
+                "http://{address}/?secret=UNIQUE_SECRET&access_token=UNIQUE_TOKEN"
+            ))
+            .send_traced()
+            .await
+            .unwrap_err();
+        assert!(error.is_connect());
+        assert!(error.url().is_none());
+        let rendered = format!("{error} {error:?}");
+        let trace = String::from_utf8(output.0.lock().unwrap().clone()).unwrap();
+        for secret in ["UNIQUE_SECRET", "UNIQUE_TOKEN"] {
+            assert!(!rendered.contains(secret));
+            assert!(!trace.contains(secret));
+        }
+        assert!(trace.contains("rust.error"));
+        assert!(trace.contains("redacted"));
+    }
+
+    #[tokio::test]
+    async fn transport_timeout_keeps_category_without_query_credentials() {
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let address = listener.local_addr().unwrap();
+        let server = tokio::spawn(async move {
+            let (stream, _) = listener.accept().await.unwrap();
+            std::future::pending::<()>().await;
+            drop(stream);
+        });
+        let client = reqwest::Client::builder()
+            .no_proxy()
+            .timeout(Duration::from_millis(100))
+            .build()
+            .unwrap();
+        let error = client
+            .get(format!("http://{address}/?secret=UNIQUE_TIMEOUT_SECRET"))
+            .send_traced()
+            .await
+            .unwrap_err();
+        server.abort();
+        assert!(error.is_timeout());
+        assert!(error.url().is_none());
+        assert!(!format!("{error:?}").contains("UNIQUE_TIMEOUT_SECRET"));
     }
 }

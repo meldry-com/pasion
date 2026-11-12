@@ -138,7 +138,7 @@ fn build_s3_operator(
     if let Some(secret_access_key) = secret_access_key {
         builder = builder.secret_access_key(secret_access_key);
     }
-    if path_style {
+    if !path_style {
         builder = builder.enable_virtual_host_style();
     }
     if !prefix.is_empty() {
@@ -152,4 +152,37 @@ fn build_s3_operator(
         region
     );
     Ok(op)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[tokio::test]
+    async fn presigned_urls_follow_the_configured_addressing_style() {
+        let _ = rustls::crypto::aws_lc_rs::default_provider().install_default();
+        for (path_style, host, path) in [
+            (true, "objects.example.com", "/avatars/image"),
+            (false, "avatars.objects.example.com", "/image"),
+        ] {
+            let operator = build_s3_operator(
+                "avatars",
+                "us-east-1",
+                Some("https://objects.example.com"),
+                Some("test-access-key"),
+                Some("test-secret-key"),
+                "",
+                path_style,
+            )
+            .unwrap();
+            // Presigning with explicit credentials is entirely local: assert
+            // the actual request URI without contacting a real S3 service.
+            let request = operator
+                .presign_read("image", Duration::from_secs(60))
+                .await
+                .unwrap();
+            assert_eq!(request.uri().host(), Some(host));
+            assert_eq!(request.uri().path(), path);
+        }
+    }
 }

@@ -12,6 +12,7 @@ pub mod email_verify;
 pub mod error_pages;
 pub mod identity_bindings;
 pub mod login;
+pub mod manage_account;
 pub mod notification_preferences;
 pub mod password_change;
 pub mod password_change_success;
@@ -34,12 +35,13 @@ use client_detail::ClientDetail;
 use consent::Consent;
 use device_consent::DeviceConsent;
 use device_link::DeviceLink;
-use device_redirect::DeviceRedirect;
+use device_redirect::{DeviceRedirect, Devices};
 use dioxus::prelude::*;
 use email_in_use::EmailInUse;
 use email_verify::EmailVerify;
 use identity_bindings::IdentityBindings;
 use login::Login;
+use manage_account::ManageAccount;
 use notification_preferences::NotificationPreferences;
 use password_change::PasswordChange;
 use password_change_success::PasswordChangeSuccess;
@@ -65,6 +67,8 @@ pub enum Route {
     // Auth pages (public)
     #[route("/login")]
     Login {},
+    #[route("/manage")]
+    ManageAccount {},
     #[route("/register?:kind&:id")]
     Register { kind: Option<String>, id: Option<String> },
     #[route("/register/steps/:id/verify-email")]
@@ -125,6 +129,8 @@ pub enum Route {
     ResetCrossSigning {},
     #[route("/clients/:id")]
     ClientDetail { id: String },
+    #[route("/devices")]
+    Devices {},
     #[route("/devices/:..route")]
     DeviceRedirect { route: Vec<String> },
 

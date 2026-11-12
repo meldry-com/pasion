@@ -374,15 +374,9 @@ impl PersonalSessionRepository for PgPersonalSessionRepository<'_> {
             let stable = format!("urn:matrix:client:device:{device}");
             let unstable = format!("urn:matrix:org.matrix.msc2967.client:device:{device}");
             sub = sub.filter(
-                diesel::dsl::sql::<diesel::sql_types::Bool>("")
-                    .bind::<diesel::sql_types::Text, _>(stable)
-                    .sql(" = ANY(")
-                    .sql("personal_sessions.scope_list")
-                    .sql(") OR ")
-                    .bind::<diesel::sql_types::Text, _>(unstable)
-                    .sql(" = ANY(")
-                    .sql("personal_sessions.scope_list")
-                    .sql(")"),
+                personal_sessions::scope_list
+                    .contains(vec![stable])
+                    .or(personal_sessions::scope_list.contains(vec![unstable])),
             );
         }
 
@@ -468,15 +462,9 @@ impl PersonalSessionRepository for PgPersonalSessionRepository<'_> {
             let stable = format!("urn:matrix:client:device:{device}");
             let unstable = format!("urn:matrix:org.matrix.msc2967.client:device:{device}");
             query = query.filter(
-                diesel::dsl::sql::<diesel::sql_types::Bool>("")
-                    .bind::<diesel::sql_types::Text, _>(stable)
-                    .sql(" = ANY(")
-                    .sql("personal_sessions.scope_list")
-                    .sql(") OR ")
-                    .bind::<diesel::sql_types::Text, _>(unstable)
-                    .sql(" = ANY(")
-                    .sql("personal_sessions.scope_list")
-                    .sql(")"),
+                personal_sessions::scope_list
+                    .contains(vec![stable])
+                    .or(personal_sessions::scope_list.contains(vec![unstable])),
             );
         }
 
@@ -577,15 +565,9 @@ impl PersonalSessionRepository for PgPersonalSessionRepository<'_> {
             let stable = format!("urn:matrix:client:device:{device}");
             let unstable = format!("urn:matrix:org.matrix.msc2967.client:device:{device}");
             query = query.filter(
-                diesel::dsl::sql::<diesel::sql_types::Bool>("")
-                    .bind::<diesel::sql_types::Text, _>(stable)
-                    .sql(" = ANY(")
-                    .sql("personal_sessions.scope_list")
-                    .sql(") OR ")
-                    .bind::<diesel::sql_types::Text, _>(unstable)
-                    .sql(" = ANY(")
-                    .sql("personal_sessions.scope_list")
-                    .sql(")"),
+                personal_sessions::scope_list
+                    .contains(vec![stable])
+                    .or(personal_sessions::scope_list.contains(vec![unstable])),
             );
         }
 

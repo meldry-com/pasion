@@ -73,9 +73,11 @@ pub async fn get_corp_access_token(
         .get(url)
         .send_traced()
         .await?
-        .error_for_status()?
+        .error_for_status()
+        .map_err(reqwest::Error::without_url)?
         .json()
-        .await?;
+        .await
+        .map_err(reqwest::Error::without_url)?;
 
     if response.errcode != 0 {
         return Err(TokenRequestError::ProviderError {
@@ -109,9 +111,11 @@ pub async fn get_user_identity(
         .get(url)
         .send_traced()
         .await?
-        .error_for_status()?
+        .error_for_status()
+        .map_err(reqwest::Error::without_url)?
         .json()
-        .await?;
+        .await
+        .map_err(reqwest::Error::without_url)?;
 
     if response.errcode != 0 {
         return Err(TokenRequestError::ProviderError {
@@ -146,9 +150,11 @@ pub async fn fetch_userinfo(
         .get(url)
         .send_traced()
         .await?
-        .error_for_status()?
+        .error_for_status()
+        .map_err(reqwest::Error::without_url)?
         .json()
-        .await?;
+        .await
+        .map_err(reqwest::Error::without_url)?;
 
     // Check for error
     if let Some(errcode) = response.get("errcode").and_then(|v| v.as_i64())

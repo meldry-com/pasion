@@ -1,6 +1,7 @@
 name: Continuous Integration
 
 on:
+  workflow_call:
   pull_request:
   push:
     branches:
@@ -16,7 +17,7 @@ env:
   SCCACHE_GHA_ENABLED: "true"
 
 concurrency:
-  group: ci-${{ github.ref }}
+  group: ci-${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
@@ -216,6 +217,24 @@ jobs:
 
   # -- Final gate --
 
+  policy-backends:
+    name: Check policy backend (${{ matrix.features }})
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+    strategy:
+      fail-fast: false
+      matrix:
+        features: ["", cedar, remote]
+    steps:
+      - uses: actions/checkout@v7
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: mozilla-actions/sccache-action@v0.0.11
+      - name: Test policy contract
+        run: cargo test --locked -p pasion-policy --no-default-features --features '${{ matrix.features }}'
+      - name: Check backend integration
+        run: cargo check --locked -p pasion-backend --no-default-features --features '${{ matrix.features }}'
+
   tests-done:
     name: All checks passed
     if: ${{ always() }}
@@ -226,6 +245,7 @@ jobs:
       - cargo-deny
       - check-schema
       - test
+      - policy-backends
 
     steps:
       - uses: matrix-org/done-action@v3

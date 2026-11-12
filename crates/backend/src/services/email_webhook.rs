@@ -1144,12 +1144,13 @@ fn should_apply_delivery_update(
     update: &DeliveryTerminalStatus,
 ) -> bool {
     match update {
-        DeliveryTerminalStatus::Delivered => !matches!(
-            current_status,
-            NotificationDeliveryStatus::Delivered
-                | NotificationDeliveryStatus::Failed
-                | NotificationDeliveryStatus::Cancelled
-        ),
+        DeliveryTerminalStatus::Delivered => {
+            !matches!(
+                current_status,
+                NotificationDeliveryStatus::Delivered | NotificationDeliveryStatus::Cancelled
+            ) && (current_status != NotificationDeliveryStatus::Failed
+                || current_failure.is_some_and(NotificationDeliveryFailure::is_outcome_unknown))
+        }
         DeliveryTerminalStatus::Failed(failure) => {
             !(current_status == NotificationDeliveryStatus::Failed
                 && current_failure == Some(failure))
@@ -1492,6 +1493,17 @@ mod tests {
             Some(&webhook_failure(
                 "bounce",
                 "SendGrid reported that the email bounced"
+            )),
+            &DeliveryTerminalStatus::Delivered,
+        ));
+    }
+
+    #[test]
+    fn delivered_webhook_reconciles_an_unknown_send_outcome() {
+        assert!(should_apply_delivery_update(
+            NotificationDeliveryStatus::Failed,
+            Some(&NotificationDeliveryFailure::outcome_unknown(
+                "lease expired"
             )),
             &DeliveryTerminalStatus::Delivered,
         ));

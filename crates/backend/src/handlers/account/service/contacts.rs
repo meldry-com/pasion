@@ -98,12 +98,15 @@ pub async fn start_email_verification(
         requester_is_admin,
         password_login_enabled,
         password_manager,
+        limiter,
+        requester,
         password,
         &browser_session.user,
         &mut repo,
     )
     .await
     .map_err(|error| match error {
+        VerifyPasswordIfNeededError::RateLimited => StartEmailVerificationError::RateLimited,
         VerifyPasswordIfNeededError::Password(error) => {
             StartEmailVerificationError::Password(error)
         }
@@ -312,6 +315,8 @@ pub async fn resend_email_verification_code(
 
 #[derive(Debug, Error)]
 pub enum RemoveUserEmailError {
+    #[error("password attempt rate limited")]
+    RateLimited,
     #[error("unauthorized")]
     Unauthorized,
 
@@ -337,6 +342,8 @@ pub async fn remove_user_email(
     rng: &mut (dyn RngCore + Send),
     clock: &dyn Clock,
     password_manager: &PasswordManager,
+    limiter: &Limiter,
+    requester: RequesterFingerprint,
     requester_user_id: Option<Ulid>,
     requester_is_admin: bool,
     password_login_enabled: bool,
@@ -363,12 +370,15 @@ pub async fn remove_user_email(
         requester_is_admin,
         password_login_enabled,
         password_manager,
+        limiter,
+        requester,
         password,
         &user,
         &mut repo,
     )
     .await
     .map_err(|error| match error {
+        VerifyPasswordIfNeededError::RateLimited => RemoveUserEmailError::RateLimited,
         VerifyPasswordIfNeededError::Password(error) => RemoveUserEmailError::Password(error),
         VerifyPasswordIfNeededError::Repository(error) => RemoveUserEmailError::Repository(error),
     })? {

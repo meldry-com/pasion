@@ -37,6 +37,9 @@ chrono = { workspace = true, optional = true }
 # Remote HTTP backend (optional)
 reqwest = { workspace = true, optional = true }
 
+[dev-dependencies]
+rustls.workspace = true
+
 [[bin]]
 name = "policy-schema"
 path = "src/bin/schema.rs"

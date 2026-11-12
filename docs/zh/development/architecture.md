@@ -24,7 +24,7 @@ Pasion 是面向 Palpo 的身份、通知、运营与接入平台。它以 Postg
 | `pasion-storage` | 存储抽象层 |
 | `pasion-storage-pg` | PostgreSQL 实现 |
 | `pasion-handlers` | HTTP 适配层（REST/OAuth2/Admin） |
-| `pasion-policy` | 策略引擎（OPA + Cedar） |
+| `pasion-policy` | 策略引擎（Cedar + Remote HTTP） |
 | `pasion-tasks` | 后台任务与工作流调度 |
 
 ### 通知与消息

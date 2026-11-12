@@ -9,7 +9,7 @@
 - Rust 稳定版工具链（通过 [rustup](https://rustup.rs/) 安装）
 - Node.js 20+ 和 npm（用于前端开发）
 - PostgreSQL 13+（用于运行测试）
-- [Open Policy Agent](https://www.openpolicyagent.org/docs/latest/#1-download-opa)（用于编译策略）
+- 本地策略启用 `cedar` Cargo 特性；远程 HTTP 策略启用 `remote`。无需安装策略编译器。
 
 ### 克隆和构建
 
@@ -24,7 +24,7 @@ npm run build
 cd ..
 
 # 编译所有 Rust crate
-cargo build
+cargo build --features cedar
 ```
 
 ### 运行测试

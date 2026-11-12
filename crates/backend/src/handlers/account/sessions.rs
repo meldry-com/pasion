@@ -247,5 +247,6 @@ fn map_account_session_error(error: AccountSessionError) -> RouteError {
         AccountSessionError::NotFound => RouteError::NotFound,
         AccountSessionError::Unauthorized => RouteError::Unauthorized,
         AccountSessionError::Repository(error) => RouteError::from(error),
+        AccountSessionError::Homeserver(error) => RouteError::Internal(error.into()),
     }
 }

@@ -73,6 +73,8 @@ pub struct PasswordManager {
 }
 
 struct InnerPasswordManager {
+    dummy_hash: std::sync::OnceLock<Result<String, String>>,
+    login_budget: Arc<tokio::sync::Semaphore>,
     /// Minimum complexity score of new passwords (between 0 and 4) as evaluated
     /// by zxcvbn.
     minimum_complexity: u8,
@@ -107,6 +109,8 @@ impl PasswordManager {
 
         Ok(Self {
             inner: Some(Arc::new(InnerPasswordManager {
+                dummy_hash: std::sync::OnceLock::new(),
+                login_budget: Arc::new(tokio::sync::Semaphore::new(4)),
                 minimum_complexity,
                 current_hasher,
                 current_version,
@@ -125,6 +129,80 @@ impl PasswordManager {
     #[must_use]
     pub const fn is_enabled(&self) -> bool {
         self.inner.is_some()
+    }
+
+    /// Admit every password login before looking up its account. A saturated
+    /// budget must produce the same outcome for real and dummy verification.
+    pub(crate) fn try_login_verification(
+        &self,
+    ) -> Result<Option<tokio::sync::OwnedSemaphorePermit>, PasswordManagerDisabledError> {
+        Ok(Arc::clone(&self.get_inner()?.login_budget)
+            .try_acquire_owned()
+            .ok())
+    }
+
+    /// Spend current-scheme verification work using an already admitted slot.
+    pub(crate) async fn dummy_verify(
+        &self,
+        password: Zeroizing<String>,
+        permit: tokio::sync::OwnedSemaphorePermit,
+    ) -> Result<(), anyhow::Error> {
+        let inner = self.get_inner()?;
+        tokio::task::spawn_blocking(move || {
+            // Keep the permit in the blocking closure even if the request is
+            // cancelled; dropping its JoinHandle cannot cancel CPU work.
+            let _permit = permit;
+            let hash = inner.dummy_hash.get_or_init(|| {
+                inner
+                    .current_hasher
+                    .hash_blocking(
+                        rand_chacha::ChaChaRng::from_entropy(),
+                        Zeroizing::new("pasion dummy verification".to_owned()),
+                    )
+                    .map_err(|error| error.to_string())
+            });
+            let hash = hash.as_ref().map_err(|error| anyhow::anyhow!("{error}"))?;
+            let _ = inner.current_hasher.verify_blocking(hash, password)?;
+            Ok::<_, anyhow::Error>(())
+        })
+        .await?
+    }
+
+    /// Verify/upgrade an admitted login. The blocking closure owns the slot so
+    /// cancelling an HTTP request cannot release capacity while hashing runs.
+    pub(crate) async fn verify_and_upgrade_admitted<R: CryptoRng + RngCore + Send>(
+        &self,
+        rng: R,
+        scheme: SchemeVersion,
+        password: Zeroizing<String>,
+        hashed_password: String,
+        permit: tokio::sync::OwnedSemaphorePermit,
+    ) -> Result<PasswordVerificationResult<Option<(SchemeVersion, String)>>, anyhow::Error> {
+        let inner = self.get_inner()?;
+        let rng = rand_chacha::ChaChaRng::from_rng(rng)?;
+        tokio::task::spawn_blocking(move || {
+            let _permit = permit;
+            let new_hash = if scheme != inner.current_version {
+                Some((
+                    inner.current_version,
+                    inner.current_hasher.hash_blocking(rng, password.clone())?,
+                ))
+            } else {
+                None
+            };
+            let hasher = if scheme == inner.current_version {
+                &inner.current_hasher
+            } else {
+                inner
+                    .other_hashers
+                    .get(&scheme)
+                    .context("Hashing scheme not found")?
+            };
+            Ok(hasher
+                .verify_blocking(&hashed_password, password)?
+                .map_data(new_hash))
+        })
+        .await?
     }
 
     /// Get the inner password manager
@@ -463,6 +541,109 @@ impl Algorithm {
 
 #[cfg(test)]
 mod tests {
+    #[tokio::test]
+    async fn dummy_verification_is_cached_and_bounded() {
+        let manager = PasswordManager::new(0, [(1, Hasher::bcrypt(Some(4), None, false))]).unwrap();
+        manager
+            .dummy_verify(
+                Zeroizing::new("wrong".to_owned()),
+                manager.try_login_verification().unwrap().unwrap(),
+            )
+            .await
+            .unwrap();
+        let inner = manager.get_inner().unwrap();
+        let initial_hash = inner.dummy_hash.get().unwrap().as_ref().unwrap().clone();
+        manager
+            .dummy_verify(
+                Zeroizing::new("another".to_owned()),
+                manager.try_login_verification().unwrap().unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(
+            inner.dummy_hash.get().unwrap().as_ref().unwrap(),
+            &initial_hash
+        );
+        let _permits = inner.login_budget.acquire_many(4).await.unwrap();
+        assert!(manager.try_login_verification().unwrap().is_none());
+    }
+
+    #[tokio::test]
+    async fn login_admission_is_shared_by_real_and_dummy_work() {
+        let manager = PasswordManager::new(0, [(1, Hasher::bcrypt(Some(4), None, false))]).unwrap();
+        let mut slots = Vec::new();
+        for _ in 0..4 {
+            slots.push(manager.try_login_verification().unwrap().unwrap());
+        }
+        assert!(manager.try_login_verification().unwrap().is_none());
+        manager
+            .dummy_verify(Zeroizing::new("wrong".to_owned()), slots.pop().unwrap())
+            .await
+            .unwrap();
+        let slot = manager.try_login_verification().unwrap().unwrap();
+        let mut rng = rand_chacha::ChaChaRng::seed_from_u64(91);
+        let (version, hash) = manager
+            .hash(&mut rng, Zeroizing::new("correct".to_owned()))
+            .await
+            .unwrap();
+        assert!(
+            manager
+                .verify_and_upgrade_admitted(
+                    &mut rng,
+                    version,
+                    Zeroizing::new("wrong".to_owned()),
+                    hash,
+                    slot
+                )
+                .await
+                .unwrap()
+                == PasswordVerificationResult::NotMatched
+        );
+        assert!(manager.try_login_verification().unwrap().is_some());
+    }
+
+    #[tokio::test]
+    async fn admitted_login_preserves_password_upgrade_and_match_results() {
+        let manager = PasswordManager::new(
+            0,
+            [
+                (2, Hasher::bcrypt(Some(4), None, false)),
+                (1, Hasher::bcrypt(Some(4), None, false)),
+            ],
+        )
+        .unwrap();
+        let mut rng = rand_chacha::ChaChaRng::seed_from_u64(92);
+        let old_hash = Hasher::bcrypt(Some(4), None, false)
+            .hash_blocking(&mut rng, Zeroizing::new("correct".to_owned()))
+            .unwrap();
+        let outcome = manager
+            .verify_and_upgrade_admitted(
+                &mut rng,
+                1,
+                Zeroizing::new("correct".to_owned()),
+                old_hash,
+                manager.try_login_verification().unwrap().unwrap(),
+            )
+            .await
+            .unwrap();
+        let PasswordVerificationResult::Matched(Some((version, hash))) = outcome else {
+            panic!("successful legacy login must upgrade its hash");
+        };
+        assert_eq!(version, 2);
+        assert!(
+            manager
+                .verify_and_upgrade_admitted(
+                    &mut rng,
+                    version,
+                    Zeroizing::new("correct".to_owned()),
+                    hash,
+                    manager.try_login_verification().unwrap().unwrap()
+                )
+                .await
+                .unwrap()
+                == PasswordVerificationResult::Matched(None)
+        );
+    }
     use rand_core::SeedableRng;
 
     use super::*;
