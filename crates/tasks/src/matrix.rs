@@ -175,10 +175,11 @@ async fn persist_device_sync(
 
 #[cfg(test)]
 mod legacy_tests {
-    use super::*;
     use diesel_async::RunQueryDsl as _;
     use pasion_data::{PgRepositoryFactory, RepositoryFactory as _, clock::SystemClock};
     use rand_core::SeedableRng as _;
+
+    use super::*;
 
     #[tokio::test]
     async fn legacy_device_forwarding_commits_its_replacement() {
