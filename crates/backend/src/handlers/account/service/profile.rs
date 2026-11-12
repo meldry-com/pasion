@@ -9,7 +9,7 @@ use rand_chacha::rand_core::CryptoRngCore;
 use thiserror::Error;
 use ulid::Ulid;
 
-use crate::handlers::{common::Requester, passwords::PasswordManager};
+use crate::handlers::{Limiter, common::Requester, passwords::PasswordManager};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum DeactivateAccountOutcome {
@@ -19,6 +19,8 @@ pub enum DeactivateAccountOutcome {
 
 #[derive(Debug, Error)]
 pub enum AccountProfileError {
+    #[error("password attempt rate limited")]
+    RateLimited,
     #[error("not found")]
     NotFound,
 
@@ -78,6 +80,7 @@ pub async fn deactivate_current_account(
     clock: &dyn Clock,
     config: &SiteConfig,
     password_manager: &PasswordManager,
+    limiter: &Limiter,
     password: Option<String>,
     hs_erase: bool,
 ) -> Result<DeactivateAccountOutcome, AccountProfileError> {
@@ -93,12 +96,17 @@ pub async fn deactivate_current_account(
         requester.is_admin(),
         config.password_login_enabled,
         password_manager,
+        limiter,
+        requester.fingerprint(),
         password,
         &browser_session.user,
         &mut repo,
     )
     .await
     .map_err(|error| match error {
+        crate::handlers::account::service::password::VerifyPasswordIfNeededError::RateLimited => {
+            AccountProfileError::RateLimited
+        }
         crate::handlers::account::service::password::VerifyPasswordIfNeededError::Password(
             error,
         ) => AccountProfileError::Password(error),
