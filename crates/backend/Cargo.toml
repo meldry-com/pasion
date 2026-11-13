@@ -108,7 +108,7 @@ tokio-postgres.workspace = true
 ulid.workspace = true
 uuid.workspace = true
 woothee.workspace = true
-x509-cert = "0.2.5"
+x509-cert = "0.3.0"
 zxcvbn.workspace = true
 
 [target.'cfg(unix)'.dependencies]
