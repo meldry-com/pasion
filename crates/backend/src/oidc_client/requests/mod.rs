@@ -25,6 +25,7 @@ pub mod userinfo;
 // Pasion-specific request modules for social login providers.
 pub mod dingtalk;
 pub mod feishu;
+pub mod github;
 pub mod qq_connect;
 pub mod wechat;
 pub mod wecom;
