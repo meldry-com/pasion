@@ -104,6 +104,7 @@ pasion-emails-recovery-create-new-password = Create new password
 pasion-emails-recovery-fallback = The button doesn't work for you?
 pasion-emails-recovery-headline = You requested a password reset for your { $server_name } account.
 pasion-emails-recovery-subject = Reset your account password ({ $mxid })
+pasion-emails-recovery-username = Your username is { $username }.
 pasion-emails-recovery-you-can-ignore =
     If you didn't ask for a new password, you can ignore this email. Your current password will continue to work.
 # The body of the email sent to verify an email address (HTML)
