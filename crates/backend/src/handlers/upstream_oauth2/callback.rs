@@ -673,7 +673,7 @@ pub async fn handler(
                 context = context.with_extra_callback_parameters(extra_callback_parameters);
             }
 
-            let userinfo = if provider.fetch_userinfo {
+            let mut userinfo = if provider.fetch_userinfo {
                 Some(json!(match &provider.userinfo_signed_response_alg {
                     Some(signing_algorithm) => {
                         let jwks = match jwks {
@@ -707,6 +707,21 @@ pub async fn handler(
             } else {
                 None
             };
+
+            // TODO(R4): callback.rs is over budget; split each provider branch
+            // of this match into its own module.
+            if let Some(ui) = userinfo.as_mut()
+                && crate::oidc_client::requests::github::is_github(provider.brand_name.as_deref())
+            {
+                super::github::enrich_userinfo(
+                    &client,
+                    &mut repo,
+                    lazy_metadata.userinfo_endpoint().await?,
+                    token_response.access_token.as_str(),
+                    ui,
+                )
+                .await?;
+            }
 
             if let Some(ref ui) = userinfo {
                 context = context.with_userinfo_claims(ui.clone());
