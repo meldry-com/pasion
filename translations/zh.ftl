@@ -89,6 +89,7 @@ pasion-emails-recovery-create-new-password = 创建新密码
 pasion-emails-recovery-fallback = 此按钮对你无效？
 pasion-emails-recovery-headline = 您已请求重置您在 { $server_name } 的密码。
 pasion-emails-recovery-subject = 重置账户密码 ({ $mxid })
+pasion-emails-recovery-username = 您的用户名是 { $username }。
 pasion-emails-recovery-you-can-ignore = 如果你没有请求过重置密码可以忽略此邮件。当前密码仍然有效。
 pasion-emails-verify-body-html = 确认此电子邮件地址的验证码是： <strong>{ $code }</strong>
 pasion-emails-verify-body-text = 确认此电子邮件地址的验证码是： { $code }
