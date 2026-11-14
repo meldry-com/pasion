@@ -22,6 +22,7 @@ use self::callback::CallbackDestination;
 use crate::salvo_utils::{SessionInfoExt, cookies::CookieJar};
 
 pub(crate) mod callback;
+pub(crate) mod upstream_hint;
 
 #[derive(Debug, Error)]
 pub enum RouteError {
@@ -341,6 +342,10 @@ async fn handle_get(req: &mut Request, depot: &Depot) -> Result<(Response, Cooki
                 )
                 .await?;
             let continue_grant = PostAuthAction::continue_grant(grant.id);
+            // TODO(R4): mod.rs is over budget; split the redirect choice below
+            // into its own module.
+            let hinted =
+                upstream_hint::hinted_provider(&mut repo, grant.login_hint.as_deref()).await?;
 
             let redirect = match maybe_session {
                 None if prompt.contains(&Prompt::Create) => {
@@ -360,19 +365,14 @@ async fn handle_get(req: &mut Request, depot: &Depot) -> Result<(Response, Cooki
                 }
 
                 None => {
-                    // Other cases where we don't have a session, ask for a login
+                    // No session: ask for a login, or go straight to the
+                    // upstream provider a `login_hint=upstream:...` selects.
                     repo.save().await?;
-
-                    {
-                        let query_str =
-                            serde_urlencoded::to_string(&continue_grant).unwrap_or_default();
-                        let path = if query_str.is_empty() {
-                            "/login".to_owned()
-                        } else {
-                            format!("/login?{query_str}")
-                        };
-                        salvo::writing::Redirect::other(url_builder.relative_url(&path))
-                    }
+                    let query_str =
+                        serde_urlencoded::to_string(&continue_grant).unwrap_or_default();
+                    salvo::writing::Redirect::other(
+                        url_builder.relative_url(&upstream_hint::login_path(hinted, &query_str)),
+                    )
                 }
 
                 Some(_) if prompt.contains(&Prompt::Create) => {
@@ -393,20 +393,14 @@ async fn handle_get(req: &mut Request, depot: &Depot) -> Result<(Response, Cooki
                 }
 
                 Some(_) if prompt.contains(&Prompt::Login) => {
-                    // Client explicitly requested re-authentication.
-                    // Redirect to the login page even though we have a session.
+                    // Client explicitly requested re-authentication: the login
+                    // page (or the hinted upstream provider) despite the session.
                     repo.save().await?;
-
-                    {
-                        let query_str =
-                            serde_urlencoded::to_string(&continue_grant).unwrap_or_default();
-                        let path = if query_str.is_empty() {
-                            "/login".to_owned()
-                        } else {
-                            format!("/login?{query_str}")
-                        };
-                        salvo::writing::Redirect::other(url_builder.relative_url(&path))
-                    }
+                    let query_str =
+                        serde_urlencoded::to_string(&continue_grant).unwrap_or_default();
+                    salvo::writing::Redirect::other(
+                        url_builder.relative_url(&upstream_hint::login_path(hinted, &query_str)),
+                    )
                 }
 
                 Some(user_session) => {
