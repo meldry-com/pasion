@@ -104,7 +104,7 @@ pub async fn list_handler(
 }
 
 /// Publish a new notification template version.
-#[endpoint]
+#[endpoint(request_body = PublishTemplateRequest)]
 #[tracing::instrument(name = "handler.admin.v1.notification_templates.publish", skip_all)]
 pub async fn publish_handler(
     req: &mut Request,

@@ -67,7 +67,7 @@ pub struct AddRequest {
 }
 
 /// Create a new personal session and its initial access token.
-#[endpoint]
+#[endpoint(request_body = AddRequest)]
 #[tracing::instrument(name = "handler.admin.v1.personal_sessions.add", skip_all)]
 pub async fn add_session(
     req: &mut Request,
@@ -442,7 +442,7 @@ pub struct RegenerateRequest {
 }
 
 /// Rotate the access token for an existing personal session.
-#[endpoint]
+#[endpoint(request_body = Option<RegenerateRequest>)]
 #[tracing::instrument(name = "handler.admin.v1.personal_sessions.add", skip_all)]
 pub async fn regenerate_session(
     req: &mut Request,

@@ -78,8 +78,9 @@ impl PublishedNotificationTemplate {
 /// English. If no published version exists, the configured templates are used.
 #[must_use]
 pub fn notification_locale_fallbacks(locale: &str) -> Vec<String> {
-    let mut result = vec![locale.to_owned()];
-    let mut parent = locale;
+    let locale = notification_locale(locale);
+    let mut result = vec![locale.clone()];
+    let mut parent = locale.as_str();
     while let Some((prefix, _)) = parent.rsplit_once('-') {
         result.push(prefix.to_owned());
         parent = prefix;
@@ -88,6 +89,15 @@ pub fn notification_locale_fallbacks(locale: &str) -> Vec<String> {
         result.push("en".to_owned());
     }
     result
+}
+
+/// Normalize a notification locale for publication lookup and render context.
+/// Unrecognized legacy locale strings use the existing English fallback.
+#[must_use]
+pub fn notification_locale(locale: &str) -> String {
+    locale
+        .parse::<pasion_i18n::DataLocale>()
+        .map_or_else(|_| "en".to_owned(), |locale| locale.to_string())
 }
 
 #[cfg(test)]

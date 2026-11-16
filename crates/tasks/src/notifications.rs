@@ -22,7 +22,7 @@ use pasion_messaging::{
 };
 use pasion_templates::{
     EmailRecoveryContext, EmailVerificationContext, PublishedNotificationTemplate,
-    TemplateContext as _, notification_locale_fallbacks,
+    TemplateContext as _, notification_locale, notification_locale_fallbacks,
 };
 use rand_core::RngCore;
 use serde::{Deserialize, Serialize};
@@ -326,19 +326,20 @@ pub(crate) async fn send_sms_authentication_code(
         repo.save().await.map_err(JobError::fail)?;
         return Ok(());
     }
+    let language = notification_locale(language);
 
     enqueue_notification_request(
         &mut repo,
         &mut rng,
         clock,
         TEMPLATE_SMS_VERIFICATION,
-        language,
+        &language,
         NotificationRequestSource::UserPhoneAuthentication {
             user_phone_authentication_id,
         },
         serde_json::to_value(SmsVerificationPayload {
             code: code.code.clone(),
-            language: language.to_owned(),
+            language: language.clone(),
         })
         .map_err(JobError::fail)?,
         NotificationDestination::Sms {
@@ -764,13 +765,13 @@ async fn prepare_delivery(
                 );
             }
 
-            let template =
-                published_template(repo, "verification", "sms", &payload.language).await?;
+            let language = notification_locale(&payload.language);
+            let template = published_template(repo, "verification", "sms", &language).await?;
             Ok(PreparedDelivery::Ready(
                 NotificationRequest::SmsVerificationCode {
                     to: phone_number.clone(),
                     code: payload.code,
-                    language: payload.language,
+                    language,
                     template,
                 },
             ))
@@ -1312,7 +1313,7 @@ mod tests {
             "English"
         );
         assert_eq!(
-            super::published_template(&mut repo, "verification", "sms", "zh-CN")
+            super::published_template(&mut repo, "verification", "sms", "zh-cn")
                 .await
                 .unwrap()
                 .unwrap()

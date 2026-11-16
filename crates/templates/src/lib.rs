@@ -31,7 +31,8 @@ mod functions;
 mod notification;
 
 pub use notification::{
-    PublishedNotificationTemplate, RenderedNotificationTemplate, notification_locale_fallbacks,
+    PublishedNotificationTemplate, RenderedNotificationTemplate, notification_locale,
+    notification_locale_fallbacks,
 };
 
 #[macro_use]

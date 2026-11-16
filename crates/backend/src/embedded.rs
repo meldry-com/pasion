@@ -8,7 +8,8 @@ use pasion_config::{
     UpstreamOAuth2Config,
 };
 use pasion_data::{PgRepositoryFactory, SystemClock, UrlBuilder};
-use salvo::Router;
+// Use the explicitly pinned core type so embedders share its path semantics.
+use salvo_core::Router;
 use tokio_util::{sync::CancellationToken, task::TaskTracker};
 use tracing::info;
 

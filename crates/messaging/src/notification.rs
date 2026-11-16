@@ -5,6 +5,7 @@ use std::collections::BTreeMap;
 use lettre::message::Mailbox;
 use pasion_templates::{
     EmailRecoveryContext, EmailVerificationContext, PublishedNotificationTemplate, WithLanguage,
+    notification_locale,
 };
 use thiserror::Error;
 
@@ -195,6 +196,7 @@ impl NotificationCenter {
                 language,
                 template,
             } => {
+                let language = notification_locale(&language);
                 if let Some(template) = template {
                     let sender = self
                         .sms
@@ -339,7 +341,7 @@ mod published_delivery_tests {
         let request = |body: &str| NotificationRequest::SmsVerificationCode {
             to: "+12065550123".to_owned(),
             code: "654321".to_owned(),
-            language: "zh-CN".to_owned(),
+            language: "zh-cn".to_owned(),
             template: Some(PublishedNotificationTemplate {
                 subject_template: None,
                 body_template: body.to_owned(),

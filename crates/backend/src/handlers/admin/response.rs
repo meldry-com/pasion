@@ -339,30 +339,6 @@ fn self_links_schema() -> salvo::oapi::Object {
         .required("self")
 }
 
-/// Document a handler which parses a bare JSON payload manually. Keep this
-/// explicit until Salvo's request-body attribute works through the facade
-/// crate (its generated code currently refers to `salvo::RefOr`).
-pub(crate) fn document_json_body<T: ToSchema>(
-    document: &mut salvo::oapi::OpenApi,
-    path_suffix: &str,
-    required: bool,
-) {
-    use salvo::oapi::*;
-    let schema = T::to_schema(&mut document.components);
-    for (path, item) in document.paths.iter_mut() {
-        if path.ends_with(path_suffix)
-            && let Some(operation) = item.operations.get_mut(&PathItemType::Post)
-        {
-            operation.request_body = Some(
-                RequestBody::new()
-                    .required(required.into())
-                    .add_content("application/json", Content::new(schema.clone()))
-                    .into(),
-            );
-        }
-    }
-}
-
 impl<T: Resource + ToSchema> ToSchema for PaginatedResponse<T> {
     fn to_schema(
         components: &mut salvo::oapi::Components,
@@ -415,13 +391,7 @@ mod schema_tests {
                         .post(personal_sessions::regenerate_session),
                 ),
         );
-        let mut doc = salvo::oapi::OpenApi::new("test", "1").merge_router(&router);
-        document_json_body::<personal_sessions::AddRequest>(&mut doc, "/personal-sessions", true);
-        document_json_body::<Option<personal_sessions::RegenerateRequest>>(
-            &mut doc,
-            "/personal-sessions/{id}/regenerate",
-            false,
-        );
+        let doc = salvo::oapi::OpenApi::new("test", "1").merge_router(&router);
         let doc = serde_json::to_value(doc).unwrap();
         let create = &doc["paths"]["/api/admin/v1/personal-sessions"]["post"]["requestBody"];
         assert_eq!(create["required"], true);
