@@ -208,10 +208,8 @@ impl ConfigurationSection for SmsConfig {
 
 #[cfg(test)]
 mod tests {
-    use figment::{
-        Figment, Jail,
-        providers::{Format, Yaml},
-    };
+    use figment::{Figment, Jail, providers::Format};
+    use serde_saphyr::figment::Yaml;
 
     use super::*;
 

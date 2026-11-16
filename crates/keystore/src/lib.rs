@@ -6,8 +6,8 @@ use std::{
     sync::{Arc, RwLock},
 };
 
-use der_legacy::{Decode, Encode, EncodePem, zeroize::Zeroizing};
-use elliptic_curve::{pkcs8::EncodePrivateKey, sec1::ToEncodedPoint};
+use der::{Decode, Encode, EncodePem, zeroize::Zeroizing};
+use elliptic_curve::{Generate, pkcs8::EncodePrivateKey, sec1::ToSec1Point};
 use pasion_iana::jose::{JsonWebKeyType, JsonWebSignatureAlg};
 pub use pasion_jose::jwk::{JsonWebKey, JsonWebKeySet};
 use pasion_jose::{
@@ -17,9 +17,8 @@ use pasion_jose::{
 };
 use pem_rfc7468::PemLabel;
 use pkcs1::EncodeRsaPrivateKey;
-use pkcs8::{AssociatedOid, PrivateKeyInfo};
+use pkcs8::{AssociatedOid, PrivateKeyInfoRef};
 use rand_core::{CryptoRng, RngCore};
-use rsa::BigUint;
 use thiserror::Error;
 
 mod encrypter;
@@ -57,12 +56,6 @@ pub enum LoadError {
 
     #[error(transparent)]
     Der {
-        #[from]
-        inner: der_legacy::Error,
-    },
-
-    #[error(transparent)]
-    Sec1Der {
         #[from]
         inner: der::Error,
     },
@@ -133,16 +126,14 @@ const ED25519_ALGORITHM_OID: const_oid::ObjectIdentifier =
     const_oid::ObjectIdentifier::new_unwrap("1.3.101.112");
 
 fn ed25519_pkcs8_der(key: &ed25519_dalek::SigningKey) -> Result<Zeroizing<Vec<u8>>, pkcs8::Error> {
-    ed25519_dalek::pkcs8::EncodePrivateKey::to_pkcs8_der(key)
-        .map(|document| document.to_bytes())
-        .map_err(|_| pkcs8::Error::KeyMalformed)
+    ed25519_dalek::pkcs8::EncodePrivateKey::to_pkcs8_der(key).map(|document| document.to_bytes())
 }
 
 /// A single private key
 #[non_exhaustive]
 #[derive(Debug)]
 pub enum PrivateKey {
-    Rsa(Box<rsa::RsaPrivateKey>),
+    Rsa(Box<rsa::PrivateKey>),
     EcP256(Box<elliptic_curve::SecretKey<p256::NistP256>>),
     EcP384(Box<elliptic_curve::SecretKey<p384::NistP384>>),
     EcP521(Box<elliptic_curve::SecretKey<p521::NistP521>>),
@@ -156,29 +147,51 @@ pub enum PrivateKey {
 pub struct WrongAlgorithmError;
 
 /// Helper: parse a DER-encoded PKCS#1 RSA private key into our enum.
-fn parse_pkcs1_rsa_key(pkcs1_key: &pkcs1::RsaPrivateKey) -> Result<PrivateKey, LoadError> {
+fn parse_pkcs1_rsa_key(pkcs1_key: &pkcs1::RsaPrivateKeyRef) -> Result<PrivateKey, LoadError> {
     if pkcs1_key.version() != pkcs1::Version::TwoPrime {
         return Err(pkcs1::Error::Version.into());
     }
 
-    let n = BigUint::from_bytes_be(pkcs1_key.modulus.as_bytes());
-    let e = BigUint::from_bytes_be(pkcs1_key.public_exponent.as_bytes());
-    let d = BigUint::from_bytes_be(pkcs1_key.private_exponent.as_bytes());
-    let primes = vec![
-        BigUint::from_bytes_be(pkcs1_key.prime1.as_bytes()),
-        BigUint::from_bytes_be(pkcs1_key.prime2.as_bytes()),
-    ];
-
-    let rsa_key = rsa::RsaPrivateKey::from_components(n, e, d, primes)?;
+    let bits = u32::try_from(pkcs1_key.modulus.as_bytes().len())
+        .ok()
+        .and_then(|n| n.checked_mul(8))
+        .ok_or(rsa::Error::InvalidArguments)?;
+    let decode = |bytes: &[u8]| {
+        rsa::BoxedUint::from_be_slice(bytes, bits).map_err(|_| rsa::Error::InvalidArguments)
+    };
+    let modulus = decode(pkcs1_key.modulus.as_bytes())?;
+    let min_bits =
+        u32::try_from(rsa::PublicKey::MIN_SIZE).map_err(|_| rsa::Error::InvalidArguments)?;
+    if modulus.bit_width_vartime() < min_bits {
+        return Err(rsa::Error::ModulusTooSmall.into());
+    }
+    // Public import policy: preserve valid legacy unbalanced keys using the
+    // supported modulus-width implementation for every import. Never select a
+    // different arithmetic width by probing a secret prime or retrying errors.
+    let rsa_key = rsa::PrivateKey::from_components_with_wide_primes(
+        modulus,
+        decode(pkcs1_key.public_exponent.as_bytes())?,
+        decode(pkcs1_key.private_exponent.as_bytes())?,
+        vec![
+            decode(pkcs1_key.prime1.as_bytes())?,
+            decode(pkcs1_key.prime2.as_bytes())?,
+        ],
+    )?;
     Ok(PrivateKey::Rsa(Box::new(rsa_key)))
 }
 
 /// Helper: resolve a PKCS#8 `PrivateKeyInfo` into the appropriate key variant.
-fn parse_pkcs8_key_info(info: PrivateKeyInfo) -> Result<PrivateKey, LoadError> {
+fn parse_pkcs8_key_info(info: PrivateKeyInfoRef<'_>) -> Result<PrivateKey, LoadError> {
     let algo_oid = info.algorithm.oid;
 
     if algo_oid == pkcs1::ALGORITHM_OID {
-        return Ok(PrivateKey::Rsa(Box::new(info.try_into()?)));
+        // Preserve RSA's PKCS#8 AlgorithmIdentifier validation while choosing
+        // an explicit wide-prime import policy below.
+        if info.algorithm.parameters_any()? != der::asn1::Null.into() {
+            return Err(pkcs8::spki::Error::KeyMalformed.into());
+        }
+        let key = pkcs1::RsaPrivateKeyRef::from_der(info.private_key.as_bytes())?;
+        return parse_pkcs1_rsa_key(&key);
     }
 
     if algo_oid == elliptic_curve::ALGORITHM_OID {
@@ -199,8 +212,7 @@ fn parse_pkcs8_key_info(info: PrivateKeyInfo) -> Result<PrivateKey, LoadError> {
         let signing_key =
             <ed25519_dalek::SigningKey as ed25519_dalek::pkcs8::DecodePrivateKey>::from_pkcs8_der(
                 &serialized,
-            )
-            .map_err(|_| pkcs8::Error::KeyMalformed)?;
+            )?;
         return Ok(PrivateKey::OkpEd25519(Box::new(signing_key)));
     }
 
@@ -247,19 +259,17 @@ fn parse_sec1_ec_key(der: &[u8]) -> Result<PrivateKey, LoadError> {
 
 /// Encode an EC secret key to SEC1 DER with the named-curve OID included,
 /// matching OpenSSL's default output format.
-fn ec_to_sec1_der<C>(
-    key: &elliptic_curve::SecretKey<C>,
-) -> Result<Zeroizing<Vec<u8>>, der_legacy::Error>
+fn ec_to_sec1_der<C>(key: &elliptic_curve::SecretKey<C>) -> Result<Zeroizing<Vec<u8>>, der::Error>
 where
     C: elliptic_curve::Curve + elliptic_curve::CurveArithmetic + AssociatedOid,
-    elliptic_curve::PublicKey<C>: elliptic_curve::sec1::ToEncodedPoint<C>,
+    elliptic_curve::PublicKey<C>: elliptic_curve::sec1::ToSec1Point<C>,
     C::FieldBytesSize: elliptic_curve::sec1::ModulusSize,
 {
     let scalar_bytes = Zeroizing::new(key.to_bytes());
-    let pub_point = key.public_key().to_encoded_point(false);
-    let ec_private = sec1_legacy::EcPrivateKey {
+    let pub_point = key.public_key().to_sec1_point(false);
+    let ec_private = sec1::EcPrivateKey {
         private_key: &scalar_bytes,
-        parameters: Some(sec1_legacy::EcParameters::NamedCurve(C::OID)),
+        parameters: Some(sec1::EcParameters::NamedCurve(C::OID)),
         public_key: Some(pub_point.as_bytes()),
     };
     Ok(Zeroizing::new(ec_private.to_der()?))
@@ -269,17 +279,17 @@ where
 fn ec_to_sec1_pem<C>(
     key: &elliptic_curve::SecretKey<C>,
     line_ending: pem_rfc7468::LineEnding,
-) -> Result<Zeroizing<String>, der_legacy::Error>
+) -> Result<Zeroizing<String>, der::Error>
 where
     C: elliptic_curve::Curve + elliptic_curve::CurveArithmetic + AssociatedOid,
-    elliptic_curve::PublicKey<C>: elliptic_curve::sec1::ToEncodedPoint<C>,
+    elliptic_curve::PublicKey<C>: elliptic_curve::sec1::ToSec1Point<C>,
     C::FieldBytesSize: elliptic_curve::sec1::ModulusSize,
 {
     let scalar_bytes = Zeroizing::new(key.to_bytes());
-    let pub_point = key.public_key().to_encoded_point(false);
-    let ec_private = sec1_legacy::EcPrivateKey {
+    let pub_point = key.public_key().to_sec1_point(false);
+    let ec_private = sec1::EcPrivateKey {
         private_key: &scalar_bytes,
-        parameters: Some(sec1_legacy::EcParameters::NamedCurve(C::OID)),
+        parameters: Some(sec1::EcParameters::NamedCurve(C::OID)),
         public_key: Some(pub_point.as_bytes()),
     };
     Ok(Zeroizing::new(ec_private.to_pem(line_ending)?))
@@ -302,7 +312,7 @@ impl PrivateKey {
             Self::EcP384(k) => Ok(ec_to_sec1_der(k)?),
             Self::EcP521(k) => Ok(ec_to_sec1_der(k)?),
             Self::EcK256(k) => Ok(ec_to_sec1_der(k)?),
-            Self::OkpEd25519(k) => Ok(ed25519_pkcs8_der(k)?),
+            Self::OkpEd25519(k) => Ok(ed25519_pkcs8_der(k).map_err(|_| pkcs1::Error::Crypto)?),
         }
     }
 
@@ -342,7 +352,7 @@ impl PrivateKey {
             Self::EcP521(k) => Ok(ec_to_sec1_pem(k, line_ending)?),
             Self::EcK256(k) => Ok(ec_to_sec1_pem(k, line_ending)?),
             Self::OkpEd25519(k) => {
-                let der = ed25519_pkcs8_der(k)?;
+                let der = ed25519_pkcs8_der(k).map_err(|_| pkcs1::Error::Crypto)?;
                 Ok(Zeroizing::new(pem_rfc7468::encode_string(
                     "PRIVATE KEY",
                     line_ending,
@@ -400,7 +410,7 @@ impl PrivateKey {
     ///   - the key could not be decrypted
     ///   - the PKCS8 key could not be loaded
     pub fn load_encrypted_der(der: &[u8], password: impl AsRef<[u8]>) -> Result<Self, LoadError> {
-        if let Ok(encrypted_info) = pkcs8::EncryptedPrivateKeyInfo::from_der(der) {
+        if let Ok(encrypted_info) = pkcs8::EncryptedPrivateKeyInfoRef::from_der(der) {
             let decrypted = encrypted_info.decrypt(password)?;
             return Self::load_der(decrypted.as_bytes()).map_err(|inner| LoadError::InEncrypted {
                 inner: Box::new(inner),
@@ -408,9 +418,9 @@ impl PrivateKey {
         }
 
         // If we can parse the DER as any unencrypted format, report the mismatch.
-        let is_unencrypted = pkcs8::PrivateKeyInfo::from_der(der).is_ok()
+        let is_unencrypted = pkcs8::PrivateKeyInfoRef::from_der(der).is_ok()
             || decode_sec1_ec_key(der).is_ok()
-            || pkcs1::RsaPrivateKey::from_der(der).is_ok();
+            || pkcs1::RsaPrivateKeyRef::from_der(der).is_ok();
 
         if is_unencrypted {
             return Err(LoadError::Unencrypted);
@@ -432,12 +442,12 @@ impl PrivateKey {
     ///   - the PKCS8/SEC1/PKCS1 key could not be loaded
     pub fn load_der(der: &[u8]) -> Result<Self, LoadError> {
         // Reject encrypted keys early.
-        if pkcs8::EncryptedPrivateKeyInfo::from_der(der).is_ok() {
+        if pkcs8::EncryptedPrivateKeyInfoRef::from_der(der).is_ok() {
             return Err(LoadError::Encrypted);
         }
 
         // Try PKCS#8 first (most general).
-        if let Ok(info) = pkcs8::PrivateKeyInfo::from_der(der) {
+        if let Ok(info) = pkcs8::PrivateKeyInfoRef::from_der(der) {
             return parse_pkcs8_key_info(info);
         }
 
@@ -447,7 +457,7 @@ impl PrivateKey {
         }
 
         // Finally PKCS#1 for RSA.
-        if let Ok(rsa_key) = pkcs1::RsaPrivateKey::from_der(der) {
+        if let Ok(rsa_key) = pkcs1::RsaPrivateKeyRef::from_der(der) {
             return parse_pkcs1_rsa_key(&rsa_key);
         }
 
@@ -468,8 +478,8 @@ impl PrivateKey {
     pub fn load_encrypted_pem(pem: &str, password: impl AsRef<[u8]>) -> Result<Self, LoadError> {
         let (label, raw) = pem_rfc7468::decode_vec(pem.as_bytes())?;
 
-        if label == pkcs8::EncryptedPrivateKeyInfo::PEM_LABEL {
-            let encrypted_info = pkcs8::EncryptedPrivateKeyInfo::from_der(&raw)?;
+        if label == pkcs8::EncryptedPrivateKeyInfoRef::PEM_LABEL {
+            let encrypted_info = pkcs8::EncryptedPrivateKeyInfoRef::from_der(&raw)?;
             let decrypted = encrypted_info.decrypt(password)?;
             return Self::load_der(decrypted.as_bytes()).map_err(|inner| LoadError::InEncrypted {
                 inner: Box::new(inner),
@@ -478,8 +488,8 @@ impl PrivateKey {
 
         // Known unencrypted labels -> wrong function
         let unencrypted_labels = [
-            pkcs1::RsaPrivateKey::PEM_LABEL,
-            pkcs8::PrivateKeyInfo::PEM_LABEL,
+            pkcs1::RsaPrivateKeyRef::PEM_LABEL,
+            pkcs8::PrivateKeyInfoRef::PEM_LABEL,
             "EC PRIVATE KEY",
         ];
 
@@ -505,13 +515,13 @@ impl PrivateKey {
     pub fn load_pem(pem: &str) -> Result<Self, LoadError> {
         let (label, raw) = pem_rfc7468::decode_vec(pem.as_bytes())?;
 
-        if label == pkcs1::RsaPrivateKey::PEM_LABEL {
-            let rsa_key = pkcs1::RsaPrivateKey::from_der(&raw)?;
+        if label == pkcs1::RsaPrivateKeyRef::PEM_LABEL {
+            let rsa_key = pkcs1::RsaPrivateKeyRef::from_der(&raw)?;
             return parse_pkcs1_rsa_key(&rsa_key);
         }
 
-        if label == pkcs8::PrivateKeyInfo::PEM_LABEL {
-            let info = pkcs8::PrivateKeyInfo::from_der(&raw)?;
+        if label == pkcs8::PrivateKeyInfoRef::PEM_LABEL {
+            let info = pkcs8::PrivateKeyInfoRef::from_der(&raw)?;
             return parse_pkcs8_key_info(info);
         }
 
@@ -519,7 +529,7 @@ impl PrivateKey {
             return parse_sec1_ec_key(&raw);
         }
 
-        if label == pkcs8::EncryptedPrivateKeyInfo::PEM_LABEL {
+        if label == pkcs8::EncryptedPrivateKeyInfoRef::PEM_LABEL {
             return Err(LoadError::Encrypted);
         }
 
@@ -601,7 +611,7 @@ impl PrivateKey {
     fn try_build_signer(&self, alg: &JsonWebSignatureAlg) -> Option<AsymmetricSigningKey> {
         match self {
             Self::Rsa(rsa_key) => {
-                let cloned: rsa::RsaPrivateKey = *rsa_key.clone();
+                let cloned: rsa::PrivateKey = *rsa_key.clone();
                 let sk = match alg {
                     JsonWebSignatureAlg::Rs256 => AsymmetricSigningKey::rs256(cloned),
                     JsonWebSignatureAlg::Rs384 => AsymmetricSigningKey::rs384(cloned),
@@ -644,28 +654,64 @@ impl PrivateKey {
     ///
     /// Returns any error from the underlying key generator
     pub fn generate_rsa<R: RngCore + CryptoRng>(mut rng: R) -> Result<Self, rsa::errors::Error> {
-        let key = rsa::RsaPrivateKey::new(&mut rng, 2048)?;
+        let key = rsa::PrivateKey::new(&mut pasion_jose::rng::CryptoRngCompat(&mut rng), 2048)?;
         Ok(Self::Rsa(Box::new(key)))
     }
 
     /// Generate an Elliptic Curve key for the P-256 curve
+    ///
+    /// # Panics
+    ///
+    /// Panics if the supplied random generator fails.
     pub fn generate_ec_p256<R: RngCore + CryptoRng>(mut rng: R) -> Self {
-        Self::EcP256(Box::new(elliptic_curve::SecretKey::random(&mut rng)))
+        Self::EcP256(Box::new(
+            elliptic_curve::SecretKey::try_generate_from_rng(
+                &mut pasion_jose::rng::CryptoRngCompat(&mut rng),
+            )
+            .expect("cryptographic random generator failed"),
+        ))
     }
 
     /// Generate an Elliptic Curve key for the P-384 curve
+    ///
+    /// # Panics
+    ///
+    /// Panics if the supplied random generator fails.
     pub fn generate_ec_p384<R: RngCore + CryptoRng>(mut rng: R) -> Self {
-        Self::EcP384(Box::new(elliptic_curve::SecretKey::random(&mut rng)))
+        Self::EcP384(Box::new(
+            elliptic_curve::SecretKey::try_generate_from_rng(
+                &mut pasion_jose::rng::CryptoRngCompat(&mut rng),
+            )
+            .expect("cryptographic random generator failed"),
+        ))
     }
 
     /// Generate an Elliptic Curve key for the P-521 curve
+    ///
+    /// # Panics
+    ///
+    /// Panics if the supplied random generator fails.
     pub fn generate_ec_p521<R: RngCore + CryptoRng>(mut rng: R) -> Self {
-        Self::EcP521(Box::new(elliptic_curve::SecretKey::random(&mut rng)))
+        Self::EcP521(Box::new(
+            elliptic_curve::SecretKey::try_generate_from_rng(
+                &mut pasion_jose::rng::CryptoRngCompat(&mut rng),
+            )
+            .expect("cryptographic random generator failed"),
+        ))
     }
 
     /// Generate an Elliptic Curve key for the secp256k1 curve
+    ///
+    /// # Panics
+    ///
+    /// Panics if the supplied random generator fails.
     pub fn generate_ec_k256<R: RngCore + CryptoRng>(mut rng: R) -> Self {
-        Self::EcK256(Box::new(elliptic_curve::SecretKey::random(&mut rng)))
+        Self::EcK256(Box::new(
+            elliptic_curve::SecretKey::try_generate_from_rng(
+                &mut pasion_jose::rng::CryptoRngCompat(&mut rng),
+            )
+            .expect("cryptographic random generator failed"),
+        ))
     }
 
     /// Generate an Ed25519 key.
@@ -737,7 +783,7 @@ pub struct Keystore {
     /// [`Arc`] so `/jwks.json` requests don't rebuild and re-clone it.
     public_jwks: Arc<PublicJsonWebKeySet>,
     /// Cache of prebuilt signers keyed by `(kid, alg)`, so we don't deep-clone
-    /// the whole [`rsa::RsaPrivateKey`] on every ID-token / userinfo signature.
+    /// the whole [`rsa::PrivateKey`] on every ID-token / userinfo signature.
     signer_cache: SignerCache,
 }
 

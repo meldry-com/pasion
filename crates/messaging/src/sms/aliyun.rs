@@ -3,7 +3,7 @@
 use std::{collections::HashMap, fmt::Write as _};
 
 use base64::{Engine as _, engine::general_purpose::STANDARD as BASE64};
-use hmac::{Hmac, Mac};
+use hmac::{Hmac, KeyInit, Mac};
 use reqwest::Client;
 use sha1::Sha1;
 

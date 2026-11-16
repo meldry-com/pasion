@@ -194,7 +194,7 @@ struct RsaOtherPrimeInfo {
 }
 
 mod rsa_impls {
-    use rsa::{BigUint, RsaPrivateKey};
+    use rsa::{BoxedUint, PrivateKey as RsaPrivateKey};
 
     use super::RsaPrivateParameters;
 
@@ -210,17 +210,33 @@ mod rsa_impls {
 
         #[allow(clippy::many_single_char_names)]
         fn try_from(value: &RsaPrivateParameters) -> Result<Self, Self::Error> {
-            let n = BigUint::from_bytes_be(value.n.as_bytes());
-            let e = BigUint::from_bytes_be(value.e.as_bytes());
-            let d = BigUint::from_bytes_be(value.d.as_bytes());
+            // All secret components use the public modulus width. Never infer
+            // secret precision using a variable-time leading-zero scan.
+            let bits = u32::try_from(value.n.as_bytes().len())
+                .ok()
+                .and_then(|n| n.checked_mul(8))
+                .ok_or(rsa::Error::InvalidArguments)?;
+            let decode = |bytes: &[u8]| {
+                BoxedUint::from_be_slice(bytes, bits).map_err(|_| rsa::Error::InvalidArguments)
+            };
+            let n = decode(value.n.as_bytes())?;
+            let min_bits = u32::try_from(rsa::PublicKey::MIN_SIZE)
+                .map_err(|_| rsa::Error::InvalidArguments)?;
+            if n.bit_width_vartime() < min_bits {
+                return Err(rsa::Error::ModulusTooSmall);
+            }
+            let e = decode(value.e.as_bytes())?;
+            let d = decode(value.d.as_bytes())?;
 
             let primes = [&value.p, &value.q]
                 .into_iter()
                 .chain(value.oth.iter().flatten().map(|o| &o.r))
-                .map(|i| BigUint::from_bytes_be(i.as_bytes()))
-                .collect();
+                .map(|i| decode(i.as_bytes()))
+                .collect::<Result<Vec<_>, _>>()?;
 
-            let key = RsaPrivateKey::from_components(n, e, d, primes)?;
+            // Match the keystore's public legacy-import policy, including
+            // valid unbalanced factors and JWK `oth` multiprime components.
+            let key = RsaPrivateKey::from_components_with_wide_primes(n, e, d, primes)?;
 
             key.validate()?;
 
@@ -268,7 +284,7 @@ impl From<EcPrivateParameters> for super::public_parameters::EcPublicParameters 
 mod ec_impls {
     use elliptic_curve::{
         AffinePoint, Curve, SecretKey,
-        sec1::{Coordinates, FromEncodedPoint, ModulusSize, ToEncodedPoint},
+        sec1::{Coordinates, FromSec1Point, ModulusSize, ToSec1Point},
     };
 
     use super::{super::JwkEcCurve, EcPrivateParameters};
@@ -298,7 +314,7 @@ mod ec_impls {
     impl<C> From<SecretKey<C>> for EcPrivateParameters
     where
         C: elliptic_curve::CurveArithmetic + JwkEcCurve,
-        AffinePoint<C>: FromEncodedPoint<C> + ToEncodedPoint<C>,
+        AffinePoint<C>: FromSec1Point<C> + ToSec1Point<C>,
         C::FieldBytesSize: ModulusSize,
     {
         fn from(key: SecretKey<C>) -> Self {
@@ -309,11 +325,11 @@ mod ec_impls {
     impl<C> From<&SecretKey<C>> for EcPrivateParameters
     where
         C: elliptic_curve::CurveArithmetic + JwkEcCurve,
-        AffinePoint<C>: FromEncodedPoint<C> + ToEncodedPoint<C>,
+        AffinePoint<C>: FromSec1Point<C> + ToSec1Point<C>,
         C::FieldBytesSize: ModulusSize,
     {
         fn from(key: &SecretKey<C>) -> Self {
-            let point = key.public_key().to_encoded_point(false);
+            let point = key.public_key().to_sec1_point(false);
             let Coordinates::Uncompressed { x, y } = point.coordinates() else {
                 unreachable!()
             };

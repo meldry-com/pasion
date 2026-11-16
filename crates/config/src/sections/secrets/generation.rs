@@ -77,21 +77,7 @@ impl SecretsConfig {
         let rsa_key = KeyConfig {
             kid: None,
             password: None,
-            key: Key::Value(
-                indoc::indoc! {r"
-                  -----BEGIN PRIVATE KEY-----
-                  MIIBVQIBADANBgkqhkiG9w0BAQEFAASCAT8wggE7AgEAAkEAymS2RkeIZo7pUeEN
-                  QUGCG4GLJru5jzxomO9jiNr5D/oRcerhpQVc9aCpBfAAg4l4a1SmYdBzWqX0X5pU
-                  scgTtQIDAQABAkEArNIMlrxUK4bSklkCcXtXdtdKE9vuWfGyOw0GyAB69fkEUBxh
-                  3j65u+u3ZmW+bpMWHgp1FtdobE9nGwb2VBTWAQIhAOyU1jiUEkrwKK004+6b5QRE
-                  vC9UI2vDWy5vioMNx5Y1AiEA2wGAJ6ETF8FF2Vd+kZlkKK7J0em9cl0gbJDsWIEw
-                  N4ECIEyWYkMurD1WQdTQqnk0Po+DMOihdFYOiBYgRdbnPxWBAiEAmtd0xJAd7622
-                  tPQniMnrBtiN2NxqFXHCev/8Gpc8gAECIBcaPcF59qVeRmYrfqzKBxFm7LmTwlAl
-                  Gh7BNzCeN+D6
-                  -----END PRIVATE KEY-----
-                "}
-                .to_owned(),
-            ),
+            key: Key::Value(include_str!("test_rsa_2048.pem").to_owned()),
         };
         let ecdsa_key = KeyConfig {
             kid: None,

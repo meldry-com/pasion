@@ -3,7 +3,7 @@
 //! Provides generation and verification of 6-digit TOTP codes using
 //! HMAC-SHA1 with a configurable time step (default 30 seconds).
 
-use hmac::{Hmac, Mac};
+use hmac::{Hmac, KeyInit, Mac};
 use sha1::Sha1;
 
 type HmacSha1 = Hmac<Sha1>;

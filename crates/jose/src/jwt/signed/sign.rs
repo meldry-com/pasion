@@ -4,8 +4,9 @@
 // a dot, signed, and then the signature is appended as a third segment.
 
 use base64ct::{Base64UrlUnpadded, Encoding};
+use rand_core::CryptoRngCore;
 use serde::Serialize;
-use signature::{RandomizedSigner, SignatureEncoding, rand_core::CryptoRngCore};
+use signature::{RandomizedSigner, SignatureEncoding, rand_core::TryCryptoRng};
 use thiserror::Error;
 
 use super::Jwt;
@@ -77,7 +78,7 @@ impl<T> Jwt<'static, T> {
         S: SignatureEncoding,
         T: Serialize,
     {
-        Self::sign_with_rng(&mut signature::rand_core::OsRng, header, payload, key)
+        Self::sign_with_crypto_rng(&mut rand::rng(), header, payload, key)
     }
 
     /// Sign `payload` under `header` using the supplied RNG.
@@ -93,6 +94,21 @@ impl<T> Jwt<'static, T> {
     ) -> Result<Self, JwtSignatureError>
     where
         R: CryptoRngCore,
+        K: RandomizedSigner<S>,
+        S: SignatureEncoding,
+        T: Serialize,
+    {
+        Self::sign_with_crypto_rng(&mut crate::rng::CryptoRngCompat(rng), header, payload, key)
+    }
+
+    fn sign_with_crypto_rng<R, K, S>(
+        rng: &mut R,
+        header: JsonWebSignatureHeader,
+        payload: T,
+        key: &K,
+    ) -> Result<Self, JwtSignatureError>
+    where
+        R: TryCryptoRng + ?Sized,
         K: RandomizedSigner<S>,
         S: SignatureEncoding,
         T: Serialize,

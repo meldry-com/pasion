@@ -1,6 +1,6 @@
 //! Tencent Cloud SMS (腾讯云短信) transport
 
-use hmac::{Hmac, Mac};
+use hmac::{Hmac, KeyInit, Mac};
 use reqwest::Client;
 use sha2::{Digest, Sha256};
 

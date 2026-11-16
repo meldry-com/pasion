@@ -129,7 +129,9 @@ mod tests {
         let hdr = JsonWebSignatureHeader::new(JsonWebSignatureAlg::Es256);
         let body = serde_json::json!({"hello": "world"});
 
-        let sk = ecdsa::SigningKey::<p256::NistP256>::random(&mut signature::rand_core::OsRng);
+        let sk = <ecdsa::SigningKey<p256::NistP256> as elliptic_curve::Generate>::generate_from_rng(
+            &mut rand::rng(),
+        );
         let signed = Jwt::sign::<_, ecdsa::Signature<_>>(hdr, body, &sk).unwrap();
 
         signed

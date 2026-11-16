@@ -109,10 +109,10 @@ impl FlowDefinitionFile {
     ///
     /// # Errors
     ///
-    /// Returns a [`serde_yaml::Error`] if the input is not valid YAML or does
+    /// Returns a [`serde_saphyr::Error`] if the input is not valid YAML or does
     /// not match the expected schema.
-    pub fn parse(yaml: &str) -> Result<Self, serde_yaml::Error> {
-        serde_yaml::from_str(yaml)
+    pub fn parse(yaml: &str) -> Result<Self, serde_saphyr::Error> {
+        serde_saphyr::from_str(yaml)
     }
 
     /// Convert this declarative definition into domain types.

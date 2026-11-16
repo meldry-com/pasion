@@ -4,7 +4,7 @@
 // round-trip serialisation, key generation, JWT signing + verification via
 // the Keystore / JWKS API, and thumbprint consistency.
 
-use der_legacy::pem::LineEnding;
+use der::pem::LineEnding;
 use pasion_iana::jose::JsonWebSignatureAlg;
 use pasion_jose::{
     jwk::{ParametersInfo, Thumbprint},
@@ -236,21 +236,31 @@ fn generate_sign_and_verify() {
 
     // Generate one key of each flavour.
     let rsa_key = PrivateKey::generate_rsa(&mut rng).expect("RSA generation failed");
-    insta::assert_snapshot!(&*rsa_key.to_pem(LineEnding::LF).unwrap());
 
     let p256_key = PrivateKey::generate_ec_p256(&mut rng);
-    insta::assert_snapshot!(&*p256_key.to_pem(LineEnding::LF).unwrap());
 
     let p384_key = PrivateKey::generate_ec_p384(&mut rng);
-    insta::assert_snapshot!(&*p384_key.to_pem(LineEnding::LF).unwrap());
 
     let k256_key = PrivateKey::generate_ec_k256(&mut rng);
-    insta::assert_snapshot!(&*k256_key.to_pem(LineEnding::LF).unwrap());
 
     // Use a separate seed so that earlier key-gen changes don't cascade.
     let mut aux_rng = rand_chacha::ChaCha8Rng::seed_from_u64(1337);
     let p521_key = PrivateKey::generate_ec_p521(&mut aux_rng);
     let ed_key = PrivateKey::generate_ed25519(&mut aux_rng);
+
+    // Prime generation and nonce generation can consume different random bytes
+    // after security fixes. Test the persisted format and key identity instead
+    // of requiring an implementation-specific seeded generation sequence.
+    for key in [
+        &rsa_key, &p256_key, &p384_key, &p521_key, &k256_key, &ed_key,
+    ] {
+        let pem = key.to_pem(LineEnding::LF).unwrap();
+        let restored = PrivateKey::load_pem(&pem).unwrap();
+        assert_eq!(key.thumbprint_sha256(), restored.thumbprint_sha256());
+        let encoded = key.to_pkcs8_der().unwrap();
+        let restored = PrivateKey::load_der(&encoded).unwrap();
+        assert_eq!(key.thumbprint_sha256(), restored.thumbprint_sha256());
+    }
 
     // Assemble a Keystore from all six keys.
     let store = Keystore::new(JsonWebKeySet::new(vec![
@@ -263,7 +273,6 @@ fn generate_sign_and_verify() {
     ]));
 
     let public_jwks = store.public_jwks();
-    insta::assert_yaml_snapshot!(public_jwks);
 
     // Sign a token for every supported algorithm and verify against the
     // public JWKS.
@@ -286,11 +295,113 @@ fn generate_sign_and_verify() {
         let signer = matched.params().signing_key_for_alg(&alg).unwrap();
         let hdr = JsonWebSignatureHeader::new(alg.clone());
         let token = Jwt::sign_with_rng(&mut rng, hdr, "", &signer).unwrap();
-        insta::assert_snapshot!(format!("jwt_{alg}"), token.as_str());
 
         // Verify from the public side only.
         token.verify_with_jwks(&public_jwks).unwrap();
     }
+}
+
+/// Existing persisted keys and the tokens produced before the `RustCrypto`
+/// migration remain valid. These snapshots are intentionally never regenerated
+/// by the new random key-generation path.
+#[test]
+fn legacy_persisted_keys_verify_pre_upgrade_tokens() {
+    fn body(snapshot: &str) -> &str {
+        snapshot.split_once("\n---\n").unwrap().1.trim()
+    }
+    let keys = [
+        include_str!("snapshots/keystore__generate_sign_and_verify.snap"),
+        include_str!("snapshots/keystore__generate_sign_and_verify-2.snap"),
+        include_str!("snapshots/keystore__generate_sign_and_verify-3.snap"),
+        include_str!("snapshots/keystore__generate_sign_and_verify-4.snap"),
+    ]
+    .into_iter()
+    .map(|snapshot| JsonWebKey::new(PrivateKey::load_pem(body(snapshot)).unwrap()));
+    let store = Keystore::new(JsonWebKeySet::new(keys.collect()));
+    let public = store.public_jwks();
+    for snapshot in [
+        include_str!("snapshots/keystore__jwt_RS256.snap"),
+        include_str!("snapshots/keystore__jwt_RS384.snap"),
+        include_str!("snapshots/keystore__jwt_RS512.snap"),
+        include_str!("snapshots/keystore__jwt_PS256.snap"),
+        include_str!("snapshots/keystore__jwt_PS384.snap"),
+        include_str!("snapshots/keystore__jwt_PS512.snap"),
+        include_str!("snapshots/keystore__jwt_ES256.snap"),
+        include_str!("snapshots/keystore__jwt_ES384.snap"),
+        include_str!("snapshots/keystore__jwt_ES256K.snap"),
+    ] {
+        let jwt: Jwt<'_, String> = Jwt::try_from(body(snapshot)).unwrap();
+        jwt.verify_with_jwks(&public).unwrap();
+    }
+}
+
+#[test]
+fn legacy_unbalanced_rsa_import_preserves_key_and_signatures() {
+    let pem = include_str!("keys/rsa.unbalanced.pkcs1.pem");
+    let key = PrivateKey::load_pem(pem).unwrap();
+    assert_eq!(&*key.to_pem(LineEnding::LF).unwrap(), pem);
+    sign_verify_all_algs(&key);
+    let encoded = key.to_pkcs8_der().unwrap();
+    let restored = PrivateKey::load_der(&encoded).unwrap();
+    assert_eq!(key.thumbprint_sha256(), restored.thumbprint_sha256());
+    sign_verify_all_algs(&restored);
+}
+
+#[test]
+fn multiprime_pkcs1_keeps_its_existing_rejection() {
+    assert!(matches!(
+        PrivateKey::load_pem(include_str!("keys/rsa.multiprime.pkcs1.pem")),
+        Err(pasion_keystore::LoadError::Pkcs1 {
+            inner: pkcs1::Error::Version
+        })
+    ));
+}
+
+#[test]
+fn obsolete_512_bit_rsa_is_rejected_without_replacing_it() {
+    assert!(matches!(
+        PrivateKey::load_pem(include_str!("keys/rsa.legacy512.pkcs8.pem")),
+        Err(pasion_keystore::LoadError::Rsa {
+            inner: rsa::Error::ModulusTooSmall
+        })
+    ));
+}
+
+#[test]
+fn rsa_pkcs8_algorithm_parameters_remain_strict() {
+    use der::{Decode, Encode, Tag, asn1::AnyRef};
+    let original = include_bytes!("keys/rsa.pkcs8.der");
+    assert!(PrivateKey::load_der(original).is_ok());
+    let info = pkcs8::PrivateKeyInfoRef::from_der(original).unwrap();
+    for parameters in [None, Some(AnyRef::new(Tag::OctetString, b"").unwrap())] {
+        let mut changed = info.clone();
+        changed.algorithm.parameters = parameters;
+        let der = changed.to_der().unwrap();
+        assert!(PrivateKey::load_der(&der).is_err());
+        let pem = pem_rfc7468::encode_string("PRIVATE KEY", LineEnding::LF, &der).unwrap();
+        assert!(PrivateKey::load_pem(&pem).is_err());
+    }
+}
+
+#[test]
+fn rsa_generation_propagates_random_generator_failure() {
+    struct Failing;
+    impl rand_core::RngCore for Failing {
+        fn next_u32(&mut self) -> u32 {
+            panic!("infallible entropy read")
+        }
+        fn next_u64(&mut self) -> u64 {
+            panic!("infallible entropy read")
+        }
+        fn fill_bytes(&mut self, _: &mut [u8]) {
+            panic!("infallible entropy read")
+        }
+        fn try_fill_bytes(&mut self, _: &mut [u8]) -> Result<(), rand_core::Error> {
+            Err(rand_core::Error::new("test entropy failure"))
+        }
+    }
+    impl rand_core::CryptoRng for Failing {}
+    assert!(PrivateKey::generate_rsa(&mut Failing).is_err());
 }
 
 // ---------------------------------------------------------------------------
