@@ -1347,8 +1347,8 @@ async fn verify_sns_signature(
         Error::Unauthorized(format!("invalid SNS signing certificate: {error}"))
     })?;
     let public_key_der = certificate
-        .tbs_certificate
-        .subject_public_key_info
+        .tbs_certificate()
+        .subject_public_key_info()
         .to_der()
         .context("failed to encode SNS subject public key")?;
     let public_key = RsaPublicKey::from_public_key_der(&public_key_der).map_err(|error| {
