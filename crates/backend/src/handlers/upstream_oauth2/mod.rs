@@ -33,6 +33,7 @@ pub mod backchannel_logout;
 pub mod cache;
 pub mod callback;
 pub(crate) mod cookie;
+pub(crate) mod github;
 pub(crate) mod template;
 
 pub(crate) use self::cookie::UpstreamSessions as UpstreamSessionsCookie;
