@@ -48,7 +48,7 @@ pub(crate) fn personal_session_owner_from_caller(caller: &CallerSession) -> Pers
 }
 
 /// Request body accepted by `POST /api/admin/v1/personal-sessions`.
-#[derive(Deserialize, JsonSchema)]
+#[derive(Deserialize, JsonSchema, salvo::oapi::ToSchema)]
 #[serde(rename = "CreatePersonalSessionRequest")]
 pub struct AddRequest {
     /// The user this session acts on behalf of
@@ -434,7 +434,7 @@ pub async fn list_sessions(
 }
 
 /// Optional payload for the regenerate endpoint.
-#[derive(Deserialize, JsonSchema)]
+#[derive(Deserialize, JsonSchema, salvo::oapi::ToSchema)]
 #[serde(rename = "RegeneratePersonalSessionRequest")]
 pub struct RegenerateRequest {
     /// Lifetime of the new token in seconds; omit for a non-expiring token.
@@ -457,10 +457,19 @@ pub async fn regenerate_session(
     } = ctx;
     let target_id = extract_ulid_param(req)?;
     let mut rng = crate::handlers::account::make_rng();
-    let body: RegenerateRequest = req
-        .parse_json()
+    let body = if req
+        .payload()
         .await
-        .unwrap_or(RegenerateRequest { expires_in: None });
+        .map_err(|error| AppError::bad_request(error.to_string()))?
+        .is_empty()
+    {
+        RegenerateRequest { expires_in: None }
+    } else {
+        req.parse_json::<Option<RegenerateRequest>>()
+            .await
+            .map_err(|error| AppError::bad_request(error.to_string()))?
+            .unwrap_or(RegenerateRequest { expires_in: None })
+    };
 
     let entry = repo
         .personal_session()
@@ -1198,6 +1207,80 @@ mod tests {
           }
         }
         "#);
+    }
+
+    #[tokio::test]
+    async fn malformed_rotation_never_revokes_the_active_token() {
+        setup();
+        let pool = pasion_data::test_utils::setup_test_pool().await;
+        let mut state = TestState::from_pool(pool).await.unwrap();
+        let token = state.token_with_scope("urn:pasion:admin").await;
+        let mut repo = state.repository().await.unwrap();
+        let mut rng = state.rng();
+        let user = repo
+            .user()
+            .add(&mut rng, &state.clock, "rotation_actor".to_owned())
+            .await
+            .unwrap();
+        repo.save().await.unwrap();
+        let response = state.request(Request::post("/api/admin/v1/personal-sessions").bearer(&token).json(json!({
+            "actor_user_id": user.id, "human_name":"Automation", "scope":"openid", "expires_in":3600,
+        }))).await;
+        response.assert_status(StatusCode::CREATED);
+        let created: Value = response.json();
+        let id: Ulid = created["data"]["id"].as_str().unwrap().parse().unwrap();
+        let mut repo = state.repository().await.unwrap();
+        let session = repo.personal_session().lookup(id).await.unwrap().unwrap();
+        let before = repo
+            .personal_access_token()
+            .find_active_for_session(&session)
+            .await
+            .unwrap()
+            .unwrap();
+        repo.cancel().await.unwrap();
+        let url = format!("/api/admin/v1/personal-sessions/{id}/regenerate");
+        for payload in [r#"{"expires_in":-1}"#, r#"{"expires_in":"3600"}"#, "{"] {
+            let response = state
+                .request(
+                    Request::post(&url)
+                        .bearer(&token)
+                        .header("content-type", "application/json")
+                        .body(payload.to_owned())
+                        .unwrap(),
+                )
+                .await;
+            response.assert_status(StatusCode::BAD_REQUEST);
+        }
+        let mut repo = state.repository().await.unwrap();
+        let after = repo
+            .personal_access_token()
+            .find_active_for_session(&session)
+            .await
+            .unwrap()
+            .unwrap();
+        assert_eq!(before.id, after.id);
+        assert_eq!(before.expires_at, after.expires_at);
+        repo.cancel().await.unwrap();
+        for payload in ["", "null"] {
+            let response = state
+                .request(
+                    Request::post(&url)
+                        .bearer(&token)
+                        .header("content-type", "application/json")
+                        .body(payload.to_owned())
+                        .unwrap(),
+                )
+                .await;
+            response.assert_status(StatusCode::CREATED);
+            let response: Value = response.json();
+            assert!(response["data"]["attributes"]["expires_at"].is_null());
+            assert!(
+                !response["data"]["attributes"]["access_token"]
+                    .as_str()
+                    .unwrap()
+                    .is_empty()
+            );
+        }
     }
 
     #[tokio::test]

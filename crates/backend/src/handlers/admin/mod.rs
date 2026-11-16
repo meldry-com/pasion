@@ -17,6 +17,7 @@ mod call_context;
 mod model;
 mod params;
 mod response;
+pub(crate) use response::document_json_body;
 mod schema;
 /// Version 1 of the Admin API endpoints.
 pub mod v1;

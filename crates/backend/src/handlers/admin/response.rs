@@ -298,61 +298,194 @@ impl ErrorResponse {
 // ---------------------------------------------------------------------------
 // ToSchema implementations for response wrappers.
 //
-// These provide a reasonable JSON:API-shaped OpenAPI schema for the generic
-// response envelopes used by admin handlers, without requiring every inner
-// resource type `T` to also implement `ToSchema`.
-// ---------------------------------------------------------------------------
+// Keep the real resource attributes and page item shape in the generated API.
 
-impl<T: 'static> ToSchema for PaginatedResponse<T> {
+fn resource_schema<T: Resource + ToSchema>(
+    components: &mut salvo::oapi::Components,
+) -> salvo::oapi::RefOr<salvo::oapi::Schema> {
+    use salvo::oapi::*;
+    Object::new()
+        .property(
+            "type",
+            Object::new()
+                .schema_type(BasicType::String)
+                .enum_values([T::KIND]),
+        )
+        .property("id", Object::new().schema_type(BasicType::String))
+        .property("attributes", T::to_schema(components))
+        .property("links", self_links_schema())
+        .property(
+            "meta",
+            Object::new()
+                .property(
+                    "page",
+                    Object::new()
+                        .property("cursor", Object::new().schema_type(BasicType::String))
+                        .required("cursor"),
+                )
+                .required("page"),
+        )
+        .required("type")
+        .required("id")
+        .required("attributes")
+        .required("links")
+        .into()
+}
+
+fn self_links_schema() -> salvo::oapi::Object {
+    use salvo::oapi::*;
+    Object::new()
+        .property("self", Object::new().schema_type(BasicType::String))
+        .required("self")
+}
+
+/// Document a handler which parses a bare JSON payload manually. Keep this
+/// explicit until Salvo's request-body attribute works through the facade
+/// crate (its generated code currently refers to `salvo::RefOr`).
+pub(crate) fn document_json_body<T: ToSchema>(
+    document: &mut salvo::oapi::OpenApi,
+    path_suffix: &str,
+    required: bool,
+) {
+    use salvo::oapi::*;
+    let schema = T::to_schema(&mut document.components);
+    for (path, item) in document.paths.iter_mut() {
+        if path.ends_with(path_suffix)
+            && let Some(operation) = item.operations.get_mut(&PathItemType::Post)
+        {
+            operation.request_body = Some(
+                RequestBody::new()
+                    .required(required.into())
+                    .add_content("application/json", Content::new(schema.clone()))
+                    .into(),
+            );
+        }
+    }
+}
+
+impl<T: Resource + ToSchema> ToSchema for PaginatedResponse<T> {
     fn to_schema(
-        _components: &mut salvo::oapi::Components,
+        components: &mut salvo::oapi::Components,
     ) -> salvo::oapi::RefOr<salvo::oapi::Schema> {
         use salvo::oapi::*;
+        let mut links = self_links_schema();
+        for field in ["first", "last", "next", "prev"] {
+            links = links.property(field, Object::new().schema_type(BasicType::String));
+        }
         Object::new()
             .property(
                 "meta",
-                Object::new().property("count", Object::new().schema_type(BasicType::Integer)),
-            )
-            .property(
-                "data",
                 Object::new()
-                    .property("type", Object::new().schema_type(BasicType::String))
-                    .property("id", Object::new().schema_type(BasicType::String))
-                    .property("attributes", Object::new()),
+                    .property("count", Object::new().schema_type(BasicType::Integer))
+                    .required("count"),
             )
-            .property(
-                "links",
-                Object::new()
-                    .property("self", Object::new().schema_type(BasicType::String))
-                    .property("first", Object::new().schema_type(BasicType::String))
-                    .property("last", Object::new().schema_type(BasicType::String))
-                    .property("next", Object::new().schema_type(BasicType::String))
-                    .property("prev", Object::new().schema_type(BasicType::String)),
-            )
+            .property("data", Array::new().items(resource_schema::<T>(components)))
+            .property("links", links)
             .required("links")
             .into()
     }
 }
 
-impl<T: 'static> ToSchema for SingleResponse<T> {
+impl<T: Resource + ToSchema> ToSchema for SingleResponse<T> {
     fn to_schema(
-        _components: &mut salvo::oapi::Components,
+        components: &mut salvo::oapi::Components,
     ) -> salvo::oapi::RefOr<salvo::oapi::Schema> {
         use salvo::oapi::*;
         Object::new()
-            .property(
-                "data",
-                Object::new()
-                    .property("type", Object::new().schema_type(BasicType::String))
-                    .property("id", Object::new().schema_type(BasicType::String))
-                    .property("attributes", Object::new()),
-            )
-            .property(
-                "links",
-                Object::new().property("self", Object::new().schema_type(BasicType::String)),
-            )
+            .property("data", resource_schema::<T>(components))
+            .property("links", self_links_schema())
             .required("data")
             .required("links")
             .into()
+    }
+}
+
+#[cfg(test)]
+mod schema_tests {
+    use super::*;
+    use crate::handlers::admin::{model::PersonalSession, v1::personal_sessions};
+
+    #[test]
+    fn personal_session_openapi_documents_bare_required_create_and_optional_rotation() {
+        let router = salvo::Router::with_path("api/admin/v1").push(
+            salvo::Router::with_path("personal-sessions")
+                .post(personal_sessions::add_session)
+                .push(
+                    salvo::Router::with_path("{id}/regenerate")
+                        .post(personal_sessions::regenerate_session),
+                ),
+        );
+        let mut doc = salvo::oapi::OpenApi::new("test", "1").merge_router(&router);
+        document_json_body::<personal_sessions::AddRequest>(&mut doc, "/personal-sessions", true);
+        document_json_body::<Option<personal_sessions::RegenerateRequest>>(
+            &mut doc,
+            "/personal-sessions/{id}/regenerate",
+            false,
+        );
+        let doc = serde_json::to_value(doc).unwrap();
+        let create = &doc["paths"]["/api/admin/v1/personal-sessions"]["post"]["requestBody"];
+        assert_eq!(create["required"], true);
+        let schema = &create["content"]["application/json"]["schema"];
+        let name = schema["$ref"]
+            .as_str()
+            .unwrap()
+            .strip_prefix("#/components/schemas/")
+            .unwrap();
+        let schema = &doc["components"]["schemas"][name];
+        let required = schema["required"].as_array().unwrap();
+        for field in ["actor_user_id", "human_name", "scope"] {
+            assert!(
+                required.iter().any(|value| value == field),
+                "missing required {field}"
+            );
+        }
+        assert!(schema["properties"]["data"].is_null());
+        assert!(!required.iter().any(|value| value == "expires_in"));
+        assert_eq!(
+            doc["paths"]["/api/admin/v1/personal-sessions/{id}/regenerate"]["post"]["requestBody"]
+                ["required"],
+            false
+        );
+    }
+
+    #[test]
+    fn personal_session_response_schema_preserves_attributes_and_page_array() {
+        let mut components = salvo::oapi::Components::new();
+        let single = serde_json::to_value(SingleResponse::<PersonalSession>::to_schema(
+            &mut components,
+        ))
+        .unwrap();
+        let attrs = &single["properties"]["data"]["properties"]["attributes"];
+        let component_name = attrs["$ref"]
+            .as_str()
+            .unwrap()
+            .strip_prefix("#/components/schemas/")
+            .unwrap();
+        let components = serde_json::to_value(components).unwrap();
+        let model = &components["schemas"][component_name];
+        for field in [
+            "human_name",
+            "actor_user_id",
+            "owner_user_id",
+            "owner_client_id",
+            "expires_at",
+            "access_token",
+        ] {
+            assert!(!model["properties"][field].is_null(), "missing {field}");
+        }
+        assert!(
+            !model["required"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .any(|v| v == "access_token")
+        );
+        let mut components = salvo::oapi::Components::new();
+        let page = serde_json::to_value(PaginatedResponse::<PersonalSession>::to_schema(
+            &mut components,
+        ))
+        .unwrap();
+        assert_eq!(page["properties"]["data"]["type"], "array");
+        assert!(!page["properties"]["data"]["items"]["properties"]["attributes"]["$ref"].is_null());
     }
 }

@@ -340,6 +340,8 @@ pub struct NotificationTemplateVersion {
     pub version: u32,
     /// Delivery channel this version targets.
     pub channel: NotificationChannel,
+    /// Locale of this version, used when resolving a delivery template.
+    pub locale: String,
     /// Optional subject line template (relevant for email).
     pub subject_template: Option<String>,
     /// Body template content.

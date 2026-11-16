@@ -28,6 +28,11 @@ use walkdir::DirEntry;
 mod context;
 mod forms;
 mod functions;
+mod notification;
+
+pub use notification::{
+    PublishedNotificationTemplate, RenderedNotificationTemplate, notification_locale_fallbacks,
+};
 
 #[macro_use]
 mod macros;
@@ -110,6 +115,9 @@ pub enum TemplateLoadingError {
 /// Failed to render a template
 #[derive(Error, Debug)]
 pub enum TemplateError {
+    /// A published notification template could not be compiled or rendered.
+    #[error("could not render published notification template")]
+    Published(#[source] minijinja::Error),
     /// Missing template
     #[error("missing template {template:?}")]
     Missing {

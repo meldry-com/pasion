@@ -37,8 +37,7 @@ struct TemplateVersionRow {
     template_key: String,
     version: i32,
     channel: String,
-    #[diesel(column_name = locale)]
-    _locale: String,
+    locale: String,
     subject_template: Option<String>,
     body_template: String,
     created_at: DateTime<Utc>,
@@ -62,6 +61,7 @@ impl From<TemplateVersionRow> for NotificationTemplateVersion {
             template_key: row.template_key,
             version: row.version.cast_unsigned(),
             channel,
+            locale: row.locale,
             subject_template: row.subject_template,
             body_template: row.body_template,
             created_at: row.created_at,
@@ -114,11 +114,13 @@ impl NotificationTemplateRepository for PgNotificationTemplateRepository<'_> {
         &mut self,
         template_key: &str,
         channel: &str,
+        locale: &str,
     ) -> Result<Option<NotificationTemplateVersion>, Self::Error> {
         let row = notification_template_versions::table
             .select(TemplateVersionRow::as_select())
             .filter(notification_template_versions::template_key.eq(template_key))
             .filter(notification_template_versions::channel.eq(channel))
+            .filter(notification_template_versions::locale.eq(locale))
             .filter(notification_template_versions::published_at.is_not_null())
             .order(notification_template_versions::version.desc())
             .first::<TemplateVersionRow>(self.conn)
@@ -141,14 +143,27 @@ impl NotificationTemplateRepository for PgNotificationTemplateRepository<'_> {
         let now = clock.now();
         let id = new_id(now, rng);
 
-        // Get the next version number for this key+channel
+        // Publishing runs inside the repository transaction. Serialize the
+        // read/increment/insert, including concurrent publications of different
+        // locales: the existing unique version sequence is per key+channel.
+        diesel::sql_query("SELECT pg_advisory_xact_lock(hashtextextended($1, 0))")
+            .bind::<diesel::sql_types::Text, _>(format!(
+                "pasion.notification_template:{template_key}:{channel}"
+            ))
+            .execute(self.conn)
+            .await?;
+
+        // Get the next version number for this key+channel.
         let max_version: Option<i32> = notification_template_versions::table
             .select(diesel::dsl::max(notification_template_versions::version))
             .filter(notification_template_versions::template_key.eq(&template_key))
             .filter(notification_template_versions::channel.eq(&channel))
             .first(self.conn)
             .await?;
-        let next_version = max_version.unwrap_or(0) + 1;
+        let next_version = max_version
+            .unwrap_or(0)
+            .checked_add(1)
+            .ok_or_else(DatabaseError::invalid_operation)?;
 
         let new_row = NewTemplateVersion {
             id: Uuid::from(id),
@@ -174,10 +189,113 @@ impl NotificationTemplateRepository for PgNotificationTemplateRepository<'_> {
             template_key,
             version: next_version.cast_unsigned(),
             channel: ch,
+            locale,
             subject_template,
             body_template,
             created_at: now,
             published_at: Some(now),
         })
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use pasion_data::{PgRepositoryFactory, RepositoryAccess, RepositoryFactory, clock::MockClock};
+    use rand_core::SeedableRng as _;
+
+    use super::*;
+
+    async fn publish(
+        factory: &PgRepositoryFactory,
+        locale: &str,
+        channel: &str,
+    ) -> NotificationTemplateVersion {
+        let mut repo = factory.create().await.unwrap();
+        let mut rng = rand_chacha::ChaChaRng::from_entropy();
+        let version = repo
+            .notification_template()
+            .publish(
+                &mut rng,
+                &MockClock::default(),
+                "verification".to_owned(),
+                channel.to_owned(),
+                locale.to_owned(),
+                None,
+                format!("Body {locale}/{channel}"),
+            )
+            .await
+            .unwrap();
+        repo.save().await.unwrap();
+        version
+    }
+
+    #[tokio::test]
+    async fn concurrent_publications_preserve_locale_and_allocate_distinct_versions() {
+        let pool = crate::test_utils::setup_test_pool().await;
+        let factory = PgRepositoryFactory::new(pool.clone());
+        let (english, chinese) = tokio::join!(
+            publish(&factory, "en", "email"),
+            publish(&factory, "zh-CN", "email")
+        );
+        assert_ne!(english.version, chinese.version);
+        assert_eq!(
+            (english.locale.as_str(), chinese.locale.as_str()),
+            ("en", "zh-CN")
+        );
+        // Different channels and missing locales must not accidentally select
+        // the newest row for another locale/channel.
+        let sms = publish(&factory, "en", "sms").await;
+        let mut repo = factory.create().await.unwrap();
+        assert_eq!(
+            repo.notification_template()
+                .get_latest("verification", "email", "en")
+                .await
+                .unwrap()
+                .unwrap(),
+            english
+        );
+        assert_eq!(
+            repo.notification_template()
+                .get_latest("verification", "email", "zh-CN")
+                .await
+                .unwrap()
+                .unwrap(),
+            chinese
+        );
+        assert_eq!(
+            repo.notification_template()
+                .get_latest("verification", "sms", "en")
+                .await
+                .unwrap()
+                .unwrap(),
+            sms
+        );
+        assert!(
+            repo.notification_template()
+                .get_latest("verification", "email", "fr")
+                .await
+                .unwrap()
+                .is_none()
+        );
+        repo.save().await.unwrap();
+
+        let mut conn = pool.get().await.unwrap();
+        diesel::update(
+            notification_template_versions::table
+                .filter(notification_template_versions::id.eq(Uuid::from(english.id))),
+        )
+        .set(notification_template_versions::published_at.eq(None::<DateTime<Utc>>))
+        .execute(&mut *conn)
+        .await
+        .unwrap();
+        drop(conn);
+        let mut repo = factory.create().await.unwrap();
+        assert!(
+            repo.notification_template()
+                .get_latest("verification", "email", "en")
+                .await
+                .unwrap()
+                .is_none()
+        );
     }
 }

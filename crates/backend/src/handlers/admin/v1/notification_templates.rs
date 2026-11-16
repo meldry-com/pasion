@@ -5,6 +5,8 @@
 //!   template version
 
 use pasion_data::RepositoryAccess;
+use pasion_i18n::DataLocale;
+use pasion_templates::PublishedNotificationTemplate;
 use salvo::{oapi::ToSchema, prelude::*};
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
@@ -21,6 +23,8 @@ pub struct NotificationTemplate {
     pub key: String,
     /// A short human-readable description of the template's purpose.
     pub description: String,
+    /// Delivery channels with an actual consumer for this template key.
+    pub channels: Vec<String>,
 }
 
 /// Response listing all known notification template keys.
@@ -87,18 +91,12 @@ pub async fn list_handler(
         NotificationTemplate {
             key: "verification".to_owned(),
             description: "Email or phone verification code".to_owned(),
+            channels: vec!["email".to_owned(), "sms".to_owned()],
         },
         NotificationTemplate {
             key: "recovery".to_owned(),
             description: "Account recovery / password reset".to_owned(),
-        },
-        NotificationTemplate {
-            key: "enrollment_invitation".to_owned(),
-            description: "Enrollment invitation for batch-invited users".to_owned(),
-        },
-        NotificationTemplate {
-            key: "password_reset".to_owned(),
-            description: "Password reset notification".to_owned(),
+            channels: vec!["email".to_owned()],
         },
     ];
 
@@ -117,7 +115,7 @@ pub async fn publish_handler(
         mut repo, clock, ..
     } = ctx;
 
-    let body: PublishTemplateRequest = req
+    let mut body: PublishTemplateRequest = req
         .parse_json()
         .await
         .map_err(|e| AppError::bad_request(format!("Invalid request body: {e}")))?;
@@ -128,6 +126,7 @@ pub async fn publish_handler(
     if body.body_template.is_empty() {
         return Err(AppError::bad_request("body_template is required"));
     }
+    validate_publish_request(&mut body)?;
 
     let mut rng = crate::handlers::account::make_rng();
 
@@ -153,7 +152,7 @@ pub async fn publish_handler(
         template_key: record.template_key,
         version: record.version,
         channel: channel_str,
-        locale: "en".to_owned(),
+        locale: record.locale,
         subject_template: record.subject_template,
         body_template: record.body_template,
         created_at: record.created_at.to_rfc3339(),
@@ -161,4 +160,52 @@ pub async fn publish_handler(
     };
 
     Ok(CreatedJson(response))
+}
+
+fn validate_publish_request(body: &mut PublishTemplateRequest) -> Result<(), AppError> {
+    if !PublishedNotificationTemplate::supports(&body.template_key, &body.channel) {
+        return Err(AppError::bad_request(
+            "Unsupported template key/channel combination",
+        ));
+    }
+    body.locale = body
+        .locale
+        .parse::<DataLocale>()
+        .map_err(|_| AppError::bad_request("Invalid template locale"))?
+        .to_string();
+    if body.channel == "sms" && body.subject_template.is_some() {
+        return Err(AppError::bad_request("SMS templates do not have a subject"));
+    }
+    PublishedNotificationTemplate {
+        subject_template: body.subject_template.clone(),
+        body_template: body.body_template.clone(),
+    }
+    .validate()
+    .map_err(|_| AppError::bad_request("Invalid notification template syntax"))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn published_template_validation_matches_delivery_capabilities() {
+        let mut request = PublishTemplateRequest {
+            template_key: "verification".to_owned(),
+            channel: "email".to_owned(),
+            locale: "zh-cn".to_owned(),
+            subject_template: None,
+            body_template: "Code {{ authentication_code.code }}".to_owned(),
+        };
+        validate_publish_request(&mut request).unwrap();
+        assert_eq!(request.locale, "zh-CN");
+        "fax".clone_into(&mut request.channel);
+        assert!(validate_publish_request(&mut request).is_err());
+        "sms".clone_into(&mut request.channel);
+        request.subject_template = Some("ignored".to_owned());
+        assert!(validate_publish_request(&mut request).is_err());
+        request.subject_template = None;
+        "{% if".clone_into(&mut request.body_template);
+        assert!(validate_publish_request(&mut request).is_err());
+    }
 }

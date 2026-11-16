@@ -33,6 +33,8 @@ url.workspace = true
 uuid.workspace = true
 
 [dev-dependencies]
+camino.workspace = true
+pasion-data.workspace = true
 tokio.workspace = true
 rustls.workspace = true
 rustls-platform-verifier.workspace = true

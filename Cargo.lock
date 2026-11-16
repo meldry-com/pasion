@@ -5918,10 +5918,12 @@ version = "1.8.0"
 dependencies = [
  "async-trait",
  "base64 0.23.1",
+ "camino",
  "chrono",
  "hex",
  "hmac 0.12.1",
  "lettre",
+ "pasion-data",
  "pasion-templates",
  "reqwest 0.13.4",
  "rustls",
