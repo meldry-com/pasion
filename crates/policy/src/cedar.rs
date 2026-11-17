@@ -308,3 +308,53 @@ fn strip_json_nulls(value: &mut serde_json::Value) {
         _ => {}
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn nested_attribute_policies_preserve_allow_and_deny_decisions() {
+        let factory = CedarProviderFactory::new(
+            "permit(principal, action, resource) when { context.account has profile.active && context.account.profile.active == true };",
+        )
+        .unwrap();
+        let evaluator = CedarEvaluator {
+            authorizer: Authorizer::new(),
+            policy_set: factory.policy_set,
+            entities: factory.entities,
+        };
+        for (context, allowed) in [
+            (
+                serde_json::json!({"account":{"profile":{"active":true}}}),
+                true,
+            ),
+            (
+                serde_json::json!({"account":{"profile":{"active":false}}}),
+                false,
+            ),
+            (serde_json::json!({"account":{}}), false),
+        ] {
+            assert_eq!(
+                evaluator
+                    .evaluate_action("register", &context)
+                    .unwrap()
+                    .valid(),
+                allowed
+            );
+        }
+    }
+
+    #[test]
+    fn malformed_nested_has_is_rejected_by_the_policy_loader() {
+        // Exercise the advisory's diagnostic path at a bounded depth, so an
+        // accidentally downgraded dependency cannot exhaust the test runner.
+        let mut expression = "1".to_owned();
+        for _ in 0..8 {
+            expression = format!("({expression}) has a.a.a");
+        }
+        let source =
+            format!("permit(principal, action, resource) when {{ {{{expression}: 1}} == {{}} }};");
+        assert!(CedarProviderFactory::new(&source).is_err());
+    }
+}
