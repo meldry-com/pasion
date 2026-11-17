@@ -249,10 +249,8 @@ fn check_claims_import_consistency(
 mod tests {
     use std::str::FromStr;
 
-    use figment::{
-        Figment, Jail,
-        providers::{Format, Yaml},
-    };
+    use figment::{Figment, Jail, providers::Format};
+    use serde_saphyr::figment::Yaml;
     use tokio::{runtime::Handle, task};
     use ulid::Ulid;
 

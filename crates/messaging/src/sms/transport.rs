@@ -7,7 +7,7 @@ use std::sync::{
 
 use base64::{Engine as _, engine::general_purpose::STANDARD as BASE64};
 use chrono::Utc;
-use hmac::{Hmac, Mac};
+use hmac::{Hmac, KeyInit, Mac};
 use reqwest::{Client, Method};
 use sha2::{Digest, Sha256};
 use thiserror::Error;
@@ -194,11 +194,8 @@ impl SmsTransport {
     /// Panics only if an internally constructed provider payload cannot
     /// serialize.
     pub async fn send(&self, to: &str, body: &str) -> Result<(), SmsTransportError> {
-        println!("[SMS] send called: to={to}, body={body}");
-
         match self.inner.as_ref() {
             SmsTransportInner::Blackhole => {
-                println!("[SMS] transport=blackhole, SMS NOT sent");
                 tracing::warn!("An SMS was supposed to be sent but no SMS backend is configured");
             }
 
@@ -208,7 +205,6 @@ impl SmsTransport {
                 auth_token,
                 from_number,
             } => {
-                println!("[SMS] transport=twilio, sending SMS...");
                 let url = format!(
                     "https://api.twilio.com/2010-04-01/Accounts/{account_sid}/Messages.json"
                 );
@@ -224,13 +220,11 @@ impl SmsTransport {
                 let status = response.status();
                 if !status.is_success() {
                     let body = response.text().await.unwrap_or_default();
-                    println!("[SMS] twilio send FAILED: status={status}, body={body}");
                     return Err(SmsTransportError::ProviderError {
                         status: status.as_u16(),
                         body,
                     });
                 }
-                println!("[SMS] twilio send SUCCESS");
             }
 
             SmsTransportInner::HttpWebhook {
@@ -239,7 +233,6 @@ impl SmsTransport {
                 api_key,
                 from_number,
             } => {
-                println!("[SMS] transport=http_webhook, sending SMS...");
                 let payload = serde_json::json!({
                     "to": to,
                     "from": from_number,
@@ -257,13 +250,11 @@ impl SmsTransport {
                 let status = response.status();
                 if !status.is_success() {
                     let body = response.text().await.unwrap_or_default();
-                    println!("[SMS] http_webhook send FAILED: status={status}, body={body}");
                     return Err(SmsTransportError::ProviderError {
                         status: status.as_u16(),
                         body,
                     });
                 }
-                println!("[SMS] http_webhook send SUCCESS");
             }
 
             SmsTransportInner::PaloudInternal {
@@ -273,7 +264,6 @@ impl SmsTransport {
                 secret,
                 workspace,
             } => {
-                println!("[SMS] transport=paloud_internal, sending SMS...");
                 let payload = serde_json::json!({
                     "workspace": workspace.as_deref().filter(|value| !value.trim().is_empty()),
                     "recipient": to,
@@ -306,17 +296,14 @@ impl SmsTransport {
                 let status = response.status();
                 if !status.is_success() {
                     let body = response.text().await.unwrap_or_default();
-                    println!("[SMS] paloud_internal send FAILED: status={status}, body={body}");
                     return Err(SmsTransportError::ProviderError {
                         status: status.as_u16(),
                         body,
                     });
                 }
-                println!("[SMS] paloud_internal send SUCCESS");
             }
 
             SmsTransportInner::AliyunSms(transport) => {
-                println!("[SMS] transport=aliyun, sending SMS...");
                 // Parse body as template params: try JSON first, fall back to
                 // {"code": body}
                 let params: std::collections::HashMap<String, String> = serde_json::from_str(body)
@@ -326,17 +313,14 @@ impl SmsTransport {
                         m
                     });
                 transport.send(to, &params).await?;
-                println!("[SMS] aliyun send SUCCESS");
             }
 
             SmsTransportInner::TencentCloudSms(transport) => {
-                println!("[SMS] transport=tencent_cloud, sending SMS...");
                 // Parse body as template params: try JSON array first, fall
                 // back to [body]
                 let params: Vec<String> =
                     serde_json::from_str(body).unwrap_or_else(|_| vec![body.to_owned()]);
                 transport.send(to, &params).await?;
-                println!("[SMS] tencent_cloud send SUCCESS");
             }
         }
 

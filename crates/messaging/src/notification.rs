@@ -3,7 +3,10 @@
 use std::collections::BTreeMap;
 
 use lettre::message::Mailbox;
-use pasion_templates::{EmailRecoveryContext, EmailVerificationContext, WithLanguage};
+use pasion_templates::{
+    EmailRecoveryContext, EmailVerificationContext, PublishedNotificationTemplate, WithLanguage,
+    notification_locale,
+};
 use thiserror::Error;
 
 use crate::{
@@ -41,6 +44,8 @@ pub enum NotificationRequest {
         context: WithLanguage<EmailVerificationContext>,
         /// Provider metadata that should round-trip in delivery callbacks.
         tags: BTreeMap<String, String>,
+        /// Selected published override; none uses configured templates.
+        template: Option<PublishedNotificationTemplate>,
     },
 
     /// Send an account recovery email to a mailbox.
@@ -51,6 +56,8 @@ pub enum NotificationRequest {
         context: WithLanguage<EmailRecoveryContext>,
         /// Provider metadata that should round-trip in delivery callbacks.
         tags: BTreeMap<String, String>,
+        /// Selected published override; none uses configured templates.
+        template: Option<PublishedNotificationTemplate>,
     },
 
     /// Send a verification code over SMS.
@@ -61,6 +68,8 @@ pub enum NotificationRequest {
         code: String,
         /// IETF language tag used to localize the message body.
         language: String,
+        /// Selected published override; none uses the provider default.
+        template: Option<PublishedNotificationTemplate>,
     },
 }
 
@@ -151,14 +160,55 @@ impl NotificationCenter {
         request: NotificationRequest,
     ) -> Result<NotificationDispatchResult, NotificationError> {
         match request {
-            NotificationRequest::EmailVerification { to, context, tags } => {
-                self.send_email_verification(to, &context, &tags).await
+            NotificationRequest::EmailVerification {
+                to,
+                context,
+                tags,
+                template,
+            } => {
+                let mailer = self
+                    .email
+                    .as_ref()
+                    .ok_or(NotificationError::EmailNotConfigured)?;
+                let result = mailer
+                    .send_verification_email_with_template(to, &context, &tags, template.as_ref())
+                    .await?;
+                Ok(result.into())
             }
-            NotificationRequest::EmailRecovery { to, context, tags } => {
-                self.send_email_recovery(to, &context, &tags).await
+            NotificationRequest::EmailRecovery {
+                to,
+                context,
+                tags,
+                template,
+            } => {
+                let mailer = self
+                    .email
+                    .as_ref()
+                    .ok_or(NotificationError::EmailNotConfigured)?;
+                let result = mailer
+                    .send_recovery_email_with_template(to, &context, &tags, template.as_ref())
+                    .await?;
+                Ok(result.into())
             }
-            NotificationRequest::SmsVerificationCode { to, code, language } => {
-                self.send_sms_verification_code(&to, &code, &language).await
+            NotificationRequest::SmsVerificationCode {
+                to,
+                code,
+                language,
+                template,
+            } => {
+                let language = notification_locale(&language);
+                if let Some(template) = template {
+                    let sender = self
+                        .sms
+                        .as_ref()
+                        .ok_or(NotificationError::SmsNotConfigured)?;
+                    let rendered =
+                        template.render(&serde_json::json!({"code": code, "lang": language}))?;
+                    sender.send_rendered(&to, &rendered.body).await?;
+                    Ok(NotificationDispatchResult::default())
+                } else {
+                    self.send_sms_verification_code(&to, &code, &language).await
+                }
             }
         }
     }
@@ -241,6 +291,9 @@ impl From<EmailSendResult> for NotificationDispatchResult {
 /// Errors produced while dispatching notifications.
 #[derive(Debug, Error)]
 pub enum NotificationError {
+    /// A published template failed to render; no provider was called.
+    #[error(transparent)]
+    Template(#[from] pasion_templates::TemplateError),
     /// An email notification was requested but no email channel is configured.
     #[error("email notifications are not configured")]
     EmailNotConfigured,
@@ -256,4 +309,52 @@ pub enum NotificationError {
     /// The SMS channel failed while sending the notification.
     #[error(transparent)]
     Sms(#[from] SmsTransportError),
+}
+
+#[cfg(test)]
+mod published_delivery_tests {
+    use wiremock::{
+        Mock, MockServer, ResponseTemplate,
+        matchers::{body_partial_json, method},
+    };
+
+    use super::*;
+
+    #[tokio::test]
+    async fn sms_dispatch_sends_rendered_override_and_does_not_send_on_render_error() {
+        let _ = rustls::crypto::aws_lc_rs::default_provider().install_default();
+        let server = MockServer::start().await;
+        Mock::given(method("POST"))
+            .and(body_partial_json(
+                serde_json::json!({"body":"Published 654321/zh-CN"}),
+            ))
+            .respond_with(ResponseTemplate::new(202))
+            .expect(1)
+            .mount(&server)
+            .await;
+        let notifications =
+            NotificationCenter::sms_only(SmsSender::new(crate::SmsTransport::http_webhook(
+                server.uri().parse().unwrap(),
+                None,
+                "Pasion".to_owned(),
+            )));
+        let request = |body: &str| NotificationRequest::SmsVerificationCode {
+            to: "+12065550123".to_owned(),
+            code: "654321".to_owned(),
+            language: "zh-cn".to_owned(),
+            template: Some(PublishedNotificationTemplate {
+                subject_template: None,
+                body_template: body.to_owned(),
+            }),
+        };
+        notifications
+            .dispatch(request("Published {{ code }}/{{ lang }}"))
+            .await
+            .unwrap();
+        assert!(matches!(
+            notifications.dispatch(request("{{ missing }}")).await,
+            Err(NotificationError::Template(_))
+        ));
+        assert_eq!(server.received_requests().await.unwrap().len(), 1);
+    }
 }

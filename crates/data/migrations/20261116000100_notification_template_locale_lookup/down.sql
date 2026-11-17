@@ -1,0 +1,1 @@
+DROP INDEX notification_template_versions_delivery_lookup_idx;

@@ -1,6 +1,6 @@
 use std::marker::PhantomData;
 
-use digest::{Digest, Mac, OutputSizeUser, crypto_common::BlockSizeUser, typenum::Unsigned};
+use digest::{Digest, KeyInit, Mac, OutputSizeUser, block_api::BlockSizeUser, typenum::Unsigned};
 use signature::{Signer, Verifier};
 use thiserror::Error;
 
@@ -97,7 +97,7 @@ impl<D: Digest + BlockSizeUser>
         msg: &[u8],
     ) -> Result<Signature<<hmac::SimpleHmac<D> as OutputSizeUser>::OutputSize>, signature::Error>
     {
-        let mut mac = <hmac::SimpleHmac<D> as Mac>::new_from_slice(&self.key)
+        let mut mac = <hmac::SimpleHmac<D> as KeyInit>::new_from_slice(&self.key)
             .map_err(signature::Error::from_source)?;
         mac.update(msg);
         let signature = mac.finalize().into_bytes().to_vec();
@@ -116,10 +116,10 @@ impl<D: Digest + BlockSizeUser>
         msg: &[u8],
         signature: &Signature<<hmac::SimpleHmac<D> as OutputSizeUser>::OutputSize>,
     ) -> Result<(), signature::Error> {
-        let new_signature = self.try_sign(msg)?;
-        if &new_signature != signature {
-            return Err(signature::Error::new());
-        }
-        Ok(())
+        let mut mac = <hmac::SimpleHmac<D> as KeyInit>::new_from_slice(&self.key)
+            .map_err(signature::Error::from_source)?;
+        mac.update(msg);
+        mac.verify_slice(signature.as_ref())
+            .map_err(|_| signature::Error::new())
     }
 }

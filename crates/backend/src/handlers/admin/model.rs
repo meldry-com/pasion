@@ -600,7 +600,7 @@ pub struct PersonalSession {
     /// None if the current token won't expire or if the session is revoked.
     expires_at: Option<DateTime<Utc>>,
 
-    /// The actual access token (only returned on creation)
+    /// The actual access token (only returned on creation or regeneration)
     #[serde(skip_serializing_if = "Option::is_none")]
     access_token: Option<String>,
 }
@@ -668,5 +668,35 @@ impl PersonalSession {
     pub fn with_token(mut self, access_token: String) -> Self {
         self.access_token = Some(access_token);
         self
+    }
+}
+
+#[cfg(test)]
+mod personal_session_contract_tests {
+    use super::*;
+
+    #[test]
+    fn read_models_keep_owner_actor_distinct_and_never_invent_a_secret() {
+        let owner = "01ARZ3NDEKTSV4RRFFQ69G5FAV".parse().unwrap();
+        let actor = "01ARZ3NDEKTSV4RRFFQ69G5FAW".parse().unwrap();
+        let session = PersonalSession {
+            id: owner,
+            created_at: DateTime::UNIX_EPOCH,
+            revoked_at: None,
+            owner_user_id: Some(owner),
+            owner_client_id: None,
+            actor_user_id: actor,
+            human_name: "Automation".to_owned(),
+            scope: "openid".to_owned(),
+            last_active_at: None,
+            last_active_ip: None,
+            expires_at: None,
+            access_token: None,
+        };
+        let read = serde_json::to_value(&session).unwrap();
+        assert_ne!(read["owner_user_id"], read["actor_user_id"]);
+        assert!(read.get("access_token").is_none());
+        let issued = serde_json::to_value(session.with_token("issued-once".to_owned())).unwrap();
+        assert_eq!(issued["access_token"], "issued-once");
     }
 }

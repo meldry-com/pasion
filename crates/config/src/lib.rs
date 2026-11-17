@@ -20,3 +20,6 @@ pub use self::{
     sections::*,
     util::{ConfigurationSection, ConfigurationSectionExt},
 };
+
+#[cfg(test)]
+mod yaml_compatibility_tests;

@@ -31,8 +31,6 @@ impl SmsSender {
         code: &str,
         language: &str,
     ) -> Result<(), SmsTransportError> {
-        println!("[SMS] send_verification_code to={to}, code={code}, language={language}");
-
         if self.transport.is_aliyun() {
             // Aliyun: pass code as JSON template params
             let params = serde_json::json!({"code": code});
@@ -56,6 +54,15 @@ impl SmsSender {
         };
 
         self.transport.send(to, &body).await
+    }
+
+    /// Send an already rendered body. Template-based providers expect their
+    /// usual parameter JSON rather than a free-form message.
+    ///
+    /// # Errors
+    /// Returns an error if the provider rejects the body or delivery fails.
+    pub async fn send_rendered(&self, to: &str, body: &str) -> Result<(), SmsTransportError> {
+        self.transport.send(to, body).await
     }
 
     /// Return the stable provider binding key for the configured transport.

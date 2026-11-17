@@ -14,7 +14,7 @@ use std::{
 use async_trait::async_trait;
 use base64::{Engine as _, engine::general_purpose::STANDARD as BASE64};
 use chrono::Utc;
-use hmac::{Hmac, Mac};
+use hmac::{Hmac, KeyInit, Mac};
 use lettre::{
     AsyncTransport, Message, Tokio1Executor,
     message::{
@@ -333,9 +333,7 @@ impl EmailProvider for BlackholeProvider {
         "email.blackhole"
     }
 
-    async fn send(&self, email: &OutboundEmail) -> Result<SendResult, Error> {
-        let to: Vec<String> = email.to.iter().map(ToString::to_string).collect();
-        println!("[EMAIL] transport=blackhole, email NOT sent: to={to:?}");
+    async fn send(&self, _email: &OutboundEmail) -> Result<SendResult, Error> {
         tracing::warn!("An email was supposed to be sent but no email backend is configured");
         Ok(SendResult::default())
     }

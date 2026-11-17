@@ -40,7 +40,9 @@ The API is documented using the [OpenAPI specification](https://spec.openapis.or
 The API schema is available [here](../api/spec.json).
 This schema can be viewed in tools like Swagger UI, available [here](../api/).
 
-If admin API is enabled, Pasion will also serve the specification at `/api/spec.json`, with a Swagger UI available at `/api/doc/`.
+If admin API is enabled, Pasion serves the specification at
+`/api-doc/admin/openapi.json` and Swagger UI at `/admin-swagger-ui` (under the
+configured HTTP mount prefix, if any).
 
 ## Authentication
 
@@ -91,6 +93,62 @@ Such a token can be created by an existing administrator with `POST /api/admin/v
 
 The token stops working as soon as the actor user loses its `admin` flag, is locked or is deactivated.
 It is good practice to create a dedicated administrator user for each tool.
+
+The create request above is a bare JSON object, not a `data.attributes`
+envelope. `actor_user_id` is the Pasion user's ULID. It is distinct from the
+owner, which the server derives from the authenticated caller. The response
+is a resource envelope, with `human_name`, `actor_user_id`, `owner_user_id` /
+`owner_client_id` and `access_token` under `data.attributes`. The secret is
+returned only when creating or regenerating a token, never by list/get.
+
+`expires_in` is the new token's lifetime **in seconds**. Omission or `null`
+creates a non-expiring token; it does not preserve a previous token's expiry.
+Regeneration accepts an optional bare JSON body with this same field, and
+still requires the authenticated caller to own the personal session.
+An invalid JSON body or invalid lifetime is rejected before rotating anything.
+The response's `expires_at` is an absolute timestamp, not a lifetime.
+
+## Published notification templates
+
+`GET /api/admin/v1/notification-templates` returns supported keys and their
+`channels`: `verification` supports `email` and `sms`; `recovery` supports
+`email`. Unsupported key/channel pairs are rejected rather than published
+without a delivery consumer. Publish with a bare JSON request:
+
+```json
+{
+  "template_key": "verification",
+  "channel": "email",
+  "locale": "zh-CN",
+  "subject_template": "Verify your address",
+  "body_template": "Your code is {{ authentication_code.code }}"
+}
+```
+
+Versions are immutable and numbered per key/channel, including concurrent
+publications. Locale tags are normalized and returned accurately. At each
+delivery attempt, the worker selects the latest published version for the
+key/channel and exact requested locale, then parent tags (for example,
+`zh-Hans-CN`, `zh-Hans`, `zh`), then `en`. If none exists, it uses the
+configured templates/provider defaults. Existing built-in verification email
+fallbacks retain their English policy; published overrides can use the
+requested locale. The selection is made before releasing the database
+transaction and calling the provider. Retries can select a newer publication.
+
+Email overrides send a plain-text body, with no stale built-in HTML alternative.
+An omitted subject uses the configured subject. Available context includes
+`lang` and `authentication_code.code` for verification, or `lang`,
+`user.username`, and `recovery_link` for recovery. SMS context includes `lang`
+and `code`; omit `subject_template`. SMS bodies are free-form text for
+text transports. Aliyun and Tencent Cloud require their configured provider
+template's parameter JSON instead (for example `{"code":"{{ code }}"}` for
+Aliyun, `["{{ code }}"]` for Tencent); publishing does not change the provider's
+approved template ID or bypass its content rules.
+
+Invalid template syntax is rejected at publication. Missing variables and
+other render errors fail delivery without sending a fallback message;
+repository errors are retried without sending. No verification code or rendered
+notification body is printed by the delivery code.
 
 
 ## General API shape

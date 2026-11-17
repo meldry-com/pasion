@@ -18,3 +18,4 @@ config.dev.yaml
 *.log
 .sqlx
 *.py
+!crates/jose/tests/openssl_compat.py

@@ -1,11 +1,11 @@
 use digest::Digest;
-use ed25519_dalek::{Signer as _, Verifier as _};
-use elliptic_curve::sec1::ToEncodedPoint;
+use ed25519_dalek::Signer as _;
+use elliptic_curve::sec1::ToSec1Point;
 use pasion_iana::jose::{
     JsonWebKeyEcEllipticCurve, JsonWebKeyOkpEllipticCurve, JsonWebSignatureAlg,
 };
 use sha2::{Sha256, Sha384, Sha512};
-use signature::{SignatureEncoding as _, rand_core::CryptoRngCore};
+use signature::{SignatureEncoding as _, rand_core::TryCryptoRng};
 use thiserror::Error;
 
 use super::signature::Signature;
@@ -58,28 +58,28 @@ impl AsymmetricSigningKey {
     /// Create a new signing key with the RS256 algorithm from the given RSA
     /// private key.
     #[must_use]
-    pub fn rs256(key: rsa::RsaPrivateKey) -> Self {
+    pub fn rs256(key: rsa::PrivateKey) -> Self {
         Self::Rs256(rsa::pkcs1v15::SigningKey::new(key))
     }
 
     /// Create a new signing key with the RS384 algorithm from the given RSA
     /// private key.
     #[must_use]
-    pub fn rs384(key: rsa::RsaPrivateKey) -> Self {
+    pub fn rs384(key: rsa::PrivateKey) -> Self {
         Self::Rs384(rsa::pkcs1v15::SigningKey::new(key))
     }
 
     /// Create a new signing key with the RS512 algorithm from the given RSA
     /// private key.
     #[must_use]
-    pub fn rs512(key: rsa::RsaPrivateKey) -> Self {
+    pub fn rs512(key: rsa::PrivateKey) -> Self {
         Self::Rs512(rsa::pkcs1v15::SigningKey::new(key))
     }
 
     /// Create a new signing key with the PS256 algorithm from the given RSA
     /// private key.
     #[must_use]
-    pub fn ps256(key: rsa::RsaPrivateKey) -> Self {
+    pub fn ps256(key: rsa::PrivateKey) -> Self {
         Self::Ps256(rsa::pss::SigningKey::new_with_salt_len(
             key,
             Sha256::output_size(),
@@ -89,7 +89,7 @@ impl AsymmetricSigningKey {
     /// Create a new signing key with the PS384 algorithm from the given RSA
     /// private key.
     #[must_use]
-    pub fn ps384(key: rsa::RsaPrivateKey) -> Self {
+    pub fn ps384(key: rsa::PrivateKey) -> Self {
         Self::Ps384(rsa::pss::SigningKey::new_with_salt_len(
             key,
             Sha384::output_size(),
@@ -99,7 +99,7 @@ impl AsymmetricSigningKey {
     /// Create a new signing key with the PS512 algorithm from the given RSA
     /// private key.
     #[must_use]
-    pub fn ps512(key: rsa::RsaPrivateKey) -> Self {
+    pub fn ps512(key: rsa::PrivateKey) -> Self {
         Self::Ps512(rsa::pss::SigningKey::new_with_salt_len(
             key,
             Sha512::output_size(),
@@ -285,9 +285,9 @@ impl From<super::EdDsaSigningKey> for AsymmetricSigningKey {
 }
 
 impl signature::RandomizedSigner<Signature> for AsymmetricSigningKey {
-    fn try_sign_with_rng(
+    fn try_sign_with_rng<R: TryCryptoRng + ?Sized>(
         &self,
-        rng: &mut impl CryptoRngCore,
+        rng: &mut R,
         msg: &[u8],
     ) -> Result<Signature, signature::Error> {
         match self {
@@ -359,42 +359,42 @@ impl AsymmetricVerifyingKey {
     /// Create a new verifying key with the RS256 algorithm from the given RSA
     /// public key.
     #[must_use]
-    pub fn rs256(key: rsa::RsaPublicKey) -> Self {
+    pub fn rs256(key: rsa::PublicKey) -> Self {
         Self::Rs256(rsa::pkcs1v15::VerifyingKey::new(key))
     }
 
     /// Create a new verifying key with the RS384 algorithm from the given RSA
     /// public key.
     #[must_use]
-    pub fn rs384(key: rsa::RsaPublicKey) -> Self {
+    pub fn rs384(key: rsa::PublicKey) -> Self {
         Self::Rs384(rsa::pkcs1v15::VerifyingKey::new(key))
     }
 
     /// Create a new verifying key with the RS512 algorithm from the given RSA
     /// public key.
     #[must_use]
-    pub fn rs512(key: rsa::RsaPublicKey) -> Self {
+    pub fn rs512(key: rsa::PublicKey) -> Self {
         Self::Rs512(rsa::pkcs1v15::VerifyingKey::new(key))
     }
 
     /// Create a new verifying key with the PS256 algorithm from the given RSA
     /// public key.
     #[must_use]
-    pub fn ps256(key: rsa::RsaPublicKey) -> Self {
+    pub fn ps256(key: rsa::PublicKey) -> Self {
         Self::Ps256(rsa::pss::VerifyingKey::new(key))
     }
 
     /// Create a new verifying key with the PS384 algorithm from the given RSA
     /// public key.
     #[must_use]
-    pub fn ps384(key: rsa::RsaPublicKey) -> Self {
+    pub fn ps384(key: rsa::PublicKey) -> Self {
         Self::Ps384(rsa::pss::VerifyingKey::new(key))
     }
 
     /// Create a new verifying key with the PS512 algorithm from the given RSA
     /// public key.
     #[must_use]
-    pub fn ps512(key: rsa::RsaPublicKey) -> Self {
+    pub fn ps512(key: rsa::PublicKey) -> Self {
         Self::Ps512(rsa::pss::VerifyingKey::new(key))
     }
 
@@ -425,7 +425,7 @@ impl AsymmetricVerifyingKey {
         reason = "keep all verifying-key constructors consistent"
     )]
     pub fn es512(key: elliptic_curve::PublicKey<p521::NistP521>) -> Self {
-        let encoded = key.to_encoded_point(false);
+        let encoded = key.to_sec1_point(false);
         let key = super::Es512VerifyingKey::from_sec1_bytes(encoded.as_bytes())
             .expect("P-521 public key should convert to a verifying key");
         Self::Es512(key)

@@ -21,6 +21,18 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  release-publication-ref:
+    name: Test branch image publication guard
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - name: Test ref lookup and release workflow gates without network access
+        run: python3 -m unittest discover -s .github/scripts -p test_check_publish_ref.py -v
+
   # -- Rust checks --
 
   rustfmt:
@@ -165,6 +177,11 @@ jobs:
       - name: Compile and archive test binaries
         run: cargo nextest archive --workspace --features pasion-backend/cedar --archive-file nextest-archive.tar.zst
 
+      - name: Verify JOSE wire compatibility with OpenSSL
+        run: |
+          openssl version
+          python3 crates/jose/tests/openssl_compat.py
+
       - name: Store nextest archive
         uses: actions/upload-artifact@v7.0.2
         with:
@@ -249,6 +266,7 @@ jobs:
     if: ${{ always() }}
     runs-on: ubuntu-24.04
     needs:
+      - release-publication-ref
       - rustfmt
       - clippy
       - cargo-deny

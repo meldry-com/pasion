@@ -18,11 +18,12 @@ pub trait NotificationTemplateRepository: Send + Sync {
         template_key: Option<&str>,
     ) -> Result<Vec<NotificationTemplateVersion>, Self::Error>;
 
-    /// Get the latest published version for a given template key and channel
+    /// Get the latest published version for an exact key, channel and locale.
     async fn get_latest(
         &mut self,
         template_key: &str,
         channel: &str,
+        locale: &str,
     ) -> Result<Option<NotificationTemplateVersion>, Self::Error>;
 
     /// Publish a new template version
@@ -52,6 +53,7 @@ repository_impl!(NotificationTemplateRepository:
         &mut self,
         template_key: &str,
         channel: &str,
+        locale: &str,
     ) -> Result<Option<NotificationTemplateVersion>, Self::Error>;
 
     async fn publish(
