@@ -21,6 +21,18 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  release-publication-ref:
+    name: Test branch image publication guard
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - name: Test ref lookup and release workflow gates without network access
+        run: python3 -m unittest discover -s .github/scripts -p test_check_publish_ref.py -v
+
   # -- Rust checks --
 
   rustfmt:
@@ -254,6 +266,7 @@ jobs:
     if: ${{ always() }}
     runs-on: ubuntu-24.04
     needs:
+      - release-publication-ref
       - rustfmt
       - clippy
       - cargo-deny
