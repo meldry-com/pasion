@@ -234,7 +234,7 @@ impl Thumbprint for JsonWebKeyPublicParameters {
 // ---------------------------------------------------------------------------
 
 mod rsa_impls {
-    use rsa::{BigUint, RsaPublicKey, traits::PublicKeyParts};
+    use rsa::{BoxedUint, PublicKey as RsaPublicKey, traits::PublicKeyParts};
 
     use super::{JsonWebKeyPublicParameters, RsaPublicParameters};
     use crate::base64::Base64UrlNoPad;
@@ -259,8 +259,8 @@ mod rsa_impls {
 
     impl From<&RsaPublicKey> for RsaPublicParameters {
         fn from(key: &RsaPublicKey) -> Self {
-            let modulus = Base64UrlNoPad::new(key.n().to_bytes_be());
-            let exponent = Base64UrlNoPad::new(key.e().to_bytes_be());
+            let modulus = Base64UrlNoPad::new(key.n().to_be_bytes_trimmed_vartime().into_vec());
+            let exponent = Base64UrlNoPad::new(key.e().to_be_bytes_trimmed_vartime().into_vec());
             Self {
                 n: modulus,
                 e: exponent,
@@ -280,8 +280,8 @@ mod rsa_impls {
         type Error = rsa::errors::Error;
 
         fn try_from(params: &RsaPublicParameters) -> Result<Self, Self::Error> {
-            let modulus = BigUint::from_bytes_be(params.n.as_bytes());
-            let exponent = BigUint::from_bytes_be(params.e.as_bytes());
+            let modulus = BoxedUint::from_be_slice_vartime(params.n.as_bytes());
+            let exponent = BoxedUint::from_be_slice_vartime(params.e.as_bytes());
             RsaPublicKey::new(modulus, exponent)
         }
     }
@@ -293,10 +293,9 @@ mod rsa_impls {
 
 mod ec_impls {
     use digest::typenum::Unsigned;
-    use ecdsa::EncodedPoint;
     use elliptic_curve::{
         AffinePoint, FieldBytes, PublicKey,
-        sec1::{Coordinates, FromEncodedPoint, ModulusSize, ToEncodedPoint},
+        sec1::{Coordinates, FromSec1Point, ModulusSize, Sec1Point, ToSec1Point},
     };
 
     use super::{super::JwkEcCurve, EcPublicParameters, JsonWebKeyPublicParameters};
@@ -305,7 +304,7 @@ mod ec_impls {
     impl<C> TryFrom<&EcPublicParameters> for PublicKey<C>
     where
         C: elliptic_curve::CurveArithmetic,
-        AffinePoint<C>: FromEncodedPoint<C> + ToEncodedPoint<C>,
+        AffinePoint<C>: FromSec1Point<C> + ToSec1Point<C>,
         C::FieldBytesSize: ModulusSize + Unsigned,
     {
         type Error = elliptic_curve::Error;
@@ -324,11 +323,11 @@ mod ec_impls {
                 .get(..field_size)
                 .ok_or(elliptic_curve::Error)?;
 
-            let x_field: &FieldBytes<C> = x_bytes.into();
-            let y_field: &FieldBytes<C> = y_bytes.into();
+            let x_field = FieldBytes::<C>::try_from(x_bytes).map_err(|_| elliptic_curve::Error)?;
+            let y_field = FieldBytes::<C>::try_from(y_bytes).map_err(|_| elliptic_curve::Error)?;
 
-            let encoded = EncodedPoint::<C>::from_affine_coordinates(x_field, y_field, false);
-            let maybe_key: Option<_> = PublicKey::from_encoded_point(&encoded).into();
+            let encoded = Sec1Point::<C>::from_affine_coordinates(&x_field, &y_field, false);
+            let maybe_key: Option<_> = PublicKey::from_sec1_point(&encoded).into();
             maybe_key.ok_or(elliptic_curve::Error)
         }
     }
@@ -336,7 +335,7 @@ mod ec_impls {
     impl<C> From<PublicKey<C>> for JsonWebKeyPublicParameters
     where
         C: elliptic_curve::CurveArithmetic + JwkEcCurve,
-        AffinePoint<C>: FromEncodedPoint<C> + ToEncodedPoint<C>,
+        AffinePoint<C>: FromSec1Point<C> + ToSec1Point<C>,
         C::FieldBytesSize: ModulusSize,
     {
         fn from(key: PublicKey<C>) -> Self {
@@ -347,7 +346,7 @@ mod ec_impls {
     impl<C> From<&PublicKey<C>> for JsonWebKeyPublicParameters
     where
         C: elliptic_curve::CurveArithmetic + JwkEcCurve,
-        AffinePoint<C>: FromEncodedPoint<C> + ToEncodedPoint<C>,
+        AffinePoint<C>: FromSec1Point<C> + ToSec1Point<C>,
         C::FieldBytesSize: ModulusSize,
     {
         fn from(key: &PublicKey<C>) -> Self {
@@ -358,7 +357,7 @@ mod ec_impls {
     impl<C> From<PublicKey<C>> for EcPublicParameters
     where
         C: elliptic_curve::CurveArithmetic + JwkEcCurve,
-        AffinePoint<C>: FromEncodedPoint<C> + ToEncodedPoint<C>,
+        AffinePoint<C>: FromSec1Point<C> + ToSec1Point<C>,
         C::FieldBytesSize: ModulusSize,
     {
         fn from(key: PublicKey<C>) -> Self {
@@ -369,11 +368,11 @@ mod ec_impls {
     impl<C> From<&PublicKey<C>> for EcPublicParameters
     where
         C: elliptic_curve::CurveArithmetic + JwkEcCurve,
-        AffinePoint<C>: FromEncodedPoint<C> + ToEncodedPoint<C>,
+        AffinePoint<C>: FromSec1Point<C> + ToSec1Point<C>,
         C::FieldBytesSize: ModulusSize,
     {
         fn from(key: &PublicKey<C>) -> Self {
-            let uncompressed_point = key.to_encoded_point(false);
+            let uncompressed_point = key.to_sec1_point(false);
             let Coordinates::Uncompressed { x, y } = uncompressed_point.coordinates() else {
                 unreachable!()
             };

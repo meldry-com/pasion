@@ -210,10 +210,8 @@ impl ConfigurationSection for TelemetryConfig {
 
 #[cfg(test)]
 mod tests {
-    use figment::{
-        Figment,
-        providers::{Format, Yaml},
-    };
+    use figment::{Figment, providers::Format};
+    use serde_saphyr::figment::Yaml;
 
     use super::{Propagator, TelemetryConfig};
 

@@ -7,7 +7,7 @@ use std::sync::{
 
 use base64::{Engine as _, engine::general_purpose::STANDARD as BASE64};
 use chrono::Utc;
-use hmac::{Hmac, Mac};
+use hmac::{Hmac, KeyInit, Mac};
 use reqwest::{Client, Method};
 use sha2::{Digest, Sha256};
 use thiserror::Error;

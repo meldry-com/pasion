@@ -133,8 +133,9 @@ impl ConfigurationSection for AccountConfig {
 mod tests {
     use figment::{
         Figment,
-        providers::{Env, Format, Yaml},
+        providers::{Env, Format},
     };
+    use serde_saphyr::figment::Yaml;
     use url::Url;
 
     use super::AccountConfig;

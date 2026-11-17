@@ -57,3 +57,6 @@ dist = []
 name = "config-schema"
 path = "src/bin/schema.rs"
 doc = false
+
+[dev-dependencies]
+serde-saphyr.workspace = true

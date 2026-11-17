@@ -3,7 +3,7 @@ use std::collections::{BTreeMap, BTreeSet};
 use anyhow::{Context, anyhow};
 use base64ct::{Base64, Encoding};
 use chrono::{TimeZone, Utc};
-use hmac::{Hmac, Mac};
+use hmac::{Hmac, KeyInit, Mac};
 use http::HeaderMap;
 use p256::ecdsa::{
     Signature as P256Signature, VerifyingKey as P256VerifyingKey, signature::Verifier as _,
@@ -21,7 +21,7 @@ use pasion_messaging::email::DELIVERY_ID_TAG;
 use pkcs8::DecodePublicKey;
 use rand_core::RngCore;
 use rsa::{
-    RsaPublicKey,
+    PublicKey,
     pkcs1v15::{Signature as RsaPkcs1v15Signature, VerifyingKey as RsaVerifyingKey},
 };
 use serde::Deserialize;
@@ -1351,7 +1351,7 @@ async fn verify_sns_signature(
         .subject_public_key_info()
         .to_der()
         .context("failed to encode SNS subject public key")?;
-    let public_key = RsaPublicKey::from_public_key_der(&public_key_der).map_err(|error| {
+    let public_key = PublicKey::from_public_key_der(&public_key_der).map_err(|error| {
         Error::Unauthorized(format!("failed to parse SNS signing public key: {error}"))
     })?;
     let signature = Base64::decode_vec(&envelope.signature)

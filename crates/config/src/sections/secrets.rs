@@ -111,13 +111,11 @@ impl SecretsConfig {
 
 #[cfg(test)]
 mod tests {
-    use figment::{
-        Figment, Jail,
-        providers::{Format, Yaml},
-    };
+    use figment::{Figment, Jail, providers::Format};
     use pasion_iana::jose::JsonWebSignatureAlg;
     use pasion_jose::constraints::Constrainable;
     use rand_core::SeedableRng;
+    use serde_saphyr::figment::Yaml;
     use tokio::{runtime::Handle, task};
 
     use super::{encryption::EncryptionKey, key_config::Key, *};

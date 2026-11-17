@@ -7,5 +7,6 @@ pub mod constraints;
 pub mod jwa;
 pub mod jwk;
 pub mod jwt;
+pub mod rng;
 
 pub use self::base64::Base64;
