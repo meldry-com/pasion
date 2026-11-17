@@ -60,10 +60,10 @@ use crate::context::SampleIdentifier;
 
 /// Escape the given string for use in HTML
 ///
-/// It uses the same crate as the one used by the minijinja templates
+/// Preserve UTF-8 text while escaping HTML metacharacters.
 #[must_use]
 pub fn escape_html(input: &str) -> String {
-    v_htmlescape::escape(input).to_string()
+    v_htmlescape::escape_fmt(input).to_string()
 }
 
 // ── Error types ─────────────────────────────────────────────────────────────
@@ -483,6 +483,16 @@ mod tests {
     use rand_core::SeedableRng;
 
     use super::*;
+
+    #[test]
+    fn html_escaping_preserves_text_and_quotes_untrusted_markup() {
+        assert_eq!(escape_html(""), "");
+        assert_eq!(escape_html("中文 café 🦀"), "中文 café 🦀");
+        assert_eq!(
+            escape_html("<script title=\"a&b\">'x'/</script>"),
+            "&lt;script title=&quot;a&amp;b&quot;&gt;&#x27;x&#x27;&#x2f;&lt;&#x2f;script&gt;"
+        );
+    }
 
     #[tokio::test]
     async fn check_builtin_templates() {
