@@ -73,5 +73,5 @@ provider in a regression test. Tokio SMTP and sendmail functionality remains
 enabled; the pinned lettre change removes an accidental inactive async-std
 feature path. The Prometheus exporter uses a maintained compact label buffer.
 Both temporary upstream pins reference exact tested commits, with upstream
-changes tracked in the pull request. Salvo and salvo_core remain pinned to 1.0.1
-to preserve encoded Matrix paths.
+changes tracked in the pull request. Salvo and salvo_core are pinned together at
+1.2.1, with the path-encoding contract test guarding encoded Matrix paths.
