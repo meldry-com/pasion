@@ -333,9 +333,7 @@ impl EmailProvider for BlackholeProvider {
         "email.blackhole"
     }
 
-    async fn send(&self, email: &OutboundEmail) -> Result<SendResult, Error> {
-        let to: Vec<String> = email.to.iter().map(ToString::to_string).collect();
-        println!("[EMAIL] transport=blackhole, email NOT sent: to={to:?}");
+    async fn send(&self, _email: &OutboundEmail) -> Result<SendResult, Error> {
         tracing::warn!("An email was supposed to be sent but no email backend is configured");
         Ok(SendResult::default())
     }

@@ -20,7 +20,10 @@ use pasion_messaging::{
     Address, Mailbox, NotificationCenter, NotificationError, NotificationRequest,
     email::{DELIVERY_ID_TAG, REQUEST_ID_TAG},
 };
-use pasion_templates::{EmailRecoveryContext, EmailVerificationContext, TemplateContext as _};
+use pasion_templates::{
+    EmailRecoveryContext, EmailVerificationContext, PublishedNotificationTemplate,
+    TemplateContext as _, notification_locale, notification_locale_fallbacks,
+};
 use rand_core::RngCore;
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
@@ -194,7 +197,7 @@ async fn schedule_processing_job(
 pub(crate) async fn send_email_authentication_code(
     state: &State,
     user_email_authentication_id: Ulid,
-    _language: &str,
+    language: &str,
 ) -> Result<(), JobError> {
     let clock = state.clock();
     let notifications = state.notifications();
@@ -231,7 +234,6 @@ pub(crate) async fn send_email_authentication_code(
 
     info!(
         email = %user_email_authentication.email,
-        code = %code.code,
         "Email verification code generated"
     );
 
@@ -242,12 +244,18 @@ pub(crate) async fn send_email_authentication_code(
         return Ok(());
     }
 
+    // Preserve the requested locale for published overrides, while keeping
+    // the configured verification-template fallback's existing English policy.
+    let requested_locale = language.parse::<DataLocale>().map_or_else(
+        |_| EMAIL_VERIFICATION_LANGUAGE.to_owned(),
+        |locale| locale.to_string(),
+    );
     enqueue_notification_request(
         &mut repo,
         &mut rng,
         clock,
         TEMPLATE_EMAIL_VERIFICATION,
-        EMAIL_VERIFICATION_LANGUAGE,
+        &requested_locale,
         NotificationRequestSource::UserEmailAuthentication {
             user_email_authentication_id,
         },
@@ -311,7 +319,6 @@ pub(crate) async fn send_sms_authentication_code(
 
     info!(
         phone = %user_phone_authentication.phone,
-        code = %code.code,
         "SMS verification code generated"
     );
 
@@ -319,19 +326,20 @@ pub(crate) async fn send_sms_authentication_code(
         repo.save().await.map_err(JobError::fail)?;
         return Ok(());
     }
+    let language = notification_locale(language);
 
     enqueue_notification_request(
         &mut repo,
         &mut rng,
         clock,
         TEMPLATE_SMS_VERIFICATION,
-        language,
+        &language,
         NotificationRequestSource::UserPhoneAuthentication {
             user_phone_authentication_id,
         },
         serde_json::to_value(SmsVerificationPayload {
             code: code.code.clone(),
-            language: language.to_owned(),
+            language: language.clone(),
         })
         .map_err(JobError::fail)?,
         NotificationDestination::Sms {
@@ -476,6 +484,11 @@ fn is_permanent_tls_validation_error(error: &(dyn StdError + 'static)) -> bool {
 
 fn notification_failure_from_error(error: &NotificationError) -> NotificationDeliveryFailure {
     let (code, message, retryable) = match error {
+        NotificationError::Template(error) => (
+            Some("notification_template".to_owned()),
+            Some(error.to_string()),
+            false,
+        ),
         NotificationError::EmailNotConfigured => (
             Some("email_not_configured".to_owned()),
             Some("email notifications are not configured".to_owned()),
@@ -604,6 +617,27 @@ fn parse_payload<T: for<'de> Deserialize<'de>>(
     })
 }
 
+async fn published_template(
+    repo: &mut BoxRepository,
+    key: &str,
+    channel: &str,
+    locale: &str,
+) -> Result<Option<PublishedNotificationTemplate>, anyhow::Error> {
+    for locale in notification_locale_fallbacks(locale) {
+        if let Some(template) = repo
+            .notification_template()
+            .get_latest(key, channel, &locale)
+            .await?
+        {
+            return Ok(Some(PublishedNotificationTemplate {
+                subject_template: template.subject_template,
+                body_template: template.body_template,
+            }));
+        }
+    }
+    Ok(None)
+}
+
 async fn prepare_delivery(
     repo: &mut BoxRepository,
     url_builder: &pasion_data::UrlBuilder,
@@ -672,7 +706,13 @@ async fn prepare_delivery(
             let address: Address = email.parse()?;
             let mailbox = Mailbox::new(username, address);
 
-            let language: DataLocale = payload.language.parse()?;
+            let template =
+                published_template(repo, "verification", "email", &request.locale).await?;
+            let language: DataLocale = if template.is_some() {
+                request.locale.parse()?
+            } else {
+                payload.language.parse()?
+            };
             let context =
                 EmailVerificationContext::new(authentication_code, browser_session, registration)
                     .with_language(language);
@@ -683,6 +723,7 @@ async fn prepare_delivery(
                     to: mailbox,
                     context,
                     tags,
+                    template,
                 },
             ))
         }
@@ -724,11 +765,14 @@ async fn prepare_delivery(
                 );
             }
 
+            let language = notification_locale(&payload.language);
+            let template = published_template(repo, "verification", "sms", &language).await?;
             Ok(PreparedDelivery::Ready(
                 NotificationRequest::SmsVerificationCode {
                     to: phone_number.clone(),
                     code: payload.code,
-                    language: payload.language,
+                    language,
+                    template,
                 },
             ))
         }
@@ -772,12 +816,15 @@ async fn prepare_delivery(
             let mailbox = Mailbox::new(Some(user.username.clone()), address);
             let context = EmailRecoveryContext::new(user, session, url).with_language(language);
             let tags = delivery_tracking_tags(request, delivery);
+            let template =
+                published_template(repo, "recovery", "email", context.language()).await?;
 
             Ok(PreparedDelivery::Ready(
                 NotificationRequest::EmailRecovery {
                     to: mailbox,
                     context,
                     tags,
+                    template,
                 },
             ))
         }
@@ -993,6 +1040,14 @@ async fn process_single_delivery(state: &State) -> Result<bool, JobError> {
             return Ok(true);
         }
         Err(error) => {
+            // Repository failures occur before sending, while the reservation
+            // is still transactional. Roll it back and retry; never silently
+            // fall back to another template or permanently fail on a DB outage.
+            if error.is::<pasion_data::DatabaseError>()
+                || error.is::<pasion_data::RepositoryError>()
+            {
+                return Err(JobError::retry(error));
+            }
             complete_delivery_with_failure(
                 &mut repo,
                 &mut rng,
@@ -1202,6 +1257,76 @@ impl RunnableJob for ProcessNotificationDeliveriesJob {
 #[cfg(test)]
 mod tests {
     use pasion_messaging::NotificationCenter;
+
+    #[tokio::test]
+    async fn published_selection_uses_exact_locale_parent_english_and_configured_fallback() {
+        use pasion_data::{PgRepositoryFactory, RepositoryFactory, clock::MockClock};
+        use rand_core::SeedableRng as _;
+
+        let pool = pasion_data::test_utils::setup_test_pool().await;
+        let factory = PgRepositoryFactory::new(pool);
+        let mut repo = factory.create().await.unwrap();
+        let mut rng = rand_chacha::ChaChaRng::seed_from_u64(72);
+        for (channel, locale, body) in [
+            ("email", "en", "English"),
+            ("email", "zh", "Chinese"),
+            ("email", "zh-CN", "Exact"),
+            ("sms", "zh-CN", "SMS"),
+        ] {
+            repo.notification_template()
+                .publish(
+                    &mut rng,
+                    &MockClock::default(),
+                    "verification".to_owned(),
+                    channel.to_owned(),
+                    locale.to_owned(),
+                    None,
+                    body.to_owned(),
+                )
+                .await
+                .unwrap();
+        }
+        repo.save().await.unwrap();
+        let mut repo = factory.create().await.unwrap();
+        assert_eq!(
+            super::published_template(&mut repo, "verification", "email", "zh-CN")
+                .await
+                .unwrap()
+                .unwrap()
+                .body_template,
+            "Exact"
+        );
+        assert_eq!(
+            super::published_template(&mut repo, "verification", "email", "zh-TW")
+                .await
+                .unwrap()
+                .unwrap()
+                .body_template,
+            "Chinese"
+        );
+        assert_eq!(
+            super::published_template(&mut repo, "verification", "email", "fr")
+                .await
+                .unwrap()
+                .unwrap()
+                .body_template,
+            "English"
+        );
+        assert_eq!(
+            super::published_template(&mut repo, "verification", "sms", "zh-cn")
+                .await
+                .unwrap()
+                .unwrap()
+                .body_template,
+            "SMS"
+        );
+        assert!(
+            super::published_template(&mut repo, "recovery", "email", "en")
+                .await
+                .unwrap()
+                .is_none()
+        );
+    }
     use rand_core::SeedableRng;
     use thiserror::Error;
 

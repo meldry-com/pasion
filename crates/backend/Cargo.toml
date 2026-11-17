@@ -42,6 +42,7 @@ tokio-rustls.workspace = true
 tokio-util.workspace = true
 tower-service.workspace = true
 salvo.workspace = true
+salvo_core.workspace = true
 url.workspace = true
 zeroize.workspace = true
 
