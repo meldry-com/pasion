@@ -1,7 +1,7 @@
 use std::net::IpAddr;
 
-use chrono::{DateTime, Utc};
 use diesel::{Queryable, deserialize, pg::Pg, sql_types};
+use jiff::Timestamp;
 use rand_core::RngCore;
 use serde::{Deserialize, Serialize};
 use ulid::Ulid;
@@ -25,10 +25,10 @@ type UserSqlType = (
 type UserSqlRow = (
     uuid::Uuid,
     String,
-    DateTime<Utc>,
-    DateTime<Utc>,
-    Option<DateTime<Utc>>,
-    Option<DateTime<Utc>>,
+    jiff_diesel::Timestamp,
+    jiff_diesel::Timestamp,
+    jiff_diesel::NullableTimestamp,
+    jiff_diesel::NullableTimestamp,
     bool,
     bool,
     Option<String>,
@@ -52,10 +52,10 @@ pub struct User {
     pub id: Ulid,
     pub username: String,
     pub sub: String,
-    pub created_at: DateTime<Utc>,
-    pub updated_at: DateTime<Utc>,
-    pub locked_at: Option<DateTime<Utc>>,
-    pub deactivated_at: Option<DateTime<Utc>>,
+    pub created_at: Timestamp,
+    pub updated_at: Timestamp,
+    pub locked_at: Option<Timestamp>,
+    pub deactivated_at: Option<Timestamp>,
     pub can_request_admin: bool,
     pub is_guest: bool,
     // Pasion-original profile fields
@@ -87,10 +87,10 @@ impl Queryable<UserSqlType, Pg> for User {
             id,
             username,
             sub: id.to_string(),
-            created_at,
-            updated_at,
-            locked_at,
-            deactivated_at,
+            created_at: created_at.into(),
+            updated_at: updated_at.into(),
+            locked_at: locked_at.into(),
+            deactivated_at: deactivated_at.into(),
             can_request_admin,
             is_guest,
             display_name,
@@ -141,7 +141,7 @@ impl User {
 impl User {
     #[doc(hidden)]
     #[must_use]
-    pub fn samples(now: chrono::DateTime<Utc>, rng: &mut (impl RngCore + ?Sized)) -> Vec<Self> {
+    pub fn samples(now: Timestamp, rng: &mut (impl RngCore + ?Sized)) -> Vec<Self> {
         vec![User {
             id: new_id(now, rng),
             username: "john".to_owned(),
@@ -165,7 +165,7 @@ pub struct UserProfile {
     pub display_name: Option<String>,
     pub avatar_url: Option<String>,
     pub preferred_locale: Option<String>,
-    pub updated_at: DateTime<Utc>,
+    pub updated_at: Timestamp,
 }
 
 /// Pasion-original: a patch object for updating user profile fields.
@@ -261,13 +261,13 @@ pub struct Password {
     pub hashed_password: String,
     pub version: u16,
     pub upgraded_from_id: Option<Ulid>,
-    pub created_at: DateTime<Utc>,
+    pub created_at: Timestamp,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 pub struct Authentication {
     pub id: Ulid,
-    pub created_at: DateTime<Utc>,
+    pub created_at: Timestamp,
     pub authentication_method: AuthenticationMethod,
 }
 
@@ -290,8 +290,8 @@ pub struct UserRecoverySession {
     pub user_agent: String,
     pub ip_address: Option<IpAddr>,
     pub locale: String,
-    pub created_at: DateTime<Utc>,
-    pub consumed_at: Option<DateTime<Utc>>,
+    pub created_at: Timestamp,
+    pub consumed_at: Option<Timestamp>,
 }
 
 /// A single recovery ticket for a user recovery session
@@ -305,13 +305,13 @@ pub struct UserRecoveryTicket {
     pub user_recovery_session_id: Ulid,
     pub user_email_id: Ulid,
     pub ticket: String,
-    pub created_at: DateTime<Utc>,
-    pub expires_at: DateTime<Utc>,
+    pub created_at: Timestamp,
+    pub expires_at: Timestamp,
 }
 
 impl UserRecoveryTicket {
     #[must_use]
-    pub fn active(&self, now: DateTime<Utc>) -> bool {
+    pub fn active(&self, now: Timestamp) -> bool {
         now < self.expires_at
     }
 }
@@ -323,8 +323,8 @@ pub struct UserEmailAuthentication {
     pub user_session_id: Option<Ulid>,
     pub user_registration_id: Option<Ulid>,
     pub email: String,
-    pub created_at: DateTime<Utc>,
-    pub completed_at: Option<DateTime<Utc>>,
+    pub created_at: Timestamp,
+    pub completed_at: Option<Timestamp>,
 }
 
 /// Pasion-original: a user email authentication code
@@ -333,18 +333,18 @@ pub struct UserEmailAuthenticationCode {
     pub id: Ulid,
     pub user_email_authentication_id: Ulid,
     pub code: String,
-    pub created_at: DateTime<Utc>,
-    pub expires_at: DateTime<Utc>,
+    pub created_at: Timestamp,
+    pub expires_at: Timestamp,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 pub struct BrowserSession {
     pub id: Ulid,
     pub user: User,
-    pub created_at: DateTime<Utc>,
-    pub finished_at: Option<DateTime<Utc>>,
+    pub created_at: Timestamp,
+    pub finished_at: Option<Timestamp>,
     pub user_agent: Option<String>,
-    pub last_active_at: Option<DateTime<Utc>>,
+    pub last_active_at: Option<Timestamp>,
     pub last_active_ip: Option<IpAddr>,
 }
 
@@ -357,7 +357,7 @@ impl BrowserSession {
 
 impl BrowserSession {
     #[must_use]
-    pub fn samples(now: chrono::DateTime<Utc>, rng: &mut (impl RngCore + ?Sized)) -> Vec<Self> {
+    pub fn samples(now: Timestamp, rng: &mut (impl RngCore + ?Sized)) -> Vec<Self> {
         User::samples(now, rng)
             .into_iter()
             .map(|user| BrowserSession {
@@ -380,15 +380,15 @@ pub struct UserEmail {
     pub id: Ulid,
     pub user_id: Ulid,
     pub email: String,
-    pub created_at: DateTime<Utc>,
-    pub updated_at: DateTime<Utc>,
-    pub confirmed_at: Option<DateTime<Utc>>,
+    pub created_at: Timestamp,
+    pub updated_at: Timestamp,
+    pub confirmed_at: Option<Timestamp>,
     pub is_primary: bool,
 }
 
 impl UserEmail {
     #[must_use]
-    pub fn samples(now: chrono::DateTime<Utc>, rng: &mut (impl RngCore + ?Sized)) -> Vec<Self> {
+    pub fn samples(now: Timestamp, rng: &mut (impl RngCore + ?Sized)) -> Vec<Self> {
         vec![
             Self {
                 id: new_id(now, rng),
@@ -441,16 +441,16 @@ pub struct UserRegistrationToken {
     pub token: String,
     pub usage_limit: Option<u32>,
     pub times_used: u32,
-    pub created_at: DateTime<Utc>,
-    pub last_used_at: Option<DateTime<Utc>>,
-    pub expires_at: Option<DateTime<Utc>>,
-    pub revoked_at: Option<DateTime<Utc>>,
+    pub created_at: Timestamp,
+    pub last_used_at: Option<Timestamp>,
+    pub expires_at: Option<Timestamp>,
+    pub revoked_at: Option<Timestamp>,
 }
 
 impl UserRegistrationToken {
     /// Returns `true` if the token is still valid and can be used
     #[must_use]
-    pub fn is_valid(&self, now: DateTime<Utc>) -> bool {
+    pub fn is_valid(&self, now: Timestamp) -> bool {
         // Check if revoked
         if self.revoked_at.is_some() {
             return false;
@@ -476,7 +476,7 @@ impl UserRegistrationToken {
     /// Returns `true` if the token can still be used (not expired and under
     /// usage limit)
     #[must_use]
-    pub fn can_be_used(&self, now: DateTime<Utc>) -> bool {
+    pub fn can_be_used(&self, now: Timestamp) -> bool {
         self.is_valid(now)
     }
 }
@@ -497,8 +497,8 @@ pub struct UserRegistration {
     pub post_auth_action: Option<serde_json::Value>,
     pub ip_address: Option<IpAddr>,
     pub user_agent: Option<String>,
-    pub created_at: DateTime<Utc>,
-    pub completed_at: Option<DateTime<Utc>>,
+    pub created_at: Timestamp,
+    pub completed_at: Option<Timestamp>,
 }
 
 /// Pasion-original: a phone number associated with a user
@@ -507,7 +507,7 @@ pub struct UserPhone {
     pub id: Ulid,
     pub user_id: Ulid,
     pub phone: String,
-    pub created_at: DateTime<Utc>,
+    pub created_at: Timestamp,
 }
 
 /// Pasion-original: an authentication session for a phone number
@@ -516,8 +516,8 @@ pub struct UserPhoneAuthentication {
     pub id: Ulid,
     pub user_registration_id: Option<Ulid>,
     pub phone: String,
-    pub created_at: DateTime<Utc>,
-    pub completed_at: Option<DateTime<Utc>>,
+    pub created_at: Timestamp,
+    pub completed_at: Option<Timestamp>,
 }
 
 /// Pasion-original: a verification code for phone authentication
@@ -526,8 +526,8 @@ pub struct UserPhoneAuthenticationCode {
     pub id: Ulid,
     pub user_phone_authentication_id: Ulid,
     pub code: String,
-    pub created_at: DateTime<Utc>,
-    pub expires_at: DateTime<Utc>,
+    pub created_at: Timestamp,
+    pub expires_at: Timestamp,
 }
 
 /// A TOTP authenticator configuration for a user.
@@ -539,6 +539,6 @@ pub struct UserTotpConfig {
     pub algorithm: String,
     pub digits: i32,
     pub period: i32,
-    pub confirmed_at: Option<DateTime<Utc>>,
-    pub created_at: DateTime<Utc>,
+    pub confirmed_at: Option<Timestamp>,
+    pub created_at: Timestamp,
 }

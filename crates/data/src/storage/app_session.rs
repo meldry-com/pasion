@@ -1,7 +1,7 @@
 //! Repositories to interact with all kinds of sessions
 
 use async_trait::async_trait;
-use chrono::{DateTime, Utc};
+use jiff::Timestamp;
 use pasion_data::{BrowserSession, Clock, Session, User};
 
 use crate::{Page, Pagination, repository_impl};
@@ -43,8 +43,8 @@ pub struct AppSessionFilter<'a> {
     browser_session: Option<&'a BrowserSession>,
     state: Option<AppSessionState>,
     device_id: Option<&'a str>,
-    last_active_before: Option<DateTime<Utc>>,
-    last_active_after: Option<DateTime<Utc>>,
+    last_active_before: Option<Timestamp>,
+    last_active_after: Option<Timestamp>,
 }
 
 impl<'a> AppSessionFilter<'a> {
@@ -95,14 +95,14 @@ impl<'a> AppSessionFilter<'a> {
 
     /// Only return sessions with a last active time before the given time
     #[must_use]
-    pub fn with_last_active_before(mut self, last_active_before: DateTime<Utc>) -> Self {
+    pub fn with_last_active_before(mut self, last_active_before: Timestamp) -> Self {
         self.last_active_before = Some(last_active_before);
         self
     }
 
     /// Only return sessions with a last active time after the given time
     #[must_use]
-    pub fn with_last_active_after(mut self, last_active_after: DateTime<Utc>) -> Self {
+    pub fn with_last_active_after(mut self, last_active_after: Timestamp) -> Self {
         self.last_active_after = Some(last_active_after);
         self
     }
@@ -111,7 +111,7 @@ impl<'a> AppSessionFilter<'a> {
     ///
     /// Returns [`None`] if no client filter was set
     #[must_use]
-    pub fn last_active_before(&self) -> Option<DateTime<Utc>> {
+    pub fn last_active_before(&self) -> Option<Timestamp> {
         self.last_active_before
     }
 
@@ -119,7 +119,7 @@ impl<'a> AppSessionFilter<'a> {
     ///
     /// Returns [`None`] if no client filter was set
     #[must_use]
-    pub fn last_active_after(&self) -> Option<DateTime<Utc>> {
+    pub fn last_active_after(&self) -> Option<Timestamp> {
         self.last_active_after
     }
 

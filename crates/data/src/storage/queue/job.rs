@@ -1,7 +1,7 @@
 //! Repository to interact with jobs in the job queue
 
 use async_trait::async_trait;
-use chrono::{DateTime, Duration, Utc};
+use jiff::{SignedDuration, Timestamp};
 use opentelemetry::trace::TraceContextExt;
 use pasion_data::Clock;
 use rand_core::RngCore;
@@ -41,9 +41,9 @@ pub struct AbandonedJob {
     /// The worker that last started the job.
     pub started_by: Ulid,
     /// When the job started running.
-    pub started_at: DateTime<Utc>,
+    pub started_at: Timestamp,
     /// When the worker was marked as shut down.
-    pub worker_shutdown_at: DateTime<Utc>,
+    pub worker_shutdown_at: Timestamp,
 }
 
 /// Metadata stored alongside the job
@@ -142,7 +142,7 @@ pub trait QueueJobRepository: Send + Sync {
         queue_name: &str,
         payload: serde_json::Value,
         metadata: serde_json::Value,
-        scheduled_at: DateTime<Utc>,
+        scheduled_at: Timestamp,
         schedule_name: Option<&str>,
     ) -> Result<(), Self::Error>;
 
@@ -212,7 +212,7 @@ pub trait QueueJobRepository: Send + Sync {
         rng: &mut (dyn RngCore + Send),
         clock: &dyn Clock,
         id: Ulid,
-        delay: Duration,
+        delay: SignedDuration,
     ) -> Result<(), Self::Error>;
 
     /// Mark all scheduled jobs past their scheduled date as available to be
@@ -281,7 +281,7 @@ repository_impl!(QueueJobRepository:
         queue_name: &str,
         payload: serde_json::Value,
         metadata: serde_json::Value,
-        scheduled_at: DateTime<Utc>,
+        scheduled_at: Timestamp,
         schedule_name: Option<&str>,
     ) -> Result<(), Self::Error>;
 
@@ -306,7 +306,7 @@ repository_impl!(QueueJobRepository:
         rng: &mut (dyn RngCore + Send),
         clock: &dyn Clock,
         id: Ulid,
-        delay: Duration,
+        delay: SignedDuration,
     ) -> Result<(), Self::Error>;
 
     async fn schedule_available_jobs(&mut self, clock: &dyn Clock) -> Result<usize, Self::Error>;
@@ -365,7 +365,7 @@ pub trait QueueJobRepositoryExt: QueueJobRepository {
         rng: &mut (dyn RngCore + Send),
         clock: &dyn Clock,
         job: J,
-        scheduled_at: DateTime<Utc>,
+        scheduled_at: Timestamp,
     ) -> Result<(), Self::Error>;
 }
 
@@ -413,7 +413,7 @@ where
         rng: &mut (dyn RngCore + Send),
         clock: &dyn Clock,
         job: J,
-        scheduled_at: DateTime<Utc>,
+        scheduled_at: Timestamp,
     ) -> Result<(), Self::Error> {
         // Grab the span context from the current span
         let span = tracing::Span::current();

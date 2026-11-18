@@ -3,8 +3,8 @@
     reason = "test-only helper items are scoped near their scenarios"
 )]
 
-use chrono::Duration;
 use diesel_async::RunQueryDsl;
+use jiff::SignedDuration;
 use oauth2_types::scope::{OPENID, Scope};
 use pasion_data::{
     Clock, Pagination, RepositoryAccess as _, RepositoryFactory as _, UserEmailPatch, UserPatch,
@@ -300,7 +300,7 @@ async fn test_user_patch_updates_profile_and_state() {
         .await
         .unwrap();
 
-    clock.advance(chrono::Duration::seconds(5));
+    clock.advance(jiff::SignedDuration::from_secs(5));
 
     let updated = repo
         .user()
@@ -397,7 +397,7 @@ async fn test_user_email_patch_swaps_primary_email() {
         .await
         .unwrap();
 
-    clock.advance(chrono::Duration::seconds(5));
+    clock.advance(jiff::SignedDuration::from_secs(5));
 
     let updated = repo
         .user_email()
@@ -615,7 +615,7 @@ async fn test_user_email_repo_authentications() {
         .add_authentication_code(
             &mut rng,
             &clock,
-            Duration::minutes(5),
+            SignedDuration::from_mins(5),
             &authentication,
             "123456".to_owned(),
         )
@@ -624,7 +624,7 @@ async fn test_user_email_repo_authentications() {
 
     assert_eq!(code.code, "123456");
     assert_eq!(code.created_at, clock.now());
-    assert_eq!(code.expires_at, clock.now() + Duration::minutes(5));
+    assert_eq!(code.expires_at, clock.now() + SignedDuration::from_mins(5));
 
     // Check that we can find the code by its ID
     let id = code.id;
@@ -638,18 +638,21 @@ async fn test_user_email_repo_authentications() {
     assert_eq!(lookup.id, id);
     assert_eq!(lookup.code, "123456");
     assert_eq!(lookup.created_at, clock.now());
-    assert_eq!(lookup.expires_at, clock.now() + Duration::minutes(5));
+    assert_eq!(
+        lookup.expires_at,
+        clock.now() + SignedDuration::from_mins(5)
+    );
 
     // Resending a fixed development code must return its newest lifetime,
     // rather than the expired row carrying the same code.
     let authentication_created_at = authentication.created_at;
-    clock.advance(Duration::minutes(6));
+    clock.advance(SignedDuration::from_mins(6));
     let refreshed = repo
         .user_email()
         .add_authentication_code(
             &mut rng,
             &clock,
-            Duration::minutes(5),
+            SignedDuration::from_mins(5),
             &authentication,
             "123456".to_owned(),
         )
@@ -662,7 +665,10 @@ async fn test_user_email_repo_authentications() {
         .unwrap()
         .unwrap();
     assert_eq!(lookup.id, refreshed.id);
-    assert_eq!(lookup.expires_at, clock.now() + Duration::minutes(5));
+    assert_eq!(
+        lookup.expires_at,
+        clock.now() + SignedDuration::from_mins(5)
+    );
 
     // Complete the authentication
     let authentication = repo
@@ -751,7 +757,7 @@ async fn test_user_password_repo() {
 
     // Getting the last inserted password is based on the clock, so we need to
     // advance it
-    clock.advance(Duration::microseconds(10 * 1000 * 1000));
+    clock.advance(SignedDuration::from_secs(10));
 
     let second_password = repo
         .user_password()

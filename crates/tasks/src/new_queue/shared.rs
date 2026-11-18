@@ -1,4 +1,4 @@
-use chrono::Duration;
+use jiff::SignedDuration;
 use pasion_data::{DatabaseError, RepositoryError};
 use thiserror::Error;
 
@@ -18,7 +18,7 @@ pub enum QueueRunnerError {
     Database(#[from] DatabaseError),
 
     #[error("Invalid schedule expression")]
-    InvalidSchedule(#[from] cron::error::Error),
+    InvalidSchedule(#[from] jiff_cron::error::Error),
 
     #[error("Worker is not the leader")]
     NotLeader,
@@ -41,7 +41,7 @@ pub(super) const MAX_ATTEMPTS: usize = 10;
 /// Compute the back-off delay for a given attempt number.
 ///
 /// Exponential: 5 s, 10 s, 20 s, 40 s, 80 s, 160 s, 320 s, 650 s, ...
-pub(super) fn retry_delay(attempt: usize) -> Duration {
+pub(super) fn retry_delay(attempt: usize) -> SignedDuration {
     let exp = u32::try_from(attempt).unwrap_or(u32::MAX);
-    Duration::milliseconds(2_i64.saturating_pow(exp) * 5_000)
+    SignedDuration::from_millis(2_i64.saturating_pow(exp) * 5_000)
 }

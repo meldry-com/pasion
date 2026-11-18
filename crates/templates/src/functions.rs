@@ -11,7 +11,7 @@ use std::{
     sync::{Arc, atomic::AtomicUsize},
 };
 
-use chrono::Timelike as _;
+use jiff::Timestamp;
 use minijinja::{
     Error, ErrorKind, State, Value,
     value::{Kwargs, Object, ViaDeserialize, from_args},
@@ -337,7 +337,7 @@ impl Object for TranslateHandle {
         match method {
             "relative_date" => {
                 let (raw_date,): (String,) = from_args(args)?;
-                let parsed_date: chrono::DateTime<chrono::Utc> = raw_date.parse().map_err(|e| {
+                let parsed_date: Timestamp = raw_date.parse().map_err(|e| {
                     Error::new(
                         ErrorKind::InvalidOperation,
                         "Invalid date while calling function `relative_date`",
@@ -352,9 +352,9 @@ impl Object for TranslateHandle {
                 // day-granularity and test snapshots render their own
                 // fixtures outside the template layer.
                 #[allow(clippy::disallowed_methods)]
-                let now = chrono::Utc::now();
+                let now = Timestamp::now();
 
-                let day_diff = (parsed_date - now).num_days();
+                let day_diff = parsed_date.duration_since(now).as_hours() / 24;
 
                 let formatted = self
                     .translator
@@ -371,7 +371,7 @@ impl Object for TranslateHandle {
 
             "short_time" => {
                 let (raw_date,): (String,) = from_args(args)?;
-                let parsed_date: chrono::DateTime<chrono::Utc> = raw_date.parse().map_err(|e| {
+                let parsed_date: Timestamp = raw_date.parse().map_err(|e| {
                     Error::new(
                         ErrorKind::InvalidOperation,
                         "Invalid date while calling function `time`",
@@ -385,11 +385,12 @@ impl Object for TranslateHandle {
                 // displaying UTC is unambiguous; localising by timezone
                 // would require storing the user's preferred TZ and is not
                 // yet modelled.
+                let parsed_date = parsed_date.to_zoned(jiff::tz::TimeZone::UTC);
                 let time_of_day = pasion_i18n::icu_datetime::input::Time::try_new(
                     u8::try_from(parsed_date.hour()).unwrap_or_default(),
                     u8::try_from(parsed_date.minute()).unwrap_or_default(),
                     u8::try_from(parsed_date.second()).unwrap_or_default(),
-                    parsed_date.nanosecond(),
+                    parsed_date.subsec_nanosecond().unsigned_abs(),
                 )
                 .map_err(|_| Error::new(ErrorKind::InvalidOperation, "Failed to convert time"))?;
 

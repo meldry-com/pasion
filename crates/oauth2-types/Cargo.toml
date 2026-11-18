@@ -20,7 +20,7 @@ serde_with.workspace = true
 base64ct.workspace = true
 
 # Data structures & utilities
-chrono.workspace = true
+jiff.workspace = true
 indexmap.workspace = true
 language-tags.workspace = true
 sha2.workspace = true

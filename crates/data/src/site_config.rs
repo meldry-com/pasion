@@ -1,6 +1,6 @@
 use std::num::NonZeroU64;
 
-use chrono::Duration;
+use jiff::SignedDuration;
 use serde::Serialize;
 use url::Url;
 
@@ -28,8 +28,8 @@ pub struct CaptchaConfig {
 /// Pasion-original: automatic session expiration configuration
 #[derive(Debug, Clone)]
 pub struct SessionExpirationConfig {
-    pub user_session_inactivity_ttl: Option<Duration>,
-    pub oauth_session_inactivity_ttl: Option<Duration>,
+    pub user_session_inactivity_ttl: Option<SignedDuration>,
+    pub oauth_session_inactivity_ttl: Option<SignedDuration>,
 }
 
 /// Pasion-original: limits on the number of application sessions per user
@@ -44,7 +44,7 @@ pub struct SessionLimitConfig {
 #[derive(Debug, Clone)]
 pub struct SiteConfig {
     /// Time-to-live of access tokens.
-    pub access_token_ttl: Duration,
+    pub access_token_ttl: SignedDuration,
 
     /// The server name, e.g. "matrix.org".
     pub server_name: String,

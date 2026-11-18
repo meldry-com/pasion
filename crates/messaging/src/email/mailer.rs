@@ -245,14 +245,14 @@ mod tests {
     }
 
     fn context() -> WithLanguage<EmailVerificationContext> {
-        let now = chrono::DateTime::UNIX_EPOCH;
+        let now = jiff::Timestamp::UNIX_EPOCH;
         EmailVerificationContext::new(
             UserEmailAuthenticationCode {
                 id: "01ARZ3NDEKTSV4RRFFQ69G5FAV".parse().unwrap(),
                 user_email_authentication_id: "01ARZ3NDEKTSV4RRFFQ69G5FAW".parse().unwrap(),
                 code: "sensitive-verification-code-621098".to_owned(),
                 created_at: now,
-                expires_at: now + chrono::Duration::minutes(5),
+                expires_at: now + jiff::SignedDuration::from_mins(5),
             },
             None,
             None,

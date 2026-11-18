@@ -5,7 +5,7 @@ use std::{
     net::{IpAddr, Ipv4Addr},
 };
 
-use chrono::Duration;
+use jiff::{SignedDuration, Timestamp};
 use oauth2_types::scope::OPENID;
 use pasion_data::{Client, DeviceCodeGrant, MatrixUser};
 use rand_core::RngCore as Rng;
@@ -63,7 +63,7 @@ impl DeviceLinkContext {
 
 impl TemplateContext for DeviceLinkContext {
     fn sample<R: Rng>(
-        _now: chrono::DateTime<chrono::Utc>,
+        _now: Timestamp,
         _rng: &mut R,
         _locales: &[pasion_i18n::DataLocale],
     ) -> BTreeMap<SampleIdentifier, Self> {
@@ -101,7 +101,7 @@ impl DeviceConsentContext {
 
 impl TemplateContext for DeviceConsentContext {
     fn sample<R: Rng>(
-        now: chrono::DateTime<chrono::Utc>,
+        now: Timestamp,
         rng: &mut R,
         _locales: &[pasion_i18n::DataLocale],
     ) -> BTreeMap<SampleIdentifier, Self> {
@@ -116,8 +116,8 @@ impl TemplateContext for DeviceConsentContext {
                         scope: [OPENID].into_iter().collect(),
                         user_code: rand_alphanumeric_string(rng, 6).to_uppercase(),
                         device_code: rand_alphanumeric_string(rng, 32),
-                        created_at: now - Duration::try_minutes(5).unwrap(),
-                        expires_at: now + Duration::try_minutes(25).unwrap(),
+                        created_at: now - SignedDuration::from_mins(5),
+                        expires_at: now + SignedDuration::from_mins(25),
                         ip_address: Some(IpAddr::V4(Ipv4Addr::LOCALHOST)),
                         user_agent: Some("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/93.0.0.0 Safari/537.36".to_owned()),
                     };
@@ -157,7 +157,7 @@ impl DeviceNameContext {
 
 impl TemplateContext for DeviceNameContext {
     fn sample<R: Rng>(
-        now: chrono::DateTime<chrono::Utc>,
+        now: Timestamp,
         rng: &mut R,
         _locales: &[pasion_i18n::DataLocale],
     ) -> BTreeMap<SampleIdentifier, Self> {

@@ -9,8 +9,8 @@
 use std::process::ExitCode;
 
 use anyhow::Context;
-use chrono::Duration;
 use figment::Figment;
+use jiff::SignedDuration;
 use pasion_backend::util::{diesel_pool_from_config, password_manager_from_config};
 use pasion_config::{ConfigurationSectionExt, DatabaseConfig, PasswordsConfig};
 use pasion_data::{
@@ -278,7 +278,8 @@ pub(super) async fn handle_issue_registration_token(
     let mut repo = PgRepository::new(conn);
 
     // Calculate expiration time if provided
-    let expires_at = expires_in.map(|seconds| clock.now() + Duration::seconds(seconds.into()));
+    let expires_at =
+        expires_in.map(|seconds| clock.now() + SignedDuration::from_secs(seconds.into()));
 
     // Generate a token if not provided
     let token_str = token.unwrap_or_else(|| {

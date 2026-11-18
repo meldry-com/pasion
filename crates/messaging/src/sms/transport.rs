@@ -6,7 +6,6 @@ use std::sync::{
 };
 
 use base64::{Engine as _, engine::general_purpose::STANDARD as BASE64};
-use chrono::Utc;
 use hmac::{Hmac, KeyInit, Mac};
 use reqwest::{Client, Method};
 use sha2::{Digest, Sha256};
@@ -271,7 +270,7 @@ impl SmsTransport {
                 });
                 let body = serde_json::to_vec(&payload)
                     .expect("paloud internal sms payload should serialize");
-                let timestamp = Utc::now().timestamp();
+                let timestamp = jiff::Timestamp::now().as_second();
                 let nonce = paloud_internal_nonce(timestamp);
                 let signature = sign_paloud_internal_request(
                     secret,

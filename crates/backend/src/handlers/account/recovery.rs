@@ -3,12 +3,12 @@
 //! These endpoints serve as thin HTTP adapters over the business logic in
 //! [`crate::handlers::account::service::recovery`]. They parse requests,
 //! delegate to service functions, and map results to JSON responses.
-use chrono::Utc;
 use pasion_data::{
     flow::{FlowSession, FlowSessionStatus},
     new_id,
 };
-use salvo::{oapi::ToSchema, prelude::*};
+use salvo::prelude::*;
+use salvo_oapi::{ToSchema, endpoint};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use ulid::Ulid;
@@ -129,7 +129,7 @@ pub async fn post_recovery_start(
         let (flow_def, bindings) = default_recovery_flow(&mut *rng);
         let plan = FlowExecutor::plan(flow_def, bindings);
 
-        let now = Utc::now();
+        let now = jiff::Timestamp::now();
         let flow_sid = new_id(now, &mut *rng);
 
         let flow_session = FlowSession {
@@ -142,7 +142,7 @@ pub async fn post_recovery_start(
             user_agent: None,
             created_at: now,
             updated_at: now,
-            expires_at: now + chrono::Duration::hours(1),
+            expires_at: now + jiff::SignedDuration::from_hours(1),
             completed_at: None,
         };
 

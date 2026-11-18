@@ -155,7 +155,7 @@ impl JobTracker {
                             job.queue.name = %context.queue_name,
                             job.attempt = %context.attempt,
                             "Job failed, will retry in {}s",
-                            delay.num_seconds()
+                            delay.as_secs()
                         );
                     }
 
@@ -339,7 +339,7 @@ impl JobTracker {
                             job.attempt = %context.attempt,
                             job.elapsed = format!("{elapsed}ms"),
                             "Job crashed, will retry in {}s",
-                            delay.num_seconds()
+                            delay.as_secs()
                         );
 
                         self.job_processing_time.record(

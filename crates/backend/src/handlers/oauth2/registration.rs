@@ -486,7 +486,7 @@ async fn handle_post(req: &mut Request, depot: &Depot) -> Result<RouteResponse, 
         client_id: client.client_id.clone(),
         client_secret,
         // XXX: we should have a `created_at` field on the clients
-        client_id_issued_at: Some(client.id.datetime().into()),
+        client_id_issued_at: jiff::Timestamp::try_from(client.id.datetime()).ok(),
         client_secret_expires_at: None,
     };
 

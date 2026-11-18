@@ -19,7 +19,8 @@ use pasion_data::{
     LocalizableField, LocalizedClientMetadata, audit::AdminOperation,
     oauth2::OAuth2ClientRepository,
 };
-use salvo::{oapi::ToSchema, prelude::*};
+use salvo::prelude::*;
+use salvo_oapi::{ToSchema, endpoint};
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use url::Url;

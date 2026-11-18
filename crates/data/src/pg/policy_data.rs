@@ -2,7 +2,6 @@
 //! storage.
 
 use async_trait::async_trait;
-use chrono::{DateTime, Utc};
 use diesel::prelude::*;
 use diesel_async::RunQueryDsl;
 use pasion_data::{Clock, PolicyData, new_id, policy_data::PolicyDataRepository};
@@ -31,7 +30,8 @@ impl<'c> PgPolicyDataRepository<'c> {
 #[diesel(table_name = policy_data)]
 struct PolicyDataRow {
     id: Uuid,
-    created_at: DateTime<Utc>,
+    #[diesel(deserialize_as = jiff_diesel::Timestamp)]
+    created_at: jiff::Timestamp,
     data: Value,
 }
 
@@ -50,7 +50,8 @@ impl From<PolicyDataRow> for PolicyData {
 #[diesel(table_name = policy_data)]
 struct NewPolicyData {
     id: Uuid,
-    created_at: DateTime<Utc>,
+    #[diesel(serialize_as = jiff_diesel::Timestamp)]
+    created_at: jiff::Timestamp,
     data: Value,
 }
 
@@ -87,7 +88,7 @@ impl PolicyDataRepository for PgPolicyDataRepository<'_> {
         };
 
         diesel::insert_into(policy_data::table)
-            .values(&new_row)
+            .values(new_row)
             .execute(self.conn)
             .await?;
 
@@ -168,7 +169,7 @@ mod tests {
         assert_eq!(policy_data1, data_fetched1);
 
         // Set some new data
-        clock.advance(chrono::Duration::seconds(1));
+        clock.advance(jiff::SignedDuration::from_secs(1));
         let value2 = json!({"foo": "bar"});
         let policy_data2 = repo
             .policy_data()

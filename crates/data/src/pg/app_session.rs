@@ -1,9 +1,10 @@
 //! A module containing PostgreSQL implementation of repositories for sessions
 
 use async_trait::async_trait;
-use chrono::{DateTime, Utc};
 use diesel::prelude::*;
 use diesel_async::RunQueryDsl;
+use jiff::Timestamp;
+use jiff_diesel::ToDiesel as _;
 use oauth2_types::scope::{Scope, ScopeToken};
 use pasion_data::{
     Clock, Page, Pagination, Session, SessionState, User,
@@ -38,10 +39,13 @@ struct AppSessionLookup {
     user_id: Option<Uuid>,
     scope_list: Vec<String>,
     human_name: Option<String>,
-    created_at: DateTime<Utc>,
-    finished_at: Option<DateTime<Utc>>,
+    #[diesel(deserialize_as = jiff_diesel::Timestamp)]
+    created_at: Timestamp,
+    #[diesel(deserialize_as = jiff_diesel::NullableTimestamp)]
+    finished_at: Option<Timestamp>,
     user_agent: Option<String>,
-    last_active_at: Option<DateTime<Utc>>,
+    #[diesel(deserialize_as = jiff_diesel::NullableTimestamp)]
+    last_active_at: Option<Timestamp>,
     last_active_ip: Option<ipnetwork::IpNetwork>,
 }
 
@@ -128,11 +132,17 @@ macro_rules! apply_app_session_filter {
         }
 
         if let Some(last_active_before) = filter.last_active_before() {
-            query = query.filter(oauth2_sessions::last_active_at.lt(last_active_before));
+            query = query.filter(
+                oauth2_sessions::last_active_at
+                    .lt(jiff_diesel::ToDiesel::to_diesel(last_active_before)),
+            );
         }
 
         if let Some(last_active_after) = filter.last_active_after() {
-            query = query.filter(oauth2_sessions::last_active_at.gt(last_active_after));
+            query = query.filter(
+                oauth2_sessions::last_active_at
+                    .gt(jiff_diesel::ToDiesel::to_diesel(last_active_after)),
+            );
         }
 
         query
@@ -224,7 +234,7 @@ impl AppSessionRepository for PgAppSessionRepository<'_> {
         .bind::<diesel::sql_types::Uuid, _>(Uuid::from(user.id))
         .bind::<diesel::sql_types::Text, _>(&stable_scope)
         .bind::<diesel::sql_types::Text, _>(&unstable_scope)
-        .bind::<diesel::sql_types::Timestamptz, _>(finished_at)
+        .bind::<diesel::sql_types::Timestamptz, _>(finished_at.to_diesel())
         .execute(self.conn)
         .await?;
 
@@ -234,7 +244,7 @@ impl AppSessionRepository for PgAppSessionRepository<'_> {
 
 #[cfg(test)]
 mod tests {
-    use chrono::Duration;
+    use jiff::SignedDuration;
     use oauth2_types::{
         requests::GrantType,
         scope::{OPENID, Scope},
@@ -336,7 +346,7 @@ mod tests {
 
         // We're moving the clock forward by 1 minute between each session to ensure
         // we're getting consistent ordering in lists.
-        clock.advance(Duration::try_minutes(1).unwrap());
+        clock.advance(SignedDuration::from_mins(1));
 
         let oauth_session = repo
             .oauth2_session()

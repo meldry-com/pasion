@@ -1,5 +1,4 @@
 use async_trait::async_trait;
-use chrono::{DateTime, Utc};
 use diesel::prelude::*;
 use diesel_async::RunQueryDsl;
 use pasion_data::{Clock, User, new_id, user::UserTermsRepository};
@@ -29,7 +28,8 @@ struct NewUserTerms {
     id: Uuid,
     user_id: Uuid,
     terms_url: String,
-    created_at: DateTime<Utc>,
+    #[diesel(serialize_as = jiff_diesel::Timestamp)]
+    created_at: jiff::Timestamp,
 }
 
 #[async_trait]
@@ -65,7 +65,7 @@ impl UserTermsRepository for PgUserTermsRepository<'_> {
         };
 
         diesel::insert_into(user_terms::table)
-            .values(&new_terms)
+            .values(new_terms)
             .on_conflict((user_terms::user_id, user_terms::terms_url))
             .do_nothing()
             .execute(self.conn)

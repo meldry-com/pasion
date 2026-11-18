@@ -1,7 +1,8 @@
 use async_trait::async_trait;
-use chrono::{DateTime, Utc};
 use diesel::prelude::*;
 use diesel_async::RunQueryDsl;
+use jiff::Timestamp;
+use jiff_diesel::ToDiesel as _;
 use pasion_data::{
     Clock, Page, Pagination, UpstreamOAuthProvider, UpstreamOAuthProviderClaimsImports, new_id,
     pagination::{Node, PaginationDirection},
@@ -44,8 +45,10 @@ struct ProviderLookup {
     id_token_signed_response_alg: String,
     fetch_userinfo: bool,
     userinfo_signed_response_alg: Option<String>,
-    created_at: DateTime<Utc>,
-    disabled_at: Option<DateTime<Utc>>,
+    #[diesel(deserialize_as = jiff_diesel::Timestamp)]
+    created_at: Timestamp,
+    #[diesel(deserialize_as = jiff_diesel::NullableTimestamp)]
+    disabled_at: Option<Timestamp>,
     claims_imports: Option<serde_json::Value>,
     jwks_uri_override: Option<String>,
     authorization_endpoint_override: Option<String>,
@@ -270,7 +273,8 @@ struct NewProvider {
     forward_login_hint: bool,
     ui_order: i32,
     on_backchannel_logout: Option<String>,
-    created_at: DateTime<Utc>,
+    #[diesel(serialize_as = jiff_diesel::Timestamp)]
+    created_at: Timestamp,
     source: String,
 }
 
@@ -370,7 +374,7 @@ impl UpstreamOAuthProviderRepository for PgUpstreamOAuthProviderRepository<'_> {
         };
 
         diesel::insert_into(upstream_oauth_providers::table)
-            .values(&new_provider)
+            .values(new_provider)
             .execute(self.conn)
             .await?;
 
@@ -506,7 +510,7 @@ impl UpstreamOAuthProviderRepository for PgUpstreamOAuthProviderRepository<'_> {
         };
 
         let (created_at, disabled_at) = diesel::insert_into(upstream_oauth_providers::table)
-            .values(&new_provider)
+            .values(new_provider)
             .on_conflict(upstream_oauth_providers::id)
             .do_update()
             .set((
@@ -565,7 +569,7 @@ impl UpstreamOAuthProviderRepository for PgUpstreamOAuthProviderRepository<'_> {
                 upstream_oauth_providers::created_at,
                 upstream_oauth_providers::disabled_at,
             ))
-            .get_result::<(DateTime<Utc>, Option<DateTime<Utc>>)>(self.conn)
+            .get_result::<(jiff_diesel::Timestamp, Option<jiff_diesel::Timestamp>)>(self.conn)
             .await?;
 
         Ok(UpstreamOAuthProvider {
@@ -581,8 +585,8 @@ impl UpstreamOAuthProviderRepository for PgUpstreamOAuthProviderRepository<'_> {
             id_token_signed_response_alg: params.id_token_signed_response_alg,
             fetch_userinfo: params.fetch_userinfo,
             userinfo_signed_response_alg: params.userinfo_signed_response_alg,
-            created_at,
-            disabled_at,
+            created_at: created_at.to_jiff(),
+            disabled_at: disabled_at.map(jiff_diesel::Timestamp::to_jiff),
             claims_imports: params.claims_imports,
             authorization_endpoint_override: params.authorization_endpoint_override,
             token_endpoint_override: params.token_endpoint_override,
@@ -616,7 +620,7 @@ impl UpstreamOAuthProviderRepository for PgUpstreamOAuthProviderRepository<'_> {
         let rows_affected = diesel::update(
             upstream_oauth_providers::table.find(Uuid::from(upstream_oauth_provider.id)),
         )
-        .set(upstream_oauth_providers::disabled_at.eq(Some(disabled_at)))
+        .set(upstream_oauth_providers::disabled_at.eq(Some(disabled_at).to_diesel()))
         .execute(self.conn)
         .await?;
 
@@ -642,7 +646,7 @@ impl UpstreamOAuthProviderRepository for PgUpstreamOAuthProviderRepository<'_> {
         let rows_affected = diesel::update(
             upstream_oauth_providers::table.find(Uuid::from(upstream_oauth_provider.id)),
         )
-        .set(upstream_oauth_providers::disabled_at.eq(None::<DateTime<Utc>>))
+        .set(upstream_oauth_providers::disabled_at.eq(None::<Timestamp>.to_diesel()))
         .execute(self.conn)
         .await?;
 

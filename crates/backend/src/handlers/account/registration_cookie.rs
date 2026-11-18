@@ -2,7 +2,7 @@
 
 use std::collections::BTreeSet;
 
-use chrono::{DateTime, Duration, Utc};
+use jiff::SignedDuration;
 use pasion_data::{Clock, UserRegistration};
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
@@ -14,7 +14,7 @@ use crate::salvo_utils::cookies::{CookieExpiration, CookieJar};
 static COOKIE_NAME: &str = "user-registration-sessions";
 
 /// Sessions expire after an hour
-static SESSION_MAX_TIME: Duration = Duration::hours(1);
+static SESSION_MAX_TIME: SignedDuration = SignedDuration::from_hours(1);
 
 /// The content of the cookie, which stores a list of user registration IDs
 #[derive(Serialize, Deserialize, Default, Debug)]
@@ -59,15 +59,15 @@ impl UserRegistrationSessions {
         }
     }
 
-    fn expire(mut self, now: DateTime<Utc>) -> Self {
+    fn expire(mut self, now: jiff::Timestamp) -> Self {
         self.0.retain(|id| {
             let Ok(ts) = id.timestamp_ms().try_into() else {
                 return false;
             };
-            let Some(when) = DateTime::from_timestamp_millis(ts) else {
+            let Some(when) = jiff::Timestamp::from_millisecond(ts).ok() else {
                 return false;
             };
-            now - when < SESSION_MAX_TIME
+            now.duration_since(when) < SESSION_MAX_TIME
         });
 
         self

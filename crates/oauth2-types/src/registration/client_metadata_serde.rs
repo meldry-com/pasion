@@ -1,4 +1,4 @@
-use chrono::Duration;
+use jiff::SignedDuration;
 use language_tags::LanguageTag;
 use pasion_iana::{
     jose::{JsonWebEncryptionAlg, JsonWebEncryptionEnc, JsonWebSignatureAlg},
@@ -132,7 +132,7 @@ struct FlatFields {
     request_object_encryption_alg: Option<JsonWebEncryptionAlg>,
     request_object_encryption_enc: Option<JsonWebEncryptionEnc>,
     #[serde_as(as = "Option<DurationSeconds<i64>>")]
-    default_max_age: Option<Duration>,
+    default_max_age: Option<SignedDuration>,
     require_auth_time: Option<bool>,
     default_acr_values: Option<Vec<String>>,
     initiate_login_uri: Option<Url>,

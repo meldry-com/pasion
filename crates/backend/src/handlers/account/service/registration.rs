@@ -9,7 +9,7 @@
 use std::{net::IpAddr, str::FromStr};
 
 use anyhow::Error as AnyhowError;
-use chrono::{DateTime, Duration, Utc};
+use jiff::{SignedDuration, Timestamp};
 use lettre::Address;
 use pasion_data::{
     BoxRepository, BrowserSession, Clock, RepositoryAccess, RepositoryError,
@@ -134,7 +134,7 @@ pub struct RegistrationStatusSummary {
     pub registration: UserRegistration,
     pub email_pending: bool,
     pub pending_email: Option<String>,
-    pub pending_email_sent_at: Option<DateTime<Utc>>,
+    pub pending_email_sent_at: Option<Timestamp>,
     pub phone_pending: bool,
     pub steps_completed: Vec<&'static str>,
     pub next_step: &'static str,
@@ -162,7 +162,7 @@ pub enum RegistrationWorkflowEventKind {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct RegistrationWorkflowEvent {
     pub kind: RegistrationWorkflowEventKind,
-    pub occurred_at: DateTime<Utc>,
+    pub occurred_at: Timestamp,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -173,7 +173,7 @@ pub enum RegistrationWorkflowDeadlineKind {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct RegistrationWorkflowDeadline {
     pub kind: RegistrationWorkflowDeadlineKind,
-    pub due_at: DateTime<Utc>,
+    pub due_at: Timestamp,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -332,7 +332,7 @@ impl RegistrationProgress {
 
         vec![RegistrationWorkflowDeadline {
             kind: RegistrationWorkflowDeadlineKind::RegistrationExpiresAt,
-            due_at: self.registration.created_at + Duration::hours(1),
+            due_at: self.registration.created_at + SignedDuration::from_hours(1),
         }]
     }
 
@@ -1138,7 +1138,7 @@ pub async fn resend_pending_registration_verification(
             .ok_or(ResendRegistrationVerificationError::NotFound)?;
 
         if auth.completed_at.is_none() {
-            if clock.now() < auth.created_at + Duration::seconds(60) {
+            if clock.now() < auth.created_at + SignedDuration::from_secs(60) {
                 return Err(ResendRegistrationVerificationError::RateLimited);
             }
             if let Err(error) = limiter
@@ -1201,8 +1201,8 @@ pub async fn resend_pending_registration_verification(
     Ok(ResendRegistrationVerificationStatus::AlreadyVerified)
 }
 
-fn registration_has_expired(created_at: DateTime<Utc>, now: DateTime<Utc>) -> bool {
-    now >= created_at + Duration::hours(1)
+fn registration_has_expired(created_at: Timestamp, now: Timestamp) -> bool {
+    now >= created_at + SignedDuration::from_hours(1)
 }
 
 pub async fn verify_registration_email_code(
@@ -1461,7 +1461,7 @@ pub async fn change_registration_email(
         return Ok(RegistrationEmailChangeOutcome::RateLimited);
     }
 
-    if clock.now() < current_auth.created_at + Duration::seconds(60)
+    if clock.now() < current_auth.created_at + SignedDuration::from_secs(60)
         || !limiter
             .check_registration_email_resend_cooldown(progress.registration.id)
             .await
@@ -1596,7 +1596,7 @@ pub async fn check_registration_finish_eligibility(
     registration: &UserRegistration,
     browser_session_present: Option<bool>,
 ) -> Result<(), CheckRegistrationFinishEligibilityError> {
-    if clock.now() - registration.created_at > Duration::hours(1) {
+    if clock.now().duration_since(registration.created_at) > SignedDuration::from_hours(1) {
         return Err(CheckRegistrationFinishEligibilityError::RegistrationExpired);
     }
 
@@ -2107,7 +2107,6 @@ pub async fn finish_registration(
 
 #[cfg(test)]
 mod tests {
-    use chrono::TimeZone;
     use pasion_data::{RepositoryFactory as _, clock::MockClock};
     use rand_chacha::ChaChaRng;
     use rand_core::SeedableRng;
@@ -2116,18 +2115,18 @@ mod tests {
 
     #[test]
     fn registration_resend_rejects_at_expiration_boundary() {
-        let created_at = Utc.timestamp_opt(1_700_000_000, 0).unwrap();
+        let created_at = Timestamp::from_second(1_700_000_000).unwrap();
         assert!(!registration_has_expired(
             created_at,
-            created_at + Duration::hours(1) - Duration::milliseconds(1)
+            created_at + SignedDuration::from_hours(1) - SignedDuration::from_millis(1)
         ));
         assert!(registration_has_expired(
             created_at,
-            created_at + Duration::hours(1)
+            created_at + SignedDuration::from_hours(1)
         ));
     }
 
-    fn sample_registration(created_at: DateTime<Utc>) -> UserRegistration {
+    fn sample_registration(created_at: Timestamp) -> UserRegistration {
         UserRegistration {
             id: Ulid::generate(),
             username: "alice".into(),
@@ -2259,13 +2258,13 @@ mod tests {
 
     #[test]
     fn workflow_snapshot_tracks_pending_email_verification() {
-        let created_at = Utc.with_ymd_and_hms(2026, 3, 30, 12, 0, 0).unwrap();
+        let created_at = "2026-03-30T12:00:00Z".parse::<Timestamp>().unwrap();
         let email_authentication = UserEmailAuthentication {
             id: Ulid::generate(),
             user_session_id: None,
             user_registration_id: Some(Ulid::generate()),
             email: "alice@example.com".into(),
-            created_at: created_at + Duration::minutes(1),
+            created_at: created_at + SignedDuration::from_mins(1),
             completed_at: None,
         };
 
@@ -2288,7 +2287,7 @@ mod tests {
         assert_eq!(snapshot.deadlines.len(), 1);
         assert_eq!(
             snapshot.deadlines[0].due_at,
-            created_at + Duration::hours(1)
+            created_at + SignedDuration::from_hours(1)
         );
         assert_eq!(snapshot.events.len(), 2);
         assert_eq!(
@@ -2303,16 +2302,16 @@ mod tests {
 
     #[test]
     fn workflow_snapshot_tracks_completed_registration() {
-        let created_at = Utc.with_ymd_and_hms(2026, 3, 30, 12, 0, 0).unwrap();
-        let completed_at = created_at + Duration::minutes(10);
-        let email_verified_at = created_at + Duration::minutes(2);
+        let created_at = "2026-03-30T12:00:00Z".parse::<Timestamp>().unwrap();
+        let completed_at = created_at + SignedDuration::from_mins(10);
+        let email_verified_at = created_at + SignedDuration::from_mins(2);
 
         let email_authentication = UserEmailAuthentication {
             id: Ulid::generate(),
             user_session_id: None,
             user_registration_id: Some(Ulid::generate()),
             email: "alice@example.com".into(),
-            created_at: created_at + Duration::minutes(1),
+            created_at: created_at + SignedDuration::from_mins(1),
             completed_at: Some(email_verified_at),
         };
 

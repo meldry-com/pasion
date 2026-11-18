@@ -7,7 +7,7 @@
 
 use std::sync::Arc;
 
-use chrono::Duration;
+use jiff::SignedDuration;
 use oauth2_types::{
     matrix_scope::{InvalidMatrixLoginScope, validate_matrix_login_scope},
     pkce::CodeChallengeError,
@@ -355,7 +355,7 @@ pub async fn exchange_authorization_code(
             );
 
             // Ending the session if the token was already exchanged more than 20s ago
-            if now - exchanged_at > Duration::microseconds(20 * 1000 * 1000) {
+            if now.duration_since(exchanged_at) > SignedDuration::from_secs(20) {
                 warn!(oauth_session.id = %session_id, "Ending potentially compromised session");
                 let session = repo.oauth2_session().lookup(session_id).await?.ok_or(
                     AuthorizationCodeExchangeError::NoSuchOAuthSession(session_id),
@@ -379,7 +379,7 @@ pub async fn exchange_authorization_code(
             session_id,
             fulfilled_at,
         } => {
-            if now - fulfilled_at > Duration::microseconds(10 * 60 * 1000 * 1000) {
+            if now.duration_since(fulfilled_at) > SignedDuration::from_mins(10) {
                 warn!(
                     oauth2_client.id = %client.id,
                     authorization_grant.id = %authz_grant.id,

@@ -1,4 +1,4 @@
-use chrono::{DateTime, Utc};
+use jiff::Timestamp;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
@@ -27,19 +27,19 @@ pub struct WorkflowInstance {
     /// Optional cross-system correlation key.
     pub correlation_key: Option<String>,
     /// When execution first began.
-    pub started_at: Option<DateTime<Utc>>,
+    pub started_at: Option<Timestamp>,
     /// When the workflow completed successfully.
-    pub completed_at: Option<DateTime<Utc>>,
+    pub completed_at: Option<Timestamp>,
     /// When the workflow failed terminally.
-    pub failed_at: Option<DateTime<Utc>>,
+    pub failed_at: Option<Timestamp>,
     /// When the workflow was cancelled explicitly.
-    pub cancelled_at: Option<DateTime<Utc>>,
+    pub cancelled_at: Option<Timestamp>,
     /// When the workflow expires automatically, if applicable.
-    pub expires_at: Option<DateTime<Utc>>,
+    pub expires_at: Option<Timestamp>,
     /// When the workflow record was created.
-    pub created_at: DateTime<Utc>,
+    pub created_at: Timestamp,
     /// Last state mutation timestamp.
-    pub updated_at: DateTime<Utc>,
+    pub updated_at: Timestamp,
 }
 
 /// Lifecycle state for a workflow instance.
@@ -144,17 +144,17 @@ pub struct WorkflowStep {
     /// Optional human-readable error message from the latest failure.
     pub last_error_message: Option<String>,
     /// When the step became eligible to run.
-    pub scheduled_at: Option<DateTime<Utc>>,
+    pub scheduled_at: Option<Timestamp>,
     /// When execution started.
-    pub started_at: Option<DateTime<Utc>>,
+    pub started_at: Option<Timestamp>,
     /// When the step completed successfully.
-    pub completed_at: Option<DateTime<Utc>>,
+    pub completed_at: Option<Timestamp>,
     /// When the step failed terminally or most recently.
-    pub failed_at: Option<DateTime<Utc>>,
+    pub failed_at: Option<Timestamp>,
     /// When the step record was created.
-    pub created_at: DateTime<Utc>,
+    pub created_at: Timestamp,
     /// Last step mutation timestamp.
-    pub updated_at: DateTime<Utc>,
+    pub updated_at: Timestamp,
 }
 
 /// Lifecycle state for a workflow step.
@@ -208,7 +208,7 @@ pub struct WorkflowEvent {
     /// Structured event payload.
     pub payload: Value,
     /// When the event occurred.
-    pub occurred_at: DateTime<Utc>,
+    pub occurred_at: Timestamp,
 }
 
 /// Immutable workflow event kind.
@@ -249,19 +249,19 @@ pub struct WorkflowDeadline {
     /// Structured metadata for the deadline or timer source.
     pub payload: Value,
     /// When the deadline becomes due.
-    pub due_at: DateTime<Utc>,
+    pub due_at: Timestamp,
     /// When the deadline was satisfied normally.
-    pub satisfied_at: Option<DateTime<Utc>>,
+    pub satisfied_at: Option<Timestamp>,
     /// When the deadline was explicitly cancelled.
-    pub cancelled_at: Option<DateTime<Utc>>,
+    pub cancelled_at: Option<Timestamp>,
     /// When the deadline record was created.
-    pub created_at: DateTime<Utc>,
+    pub created_at: Timestamp,
 }
 
 impl WorkflowDeadline {
     /// Returns `true` when the deadline is open and past due.
     #[must_use]
-    pub fn is_overdue(&self, now: DateTime<Utc>) -> bool {
+    pub fn is_overdue(&self, now: Timestamp) -> bool {
         matches!(self.status, WorkflowDeadlineStatus::Open) && self.due_at <= now
     }
 }
@@ -302,7 +302,7 @@ pub struct WorkflowAuditLog {
     /// Structured audit metadata for debugging and reports.
     pub metadata: Value,
     /// When the action occurred.
-    pub occurred_at: DateTime<Utc>,
+    pub occurred_at: Timestamp,
 }
 
 /// Human/audit-oriented action category for workflow logging.
@@ -326,7 +326,7 @@ mod tests {
         reason = "unit tests use wall-clock timestamps only as sample data"
     )]
 
-    use chrono::{Duration, Utc};
+    use jiff::{SignedDuration, Timestamp};
     use serde_json::Value;
 
     use super::{
@@ -358,7 +358,7 @@ mod tests {
 
     #[test]
     fn open_deadline_becomes_overdue_after_due_time() {
-        let now = Utc::now();
+        let now = Timestamp::now();
         let deadline = WorkflowDeadline {
             id: ulid::Ulid::nil(),
             workflow_instance_id: ulid::Ulid::nil(),
@@ -366,10 +366,10 @@ mod tests {
             deadline_key: "verify_email_timeout".to_owned(),
             status: WorkflowDeadlineStatus::Open,
             payload: Value::Null,
-            due_at: now - Duration::minutes(1),
+            due_at: now - SignedDuration::from_mins(1),
             satisfied_at: None,
             cancelled_at: None,
-            created_at: now - Duration::minutes(5),
+            created_at: now - SignedDuration::from_mins(5),
         };
 
         assert!(deadline.is_overdue(now));

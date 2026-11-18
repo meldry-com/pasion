@@ -1,6 +1,6 @@
 //! The [`ClientMetadata`] struct and its accessor methods.
 
-use chrono::Duration;
+use jiff::SignedDuration;
 use pasion_iana::{
     jose::{JsonWebEncryptionAlg, JsonWebEncryptionEnc, JsonWebSignatureAlg},
     oauth::{OAuthAuthorizationEndpointResponseType, OAuthClientAuthenticationMethod},
@@ -260,7 +260,7 @@ pub struct ClientMetadata {
     /// seconds.
     ///
     /// The `max_age` request parameter overrides this default value.
-    pub default_max_age: Option<Duration>,
+    pub default_max_age: Option<SignedDuration>,
 
     /// Whether the `auth_time` Claim in the ID Token is required.
     ///

@@ -1,4 +1,5 @@
 use salvo::prelude::*;
+use salvo_oapi::endpoint;
 use serde::Serialize;
 
 use super::{
@@ -11,7 +12,7 @@ use crate::storage;
 
 const MAX_AVATAR_SIZE: usize = 5 * 1024 * 1024; // 5 MB
 
-#[derive(Serialize, salvo::oapi::ToSchema)]
+#[derive(Serialize, salvo_oapi::ToSchema)]
 pub struct UploadAvatarResponse {
     pub avatar_url: String,
 }

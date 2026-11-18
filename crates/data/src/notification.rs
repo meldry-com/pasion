@@ -1,4 +1,4 @@
-use chrono::{DateTime, Utc};
+use jiff::Timestamp;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use url::Url;
@@ -36,15 +36,15 @@ pub struct NotificationRequest {
     /// Optional cross-system correlation key for tracing and audit.
     pub correlation_key: Option<String>,
     /// When the request was recorded.
-    pub created_at: DateTime<Utc>,
+    pub created_at: Timestamp,
     /// When the request becomes eligible for delivery.
-    pub scheduled_at: DateTime<Utc>,
+    pub scheduled_at: Timestamp,
     /// When delivery processing first started.
-    pub started_at: Option<DateTime<Utc>>,
+    pub started_at: Option<Timestamp>,
     /// When the request reached a terminal successful state.
-    pub completed_at: Option<DateTime<Utc>>,
+    pub completed_at: Option<Timestamp>,
     /// When the request was explicitly cancelled.
-    pub cancelled_at: Option<DateTime<Utc>>,
+    pub cancelled_at: Option<Timestamp>,
 }
 
 /// The business origin of a persisted notification request.
@@ -129,17 +129,17 @@ pub struct NotificationDelivery {
     /// Last terminal or most recent failure captured for this delivery.
     pub last_failure: Option<NotificationDeliveryFailure>,
     /// When the delivery record was created.
-    pub created_at: DateTime<Utc>,
+    pub created_at: Timestamp,
     /// When a worker reserved this delivery for processing.
-    pub reserved_at: Option<DateTime<Utc>>,
+    pub reserved_at: Option<Timestamp>,
     /// When the current attempt began contacting the provider.
-    pub sent_at: Option<DateTime<Utc>>,
+    pub sent_at: Option<Timestamp>,
     /// When the platform observed terminal success.
-    pub delivered_at: Option<DateTime<Utc>>,
+    pub delivered_at: Option<Timestamp>,
     /// When the most recent terminal failure occurred.
-    pub failed_at: Option<DateTime<Utc>>,
+    pub failed_at: Option<Timestamp>,
     /// When this delivery should be retried next.
-    pub next_retry_at: Option<DateTime<Utc>>,
+    pub next_retry_at: Option<Timestamp>,
 }
 
 impl NotificationDelivery {
@@ -269,7 +269,7 @@ pub struct NotificationEventLog {
     /// Structured event metadata for audits and debugging.
     pub metadata: Value,
     /// When the event occurred.
-    pub occurred_at: DateTime<Utc>,
+    pub occurred_at: Timestamp,
 }
 
 /// Immutable notification lifecycle event kind.
@@ -347,9 +347,9 @@ pub struct NotificationTemplateVersion {
     /// Body template content.
     pub body_template: String,
     /// When this version was created.
-    pub created_at: DateTime<Utc>,
+    pub created_at: Timestamp,
     /// When this version was published for delivery use.
-    pub published_at: Option<DateTime<Utc>>,
+    pub published_at: Option<Timestamp>,
 }
 
 /// A user's notification channel preference.
@@ -366,7 +366,7 @@ pub struct NotificationPreference {
     /// Whether the channel is enabled for the user.
     pub enabled: bool,
     /// When this preference was last updated.
-    pub updated_at: DateTime<Utc>,
+    pub updated_at: Timestamp,
 }
 
 /// Binding between a notification channel and a provider.
@@ -386,7 +386,7 @@ pub struct NotificationProviderBinding {
     /// Whether this binding is currently active.
     pub enabled: bool,
     /// When this binding was created.
-    pub created_at: DateTime<Utc>,
+    pub created_at: Timestamp,
 }
 
 #[cfg(test)]
@@ -395,6 +395,8 @@ mod tests {
         clippy::disallowed_methods,
         reason = "unit tests use wall-clock timestamps only as sample data"
     )]
+
+    use jiff::Timestamp;
 
     use super::{
         NotificationDelivery, NotificationDeliveryFailure, NotificationDeliveryStatus,
@@ -428,12 +430,12 @@ mod tests {
                 message: Some("gateway timeout".to_owned()),
                 retryable: true,
             }),
-            created_at: chrono::Utc::now(),
+            created_at: Timestamp::now(),
             reserved_at: None,
             sent_at: None,
             delivered_at: None,
-            failed_at: Some(chrono::Utc::now()),
-            next_retry_at: Some(chrono::Utc::now()),
+            failed_at: Some(Timestamp::now()),
+            next_retry_at: Some(Timestamp::now()),
         };
 
         assert!(delivery.should_retry());

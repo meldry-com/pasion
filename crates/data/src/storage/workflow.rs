@@ -1,5 +1,5 @@
 use async_trait::async_trait;
-use chrono::{DateTime, Utc};
+use jiff::Timestamp;
 use pasion_data::{
     Clock, WorkflowActor, WorkflowAssignee, WorkflowEvent, WorkflowEventKind, WorkflowInstance,
     WorkflowInstanceStatus, WorkflowStep, WorkflowStepStatus, WorkflowSubject,
@@ -18,7 +18,7 @@ pub struct NewWorkflowInstance {
     trigger: WorkflowActor,
     input: Value,
     correlation_key: Option<String>,
-    expires_at: Option<DateTime<Utc>>,
+    expires_at: Option<Timestamp>,
 }
 
 impl NewWorkflowInstance {
@@ -49,7 +49,7 @@ impl NewWorkflowInstance {
 
     /// Set an automatic expiration time for the workflow.
     #[must_use]
-    pub fn expires_at(mut self, expires_at: DateTime<Utc>) -> Self {
+    pub fn expires_at(mut self, expires_at: Timestamp) -> Self {
         self.expires_at = Some(expires_at);
         self
     }
@@ -86,7 +86,7 @@ impl NewWorkflowInstance {
 
     /// The automatic expiration time, if any.
     #[must_use]
-    pub fn expiration(&self) -> Option<DateTime<Utc>> {
+    pub fn expiration(&self) -> Option<Timestamp> {
         self.expires_at
     }
 }

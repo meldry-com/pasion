@@ -23,7 +23,6 @@
 //!     max_attempts: 5
 //! ```
 
-use chrono::Utc;
 use pasion_data::{
     flow::{
         AuthenticatorType, FlowDefinition, FlowDesignation, FlowStageBinding, IdentificationField,
@@ -123,7 +122,7 @@ impl FlowDefinitionFile {
         self,
         rng: &mut (dyn rand_core::RngCore + Send),
     ) -> (FlowDefinition, Vec<FlowStageBinding>) {
-        let now = Utc::now();
+        let now = jiff::Timestamp::now();
         let flow_id = new_id(now, rng);
 
         let designation = match self.designation.as_str() {

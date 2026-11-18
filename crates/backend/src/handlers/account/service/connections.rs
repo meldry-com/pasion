@@ -17,7 +17,7 @@ pub struct LinkedAccountSummary {
     pub provider_brand: Option<String>,
     pub subject: String,
     pub human_account_name: Option<String>,
-    pub created_at: chrono::DateTime<chrono::Utc>,
+    pub created_at: jiff::Timestamp,
 }
 
 #[derive(Debug, Error)]

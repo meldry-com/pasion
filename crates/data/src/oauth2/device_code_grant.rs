@@ -1,6 +1,6 @@
 use std::net::IpAddr;
 
-use chrono::{DateTime, Utc};
+use jiff::Timestamp;
 use oauth2_types::scope::Scope;
 use serde::Serialize;
 use ulid::Ulid;
@@ -20,7 +20,7 @@ pub enum DeviceCodeGrantState {
         browser_session_id: Ulid,
 
         /// The time at which this device code grant was fulfilled.
-        fulfilled_at: DateTime<Utc>,
+        fulfilled_at: Timestamp,
     },
 
     /// The device code grant has been rejected by a user.
@@ -29,7 +29,7 @@ pub enum DeviceCodeGrantState {
         browser_session_id: Ulid,
 
         /// The time at which this device code grant was rejected.
-        rejected_at: DateTime<Utc>,
+        rejected_at: Timestamp,
     },
 
     /// The device code grant was exchanged for an access token.
@@ -39,10 +39,10 @@ pub enum DeviceCodeGrantState {
         browser_session_id: Ulid,
 
         /// The time at which the device code grant was fulfilled.
-        fulfilled_at: DateTime<Utc>,
+        fulfilled_at: Timestamp,
 
         /// The time at which this device code grant was exchanged.
-        exchanged_at: DateTime<Utc>,
+        exchanged_at: Timestamp,
 
         /// The OAuth 2.0 session ID which was created by this device code
         /// grant.
@@ -62,7 +62,7 @@ impl DeviceCodeGrantState {
     pub fn fulfill(
         self,
         browser_session: &BrowserSession,
-        fulfilled_at: DateTime<Utc>,
+        fulfilled_at: Timestamp,
     ) -> Result<Self, InvalidTransitionError> {
         match self {
             DeviceCodeGrantState::Pending => Ok(DeviceCodeGrantState::Fulfilled {
@@ -84,7 +84,7 @@ impl DeviceCodeGrantState {
     pub fn reject(
         self,
         browser_session: &BrowserSession,
-        rejected_at: DateTime<Utc>,
+        rejected_at: Timestamp,
     ) -> Result<Self, InvalidTransitionError> {
         match self {
             DeviceCodeGrantState::Pending => Ok(DeviceCodeGrantState::Rejected {
@@ -106,7 +106,7 @@ impl DeviceCodeGrantState {
     pub fn exchange(
         self,
         session: &Session,
-        exchanged_at: DateTime<Utc>,
+        exchanged_at: Timestamp,
     ) -> Result<Self, InvalidTransitionError> {
         match self {
             DeviceCodeGrantState::Fulfilled {
@@ -177,10 +177,10 @@ pub struct DeviceCodeGrant {
     pub device_code: String,
 
     /// The time at which this device code grant was created.
-    pub created_at: DateTime<Utc>,
+    pub created_at: Timestamp,
 
     /// The time at which this device code grant will expire.
-    pub expires_at: DateTime<Utc>,
+    pub expires_at: Timestamp,
 
     /// The IP address of the client which requested this device code grant.
     pub ip_address: Option<IpAddr>,
@@ -209,7 +209,7 @@ impl DeviceCodeGrant {
     pub fn fulfill(
         self,
         browser_session: &BrowserSession,
-        fulfilled_at: DateTime<Utc>,
+        fulfilled_at: Timestamp,
     ) -> Result<Self, InvalidTransitionError> {
         Ok(Self {
             state: self.state.fulfill(browser_session, fulfilled_at)?,
@@ -227,7 +227,7 @@ impl DeviceCodeGrant {
     pub fn reject(
         self,
         browser_session: &BrowserSession,
-        rejected_at: DateTime<Utc>,
+        rejected_at: Timestamp,
     ) -> Result<Self, InvalidTransitionError> {
         Ok(Self {
             state: self.state.reject(browser_session, rejected_at)?,
@@ -246,7 +246,7 @@ impl DeviceCodeGrant {
     pub fn exchange(
         self,
         session: &Session,
-        exchanged_at: DateTime<Utc>,
+        exchanged_at: Timestamp,
     ) -> Result<Self, InvalidTransitionError> {
         Ok(Self {
             state: self.state.exchange(session, exchanged_at)?,

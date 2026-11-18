@@ -3,6 +3,7 @@
 
 use std::collections::BTreeMap;
 
+use jiff::Timestamp;
 use pasion_data::{PostAuthAction, UpstreamOAuthProvider, UserEmailAuthentication};
 use rand_core::RngCore as Rng;
 use serde::{Deserialize, Serialize};
@@ -72,7 +73,7 @@ impl RegisterContext {
 
 impl TemplateContext for RegisterContext {
     fn sample<R: Rng>(
-        _now: chrono::DateTime<chrono::Utc>,
+        _now: Timestamp,
         _rng: &mut R,
         _locales: &[pasion_i18n::DataLocale],
     ) -> BTreeMap<SampleIdentifier, Self> {
@@ -111,7 +112,7 @@ impl PasswordRegisterContext {
 
 impl TemplateContext for PasswordRegisterContext {
     fn sample<R: Rng>(
-        _now: chrono::DateTime<chrono::Utc>,
+        _now: Timestamp,
         _rng: &mut R,
         _locales: &[pasion_i18n::DataLocale],
     ) -> BTreeMap<SampleIdentifier, Self> {
@@ -164,7 +165,7 @@ impl RegisterStepsVerifyEmailContext {
 
 impl TemplateContext for RegisterStepsVerifyEmailContext {
     fn sample<R: Rng>(
-        now: chrono::DateTime<chrono::Utc>,
+        now: Timestamp,
         rng: &mut R,
         _locales: &[pasion_i18n::DataLocale],
     ) -> BTreeMap<SampleIdentifier, Self> {
@@ -202,7 +203,7 @@ impl RegisterStepsEmailInUseContext {
 
 impl TemplateContext for RegisterStepsEmailInUseContext {
     fn sample<R: Rng>(
-        _now: chrono::DateTime<chrono::Utc>,
+        _now: Timestamp,
         _rng: &mut R,
         _locales: &[pasion_i18n::DataLocale],
     ) -> BTreeMap<SampleIdentifier, Self> {
@@ -254,7 +255,7 @@ impl RegisterStepsDisplayNameContext {
 
 impl TemplateContext for RegisterStepsDisplayNameContext {
     fn sample<R: Rng>(
-        _now: chrono::DateTime<chrono::Utc>,
+        _now: Timestamp,
         _rng: &mut R,
         _locales: &[pasion_i18n::DataLocale],
     ) -> BTreeMap<SampleIdentifier, Self> {
@@ -304,7 +305,7 @@ impl RegisterStepsRegistrationTokenContext {
 
 impl TemplateContext for RegisterStepsRegistrationTokenContext {
     fn sample<R: Rng>(
-        _now: chrono::DateTime<chrono::Utc>,
+        _now: Timestamp,
         _rng: &mut R,
         _locales: &[pasion_i18n::DataLocale],
     ) -> BTreeMap<SampleIdentifier, Self> {

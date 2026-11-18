@@ -1,7 +1,8 @@
 use async_trait::async_trait;
-use chrono::{DateTime, Utc};
 use diesel::prelude::*;
 use diesel_async::RunQueryDsl;
+use jiff::Timestamp;
+use jiff_diesel::ToDiesel as _;
 use pasion_data::{
     Clock, User, UserPhone, UserPhoneAuthentication, UserPhoneAuthenticationCode, UserRegistration,
     new_id, user::UserPhoneRepository,
@@ -35,7 +36,8 @@ struct UserPhoneRow {
     id: Uuid,
     user_id: Uuid,
     phone: String,
-    created_at: DateTime<Utc>,
+    #[diesel(deserialize_as = jiff_diesel::Timestamp)]
+    created_at: Timestamp,
 }
 
 impl From<UserPhoneRow> for UserPhone {
@@ -56,7 +58,8 @@ struct NewUserPhone {
     id: Uuid,
     user_id: Uuid,
     phone: String,
-    created_at: DateTime<Utc>,
+    #[diesel(serialize_as = jiff_diesel::Timestamp)]
+    created_at: Timestamp,
 }
 
 /// Row type for loading user phone authentications from the database
@@ -66,8 +69,10 @@ struct UserPhoneAuthenticationRow {
     id: Uuid,
     user_registration_id: Option<Uuid>,
     phone: String,
-    created_at: DateTime<Utc>,
-    completed_at: Option<DateTime<Utc>>,
+    #[diesel(deserialize_as = jiff_diesel::Timestamp)]
+    created_at: Timestamp,
+    #[diesel(deserialize_as = jiff_diesel::NullableTimestamp)]
+    completed_at: Option<Timestamp>,
 }
 
 impl From<UserPhoneAuthenticationRow> for UserPhoneAuthentication {
@@ -89,7 +94,8 @@ struct NewUserPhoneAuthentication {
     id: Uuid,
     user_registration_id: Option<Uuid>,
     phone: String,
-    created_at: DateTime<Utc>,
+    #[diesel(serialize_as = jiff_diesel::Timestamp)]
+    created_at: Timestamp,
 }
 
 /// Row type for loading user phone authentication codes from the database
@@ -99,8 +105,10 @@ struct UserPhoneAuthenticationCodeRow {
     id: Uuid,
     user_phone_authentication_id: Uuid,
     code: String,
-    created_at: DateTime<Utc>,
-    expires_at: DateTime<Utc>,
+    #[diesel(deserialize_as = jiff_diesel::Timestamp)]
+    created_at: Timestamp,
+    #[diesel(deserialize_as = jiff_diesel::Timestamp)]
+    expires_at: Timestamp,
 }
 
 impl From<UserPhoneAuthenticationCodeRow> for UserPhoneAuthenticationCode {
@@ -122,8 +130,10 @@ struct NewUserPhoneAuthenticationCode {
     id: Uuid,
     user_phone_authentication_id: Uuid,
     code: String,
-    created_at: DateTime<Utc>,
-    expires_at: DateTime<Utc>,
+    #[diesel(serialize_as = jiff_diesel::Timestamp)]
+    created_at: Timestamp,
+    #[diesel(serialize_as = jiff_diesel::Timestamp)]
+    expires_at: Timestamp,
 }
 
 #[async_trait]
@@ -223,7 +233,7 @@ impl UserPhoneRepository for PgUserPhoneRepository<'_> {
         };
 
         diesel::insert_into(user_phones::table)
-            .values(&new_phone)
+            .values(new_phone)
             .execute(self.conn)
             .await?;
 
@@ -285,7 +295,7 @@ impl UserPhoneRepository for PgUserPhoneRepository<'_> {
         };
 
         diesel::insert_into(user_phone_authentications::table)
-            .values(&new_auth)
+            .values(new_auth)
             .execute(self.conn)
             .await?;
 
@@ -313,7 +323,7 @@ impl UserPhoneRepository for PgUserPhoneRepository<'_> {
         &mut self,
         rng: &mut (dyn RngCore + Send),
         clock: &dyn Clock,
-        duration: chrono::Duration,
+        duration: jiff::SignedDuration,
         user_phone_authentication: &UserPhoneAuthentication,
         code: String,
     ) -> Result<UserPhoneAuthenticationCode, Self::Error> {
@@ -334,7 +344,7 @@ impl UserPhoneRepository for PgUserPhoneRepository<'_> {
         };
 
         diesel::insert_into(user_phone_authentication_codes::table)
-            .values(&new_code)
+            .values(new_code)
             .execute(self.conn)
             .await?;
 
@@ -431,7 +441,7 @@ impl UserPhoneRepository for PgUserPhoneRepository<'_> {
                 .find(Uuid::from(user_phone_authentication.id))
                 .filter(user_phone_authentications::completed_at.is_null()),
         )
-        .set(user_phone_authentications::completed_at.eq(Some(completed_at)))
+        .set(user_phone_authentications::completed_at.eq(Some(completed_at).to_diesel()))
         .execute(self.conn)
         .await?;
 

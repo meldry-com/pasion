@@ -1,9 +1,9 @@
 //! PostgreSQL implementation of [`AccountRepository`].
 
 use async_trait::async_trait;
-use chrono::{DateTime, Utc};
 use diesel::prelude::*;
 use diesel_async::RunQueryDsl;
+use jiff::Timestamp;
 use pasion_data::{
     AccountContactPoint, AccountIdentityBinding, ContactChannel, IdentityProviderType,
     account::{AccountRepository, AccountSecuritySummary},
@@ -44,7 +44,8 @@ struct UserEmailRow {
     id: Uuid,
     user_id: Uuid,
     email: String,
-    created_at: DateTime<Utc>,
+    #[diesel(deserialize_as = jiff_diesel::Timestamp)]
+    created_at: Timestamp,
 }
 
 #[derive(Debug, Clone, Queryable, Selectable)]
@@ -53,7 +54,8 @@ struct UserPhoneRow {
     id: Uuid,
     user_id: Uuid,
     phone: String,
-    created_at: DateTime<Utc>,
+    #[diesel(deserialize_as = jiff_diesel::Timestamp)]
+    created_at: Timestamp,
 }
 
 #[derive(Debug, Clone, Queryable, Selectable)]
@@ -65,7 +67,8 @@ struct AccountSecurityEventRow {
     metadata: serde_json::Value,
     ip_address: Option<ipnetwork::IpNetwork>,
     user_agent: Option<String>,
-    created_at: DateTime<Utc>,
+    #[diesel(deserialize_as = jiff_diesel::Timestamp)]
+    created_at: Timestamp,
 }
 
 impl TryFrom<AccountSecurityEventRow> for AccountSecurityEvent {
@@ -183,26 +186,30 @@ impl AccountRepository for PgAccountRepository<'_> {
     ) -> Result<Vec<AccountIdentityBinding>, Self::Error> {
         let user_uuid = Uuid::from(user_id);
 
-        let rows: Vec<(Uuid, Uuid, String, DateTime<Utc>, Option<String>, Uuid)> =
-            upstream_oauth_links::table
-                .inner_join(
-                    upstream_oauth_providers::table
-                        .on(upstream_oauth_links::upstream_oauth_provider_id
-                            .eq(upstream_oauth_providers::id)),
-                )
-                .filter(upstream_oauth_links::user_id.eq(user_uuid))
-                .filter(upstream_oauth_links::unlinked_at.is_null())
-                .order(upstream_oauth_links::created_at.asc())
-                .select((
-                    upstream_oauth_links::id,
-                    upstream_oauth_links::user_id.assume_not_null(),
-                    upstream_oauth_links::subject,
-                    upstream_oauth_links::created_at,
-                    upstream_oauth_links::human_account_name,
-                    upstream_oauth_providers::id,
-                ))
-                .load(self.conn)
-                .await?;
+        let rows: Vec<(
+            Uuid,
+            Uuid,
+            String,
+            jiff_diesel::Timestamp,
+            Option<String>,
+            Uuid,
+        )> = upstream_oauth_links::table
+            .inner_join(upstream_oauth_providers::table.on(
+                upstream_oauth_links::upstream_oauth_provider_id.eq(upstream_oauth_providers::id),
+            ))
+            .filter(upstream_oauth_links::user_id.eq(user_uuid))
+            .filter(upstream_oauth_links::unlinked_at.is_null())
+            .order(upstream_oauth_links::created_at.asc())
+            .select((
+                upstream_oauth_links::id,
+                upstream_oauth_links::user_id.assume_not_null(),
+                upstream_oauth_links::subject,
+                upstream_oauth_links::created_at,
+                upstream_oauth_links::human_account_name,
+                upstream_oauth_providers::id,
+            ))
+            .load(self.conn)
+            .await?;
 
         let bindings = rows
             .into_iter()
@@ -216,7 +223,7 @@ impl AccountRepository for PgAccountRepository<'_> {
                         external_subject: subject,
                         external_display_name: human_name,
                         metadata: serde_json::Value::Object(serde_json::Map::new()),
-                        created_at,
+                        created_at: created_at.to_jiff(),
                         last_used_at: None,
                     }
                 },

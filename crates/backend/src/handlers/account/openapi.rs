@@ -4,10 +4,8 @@
 //! router whose handlers are annotated with `#[endpoint]`, and attaches a
 //! Swagger UI frontend so that developers can explore the API interactively.
 
-use salvo::{
-    oapi::{OpenApi, swagger_ui::SwaggerUi},
-    prelude::*,
-};
+use salvo::prelude::*;
+use salvo_oapi::{OpenApi, swagger_ui::SwaggerUi};
 
 /// Build an OpenAPI document from the given `router` and return a new router
 /// that serves both the JSON spec and the Swagger UI.
@@ -32,7 +30,7 @@ pub fn build_openapi_router_with_prefix(router: &Router, prefix: &str) -> Router
     let prefix = prefix.trim_end_matches('/');
     let doc = OpenApi::new("Pasion REST API", env!("CARGO_PKG_VERSION"))
         .merge_router(router)
-        .servers([salvo::oapi::Server::new(if prefix.is_empty() {
+        .servers([salvo_oapi::Server::new(if prefix.is_empty() {
             "/"
         } else {
             prefix

@@ -5,7 +5,7 @@ use std::{
     net::{IpAddr, Ipv4Addr},
 };
 
-use chrono::Duration;
+use jiff::SignedDuration;
 use pasion_data::{
     BrowserSession, User, UserEmailAuthenticationCode, UserRecoverySession, UserRegistration,
 };
@@ -50,7 +50,7 @@ impl EmailRecoveryContext {
 
 impl TemplateContext for EmailRecoveryContext {
     fn sample<R: Rng>(
-        now: chrono::DateTime<chrono::Utc>,
+        now: jiff::Timestamp,
         rng: &mut R,
         _locales: &[pasion_i18n::DataLocale],
     ) -> BTreeMap<SampleIdentifier, Self> {
@@ -121,7 +121,7 @@ impl EmailVerificationContext {
 
 impl TemplateContext for EmailVerificationContext {
     fn sample<R: Rng>(
-        now: chrono::DateTime<chrono::Utc>,
+        now: jiff::Timestamp,
         rng: &mut R,
         _locales: &[pasion_i18n::DataLocale],
     ) -> BTreeMap<SampleIdentifier, Self> {
@@ -133,8 +133,8 @@ impl TemplateContext for EmailVerificationContext {
                         id: pasion_data::new_id(now, rng),
                         user_email_authentication_id: pasion_data::new_id(now, rng),
                         code: "123456".to_owned(),
-                        created_at: now - Duration::try_minutes(5).unwrap(),
-                        expires_at: now + Duration::try_minutes(25).unwrap(),
+                        created_at: now - SignedDuration::from_mins(5),
+                        expires_at: now + SignedDuration::from_mins(25),
                     };
 
                     Self {

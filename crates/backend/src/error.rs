@@ -2,9 +2,9 @@ use std::{error::Error as StdError, fmt};
 
 use salvo::{
     http::StatusCode,
-    oapi::{self, BasicType, Content, EndpointOutRegister, Object},
     prelude::{Json, Response, Scribe},
 };
+use salvo_oapi::{self as oapi, BasicType, Content, EndpointOutRegister, Object};
 
 use crate::{
     handlers::{

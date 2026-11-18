@@ -1,7 +1,8 @@
 use async_trait::async_trait;
-use chrono::{DateTime, Utc};
 use diesel::prelude::*;
 use diesel_async::RunQueryDsl;
+use jiff::Timestamp;
+use jiff_diesel::ToDiesel as _;
 use pasion_data::{
     BrowserSession, Clock, Page, Pagination, UpstreamOAuthAuthorizationSession,
     UpstreamOAuthAuthorizationSessionState, UpstreamOAuthLink, UpstreamOAuthProvider, new_id,
@@ -42,11 +43,15 @@ struct SessionLookup {
     id_token: Option<String>,
     id_token_claims: Option<serde_json::Value>,
     userinfo: Option<serde_json::Value>,
-    created_at: DateTime<Utc>,
-    completed_at: Option<DateTime<Utc>>,
-    consumed_at: Option<DateTime<Utc>>,
+    #[diesel(deserialize_as = jiff_diesel::Timestamp)]
+    created_at: Timestamp,
+    #[diesel(deserialize_as = jiff_diesel::NullableTimestamp)]
+    completed_at: Option<Timestamp>,
+    #[diesel(deserialize_as = jiff_diesel::NullableTimestamp)]
+    consumed_at: Option<Timestamp>,
     extra_callback_parameters: Option<serde_json::Value>,
-    unlinked_at: Option<DateTime<Utc>>,
+    #[diesel(deserialize_as = jiff_diesel::NullableTimestamp)]
+    unlinked_at: Option<Timestamp>,
 }
 
 impl Node<Ulid> for SessionLookup {
@@ -153,9 +158,10 @@ struct NewSession {
     state: String,
     code_challenge_verifier: Option<String>,
     nonce: Option<String>,
-    created_at: DateTime<Utc>,
-    completed_at: Option<DateTime<Utc>>,
-    consumed_at: Option<DateTime<Utc>>,
+    #[diesel(serialize_as = jiff_diesel::Timestamp)]
+    created_at: Timestamp,
+    completed_at: Option<jiff_diesel::Timestamp>,
+    consumed_at: Option<jiff_diesel::Timestamp>,
     id_token: Option<String>,
     userinfo: Option<serde_json::Value>,
 }
@@ -229,7 +235,7 @@ impl UpstreamOAuthSessionRepository for PgUpstreamOAuthSessionRepository<'_> {
         };
 
         diesel::insert_into(upstream_oauth_authorization_sessions::table)
-            .values(&new_session)
+            .values(new_session)
             .execute(self.conn)
             .await?;
 
@@ -272,7 +278,7 @@ impl UpstreamOAuthSessionRepository for PgUpstreamOAuthSessionRepository<'_> {
         .set((
             upstream_oauth_authorization_sessions::upstream_oauth_link_id
                 .eq(Some(Uuid::from(upstream_oauth_link.id))),
-            upstream_oauth_authorization_sessions::completed_at.eq(Some(completed_at)),
+            upstream_oauth_authorization_sessions::completed_at.eq(Some(completed_at).to_diesel()),
             upstream_oauth_authorization_sessions::id_token.eq(&id_token),
             upstream_oauth_authorization_sessions::id_token_claims.eq(&id_token_claims),
             upstream_oauth_authorization_sessions::extra_callback_parameters
@@ -318,7 +324,7 @@ impl UpstreamOAuthSessionRepository for PgUpstreamOAuthSessionRepository<'_> {
                 .find(Uuid::from(upstream_oauth_authorization_session.id)),
         )
         .set((
-            upstream_oauth_authorization_sessions::consumed_at.eq(Some(consumed_at)),
+            upstream_oauth_authorization_sessions::consumed_at.eq(Some(consumed_at).to_diesel()),
             upstream_oauth_authorization_sessions::user_session_id
                 .eq(Some(Uuid::from(browser_session.id))),
         ))

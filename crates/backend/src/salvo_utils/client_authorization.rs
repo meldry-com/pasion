@@ -1,8 +1,8 @@
 use std::{collections::HashMap, sync::LazyLock};
 
-use chrono::{DateTime, Duration, Utc};
 use headers::authorization::{Basic, Bearer, Credentials as _};
 use http::StatusCode;
+use jiff::{SignedDuration, Timestamp};
 use oauth2_types::errors::{ClientError, ClientErrorCode};
 use pasion_data::{Client, JwksOrJwksUri, RepositoryAccess, oauth2::OAuth2ClientRepository};
 use pasion_iana::{jose::JsonWebSignatureAlg, oauth::OAuthClientAuthenticationMethod};
@@ -114,7 +114,7 @@ impl Credentials {
         client: &Client,
         token_endpoint: &url::Url,
         issuer: &url::Url,
-        now: DateTime<Utc>,
+        now: Timestamp,
     ) -> Result<(), CredentialsVerificationError> {
         match (self, method) {
             (Credentials::None { .. }, OAuthClientAuthenticationMethod::None) => {}
@@ -211,8 +211,8 @@ impl Credentials {
     }
 }
 
-fn max_client_assertion_lifetime() -> Duration {
-    Duration::try_minutes(5).expect("five-minute assertion lifetime is representable")
+fn max_client_assertion_lifetime() -> SignedDuration {
+    SignedDuration::from_mins(5)
 }
 
 fn validate_client_assertion_alg(
@@ -233,7 +233,7 @@ fn validate_client_assertion_claims(
     expected_client_id: &str,
     token_endpoint: &url::Url,
     issuer: &url::Url,
-    now: DateTime<Utc>,
+    now: Timestamp,
 ) -> Result<(), CredentialsVerificationError> {
     let mut claims = jwt.payload().clone();
     let time_options = TimeOptions::new(now);
@@ -255,7 +255,7 @@ fn validate_client_assertion_claims(
     let expires_at = claims::EXP
         .extract_required_with_options(&mut claims, &time_options)
         .map_err(CredentialsVerificationError::InvalidAssertionClaims)?;
-    if expires_at.signed_duration_since(now) > max_client_assertion_lifetime() {
+    if expires_at.duration_since(now) > max_client_assertion_lifetime() {
         return Err(CredentialsVerificationError::AssertionExpirationTooLong);
     }
 
@@ -645,7 +645,6 @@ where
 #[cfg(test)]
 mod tests {
     use base64ct::{Base64UrlUnpadded, Encoding};
-    use chrono::TimeZone as _;
 
     use super::*;
 
@@ -666,8 +665,8 @@ mod tests {
         Jwt::try_from(token).unwrap()
     }
 
-    fn fixed_now() -> DateTime<Utc> {
-        Utc.with_ymd_and_hms(2026, 5, 6, 12, 0, 0).unwrap()
+    fn fixed_now() -> Timestamp {
+        "2026-05-06T12:00:00Z".parse::<Timestamp>().unwrap()
     }
 
     #[test]
@@ -679,8 +678,8 @@ mod tests {
             "iss": "client-123",
             "sub": "client-123",
             "aud": "https://example.com/oauth2/token",
-            "exp": (now + Duration::try_minutes(1).unwrap()).timestamp(),
-            "iat": now.timestamp(),
+            "exp": (now + SignedDuration::from_mins(1)).as_second(),
+            "iat": now.as_second(),
             "jti": "assertion-1"
         }));
 
@@ -707,7 +706,7 @@ mod tests {
             "iss": "client-123",
             "sub": "client-123",
             "aud": "https://example.com/",
-            "exp": (now + Duration::try_minutes(1).unwrap()).timestamp(),
+            "exp": (now + SignedDuration::from_mins(1)).as_second(),
         }));
 
         validate_client_assertion_claims(&jwt, "client-123", &token_endpoint, &issuer, now)
@@ -723,7 +722,7 @@ mod tests {
             "iss": "client-123",
             "sub": "client-123",
             "aud": "https://attacker.example/token",
-            "exp": (now + Duration::try_minutes(1).unwrap()).timestamp(),
+            "exp": (now + SignedDuration::from_mins(1)).as_second(),
         }));
 
         assert!(matches!(
@@ -741,7 +740,7 @@ mod tests {
             "iss": "client-123",
             "sub": "other-client",
             "aud": "https://example.com/oauth2/token",
-            "exp": (now + Duration::try_minutes(1).unwrap()).timestamp(),
+            "exp": (now + SignedDuration::from_mins(1)).as_second(),
         }));
 
         assert!(matches!(
@@ -759,7 +758,7 @@ mod tests {
             "iss": "client-123",
             "sub": "client-123",
             "aud": "https://example.com/oauth2/token",
-            "exp": (now + Duration::try_minutes(30).unwrap()).timestamp(),
+            "exp": (now + SignedDuration::from_mins(30)).as_second(),
         }));
 
         assert!(matches!(

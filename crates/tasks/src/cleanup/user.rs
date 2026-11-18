@@ -1,5 +1,6 @@
 //! User-related cleanup tasks
 
+use jiff::SignedDuration;
 use pasion_data::queue::{
     CleanupUserEmailAuthenticationsJob, CleanupUserRecoverySessionsJob, CleanupUserRegistrationsJob,
 };
@@ -9,7 +10,7 @@ cleanup_ulid_cursor_job!(
     span = "job.cleanup_user_registrations",
     repo = user_registration,
     method = cleanup,
-    cutoff = |state: &crate::State| state.clock().now() - chrono::Duration::days(30),
+    cutoff = |state: &crate::State| state.clock().now() - SignedDuration::from_hours(24 * 30),
     timeout_secs = 10 * 60,
     empty = "no user registrations to clean up",
     done = "cleaned up user registrations",
@@ -20,7 +21,7 @@ cleanup_ulid_cursor_job!(
     span = "job.cleanup_user_recovery_sessions",
     repo = user_recovery,
     method = cleanup,
-    cutoff = |state: &crate::State| state.clock().now() - chrono::Duration::days(7),
+    cutoff = |state: &crate::State| state.clock().now() - SignedDuration::from_hours(24 * 7),
     timeout_secs = 10 * 60,
     empty = "no user recovery sessions to clean up",
     done = "cleaned up user recovery sessions",
@@ -31,7 +32,7 @@ cleanup_ulid_cursor_job!(
     span = "job.cleanup_user_email_authentications",
     repo = user_email,
     method = cleanup_authentications,
-    cutoff = |state: &crate::State| state.clock().now() - chrono::Duration::days(7),
+    cutoff = |state: &crate::State| state.clock().now() - SignedDuration::from_hours(24 * 7),
     timeout_secs = 10 * 60,
     empty = "no user email authentications to clean up",
     done = "cleaned up user email authentications",

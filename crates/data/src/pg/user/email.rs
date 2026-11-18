@@ -1,7 +1,8 @@
 use async_trait::async_trait;
-use chrono::{DateTime, Utc};
 use diesel::prelude::*;
 use diesel_async::RunQueryDsl;
+use jiff::Timestamp;
+use jiff_diesel::ToDiesel as _;
 use pasion_data::{
     BrowserSession, Clock, Page, Pagination, UpstreamOAuthAuthorizationSession, User, UserEmail,
     UserEmailAuthentication, UserEmailAuthenticationCode, UserEmailPatch, UserRegistration, new_id,
@@ -36,9 +37,12 @@ struct UserEmailLookup {
     id: Uuid,
     user_id: Uuid,
     email: String,
-    created_at: DateTime<Utc>,
-    updated_at: DateTime<Utc>,
-    confirmed_at: Option<DateTime<Utc>>,
+    #[diesel(deserialize_as = jiff_diesel::Timestamp)]
+    created_at: Timestamp,
+    #[diesel(deserialize_as = jiff_diesel::Timestamp)]
+    updated_at: Timestamp,
+    #[diesel(deserialize_as = jiff_diesel::NullableTimestamp)]
+    confirmed_at: Option<Timestamp>,
     is_primary: bool,
 }
 
@@ -69,8 +73,10 @@ struct UserEmailAuthenticationLookup {
     user_session_id: Option<Uuid>,
     user_registration_id: Option<Uuid>,
     email: String,
-    created_at: DateTime<Utc>,
-    completed_at: Option<DateTime<Utc>>,
+    #[diesel(deserialize_as = jiff_diesel::Timestamp)]
+    created_at: Timestamp,
+    #[diesel(deserialize_as = jiff_diesel::NullableTimestamp)]
+    completed_at: Option<Timestamp>,
 }
 
 impl From<UserEmailAuthenticationLookup> for UserEmailAuthentication {
@@ -92,8 +98,10 @@ struct UserEmailAuthenticationCodeLookup {
     id: Uuid,
     user_email_authentication_id: Uuid,
     code: String,
-    created_at: DateTime<Utc>,
-    expires_at: DateTime<Utc>,
+    #[diesel(deserialize_as = jiff_diesel::Timestamp)]
+    created_at: Timestamp,
+    #[diesel(deserialize_as = jiff_diesel::Timestamp)]
+    expires_at: Timestamp,
 }
 
 impl From<UserEmailAuthenticationCodeLookup> for UserEmailAuthenticationCode {
@@ -115,9 +123,11 @@ struct NewUserEmail {
     id: Uuid,
     user_id: Uuid,
     email: String,
-    created_at: DateTime<Utc>,
-    updated_at: DateTime<Utc>,
-    confirmed_at: Option<DateTime<Utc>>,
+    #[diesel(serialize_as = jiff_diesel::Timestamp)]
+    created_at: Timestamp,
+    #[diesel(serialize_as = jiff_diesel::Timestamp)]
+    updated_at: Timestamp,
+    confirmed_at: Option<jiff_diesel::Timestamp>,
     is_primary: bool,
 }
 
@@ -129,7 +139,8 @@ struct NewUserEmailAuthentication {
     user_session_id: Option<Uuid>,
     user_registration_id: Option<Uuid>,
     email: String,
-    created_at: DateTime<Utc>,
+    #[diesel(serialize_as = jiff_diesel::Timestamp)]
+    created_at: Timestamp,
 }
 
 /// Insertable row for creating a new user email authentication code
@@ -139,8 +150,10 @@ struct NewUserEmailAuthenticationCode {
     id: Uuid,
     user_email_authentication_id: Uuid,
     code: String,
-    created_at: DateTime<Utc>,
-    expires_at: DateTime<Utc>,
+    #[diesel(serialize_as = jiff_diesel::Timestamp)]
+    created_at: Timestamp,
+    #[diesel(serialize_as = jiff_diesel::Timestamp)]
+    expires_at: Timestamp,
 }
 
 #[async_trait]
@@ -338,12 +351,12 @@ impl UserEmailRepository for PgUserEmailRepository<'_> {
             email: email.clone(),
             created_at,
             updated_at: created_at,
-            confirmed_at: Some(created_at),
+            confirmed_at: Some(created_at.into()),
             is_primary,
         };
 
         diesel::insert_into(user_emails::table)
-            .values(&new_row)
+            .values(new_row)
             .execute(self.conn)
             .await?;
 
@@ -417,7 +430,7 @@ impl UserEmailRepository for PgUserEmailRepository<'_> {
             )
             .set((
                 user_emails::is_primary.eq(false),
-                user_emails::updated_at.eq(user_email.updated_at),
+                user_emails::updated_at.eq(user_email.updated_at.to_diesel()),
             ))
             .execute(self.conn)
             .await?;
@@ -426,8 +439,8 @@ impl UserEmailRepository for PgUserEmailRepository<'_> {
         let rows_affected = diesel::update(user_emails::table.find(Uuid::from(user_email.id)))
             .set((
                 user_emails::email.eq(&user_email.email),
-                user_emails::updated_at.eq(user_email.updated_at),
-                user_emails::confirmed_at.eq(user_email.confirmed_at),
+                user_emails::updated_at.eq(user_email.updated_at.to_diesel()),
+                user_emails::confirmed_at.eq(user_email.confirmed_at.to_diesel()),
                 user_emails::is_primary.eq(user_email.is_primary),
             ))
             .execute(self.conn)
@@ -518,7 +531,7 @@ impl UserEmailRepository for PgUserEmailRepository<'_> {
         };
 
         diesel::insert_into(user_email_authentications::table)
-            .values(&new_row)
+            .values(new_row)
             .execute(self.conn)
             .await?;
 
@@ -563,7 +576,7 @@ impl UserEmailRepository for PgUserEmailRepository<'_> {
         };
 
         diesel::insert_into(user_email_authentications::table)
-            .values(&new_row)
+            .values(new_row)
             .execute(self.conn)
             .await?;
 
@@ -592,7 +605,7 @@ impl UserEmailRepository for PgUserEmailRepository<'_> {
         &mut self,
         rng: &mut (dyn RngCore + Send),
         clock: &dyn Clock,
-        duration: chrono::Duration,
+        duration: jiff::SignedDuration,
         user_email_authentication: &UserEmailAuthentication,
         code: String,
     ) -> Result<UserEmailAuthenticationCode, Self::Error> {
@@ -613,7 +626,7 @@ impl UserEmailRepository for PgUserEmailRepository<'_> {
         };
 
         diesel::insert_into(user_email_authentication_codes::table)
-            .values(&new_row)
+            .values(new_row)
             // A fixed development code (or random collision) refreshes its lifetime.
             .on_conflict((
                 user_email_authentication_codes::user_email_authentication_id,
@@ -621,9 +634,9 @@ impl UserEmailRepository for PgUserEmailRepository<'_> {
             ))
             .do_update()
             .set((
-                user_email_authentication_codes::id.eq(new_row.id),
-                user_email_authentication_codes::created_at.eq(created_at),
-                user_email_authentication_codes::expires_at.eq(expires_at),
+                user_email_authentication_codes::id.eq(Uuid::from(id)),
+                user_email_authentication_codes::created_at.eq(created_at.to_diesel()),
+                user_email_authentication_codes::expires_at.eq(expires_at.to_diesel()),
             ))
             .execute(self.conn)
             .await?;
@@ -717,7 +730,7 @@ impl UserEmailRepository for PgUserEmailRepository<'_> {
                 .find(Uuid::from(user_email_authentication.id))
                 .filter(user_email_authentications::completed_at.is_null()),
         )
-        .set(user_email_authentications::completed_at.eq(Some(completed_at)))
+        .set(user_email_authentications::completed_at.eq(Some(completed_at).to_diesel()))
         .execute(self.conn)
         .await?;
 
@@ -756,7 +769,7 @@ impl UserEmailRepository for PgUserEmailRepository<'_> {
                 .find(Uuid::from(user_email_authentication.id))
                 .filter(user_email_authentications::completed_at.is_null()),
         )
-        .set(user_email_authentications::completed_at.eq(Some(completed_at)))
+        .set(user_email_authentications::completed_at.eq(Some(completed_at).to_diesel()))
         .execute(self.conn)
         .await?;
 

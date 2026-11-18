@@ -14,7 +14,7 @@
 
 use std::{collections::HashSet, fmt, hash::Hash, num::NonZeroU32};
 
-use chrono::{DateTime, Duration, Utc};
+use jiff::SignedDuration;
 use language_tags::LanguageTag;
 use pasion_iana::oauth::{OAuthAccessTokenType, OAuthTokenTypeHint};
 use serde::{Deserialize, Serialize};
@@ -413,7 +413,7 @@ pub struct AuthorizationResponse {
 
     /// The duration for which the access token is valid.
     #[serde_as(as = "Option<DurationSeconds<i64>>")]
-    pub expires_in: Option<Duration>,
+    pub expires_in: Option<SignedDuration>,
 }
 
 impl fmt::Debug for AuthorizationResponse {
@@ -442,8 +442,8 @@ pub struct DeviceAuthorizationRequest {
 
 /// The default value of the `interval` between polling requests, if it is not
 /// set.
-pub const DEFAULT_DEVICE_AUTHORIZATION_INTERVAL: Duration =
-    Duration::microseconds(5 * 1_000 * 1_000);
+pub const DEFAULT_DEVICE_AUTHORIZATION_INTERVAL: SignedDuration =
+    SignedDuration::from_micros(5 * 1_000 * 1_000);
 
 /// A successful response from the [Device Authorization Endpoint].
 ///
@@ -471,14 +471,14 @@ pub struct DeviceAuthorizationResponse {
 
     /// The lifetime of the `device_code` and `user_code`.
     #[serde_as(as = "DurationSeconds<i64>")]
-    pub expires_in: Duration,
+    pub expires_in: SignedDuration,
 
     /// The minimum amount of time in seconds that the client should wait
     /// between polling requests to the token endpoint.
     ///
     /// Defaults to [`DEFAULT_DEVICE_AUTHORIZATION_INTERVAL`].
     #[serde_as(as = "Option<DurationSeconds<i64>>")]
-    pub interval: Option<Duration>,
+    pub interval: Option<SignedDuration>,
 }
 
 impl DeviceAuthorizationResponse {
@@ -487,7 +487,7 @@ impl DeviceAuthorizationResponse {
     ///
     /// Defaults to [`DEFAULT_DEVICE_AUTHORIZATION_INTERVAL`].
     #[must_use]
-    pub fn interval(&self) -> Duration {
+    pub fn interval(&self) -> SignedDuration {
         self.interval
             .unwrap_or(DEFAULT_DEVICE_AUTHORIZATION_INTERVAL)
     }
@@ -660,7 +660,7 @@ pub struct AccessTokenResponse {
 
     /// The duration for which the access token is valid.
     #[serde_as(as = "Option<DurationSeconds<i64>>")]
-    pub expires_in: Option<Duration>,
+    pub expires_in: Option<SignedDuration>,
 
     /// The scope of the access token.
     pub scope: Option<Scope>,
@@ -703,7 +703,7 @@ impl AccessTokenResponse {
 
     /// Adds an expiration duration to an `AccessTokenResponse`.
     #[must_use]
-    pub fn with_expires_in(mut self, expires_in: Duration) -> Self {
+    pub fn with_expires_in(mut self, expires_in: SignedDuration) -> Self {
         self.expires_in = Some(expires_in);
         self
     }
@@ -769,20 +769,20 @@ pub struct IntrospectionResponse {
 
     /// Timestamp indicating when the token will expire.
     #[serde_as(as = "Option<TimestampSeconds>")]
-    pub exp: Option<DateTime<Utc>>,
+    pub exp: Option<jiff::Timestamp>,
 
     /// Relative timestamp indicating when the token will expire,
     /// in seconds from the current instant.
     #[serde_as(as = "Option<DurationSeconds<i64>>")]
-    pub expires_in: Option<Duration>,
+    pub expires_in: Option<SignedDuration>,
 
     /// Timestamp indicating when the token was issued.
     #[serde_as(as = "Option<TimestampSeconds>")]
-    pub iat: Option<DateTime<Utc>>,
+    pub iat: Option<jiff::Timestamp>,
 
     /// Timestamp indicating when the token is not to be used before.
     #[serde_as(as = "Option<TimestampSeconds>")]
-    pub nbf: Option<DateTime<Utc>>,
+    pub nbf: Option<jiff::Timestamp>,
 
     /// Subject of the token.
     pub sub: Option<String>,
@@ -845,7 +845,7 @@ pub struct PushedAuthorizationResponse {
 
     /// The duration for which the request URI is valid.
     #[serde_as(as = "DurationSeconds<i64>")]
-    pub expires_in: Duration,
+    pub expires_in: SignedDuration,
 }
 
 // ---------------------------------------------------------------------------

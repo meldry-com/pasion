@@ -24,7 +24,7 @@ serde_with.workspace = true
 # Core utilities
 anyhow.workspace = true
 camino.workspace = true
-chrono.workspace = true
+jiff.workspace = true
 hex.workspace = true
 indoc.workspace = true
 tracing.workspace = true

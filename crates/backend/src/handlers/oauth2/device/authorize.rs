@@ -1,4 +1,4 @@
-use chrono::Duration;
+use jiff::SignedDuration;
 use oauth2_types::{
     errors::{ClientError, ClientErrorCode},
     requests::{DeviceAuthorizationRequest, DeviceAuthorizationResponse, GrantType},
@@ -171,7 +171,7 @@ async fn handle_post(
 
     oauth2_types::matrix_scope::validate_matrix_login_scope(&scope)?;
 
-    let expires_in = Duration::microseconds(20 * 60 * 1000 * 1000);
+    let expires_in = SignedDuration::from_mins(20);
 
     let ip_address = activity_tracker.ip();
 
@@ -205,7 +205,7 @@ async fn handle_post(
         verification_uri: url_builder.device_code_link(),
         verification_uri_complete: Some(url_builder.device_code_link_full(&device_code.user_code)),
         expires_in,
-        interval: Some(Duration::microseconds(5 * 1000 * 1000)),
+        interval: Some(SignedDuration::from_secs(5)),
     };
 
     Ok(response)

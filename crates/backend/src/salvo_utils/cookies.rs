@@ -2,8 +2,8 @@
 
 use std::sync::LazyLock;
 
-use chrono::{DateTime, Duration, Utc};
 use cookie::{Cookie, CookieJar as RawCookieJar, Key, SameSite};
+use jiff::{SignedDuration, Timestamp};
 use pasion_data::Clock;
 use salvo::{
     extract::{Extractible, Metadata},
@@ -109,7 +109,7 @@ impl CookieOption {
 /// behaviour stable across clock skew. Use [`ExpiresAt`](Self::ExpiresAt)
 /// when you want a hard cut-off resolved against an injected
 /// [`Clock`](pasion_data::Clock) — that variant accepts a
-/// `DateTime<Utc>` so callers can drive expiration from a `MockClock` in
+/// `Timestamp` so callers can drive expiration from a `MockClock` in
 /// tests.
 #[derive(Debug, Clone, Copy)]
 pub enum CookieExpiration {
@@ -118,10 +118,10 @@ pub enum CookieExpiration {
 
     /// Relative `Max-Age` attribute. Negative durations are clamped to zero
     /// (which makes the cookie expire immediately).
-    MaxAge(Duration),
+    MaxAge(SignedDuration),
 
     /// Absolute `Expires` attribute (clock-injected by the caller).
-    ExpiresAt(DateTime<Utc>),
+    ExpiresAt(Timestamp),
 }
 
 impl CookieExpiration {
@@ -131,8 +131,8 @@ impl CookieExpiration {
     /// the session and CSRF jars; takes `now` from an injected clock so
     /// `MockClock`-driven tests can age out the cookie deterministically.
     #[must_use]
-    pub fn permanent_at(now: DateTime<Utc>) -> Self {
-        Self::ExpiresAt(now + Duration::days(365 * 10))
+    pub fn permanent_at(now: Timestamp) -> Self {
+        Self::ExpiresAt(now + SignedDuration::from_hours(24 * 365 * 10))
     }
 
     /// Long-lived cookie that lasts 10 years, expressed as a `Max-Age`
@@ -140,7 +140,7 @@ impl CookieExpiration {
     /// does not have a clock in scope (e.g. synchronous extension traits).
     #[must_use]
     pub fn permanent_max_age() -> Self {
-        Self::MaxAge(Duration::days(365 * 10))
+        Self::MaxAge(SignedDuration::from_hours(24 * 365 * 10))
     }
 }
 
@@ -179,14 +179,13 @@ impl CookieJar {
             CookieExpiration::MaxAge(duration) => {
                 // `time::Duration::seconds` accepts negatives but browsers
                 // treat any past-Max-Age as "expire now"; clamp explicitly.
-                let secs = duration.num_seconds().max(0);
+                let secs = duration.as_secs().max(0);
                 cookie.set_max_age(time::Duration::seconds(secs));
             }
             CookieExpiration::ExpiresAt(when) => {
                 // `cookie::Cookie` uses `time::OffsetDateTime`; convert via
-                // a Unix timestamp so we don't depend on `chrono`'s `time`
-                // interop feature.
-                if let Ok(odt) = time::OffsetDateTime::from_unix_timestamp(when.timestamp()) {
+                // whole Unix seconds for the HTTP expiration date.
+                if let Ok(odt) = time::OffsetDateTime::from_unix_timestamp(when.as_second()) {
                     cookie.set_expires(odt);
                 }
             }
@@ -282,14 +281,14 @@ impl CookieJar {
 /// `now`. Malformed ULIDs (whose timestamp overflows `i64`) are treated as
 /// expired.
 #[must_use]
-pub fn ulid_is_expired(id: Ulid, now: DateTime<Utc>, max_age: Duration) -> bool {
+pub fn ulid_is_expired(id: Ulid, now: Timestamp, max_age: SignedDuration) -> bool {
     let Ok(ts) = id.timestamp_ms().try_into() else {
         return true;
     };
-    let Some(when) = DateTime::from_timestamp_millis(ts) else {
+    let Some(when) = Timestamp::from_millisecond(ts).ok() else {
         return true;
     };
-    now - when > max_age
+    now.duration_since(when) > max_age
 }
 
 /// Abstraction for encrypted "session list" cookies whose entries
@@ -307,12 +306,10 @@ pub trait TimedCookie: Sized + Default + Serialize + DeserializeOwned {
     ///
     /// Implementers decide how to derive a timestamp from each entry (usually
     /// via a ULID field, see [`ulid_is_expired`]).
-    fn expire(self, now: DateTime<Utc>) -> Self;
+    fn expire(self, now: Timestamp) -> Self;
 
-    /// Maximum wall-clock age for any entry in the cookie. Defined as a
-    /// method rather than an associated constant because `chrono::Duration`
-    /// has no const constructors.
-    fn max_age() -> Duration;
+    /// Maximum wall-clock age for any entry in the cookie.
+    fn max_age() -> SignedDuration;
 
     /// Load and deserialize the cookie, returning `Self::default()` on miss
     /// or decode error. Decode errors are logged at `warn` level.

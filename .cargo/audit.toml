@@ -4,8 +4,8 @@
 # including optional packages that cargo-deny excludes from the build graph.
 
 [advisories]
-# chrono is unmaintained and has no patched release. Revisit when the
-# PostgreSQL timestamp and schema integrations support a replacement.
+# cedar-policy-core uses chrono for datetime expressions in existing Cedar policies.
+# zxcvbn also requires chrono on wasm32 for password-strength scoring.
 ignore = [
     "RUSTSEC-2026-0543",
     # lettre's sendmail-transport references async-std?/unstable. Neither

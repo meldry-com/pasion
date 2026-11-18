@@ -3,7 +3,8 @@
 //! These endpoints allow authenticated users to view and unlink their
 //! connected external accounts (GitHub, Google, etc.).
 
-use salvo::{oapi::ToSchema, prelude::*};
+use salvo::prelude::*;
+use salvo_oapi::{ToSchema, endpoint};
 use serde::Serialize;
 use ulid::Ulid;
 
@@ -65,7 +66,7 @@ pub async fn list_linked_accounts(
             provider_brand: link.provider_brand,
             subject: link.subject,
             human_account_name: link.human_account_name,
-            created_at: link.created_at.to_rfc3339(),
+            created_at: pasion_data::clock::format_rfc3339(link.created_at),
         })
         .collect();
 

@@ -39,7 +39,7 @@ sec1.workspace = true
 
 # Encoding & misc
 base64ct.workspace = true
-chrono.workspace = true
+jiff.workspace = true
 schemars.workspace = true
 thiserror.workspace = true
 url.workspace = true

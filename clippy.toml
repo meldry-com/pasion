@@ -2,7 +2,7 @@ doc-valid-idents = ["OpenID", "OAuth", "UserInfo", "..", "PostgreSQL", "SQLite"]
 
 disallowed-methods = [
     { path = "rand::thread_rng", reason = "do not create rngs on the fly, pass them as parameters", allow-invalid = true },
-    { path = "chrono::Utc::now", reason = "source the current time from the clock instead", allow-invalid = true },
+    { path = "jiff::Timestamp::now", reason = "source the current time from the clock instead", allow-invalid = true },
     { path = "ulid::Ulid::from_datetime", reason = "use Ulid::from_datetime_with_source instead", allow-invalid = true },
     { path = "ulid::Ulid::new", reason = "use Ulid::from_datetime_with_source instead", allow-invalid = true },
     { path = "reqwest::Client::new", reason = "use pasion_http::reqwest_client instead", allow-invalid = true },

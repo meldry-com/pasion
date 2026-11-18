@@ -4,6 +4,7 @@
 
 use pasion_data::{RepositoryAccess, audit::AdminOperation};
 use salvo::prelude::*;
+use salvo_oapi::endpoint;
 use schemars::JsonSchema;
 use serde::Deserialize;
 

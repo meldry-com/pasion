@@ -103,11 +103,8 @@ pub use self::{
 ///
 /// The result is returned as a [`Ulid`] for type compatibility with the
 /// rest of the codebase; the underlying bytes are valid UUID v7.
-pub fn new_id(
-    ts: chrono::DateTime<chrono::Utc>,
-    rng: &mut (impl rand_core::RngCore + ?Sized),
-) -> Ulid {
-    let millis = u64::try_from(ts.timestamp_millis()).unwrap_or_default();
+pub fn new_id(ts: jiff::Timestamp, rng: &mut (impl rand_core::RngCore + ?Sized)) -> Ulid {
+    let millis = u64::try_from(ts.as_millisecond()).unwrap_or_default();
     let mut bytes = [0u8; 16];
 
     // 48-bit Unix timestamp in milliseconds (big-endian)

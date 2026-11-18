@@ -1,5 +1,5 @@
 use async_trait::async_trait;
-use chrono::{DateTime, Utc};
+use jiff::Timestamp;
 use pasion_data::{
     Clock, NotificationDelivery, NotificationDeliveryFailure, NotificationDestination,
     NotificationEventActor, NotificationEventKind, NotificationEventLog, NotificationPreference,
@@ -20,7 +20,7 @@ pub struct NewNotificationRequest {
     payload: Value,
     dedupe_key: Option<String>,
     correlation_key: Option<String>,
-    scheduled_at: Option<DateTime<Utc>>,
+    scheduled_at: Option<Timestamp>,
 }
 
 impl NewNotificationRequest {
@@ -59,7 +59,7 @@ impl NewNotificationRequest {
 
     /// Schedule the request for later delivery.
     #[must_use]
-    pub fn scheduled_for(mut self, scheduled_at: DateTime<Utc>) -> Self {
+    pub fn scheduled_for(mut self, scheduled_at: Timestamp) -> Self {
         self.scheduled_at = Some(scheduled_at);
         self
     }
@@ -102,7 +102,7 @@ impl NewNotificationRequest {
 
     /// The explicit scheduled time for this request, if any.
     #[must_use]
-    pub fn scheduled_at(&self) -> Option<DateTime<Utc>> {
+    pub fn scheduled_at(&self) -> Option<Timestamp> {
         self.scheduled_at
     }
 }
@@ -301,7 +301,7 @@ pub trait NotificationRepository: Send + Sync {
         notification_delivery: NotificationDelivery,
         failure: NotificationDeliveryFailure,
         provider_message_id: Option<String>,
-        next_retry_at: Option<DateTime<Utc>>,
+        next_retry_at: Option<Timestamp>,
     ) -> Result<NotificationDelivery, Self::Error>;
 
     /// Cancel a delivery so it is not attempted anymore.
@@ -400,7 +400,7 @@ repository_impl!(NotificationRepository:
         notification_delivery: NotificationDelivery,
         failure: NotificationDeliveryFailure,
         provider_message_id: Option<String>,
-        next_retry_at: Option<DateTime<Utc>>,
+        next_retry_at: Option<Timestamp>,
     ) -> Result<NotificationDelivery, Self::Error>;
     async fn cancel_delivery(
         &mut self,

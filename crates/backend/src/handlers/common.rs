@@ -196,12 +196,9 @@ impl Scribe for RouteError {
     }
 }
 
-impl salvo::oapi::EndpointOutRegister for RouteError {
-    fn register(
-        _components: &mut salvo::oapi::Components,
-        _operation: &mut salvo::oapi::Operation,
-    ) {
-        use salvo::oapi::*;
+impl salvo_oapi::EndpointOutRegister for RouteError {
+    fn register(_components: &mut salvo_oapi::Components, _operation: &mut salvo_oapi::Operation) {
+        use salvo_oapi::*;
 
         let error_schema = Object::new()
             .property("error", Object::new().schema_type(BasicType::String))
@@ -219,7 +216,7 @@ impl salvo::oapi::EndpointOutRegister for RouteError {
                 .add_content("application/json", Content::new(error_schema.clone()));
             _operation
                 .responses
-                .insert(status, salvo::oapi::RefOr::Type(response));
+                .insert(status, salvo_oapi::RefOr::Type(response));
         }
     }
 }
@@ -416,7 +413,7 @@ pub fn make_rng() -> BoxRng {
 
 // ── User-agent parsing helper ──────────────────────────────────
 
-#[derive(Serialize, Clone, salvo::oapi::ToSchema)]
+#[derive(Serialize, Clone, salvo_oapi::ToSchema)]
 pub struct UserAgentInfo {
     pub name: Option<String>,
     pub model: Option<String>,

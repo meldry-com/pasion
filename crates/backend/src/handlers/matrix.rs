@@ -11,7 +11,8 @@ use pasion_data::{
     personal::{PersonalSessionFilter, session::PersonalSessionOwner},
     user::UserRepository,
 };
-use salvo::{oapi::ToSchema, prelude::*};
+use salvo::prelude::*;
+use salvo_oapi::{ToSchema, endpoint};
 use serde::{Deserialize, Serialize};
 use zeroize::Zeroizing;
 

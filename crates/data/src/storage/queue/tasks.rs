@@ -1,4 +1,4 @@
-use chrono::{DateTime, Utc};
+use jiff::Timestamp;
 use pasion_data::{
     BrowserSession, Session, User, UserEmailAuthentication, UserPhoneAuthentication,
     UserRecoverySession,
@@ -627,7 +627,7 @@ impl InsertableJob for ExpireInactiveSessionsJob {
 /// Expire inactive OAuth 2.0 sessions
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct ExpireInactiveOAuthSessionsJob {
-    threshold: DateTime<Utc>,
+    threshold: Timestamp,
     after: Option<Ulid>,
 }
 
@@ -638,7 +638,7 @@ impl ExpireInactiveOAuthSessionsJob {
     ///
     /// * `threshold` - The threshold to expire sessions at
     #[must_use]
-    pub fn new(threshold: DateTime<Utc>) -> Self {
+    pub fn new(threshold: Timestamp) -> Self {
         Self {
             threshold,
             after: None,
@@ -647,7 +647,7 @@ impl ExpireInactiveOAuthSessionsJob {
 
     /// Get the threshold to expire sessions at
     #[must_use]
-    pub fn threshold(&self) -> DateTime<Utc> {
+    pub fn threshold(&self) -> Timestamp {
         self.threshold
     }
 
@@ -684,7 +684,7 @@ impl InsertableJob for ExpireInactiveOAuthSessionsJob {
 /// Expire inactive user sessions
 #[derive(Debug, Serialize, Deserialize)]
 pub struct ExpireInactiveUserSessionsJob {
-    threshold: DateTime<Utc>,
+    threshold: Timestamp,
     after: Option<Ulid>,
 }
 
@@ -695,7 +695,7 @@ impl ExpireInactiveUserSessionsJob {
     ///
     /// * `threshold` - The threshold to expire sessions at
     #[must_use]
-    pub fn new(threshold: DateTime<Utc>) -> Self {
+    pub fn new(threshold: Timestamp) -> Self {
         Self {
             threshold,
             after: None,
@@ -704,7 +704,7 @@ impl ExpireInactiveUserSessionsJob {
 
     /// Get the threshold to expire sessions at
     #[must_use]
-    pub fn threshold(&self) -> DateTime<Utc> {
+    pub fn threshold(&self) -> Timestamp {
         self.threshold
     }
 

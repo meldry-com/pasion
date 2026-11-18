@@ -2,10 +2,10 @@
 //
 // SPDX-License-Identifier: AGPL-3.0-only
 
-use chrono::{DateTime, Utc};
 use pasion_data::{RepositoryAccess, audit::AdminOperation, user::UserRegistrationTokenFilter};
 use rand::distr::{Alphanumeric, SampleString};
 use salvo::prelude::*;
+use salvo_oapi::endpoint;
 use schemars::JsonSchema;
 use serde::Deserialize;
 
@@ -35,7 +35,7 @@ pub struct AddRequest {
 
     /// Point in time after which the token is no longer valid. Never expires
     /// when absent.
-    expires_at: Option<DateTime<Utc>>,
+    expires_at: Option<jiff::Timestamp>,
 }
 
 /// Create a new user-registration token.
@@ -341,7 +341,7 @@ pub struct UpdateRequest {
         deserialize_with = "nullable_field"
     )]
     #[expect(clippy::option_option)]
-    expires_at: Option<Option<DateTime<Utc>>>,
+    expires_at: Option<Option<jiff::Timestamp>>,
 
     /// Updated usage cap, or `null` to remove the limit
     #[expect(clippy::option_option)]
@@ -404,9 +404,9 @@ pub async fn update_token(
 
 #[cfg(test)]
 mod tests {
-    use chrono::Duration;
     use hyper::{Request, StatusCode};
     use insta::assert_json_snapshot;
+    use jiff::SignedDuration;
     use pasion_data::Clock as _;
     use serde_json::json;
     use ulid::Ulid;
@@ -714,7 +714,7 @@ mod tests {
             .unwrap();
 
         // 5 -- already expired
-        let past = ts.clock.now() - Duration::try_days(1).unwrap();
+        let past = ts.clock.now() - SignedDuration::from_hours(24);
         repo.user_registration_token()
             .add(
                 &mut ts.rng(),
@@ -2103,7 +2103,7 @@ mod tests {
 
         repo.save().await.unwrap();
 
-        state.clock.advance(Duration::try_minutes(1).unwrap());
+        state.clock.advance(SignedDuration::from_mins(1));
 
         let request = Request::post(format!(
             "/api/admin/v1/user-registration-tokens/{}/revoke",
@@ -2291,7 +2291,7 @@ mod tests {
         repo.save().await.unwrap();
 
         // Set an expiry date
-        let new_expiry = state.clock.now() + Duration::days(30);
+        let new_expiry = state.clock.now() + SignedDuration::from_hours(24 * 30);
         let request = Request::put(format!(
             "/api/admin/v1/user-registration-tokens/{}",
             reg_token.id
@@ -2495,7 +2495,7 @@ mod tests {
 
         repo.save().await.unwrap();
 
-        let new_expiry = state.clock.now() + Duration::days(30);
+        let new_expiry = state.clock.now() + SignedDuration::from_hours(24 * 30);
         let request = Request::put(format!(
             "/api/admin/v1/user-registration-tokens/{}",
             reg_token.id
@@ -2552,7 +2552,7 @@ mod tests {
                 &state.clock,
                 "test_update_none".to_owned(),
                 Some(5),
-                Some(state.clock.now() + Duration::days(30)),
+                Some(state.clock.now() + SignedDuration::from_hours(24 * 30)),
             )
             .await
             .unwrap();

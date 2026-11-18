@@ -21,7 +21,7 @@ pasion-templates.workspace = true
 
 # SMS dependencies
 base64.workspace = true
-chrono.workspace = true
+jiff.workspace = true
 hmac.workspace = true
 hex.workspace = true
 reqwest.workspace = true

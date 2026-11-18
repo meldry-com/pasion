@@ -1,9 +1,10 @@
 use std::net::IpAddr;
 
 use async_trait::async_trait;
-use chrono::{DateTime, Utc};
 use diesel::prelude::*;
 use diesel_async::RunQueryDsl;
+use jiff::Timestamp;
+use jiff_diesel::ToDiesel as _;
 use oauth2_types::scope::Scope;
 use pasion_data::{
     Clock, Page, Pagination, User, new_id,
@@ -48,9 +49,12 @@ struct PersonalSessionRow {
     actor_user_id: Uuid,
     human_name: String,
     scope_list: Vec<String>,
-    created_at: DateTime<Utc>,
-    revoked_at: Option<DateTime<Utc>>,
-    last_active_at: Option<DateTime<Utc>>,
+    #[diesel(deserialize_as = jiff_diesel::Timestamp)]
+    created_at: Timestamp,
+    #[diesel(deserialize_as = jiff_diesel::NullableTimestamp)]
+    revoked_at: Option<Timestamp>,
+    #[diesel(deserialize_as = jiff_diesel::NullableTimestamp)]
+    last_active_at: Option<Timestamp>,
     last_active_ip: Option<ipnetwork::IpNetwork>,
 }
 
@@ -114,14 +118,19 @@ struct PersonalSessionAndAccessTokenRow {
     actor_user_id: Uuid,
     human_name: String,
     scope_list: Vec<String>,
-    created_at: DateTime<Utc>,
-    revoked_at: Option<DateTime<Utc>>,
-    last_active_at: Option<DateTime<Utc>>,
+    #[diesel(deserialize_as = jiff_diesel::Timestamp)]
+    created_at: Timestamp,
+    #[diesel(deserialize_as = jiff_diesel::NullableTimestamp)]
+    revoked_at: Option<Timestamp>,
+    #[diesel(deserialize_as = jiff_diesel::NullableTimestamp)]
+    last_active_at: Option<Timestamp>,
     last_active_ip: Option<ipnetwork::IpNetwork>,
     // personal_access_tokens fields (nullable because LEFT JOIN)
     personal_access_token_id: Option<Uuid>,
-    token_created_at: Option<DateTime<Utc>>,
-    token_expires_at: Option<DateTime<Utc>>,
+    #[diesel(deserialize_as = jiff_diesel::NullableTimestamp)]
+    token_created_at: Option<Timestamp>,
+    #[diesel(deserialize_as = jiff_diesel::NullableTimestamp)]
+    token_expires_at: Option<Timestamp>,
 }
 
 impl Node<Ulid> for PersonalSessionAndAccessTokenRow {
@@ -178,7 +187,8 @@ struct NewPersonalSession {
     actor_user_id: Uuid,
     human_name: String,
     scope_list: Vec<String>,
-    created_at: DateTime<Utc>,
+    #[diesel(serialize_as = jiff_diesel::Timestamp)]
+    created_at: Timestamp,
 }
 
 /// Build the tuple of columns selected from the LEFT JOIN of
@@ -282,7 +292,7 @@ impl PersonalSessionRepository for PgPersonalSessionRepository<'_> {
         };
 
         diesel::insert_into(personal_sessions::table)
-            .values(&new_session)
+            .values(new_session)
             .execute(self.conn)
             .await?;
 
@@ -321,12 +331,12 @@ impl PersonalSessionRepository for PgPersonalSessionRepository<'_> {
                 .filter(personal_access_tokens::personal_session_id.eq(Uuid::from(session.id)))
                 .filter(personal_access_tokens::revoked_at.is_null()),
         )
-        .set(personal_access_tokens::revoked_at.eq(Some(revoked_at)))
+        .set(personal_access_tokens::revoked_at.eq(Some(revoked_at).to_diesel()))
         .execute(self.conn)
         .await?;
 
         let rows_affected = diesel::update(personal_sessions::table.find(Uuid::from(session.id)))
-            .set(personal_sessions::revoked_at.eq(Some(revoked_at)))
+            .set(personal_sessions::revoked_at.eq(Some(revoked_at).to_diesel()))
             .execute(self.conn)
             .await?;
 
@@ -396,20 +406,20 @@ impl PersonalSessionRepository for PgPersonalSessionRepository<'_> {
         }
 
         if let Some(last_active_before) = filter.last_active_before() {
-            sub = sub.filter(personal_sessions::last_active_at.lt(last_active_before));
+            sub = sub.filter(personal_sessions::last_active_at.lt(last_active_before.to_diesel()));
         }
 
         if let Some(last_active_after) = filter.last_active_after() {
-            sub = sub.filter(personal_sessions::last_active_at.gt(last_active_after));
+            sub = sub.filter(personal_sessions::last_active_at.gt(last_active_after.to_diesel()));
         }
 
         // Token-level filters
         if let Some(expires_before) = filter.expires_before() {
-            sub = sub.filter(personal_access_tokens::expires_at.lt(expires_before));
+            sub = sub.filter(personal_access_tokens::expires_at.lt(expires_before.to_diesel()));
         }
 
         if let Some(expires_after) = filter.expires_after() {
-            sub = sub.filter(personal_access_tokens::expires_at.gt(expires_after));
+            sub = sub.filter(personal_access_tokens::expires_at.gt(expires_after.to_diesel()));
         }
 
         if let Some(expires) = filter.expires() {
@@ -422,7 +432,7 @@ impl PersonalSessionRepository for PgPersonalSessionRepository<'_> {
 
         let rows_affected =
             diesel::update(personal_sessions::table.filter(personal_sessions::id.eq_any(sub)))
-                .set(personal_sessions::revoked_at.eq(Some(revoked_at)))
+                .set(personal_sessions::revoked_at.eq(Some(revoked_at).to_diesel()))
                 .execute(self.conn)
                 .await?;
 
@@ -484,20 +494,22 @@ impl PersonalSessionRepository for PgPersonalSessionRepository<'_> {
         }
 
         if let Some(last_active_before) = filter.last_active_before() {
-            query = query.filter(personal_sessions::last_active_at.lt(last_active_before));
+            query =
+                query.filter(personal_sessions::last_active_at.lt(last_active_before.to_diesel()));
         }
 
         if let Some(last_active_after) = filter.last_active_after() {
-            query = query.filter(personal_sessions::last_active_at.gt(last_active_after));
+            query =
+                query.filter(personal_sessions::last_active_at.gt(last_active_after.to_diesel()));
         }
 
         // Token-level filters
         if let Some(expires_before) = filter.expires_before() {
-            query = query.filter(personal_access_tokens::expires_at.lt(expires_before));
+            query = query.filter(personal_access_tokens::expires_at.lt(expires_before.to_diesel()));
         }
 
         if let Some(expires_after) = filter.expires_after() {
-            query = query.filter(personal_access_tokens::expires_at.gt(expires_after));
+            query = query.filter(personal_access_tokens::expires_at.gt(expires_after.to_diesel()));
         }
 
         if let Some(expires) = filter.expires() {
@@ -587,20 +599,22 @@ impl PersonalSessionRepository for PgPersonalSessionRepository<'_> {
         }
 
         if let Some(last_active_before) = filter.last_active_before() {
-            query = query.filter(personal_sessions::last_active_at.lt(last_active_before));
+            query =
+                query.filter(personal_sessions::last_active_at.lt(last_active_before.to_diesel()));
         }
 
         if let Some(last_active_after) = filter.last_active_after() {
-            query = query.filter(personal_sessions::last_active_at.gt(last_active_after));
+            query =
+                query.filter(personal_sessions::last_active_at.gt(last_active_after.to_diesel()));
         }
 
         // Token-level filters
         if let Some(expires_before) = filter.expires_before() {
-            query = query.filter(personal_access_tokens::expires_at.lt(expires_before));
+            query = query.filter(personal_access_tokens::expires_at.lt(expires_before.to_diesel()));
         }
 
         if let Some(expires_after) = filter.expires_after() {
-            query = query.filter(personal_access_tokens::expires_at.gt(expires_after));
+            query = query.filter(personal_access_tokens::expires_at.gt(expires_after.to_diesel()));
         }
 
         if let Some(expires) = filter.expires() {
@@ -621,7 +635,7 @@ impl PersonalSessionRepository for PgPersonalSessionRepository<'_> {
     #[tracing::instrument(name = "db.personal_session.record_batch_activity", skip_all, err)]
     async fn record_batch_activity(
         &mut self,
-        mut activities: Vec<(Ulid, DateTime<Utc>, Option<IpAddr>)>,
+        mut activities: Vec<(Ulid, Timestamp, Option<IpAddr>)>,
     ) -> Result<(), Self::Error> {
         // Sort the activity by ID, so that when batching the updates, Postgres
         // locks the rows in a stable order, preventing deadlocks
@@ -632,7 +646,7 @@ impl PersonalSessionRepository for PgPersonalSessionRepository<'_> {
 
         for (id, last_activity, ip) in activities {
             ids.push(Uuid::from(id));
-            last_activities.push(last_activity);
+            last_activities.push(last_activity.to_diesel());
             ips.push(ip.map(ipnetwork::IpNetwork::from));
         }
 

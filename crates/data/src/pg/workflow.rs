@@ -1,9 +1,10 @@
 // Workflow repository -- PostgreSQL implementation.
 
 use async_trait::async_trait;
-use chrono::{DateTime, Utc};
 use diesel::prelude::*;
 use diesel_async::RunQueryDsl;
+use jiff::Timestamp;
+use jiff_diesel::ToDiesel as _;
 use pasion_data::{
     Clock, WorkflowEvent, WorkflowEventKind, WorkflowInstance, WorkflowInstanceStatus,
     WorkflowStep, WorkflowStepStatus, new_id,
@@ -47,13 +48,20 @@ struct WorkflowInstanceRow {
     input: serde_json::Value,
     context: serde_json::Value,
     correlation_key: Option<String>,
-    started_at: Option<DateTime<Utc>>,
-    completed_at: Option<DateTime<Utc>>,
-    failed_at: Option<DateTime<Utc>>,
-    cancelled_at: Option<DateTime<Utc>>,
-    expires_at: Option<DateTime<Utc>>,
-    created_at: DateTime<Utc>,
-    updated_at: DateTime<Utc>,
+    #[diesel(deserialize_as = jiff_diesel::NullableTimestamp)]
+    started_at: Option<Timestamp>,
+    #[diesel(deserialize_as = jiff_diesel::NullableTimestamp)]
+    completed_at: Option<Timestamp>,
+    #[diesel(deserialize_as = jiff_diesel::NullableTimestamp)]
+    failed_at: Option<Timestamp>,
+    #[diesel(deserialize_as = jiff_diesel::NullableTimestamp)]
+    cancelled_at: Option<Timestamp>,
+    #[diesel(deserialize_as = jiff_diesel::NullableTimestamp)]
+    expires_at: Option<Timestamp>,
+    #[diesel(deserialize_as = jiff_diesel::Timestamp)]
+    created_at: Timestamp,
+    #[diesel(deserialize_as = jiff_diesel::Timestamp)]
+    updated_at: Timestamp,
 }
 
 impl TryFrom<WorkflowInstanceRow> for WorkflowInstance {
@@ -97,12 +105,18 @@ struct WorkflowStepRow {
     attempt_count: i32,
     last_error_code: Option<String>,
     last_error_message: Option<String>,
-    scheduled_at: Option<DateTime<Utc>>,
-    started_at: Option<DateTime<Utc>>,
-    completed_at: Option<DateTime<Utc>>,
-    failed_at: Option<DateTime<Utc>>,
-    created_at: DateTime<Utc>,
-    updated_at: DateTime<Utc>,
+    #[diesel(deserialize_as = jiff_diesel::NullableTimestamp)]
+    scheduled_at: Option<Timestamp>,
+    #[diesel(deserialize_as = jiff_diesel::NullableTimestamp)]
+    started_at: Option<Timestamp>,
+    #[diesel(deserialize_as = jiff_diesel::NullableTimestamp)]
+    completed_at: Option<Timestamp>,
+    #[diesel(deserialize_as = jiff_diesel::NullableTimestamp)]
+    failed_at: Option<Timestamp>,
+    #[diesel(deserialize_as = jiff_diesel::Timestamp)]
+    created_at: Timestamp,
+    #[diesel(deserialize_as = jiff_diesel::Timestamp)]
+    updated_at: Timestamp,
 }
 
 impl TryFrom<WorkflowStepRow> for WorkflowStep {
@@ -155,7 +169,8 @@ struct WorkflowEventRow {
     kind: String,
     actor: serde_json::Value,
     payload: serde_json::Value,
-    occurred_at: DateTime<Utc>,
+    #[diesel(deserialize_as = jiff_diesel::Timestamp)]
+    occurred_at: Timestamp,
 }
 
 impl TryFrom<WorkflowEventRow> for WorkflowEvent {
@@ -190,13 +205,13 @@ struct InsertableWorkflowInstance {
     input: serde_json::Value,
     context: serde_json::Value,
     correlation_key: Option<String>,
-    started_at: Option<DateTime<Utc>>,
-    completed_at: Option<DateTime<Utc>>,
-    failed_at: Option<DateTime<Utc>>,
-    cancelled_at: Option<DateTime<Utc>>,
-    expires_at: Option<DateTime<Utc>>,
-    created_at: DateTime<Utc>,
-    updated_at: DateTime<Utc>,
+    started_at: Option<jiff_diesel::Timestamp>,
+    completed_at: Option<jiff_diesel::Timestamp>,
+    failed_at: Option<jiff_diesel::Timestamp>,
+    cancelled_at: Option<jiff_diesel::Timestamp>,
+    expires_at: Option<jiff_diesel::Timestamp>,
+    created_at: jiff_diesel::Timestamp,
+    updated_at: jiff_diesel::Timestamp,
 }
 
 #[derive(Insertable)]
@@ -213,12 +228,12 @@ struct InsertableWorkflowStep {
     attempt_count: i32,
     last_error_code: Option<String>,
     last_error_message: Option<String>,
-    scheduled_at: Option<DateTime<Utc>>,
-    started_at: Option<DateTime<Utc>>,
-    completed_at: Option<DateTime<Utc>>,
-    failed_at: Option<DateTime<Utc>>,
-    created_at: DateTime<Utc>,
-    updated_at: DateTime<Utc>,
+    scheduled_at: Option<jiff_diesel::Timestamp>,
+    started_at: Option<jiff_diesel::Timestamp>,
+    completed_at: Option<jiff_diesel::Timestamp>,
+    failed_at: Option<jiff_diesel::Timestamp>,
+    created_at: jiff_diesel::Timestamp,
+    updated_at: jiff_diesel::Timestamp,
 }
 
 #[derive(Insertable)]
@@ -230,7 +245,7 @@ struct InsertableWorkflowEvent {
     kind: String,
     actor: serde_json::Value,
     payload: serde_json::Value,
-    occurred_at: DateTime<Utc>,
+    occurred_at: jiff_diesel::Timestamp,
 }
 
 // ── Repository implementation ────────────────────────────────────────
@@ -294,9 +309,9 @@ impl WorkflowRepository for PgWorkflowRepository<'_> {
             completed_at: None,
             failed_at: None,
             cancelled_at: None,
-            expires_at: params.expiration(),
-            created_at,
-            updated_at: created_at,
+            expires_at: params.expiration().map(Into::into),
+            created_at: created_at.to_diesel(),
+            updated_at: created_at.to_diesel(),
         };
 
         diesel::insert_into(workflow_instances::table)
@@ -318,7 +333,7 @@ impl WorkflowRepository for PgWorkflowRepository<'_> {
             completed_at: None,
             failed_at: None,
             cancelled_at: None,
-            expires_at: row.expires_at,
+            expires_at: row.expires_at.map(jiff_diesel::Timestamp::to_jiff),
             created_at,
             updated_at: created_at,
         })
@@ -379,11 +394,11 @@ impl WorkflowRepository for PgWorkflowRepository<'_> {
         )
         .set((
             workflow_instances::status.eq(instance_status_to_db(workflow_instance.status)),
-            workflow_instances::started_at.eq(workflow_instance.started_at),
-            workflow_instances::completed_at.eq(workflow_instance.completed_at),
-            workflow_instances::failed_at.eq(workflow_instance.failed_at),
-            workflow_instances::cancelled_at.eq(workflow_instance.cancelled_at),
-            workflow_instances::updated_at.eq(workflow_instance.updated_at),
+            workflow_instances::started_at.eq(workflow_instance.started_at.to_diesel()),
+            workflow_instances::completed_at.eq(workflow_instance.completed_at.to_diesel()),
+            workflow_instances::failed_at.eq(workflow_instance.failed_at.to_diesel()),
+            workflow_instances::cancelled_at.eq(workflow_instance.cancelled_at.to_diesel()),
+            workflow_instances::updated_at.eq(workflow_instance.updated_at.to_diesel()),
         ))
         .execute(self.conn)
         .await?;
@@ -480,8 +495,8 @@ impl WorkflowRepository for PgWorkflowRepository<'_> {
             started_at: None,
             completed_at: None,
             failed_at: None,
-            created_at,
-            updated_at: created_at,
+            created_at: created_at.to_diesel(),
+            updated_at: created_at.to_diesel(),
         };
 
         diesel::insert_into(workflow_steps::table)
@@ -564,11 +579,11 @@ impl WorkflowRepository for PgWorkflowRepository<'_> {
         .set((
             workflow_steps::status.eq(step_status_to_db(workflow_step.status)),
             workflow_steps::attempt_count.eq(attempt_count),
-            workflow_steps::scheduled_at.eq(workflow_step.scheduled_at),
-            workflow_steps::started_at.eq(workflow_step.started_at),
-            workflow_steps::completed_at.eq(workflow_step.completed_at),
-            workflow_steps::failed_at.eq(workflow_step.failed_at),
-            workflow_steps::updated_at.eq(workflow_step.updated_at),
+            workflow_steps::scheduled_at.eq(workflow_step.scheduled_at.to_diesel()),
+            workflow_steps::started_at.eq(workflow_step.started_at.to_diesel()),
+            workflow_steps::completed_at.eq(workflow_step.completed_at.to_diesel()),
+            workflow_steps::failed_at.eq(workflow_step.failed_at.to_diesel()),
+            workflow_steps::updated_at.eq(workflow_step.updated_at.to_diesel()),
         ))
         .execute(self.conn)
         .await?;
@@ -606,7 +621,7 @@ impl WorkflowRepository for PgWorkflowRepository<'_> {
             actor: serde_json::to_value(params.actor())
                 .map_err(DatabaseError::to_invalid_operation)?,
             payload: params.payload().clone(),
-            occurred_at,
+            occurred_at: occurred_at.to_diesel(),
         };
 
         diesel::insert_into(workflow_events::table)

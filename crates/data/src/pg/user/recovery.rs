@@ -1,10 +1,11 @@
 use std::net::IpAddr;
 
 use async_trait::async_trait;
-use chrono::{DateTime, Duration, Utc};
 use diesel::prelude::*;
 use diesel_async::RunQueryDsl;
 use ipnetwork::IpNetwork;
+use jiff::{SignedDuration, Timestamp};
+use jiff_diesel::ToDiesel as _;
 use pasion_data::{
     Clock, UserEmail, UserRecoverySession, UserRecoveryTicket, new_id, user::UserRecoveryRepository,
 };
@@ -38,8 +39,10 @@ struct UserRecoverySessionRow {
     user_agent: String,
     ip_address: Option<IpNetwork>,
     locale: String,
-    created_at: DateTime<Utc>,
-    consumed_at: Option<DateTime<Utc>>,
+    #[diesel(deserialize_as = jiff_diesel::Timestamp)]
+    created_at: Timestamp,
+    #[diesel(deserialize_as = jiff_diesel::NullableTimestamp)]
+    consumed_at: Option<Timestamp>,
 }
 
 impl From<UserRecoverySessionRow> for UserRecoverySession {
@@ -63,8 +66,10 @@ struct UserRecoveryTicketRow {
     user_recovery_session_id: Uuid,
     user_email_id: Uuid,
     ticket: String,
-    created_at: DateTime<Utc>,
-    expires_at: DateTime<Utc>,
+    #[diesel(deserialize_as = jiff_diesel::Timestamp)]
+    created_at: Timestamp,
+    #[diesel(deserialize_as = jiff_diesel::Timestamp)]
+    expires_at: Timestamp,
 }
 
 impl From<UserRecoveryTicketRow> for UserRecoveryTicket {
@@ -89,7 +94,8 @@ struct NewUserRecoverySession {
     user_agent: String,
     ip_address: Option<IpNetwork>,
     locale: String,
-    created_at: DateTime<Utc>,
+    #[diesel(serialize_as = jiff_diesel::Timestamp)]
+    created_at: Timestamp,
 }
 
 /// Insertable row for creating a new recovery ticket
@@ -100,8 +106,10 @@ struct NewUserRecoveryTicket {
     user_recovery_session_id: Uuid,
     user_email_id: Uuid,
     ticket: String,
-    created_at: DateTime<Utc>,
-    expires_at: DateTime<Utc>,
+    #[diesel(serialize_as = jiff_diesel::Timestamp)]
+    created_at: Timestamp,
+    #[diesel(serialize_as = jiff_diesel::Timestamp)]
+    expires_at: Timestamp,
 }
 
 /// Helper struct for extracting UUID from raw SQL RETURNING clause
@@ -178,7 +186,7 @@ impl UserRecoveryRepository for PgUserRecoveryRepository<'_> {
         };
 
         diesel::insert_into(user_recovery_sessions::table)
-            .values(&new_session)
+            .values(new_session)
             .execute(self.conn)
             .await?;
 
@@ -244,7 +252,7 @@ impl UserRecoveryRepository for PgUserRecoveryRepository<'_> {
         tracing::Span::current().record("user_recovery_ticket.id", tracing::field::display(id));
 
         // TODO: move that to a parameter
-        let expires_at = created_at + Duration::minutes(10);
+        let expires_at = created_at + SignedDuration::from_mins(10);
 
         let new_ticket = NewUserRecoveryTicket {
             id: Uuid::from(id),
@@ -256,7 +264,7 @@ impl UserRecoveryRepository for PgUserRecoveryRepository<'_> {
         };
 
         diesel::insert_into(user_recovery_tickets::table)
-            .values(&new_ticket)
+            .values(new_ticket)
             .execute(self.conn)
             .await?;
 
@@ -304,7 +312,7 @@ impl UserRecoveryRepository for PgUserRecoveryRepository<'_> {
                 .find(Uuid::from(user_recovery_session.id))
                 .filter(user_recovery_sessions::consumed_at.is_null()),
         )
-        .set(user_recovery_sessions::consumed_at.eq(Some(consumed_at)))
+        .set(user_recovery_sessions::consumed_at.eq(Some(consumed_at).to_diesel()))
         .execute(self.conn)
         .await?;
 
@@ -407,7 +415,7 @@ mod tests {
                     user_email_id: Ulid::from(1_u128),
                     ticket: "test".to_owned(),
                     created_at: clock.now(),
-                    expires_at: clock.now() + Duration::minutes(10),
+                    expires_at: clock.now() + SignedDuration::from_mins(10),
                 };
                 let result = repo
                     .user_recovery()

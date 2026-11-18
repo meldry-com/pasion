@@ -1,4 +1,4 @@
-use chrono::{DateTime, Utc};
+use jiff::Timestamp;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
@@ -22,11 +22,11 @@ pub struct AccountContactPoint {
     /// Whether this contact point has been verified.
     pub verified: bool,
     /// When verification was completed, if applicable.
-    pub verified_at: Option<DateTime<Utc>>,
+    pub verified_at: Option<Timestamp>,
     /// Whether this is the user's primary contact for this channel.
     pub is_primary: bool,
     /// When this contact point was created.
-    pub created_at: DateTime<Utc>,
+    pub created_at: Timestamp,
 }
 
 /// Channel type for a contact point.
@@ -58,9 +58,9 @@ pub struct AccountIdentityBinding {
     /// Optional structured metadata about the binding.
     pub metadata: Value,
     /// When this binding was established.
-    pub created_at: DateTime<Utc>,
+    pub created_at: Timestamp,
     /// When the binding was last used for authentication.
-    pub last_used_at: Option<DateTime<Utc>>,
+    pub last_used_at: Option<Timestamp>,
 }
 
 /// Type of external identity provider.

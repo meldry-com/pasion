@@ -1,4 +1,3 @@
-use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
@@ -25,7 +24,7 @@ pub struct AdminOperationLog {
     /// User-agent string of the admin's client.
     pub user_agent: Option<String>,
     /// When the operation occurred.
-    pub created_at: DateTime<Utc>,
+    pub created_at: jiff::Timestamp,
 }
 
 /// Types of admin operations.
@@ -92,7 +91,7 @@ pub struct AccountSecurityEvent {
     /// User-agent string associated with the event.
     pub user_agent: Option<String>,
     /// When the event occurred.
-    pub created_at: DateTime<Utc>,
+    pub created_at: jiff::Timestamp,
 }
 
 /// Types of security events.

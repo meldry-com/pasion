@@ -1,7 +1,8 @@
 //! Admin endpoint for checking connector provider health.
 
 use pasion_matrix::ConnectorRegistry;
-use salvo::{oapi::ToSchema, prelude::*};
+use salvo::prelude::*;
+use salvo_oapi::{ToSchema, endpoint};
 use schemars::JsonSchema;
 use serde::Serialize;
 

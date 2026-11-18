@@ -7,7 +7,8 @@
 use pasion_data::RepositoryAccess;
 use pasion_i18n::DataLocale;
 use pasion_templates::PublishedNotificationTemplate;
-use salvo::{oapi::ToSchema, prelude::*};
+use salvo::prelude::*;
+use salvo_oapi::{ToSchema, endpoint};
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 
@@ -155,8 +156,8 @@ pub async fn publish_handler(
         locale: record.locale,
         subject_template: record.subject_template,
         body_template: record.body_template,
-        created_at: record.created_at.to_rfc3339(),
-        published_at: record.published_at.map(|t| t.to_rfc3339()),
+        created_at: pasion_data::clock::format_rfc3339(record.created_at),
+        published_at: record.published_at.map(pasion_data::clock::format_rfc3339),
     };
 
     Ok(CreatedJson(response))

@@ -1,4 +1,5 @@
 use async_trait::async_trait;
+use jiff::Timestamp;
 use pasion_data::{AccessToken, Clock, RefreshToken, Session};
 use rand_core::RngCore;
 use ulid::Ulid;
@@ -122,10 +123,10 @@ pub trait OAuth2RefreshTokenRepository: Send + Sync {
     /// Returns [`Self::Error`] if the underlying repository fails
     async fn cleanup_revoked(
         &mut self,
-        since: Option<chrono::DateTime<chrono::Utc>>,
-        until: chrono::DateTime<chrono::Utc>,
+        since: Option<Timestamp>,
+        until: Timestamp,
         limit: usize,
-    ) -> Result<(usize, Option<chrono::DateTime<chrono::Utc>>), Self::Error>;
+    ) -> Result<(usize, Option<Timestamp>), Self::Error>;
 
     /// Cleanup consumed refresh tokens that were consumed before a certain time
     ///
@@ -147,10 +148,10 @@ pub trait OAuth2RefreshTokenRepository: Send + Sync {
     /// Returns [`Self::Error`] if the underlying repository fails
     async fn cleanup_consumed(
         &mut self,
-        since: Option<chrono::DateTime<chrono::Utc>>,
-        until: chrono::DateTime<chrono::Utc>,
+        since: Option<Timestamp>,
+        until: Timestamp,
         limit: usize,
-    ) -> Result<(usize, Option<chrono::DateTime<chrono::Utc>>), Self::Error>;
+    ) -> Result<(usize, Option<Timestamp>), Self::Error>;
 }
 
 repository_impl!(OAuth2RefreshTokenRepository:
@@ -185,15 +186,15 @@ repository_impl!(OAuth2RefreshTokenRepository:
 
     async fn cleanup_revoked(
         &mut self,
-        since: Option<chrono::DateTime<chrono::Utc>>,
-        until: chrono::DateTime<chrono::Utc>,
+        since: Option<Timestamp>,
+        until: Timestamp,
         limit: usize,
-    ) -> Result<(usize, Option<chrono::DateTime<chrono::Utc>>), Self::Error>;
+    ) -> Result<(usize, Option<Timestamp>), Self::Error>;
 
     async fn cleanup_consumed(
         &mut self,
-        since: Option<chrono::DateTime<chrono::Utc>>,
-        until: chrono::DateTime<chrono::Utc>,
+        since: Option<Timestamp>,
+        until: Timestamp,
         limit: usize,
-    ) -> Result<(usize, Option<chrono::DateTime<chrono::Utc>>), Self::Error>;
+    ) -> Result<(usize, Option<Timestamp>), Self::Error>;
 );

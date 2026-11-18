@@ -1,5 +1,6 @@
 use pasion_data::SiteConfig;
-use salvo::{oapi::ToSchema, prelude::*};
+use salvo::prelude::*;
+use salvo_oapi::{ToSchema, endpoint};
 use serde::Serialize;
 
 use super::{DepotExt, RouteError};

@@ -2,6 +2,7 @@
 
 use std::collections::BTreeMap;
 
+use jiff::Timestamp;
 use oauth2_types::scope::{OPENID, Scope};
 use pasion_data::{
     PostAuthAction, UpstreamOAuthLink, UpstreamOAuthProvider, UpstreamOAuthProviderClaimsImports,
@@ -34,7 +35,7 @@ impl UpstreamExistingLinkContext {
 
 impl TemplateContext for UpstreamExistingLinkContext {
     fn sample<R: Rng>(
-        now: chrono::DateTime<chrono::Utc>,
+        now: Timestamp,
         rng: &mut R,
         _locales: &[pasion_i18n::DataLocale],
     ) -> BTreeMap<SampleIdentifier, Self> {
@@ -71,7 +72,7 @@ impl UpstreamSuggestLink {
 
 impl TemplateContext for UpstreamSuggestLink {
     fn sample<R: Rng>(
-        now: chrono::DateTime<chrono::Utc>,
+        now: Timestamp,
         rng: &mut R,
         _locales: &[pasion_i18n::DataLocale],
     ) -> BTreeMap<SampleIdentifier, Self> {
@@ -194,7 +195,7 @@ impl UpstreamRegister {
 
 impl TemplateContext for UpstreamRegister {
     fn sample<R: Rng>(
-        now: chrono::DateTime<chrono::Utc>,
+        now: Timestamp,
         _rng: &mut R,
         _locales: &[pasion_i18n::DataLocale],
     ) -> BTreeMap<SampleIdentifier, Self> {

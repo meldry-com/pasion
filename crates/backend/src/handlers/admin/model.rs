@@ -5,12 +5,12 @@
 
 use std::net::IpAddr;
 
-use chrono::{DateTime, Utc};
+use jiff::Timestamp;
 use pasion_data::personal::{
     PersonalAccessToken as DataModelPersonalAccessToken,
     session::{PersonalSession as DataModelPersonalSession, PersonalSessionOwner},
 };
-use salvo::oapi::ToSchema;
+use salvo_oapi::ToSchema;
 use schemars::JsonSchema;
 use serde::Serialize;
 use thiserror::Error;
@@ -45,16 +45,20 @@ pub struct User {
     username: String,
 
     /// When the user was created
-    created_at: DateTime<Utc>,
+    #[salvo(schema(value_type = String, format = "date-time"))]
+    created_at: Timestamp,
 
     /// When the user was last updated through the local account model.
-    updated_at: DateTime<Utc>,
+    #[salvo(schema(value_type = String, format = "date-time"))]
+    updated_at: Timestamp,
 
     /// When the user was locked. If null, the user is not locked.
-    locked_at: Option<DateTime<Utc>>,
+    #[salvo(schema(value_type = Option<String>, format = "date-time"))]
+    locked_at: Option<Timestamp>,
 
     /// When the user was deactivated. If null, the user is not deactivated.
-    deactivated_at: Option<DateTime<Utc>>,
+    #[salvo(schema(value_type = Option<String>, format = "date-time"))]
+    deactivated_at: Option<Timestamp>,
 
     /// Whether the user can request admin privileges.
     admin: bool,
@@ -106,10 +110,12 @@ pub struct UserEmail {
     id: Ulid,
 
     /// When the object was created
-    created_at: DateTime<Utc>,
+    #[salvo(schema(value_type = String, format = "date-time"))]
+    created_at: Timestamp,
 
     /// When the object was last updated
-    updated_at: DateTime<Utc>,
+    #[salvo(schema(value_type = String, format = "date-time"))]
+    updated_at: Timestamp,
 
     /// The ID of the user who owns this email address
     #[schemars(with = "super::schema::Ulid")]
@@ -119,7 +125,8 @@ pub struct UserEmail {
     email: String,
 
     /// When the email was confirmed, if ever.
-    confirmed_at: Option<DateTime<Utc>>,
+    #[salvo(schema(value_type = Option<String>, format = "date-time"))]
+    confirmed_at: Option<Timestamp>,
 
     /// Whether this email is the primary email for the account.
     is_primary: bool,
@@ -155,10 +162,12 @@ pub struct OAuth2Session {
     id: Ulid,
 
     /// When the object was created
-    created_at: DateTime<Utc>,
+    #[salvo(schema(value_type = String, format = "date-time"))]
+    created_at: Timestamp,
 
     /// When the session was finished
-    finished_at: Option<DateTime<Utc>>,
+    #[salvo(schema(value_type = Option<String>, format = "date-time"))]
+    finished_at: Option<Timestamp>,
 
     /// The ID of the user who owns the session
     #[schemars(with = "Option<super::schema::Ulid>")]
@@ -179,7 +188,8 @@ pub struct OAuth2Session {
     user_agent: Option<String>,
 
     /// The last time the session was active
-    last_active_at: Option<DateTime<Utc>>,
+    #[salvo(schema(value_type = Option<String>, format = "date-time"))]
+    last_active_at: Option<Timestamp>,
 
     /// The last IP address used by the session
     last_active_ip: Option<IpAddr>,
@@ -222,10 +232,12 @@ pub struct UserSession {
     id: Ulid,
 
     /// When the object was created
-    created_at: DateTime<Utc>,
+    #[salvo(schema(value_type = String, format = "date-time"))]
+    created_at: Timestamp,
 
     /// When the session was finished
-    finished_at: Option<DateTime<Utc>>,
+    #[salvo(schema(value_type = Option<String>, format = "date-time"))]
+    finished_at: Option<Timestamp>,
 
     /// The ID of the user who owns the session
     #[schemars(with = "super::schema::Ulid")]
@@ -235,7 +247,8 @@ pub struct UserSession {
     user_agent: Option<String>,
 
     /// The last time the session was active
-    last_active_at: Option<DateTime<Utc>>,
+    #[salvo(schema(value_type = Option<String>, format = "date-time"))]
+    last_active_at: Option<Timestamp>,
 
     /// The last IP address used by the session
     last_active_ip: Option<IpAddr>,
@@ -271,10 +284,12 @@ pub struct UpstreamOAuthLink {
     id: Ulid,
 
     /// When the object was created
-    created_at: DateTime<Utc>,
+    #[salvo(schema(value_type = String, format = "date-time"))]
+    created_at: Timestamp,
 
     /// When the object was last updated
-    updated_at: DateTime<Utc>,
+    #[salvo(schema(value_type = String, format = "date-time"))]
+    updated_at: Timestamp,
 
     /// The ID of the provider
     #[schemars(with = "super::schema::Ulid")]
@@ -321,7 +336,8 @@ pub struct PolicyData {
     id: Ulid,
 
     /// The creation date of the policy data
-    created_at: DateTime<Utc>,
+    #[salvo(schema(value_type = String, format = "date-time"))]
+    created_at: Timestamp,
 
     /// The policy data content
     data: serde_json::Value,
@@ -365,20 +381,24 @@ pub struct UserRegistrationToken {
     times_used: u32,
 
     /// When the token was created
-    created_at: DateTime<Utc>,
+    #[salvo(schema(value_type = String, format = "date-time"))]
+    created_at: Timestamp,
 
     /// When the token was last used. If null, the token has never been used.
-    last_used_at: Option<DateTime<Utc>>,
+    #[salvo(schema(value_type = Option<String>, format = "date-time"))]
+    last_used_at: Option<Timestamp>,
 
     /// When the token expires. If null, the token never expires.
-    expires_at: Option<DateTime<Utc>>,
+    #[salvo(schema(value_type = Option<String>, format = "date-time"))]
+    expires_at: Option<Timestamp>,
 
     /// When the token was revoked. If null, the token is not revoked.
-    revoked_at: Option<DateTime<Utc>>,
+    #[salvo(schema(value_type = Option<String>, format = "date-time"))]
+    revoked_at: Option<Timestamp>,
 }
 
 impl UserRegistrationToken {
-    pub fn new(token: pasion_data::UserRegistrationToken, now: DateTime<Utc>) -> Self {
+    pub fn new(token: pasion_data::UserRegistrationToken, now: Timestamp) -> Self {
         Self {
             id: token.id,
             valid: token.is_valid(now),
@@ -421,10 +441,12 @@ pub struct UpstreamOAuthProvider {
     brand_name: Option<String>,
 
     /// When the provider was created
-    created_at: DateTime<Utc>,
+    #[salvo(schema(value_type = String, format = "date-time"))]
+    created_at: Timestamp,
 
     /// When the provider was disabled. If null, the provider is enabled.
-    disabled_at: Option<DateTime<Utc>>,
+    #[salvo(schema(value_type = Option<String>, format = "date-time"))]
+    disabled_at: Option<Timestamp>,
 
     /// Origin of this provider row.
     ///
@@ -565,10 +587,12 @@ pub struct PersonalSession {
     id: Ulid,
 
     /// When the session was created
-    created_at: DateTime<Utc>,
+    #[salvo(schema(value_type = String, format = "date-time"))]
+    created_at: Timestamp,
 
     /// When the session was revoked, if applicable
-    revoked_at: Option<DateTime<Utc>>,
+    #[salvo(schema(value_type = Option<String>, format = "date-time"))]
+    revoked_at: Option<Timestamp>,
 
     /// The ID of the user who owns this session (if user-owned)
     #[schemars(with = "Option<super::schema::Ulid>")]
@@ -589,7 +613,8 @@ pub struct PersonalSession {
     scope: String,
 
     /// When the session was last active
-    last_active_at: Option<DateTime<Utc>>,
+    #[salvo(schema(value_type = Option<String>, format = "date-time"))]
+    last_active_at: Option<Timestamp>,
 
     /// IP address of last activity
     last_active_ip: Option<IpAddr>,
@@ -598,7 +623,8 @@ pub struct PersonalSession {
     /// The session will need to be regenerated, producing a new access token,
     /// after this time.
     /// None if the current token won't expire or if the session is revoked.
-    expires_at: Option<DateTime<Utc>>,
+    #[salvo(schema(value_type = Option<String>, format = "date-time"))]
+    expires_at: Option<Timestamp>,
 
     /// The actual access token (only returned on creation or regeneration)
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -681,7 +707,7 @@ mod personal_session_contract_tests {
         let actor = "01ARZ3NDEKTSV4RRFFQ69G5FAW".parse().unwrap();
         let session = PersonalSession {
             id: owner,
-            created_at: DateTime::UNIX_EPOCH,
+            created_at: Timestamp::UNIX_EPOCH,
             revoked_at: None,
             owner_user_id: Some(owner),
             owner_client_id: None,

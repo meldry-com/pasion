@@ -1,7 +1,8 @@
 use async_trait::async_trait;
-use chrono::{DateTime, Utc};
 use diesel::prelude::*;
 use diesel_async::RunQueryDsl;
+use jiff::Timestamp;
+use jiff_diesel::ToDiesel as _;
 use oauth2_types::{requests::ResponseMode, scope::Scope};
 use pasion_data::{
     AuthorizationCode, AuthorizationGrant, AuthorizationGrantStage, Client, Clock, Pkce, Session,
@@ -34,10 +35,14 @@ impl<'c> PgOAuth2AuthorizationGrantRepository<'c> {
 #[diesel(table_name = oauth2_authorization_grants)]
 struct GrantLookup {
     id: Uuid,
-    created_at: DateTime<Utc>,
-    cancelled_at: Option<DateTime<Utc>>,
-    fulfilled_at: Option<DateTime<Utc>>,
-    exchanged_at: Option<DateTime<Utc>>,
+    #[diesel(deserialize_as = jiff_diesel::Timestamp)]
+    created_at: Timestamp,
+    #[diesel(deserialize_as = jiff_diesel::NullableTimestamp)]
+    cancelled_at: Option<Timestamp>,
+    #[diesel(deserialize_as = jiff_diesel::NullableTimestamp)]
+    fulfilled_at: Option<Timestamp>,
+    #[diesel(deserialize_as = jiff_diesel::NullableTimestamp)]
+    exchanged_at: Option<Timestamp>,
     scope: String,
     state: Option<String>,
     nonce: Option<String>,
@@ -183,7 +188,8 @@ struct NewAuthorizationGrant {
     authorization_code: Option<String>,
     login_hint: Option<String>,
     locale: Option<String>,
-    created_at: DateTime<Utc>,
+    #[diesel(serialize_as = jiff_diesel::Timestamp)]
+    created_at: Timestamp,
 }
 
 #[async_trait]
@@ -249,7 +255,7 @@ impl OAuth2AuthorizationGrantRepository for PgOAuth2AuthorizationGrantRepository
         };
 
         diesel::insert_into(oauth2_authorization_grants::table)
-            .values(&new_grant)
+            .values(new_grant)
             .execute(self.conn)
             .await?;
 
@@ -329,7 +335,7 @@ impl OAuth2AuthorizationGrantRepository for PgOAuth2AuthorizationGrantRepository
         let rows_affected =
             diesel::update(oauth2_authorization_grants::table.find(Uuid::from(grant.id)))
                 .set((
-                    oauth2_authorization_grants::fulfilled_at.eq(Some(fulfilled_at)),
+                    oauth2_authorization_grants::fulfilled_at.eq(Some(fulfilled_at).to_diesel()),
                     oauth2_authorization_grants::oauth2_session_id.eq(Some(Uuid::from(session.id))),
                 ))
                 .execute(self.conn)
@@ -362,7 +368,7 @@ impl OAuth2AuthorizationGrantRepository for PgOAuth2AuthorizationGrantRepository
         let exchanged_at = clock.now();
         let rows_affected =
             diesel::update(oauth2_authorization_grants::table.find(Uuid::from(grant.id)))
-                .set(oauth2_authorization_grants::exchanged_at.eq(Some(exchanged_at)))
+                .set(oauth2_authorization_grants::exchanged_at.eq(Some(exchanged_at).to_diesel()))
                 .execute(self.conn)
                 .await?;
 

@@ -6,7 +6,6 @@
 
 #![allow(clippy::module_name_repetitions)]
 
-use chrono::{DateTime, Utc};
 use pasion_data::{BoxRepository, Clock, SiteConfig, User};
 use serde::{Deserialize, Serialize};
 use ulid::Ulid;
@@ -212,8 +211,8 @@ pub struct Connection<T: Serialize> {
 
 #[derive(Deserialize, Default, Clone, Copy)]
 pub struct DateFilter {
-    pub after: Option<DateTime<Utc>>,
-    pub before: Option<DateTime<Utc>>,
+    pub after: Option<jiff::Timestamp>,
+    pub before: Option<jiff::Timestamp>,
 }
 
 /// Cookie management for user registration sessions.

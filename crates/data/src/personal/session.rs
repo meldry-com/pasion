@@ -1,6 +1,6 @@
 use std::net::IpAddr;
 
-use chrono::{DateTime, Utc};
+use jiff::Timestamp;
 use oauth2_types::scope::Scope;
 use serde::Serialize;
 use ulid::Ulid;
@@ -16,7 +16,7 @@ pub enum SessionState {
     /// The session has been explicitly terminated.
     Revoked {
         /// Instant at which the session was revoked.
-        revoked_at: DateTime<Utc>,
+        revoked_at: Timestamp,
     },
 }
 
@@ -39,7 +39,7 @@ impl SessionState {
     ///
     /// Fails with [`InvalidTransitionError`] when the session was already
     /// revoked.
-    pub fn revoke(self, revoked_at: DateTime<Utc>) -> Result<Self, InvalidTransitionError> {
+    pub fn revoke(self, revoked_at: Timestamp) -> Result<Self, InvalidTransitionError> {
         match self {
             Self::Valid => Ok(Self::Revoked { revoked_at }),
             Self::Revoked { .. } => Err(InvalidTransitionError),
@@ -48,7 +48,7 @@ impl SessionState {
 
     /// If the session has been revoked, returns the instant it happened.
     #[must_use]
-    pub fn revoked_at(&self) -> Option<DateTime<Utc>> {
+    pub fn revoked_at(&self) -> Option<Timestamp> {
         match self {
             Self::Valid => None,
             Self::Revoked { revoked_at } => Some(*revoked_at),
@@ -67,8 +67,8 @@ pub struct PersonalSession {
     /// OAuth 2-compatible scope granted to this session.  May optionally
     /// contain a device scope (personal sessions are not required to have one).
     pub scope: Scope,
-    pub created_at: DateTime<Utc>,
-    pub last_active_at: Option<DateTime<Utc>>,
+    pub created_at: Timestamp,
+    pub last_active_at: Option<Timestamp>,
     pub last_active_ip: Option<IpAddr>,
 }
 
@@ -108,7 +108,7 @@ impl PersonalSession {
     /// # Errors
     ///
     /// Returns [`InvalidTransitionError`] if the session was already revoked.
-    pub fn finish(mut self, revoked_at: DateTime<Utc>) -> Result<Self, InvalidTransitionError> {
+    pub fn finish(mut self, revoked_at: Timestamp) -> Result<Self, InvalidTransitionError> {
         self.state = self.state.revoke(revoked_at)?;
         Ok(self)
     }

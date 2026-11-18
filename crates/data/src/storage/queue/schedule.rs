@@ -1,7 +1,6 @@
 //! Repository to interact with recurrent scheduled jobs in the job queue
 
 use async_trait::async_trait;
-use chrono::{DateTime, Utc};
 
 use crate::repository_impl;
 
@@ -11,7 +10,7 @@ pub struct ScheduleStatus {
     /// Name of the schedule, uniquely identifying it
     pub schedule_name: String,
     /// When the schedule was last run
-    pub last_scheduled_at: Option<DateTime<Utc>>,
+    pub last_scheduled_at: Option<jiff::Timestamp>,
     /// Did the last job on this schedule finish? (successfully or not)
     pub last_scheduled_job_completed: Option<bool>,
 }

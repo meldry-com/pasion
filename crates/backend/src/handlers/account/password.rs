@@ -1,11 +1,11 @@
-use chrono::Utc;
 use pasion_data::{
     Clock, RepositoryAccess,
     flow::{FlowSession, FlowSessionStatus},
     new_id,
     user::UserRecoveryRepository,
 };
-use salvo::{oapi::ToSchema, prelude::*};
+use salvo::prelude::*;
+use salvo_oapi::{ToSchema, endpoint};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use zeroize::Zeroizing;
@@ -97,7 +97,7 @@ pub async fn set_password(
                 let (flow_def, bindings) = default_password_change_flow(&mut *rng);
                 let plan = FlowExecutor::plan(flow_def, bindings);
 
-                let now = Utc::now();
+                let now = jiff::Timestamp::now();
                 let session_id = new_id(now, &mut *rng);
 
                 let session = FlowSession {
@@ -110,7 +110,7 @@ pub async fn set_password(
                     user_agent: None,
                     created_at: now,
                     updated_at: now,
-                    expires_at: now + chrono::Duration::hours(1),
+                    expires_at: now + jiff::SignedDuration::from_hours(1),
                     completed_at: None,
                 };
 

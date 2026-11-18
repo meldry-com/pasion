@@ -59,7 +59,9 @@ impl AliyunSmsTransport {
         to: &str,
         template_params: &HashMap<String, String>,
     ) -> Result<(), SmsTransportError> {
-        let timestamp = chrono::Utc::now().format("%Y-%m-%dT%H:%M:%SZ").to_string();
+        let timestamp = jiff::Timestamp::now()
+            .strftime("%Y-%m-%dT%H:%M:%SZ")
+            .to_string();
         let nonce = random_nonce();
         let template_param_json =
             serde_json::to_string(template_params).unwrap_or_else(|_| String::from("{}"));

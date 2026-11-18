@@ -12,7 +12,7 @@ pub use self::{
 
 #[cfg(test)]
 mod tests {
-    use chrono::Duration;
+    use jiff::SignedDuration;
     use oauth2_types::scope::{OPENID, Scope};
     use pasion_data::{
         Pagination, RepositoryAccess as _, RepositoryFactory as _, UpstreamOAuthLinkPatch,
@@ -365,7 +365,7 @@ mod tests {
                 .await
                 .unwrap();
             ids.push(provider.id);
-            clock.advance(Duration::microseconds(10 * 1000 * 1000));
+            clock.advance(SignedDuration::from_secs(10));
         }
 
         // Now we have 20 providers
@@ -556,7 +556,7 @@ mod tests {
                 .await
                 .unwrap();
             ids.push(session.id);
-            clock.advance(Duration::microseconds(10 * 1000 * 1000));
+            clock.advance(SignedDuration::from_secs(10));
         }
 
         // Now we have 20 sessions
@@ -733,7 +733,7 @@ mod tests {
             .await
             .unwrap();
 
-        clock.advance(Duration::seconds(5));
+        clock.advance(SignedDuration::from_secs(5));
 
         let updated = repo
             .upstream_oauth_link()

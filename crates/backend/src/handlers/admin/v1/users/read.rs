@@ -7,6 +7,7 @@
 
 use pasion_data::user::UserFilter;
 use salvo::prelude::*;
+use salvo_oapi::endpoint;
 use schemars::JsonSchema;
 use serde::Deserialize;
 

@@ -96,12 +96,9 @@ impl InternalError {
     }
 }
 
-impl salvo::oapi::EndpointOutRegister for InternalError {
-    fn register(
-        _components: &mut salvo::oapi::Components,
-        _operation: &mut salvo::oapi::Operation,
-    ) {
-        use salvo::oapi::*;
+impl salvo_oapi::EndpointOutRegister for InternalError {
+    fn register(_components: &mut salvo_oapi::Components, _operation: &mut salvo_oapi::Operation) {
+        use salvo_oapi::*;
         let error_schema = Object::new()
             .property("error", Object::new().schema_type(BasicType::String))
             .required("error");

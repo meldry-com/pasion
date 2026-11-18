@@ -6,7 +6,6 @@
 //! stages can reference it (e.g. to associate the new user with the
 //! invitation).
 
-use chrono::Utc;
 use pasion_data::{
     BoxRepository, RepositoryAccess,
     flow::{StageOutcome, StageValidationError},
@@ -62,7 +61,7 @@ pub async fn execute(
     };
 
     // Validate the token (not expired, not revoked, usage limit not exceeded).
-    let now = Utc::now();
+    let now = jiff::Timestamp::now();
     if !registration_token.is_valid(now) {
         return Ok(StageOutcome::Retry {
             errors: vec![StageValidationError {

@@ -2,9 +2,9 @@
 //! repositories
 
 use async_trait::async_trait;
-use chrono::{DateTime, Utc};
 use diesel::prelude::*;
 use diesel_async::RunQueryDsl;
+use jiff_diesel::ToDiesel as _;
 use pasion_data::{
     Clock, Pagination, User, UserPatch, UserProfilePatch, new_id,
     pagination::PaginationDirection,
@@ -74,8 +74,10 @@ macro_rules! select_user_columns {
 struct NewUser {
     id: Uuid,
     username: String,
-    created_at: DateTime<Utc>,
-    updated_at: DateTime<Utc>,
+    #[diesel(serialize_as = jiff_diesel::Timestamp)]
+    created_at: jiff::Timestamp,
+    #[diesel(serialize_as = jiff_diesel::Timestamp)]
+    updated_at: jiff::Timestamp,
 }
 
 #[async_trait]
@@ -151,7 +153,7 @@ impl UserRepository for PgUserRepository<'_> {
         };
 
         let rows_affected = diesel::insert_into(users::table)
-            .values(&new_user)
+            .values(new_user)
             .on_conflict(users::username)
             .do_nothing()
             .execute(self.conn)
@@ -261,9 +263,9 @@ impl UserRepository for PgUserRepository<'_> {
 
         let rows_affected = diesel::update(users::table.find(Uuid::from(user.id)))
             .set((
-                users::updated_at.eq(user.updated_at),
-                users::locked_at.eq(user.locked_at),
-                users::deactivated_at.eq(user.deactivated_at),
+                users::updated_at.eq(user.updated_at.to_diesel()),
+                users::locked_at.eq(user.locked_at.to_diesel()),
+                users::deactivated_at.eq(user.deactivated_at.to_diesel()),
                 users::can_request_admin.eq(user.can_request_admin),
                 users::display_name.eq(user.display_name.as_deref()),
                 users::avatar_url.eq(user.avatar_url.as_deref()),
@@ -333,12 +335,12 @@ impl UserRepository for PgUserRepository<'_> {
             return Ok(user);
         }
         user.locked_at = None;
-        user.updated_at = Utc::now();
+        user.updated_at = jiff::Timestamp::now();
 
         let rows_affected = diesel::update(users::table.find(Uuid::from(user.id)))
             .set((
-                users::locked_at.eq(None::<DateTime<Utc>>),
-                users::updated_at.eq(user.updated_at),
+                users::locked_at.eq(None::<jiff::Timestamp>.to_diesel()),
+                users::updated_at.eq(user.updated_at.to_diesel()),
             ))
             .execute(self.conn)
             .await?;
@@ -383,12 +385,12 @@ impl UserRepository for PgUserRepository<'_> {
             return Ok(user);
         }
         user.deactivated_at = None;
-        user.updated_at = Utc::now();
+        user.updated_at = jiff::Timestamp::now();
 
         let rows_affected = diesel::update(users::table.find(Uuid::from(user.id)))
             .set((
-                users::deactivated_at.eq(None::<DateTime<Utc>>),
-                users::updated_at.eq(user.updated_at),
+                users::deactivated_at.eq(None::<jiff::Timestamp>.to_diesel()),
+                users::updated_at.eq(user.updated_at.to_diesel()),
             ))
             .execute(self.conn)
             .await?;
@@ -413,12 +415,12 @@ impl UserRepository for PgUserRepository<'_> {
         can_request_admin: bool,
     ) -> Result<User, Self::Error> {
         user.can_request_admin = can_request_admin;
-        user.updated_at = Utc::now();
+        user.updated_at = jiff::Timestamp::now();
 
         let rows_affected = diesel::update(users::table.find(Uuid::from(user.id)))
             .set((
                 users::can_request_admin.eq(can_request_admin),
-                users::updated_at.eq(user.updated_at),
+                users::updated_at.eq(user.updated_at.to_diesel()),
             ))
             .execute(self.conn)
             .await?;

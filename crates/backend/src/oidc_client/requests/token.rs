@@ -14,7 +14,6 @@
 
 //! Requests for the Token endpoint.
 
-use chrono::{DateTime, Utc};
 use http::header::ACCEPT;
 use mime::APPLICATION_JSON;
 use oauth2_types::requests::{AccessTokenRequest, AccessTokenResponse};
@@ -53,7 +52,7 @@ pub async fn request_access_token(
     client_credentials: ClientCredentials,
     token_endpoint: &Url,
     request: AccessTokenRequest,
-    now: DateTime<Utc>,
+    now: jiff::Timestamp,
     rng: &mut impl Rng,
 ) -> Result<AccessTokenResponse, TokenRequestError> {
     tracing::debug!(?request, "Requesting access token...");

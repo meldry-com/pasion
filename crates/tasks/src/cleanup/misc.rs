@@ -12,7 +12,7 @@ cleanup_ulid_cursor_job!(
     span = "job.cleanup_queue_jobs",
     repo = queue_job,
     method = cleanup,
-    cutoff = |state: &crate::State| state.clock().now() - chrono::Duration::days(30),
+    cutoff = |state: &crate::State| state.clock().now() - jiff::SignedDuration::from_hours(24 * 30),
     timeout_secs = 10 * 60,
     empty = "no queue jobs to clean up",
     done = "cleaned up queue jobs",

@@ -6,7 +6,7 @@
 //! Session state is stored in-memory for now; a proper repository-backed store
 //! will replace this once `FlowSession` has a database repository.
 
-use chrono::Utc;
+use jiff::Timestamp;
 use pasion_data::{
     flow::{
         AuthenticatorType as DomainAuthenticatorType, FlowSession, FlowSessionStatus,
@@ -17,7 +17,8 @@ use pasion_data::{
     },
     new_id,
 };
-use salvo::{oapi::ToSchema, prelude::*};
+use salvo::prelude::*;
+use salvo_oapi::{ToSchema, endpoint};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use ulid::Ulid;
@@ -402,7 +403,7 @@ pub async fn start_flow(req: &mut Request) -> Result<Json<FlowResponse>, RouteEr
 
     let plan = FlowExecutor::plan(flow_def, bindings);
 
-    let now = Utc::now();
+    let now = Timestamp::now();
     let session_id = new_id(now, &mut *rng);
 
     let session = FlowSession {
@@ -415,7 +416,7 @@ pub async fn start_flow(req: &mut Request) -> Result<Json<FlowResponse>, RouteEr
         user_agent: None,
         created_at: now,
         updated_at: now,
-        expires_at: now + chrono::Duration::hours(1),
+        expires_at: now + jiff::SignedDuration::from_hours(1),
         completed_at: None,
     };
 
@@ -518,7 +519,7 @@ pub async fn respond_flow(
 
     // Update the session context
     session.context = updated_context;
-    session.updated_at = Utc::now();
+    session.updated_at = Timestamp::now();
 
     match outcome {
         StageOutcome::Continue => {
@@ -534,7 +535,7 @@ pub async fn respond_flow(
             } else {
                 // Flow is done
                 session.status = FlowSessionStatus::Completed;
-                session.completed_at = Some(Utc::now());
+                session.completed_at = Some(Timestamp::now());
 
                 let challenge = DomainStageChallenge::FlowDone {
                     redirect_to: Some("/account".into()),
@@ -556,7 +557,7 @@ pub async fn respond_flow(
         StageOutcome::Done { redirect_to } => {
             // The stage itself decided the flow is done (e.g. consent denied)
             session.status = FlowSessionStatus::Completed;
-            session.completed_at = Some(Utc::now());
+            session.completed_at = Some(Timestamp::now());
 
             let challenge = DomainStageChallenge::FlowDone { redirect_to };
             session.current_stage_index = plan.stages.len();

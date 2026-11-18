@@ -1,5 +1,5 @@
 use async_trait::async_trait;
-use chrono::Duration;
+use jiff::SignedDuration;
 use pasion_data::{
     Clock,
     personal::{PersonalAccessToken, session::PersonalSession},
@@ -83,7 +83,7 @@ pub trait PersonalAccessTokenRepository: Send + Sync {
         clock: &dyn Clock,
         session: &PersonalSession,
         access_token: &str,
-        expires_after: Option<Duration>,
+        expires_after: Option<SignedDuration>,
     ) -> Result<PersonalAccessToken, Self::Error>;
 
     /// Revoke an access token
@@ -124,7 +124,7 @@ repository_impl!(PersonalAccessTokenRepository:
         clock: &dyn Clock,
         session: &PersonalSession,
         access_token: &str,
-        expires_after: Option<Duration>,
+        expires_after: Option<SignedDuration>,
     ) -> Result<PersonalAccessToken, Self::Error>;
 
     async fn revoke(

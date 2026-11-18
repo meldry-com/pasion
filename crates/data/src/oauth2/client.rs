@@ -1,6 +1,5 @@
 use std::collections::BTreeMap;
 
-use chrono::{DateTime, Utc};
 use oauth2_types::{
     oidc::ApplicationType,
     registration::{ClientMetadata, Localized},
@@ -324,7 +323,7 @@ impl Client {
     }
 
     #[doc(hidden)]
-    pub fn samples(now: DateTime<Utc>, rng: &mut impl RngCore) -> Vec<Client> {
+    pub fn samples(now: jiff::Timestamp, rng: &mut impl RngCore) -> Vec<Client> {
         vec![
             // A client with all the URIs set
             Self {

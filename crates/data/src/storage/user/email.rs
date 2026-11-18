@@ -260,7 +260,7 @@ pub trait UserEmailRepository: Send + Sync {
         &mut self,
         rng: &mut (dyn RngCore + Send),
         clock: &dyn Clock,
-        duration: chrono::Duration,
+        duration: jiff::SignedDuration,
         authentication: &UserEmailAuthentication,
         code: String,
     ) -> Result<UserEmailAuthenticationCode, Self::Error>;
@@ -414,7 +414,7 @@ repository_impl!(UserEmailRepository:
         &mut self,
         rng: &mut (dyn RngCore + Send),
         clock: &dyn Clock,
-        duration: chrono::Duration,
+        duration: jiff::SignedDuration,
         authentication: &UserEmailAuthentication,
         code: String,
     ) -> Result<UserEmailAuthenticationCode, Self::Error>;

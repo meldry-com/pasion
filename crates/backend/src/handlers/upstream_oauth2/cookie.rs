@@ -4,7 +4,7 @@
 //! implements the shared [`TimedCookie`] trait, which supplies `load`/`save`
 //! and centralises the expiry ceremony.
 
-use chrono::{DateTime, Duration, Utc};
+use jiff::SignedDuration;
 use pasion_data::PostAuthAction;
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
@@ -13,8 +13,8 @@ use ulid::Ulid;
 use crate::salvo_utils::cookies::{TimedCookie, ulid_is_expired};
 
 /// Sessions expire after 10 minutes.
-fn upstream_session_max_age() -> Duration {
-    Duration::minutes(10)
+fn upstream_session_max_age() -> SignedDuration {
+    SignedDuration::from_mins(10)
 }
 
 #[derive(Serialize, Deserialize, Debug)]
@@ -36,11 +36,11 @@ pub struct UpstreamSessionNotFound;
 impl TimedCookie for UpstreamSessions {
     const COOKIE_NAME: &'static str = "upstream-oauth2-sessions";
 
-    fn max_age() -> Duration {
+    fn max_age() -> SignedDuration {
         upstream_session_max_age()
     }
 
-    fn expire(mut self, now: DateTime<Utc>) -> Self {
+    fn expire(mut self, now: jiff::Timestamp) -> Self {
         let max_age = Self::max_age();
         self.0
             .retain(|payload| !ulid_is_expired(payload.session, now, max_age));
@@ -131,7 +131,6 @@ impl UpstreamSessions {
 
 #[cfg(test)]
 mod tests {
-    use chrono::TimeZone;
     use rand_chacha::ChaChaRng;
     use rand_core::SeedableRng;
 
@@ -139,9 +138,7 @@ mod tests {
 
     #[test]
     fn test_session_cookie() {
-        let now = chrono::Utc
-            .with_ymd_and_hms(2018, 1, 18, 1, 30, 22)
-            .unwrap();
+        let now = "2018-01-18T01:30:22Z".parse::<jiff::Timestamp>().unwrap();
         let mut rng = ChaChaRng::seed_from_u64(42);
 
         let sessions = UpstreamSessions::default();
@@ -153,7 +150,7 @@ mod tests {
         let first_state = "first-state";
         let sessions = sessions.add(first_session, provider_a, first_state.into(), None);
 
-        let now = now + Duration::microseconds(5 * 60 * 1000 * 1000);
+        let now = now + SignedDuration::from_mins(5);
 
         let second_session = pasion_data::new_id(now, &mut rng);
         let second_state = "second-state";
@@ -172,7 +169,7 @@ mod tests {
         assert!(sessions.find_session(provider_a, second_state).is_err());
 
         // Make the first session expire
-        let now = now + Duration::microseconds(6 * 60 * 1000 * 1000);
+        let now = now + SignedDuration::from_mins(6);
         let sessions = sessions.expire(now);
         assert!(sessions.find_session(provider_a, first_state).is_err());
         assert_eq!(

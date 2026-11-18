@@ -1,7 +1,7 @@
 //! Repository to interact with workers in the job queue
 
 use async_trait::async_trait;
-use chrono::{DateTime, Duration, Utc};
+use jiff::SignedDuration;
 use pasion_data::Clock;
 use rand_core::RngCore;
 use ulid::Ulid;
@@ -19,9 +19,9 @@ pub struct ShutdownWorker {
     /// The ID of the worker.
     pub id: Ulid,
     /// When the worker last sent a heartbeat.
-    pub last_seen_at: DateTime<Utc>,
+    pub last_seen_at: jiff::Timestamp,
     /// When the worker was marked as shut down.
-    pub shutdown_at: DateTime<Utc>,
+    pub shutdown_at: jiff::Timestamp,
 }
 
 /// A [`QueueWorkerRepository`] is used to schedule jobs to be executed by a
@@ -67,7 +67,7 @@ pub trait QueueWorkerRepository: Send + Sync {
     async fn shutdown_dead_workers(
         &mut self,
         clock: &dyn Clock,
-        threshold: Duration,
+        threshold: SignedDuration,
     ) -> Result<Vec<ShutdownWorker>, Self::Error>;
 
     /// Remove the leader lease if it is expired, sending a notification to
@@ -117,7 +117,7 @@ repository_impl!(QueueWorkerRepository:
     async fn shutdown_dead_workers(
         &mut self,
         clock: &dyn Clock,
-        threshold: Duration,
+        threshold: SignedDuration,
     ) -> Result<Vec<ShutdownWorker>, Self::Error>;
 
     async fn remove_leader_lease_if_expired(

@@ -1,7 +1,7 @@
 use std::net::IpAddr;
 
 use async_trait::async_trait;
-use chrono::{DateTime, Utc};
+use jiff::Timestamp;
 use oauth2_types::scope::Scope;
 use pasion_data::{BrowserSession, Client, Clock, Session, User};
 use rand_core::RngCore;
@@ -49,8 +49,8 @@ pub struct OAuth2SessionFilter<'a> {
     client_kind: Option<ClientKind>,
     state: Option<OAuth2SessionState>,
     scope: Option<&'a Scope>,
-    last_active_before: Option<DateTime<Utc>>,
-    last_active_after: Option<DateTime<Utc>>,
+    last_active_before: Option<Timestamp>,
+    last_active_after: Option<Timestamp>,
 }
 
 impl<'a> OAuth2SessionFilter<'a> {
@@ -169,14 +169,14 @@ impl<'a> OAuth2SessionFilter<'a> {
 
     /// Only return sessions with a last active time before the given time
     #[must_use]
-    pub fn with_last_active_before(mut self, last_active_before: DateTime<Utc>) -> Self {
+    pub fn with_last_active_before(mut self, last_active_before: Timestamp) -> Self {
         self.last_active_before = Some(last_active_before);
         self
     }
 
     /// Only return sessions with a last active time after the given time
     #[must_use]
-    pub fn with_last_active_after(mut self, last_active_after: DateTime<Utc>) -> Self {
+    pub fn with_last_active_after(mut self, last_active_after: Timestamp) -> Self {
         self.last_active_after = Some(last_active_after);
         self
     }
@@ -185,7 +185,7 @@ impl<'a> OAuth2SessionFilter<'a> {
     ///
     /// Returns [`None`] if no client filter was set
     #[must_use]
-    pub fn last_active_before(&self) -> Option<DateTime<Utc>> {
+    pub fn last_active_before(&self) -> Option<Timestamp> {
         self.last_active_before
     }
 
@@ -193,7 +193,7 @@ impl<'a> OAuth2SessionFilter<'a> {
     ///
     /// Returns [`None`] if no client filter was set
     #[must_use]
-    pub fn last_active_after(&self) -> Option<DateTime<Utc>> {
+    pub fn last_active_after(&self) -> Option<Timestamp> {
         self.last_active_after
     }
 
@@ -429,7 +429,7 @@ pub trait OAuth2SessionRepository: Send + Sync {
     /// Returns [`Self::Error`] if the underlying repository fails
     async fn record_batch_activity(
         &mut self,
-        activity: Vec<(Ulid, DateTime<Utc>, Option<IpAddr>)>,
+        activity: Vec<(Ulid, Timestamp, Option<IpAddr>)>,
     ) -> Result<(), Self::Error>;
 
     /// Record the user agent of a [`Session`]
@@ -474,10 +474,10 @@ pub trait OAuth2SessionRepository: Send + Sync {
     /// Returns [`Self::Error`] if the underlying repository fails
     async fn cleanup_finished(
         &mut self,
-        since: Option<DateTime<Utc>>,
-        until: DateTime<Utc>,
+        since: Option<Timestamp>,
+        until: Timestamp,
         limit: usize,
-    ) -> Result<(usize, Option<DateTime<Utc>>), Self::Error>;
+    ) -> Result<(usize, Option<Timestamp>), Self::Error>;
 
     /// Clear IP addresses from sessions inactive since the threshold
     ///
@@ -498,10 +498,10 @@ pub trait OAuth2SessionRepository: Send + Sync {
     /// Returns [`Self::Error`] if the underlying repository fails
     async fn cleanup_inactive_ips(
         &mut self,
-        since: Option<DateTime<Utc>>,
-        threshold: DateTime<Utc>,
+        since: Option<Timestamp>,
+        threshold: Timestamp,
         limit: usize,
-    ) -> Result<(usize, Option<DateTime<Utc>>), Self::Error>;
+    ) -> Result<(usize, Option<Timestamp>), Self::Error>;
 }
 
 repository_impl!(OAuth2SessionRepository:
@@ -553,7 +553,7 @@ repository_impl!(OAuth2SessionRepository:
 
     async fn record_batch_activity(
         &mut self,
-        activity: Vec<(Ulid, DateTime<Utc>, Option<IpAddr>)>,
+        activity: Vec<(Ulid, Timestamp, Option<IpAddr>)>,
     ) -> Result<(), Self::Error>;
 
     async fn record_user_agent(
@@ -570,15 +570,15 @@ repository_impl!(OAuth2SessionRepository:
 
     async fn cleanup_finished(
         &mut self,
-        since: Option<DateTime<Utc>>,
-        until: DateTime<Utc>,
+        since: Option<Timestamp>,
+        until: Timestamp,
         limit: usize,
-    ) -> Result<(usize, Option<DateTime<Utc>>), Self::Error>;
+    ) -> Result<(usize, Option<Timestamp>), Self::Error>;
 
     async fn cleanup_inactive_ips(
         &mut self,
-        since: Option<DateTime<Utc>>,
-        threshold: DateTime<Utc>,
+        since: Option<Timestamp>,
+        threshold: Timestamp,
         limit: usize,
-    ) -> Result<(usize, Option<DateTime<Utc>>), Self::Error>;
+    ) -> Result<(usize, Option<Timestamp>), Self::Error>;
 );

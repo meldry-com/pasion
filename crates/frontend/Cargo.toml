@@ -17,7 +17,7 @@ dioxus-history = "0.7"
 serde.workspace = true
 serde_json.workspace = true
 form_urlencoded.workspace = true
-chrono = { workspace = true, features = ["wasmbind"] }
+jiff = { workspace = true, features = ["js"] }
 tracing.workspace = true
 gloo-timers.workspace = true
 web-sys.workspace = true

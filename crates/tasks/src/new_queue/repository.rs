@@ -1,5 +1,5 @@
-use chrono::{DateTime, Utc};
 use diesel_async::RunQueryDsl as _;
+use jiff::SignedDuration;
 use pasion_data::{PgRepository, RepositoryAccess, queue::Worker};
 use tokio_util::sync::CancellationToken;
 
@@ -32,7 +32,7 @@ fn jobs_to_fetch_capacity(running_jobs: usize) -> usize {
 
 pub(super) async fn register_worker(
     state: &State,
-) -> Result<(Worker, DateTime<Utc>), QueueRunnerError> {
+) -> Result<(Worker, jiff::Timestamp), QueueRunnerError> {
     let mut rng = state.rng();
     let clock = state.clock();
 
@@ -81,30 +81,30 @@ pub(super) async fn shutdown_worker(
 pub(super) async fn tick_worker(
     state: &State,
     registration: &Worker,
-    last_heartbeat: &mut DateTime<Utc>,
+    last_heartbeat: &mut jiff::Timestamp,
     tracker: &mut JobTracker,
     cancellation_token: &CancellationToken,
 ) -> Result<bool, QueueRunnerError> {
     let clock = state.clock();
     let mut rng = state.rng();
     let now = clock.now();
-    let heartbeat_age = now - *last_heartbeat;
+    let heartbeat_age = now.duration_since(*last_heartbeat);
 
     let mut repo = begin_queue_transaction(state.pool()).await?;
 
-    if heartbeat_age >= chrono::Duration::seconds(90) {
+    if heartbeat_age >= SignedDuration::from_secs(90) {
         tracing::warn!(
             worker.id = %registration.id,
-            heartbeat.age_secs = heartbeat_age.num_seconds(),
+            heartbeat.age_secs = heartbeat_age.as_secs(),
             running_jobs = tracker.running_jobs(),
             "Worker heartbeat is overdue"
         );
     }
 
-    if heartbeat_age >= chrono::Duration::minutes(1) {
+    if heartbeat_age >= SignedDuration::from_mins(1) {
         tracing::info!(
             worker.id = %registration.id,
-            heartbeat.age_secs = heartbeat_age.num_seconds(),
+            heartbeat.age_secs = heartbeat_age.as_secs(),
             running_jobs = tracker.running_jobs(),
             "Sending heartbeat"
         );
@@ -249,7 +249,7 @@ mod tests {
             .unwrap();
         assert!(
             repo.queue_job()
-                .retry(&mut rng, &clock, job.id, chrono::Duration::zero())
+                .retry(&mut rng, &clock, job.id, jiff::SignedDuration::ZERO)
                 .await
                 .is_err()
         );

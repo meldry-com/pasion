@@ -1,10 +1,11 @@
 use async_trait::async_trait;
-use chrono::{DateTime, Utc};
 use diesel::{
     prelude::*,
-    sql_types::{BigInt, Jsonb, Nullable, Text, Timestamptz, Uuid as DieselUuid},
+    sql_types::{BigInt, Timestamptz},
 };
 use diesel_async::RunQueryDsl;
+use jiff::Timestamp;
+use jiff_diesel::ToDiesel as _;
 use pasion_data::{
     Clock, NotificationChannel, NotificationDelivery, NotificationDeliveryFailure,
     NotificationDeliveryStatus, NotificationEventKind, NotificationEventLog,
@@ -21,6 +22,7 @@ use uuid::Uuid;
 
 use crate::{
     DatabaseError, DatabaseInconsistencyError,
+    pg::query_rows::ReservedDeliveryRow,
     schema::{
         notification_deliveries, notification_event_logs, notification_preferences,
         notification_requests,
@@ -52,11 +54,16 @@ struct NotificationRequestRow {
     status: String,
     dedupe_key: Option<String>,
     correlation_key: Option<String>,
-    created_at: DateTime<Utc>,
-    scheduled_at: DateTime<Utc>,
-    started_at: Option<DateTime<Utc>>,
-    completed_at: Option<DateTime<Utc>>,
-    cancelled_at: Option<DateTime<Utc>>,
+    #[diesel(deserialize_as = jiff_diesel::Timestamp)]
+    created_at: Timestamp,
+    #[diesel(deserialize_as = jiff_diesel::Timestamp)]
+    scheduled_at: Timestamp,
+    #[diesel(deserialize_as = jiff_diesel::NullableTimestamp)]
+    started_at: Option<Timestamp>,
+    #[diesel(deserialize_as = jiff_diesel::NullableTimestamp)]
+    completed_at: Option<Timestamp>,
+    #[diesel(deserialize_as = jiff_diesel::NullableTimestamp)]
+    cancelled_at: Option<Timestamp>,
 }
 
 impl TryFrom<NotificationRequestRow> for NotificationRequest {
@@ -95,12 +102,18 @@ struct NotificationDeliveryRow {
     attempt_count: i32,
     status: String,
     last_failure: Option<serde_json::Value>,
-    created_at: DateTime<Utc>,
-    reserved_at: Option<DateTime<Utc>>,
-    sent_at: Option<DateTime<Utc>>,
-    delivered_at: Option<DateTime<Utc>>,
-    failed_at: Option<DateTime<Utc>>,
-    next_retry_at: Option<DateTime<Utc>>,
+    #[diesel(deserialize_as = jiff_diesel::Timestamp)]
+    created_at: Timestamp,
+    #[diesel(deserialize_as = jiff_diesel::NullableTimestamp)]
+    reserved_at: Option<Timestamp>,
+    #[diesel(deserialize_as = jiff_diesel::NullableTimestamp)]
+    sent_at: Option<Timestamp>,
+    #[diesel(deserialize_as = jiff_diesel::NullableTimestamp)]
+    delivered_at: Option<Timestamp>,
+    #[diesel(deserialize_as = jiff_diesel::NullableTimestamp)]
+    failed_at: Option<Timestamp>,
+    #[diesel(deserialize_as = jiff_diesel::NullableTimestamp)]
+    next_retry_at: Option<Timestamp>,
 }
 
 impl TryFrom<NotificationDeliveryRow> for NotificationDelivery {
@@ -154,7 +167,8 @@ struct NotificationEventLogRow {
     actor: serde_json::Value,
     summary: Option<String>,
     metadata: serde_json::Value,
-    occurred_at: DateTime<Utc>,
+    #[diesel(deserialize_as = jiff_diesel::Timestamp)]
+    occurred_at: Timestamp,
 }
 
 #[derive(Debug, Clone, Queryable, Selectable)]
@@ -164,7 +178,8 @@ struct NotificationPreferenceRow {
     user_id: Uuid,
     channel: String,
     enabled: bool,
-    updated_at: DateTime<Utc>,
+    #[diesel(deserialize_as = jiff_diesel::Timestamp)]
+    updated_at: Timestamp,
 }
 
 impl TryFrom<NotificationPreferenceRow> for NotificationPreference {
@@ -213,11 +228,11 @@ struct NewNotificationRequestRow {
     status: String,
     dedupe_key: Option<String>,
     correlation_key: Option<String>,
-    created_at: DateTime<Utc>,
-    scheduled_at: DateTime<Utc>,
-    started_at: Option<DateTime<Utc>>,
-    completed_at: Option<DateTime<Utc>>,
-    cancelled_at: Option<DateTime<Utc>>,
+    created_at: jiff_diesel::Timestamp,
+    scheduled_at: jiff_diesel::Timestamp,
+    started_at: Option<jiff_diesel::Timestamp>,
+    completed_at: Option<jiff_diesel::Timestamp>,
+    cancelled_at: Option<jiff_diesel::Timestamp>,
 }
 
 #[derive(Insertable)]
@@ -232,12 +247,12 @@ struct NewNotificationDeliveryRow {
     attempt_count: i32,
     status: String,
     last_failure: Option<serde_json::Value>,
-    created_at: DateTime<Utc>,
-    reserved_at: Option<DateTime<Utc>>,
-    sent_at: Option<DateTime<Utc>>,
-    delivered_at: Option<DateTime<Utc>>,
-    failed_at: Option<DateTime<Utc>>,
-    next_retry_at: Option<DateTime<Utc>>,
+    created_at: jiff_diesel::Timestamp,
+    reserved_at: Option<jiff_diesel::Timestamp>,
+    sent_at: Option<jiff_diesel::Timestamp>,
+    delivered_at: Option<jiff_diesel::Timestamp>,
+    failed_at: Option<jiff_diesel::Timestamp>,
+    next_retry_at: Option<jiff_diesel::Timestamp>,
 }
 
 #[derive(Insertable)]
@@ -250,7 +265,7 @@ struct NewNotificationEventLogRow {
     actor: serde_json::Value,
     summary: Option<String>,
     metadata: serde_json::Value,
-    occurred_at: DateTime<Utc>,
+    occurred_at: jiff_diesel::Timestamp,
 }
 
 #[derive(Insertable)]
@@ -260,41 +275,7 @@ struct NewNotificationPreferenceRow {
     user_id: Uuid,
     channel: String,
     enabled: bool,
-    updated_at: DateTime<Utc>,
-}
-
-#[derive(Debug, QueryableByName)]
-struct ReservedDeliveryRow {
-    #[diesel(sql_type = DieselUuid)]
-    id: Uuid,
-    #[diesel(sql_type = DieselUuid)]
-    notification_request_id: Uuid,
-    #[diesel(sql_type = Text)]
-    channel: String,
-    #[diesel(sql_type = Jsonb)]
-    destination: serde_json::Value,
-    #[diesel(sql_type = Nullable<Text>)]
-    provider_binding_key: Option<String>,
-    #[diesel(sql_type = Nullable<Text>)]
-    provider_message_id: Option<String>,
-    #[diesel(sql_type = diesel::sql_types::Int4)]
-    attempt_count: i32,
-    #[diesel(sql_type = Text)]
-    status: String,
-    #[diesel(sql_type = Nullable<Jsonb>)]
-    last_failure: Option<serde_json::Value>,
-    #[diesel(sql_type = Timestamptz)]
-    created_at: DateTime<Utc>,
-    #[diesel(sql_type = Nullable<Timestamptz>)]
-    reserved_at: Option<DateTime<Utc>>,
-    #[diesel(sql_type = Nullable<Timestamptz>)]
-    sent_at: Option<DateTime<Utc>>,
-    #[diesel(sql_type = Nullable<Timestamptz>)]
-    delivered_at: Option<DateTime<Utc>>,
-    #[diesel(sql_type = Nullable<Timestamptz>)]
-    failed_at: Option<DateTime<Utc>>,
-    #[diesel(sql_type = Nullable<Timestamptz>)]
-    next_retry_at: Option<DateTime<Utc>>,
+    updated_at: jiff_diesel::Timestamp,
 }
 
 impl TryFrom<ReservedDeliveryRow> for NotificationDelivery {
@@ -311,12 +292,12 @@ impl TryFrom<ReservedDeliveryRow> for NotificationDelivery {
             attempt_count: value.attempt_count,
             status: value.status,
             last_failure: value.last_failure,
-            created_at: value.created_at,
-            reserved_at: value.reserved_at,
-            sent_at: value.sent_at,
-            delivered_at: value.delivered_at,
-            failed_at: value.failed_at,
-            next_retry_at: value.next_retry_at,
+            created_at: value.created_at.to_jiff(),
+            reserved_at: value.reserved_at.map(jiff_diesel::Timestamp::to_jiff),
+            sent_at: value.sent_at.map(jiff_diesel::Timestamp::to_jiff),
+            delivered_at: value.delivered_at.map(jiff_diesel::Timestamp::to_jiff),
+            failed_at: value.failed_at.map(jiff_diesel::Timestamp::to_jiff),
+            next_retry_at: value.next_retry_at.map(jiff_diesel::Timestamp::to_jiff),
         }
         .try_into()
     }
@@ -381,8 +362,8 @@ impl NotificationRepository for PgNotificationRepository<'_> {
             status: request_status_to_db(NotificationRequestStatus::Pending).to_owned(),
             dedupe_key: params.dedupe_key().map(ToOwned::to_owned),
             correlation_key: params.correlation_key().map(ToOwned::to_owned),
-            created_at,
-            scheduled_at,
+            created_at: created_at.to_diesel(),
+            scheduled_at: scheduled_at.to_diesel(),
             started_at: None,
             completed_at: None,
             cancelled_at: None,
@@ -455,9 +436,9 @@ impl NotificationRepository for PgNotificationRepository<'_> {
         )
         .set((
             notification_requests::status.eq(request_status_to_db(notification_request.status)),
-            notification_requests::started_at.eq(notification_request.started_at),
-            notification_requests::completed_at.eq(notification_request.completed_at),
-            notification_requests::cancelled_at.eq(notification_request.cancelled_at),
+            notification_requests::started_at.eq(notification_request.started_at.to_diesel()),
+            notification_requests::completed_at.eq(notification_request.completed_at.to_diesel()),
+            notification_requests::cancelled_at.eq(notification_request.cancelled_at.to_diesel()),
         ))
         .execute(self.conn)
         .await?;
@@ -573,7 +554,7 @@ impl NotificationRepository for PgNotificationRepository<'_> {
             attempt_count: 0,
             status: delivery_status_to_db(NotificationDeliveryStatus::Pending).to_owned(),
             last_failure: None,
-            created_at,
+            created_at: created_at.to_diesel(),
             reserved_at: None,
             sent_at: None,
             delivered_at: None,
@@ -646,7 +627,7 @@ impl NotificationRepository for PgNotificationRepository<'_> {
             UPDATE notification_requests SET status = 'failed'
             WHERE id IN (SELECT notification_request_id FROM marked)
               AND status = 'processing'
-        "#).bind::<Timestamptz, _>(now).execute(self.conn).await?;
+        "#).bind::<Timestamptz, _>(now.to_diesel()).execute(self.conn).await?;
 
         let rows: Vec<ReservedDeliveryRow> = diesel::sql_query(
             r"
@@ -688,7 +669,7 @@ impl NotificationRepository for PgNotificationRepository<'_> {
                     notification_deliveries.next_retry_at
             ",
         )
-        .bind::<Timestamptz, _>(now)
+        .bind::<Timestamptz, _>(now.to_diesel())
         .bind::<BigInt, _>(max_count)
         .get_results(self.conn)
         .await?;
@@ -765,7 +746,7 @@ impl NotificationRepository for PgNotificationRepository<'_> {
         mut notification_delivery: NotificationDelivery,
         failure: NotificationDeliveryFailure,
         provider_message_id: Option<String>,
-        next_retry_at: Option<DateTime<Utc>>,
+        next_retry_at: Option<Timestamp>,
     ) -> Result<NotificationDelivery, Self::Error> {
         let now = clock.now();
         notification_delivery.status = NotificationDeliveryStatus::Failed;
@@ -834,7 +815,7 @@ impl NotificationRepository for PgNotificationRepository<'_> {
                 .map_err(DatabaseError::to_invalid_operation)?,
             summary: params.summary().map(ToOwned::to_owned),
             metadata: params.metadata().clone(),
-            occurred_at,
+            occurred_at: occurred_at.to_diesel(),
         };
 
         diesel::insert_into(notification_event_logs::table)
@@ -932,7 +913,7 @@ impl NotificationRepository for PgNotificationRepository<'_> {
                 user_id: Uuid::from(user.id),
                 channel: channel_to_db(channel).to_owned(),
                 enabled,
-                updated_at,
+                updated_at: updated_at.to_diesel(),
             })
             .collect();
 
@@ -950,7 +931,7 @@ impl NotificationRepository for PgNotificationRepository<'_> {
                     user_id: row.user_id,
                     channel: row.channel,
                     enabled: row.enabled,
-                    updated_at: row.updated_at,
+                    updated_at: row.updated_at.to_jiff(),
                 }
                 .try_into()
             })
@@ -977,11 +958,11 @@ async fn persist_delivery(
             .map(serde_json::to_value)
             .transpose()
             .map_err(DatabaseError::to_invalid_operation)?),
-        notification_deliveries::reserved_at.eq(notification_delivery.reserved_at),
-        notification_deliveries::sent_at.eq(notification_delivery.sent_at),
-        notification_deliveries::delivered_at.eq(notification_delivery.delivered_at),
-        notification_deliveries::failed_at.eq(notification_delivery.failed_at),
-        notification_deliveries::next_retry_at.eq(notification_delivery.next_retry_at),
+        notification_deliveries::reserved_at.eq(notification_delivery.reserved_at.to_diesel()),
+        notification_deliveries::sent_at.eq(notification_delivery.sent_at.to_diesel()),
+        notification_deliveries::delivered_at.eq(notification_delivery.delivered_at.to_diesel()),
+        notification_deliveries::failed_at.eq(notification_delivery.failed_at.to_diesel()),
+        notification_deliveries::next_retry_at.eq(notification_delivery.next_retry_at.to_diesel()),
     ))
     .execute(conn)
     .await?;
@@ -1206,7 +1187,7 @@ mod lease_tests {
                 .is_empty()
         );
         repo.save().await.unwrap();
-        clock.advance(chrono::Duration::minutes(6));
+        clock.advance(jiff::SignedDuration::from_mins(6));
         let mut repo = factory.create().await.unwrap();
         assert!(
             repo.notification()

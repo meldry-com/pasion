@@ -112,7 +112,7 @@ impl<T> WithCaptcha<T> {
 
 impl<T: TemplateContext> TemplateContext for WithCaptcha<T> {
     fn sample<R: Rng>(
-        now: chrono::DateTime<chrono::prelude::Utc>,
+        now: jiff::Timestamp,
         rng: &mut R,
         locales: &[DataLocale],
     ) -> BTreeMap<SampleIdentifier, Self>

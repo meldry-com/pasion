@@ -6,6 +6,7 @@
 //!   preferences.
 
 use salvo::prelude::*;
+use salvo_oapi::endpoint;
 use serde::{Deserialize, Serialize};
 
 use super::{
@@ -20,7 +21,7 @@ use crate::services::user_profile::{
 // ── Response / request types ─────────────────────────────────
 
 /// Availability status of a single notification channel.
-#[derive(Serialize, Deserialize, Clone, salvo::oapi::ToSchema)]
+#[derive(Serialize, Deserialize, Clone, salvo_oapi::ToSchema)]
 pub struct ChannelAvailability {
     /// Channel name, e.g. `"email"` or `"sms"`.
     pub channel: String,
@@ -30,7 +31,7 @@ pub struct ChannelAvailability {
 }
 
 /// Per-channel preference of the current user.
-#[derive(Serialize, Deserialize, Clone, salvo::oapi::ToSchema)]
+#[derive(Serialize, Deserialize, Clone, salvo_oapi::ToSchema)]
 pub struct ChannelPreference {
     /// Channel name, e.g. `"email"` or `"sms"`.
     pub channel: String,
@@ -40,7 +41,7 @@ pub struct ChannelPreference {
 }
 
 /// Response for `GET /api/v1/viewer/preferences`.
-#[derive(Serialize, salvo::oapi::ToSchema)]
+#[derive(Serialize, salvo_oapi::ToSchema)]
 pub struct NotificationPreferencesResponse {
     /// Server-side channel availability.
     pub available_channels: Vec<ChannelAvailability>,
@@ -50,14 +51,14 @@ pub struct NotificationPreferencesResponse {
 }
 
 /// Request body for `PATCH /api/v1/viewer/preferences`.
-#[derive(Deserialize, salvo::oapi::ToSchema)]
+#[derive(Deserialize, salvo_oapi::ToSchema)]
 pub struct PatchNotificationPreferencesRequest {
     /// The per-channel preferences to update.
     pub preferences: Vec<ChannelPreference>,
 }
 
 /// Response for `PATCH /api/v1/viewer/preferences`.
-#[derive(Serialize, salvo::oapi::ToSchema)]
+#[derive(Serialize, salvo_oapi::ToSchema)]
 pub struct PatchNotificationPreferencesResponse {
     /// The preferences as persisted by the server.
     pub preferences: Vec<ChannelPreference>,
@@ -195,8 +196,8 @@ fn map_user_profile_error(error: UserProfileServiceError) -> RouteError {
 
 #[cfg(test)]
 mod tests {
-    use chrono::Duration;
     use hyper::{Request, StatusCode};
+    use jiff::SignedDuration;
     use pasion_data::{
         RepositoryAccess,
         user::{BrowserSessionRepository, UserRepository},
@@ -218,7 +219,9 @@ mod tests {
         let pool = pasion_data::test_utils::setup_test_pool().await;
         let state = TestState::from_pool(pool.clone()).await.unwrap();
         let unique = unique_test_nonce();
-        state.clock.advance(Duration::seconds(unique as i64));
+        state
+            .clock
+            .advance(SignedDuration::from_secs(unique as i64));
         let mut rng = ChaChaRng::seed_from_u64(unique);
         let mut repo = state.repository().await.unwrap();
         let username = format!("alice{}", Ulid::generate().to_string().to_lowercase());

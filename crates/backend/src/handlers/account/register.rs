@@ -5,13 +5,13 @@
 //! check config/policy constraints, delegate to service functions, and map
 //! results to JSON responses.
 
-use chrono::Utc;
 use pasion_data::{
     PostAuthAction,
     flow::{FlowSession, FlowSessionStatus},
     new_id,
 };
-use salvo::{oapi::ToSchema, prelude::*};
+use salvo::prelude::*;
+use salvo_oapi::{ToSchema, endpoint};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use ulid::Ulid;
@@ -176,7 +176,7 @@ pub async fn post_register(
         let (flow_def, bindings) = default_registration_flow(&mut *rng);
         let plan = FlowExecutor::plan(flow_def, bindings);
 
-        let now = Utc::now();
+        let now = jiff::Timestamp::now();
         let session_id = new_id(now, &mut *rng);
 
         let session = FlowSession {
@@ -189,7 +189,7 @@ pub async fn post_register(
             user_agent: None,
             created_at: now,
             updated_at: now,
-            expires_at: now + chrono::Duration::hours(1),
+            expires_at: now + jiff::SignedDuration::from_hours(1),
             completed_at: None,
         };
 
@@ -253,11 +253,13 @@ pub async fn get_registration(
 
     Ok(Json(RegistrationStatusResponse {
         id: status.registration.id.to_string(),
-        created_at: status.registration.created_at.to_rfc3339(),
+        created_at: pasion_data::clock::format_rfc3339(status.registration.created_at),
         username: status.registration.username,
         email_pending: status.email_pending,
         pending_email: status.pending_email,
-        pending_email_sent_at: status.pending_email_sent_at.map(|at| at.to_rfc3339()),
+        pending_email_sent_at: status
+            .pending_email_sent_at
+            .map(pasion_data::clock::format_rfc3339),
         phone_pending: status.phone_pending,
         steps_completed: status.steps_completed,
         next_step: status.next_step,

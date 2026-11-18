@@ -1,9 +1,10 @@
 use std::net::IpAddr;
 
 use async_trait::async_trait;
-use chrono::{DateTime, Utc};
 use diesel::prelude::*;
 use diesel_async::RunQueryDsl;
+use jiff::Timestamp;
+use jiff_diesel::ToDiesel as _;
 use pasion_data::{
     Authentication, AuthenticationMethod, BrowserSession, Clock, Page, Pagination, Password,
     UpstreamOAuthAuthorizationSession, User, new_id,
@@ -16,6 +17,7 @@ use uuid::Uuid;
 
 use crate::{
     DatabaseError, DatabaseInconsistencyError,
+    pg::query_rows::CleanupResult,
     schema::{
         upstream_oauth_authorization_sessions, user_session_authentications, user_sessions, users,
     },
@@ -41,10 +43,13 @@ impl<'c> PgBrowserSessionRepository<'c> {
 struct UserSessionRow {
     id: Uuid,
     user_id: Uuid,
-    created_at: DateTime<Utc>,
-    finished_at: Option<DateTime<Utc>>,
+    #[diesel(deserialize_as = jiff_diesel::Timestamp)]
+    created_at: Timestamp,
+    #[diesel(deserialize_as = jiff_diesel::NullableTimestamp)]
+    finished_at: Option<Timestamp>,
     user_agent: Option<String>,
-    last_active_at: Option<DateTime<Utc>>,
+    #[diesel(deserialize_as = jiff_diesel::NullableTimestamp)]
+    last_active_at: Option<Timestamp>,
     last_active_ip: Option<ipnetwork::IpNetwork>,
 }
 
@@ -105,7 +110,8 @@ impl From<SessionLookup> for BrowserSession {
 #[diesel(table_name = user_session_authentications)]
 struct AuthenticationLookup {
     id: Uuid,
-    created_at: DateTime<Utc>,
+    #[diesel(deserialize_as = jiff_diesel::Timestamp)]
+    created_at: Timestamp,
     user_password_id: Option<Uuid>,
     upstream_oauth_authorization_session_id: Option<Uuid>,
 }
@@ -145,7 +151,8 @@ impl TryFrom<AuthenticationLookup> for Authentication {
 struct NewUserSession {
     id: Uuid,
     user_id: Uuid,
-    created_at: DateTime<Utc>,
+    #[diesel(serialize_as = jiff_diesel::Timestamp)]
+    created_at: Timestamp,
     user_agent: Option<String>,
 }
 
@@ -155,7 +162,8 @@ struct NewUserSession {
 struct NewSessionAuthenticationPassword {
     id: Uuid,
     user_session_id: Uuid,
-    created_at: DateTime<Utc>,
+    #[diesel(serialize_as = jiff_diesel::Timestamp)]
+    created_at: Timestamp,
     user_password_id: Option<Uuid>,
 }
 
@@ -165,17 +173,9 @@ struct NewSessionAuthenticationPassword {
 struct NewSessionAuthenticationUpstream {
     id: Uuid,
     user_session_id: Uuid,
-    created_at: DateTime<Utc>,
+    #[diesel(serialize_as = jiff_diesel::Timestamp)]
+    created_at: Timestamp,
     upstream_oauth_authorization_session_id: Option<Uuid>,
-}
-
-/// Result row for cleanup/batch queries using raw SQL
-#[derive(Debug, QueryableByName)]
-struct CleanupResult {
-    #[diesel(sql_type = diesel::sql_types::BigInt)]
-    count: i64,
-    #[diesel(sql_type = diesel::sql_types::Nullable<diesel::sql_types::Timestamptz>)]
-    last_ts: Option<DateTime<Utc>>,
 }
 
 /// Apply the common [`BrowserSessionFilter`] conditions to any diesel
@@ -194,10 +194,10 @@ macro_rules! apply_session_filter {
             }
         }
         if let Some(last_active_after) = $filter.last_active_after() {
-            q = q.filter(user_sessions::last_active_at.gt(last_active_after));
+            q = q.filter(user_sessions::last_active_at.gt(last_active_after.to_diesel()));
         }
         if let Some(last_active_before) = $filter.last_active_before() {
-            q = q.filter(user_sessions::last_active_at.lt(last_active_before));
+            q = q.filter(user_sessions::last_active_at.lt(last_active_before.to_diesel()));
         }
         if let Some(upstream_filter) = $filter.authenticated_by_upstream_sessions() {
             let mut sub = user_session_authentications::table
@@ -304,7 +304,7 @@ impl BrowserSessionRepository for PgBrowserSessionRepository<'_> {
         };
 
         diesel::insert_into(user_sessions::table)
-            .values(&new_session)
+            .values(new_session)
             .execute(self.conn)
             .await?;
 
@@ -340,7 +340,7 @@ impl BrowserSessionRepository for PgBrowserSessionRepository<'_> {
         let rows_affected = diesel::update(
             user_sessions::table.filter(user_sessions::id.eq(Uuid::from(user_session.id))),
         )
-        .set(user_sessions::finished_at.eq(Some(finished_at)))
+        .set(user_sessions::finished_at.eq(Some(finished_at).to_diesel()))
         .execute(self.conn)
         .await?;
 
@@ -363,7 +363,7 @@ impl BrowserSessionRepository for PgBrowserSessionRepository<'_> {
         let update = apply_session_filter!(update, filter);
 
         let rows_affected = update
-            .set(user_sessions::finished_at.eq(Some(finished_at)))
+            .set(user_sessions::finished_at.eq(Some(finished_at).to_diesel()))
             .execute(self.conn)
             .await?;
 
@@ -483,7 +483,7 @@ impl BrowserSessionRepository for PgBrowserSessionRepository<'_> {
         };
 
         diesel::insert_into(user_session_authentications::table)
-            .values(&new_auth)
+            .values(new_auth)
             .execute(self.conn)
             .await?;
 
@@ -528,7 +528,7 @@ impl BrowserSessionRepository for PgBrowserSessionRepository<'_> {
         };
 
         diesel::insert_into(user_session_authentications::table)
-            .values(&new_auth)
+            .values(new_auth)
             .execute(self.conn)
             .await?;
 
@@ -572,7 +572,7 @@ impl BrowserSessionRepository for PgBrowserSessionRepository<'_> {
     #[tracing::instrument(name = "db.browser_session.record_batch_activity", skip_all, err)]
     async fn record_batch_activity(
         &mut self,
-        mut activities: Vec<(Ulid, DateTime<Utc>, Option<IpAddr>)>,
+        mut activities: Vec<(Ulid, Timestamp, Option<IpAddr>)>,
     ) -> Result<(), Self::Error> {
         // Sort the activity by ID, so that when batching the updates, Postgres
         // locks the rows in a stable order, preventing deadlocks
@@ -583,7 +583,7 @@ impl BrowserSessionRepository for PgBrowserSessionRepository<'_> {
 
         for (id, last_activity, ip) in activities {
             ids.push(Uuid::from(id));
-            last_activities.push(last_activity);
+            last_activities.push(last_activity.to_diesel());
             ips.push(ip.map(ipnetwork::IpNetwork::from));
         }
 
@@ -627,10 +627,10 @@ impl BrowserSessionRepository for PgBrowserSessionRepository<'_> {
     )]
     async fn cleanup_finished(
         &mut self,
-        since: Option<DateTime<Utc>>,
-        until: DateTime<Utc>,
+        since: Option<Timestamp>,
+        until: Timestamp,
         limit: usize,
-    ) -> Result<(usize, Option<DateTime<Utc>>), Self::Error> {
+    ) -> Result<(usize, Option<Timestamp>), Self::Error> {
         let res: CleanupResult = diesel::sql_query(
             r"
                 WITH
@@ -661,13 +661,16 @@ impl BrowserSessionRepository for PgBrowserSessionRepository<'_> {
                 SELECT COUNT(*) AS count, MAX(finished_at) AS last_ts FROM deleted_sessions
             ",
         )
-        .bind::<diesel::sql_types::Nullable<diesel::sql_types::Timestamptz>, _>(since)
-        .bind::<diesel::sql_types::Timestamptz, _>(until)
+        .bind::<diesel::sql_types::Nullable<diesel::sql_types::Timestamptz>, _>(since.to_diesel())
+        .bind::<diesel::sql_types::Timestamptz, _>(until.to_diesel())
         .bind::<diesel::sql_types::BigInt, _>(i64::try_from(limit).unwrap_or(i64::MAX))
         .get_result(self.conn)
         .await?;
 
-        Ok((res.count.try_into().unwrap_or(usize::MAX), res.last_ts))
+        Ok((
+            res.count.try_into().unwrap_or(usize::MAX),
+            res.last_ts.map(jiff_diesel::Timestamp::to_jiff),
+        ))
     }
 
     #[tracing::instrument(
@@ -682,10 +685,10 @@ impl BrowserSessionRepository for PgBrowserSessionRepository<'_> {
     )]
     async fn cleanup_inactive_ips(
         &mut self,
-        since: Option<DateTime<Utc>>,
-        threshold: DateTime<Utc>,
+        since: Option<Timestamp>,
+        threshold: Timestamp,
         limit: usize,
-    ) -> Result<(usize, Option<DateTime<Utc>>), Self::Error> {
+    ) -> Result<(usize, Option<Timestamp>), Self::Error> {
         let res: CleanupResult = diesel::sql_query(
             r"
                 WITH to_update AS (
@@ -709,12 +712,15 @@ impl BrowserSessionRepository for PgBrowserSessionRepository<'_> {
                 SELECT COUNT(*) AS count, MAX(last_active_at) AS last_ts FROM updated
             ",
         )
-        .bind::<diesel::sql_types::Nullable<diesel::sql_types::Timestamptz>, _>(since)
-        .bind::<diesel::sql_types::Timestamptz, _>(threshold)
+        .bind::<diesel::sql_types::Nullable<diesel::sql_types::Timestamptz>, _>(since.to_diesel())
+        .bind::<diesel::sql_types::Timestamptz, _>(threshold.to_diesel())
         .bind::<diesel::sql_types::BigInt, _>(i64::try_from(limit).unwrap_or(i64::MAX))
         .get_result(self.conn)
         .await?;
 
-        Ok((res.count.try_into().unwrap_or(usize::MAX), res.last_ts))
+        Ok((
+            res.count.try_into().unwrap_or(usize::MAX),
+            res.last_ts.map(jiff_diesel::Timestamp::to_jiff),
+        ))
     }
 }

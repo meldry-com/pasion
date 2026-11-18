@@ -22,7 +22,7 @@
 
 use std::collections::HashMap;
 
-use chrono::Duration;
+use jiff::SignedDuration;
 use pasion_data::{
     AccessToken, Authentication, AuthorizationGrant, BrowserSession, Client, Clock, RefreshToken,
     RepositoryAccess, Session, TokenType, UrlBuilder,
@@ -144,7 +144,7 @@ pub(crate) fn generate_id_token(
     claims::SUB.insert(&mut claims, &browser_session.user.sub)?;
     claims::AUD.insert(&mut claims, client.client_id.clone())?;
     claims::IAT.insert(&mut claims, now)?;
-    claims::EXP.insert(&mut claims, now + Duration::try_hours(1).unwrap())?;
+    claims::EXP.insert(&mut claims, now + SignedDuration::from_hours(1))?;
 
     if let Some(nonce) = grant.and_then(|grant| grant.nonce.as_ref()) {
         claims::NONCE.insert(&mut claims, nonce)?;
@@ -183,7 +183,7 @@ pub(crate) async fn generate_token_pair<R: RepositoryAccess>(
     clock: &impl Clock,
     repo: &mut R,
     session: &Session,
-    ttl: Duration,
+    ttl: SignedDuration,
 ) -> Result<(AccessToken, RefreshToken), R::Error> {
     let access_token_str = TokenType::AccessToken.generate(rng);
     let refresh_token_str = TokenType::RefreshToken.generate(rng);
@@ -205,7 +205,7 @@ pub(crate) async fn generate_token_pair<R: RepositoryAccess>(
 mod tests {
     use std::collections::HashMap;
 
-    use chrono::Duration;
+    use jiff::SignedDuration;
     use pasion_data::{AccessTokenState, AuthenticationMethod, clock::MockClock};
     use pasion_jose::{claims::hash_token, jwt::Jwt};
     use pasion_keystore::{JsonWebKey, JsonWebKeySet, PrivateKey};
@@ -251,12 +251,12 @@ mod tests {
             session_id: Ulid::generate(),
             access_token: "access-token-value".to_owned(),
             created_at: now,
-            expires_at: Some(now + Duration::try_minutes(5).unwrap()),
+            expires_at: Some(now + SignedDuration::from_mins(5)),
             first_used_at: None,
         };
         let authentication = Authentication {
             id: Ulid::generate(),
-            created_at: now - Duration::try_minutes(2).unwrap(),
+            created_at: now - SignedDuration::from_mins(2),
             authentication_method: AuthenticationMethod::Unknown,
         };
         let (key_store, kid) = keystore_for_alg(&alg);
@@ -300,7 +300,7 @@ mod tests {
         );
         assert_eq!(
             payload.get("auth_time").and_then(Value::as_i64),
-            Some(authentication.created_at.timestamp())
+            Some(authentication.created_at.as_second())
         );
 
         let expected_at_hash = hash_token(&alg, &access_token.access_token).unwrap();

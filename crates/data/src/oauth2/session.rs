@@ -1,6 +1,6 @@
 use std::net::IpAddr;
 
-use chrono::{DateTime, Utc};
+use jiff::Timestamp;
 use oauth2_types::scope::Scope;
 use serde::Serialize;
 use ulid::Ulid;
@@ -12,7 +12,7 @@ pub enum SessionState {
     #[default]
     Valid,
     Finished {
-        finished_at: DateTime<Utc>,
+        finished_at: Timestamp,
     },
 }
 
@@ -44,7 +44,7 @@ impl SessionState {
     /// Returns an error if the session state is already [`Finished`].
     ///
     /// [`Finished`]: SessionState::Finished
-    pub fn finish(self, finished_at: DateTime<Utc>) -> Result<Self, InvalidTransitionError> {
+    pub fn finish(self, finished_at: Timestamp) -> Result<Self, InvalidTransitionError> {
         match self {
             Self::Valid => Ok(Self::Finished { finished_at }),
             Self::Finished { .. } => Err(InvalidTransitionError),
@@ -57,7 +57,7 @@ impl SessionState {
     ///
     /// [`Valid`]: SessionState::Valid
     #[must_use]
-    pub fn finished_at(&self) -> Option<DateTime<Utc>> {
+    pub fn finished_at(&self) -> Option<Timestamp> {
         match self {
             Self::Valid => None,
             Self::Finished { finished_at } => Some(*finished_at),
@@ -69,13 +69,13 @@ impl SessionState {
 pub struct Session {
     pub id: Ulid,
     pub state: SessionState,
-    pub created_at: DateTime<Utc>,
+    pub created_at: Timestamp,
     pub user_id: Option<Ulid>,
     pub user_session_id: Option<Ulid>,
     pub client_id: Ulid,
     pub scope: Scope,
     pub user_agent: Option<String>,
-    pub last_active_at: Option<DateTime<Utc>>,
+    pub last_active_at: Option<Timestamp>,
     pub last_active_ip: Option<IpAddr>,
     /// Pasion-original: optional human-readable name for this session.
     pub human_name: Option<String>,
@@ -99,7 +99,7 @@ impl Session {
     /// # Errors
     ///
     /// Returns an error if the session is already finished.
-    pub fn finish(mut self, finished_at: DateTime<Utc>) -> Result<Self, InvalidTransitionError> {
+    pub fn finish(mut self, finished_at: Timestamp) -> Result<Self, InvalidTransitionError> {
         self.state = self.state.finish(finished_at)?;
         Ok(self)
     }

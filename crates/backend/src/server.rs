@@ -842,9 +842,9 @@ fn build_admin_router(router: Router, mount: &str) -> Router {
         );
 
     // Generate OpenAPI spec and Swagger UI for the admin API
-    let admin_doc = salvo::oapi::OpenApi::new("Pasion Admin API", env!("CARGO_PKG_VERSION"))
+    let admin_doc = salvo_oapi::OpenApi::new("Pasion Admin API", env!("CARGO_PKG_VERSION"))
         .merge_router(&admin_router)
-        .servers([salvo::oapi::Server::new(if mount.is_empty() {
+        .servers([salvo_oapi::Server::new(if mount.is_empty() {
             "/"
         } else {
             mount
@@ -854,7 +854,7 @@ fn build_admin_router(router: Router, mount: &str) -> Router {
         .push(admin_router)
         .push(admin_doc.into_router("/api-doc/admin/openapi.json"))
         .push(
-            salvo::oapi::swagger_ui::SwaggerUi::new(format!("{mount}/api-doc/admin/openapi.json"))
+            salvo_oapi::swagger_ui::SwaggerUi::new(format!("{mount}/api-doc/admin/openapi.json"))
                 .into_router("admin-swagger-ui"),
         )
 }

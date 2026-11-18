@@ -41,8 +41,8 @@ impl TencentSmsTransport {
         let action = "SendSms";
         let version = "2021-01-11";
 
-        let timestamp = chrono::Utc::now().timestamp();
-        let date = chrono::Utc::now().format("%Y-%m-%d").to_string();
+        let timestamp = jiff::Timestamp::now().as_second();
+        let date = jiff::Timestamp::now().strftime("%Y-%m-%d").to_string();
 
         // Build JSON request body
         let payload = serde_json::json!({

@@ -1,4 +1,5 @@
-use salvo::{oapi::ToSchema, prelude::*};
+use salvo::prelude::*;
+use salvo_oapi::{ToSchema, endpoint};
 use serde::{Deserialize, Serialize};
 
 use super::{
@@ -78,7 +79,7 @@ pub async fn get_email_auth(
     Ok(Json(EmailAuthStatusResponse {
         id: NodeType::UserEmailAuthentication.serialize(auth.id),
         email: auth.email,
-        completed_at: auth.completed_at.map(|t| t.to_rfc3339()),
+        completed_at: auth.completed_at.map(pasion_data::clock::format_rfc3339),
     }))
 }
 

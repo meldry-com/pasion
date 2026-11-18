@@ -1,6 +1,6 @@
 use std::str::FromStr as _;
 
-use chrono::{DateTime, Utc};
+use jiff::Timestamp;
 use oauth2_types::{
     pkce::{CodeChallengeError, CodeChallengeMethodExt},
     requests::ResponseMode,
@@ -65,15 +65,15 @@ pub enum AuthorizationGrantStage {
     Pending,
     Fulfilled {
         session_id: Ulid,
-        fulfilled_at: DateTime<Utc>,
+        fulfilled_at: Timestamp,
     },
     Exchanged {
         session_id: Ulid,
-        fulfilled_at: DateTime<Utc>,
-        exchanged_at: DateTime<Utc>,
+        fulfilled_at: Timestamp,
+        exchanged_at: Timestamp,
     },
     Cancelled {
-        cancelled_at: DateTime<Utc>,
+        cancelled_at: Timestamp,
     },
 }
 
@@ -85,7 +85,7 @@ impl AuthorizationGrantStage {
 
     fn fulfill(
         self,
-        fulfilled_at: DateTime<Utc>,
+        fulfilled_at: Timestamp,
         session: &Session,
     ) -> Result<Self, InvalidTransitionError> {
         match self {
@@ -97,7 +97,7 @@ impl AuthorizationGrantStage {
         }
     }
 
-    fn exchange(self, exchanged_at: DateTime<Utc>) -> Result<Self, InvalidTransitionError> {
+    fn exchange(self, exchanged_at: Timestamp) -> Result<Self, InvalidTransitionError> {
         match self {
             Self::Fulfilled {
                 fulfilled_at,
@@ -111,7 +111,7 @@ impl AuthorizationGrantStage {
         }
     }
 
-    fn cancel(self, cancelled_at: DateTime<Utc>) -> Result<Self, InvalidTransitionError> {
+    fn cancel(self, cancelled_at: Timestamp) -> Result<Self, InvalidTransitionError> {
         match self {
             Self::Pending => Ok(Self::Cancelled { cancelled_at }),
             _ => Err(InvalidTransitionError),
@@ -165,7 +165,7 @@ pub struct AuthorizationGrant {
     pub nonce: Option<String>,
     pub response_mode: ResponseMode,
     pub response_type_id_token: bool,
-    pub created_at: DateTime<Utc>,
+    pub created_at: Timestamp,
     /// Pasion-original: login hint passed through the authorization request.
     pub login_hint: Option<String>,
     /// Pasion-original: preferred locale from the authorization request.
@@ -213,7 +213,7 @@ impl AuthorizationGrant {
     /// Returns an error if the authorization grant is not [`Fulfilled`].
     ///
     /// [`Fulfilled`]: AuthorizationGrantStage::Fulfilled
-    pub fn exchange(mut self, exchanged_at: DateTime<Utc>) -> Result<Self, InvalidTransitionError> {
+    pub fn exchange(mut self, exchanged_at: Timestamp) -> Result<Self, InvalidTransitionError> {
         self.stage = self.stage.exchange(exchanged_at)?;
         Ok(self)
     }
@@ -227,7 +227,7 @@ impl AuthorizationGrant {
     /// [`Pending`]: AuthorizationGrantStage::Pending
     pub fn fulfill(
         mut self,
-        fulfilled_at: DateTime<Utc>,
+        fulfilled_at: Timestamp,
         session: &Session,
     ) -> Result<Self, InvalidTransitionError> {
         self.stage = self.stage.fulfill(fulfilled_at, session)?;
@@ -245,13 +245,13 @@ impl AuthorizationGrant {
     /// # TODO
     ///
     /// This appears to be unused
-    pub fn cancel(mut self, canceld_at: DateTime<Utc>) -> Result<Self, InvalidTransitionError> {
+    pub fn cancel(mut self, canceld_at: Timestamp) -> Result<Self, InvalidTransitionError> {
         self.stage = self.stage.cancel(canceld_at)?;
         Ok(self)
     }
 
     #[doc(hidden)]
-    pub fn sample(now: DateTime<Utc>, rng: &mut impl RngCore) -> Self {
+    pub fn sample(now: Timestamp, rng: &mut impl RngCore) -> Self {
         Self {
             id: crate::new_id(now, rng),
             stage: AuthorizationGrantStage::Pending,

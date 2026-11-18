@@ -4,7 +4,7 @@
 //! They can be used directly or as templates for custom flows stored in the
 //! database.
 
-use chrono::Utc;
+use jiff::Timestamp;
 use pasion_data::{
     flow::{FlowDefinition, FlowDesignation, FlowStageBinding, IdentificationField, StageKind},
     new_id,
@@ -16,7 +16,7 @@ use pasion_data::{
 pub fn default_registration_flow(
     rng: &mut (dyn rand_core::RngCore + Send),
 ) -> (FlowDefinition, Vec<FlowStageBinding>) {
-    let now = Utc::now();
+    let now = Timestamp::now();
     let flow_id = new_id(now, rng);
 
     let flow = FlowDefinition {
@@ -68,7 +68,7 @@ pub fn default_registration_flow(
 pub fn default_recovery_flow(
     rng: &mut (dyn rand_core::RngCore + Send),
 ) -> (FlowDefinition, Vec<FlowStageBinding>) {
-    let now = Utc::now();
+    let now = Timestamp::now();
     let flow_id = new_id(now, rng);
 
     let flow = FlowDefinition {
@@ -130,7 +130,7 @@ pub fn default_recovery_flow(
 pub fn default_password_change_flow(
     rng: &mut (dyn rand_core::RngCore + Send),
 ) -> (FlowDefinition, Vec<FlowStageBinding>) {
-    let now = Utc::now();
+    let now = Timestamp::now();
     let flow_id = new_id(now, rng);
 
     let flow = FlowDefinition {
@@ -164,7 +164,7 @@ pub fn default_password_change_flow(
 pub fn default_authentication_flow(
     rng: &mut (dyn rand_core::RngCore + Send),
 ) -> (FlowDefinition, Vec<FlowStageBinding>) {
-    let now = Utc::now();
+    let now = Timestamp::now();
     let flow_id = new_id(now, rng);
 
     let flow = FlowDefinition {
@@ -199,7 +199,7 @@ pub fn default_authentication_flow(
 pub fn default_authorization_flow(
     rng: &mut (dyn rand_core::RngCore + Send),
 ) -> (FlowDefinition, Vec<FlowStageBinding>) {
-    let now = Utc::now();
+    let now = Timestamp::now();
     let flow_id = new_id(now, rng);
 
     let flow = FlowDefinition {
@@ -233,7 +233,7 @@ pub fn default_authorization_flow(
 pub fn default_enrollment_flow(
     rng: &mut (dyn rand_core::RngCore + Send),
 ) -> (FlowDefinition, Vec<FlowStageBinding>) {
-    let now = Utc::now();
+    let now = Timestamp::now();
     let flow_id = new_id(now, rng);
 
     let flow = FlowDefinition {

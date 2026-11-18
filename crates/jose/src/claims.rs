@@ -8,6 +8,7 @@
 use std::{collections::HashMap, convert::Infallible, ops::Deref};
 
 use base64ct::{Base64UrlUnpadded, Encoding};
+use jiff::SignedDuration;
 use pasion_iana::jose::JsonWebSignatureAlg;
 use serde::{Deserialize, Serialize, de::DeserializeOwned};
 use sha2::{Digest, Sha256, Sha384, Sha512};
@@ -246,8 +247,8 @@ where
 /// Controls how temporal claims (`nbf`, `exp`, `iat`) are validated.
 #[derive(Debug, Clone)]
 pub struct TimeOptions {
-    when: chrono::DateTime<chrono::Utc>,
-    leeway: chrono::Duration,
+    when: jiff::Timestamp,
+    leeway: SignedDuration,
 }
 
 /// Default leeway: 5 minutes expressed in whole seconds.
@@ -255,15 +256,15 @@ const DEFAULT_LEEWAY_SECS: i64 = 5 * 60;
 
 impl TimeOptions {
     #[must_use]
-    pub fn new(when: chrono::DateTime<chrono::Utc>) -> Self {
+    pub fn new(when: jiff::Timestamp) -> Self {
         Self {
             when,
-            leeway: chrono::Duration::seconds(DEFAULT_LEEWAY_SECS),
+            leeway: SignedDuration::from_secs(DEFAULT_LEEWAY_SECS),
         }
     }
 
     #[must_use]
-    pub fn leeway(mut self, leeway: chrono::Duration) -> Self {
+    pub fn leeway(mut self, leeway: SignedDuration) -> Self {
         self.leeway = leeway;
         self
     }
@@ -523,24 +524,39 @@ impl<'a, T> From<&'a T> for Contains<'a, T> {
 }
 
 // ---------------------------------------------------------------------------
-// Timestamp – chrono wrapper with UNIX-seconds serde
+// NumericDate claims
 // ---------------------------------------------------------------------------
 
 /// A UTC timestamp that serializes as a UNIX epoch integer (seconds).
 #[derive(Deserialize, Serialize, Debug, Clone, PartialEq, Eq)]
 #[serde(transparent)]
-pub struct Timestamp(#[serde(with = "chrono::serde::ts_seconds")] chrono::DateTime<chrono::Utc>);
+pub struct Timestamp(
+    #[serde(
+        deserialize_with = "jiff::fmt::serde::timestamp::second::required::deserialize",
+        serialize_with = "serialize_epoch_seconds"
+    )]
+    jiff::Timestamp,
+);
+
+fn serialize_epoch_seconds<S: serde::Serializer>(
+    value: &jiff::Timestamp,
+    serializer: S,
+) -> Result<S::Ok, S::Error> {
+    // NumericDate uses the whole second containing the instant, including before
+    // 1970.
+    serializer.serialize_i64(value.as_second() - i64::from(value.subsec_nanosecond() < 0))
+}
 
 impl Deref for Timestamp {
-    type Target = chrono::DateTime<chrono::Utc>;
+    type Target = jiff::Timestamp;
 
     fn deref(&self) -> &Self::Target {
         &self.0
     }
 }
 
-impl From<chrono::DateTime<chrono::Utc>> for Timestamp {
-    fn from(value: chrono::DateTime<chrono::Utc>) -> Self {
+impl From<jiff::Timestamp> for Timestamp {
+    fn from(value: jiff::Timestamp) -> Self {
         Timestamp(value)
     }
 }
@@ -741,7 +757,6 @@ mod tests {
     use std::collections::HashMap;
 
     use base64ct::{Base64UrlUnpadded, Encoding};
-    use chrono::TimeZone;
     use sha2::{Digest, Sha512};
 
     use super::*;
@@ -751,13 +766,8 @@ mod tests {
     // -----------------------------------------------------------------------
 
     /// Builds a standard set of JWT claims at a known point in time.
-    fn standard_claims_fixture() -> (
-        chrono::DateTime<chrono::Utc>,
-        HashMap<String, serde_json::Value>,
-    ) {
-        let now = chrono::Utc
-            .with_ymd_and_hms(2018, 1, 18, 1, 30, 22)
-            .unwrap();
+    fn standard_claims_fixture() -> (jiff::Timestamp, HashMap<String, serde_json::Value>) {
+        let now = "2018-01-18T01:30:22Z".parse::<jiff::Timestamp>().unwrap();
         let claims = serde_json::json!({
             "iss": "https://foo.com",
             "sub": "johndoe",
@@ -771,10 +781,8 @@ mod tests {
     }
 
     /// Reference time used across multiple tests.
-    fn reference_time() -> chrono::DateTime<chrono::Utc> {
-        chrono::Utc
-            .with_ymd_and_hms(2018, 1, 18, 1, 30, 22)
-            .unwrap()
+    fn reference_time() -> jiff::Timestamp {
+        "2018-01-18T01:30:22Z".parse::<jiff::Timestamp>().unwrap()
     }
 
     /// Builds claims with deliberately wrong types for negative testing.
@@ -794,6 +802,15 @@ mod tests {
     // -----------------------------------------------------------------------
     // Timestamp serde
     // -----------------------------------------------------------------------
+
+    #[test]
+    fn negative_fractional_numeric_date_uses_the_preceding_second() {
+        let instant = Timestamp("1969-12-31T23:59:59.500Z".parse().unwrap());
+        assert_eq!(
+            serde_json::to_value(instant).unwrap(),
+            serde_json::json!(-1)
+        );
+    }
 
     #[test]
     fn timestamp_roundtrips_through_json() {
@@ -877,8 +894,8 @@ mod tests {
     #[test]
     fn extract_all_standard_claims() {
         let (now, mut claims) = standard_claims_fixture();
-        let expiration = now + chrono::Duration::try_seconds(300).unwrap();
-        let time_options = TimeOptions::new(now).leeway(chrono::Duration::zero());
+        let expiration = now + SignedDuration::from_secs(300);
+        let time_options = TimeOptions::new(now).leeway(SignedDuration::ZERO);
 
         let iss = ISS
             .extract_required_with_options(&mut claims, "https://foo.com")
@@ -928,17 +945,17 @@ mod tests {
         // Scenario 1: exactly at claim time, zero leeway => all pass
         {
             let mut c = base.clone();
-            let opts = TimeOptions::new(now).leeway(chrono::Duration::zero());
+            let opts = TimeOptions::new(now).leeway(SignedDuration::ZERO);
             assert!(IAT.extract_required_with_options(&mut c, &opts).is_ok());
             assert!(NBF.extract_required_with_options(&mut c, &opts).is_ok());
             assert!(EXP.extract_required_with_options(&mut c, &opts).is_ok());
         }
 
         // Scenario 2: 1 minute before claim time, zero leeway => iat/nbf fail
-        let earlier = now - chrono::Duration::try_seconds(60).unwrap();
+        let earlier = now - SignedDuration::from_secs(60);
         {
             let mut c = base.clone();
-            let opts = TimeOptions::new(earlier).leeway(chrono::Duration::zero());
+            let opts = TimeOptions::new(earlier).leeway(SignedDuration::ZERO);
             assert!(matches!(
                 IAT.extract_required_with_options(&mut c, &opts),
                 Err(ClaimError::ValidationError { claim: "iat", .. }),
@@ -953,18 +970,17 @@ mod tests {
         // Scenario 3: 1 minute before, 2-minute leeway => all pass
         {
             let mut c = base.clone();
-            let opts =
-                TimeOptions::new(earlier).leeway(chrono::Duration::try_seconds(120).unwrap());
+            let opts = TimeOptions::new(earlier).leeway(SignedDuration::from_secs(120));
             assert!(IAT.extract_required_with_options(&mut c, &opts).is_ok());
             assert!(NBF.extract_required_with_options(&mut c, &opts).is_ok());
             assert!(EXP.extract_required_with_options(&mut c, &opts).is_ok());
         }
 
         // Scenario 4: well past expiration, zero leeway => exp fails
-        let later = now + chrono::Duration::try_seconds(7 * 60).unwrap();
+        let later = now + SignedDuration::from_secs(7 * 60);
         {
             let mut c = base.clone();
-            let opts = TimeOptions::new(later).leeway(chrono::Duration::zero());
+            let opts = TimeOptions::new(later).leeway(SignedDuration::ZERO);
             assert!(IAT.extract_required_with_options(&mut c, &opts).is_ok());
             assert!(NBF.extract_required_with_options(&mut c, &opts).is_ok());
             assert!(matches!(
@@ -976,7 +992,7 @@ mod tests {
         // Scenario 5: past expiration but within 2-minute leeway
         {
             let mut c = base;
-            let opts = TimeOptions::new(later).leeway(chrono::Duration::try_minutes(2).unwrap());
+            let opts = TimeOptions::new(later).leeway(SignedDuration::from_mins(2));
             assert!(IAT.extract_required_with_options(&mut c, &opts).is_ok());
             assert!(NBF.extract_required_with_options(&mut c, &opts).is_ok());
             assert!(EXP.extract_required_with_options(&mut c, &opts).is_ok());
@@ -990,7 +1006,7 @@ mod tests {
     #[test]
     fn rejects_wrong_typed_claims() {
         let now = reference_time();
-        let opts = TimeOptions::new(now).leeway(chrono::Duration::zero());
+        let opts = TimeOptions::new(now).leeway(SignedDuration::ZERO);
         let mut claims = invalid_type_claims_fixture();
 
         assert!(matches!(

@@ -37,8 +37,8 @@ opentelemetry.workspace = true
 opentelemetry-semantic-conventions.workspace = true
 
 # -- Scheduling & time -----------------------------------------------------
-cron.workspace = true
-chrono.workspace = true
+jiff-cron.workspace = true
+jiff.workspace = true
 
 # -- Cryptography & identifiers -------------------------------------------
 rand.workspace = true

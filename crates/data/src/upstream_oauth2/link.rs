@@ -1,4 +1,3 @@
-use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use ulid::Ulid;
 
@@ -10,9 +9,9 @@ pub struct UpstreamOAuthLink {
     pub subject: String,
     /// Pasion-original: human-readable account name from upstream
     pub human_account_name: Option<String>,
-    pub created_at: DateTime<Utc>,
+    pub created_at: jiff::Timestamp,
     /// Pasion-original: tracks when the link was last updated
-    pub updated_at: DateTime<Utc>,
+    pub updated_at: jiff::Timestamp,
 }
 
 /// Pasion-original: a patch object for updating upstream OAuth link fields.
