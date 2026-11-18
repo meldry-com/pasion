@@ -38,6 +38,7 @@ fn main() {
 fn app() -> Element {
     let cfg = get_config();
     let stylesheet = crate::config::app_path(&MAIN_CSS.to_string());
+    let mut stylesheet_pending = use_signal(|| true);
 
     // Fetch site-config once and share it app-wide via context.
     let site_config =
@@ -45,15 +46,29 @@ fn app() -> Element {
     use_context_provider(|| SiteConfigContext(site_config));
 
     rsx! {
-        document::Link { rel: "stylesheet", href: stylesheet }
-        ThemeToggle {}
-
-        if let Some(error) = cfg.error {
-            // The backend injected an error state — show the error page
-            // instead of the normal SPA routes.
-            ErrorPage { error }
+        link {
+            rel: "stylesheet",
+            href: stylesheet,
+            onload: move |_| stylesheet_pending.set(false),
+            // Keep sign-in available even if the stylesheet request fails.
+            onerror: move |_| stylesheet_pending.set(false),
+        }
+        if stylesheet_pending() {
+            div {
+                style: "position: fixed; inset: 0; display: grid; place-items: center; color-scheme: light dark;",
+                progress { "aria-label": "Loading Pasion", style: "width: 6rem; accent-color: #e26f86;" }
+            }
         } else {
-            AppRouter {}
+            document::Link {
+                rel: "stylesheet",
+                href: "https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap",
+            }
+            ThemeToggle {}
+            if let Some(error) = cfg.error {
+                ErrorPage { error }
+            } else {
+                AppRouter {}
+            }
         }
     }
 }
