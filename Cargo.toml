@@ -153,7 +153,7 @@ ipnetwork = { version = "0.21", features = ["serde"] }
 itertools = "0.15.0"
 k256 = { version = "0.14.0", features = ["std"] }
 language-tags = { version = "0.3.2", features = ["serde"] }
-lettre = { git = "https://github.com/chrislearn/lettre.git", rev = "388699bd167493a1fe88d51fd0a28e17ab1a6596", default-features = false, features = [
+lettre = { version = "0.11.24", default-features = false, features = [
     "tokio1-rustls",
     "rustls-platform-verifier",
     "aws-lc-rs",
