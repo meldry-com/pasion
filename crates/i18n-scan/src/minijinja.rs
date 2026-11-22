@@ -232,6 +232,14 @@ fn visit_expr<'a>(ctx: &mut Context, expr: &'a Expr<'a>) -> Result<(), minijinja
             visit_expr(ctx, &bo.right)
         }
 
+        Expr::Compare(comparison) => {
+            visit_expr(ctx, &comparison.expr)?;
+            for operand in &comparison.ops {
+                visit_expr(ctx, &operand.expr)?;
+            }
+            Ok(())
+        }
+
         Expr::IfExpr(ie) => {
             visit_expr(ctx, &ie.test_expr)?;
             visit_expr(ctx, &ie.true_expr)?;
@@ -279,6 +287,10 @@ mod tests {
             ("hello.txt", r#"Hello {{ t("world") }}"#),
             ("existing.txt", r#"{{ t("hello") }}"#),
             ("plural.txt", r#"{{ t("plural", count=4) }}"#),
+            (
+                "comparison.txt",
+                r#"{{ t("first") < t("middle") <= t("last") }}"#,
+            ),
             // Kitchen sink to make sure we're going through the whole AST
             (
                 "macros.txt",
@@ -326,8 +338,8 @@ mod tests {
         assert_eq!(
             keys,
             vec![
-                "hello", "nested-1", "nested-2", "nested-3", "nested-4", "nested-5", "nested-6",
-                "plural", "world",
+                "first", "hello", "last", "middle", "nested-1", "nested-2", "nested-3", "nested-4",
+                "nested-5", "nested-6", "plural", "world",
             ]
         );
     }

@@ -164,14 +164,14 @@ lettre = { version = "0.11.24", default-features = false, features = [
 ] }
 listenfd = "1.0.2"
 mime = "0.3.17"
-minijinja = { version = "2.19.0", features = [
+minijinja = { version = "2.24.0", features = [
     "urlencode",
     "loader",
     "json",
     "speedups",
     "unstable_machinery",
 ] }
-minijinja-contrib = { version = "2.19.0", features = ["pycompat"] }
+minijinja-contrib = { version = "2.24.0", features = ["pycompat"] }
 nonzero_ext = "0.3.0"
 opendal = { version = "0.59", features = ["services-fs", "services-s3"] }
 cedar-policy = "4.13"
