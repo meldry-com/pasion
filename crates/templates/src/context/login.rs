@@ -107,7 +107,7 @@ impl LoginContext {
 
 impl TemplateContext for LoginContext {
     fn sample<R: Rng>(
-        _now: chrono::DateTime<chrono::Utc>,
+        _now: jiff::Timestamp,
         _rng: &mut R,
         _locales: &[pasion_i18n::DataLocale],
     ) -> BTreeMap<SampleIdentifier, Self> {

@@ -2,12 +2,13 @@
 //! [`QueueWorkerRepository`].
 
 use async_trait::async_trait;
-use chrono::{DateTime, Duration, Utc};
 use diesel::{
     prelude::*,
-    sql_types::{Nullable, Timestamptz, Uuid as DieselUuid},
+    sql_types::{Timestamptz, Uuid as DieselUuid},
 };
 use diesel_async::RunQueryDsl;
+use jiff::{SignedDuration, Timestamp};
+use jiff_diesel::ToDiesel as _;
 use pasion_data::{
     Clock, new_id,
     queue::{QueueWorkerRepository, ShutdownWorker, Worker},
@@ -17,6 +18,7 @@ use uuid::Uuid;
 
 use crate::{
     DatabaseError,
+    pg::query_rows::{ShutdownWorkerRow, WorkerStateRow},
     schema::{queue_leader, queue_workers},
 };
 
@@ -39,38 +41,18 @@ impl<'c> PgQueueWorkerRepository<'c> {
 #[diesel(table_name = queue_workers)]
 struct NewWorker {
     id: Uuid,
-    registered_at: DateTime<Utc>,
-    last_seen_at: DateTime<Utc>,
-}
-
-#[derive(Debug, QueryableByName)]
-struct WorkerStateRow {
-    #[diesel(sql_type = DieselUuid)]
-    id: Uuid,
-    #[diesel(sql_type = Timestamptz)]
-    registered_at: DateTime<Utc>,
-    #[diesel(sql_type = Timestamptz)]
-    last_seen_at: DateTime<Utc>,
-    #[diesel(sql_type = Nullable<Timestamptz>)]
-    shutdown_at: Option<DateTime<Utc>>,
-}
-
-#[derive(Debug, QueryableByName)]
-struct ShutdownWorkerRow {
-    #[diesel(sql_type = DieselUuid)]
-    id: Uuid,
-    #[diesel(sql_type = Timestamptz)]
-    last_seen_at: DateTime<Utc>,
-    #[diesel(sql_type = Timestamptz)]
-    shutdown_at: DateTime<Utc>,
+    #[diesel(serialize_as = jiff_diesel::Timestamp)]
+    registered_at: Timestamp,
+    #[diesel(serialize_as = jiff_diesel::Timestamp)]
+    last_seen_at: Timestamp,
 }
 
 impl From<ShutdownWorkerRow> for ShutdownWorker {
     fn from(value: ShutdownWorkerRow) -> Self {
         Self {
             id: value.id.into(),
-            last_seen_at: value.last_seen_at,
-            shutdown_at: value.shutdown_at,
+            last_seen_at: value.last_seen_at.to_jiff(),
+            shutdown_at: value.shutdown_at.to_jiff(),
         }
     }
 }
@@ -98,14 +80,15 @@ impl PgQueueWorkerRepository<'_> {
     async fn log_worker_state(&mut self, worker: &Worker, reason: &str) {
         match self.load_worker_state(worker).await {
             Ok(Some(state)) => {
-                let shutdown_at = state
-                    .shutdown_at
-                    .map_or_else(|| "null".to_owned(), |ts| ts.to_rfc3339());
+                let shutdown_at = state.shutdown_at.map_or_else(
+                    || "null".to_owned(),
+                    |ts| crate::clock::format_rfc3339(ts.to_jiff()),
+                );
                 tracing::error!(
                     worker.id = %worker.id,
                     stored_worker.id = %state.id,
-                    worker.registered_at = %state.registered_at,
-                    worker.last_seen_at = %state.last_seen_at,
+                    worker.registered_at = %state.registered_at.to_jiff(),
+                    worker.last_seen_at = %state.last_seen_at.to_jiff(),
                     worker.shutdown_at = %shutdown_at,
                     "{}", reason
                 );
@@ -159,7 +142,7 @@ impl QueueWorkerRepository for PgQueueWorkerRepository<'_> {
         };
 
         diesel::insert_into(queue_workers::table)
-            .values(&new_worker)
+            .values(new_worker)
             .execute(self.conn)
             .await?;
 
@@ -181,7 +164,7 @@ impl QueueWorkerRepository for PgQueueWorkerRepository<'_> {
                 .filter(queue_workers::id.eq(Uuid::from(worker.id)))
                 .filter(queue_workers::shutdown_at.is_null()),
         )
-        .set(queue_workers::last_seen_at.eq(now))
+        .set(queue_workers::last_seen_at.eq(now.to_diesel()))
         .execute(self.conn)
         .await?;
 
@@ -211,7 +194,7 @@ impl QueueWorkerRepository for PgQueueWorkerRepository<'_> {
         let rows_affected = diesel::update(
             queue_workers::table.filter(queue_workers::id.eq(Uuid::from(worker.id))),
         )
-        .set(queue_workers::shutdown_at.eq(Some(now)))
+        .set(queue_workers::shutdown_at.eq(Some(now).to_diesel()))
         .execute(self.conn)
         .await?;
 
@@ -238,7 +221,7 @@ impl QueueWorkerRepository for PgQueueWorkerRepository<'_> {
     async fn shutdown_dead_workers(
         &mut self,
         clock: &dyn Clock,
-        threshold: Duration,
+        threshold: SignedDuration,
     ) -> Result<Vec<ShutdownWorker>, Self::Error> {
         // Here the threshold is usually set to a few minutes, so we don't need to use
         // the database time, as we can assume worker clocks have less than a minute
@@ -254,8 +237,8 @@ impl QueueWorkerRepository for PgQueueWorkerRepository<'_> {
                 RETURNING id, last_seen_at, shutdown_at
             ",
         )
-        .bind::<Timestamptz, _>(now)
-        .bind::<Timestamptz, _>(cutoff)
+        .bind::<Timestamptz, _>(now.to_diesel())
+        .bind::<Timestamptz, _>(cutoff.to_diesel())
         .get_results::<ShutdownWorkerRow>(self.conn)
         .await?;
 
@@ -307,7 +290,7 @@ impl QueueWorkerRepository for PgQueueWorkerRepository<'_> {
                 WHERE queue_leader.queue_worker_id = $2
             ",
         )
-        .bind::<Timestamptz, _>(now)
+        .bind::<Timestamptz, _>(now.to_diesel())
         .bind::<DieselUuid, _>(Uuid::from(worker.id))
         .execute(self.conn)
         .await

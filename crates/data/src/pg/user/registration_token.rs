@@ -1,7 +1,8 @@
 use async_trait::async_trait;
-use chrono::{DateTime, Utc};
 use diesel::prelude::*;
 use diesel_async::RunQueryDsl;
+use jiff::Timestamp;
+use jiff_diesel::ToDiesel as _;
 use pasion_data::{
     Clock, Page, Pagination, UserRegistrationToken, new_id,
     pagination::{Node, PaginationDirection},
@@ -38,10 +39,14 @@ struct UserRegistrationTokenRow {
     token: String,
     usage_limit: Option<i32>,
     times_used: i32,
-    created_at: DateTime<Utc>,
-    last_used_at: Option<DateTime<Utc>>,
-    expires_at: Option<DateTime<Utc>>,
-    revoked_at: Option<DateTime<Utc>>,
+    #[diesel(deserialize_as = jiff_diesel::Timestamp)]
+    created_at: Timestamp,
+    #[diesel(deserialize_as = jiff_diesel::NullableTimestamp)]
+    last_used_at: Option<Timestamp>,
+    #[diesel(deserialize_as = jiff_diesel::NullableTimestamp)]
+    expires_at: Option<Timestamp>,
+    #[diesel(deserialize_as = jiff_diesel::NullableTimestamp)]
+    revoked_at: Option<Timestamp>,
 }
 
 impl Node<Ulid> for UserRegistrationTokenRow {
@@ -94,8 +99,9 @@ struct NewUserRegistrationToken {
     id: Uuid,
     token: String,
     usage_limit: Option<i32>,
-    created_at: DateTime<Utc>,
-    expires_at: Option<DateTime<Utc>>,
+    #[diesel(serialize_as = jiff_diesel::Timestamp)]
+    created_at: Timestamp,
+    expires_at: Option<jiff_diesel::Timestamp>,
 }
 
 /// Apply [`UserRegistrationTokenFilter`] to a boxed query.
@@ -130,13 +136,13 @@ macro_rules! apply_token_filter {
                 query = query.filter(
                     user_registration_tokens::expires_at
                         .is_not_null()
-                        .and(user_registration_tokens::expires_at.lt(now)),
+                        .and(user_registration_tokens::expires_at.lt(now.to_diesel())),
                 );
             } else {
                 query = query.filter(
                     user_registration_tokens::expires_at
                         .is_null()
-                        .or(user_registration_tokens::expires_at.ge(now)),
+                        .or(user_registration_tokens::expires_at.ge(now.to_diesel())),
                 );
             }
         }
@@ -159,7 +165,7 @@ macro_rules! apply_token_filter {
                     .filter(
                         user_registration_tokens::expires_at
                             .is_null()
-                            .or(user_registration_tokens::expires_at.ge(now)),
+                            .or(user_registration_tokens::expires_at.ge(now.to_diesel())),
                     );
             } else {
                 // Not valid: at least one validity condition fails
@@ -171,7 +177,7 @@ macro_rules! apply_token_filter {
                     .or(user_registration_tokens::revoked_at.is_not_null())
                     .or(user_registration_tokens::expires_at
                         .is_not_null()
-                        .and(user_registration_tokens::expires_at.lt(now))),
+                        .and(user_registration_tokens::expires_at.lt(now.to_diesel()))),
                 );
             }
         }
@@ -307,7 +313,7 @@ impl UserRegistrationTokenRepository for PgUserRegistrationTokenRepository<'_> {
         clock: &dyn Clock,
         token: String,
         usage_limit: Option<u32>,
-        expires_at: Option<DateTime<Utc>>,
+        expires_at: Option<Timestamp>,
     ) -> Result<UserRegistrationToken, Self::Error> {
         let created_at = clock.now();
         let id = new_id(created_at, rng);
@@ -322,11 +328,11 @@ impl UserRegistrationTokenRepository for PgUserRegistrationTokenRepository<'_> {
             token: token.clone(),
             usage_limit: usage_limit_i32,
             created_at,
-            expires_at,
+            expires_at: expires_at.map(jiff_diesel::Timestamp::from),
         };
 
         diesel::insert_into(user_registration_tokens::table)
-            .values(&new_token)
+            .values(new_token)
             .execute(self.conn)
             .await?;
 
@@ -369,7 +375,7 @@ impl UserRegistrationTokenRepository for PgUserRegistrationTokenRepository<'_> {
              RETURNING times_used",
         )
         .bind::<diesel::sql_types::Uuid, _>(Uuid::from(token.id))
-        .bind::<diesel::sql_types::Timestamptz, _>(now)
+        .bind::<diesel::sql_types::Timestamptz, _>(now.to_diesel())
         .get_result::<TimesUsedRow>(self.conn)
         .await
         .map(|r| r.times_used)?;
@@ -401,7 +407,7 @@ impl UserRegistrationTokenRepository for PgUserRegistrationTokenRepository<'_> {
         let revoked_at = clock.now();
         let rows_affected =
             diesel::update(user_registration_tokens::table.find(Uuid::from(token.id)))
-                .set(user_registration_tokens::revoked_at.eq(Some(revoked_at)))
+                .set(user_registration_tokens::revoked_at.eq(Some(revoked_at).to_diesel()))
                 .execute(self.conn)
                 .await?;
 
@@ -426,7 +432,7 @@ impl UserRegistrationTokenRepository for PgUserRegistrationTokenRepository<'_> {
     ) -> Result<UserRegistrationToken, Self::Error> {
         let rows_affected =
             diesel::update(user_registration_tokens::table.find(Uuid::from(token.id)))
-                .set(user_registration_tokens::revoked_at.eq(None::<DateTime<Utc>>))
+                .set(user_registration_tokens::revoked_at.eq(None::<Timestamp>.to_diesel()))
                 .execute(self.conn)
                 .await?;
 
@@ -448,11 +454,11 @@ impl UserRegistrationTokenRepository for PgUserRegistrationTokenRepository<'_> {
     async fn set_expiry(
         &mut self,
         mut token: UserRegistrationToken,
-        expires_at: Option<DateTime<Utc>>,
+        expires_at: Option<Timestamp>,
     ) -> Result<UserRegistrationToken, Self::Error> {
         let rows_affected =
             diesel::update(user_registration_tokens::table.find(Uuid::from(token.id)))
-                .set(user_registration_tokens::expires_at.eq(expires_at))
+                .set(user_registration_tokens::expires_at.eq(expires_at.to_diesel()))
                 .execute(self.conn)
                 .await?;
 
@@ -504,7 +510,7 @@ struct TimesUsedRow {
 
 #[cfg(test)]
 mod tests {
-    use chrono::Duration;
+    use jiff::SignedDuration;
     use pasion_data::{
         Clock as _, Pagination, RepositoryAccess as _, RepositoryFactory as _, clock::MockClock,
         user::UserRegistrationTokenFilter,
@@ -585,7 +591,7 @@ mod tests {
         assert!(token.expires_at.is_none());
 
         // Set an expiration
-        let future_time = clock.now() + Duration::days(30);
+        let future_time = clock.now() + SignedDuration::from_hours(24 * 30);
         let updated_token = repo
             .user_registration_token()
             .set_expiry(token, Some(future_time))
@@ -690,7 +696,7 @@ mod tests {
             .unwrap();
 
         // 3. A token that is expired
-        let past_time = clock.now() - Duration::days(1);
+        let past_time = clock.now() - SignedDuration::from_hours(24);
         let token3 = repo
             .user_registration_token()
             .add(&mut rng, &clock, "token3".to_owned(), None, Some(past_time))

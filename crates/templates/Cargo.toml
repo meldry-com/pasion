@@ -30,7 +30,7 @@ arc-swap.workspace = true
 # Core utilities
 anyhow.workspace = true
 camino.workspace = true
-chrono.workspace = true
+jiff.workspace = true
 http.workspace = true
 rand.workspace = true
 rand_chacha.workspace = true

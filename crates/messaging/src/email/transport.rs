@@ -13,7 +13,6 @@ use std::{
 
 use async_trait::async_trait;
 use base64::{Engine as _, engine::general_purpose::STANDARD as BASE64};
-use chrono::Utc;
 use hmac::{Hmac, KeyInit, Mac};
 use lettre::{
     AsyncTransport, Message, Tokio1Executor,
@@ -494,7 +493,7 @@ impl EmailProvider for PaloudInternalProvider {
                 .filter(|value| !value.trim().is_empty()),
         };
         let body = serde_json::to_vec(&payload)?;
-        let timestamp = Utc::now().timestamp();
+        let timestamp = jiff::Timestamp::now().as_second();
         let nonce = paloud_internal_nonce(timestamp);
         let signature = sign_paloud_internal_request(
             &self.secret,
@@ -956,9 +955,9 @@ impl AwsSesProvider {
             .expect("AWS SES endpoint must contain a hostname");
         let body = body.unwrap_or_default();
         let payload_hash = hex_sha256(body.as_bytes());
-        let now = Utc::now();
-        let amz_date = now.format("%Y%m%dT%H%M%SZ").to_string();
-        let date_stamp = now.format("%Y%m%d").to_string();
+        let now = jiff::Timestamp::now();
+        let amz_date = now.strftime("%Y%m%dT%H%M%SZ").to_string();
+        let date_stamp = now.strftime("%Y%m%d").to_string();
 
         let mut canonical_headers = BTreeMap::from([
             ("host".to_owned(), host.to_owned()),

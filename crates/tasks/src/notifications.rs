@@ -2,7 +2,7 @@ use std::{collections::BTreeMap, error::Error as StdError};
 
 use anyhow::Context;
 use async_trait::async_trait;
-use chrono::{Duration, Utc};
+use jiff::SignedDuration;
 use pasion_data::{
     BoxRepository, NotificationChannel, NotificationDelivery, NotificationDeliveryFailure,
     NotificationDeliveryStatus, NotificationDestination, NotificationEventActor,
@@ -225,7 +225,7 @@ pub(crate) async fn send_email_authentication_code(
         .add_authentication_code(
             &mut rng,
             clock,
-            Duration::minutes(5),
+            SignedDuration::from_mins(5),
             &user_email_authentication,
             code,
         )
@@ -310,7 +310,7 @@ pub(crate) async fn send_sms_authentication_code(
         .add_authentication_code(
             &mut rng,
             clock,
-            Duration::minutes(5),
+            SignedDuration::from_mins(5),
             &user_phone_authentication,
             code,
         )
@@ -583,22 +583,22 @@ fn next_retry_delay(
     request: &PersistedNotificationRequest,
     delivery: &NotificationDelivery,
     failure: &NotificationDeliveryFailure,
-) -> Option<Duration> {
+) -> Option<SignedDuration> {
     if !failure.retryable {
         return None;
     }
 
     let delay = match delivery.attempt_count {
-        1 => Duration::seconds(30),
-        2 => Duration::minutes(2),
-        3 if request.template_key == TEMPLATE_EMAIL_RECOVERY => Duration::minutes(10),
+        1 => SignedDuration::from_secs(30),
+        2 => SignedDuration::from_mins(2),
+        3 if request.template_key == TEMPLATE_EMAIL_RECOVERY => SignedDuration::from_mins(10),
         _ => return None,
     };
 
     if matches!(
         request.template_key.as_str(),
         TEMPLATE_EMAIL_VERIFICATION | TEMPLATE_SMS_VERIFICATION
-    ) && request.created_at + Duration::minutes(5) <= Utc::now() + delay
+    ) && request.created_at + SignedDuration::from_mins(5) <= jiff::Timestamp::now() + delay
     {
         return None;
     }

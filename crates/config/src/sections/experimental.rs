@@ -1,6 +1,6 @@
 use std::num::NonZeroU64;
 
-use chrono::Duration;
+use jiff::SignedDuration;
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize, de::Error as _};
 use serde_with::serde_as;
@@ -10,11 +10,11 @@ use crate::ConfigurationSection;
 /// Five minutes expressed in microseconds -- the default token lifetime
 const ACCESS_TOKEN_TTL_MICROS: i64 = 5 * 60 * 1_000_000;
 
-fn default_access_token_ttl() -> Duration {
-    Duration::microseconds(ACCESS_TOKEN_TTL_MICROS)
+fn default_access_token_ttl() -> SignedDuration {
+    SignedDuration::from_micros(ACCESS_TOKEN_TTL_MICROS)
 }
 
-fn access_token_ttl_is_default(ttl: &Duration) -> bool {
+fn access_token_ttl_is_default(ttl: &SignedDuration) -> bool {
     *ttl == default_access_token_ttl()
 }
 
@@ -29,7 +29,7 @@ pub struct InactiveSessionExpirationConfig {
     /// Duration (in seconds) after which an idle session is terminated
     #[schemars(with = "u64", range(min = 600, max = 7_776_000))]
     #[serde_as(as = "serde_with::DurationSeconds<i64>")]
-    pub ttl: Duration,
+    pub ttl: SignedDuration,
 
     /// Apply the inactivity timeout to OAuth 2.0 sessions
     #[serde(default = "default_bool_true")]
@@ -65,7 +65,7 @@ pub struct ExperimentalConfig {
         skip_serializing_if = "access_token_ttl_is_default"
     )]
     #[serde_as(as = "serde_with::DurationSeconds<i64>")]
-    pub access_token_ttl: Duration,
+    pub access_token_ttl: SignedDuration,
 
     /// Opt-in automatic expiration of sessions that have been idle
     #[serde(skip_serializing_if = "Option::is_none")]

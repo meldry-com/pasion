@@ -2,7 +2,8 @@
 //
 // SPDX-License-Identifier: AGPL-3.0-only
 
-use salvo::{oapi::ToSchema, prelude::*};
+use salvo::prelude::*;
+use salvo_oapi::{ToSchema, endpoint};
 use schemars::JsonSchema;
 use serde::Serialize;
 

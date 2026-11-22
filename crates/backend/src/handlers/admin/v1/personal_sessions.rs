@@ -5,7 +5,7 @@
 use std::str::FromStr as _;
 
 use anyhow::Context;
-use chrono::{DateTime, Duration, Utc};
+use jiff::SignedDuration;
 use oauth2_types::scope::{Scope, ScopeToken};
 use pasion_data::{
     TokenType,
@@ -14,6 +14,7 @@ use pasion_data::{
 };
 use pasion_matrix::HomeserverAdmin;
 use salvo::prelude::*;
+use salvo_oapi::endpoint;
 use schemars::JsonSchema;
 use serde::Deserialize;
 use tracing::error;
@@ -48,7 +49,7 @@ pub(crate) fn personal_session_owner_from_caller(caller: &CallerSession) -> Pers
 }
 
 /// Request body accepted by `POST /api/admin/v1/personal-sessions`.
-#[derive(Deserialize, JsonSchema, salvo::oapi::ToSchema)]
+#[derive(Deserialize, JsonSchema, salvo_oapi::ToSchema)]
 #[serde(rename = "CreatePersonalSessionRequest")]
 pub struct AddRequest {
     /// The user this session acts on behalf of
@@ -135,7 +136,7 @@ pub async fn add_session(
             &new_session,
             &raw_token,
             body.expires_in
-                .map(|secs| Duration::seconds(i64::from(secs))),
+                .map(|secs| SignedDuration::from_secs(i64::from(secs))),
         )
         .await?;
 
@@ -243,11 +244,11 @@ pub struct FilterParams {
 
     /// Upper bound on the access-token expiry timestamp
     #[serde(rename = "filter[expires_before]")]
-    expires_before: Option<DateTime<Utc>>,
+    expires_before: Option<jiff::Timestamp>,
 
     /// Lower bound on the access-token expiry timestamp
     #[serde(rename = "filter[expires_after]")]
-    expires_after: Option<DateTime<Utc>>,
+    expires_after: Option<jiff::Timestamp>,
 
     /// Whether the access token carries an expiry at all
     #[serde(rename = "filter[expires]")]
@@ -282,7 +283,7 @@ impl std::fmt::Display for FilterParams {
             write!(
                 f,
                 "{delim}filter[expires_before]={}",
-                ts.format("%Y-%m-%dT%H:%M:%SZ")
+                ts.strftime("%Y-%m-%dT%H:%M:%SZ")
             )?;
             delim = '&';
         }
@@ -290,7 +291,7 @@ impl std::fmt::Display for FilterParams {
             write!(
                 f,
                 "{delim}filter[expires_after]={}",
-                ts.format("%Y-%m-%dT%H:%M:%SZ")
+                ts.strftime("%Y-%m-%dT%H:%M:%SZ")
             )?;
             delim = '&';
         }
@@ -434,7 +435,7 @@ pub async fn list_sessions(
 }
 
 /// Optional payload for the regenerate endpoint.
-#[derive(Deserialize, JsonSchema, salvo::oapi::ToSchema)]
+#[derive(Deserialize, JsonSchema, salvo_oapi::ToSchema)]
 #[serde(rename = "RegeneratePersonalSessionRequest")]
 pub struct RegenerateRequest {
     /// Lifetime of the new token in seconds; omit for a non-expiring token.
@@ -509,7 +510,7 @@ pub async fn regenerate_session(
             &entry,
             &new_token_str,
             body.expires_in
-                .map(|secs| Duration::seconds(i64::from(secs))),
+                .map(|secs| SignedDuration::from_secs(i64::from(secs))),
         )
         .await?;
 
@@ -589,9 +590,9 @@ pub async fn revoke_session(
 mod tests {
     use std::collections::BTreeSet;
 
-    use chrono::Duration;
     use hyper::{Request, StatusCode};
     use insta::assert_json_snapshot;
+    use jiff::SignedDuration;
     use oauth2_types::scope::{OPENID, Scope};
     use pasion_data::{Clock, personal::session::PersonalSessionOwner};
     use serde_json::{Value, json};
@@ -883,12 +884,12 @@ mod tests {
                 &state.clock,
                 &sess_a,
                 "mpt_hiss",
-                Some(Duration::days(42)),
+                Some(SignedDuration::from_hours(24 * 42)),
             )
             .await
             .unwrap();
 
-        state.clock.advance(Duration::days(1));
+        state.clock.advance(SignedDuration::from_hours(24));
 
         let sess_b = repo
             .personal_session()
@@ -909,7 +910,7 @@ mod tests {
                 &state.clock,
                 &sess_b,
                 "mpt_scratch",
-                Some(Duration::days(21)),
+                Some(SignedDuration::from_hours(24 * 21)),
             )
             .await
             .unwrap();
@@ -918,7 +919,7 @@ mod tests {
             .await
             .unwrap();
 
-        state.clock.advance(Duration::days(1));
+        state.clock.advance(SignedDuration::from_hours(24));
 
         let sess_c = repo
             .personal_session()
@@ -939,7 +940,7 @@ mod tests {
                 &state.clock,
                 &sess_c,
                 "mpt_meow",
-                Some(Duration::days(14)),
+                Some(SignedDuration::from_hours(24 * 14)),
             )
             .await
             .unwrap();
@@ -1165,7 +1166,7 @@ mod tests {
 
         let sess_id = created_body["data"]["id"].as_str().unwrap();
 
-        state.clock.advance(Duration::minutes(3));
+        state.clock.advance(SignedDuration::from_mins(3));
 
         let request = Request::post(format!(
             "/api/admin/v1/personal-sessions/{sess_id}/regenerate"
@@ -1367,7 +1368,7 @@ mod tests {
 
         repo.save().await.unwrap();
 
-        state.clock.advance(Duration::try_minutes(1).unwrap());
+        state.clock.advance(SignedDuration::from_mins(1));
 
         let request = Request::post(format!(
             "/api/admin/v1/personal-sessions/{}/revoke",

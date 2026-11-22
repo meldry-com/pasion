@@ -1,4 +1,3 @@
-use chrono::{DateTime, Utc};
 use oauth2_types::scope::Scope;
 use pasion_iana::jose::JsonWebSignatureAlg;
 use serde::{Deserialize, Serialize};
@@ -355,8 +354,8 @@ pub struct UpstreamOAuthProvider {
     pub id_token_signed_response_alg: JsonWebSignatureAlg,
     /// Pasion-original: response mode for the authorization request
     pub response_mode: Option<ResponseMode>,
-    pub created_at: DateTime<Utc>,
-    pub disabled_at: Option<DateTime<Utc>>,
+    pub created_at: jiff::Timestamp,
+    pub disabled_at: Option<jiff::Timestamp>,
     pub claims_imports: ClaimsImports,
     pub additional_authorization_parameters: Vec<(String, String)>,
     /// Pasion-original: whether to forward the `login_hint` parameter

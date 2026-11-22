@@ -1,4 +1,5 @@
-use salvo::{oapi::ToSchema, prelude::*};
+use salvo::prelude::*;
+use salvo_oapi::{ToSchema, endpoint};
 use serde::{Deserialize, Serialize};
 
 use super::{
@@ -89,7 +90,7 @@ pub async fn patch_profile(
             display_name: user.display_name.clone(),
             avatar_url: user.avatar_url.clone(),
             preferred_locale: user.preferred_locale.clone(),
-            updated_at: user.updated_at.to_rfc3339(),
+            updated_at: pasion_data::clock::format_rfc3339(user.updated_at),
         },
         matrix: MatrixUserData {
             mxid: homeserver.mxid(&user.username),
@@ -100,17 +101,17 @@ pub async fn patch_profile(
 
 // ── POST /api/v1/viewer/cross-signing-reset ────────────────────
 
-#[derive(Deserialize, salvo::oapi::ToSchema)]
+#[derive(Deserialize, salvo_oapi::ToSchema)]
 pub struct AllowCrossSigningResetInput {
     pub user_id: String,
 }
 
-#[derive(Serialize, salvo::oapi::ToSchema)]
+#[derive(Serialize, salvo_oapi::ToSchema)]
 pub struct AllowCrossSigningResetResponse {
     pub user: Option<UserBrief>,
 }
 
-#[derive(Serialize, salvo::oapi::ToSchema)]
+#[derive(Serialize, salvo_oapi::ToSchema)]
 pub struct UserBrief {
     pub id: String,
 }
@@ -150,13 +151,13 @@ pub async fn allow_cross_signing_reset(
 
 // ── POST /api/v1/viewer/deactivate ─────────────────────────────
 
-#[derive(Deserialize, salvo::oapi::ToSchema)]
+#[derive(Deserialize, salvo_oapi::ToSchema)]
 pub struct DeactivateUserInput {
     pub hs_erase: bool,
     pub password: Option<String>,
 }
 
-#[derive(Serialize, salvo::oapi::ToSchema)]
+#[derive(Serialize, salvo_oapi::ToSchema)]
 pub struct DeactivateUserResponse {
     pub status: &'static str,
 }
@@ -245,8 +246,8 @@ fn map_user_profile_error(error: UserProfileServiceError) -> RouteError {
 
 #[cfg(test)]
 mod tests {
-    use chrono::Duration;
     use hyper::{Request, StatusCode};
+    use jiff::SignedDuration;
     use pasion_data::{
         RepositoryAccess,
         user::{BrowserSessionRepository, UserRepository},
@@ -269,7 +270,9 @@ mod tests {
         let pool = pasion_data::test_utils::setup_test_pool().await;
         let state = TestState::from_pool(pool.clone()).await.unwrap();
         let unique = unique_test_nonce();
-        state.clock.advance(Duration::seconds(unique as i64));
+        state
+            .clock
+            .advance(SignedDuration::from_secs(unique as i64));
         let mut rng = ChaChaRng::seed_from_u64(unique);
         let mut repo = state.repository().await.unwrap();
         let username = format!("alice{}", Ulid::generate().to_string().to_lowercase());

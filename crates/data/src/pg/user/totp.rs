@@ -1,7 +1,8 @@
 use async_trait::async_trait;
-use chrono::{DateTime, Utc};
 use diesel::prelude::*;
 use diesel_async::RunQueryDsl;
+use jiff::Timestamp;
+use jiff_diesel::ToDiesel as _;
 use pasion_data::{Clock, User, UserTotpConfig, new_id, user::UserTotpRepository};
 use rand_core::RngCore;
 use ulid::Ulid;
@@ -31,8 +32,10 @@ struct UserTotpLookup {
     algorithm: String,
     digits: i32,
     period: i32,
-    confirmed_at: Option<DateTime<Utc>>,
-    created_at: DateTime<Utc>,
+    #[diesel(deserialize_as = jiff_diesel::NullableTimestamp)]
+    confirmed_at: Option<Timestamp>,
+    #[diesel(deserialize_as = jiff_diesel::Timestamp)]
+    created_at: Timestamp,
 }
 
 #[derive(Insertable)]
@@ -44,7 +47,8 @@ struct NewUserTotpConfig {
     algorithm: String,
     digits: i32,
     period: i32,
-    created_at: DateTime<Utc>,
+    #[diesel(serialize_as = jiff_diesel::Timestamp)]
+    created_at: Timestamp,
 }
 
 #[async_trait]
@@ -114,7 +118,7 @@ impl UserTotpRepository for PgUserTotpRepository<'_> {
         };
 
         diesel::insert_into(user_totp_configs::table)
-            .values(&new_config)
+            .values(new_config)
             .execute(self.conn)
             .await?;
 
@@ -146,7 +150,7 @@ impl UserTotpRepository for PgUserTotpRepository<'_> {
         let confirmed_at = clock.now();
 
         let rows_affected = diesel::update(user_totp_configs::table.find(Uuid::from(config.id)))
-            .set(user_totp_configs::confirmed_at.eq(Some(confirmed_at)))
+            .set(user_totp_configs::confirmed_at.eq(Some(confirmed_at).to_diesel()))
             .execute(self.conn)
             .await?;
 

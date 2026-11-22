@@ -179,7 +179,7 @@ pub async fn introspect_token(
                 exp: access_token.expires_at,
                 expires_in: access_token
                     .expires_at
-                    .map(|expires_at| expires_at.signed_duration_since(clock.now())),
+                    .map(|expires_at| expires_at.duration_since(clock.now())),
                 iat: Some(access_token.created_at),
                 nbf: Some(access_token.created_at),
                 sub,
@@ -330,7 +330,7 @@ pub async fn introspect_token(
                 exp: access_token.expires_at,
                 expires_in: access_token
                     .expires_at
-                    .map(|expires_at| expires_at.signed_duration_since(clock.now())),
+                    .map(|expires_at| expires_at.duration_since(clock.now())),
                 iat: Some(access_token.created_at),
                 nbf: Some(access_token.created_at),
                 sub: Some(actor_user.sub),

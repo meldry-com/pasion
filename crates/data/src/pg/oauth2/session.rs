@@ -1,10 +1,11 @@
 use std::net::IpAddr;
 
 use async_trait::async_trait;
-use chrono::{DateTime, Utc};
 use diesel::prelude::*;
 use diesel_async::RunQueryDsl;
 use ipnetwork::IpNetwork;
+use jiff::Timestamp;
+use jiff_diesel::ToDiesel as _;
 use oauth2_types::scope::{Scope, ScopeToken};
 use pasion_data::{
     BrowserSession, Client, Clock, Page, Pagination, Session, SessionState, User, new_id,
@@ -17,6 +18,7 @@ use uuid::Uuid;
 
 use crate::{
     DatabaseError, DatabaseInconsistencyError,
+    pg::query_rows::CleanupResult,
     schema::{oauth2_clients, oauth2_sessions, user_sessions},
 };
 
@@ -42,10 +44,13 @@ struct OAuthSessionLookup {
     user_session_id: Option<Uuid>,
     oauth2_client_id: Uuid,
     scope_list: Vec<String>,
-    created_at: DateTime<Utc>,
-    finished_at: Option<DateTime<Utc>>,
+    #[diesel(deserialize_as = jiff_diesel::Timestamp)]
+    created_at: Timestamp,
+    #[diesel(deserialize_as = jiff_diesel::NullableTimestamp)]
+    finished_at: Option<Timestamp>,
     user_agent: Option<String>,
-    last_active_at: Option<DateTime<Utc>>,
+    #[diesel(deserialize_as = jiff_diesel::NullableTimestamp)]
+    last_active_at: Option<Timestamp>,
     last_active_ip: Option<IpNetwork>,
     human_name: Option<String>,
 }
@@ -103,16 +108,8 @@ struct NewOAuthSession {
     user_session_id: Option<Uuid>,
     oauth2_client_id: Uuid,
     scope_list: Vec<String>,
-    created_at: DateTime<Utc>,
-}
-
-/// Result row for cleanup CTE queries using raw SQL
-#[derive(Debug, QueryableByName)]
-struct CleanupResult {
-    #[diesel(sql_type = diesel::sql_types::BigInt)]
-    count: i64,
-    #[diesel(sql_type = diesel::sql_types::Nullable<diesel::sql_types::Timestamptz>)]
-    last_ts: Option<DateTime<Utc>>,
+    #[diesel(serialize_as = jiff_diesel::Timestamp)]
+    created_at: Timestamp,
 }
 
 /// Macro to apply the common [`OAuth2SessionFilter`] conditions to a diesel
@@ -173,11 +170,13 @@ macro_rules! apply_session_filter {
             }
 
             if let Some(last_active_before) = browser_session_filter.last_active_before() {
-                subquery = subquery.filter(user_sessions::last_active_at.lt(last_active_before));
+                subquery = subquery
+                    .filter(user_sessions::last_active_at.lt(last_active_before.to_diesel()));
             }
 
             if let Some(last_active_after) = browser_session_filter.last_active_after() {
-                subquery = subquery.filter(user_sessions::last_active_at.gt(last_active_after));
+                subquery = subquery
+                    .filter(user_sessions::last_active_at.gt(last_active_after.to_diesel()));
             }
 
             q = q.filter(oauth2_sessions::user_session_id.eq_any(subquery));
@@ -205,11 +204,11 @@ macro_rules! apply_session_filter {
         }
 
         if let Some(last_active_after) = $filter.last_active_after() {
-            q = q.filter(oauth2_sessions::last_active_at.gt(last_active_after));
+            q = q.filter(oauth2_sessions::last_active_at.gt(last_active_after.to_diesel()));
         }
 
         if let Some(last_active_before) = $filter.last_active_before() {
-            q = q.filter(oauth2_sessions::last_active_at.lt(last_active_before));
+            q = q.filter(oauth2_sessions::last_active_at.lt(last_active_before.to_diesel()));
         }
 
         q
@@ -276,7 +275,7 @@ impl OAuth2SessionRepository for PgOAuth2SessionRepository<'_> {
         };
 
         diesel::insert_into(oauth2_sessions::table)
-            .values(&new_session)
+            .values(new_session)
             .execute(self.conn)
             .await?;
 
@@ -313,7 +312,7 @@ impl OAuth2SessionRepository for PgOAuth2SessionRepository<'_> {
 
         let rows_affected =
             diesel::update(oauth2_sessions::table.filter(oauth2_sessions::id.eq_any(filtered_ids)))
-                .set(oauth2_sessions::finished_at.eq(Some(finished_at)))
+                .set(oauth2_sessions::finished_at.eq(Some(finished_at).to_diesel()))
                 .execute(self.conn)
                 .await?;
 
@@ -337,7 +336,7 @@ impl OAuth2SessionRepository for PgOAuth2SessionRepository<'_> {
     ) -> Result<Session, Self::Error> {
         let finished_at = clock.now();
         let rows_affected = diesel::update(oauth2_sessions::table.find(Uuid::from(session.id)))
-            .set(oauth2_sessions::finished_at.eq(Some(finished_at)))
+            .set(oauth2_sessions::finished_at.eq(Some(finished_at).to_diesel()))
             .execute(self.conn)
             .await?;
 
@@ -403,7 +402,7 @@ impl OAuth2SessionRepository for PgOAuth2SessionRepository<'_> {
     #[tracing::instrument(name = "db.oauth2_session.record_batch_activity", skip_all, err)]
     async fn record_batch_activity(
         &mut self,
-        mut activities: Vec<(Ulid, DateTime<Utc>, Option<IpAddr>)>,
+        mut activities: Vec<(Ulid, Timestamp, Option<IpAddr>)>,
     ) -> Result<(), Self::Error> {
         // Sort the activity by ID, so that when batching the updates, Postgres
         // locks the rows in a stable order, preventing deadlocks
@@ -414,7 +413,7 @@ impl OAuth2SessionRepository for PgOAuth2SessionRepository<'_> {
 
         for (id, last_activity, ip) in activities {
             ids.push(Uuid::from(id));
-            last_activities.push(last_activity);
+            last_activities.push(last_activity.to_diesel());
             ips.push(ip.map(IpNetwork::from));
         }
 
@@ -512,10 +511,10 @@ impl OAuth2SessionRepository for PgOAuth2SessionRepository<'_> {
     )]
     async fn cleanup_finished(
         &mut self,
-        since: Option<DateTime<Utc>>,
-        until: DateTime<Utc>,
+        since: Option<Timestamp>,
+        until: Timestamp,
         limit: usize,
-    ) -> Result<(usize, Option<DateTime<Utc>>), Self::Error> {
+    ) -> Result<(usize, Option<Timestamp>), Self::Error> {
         let res: CleanupResult = diesel::sql_query(
             r"
                 WITH
@@ -545,13 +544,16 @@ impl OAuth2SessionRepository for PgOAuth2SessionRepository<'_> {
                 SELECT COUNT(*) as count, MAX(finished_at) as last_ts FROM deleted_sessions
             ",
         )
-        .bind::<diesel::sql_types::Nullable<diesel::sql_types::Timestamptz>, _>(since)
-        .bind::<diesel::sql_types::Timestamptz, _>(until)
+        .bind::<diesel::sql_types::Nullable<diesel::sql_types::Timestamptz>, _>(since.to_diesel())
+        .bind::<diesel::sql_types::Timestamptz, _>(until.to_diesel())
         .bind::<diesel::sql_types::BigInt, _>(i64::try_from(limit).unwrap_or(i64::MAX))
         .get_result(self.conn)
         .await?;
 
-        Ok((res.count.try_into().unwrap_or(usize::MAX), res.last_ts))
+        Ok((
+            res.count.try_into().unwrap_or(usize::MAX),
+            res.last_ts.map(jiff_diesel::Timestamp::to_jiff),
+        ))
     }
 
     #[tracing::instrument(
@@ -566,10 +568,10 @@ impl OAuth2SessionRepository for PgOAuth2SessionRepository<'_> {
     )]
     async fn cleanup_inactive_ips(
         &mut self,
-        since: Option<DateTime<Utc>>,
-        threshold: DateTime<Utc>,
+        since: Option<Timestamp>,
+        threshold: Timestamp,
         limit: usize,
-    ) -> Result<(usize, Option<DateTime<Utc>>), Self::Error> {
+    ) -> Result<(usize, Option<Timestamp>), Self::Error> {
         let res: CleanupResult = diesel::sql_query(
             r"
                 WITH to_update AS (
@@ -593,12 +595,15 @@ impl OAuth2SessionRepository for PgOAuth2SessionRepository<'_> {
                 SELECT COUNT(*) AS count, MAX(last_active_at) AS last_ts FROM updated
             ",
         )
-        .bind::<diesel::sql_types::Nullable<diesel::sql_types::Timestamptz>, _>(since)
-        .bind::<diesel::sql_types::Timestamptz, _>(threshold)
+        .bind::<diesel::sql_types::Nullable<diesel::sql_types::Timestamptz>, _>(since.to_diesel())
+        .bind::<diesel::sql_types::Timestamptz, _>(threshold.to_diesel())
         .bind::<diesel::sql_types::BigInt, _>(i64::try_from(limit).unwrap_or(i64::MAX))
         .get_result(self.conn)
         .await?;
 
-        Ok((res.count.try_into().unwrap_or(usize::MAX), res.last_ts))
+        Ok((
+            res.count.try_into().unwrap_or(usize::MAX),
+            res.last_ts.map(jiff_diesel::Timestamp::to_jiff),
+        ))
     }
 }

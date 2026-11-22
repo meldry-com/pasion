@@ -1,7 +1,7 @@
 use std::net::IpAddr;
 
 use async_trait::async_trait;
-use chrono::{DateTime, Utc};
+use jiff::Timestamp;
 use oauth2_types::scope::Scope;
 use pasion_data::{
     Client, Clock, User,
@@ -140,7 +140,7 @@ pub trait PersonalSessionRepository: Send + Sync {
     /// Returns [`Self::Error`] if the underlying repository fails
     async fn record_batch_activity(
         &mut self,
-        activity: Vec<(Ulid, DateTime<Utc>, Option<IpAddr>)>,
+        activity: Vec<(Ulid, Timestamp, Option<IpAddr>)>,
     ) -> Result<(), Self::Error>;
 }
 
@@ -179,7 +179,7 @@ repository_impl!(PersonalSessionRepository:
 
     async fn record_batch_activity(
         &mut self,
-        activity: Vec<(Ulid, DateTime<Utc>, Option<IpAddr>)>,
+        activity: Vec<(Ulid, Timestamp, Option<IpAddr>)>,
     ) -> Result<(), Self::Error>;
 );
 
@@ -193,10 +193,10 @@ pub struct PersonalSessionFilter<'a> {
     device: Option<&'a str>,
     state: Option<PersonalSessionState>,
     scope: Option<&'a Scope>,
-    last_active_before: Option<DateTime<Utc>>,
-    last_active_after: Option<DateTime<Utc>>,
-    expires_before: Option<DateTime<Utc>>,
-    expires_after: Option<DateTime<Utc>>,
+    last_active_before: Option<Timestamp>,
+    last_active_after: Option<Timestamp>,
+    expires_before: Option<Timestamp>,
+    expires_after: Option<Timestamp>,
     expires: Option<bool>,
 }
 
@@ -265,14 +265,14 @@ impl<'a> PersonalSessionFilter<'a> {
 
     /// Only return sessions with a last active time before the given time
     #[must_use]
-    pub fn with_last_active_before(mut self, last_active_before: DateTime<Utc>) -> Self {
+    pub fn with_last_active_before(mut self, last_active_before: Timestamp) -> Self {
         self.last_active_before = Some(last_active_before);
         self
     }
 
     /// Only return sessions with a last active time after the given time
     #[must_use]
-    pub fn with_last_active_after(mut self, last_active_after: DateTime<Utc>) -> Self {
+    pub fn with_last_active_after(mut self, last_active_after: Timestamp) -> Self {
         self.last_active_after = Some(last_active_after);
         self
     }
@@ -281,7 +281,7 @@ impl<'a> PersonalSessionFilter<'a> {
     ///
     /// Returns [`None`] if no client filter was set
     #[must_use]
-    pub fn last_active_before(&self) -> Option<DateTime<Utc>> {
+    pub fn last_active_before(&self) -> Option<Timestamp> {
         self.last_active_before
     }
 
@@ -289,7 +289,7 @@ impl<'a> PersonalSessionFilter<'a> {
     ///
     /// Returns [`None`] if no client filter was set
     #[must_use]
-    pub fn last_active_after(&self) -> Option<DateTime<Utc>> {
+    pub fn last_active_after(&self) -> Option<Timestamp> {
         self.last_active_after
     }
 
@@ -347,7 +347,7 @@ impl<'a> PersonalSessionFilter<'a> {
 
     /// Only return sessions whose access tokens expire before the given time
     #[must_use]
-    pub fn with_expires_before(mut self, expires_before: DateTime<Utc>) -> Self {
+    pub fn with_expires_before(mut self, expires_before: Timestamp) -> Self {
         self.expires_before = Some(expires_before);
         self
     }
@@ -356,13 +356,13 @@ impl<'a> PersonalSessionFilter<'a> {
     ///
     /// Returns [`None`] if no expires before filter was set
     #[must_use]
-    pub fn expires_before(&self) -> Option<DateTime<Utc>> {
+    pub fn expires_before(&self) -> Option<Timestamp> {
         self.expires_before
     }
 
     /// Only return sessions whose access tokens expire after the given time
     #[must_use]
-    pub fn with_expires_after(mut self, expires_after: DateTime<Utc>) -> Self {
+    pub fn with_expires_after(mut self, expires_after: Timestamp) -> Self {
         self.expires_after = Some(expires_after);
         self
     }
@@ -371,7 +371,7 @@ impl<'a> PersonalSessionFilter<'a> {
     ///
     /// Returns [`None`] if no expires after filter was set
     #[must_use]
-    pub fn expires_after(&self) -> Option<DateTime<Utc>> {
+    pub fn expires_after(&self) -> Option<Timestamp> {
         self.expires_after
     }
 

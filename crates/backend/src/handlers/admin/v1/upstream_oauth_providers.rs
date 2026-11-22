@@ -10,6 +10,7 @@ use pasion_data::{
     },
 };
 use salvo::{http::StatusCode, prelude::*};
+use salvo_oapi::endpoint;
 use schemars::JsonSchema;
 use serde::Deserialize;
 use url::Url;

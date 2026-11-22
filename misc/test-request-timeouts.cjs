@@ -60,6 +60,26 @@ const server = http.createServer(async (req, res) => {
   const origin = `http://127.0.0.1:${server.address().port}`;
   const browser = await chromium.launch({ headless: true });
   try {
+    const login = await browser.newPage();
+    let releaseCss;
+    const cssDelay = new Promise(resolve => { releaseCss = resolve; });
+    await login.route('**/assets/main-*.css', async route => {
+      await cssDelay;
+      await route.continue();
+    });
+    try {
+      await login.goto(origin + '/login', { waitUntil: 'commit' });
+      await login.getByRole('progressbar', { name: 'Loading Pasion' }).waitFor();
+      assert.equal(await login.locator('input[type=password], .theme-toggle').count(), 0);
+      releaseCss();
+      await login.getByRole('button', { name: 'Sign in', exact: true }).waitFor();
+      assert.equal(await login.locator('.login-page').evaluate(el => getComputedStyle(el).display), 'flex');
+      console.log('PASS login waits for its layout stylesheet');
+    } finally {
+      releaseCss();
+      await login.close();
+    }
+
     for (const scenario of [
       { endpoint: '/auth/providers', page: '/login', mode: 'headers', seconds: 5, retry: true },
       { endpoint: '/auth/providers', page: '/login', mode: 'body', seconds: 5, retry: true },

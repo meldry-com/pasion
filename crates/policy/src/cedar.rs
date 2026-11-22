@@ -42,7 +42,6 @@ use std::sync::{Arc, OnceLock};
 
 use async_trait::async_trait;
 use cedar_policy::{Authorizer, Context, Decision, Entities, EntityUid, PolicySet, Request};
-use chrono::{Datelike, Timelike, Utc};
 use pasion_data::PolicyData;
 
 use crate::{
@@ -138,20 +137,21 @@ impl CedarEvaluator {
             serde_json::to_value(input).map_err(EvaluationError::Serialization)?;
 
         // Inject time context fields for time-based policy evaluation.
-        let now = Utc::now();
-        let day_of_week = match now.weekday() {
-            chrono::Weekday::Mon => "monday",
-            chrono::Weekday::Tue => "tuesday",
-            chrono::Weekday::Wed => "wednesday",
-            chrono::Weekday::Thu => "thursday",
-            chrono::Weekday::Fri => "friday",
-            chrono::Weekday::Sat => "saturday",
-            chrono::Weekday::Sun => "sunday",
+        let now = jiff::Timestamp::now();
+        let utc = now.to_zoned(jiff::tz::TimeZone::UTC);
+        let day_of_week = match utc.weekday() {
+            jiff::civil::Weekday::Monday => "monday",
+            jiff::civil::Weekday::Tuesday => "tuesday",
+            jiff::civil::Weekday::Wednesday => "wednesday",
+            jiff::civil::Weekday::Thursday => "thursday",
+            jiff::civil::Weekday::Friday => "friday",
+            jiff::civil::Weekday::Saturday => "saturday",
+            jiff::civil::Weekday::Sunday => "sunday",
         };
         if let serde_json::Value::Object(ref mut map) = context_json {
             map.insert(
                 "current_hour".to_owned(),
-                serde_json::Value::from(now.hour()),
+                serde_json::Value::from(utc.hour()),
             );
             map.insert(
                 "current_day_of_week".to_owned(),
@@ -159,7 +159,7 @@ impl CedarEvaluator {
             );
             map.insert(
                 "current_timestamp".to_owned(),
-                serde_json::Value::from(now.timestamp()),
+                serde_json::Value::from(now.as_second()),
             );
         }
 

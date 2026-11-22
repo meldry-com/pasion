@@ -2,7 +2,8 @@ use pasion_data::{
     BoxRepository, RepositoryAccess, RepositoryError, SiteConfig,
     queue::QueueJobRepositoryExt as _, user::UserFilter,
 };
-use salvo::{oapi::ToSchema, prelude::*};
+use salvo::prelude::*;
+use salvo_oapi::{ToSchema, endpoint};
 use serde::{Deserialize, Serialize};
 
 use super::{

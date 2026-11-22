@@ -4,6 +4,7 @@
 
 use pasion_data::{RepositoryAccess, audit::AdminOperation, user::BrowserSessionFilter};
 use salvo::prelude::*;
+use salvo_oapi::endpoint;
 use schemars::JsonSchema;
 use serde::Deserialize;
 use ulid::Ulid;
@@ -222,9 +223,9 @@ pub async fn list_sessions(
 
 #[cfg(test)]
 mod tests {
-    use chrono::Duration;
     use hyper::{Request, StatusCode};
     use insta::assert_json_snapshot;
+    use jiff::SignedDuration;
     use pasion_data::Clock as _;
 
     use crate::handlers::test_utils::{RequestBuilderExt, ResponseExt, TestState, setup};
@@ -296,7 +297,7 @@ mod tests {
         repo.save().await.unwrap();
 
         // Move the clock forward
-        state.clock.advance(Duration::try_minutes(1).unwrap());
+        state.clock.advance(SignedDuration::from_mins(1));
 
         let request = Request::post(format!("/api/admin/v1/user-sessions/{}/finish", session.id))
             .bearer(&token)
@@ -398,7 +399,7 @@ mod tests {
             .add(&mut rng, &state.clock, "alice".to_owned())
             .await
             .unwrap();
-        state.clock.advance(Duration::minutes(1));
+        state.clock.advance(SignedDuration::from_mins(1));
 
         let bob = repo
             .user()
@@ -416,7 +417,7 @@ mod tests {
             .add(&mut rng, &state.clock, &bob, None)
             .await
             .unwrap();
-        state.clock.advance(Duration::minutes(1));
+        state.clock.advance(SignedDuration::from_mins(1));
         repo.browser_session()
             .finish(&state.clock, session)
             .await

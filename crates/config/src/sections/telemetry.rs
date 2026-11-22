@@ -33,7 +33,7 @@ pub enum TracingExporterKind {
     /// Disable trace export
     #[default]
     None,
-    /// Write traces to stdout (debugging only)
+    /// Write traces to stdout as OTLP JSON Lines (debugging only)
     Stdout,
     /// Ship traces via OTLP/HTTP
     Otlp,
@@ -81,7 +81,7 @@ pub enum MetricsExporterKind {
     /// Disable metric export
     #[default]
     None,
-    /// Dump metrics to stdout (debugging only)
+    /// Write metrics to stdout as OTLP JSON Lines (debugging only)
     Stdout,
     /// Ship metrics via OTLP/HTTP
     Otlp,

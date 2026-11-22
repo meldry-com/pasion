@@ -1,6 +1,6 @@
 use base64ct::{Base64UrlUnpadded, Encoding};
-use chrono::{DateTime, Utc};
 use crc::{CRC_32_ISO_HDLC, Crc};
+use jiff::Timestamp;
 use pasion_iana::oauth::OAuthTokenTypeHint;
 use rand_core::RngCore;
 use thiserror::Error;
@@ -13,12 +13,12 @@ pub enum AccessTokenState {
     #[default]
     Valid,
     Revoked {
-        revoked_at: DateTime<Utc>,
+        revoked_at: Timestamp,
     },
 }
 
 impl AccessTokenState {
-    fn revoke(self, revoked_at: DateTime<Utc>) -> Result<Self, InvalidTransitionError> {
+    fn revoke(self, revoked_at: Timestamp) -> Result<Self, InvalidTransitionError> {
         match self {
             Self::Valid => Ok(Self::Revoked { revoked_at }),
             Self::Revoked { .. } => Err(InvalidTransitionError),
@@ -48,10 +48,10 @@ pub struct AccessToken {
     pub state: AccessTokenState,
     pub session_id: Ulid,
     pub access_token: String,
-    pub created_at: DateTime<Utc>,
-    pub expires_at: Option<DateTime<Utc>>,
+    pub created_at: Timestamp,
+    pub expires_at: Option<Timestamp>,
     /// Pasion-original: tracks the first time this token was actually used.
-    pub first_used_at: Option<DateTime<Utc>>,
+    pub first_used_at: Option<Timestamp>,
 }
 
 impl AccessToken {
@@ -66,7 +66,7 @@ impl AccessToken {
     ///
     /// * `now` - The current time
     #[must_use]
-    pub fn is_valid(&self, now: DateTime<Utc>) -> bool {
+    pub fn is_valid(&self, now: Timestamp) -> bool {
         self.state.is_valid() && !self.is_expired(now)
     }
 
@@ -78,7 +78,7 @@ impl AccessToken {
     ///
     /// * `now` - The current time
     #[must_use]
-    pub fn is_expired(&self, now: DateTime<Utc>) -> bool {
+    pub fn is_expired(&self, now: Timestamp) -> bool {
         match self.expires_at {
             Some(expires_at) => expires_at < now,
             None => false,
@@ -100,7 +100,7 @@ impl AccessToken {
     /// # Errors
     ///
     /// Returns an error if the access token is already revoked
-    pub fn revoke(mut self, revoked_at: DateTime<Utc>) -> Result<Self, InvalidTransitionError> {
+    pub fn revoke(mut self, revoked_at: Timestamp) -> Result<Self, InvalidTransitionError> {
         self.state = self.state.revoke(revoked_at)?;
         Ok(self)
     }
@@ -114,11 +114,11 @@ pub enum RefreshTokenState {
     #[default]
     Valid,
     Consumed {
-        consumed_at: DateTime<Utc>,
+        consumed_at: Timestamp,
         next_refresh_token_id: Option<Ulid>,
     },
     Revoked {
-        revoked_at: DateTime<Utc>,
+        revoked_at: Timestamp,
     },
 }
 
@@ -130,7 +130,7 @@ impl RefreshTokenState {
     /// Returns an error if the refresh token is revoked.
     fn consume(
         self,
-        consumed_at: DateTime<Utc>,
+        consumed_at: Timestamp,
         replaced_by: &RefreshToken,
     ) -> Result<Self, InvalidTransitionError> {
         match self {
@@ -147,7 +147,7 @@ impl RefreshTokenState {
     /// # Errors
     ///
     /// Returns an error if the refresh token is already consumed or revoked.
-    pub fn revoke(self, revoked_at: DateTime<Utc>) -> Result<Self, InvalidTransitionError> {
+    pub fn revoke(self, revoked_at: Timestamp) -> Result<Self, InvalidTransitionError> {
         match self {
             Self::Valid => Ok(Self::Revoked { revoked_at }),
             Self::Consumed { .. } | Self::Revoked { .. } => Err(InvalidTransitionError),
@@ -181,7 +181,7 @@ pub struct RefreshToken {
     pub state: RefreshTokenState,
     pub refresh_token: String,
     pub session_id: Ulid,
-    pub created_at: DateTime<Utc>,
+    pub created_at: Timestamp,
     pub access_token_id: Option<Ulid>,
 }
 
@@ -206,7 +206,7 @@ impl RefreshToken {
     /// Returns an error if the refresh token is revoked.
     pub fn consume(
         mut self,
-        consumed_at: DateTime<Utc>,
+        consumed_at: Timestamp,
         replaced_by: &Self,
     ) -> Result<Self, InvalidTransitionError> {
         self.state = self.state.consume(consumed_at, replaced_by)?;
@@ -218,7 +218,7 @@ impl RefreshToken {
     /// # Errors
     ///
     /// Returns an error if the refresh token is already revoked.
-    pub fn revoke(mut self, revoked_at: DateTime<Utc>) -> Result<Self, InvalidTransitionError> {
+    pub fn revoke(mut self, revoked_at: Timestamp) -> Result<Self, InvalidTransitionError> {
         self.state = self.state.revoke(revoked_at)?;
         Ok(self)
     }

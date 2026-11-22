@@ -12,7 +12,6 @@
 //!   codes
 //! - [`misc`]: Completed queue jobs and stale policy data
 
-use chrono::{DateTime, Utc};
 use ulid::Ulid;
 
 pub(crate) const BATCH_SIZE: usize = 1000;
@@ -25,9 +24,9 @@ pub(crate) fn log_cleanup_result(processed: usize, empty: &'static str, done: &'
     }
 }
 
-pub(crate) fn ulid_upper_bound(cutoff: DateTime<Utc>) -> Ulid {
+pub(crate) fn ulid_upper_bound(cutoff: jiff::Timestamp) -> Ulid {
     Ulid::from_parts(
-        u64::try_from(cutoff.timestamp_millis()).unwrap_or(u64::MIN),
+        u64::try_from(cutoff.as_millisecond()).unwrap_or(u64::MIN),
         u128::MAX,
     )
 }

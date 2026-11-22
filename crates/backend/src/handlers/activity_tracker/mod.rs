@@ -8,7 +8,6 @@ mod worker;
 
 use std::net::IpAddr;
 
-use chrono::{DateTime, Utc};
 use pasion_data::{
     BoxRepositoryFactory, BrowserSession, Clock, Session, personal::session::PersonalSession,
 };
@@ -42,7 +41,7 @@ enum Message {
     Record {
         kind: SessionKind,
         id: Ulid,
-        date_time: DateTime<Utc>,
+        date_time: jiff::Timestamp,
         ip: Option<IpAddr>,
     },
     Flush(tokio::sync::oneshot::Sender<()>),

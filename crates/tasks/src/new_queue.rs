@@ -1,5 +1,4 @@
-use chrono::{DateTime, Utc};
-use cron::Schedule;
+use jiff_cron::Schedule;
 use opentelemetry::metrics::{Counter, Histogram};
 use pasion_data::queue::{InsertableJob, Worker};
 use tokio::time::Instant;
@@ -39,7 +38,7 @@ pub struct QueueWorker {
     /// Whether this worker currently holds the leader lease.
     am_i_leader: bool,
     /// Timestamp of the last heartbeat we sent.
-    last_heartbeat: DateTime<Utc>,
+    last_heartbeat: jiff::Timestamp,
     /// Monotonic time when the previous tick started.
     last_tick_started_at: Instant,
     /// Top-level cancellation token for graceful shutdown.

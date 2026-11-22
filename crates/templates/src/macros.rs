@@ -65,7 +65,7 @@ macro_rules! register_templates {
             /// Returns an error if any template fails to render with any sample.
             pub(crate) fn all<R: Rng + Clone>(
                 templates: &Templates,
-                now: chrono::DateTime<chrono::Utc>,
+                now: jiff::Timestamp,
                 rng: &R,
             ) -> anyhow::Result<
                 ::std::collections::BTreeMap<(&'static str, SampleIdentifier), String>,
@@ -100,7 +100,7 @@ macro_rules! register_templates {
                     < __R: Rng + Clone $( , $( $lt $( : $clt $(+ $dlt )* + TemplateContext )? ),+ )? >
                     (
                         templates: &Templates,
-                        now: chrono::DateTime<chrono::Utc>,
+                        now: jiff::Timestamp,
                         rng: &mut __R,
                     )
                 -> anyhow::Result<BTreeMap<SampleIdentifier, String>> {

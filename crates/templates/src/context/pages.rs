@@ -4,6 +4,7 @@
 use std::{collections::BTreeMap, fmt::Formatter};
 
 use http::{Method, Uri, Version};
+use jiff::Timestamp;
 use pasion_data::UrlBuilder;
 use rand_core::RngCore as Rng;
 use serde::Serialize;
@@ -28,7 +29,7 @@ impl IndexContext {
 
 impl TemplateContext for IndexContext {
     fn sample<R: Rng>(
-        _now: chrono::DateTime<chrono::Utc>,
+        _now: Timestamp,
         _rng: &mut R,
         _locales: &[pasion_i18n::DataLocale],
     ) -> BTreeMap<SampleIdentifier, Self> {
@@ -101,7 +102,7 @@ impl AppContext {
 
 impl TemplateContext for AppContext {
     fn sample<R: Rng>(
-        _now: chrono::DateTime<chrono::Utc>,
+        _now: Timestamp,
         _rng: &mut R,
         _locales: &[pasion_i18n::DataLocale],
     ) -> BTreeMap<SampleIdentifier, Self> {
@@ -192,7 +193,7 @@ impl ErrorContext {
 
 impl TemplateContext for ErrorContext {
     fn sample<R: Rng>(
-        _now: chrono::DateTime<chrono::Utc>,
+        _now: Timestamp,
         _rng: &mut R,
         _locales: &[pasion_i18n::DataLocale],
     ) -> BTreeMap<SampleIdentifier, Self> {
@@ -229,7 +230,7 @@ impl NotFoundContext {
 
 impl TemplateContext for NotFoundContext {
     fn sample<R: Rng>(
-        _now: chrono::DateTime<chrono::Utc>,
+        _now: Timestamp,
         _rng: &mut R,
         _locales: &[pasion_i18n::DataLocale],
     ) -> BTreeMap<SampleIdentifier, Self> {

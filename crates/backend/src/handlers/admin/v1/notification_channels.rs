@@ -4,7 +4,8 @@
 //! Since the [`NotificationCenter`] is not available in the HTTP depot,
 //! channel availability is inferred from the site configuration flags.
 
-use salvo::{oapi::ToSchema, prelude::*};
+use salvo::prelude::*;
+use salvo_oapi::{ToSchema, endpoint};
 use schemars::JsonSchema;
 use serde::Serialize;
 

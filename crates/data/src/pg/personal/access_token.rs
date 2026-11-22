@@ -1,7 +1,8 @@
 use async_trait::async_trait;
-use chrono::{DateTime, Utc};
 use diesel::prelude::*;
 use diesel_async::RunQueryDsl;
+use jiff::Timestamp;
+use jiff_diesel::ToDiesel as _;
 use pasion_data::{
     Clock, new_id,
     personal::{PersonalAccessToken, PersonalAccessTokenRepository, session::PersonalSession},
@@ -33,9 +34,12 @@ impl<'c> PgPersonalAccessTokenRepository<'c> {
 struct PersonalAccessTokenRow {
     id: Uuid,
     personal_session_id: Uuid,
-    created_at: DateTime<Utc>,
-    expires_at: Option<DateTime<Utc>>,
-    revoked_at: Option<DateTime<Utc>>,
+    #[diesel(deserialize_as = jiff_diesel::Timestamp)]
+    created_at: Timestamp,
+    #[diesel(deserialize_as = jiff_diesel::NullableTimestamp)]
+    expires_at: Option<Timestamp>,
+    #[diesel(deserialize_as = jiff_diesel::NullableTimestamp)]
+    revoked_at: Option<Timestamp>,
 }
 
 impl From<PersonalAccessTokenRow> for PersonalAccessToken {
@@ -57,8 +61,9 @@ struct NewPersonalAccessToken {
     id: Uuid,
     personal_session_id: Uuid,
     access_token_sha256: Vec<u8>,
-    created_at: DateTime<Utc>,
-    expires_at: Option<DateTime<Utc>>,
+    #[diesel(serialize_as = jiff_diesel::Timestamp)]
+    created_at: Timestamp,
+    expires_at: Option<jiff_diesel::Timestamp>,
 }
 
 #[async_trait]
@@ -136,7 +141,7 @@ impl PersonalAccessTokenRepository for PgPersonalAccessTokenRepository<'_> {
         clock: &dyn Clock,
         session: &PersonalSession,
         access_token: &str,
-        expires_after: Option<chrono::Duration>,
+        expires_after: Option<jiff::SignedDuration>,
     ) -> Result<PersonalAccessToken, Self::Error> {
         let created_at = clock.now();
         let id = new_id(created_at, rng);
@@ -150,11 +155,11 @@ impl PersonalAccessTokenRepository for PgPersonalAccessTokenRepository<'_> {
             personal_session_id: Uuid::from(session.id),
             access_token_sha256: token_sha256,
             created_at,
-            expires_at,
+            expires_at: expires_at.map(jiff_diesel::Timestamp::from),
         };
 
         diesel::insert_into(personal_access_tokens::table)
-            .values(&new_token)
+            .values(new_token)
             .execute(self.conn)
             .await?;
 
@@ -184,7 +189,7 @@ impl PersonalAccessTokenRepository for PgPersonalAccessTokenRepository<'_> {
         let revoked_at = clock.now();
         let rows_affected =
             diesel::update(personal_access_tokens::table.find(Uuid::from(access_token.id)))
-                .set(personal_access_tokens::revoked_at.eq(Some(revoked_at)))
+                .set(personal_access_tokens::revoked_at.eq(Some(revoked_at).to_diesel()))
                 .execute(self.conn)
                 .await?;
 

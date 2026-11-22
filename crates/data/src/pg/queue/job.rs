@@ -2,12 +2,13 @@
 //! [`QueueJobRepository`].
 
 use async_trait::async_trait;
-use chrono::{DateTime, Duration, Utc};
 use diesel::{
     prelude::*,
     sql_types::{Array, BigInt, Jsonb, Nullable, Text, Timestamptz, Uuid as DieselUuid},
 };
 use diesel_async::RunQueryDsl;
+use jiff::{SignedDuration, Timestamp};
+use jiff_diesel::ToDiesel as _;
 use pasion_data::{
     Clock, new_id,
     queue::{AbandonedJob, Job, QueueJobRepository, Worker},
@@ -18,6 +19,7 @@ use uuid::Uuid;
 
 use crate::{
     DatabaseError, DatabaseInconsistencyError,
+    pg::query_rows::AbandonedJobResult,
     schema::{queue_jobs, queue_schedules},
 };
 
@@ -82,22 +84,6 @@ impl TryFrom<JobReservationResult> for Job {
     }
 }
 
-#[derive(Debug, QueryableByName)]
-struct AbandonedJobResult {
-    #[diesel(sql_type = DieselUuid)]
-    id: Uuid,
-    #[diesel(sql_type = Text)]
-    queue_name: String,
-    #[diesel(sql_type = diesel::sql_types::Integer)]
-    attempt: i32,
-    #[diesel(sql_type = DieselUuid)]
-    started_by: Uuid,
-    #[diesel(sql_type = Timestamptz)]
-    started_at: DateTime<Utc>,
-    #[diesel(sql_type = Timestamptz)]
-    worker_shutdown_at: DateTime<Utc>,
-}
-
 impl TryFrom<AbandonedJobResult> for AbandonedJob {
     type Error = DatabaseInconsistencyError;
 
@@ -115,8 +101,8 @@ impl TryFrom<AbandonedJobResult> for AbandonedJob {
             queue_name: value.queue_name,
             attempt,
             started_by: value.started_by.into(),
-            started_at: value.started_at,
-            worker_shutdown_at: value.worker_shutdown_at,
+            started_at: value.started_at.to_jiff(),
+            worker_shutdown_at: value.worker_shutdown_at.to_jiff(),
         })
     }
 }
@@ -130,7 +116,8 @@ struct NewJob {
     queue_name: String,
     payload: serde_json::Value,
     metadata: serde_json::Value,
-    created_at: DateTime<Utc>,
+    #[diesel(serialize_as = jiff_diesel::Timestamp)]
+    created_at: Timestamp,
 }
 
 /// Insertable row for scheduling a job at a later time.
@@ -141,8 +128,9 @@ struct NewScheduledJob {
     queue_name: String,
     payload: serde_json::Value,
     metadata: serde_json::Value,
-    created_at: DateTime<Utc>,
-    scheduled_at: Option<DateTime<Utc>>,
+    #[diesel(serialize_as = jiff_diesel::Timestamp)]
+    created_at: Timestamp,
+    scheduled_at: Option<jiff_diesel::Timestamp>,
     schedule_name: Option<String>,
     status: String,
 }
@@ -181,7 +169,7 @@ impl QueueJobRepository for PgQueueJobRepository<'_> {
         };
 
         diesel::insert_into(queue_jobs::table)
-            .values(&new_job)
+            .values(new_job)
             .execute(self.conn)
             .await?;
 
@@ -205,7 +193,7 @@ impl QueueJobRepository for PgQueueJobRepository<'_> {
         queue_name: &str,
         payload: serde_json::Value,
         metadata: serde_json::Value,
-        scheduled_at: DateTime<Utc>,
+        scheduled_at: Timestamp,
         schedule_name: Option<&str>,
     ) -> Result<(), Self::Error> {
         let created_at = clock.now();
@@ -218,13 +206,13 @@ impl QueueJobRepository for PgQueueJobRepository<'_> {
             payload,
             metadata,
             created_at,
-            scheduled_at: Some(scheduled_at),
+            scheduled_at: Some(scheduled_at.into()),
             schedule_name: schedule_name.map(ToOwned::to_owned),
             status: "scheduled".to_owned(),
         };
 
         diesel::insert_into(queue_jobs::table)
-            .values(&new_job)
+            .values(new_job)
             .execute(self.conn)
             .await?;
 
@@ -234,7 +222,7 @@ impl QueueJobRepository for PgQueueJobRepository<'_> {
                 queue_schedules::table.filter(queue_schedules::schedule_name.eq(schedule_name)),
             )
             .set((
-                queue_schedules::last_scheduled_at.eq(Some(scheduled_at)),
+                queue_schedules::last_scheduled_at.eq(Some(scheduled_at).to_diesel()),
                 queue_schedules::last_scheduled_job_id.eq(Some(Uuid::from(id))),
             ))
             .execute(self.conn)
@@ -285,7 +273,7 @@ impl QueueJobRepository for PgQueueJobRepository<'_> {
         )
         .bind::<Array<Text>, _>(&queues)
         .bind::<BigInt, _>(max_count)
-        .bind::<Timestamptz, _>(now)
+        .bind::<Timestamptz, _>(now.to_diesel())
         .bind::<DieselUuid, _>(Uuid::from(worker.id))
         .get_results(self.conn)
         .await?;
@@ -315,7 +303,7 @@ impl QueueJobRepository for PgQueueJobRepository<'_> {
         )
         .set((
             queue_jobs::status.eq("completed"),
-            queue_jobs::completed_at.eq(Some(now)),
+            queue_jobs::completed_at.eq(Some(now).to_diesel()),
         ))
         .execute(self.conn)
         .await?;
@@ -347,7 +335,7 @@ impl QueueJobRepository for PgQueueJobRepository<'_> {
         )
         .set((
             queue_jobs::status.eq("failed"),
-            queue_jobs::failed_at.eq(Some(now)),
+            queue_jobs::failed_at.eq(Some(now).to_diesel()),
             queue_jobs::failed_reason.eq(Some(reason)),
         ))
         .execute(self.conn)
@@ -371,7 +359,7 @@ impl QueueJobRepository for PgQueueJobRepository<'_> {
         rng: &mut (dyn RngCore + Send),
         clock: &dyn Clock,
         id: Ulid,
-        delay: Duration,
+        delay: SignedDuration,
     ) -> Result<(), Self::Error> {
         let now = clock.now();
         let scheduled_at = now + delay;
@@ -392,8 +380,8 @@ impl QueueJobRepository for PgQueueJobRepository<'_> {
             ",
         )
         .bind::<DieselUuid, _>(Uuid::from(new_id))
-        .bind::<Timestamptz, _>(now)
-        .bind::<Timestamptz, _>(scheduled_at)
+        .bind::<Timestamptz, _>(now.to_diesel())
+        .bind::<Timestamptz, _>(scheduled_at.to_diesel())
         .bind::<DieselUuid, _>(Uuid::from(id))
         .execute(self.conn)
         .await?;
@@ -406,7 +394,7 @@ impl QueueJobRepository for PgQueueJobRepository<'_> {
                 .filter(queue_schedules::last_scheduled_job_id.eq(Uuid::from(id))),
         )
         .set((
-            queue_schedules::last_scheduled_at.eq(Some(scheduled_at)),
+            queue_schedules::last_scheduled_at.eq(Some(scheduled_at).to_diesel()),
             queue_schedules::last_scheduled_job_id.eq(Some(Uuid::from(new_id))),
         ))
         .execute(self.conn)
@@ -430,7 +418,7 @@ impl QueueJobRepository for PgQueueJobRepository<'_> {
         let count = diesel::update(
             queue_jobs::table
                 .filter(queue_jobs::status.eq("scheduled"))
-                .filter(queue_jobs::scheduled_at.le(Some(now))),
+                .filter(queue_jobs::scheduled_at.le(Some(now).to_diesel())),
         )
         .set(queue_jobs::status.eq("available"))
         .execute(self.conn)
@@ -481,7 +469,7 @@ impl QueueJobRepository for PgQueueJobRepository<'_> {
                 JOIN marked_jobs USING (id)
             ",
         )
-        .bind::<Timestamptz, _>(now)
+        .bind::<Timestamptz, _>(now.to_diesel())
         .bind::<Text, _>(reason)
         .get_results::<AbandonedJobResult>(self.conn)
         .await?;
@@ -554,7 +542,7 @@ struct UuidRow {
 mod tests {
     use std::time::{SystemTime, UNIX_EPOCH};
 
-    use chrono::Duration;
+    use jiff::SignedDuration;
     use pasion_data::{RepositoryAccess as _, RepositoryFactory as _, clock::MockClock};
     use rand_chacha::ChaChaRng;
     use rand_core::SeedableRng;
@@ -601,11 +589,11 @@ mod tests {
             .unwrap();
         let job = reserved.into_iter().next().expect("reserved one job");
 
-        clock.advance(Duration::minutes(3));
+        clock.advance(SignedDuration::from_mins(3));
 
         let dead_workers = repo
             .queue_worker()
-            .shutdown_dead_workers(&clock, Duration::minutes(2))
+            .shutdown_dead_workers(&clock, SignedDuration::from_mins(2))
             .await
             .unwrap();
         assert_eq!(dead_workers.len(), 1);
@@ -623,7 +611,7 @@ mod tests {
         assert_eq!(abandoned_jobs[0].started_by, worker.id);
 
         repo.queue_job()
-            .retry(&mut rng, &clock, job.id, Duration::zero())
+            .retry(&mut rng, &clock, job.id, SignedDuration::ZERO)
             .await
             .unwrap();
         assert_eq!(

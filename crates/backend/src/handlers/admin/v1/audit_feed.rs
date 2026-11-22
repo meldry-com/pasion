@@ -4,12 +4,12 @@
 //! resource type. Queries the [`AuditRepository`] for persisted admin
 //! operation log entries.
 
-use chrono::{DateTime, Utc};
 use pasion_data::{
     RepositoryAccess,
     audit::{AdminOperation, AdminOperationFilter, AdminOperationLog},
 };
-use salvo::{oapi::ToSchema, prelude::*};
+use salvo::prelude::*;
+use salvo_oapi::{ToSchema, endpoint};
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use ulid::Ulid;
@@ -41,7 +41,8 @@ pub struct AuditEntry {
     pub details: Option<serde_json::Value>,
 
     /// When the operation was performed.
-    pub created_at: DateTime<Utc>,
+    #[salvo(schema(value_type = String, format = "date-time"))]
+    pub created_at: jiff::Timestamp,
 }
 
 /// Convert an [`AdminOperation`] enum variant into a human-readable

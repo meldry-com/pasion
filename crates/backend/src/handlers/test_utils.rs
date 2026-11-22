@@ -12,7 +12,6 @@ use std::{
     time::{SystemTime, UNIX_EPOCH},
 };
 
-use chrono::Duration;
 use cookie_store::{CookieStore, RawCookie};
 use diesel_async::{AsyncPgConnection, pooled_connection::deadpool::Pool as DieselPool};
 use headers::{Authorization, ContentType, HeaderMapExt, HeaderValue};
@@ -20,6 +19,7 @@ use hyper::{
     Request, Response, StatusCode,
     header::{CONTENT_TYPE, COOKIE},
 };
+use jiff::SignedDuration;
 use oauth2_types::scope::Scope;
 use pasion_config::RateLimitingConfig;
 use pasion_data::{
@@ -141,7 +141,7 @@ fn workspace_root() -> camino::Utf8PathBuf {
 
 pub fn test_site_config() -> SiteConfig {
     SiteConfig {
-        access_token_ttl: Duration::try_minutes(5).unwrap(),
+        access_token_ttl: SignedDuration::from_mins(5),
         server_name: "example.com".to_owned(),
         policy_uri: Some("https://example.com/policy".parse().unwrap()),
         tos_uri: Some("https://example.com/tos".parse().unwrap()),

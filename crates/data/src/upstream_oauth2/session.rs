@@ -1,4 +1,4 @@
-use chrono::{DateTime, Utc};
+use jiff::Timestamp;
 use serde::Serialize;
 use ulid::Ulid;
 
@@ -14,7 +14,7 @@ pub enum UpstreamOAuthAuthorizationSessionState {
     #[default]
     Pending,
     Completed {
-        completed_at: DateTime<Utc>,
+        completed_at: Timestamp,
         link_id: Ulid,
         id_token: Option<String>,
         id_token_claims: Option<serde_json::Value>,
@@ -22,8 +22,8 @@ pub enum UpstreamOAuthAuthorizationSessionState {
         userinfo: Option<serde_json::Value>,
     },
     Consumed {
-        completed_at: DateTime<Utc>,
-        consumed_at: DateTime<Utc>,
+        completed_at: Timestamp,
+        consumed_at: Timestamp,
         link_id: Ulid,
         id_token: Option<String>,
         id_token_claims: Option<serde_json::Value>,
@@ -32,9 +32,9 @@ pub enum UpstreamOAuthAuthorizationSessionState {
     },
     /// Pasion-original: the link has been removed after completion/consumption.
     Unlinked {
-        completed_at: DateTime<Utc>,
-        consumed_at: Option<DateTime<Utc>>,
-        unlinked_at: DateTime<Utc>,
+        completed_at: Timestamp,
+        consumed_at: Option<Timestamp>,
+        unlinked_at: Timestamp,
         id_token: Option<String>,
         id_token_claims: Option<serde_json::Value>,
     },
@@ -51,7 +51,7 @@ impl UpstreamOAuthAuthorizationSessionState {
     /// [`Pending`]: UpstreamOAuthAuthorizationSessionState::Pending
     pub fn complete(
         self,
-        completed_at: DateTime<Utc>,
+        completed_at: Timestamp,
         link: &UpstreamOAuthLink,
         id_token: Option<String>,
         id_token_claims: Option<serde_json::Value>,
@@ -81,7 +81,7 @@ impl UpstreamOAuthAuthorizationSessionState {
     /// is not [`Completed`].
     ///
     /// [`Completed`]: UpstreamOAuthAuthorizationSessionState::Completed
-    pub fn consume(self, consumed_at: DateTime<Utc>) -> Result<Self, InvalidTransitionError> {
+    pub fn consume(self, consumed_at: Timestamp) -> Result<Self, InvalidTransitionError> {
         match self {
             Self::Completed {
                 completed_at,
@@ -127,7 +127,7 @@ impl UpstreamOAuthAuthorizationSessionState {
     ///
     /// [`Pending`]: UpstreamOAuthAuthorizationSessionState::Pending
     #[must_use]
-    pub fn completed_at(&self) -> Option<DateTime<Utc>> {
+    pub fn completed_at(&self) -> Option<Timestamp> {
         match self {
             Self::Pending => None,
             Self::Completed { completed_at, .. }
@@ -214,7 +214,7 @@ impl UpstreamOAuthAuthorizationSessionState {
     ///
     /// [`Consumed`]: UpstreamOAuthAuthorizationSessionState::Consumed
     #[must_use]
-    pub fn consumed_at(&self) -> Option<DateTime<Utc>> {
+    pub fn consumed_at(&self) -> Option<Timestamp> {
         match self {
             Self::Pending | Self::Completed { .. } => None,
             Self::Consumed { consumed_at, .. } => Some(*consumed_at),
@@ -230,7 +230,7 @@ impl UpstreamOAuthAuthorizationSessionState {
     ///
     /// [`Unlinked`]: UpstreamOAuthAuthorizationSessionState::Unlinked
     #[must_use]
-    pub fn unlinked_at(&self) -> Option<DateTime<Utc>> {
+    pub fn unlinked_at(&self) -> Option<Timestamp> {
         match self {
             Self::Pending | Self::Completed { .. } | Self::Consumed { .. } => None,
             Self::Unlinked { unlinked_at, .. } => Some(*unlinked_at),
@@ -283,7 +283,7 @@ pub struct UpstreamOAuthAuthorizationSession {
     pub code_challenge_verifier: Option<String>,
     /// Pasion-original: nonce is Optional (for non-OIDC providers)
     pub nonce: Option<String>,
-    pub created_at: DateTime<Utc>,
+    pub created_at: Timestamp,
 }
 
 impl std::ops::Deref for UpstreamOAuthAuthorizationSession {
@@ -306,7 +306,7 @@ impl UpstreamOAuthAuthorizationSession {
     /// [`Pending`]: UpstreamOAuthAuthorizationSessionState::Pending
     pub fn complete(
         mut self,
-        completed_at: DateTime<Utc>,
+        completed_at: Timestamp,
         link: &UpstreamOAuthLink,
         id_token: Option<String>,
         id_token_claims: Option<serde_json::Value>,
@@ -333,7 +333,7 @@ impl UpstreamOAuthAuthorizationSession {
     /// is not [`Completed`].
     ///
     /// [`Completed`]: UpstreamOAuthAuthorizationSessionState::Completed
-    pub fn consume(mut self, consumed_at: DateTime<Utc>) -> Result<Self, InvalidTransitionError> {
+    pub fn consume(mut self, consumed_at: Timestamp) -> Result<Self, InvalidTransitionError> {
         self.state = self.state.consume(consumed_at)?;
         Ok(self)
     }

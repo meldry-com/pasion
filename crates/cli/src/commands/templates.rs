@@ -8,7 +8,6 @@ use std::{fmt::Write as _, process::ExitCode};
 
 use anyhow::{Context as _, bail};
 use camino::Utf8PathBuf;
-use chrono::DateTime;
 use clap::Parser;
 use figment::Figment;
 use pasion_backend::util::{site_config_from_config, templates_from_config};
@@ -67,7 +66,7 @@ impl Options {
 
         // ── Deterministic clock / RNG when stabilising ───────────────
         let now = if stabilise {
-            DateTime::from_timestamp_secs(1_446_823_992).unwrap()
+            jiff::Timestamp::from_second(1_446_823_992).unwrap()
         } else {
             SystemClock::default().now()
         };

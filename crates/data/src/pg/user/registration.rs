@@ -1,10 +1,11 @@
 use std::net::IpAddr;
 
 use async_trait::async_trait;
-use chrono::{DateTime, Utc};
 use diesel::prelude::*;
 use diesel_async::RunQueryDsl;
 use ipnetwork::IpNetwork;
+use jiff::Timestamp;
+use jiff_diesel::ToDiesel as _;
 use pasion_data::{
     Clock, UpstreamOAuthAuthorizationSession, UserEmailAuthentication, UserPhoneAuthentication,
     UserRegistration, UserRegistrationPassword, UserRegistrationToken, new_id,
@@ -48,8 +49,10 @@ struct UserRegistrationRow {
     hashed_password: Option<String>,
     hashed_password_version: Option<i32>,
     upstream_oauth_authorization_session_id: Option<Uuid>,
-    created_at: DateTime<Utc>,
-    completed_at: Option<DateTime<Utc>>,
+    #[diesel(deserialize_as = jiff_diesel::Timestamp)]
+    created_at: Timestamp,
+    #[diesel(deserialize_as = jiff_diesel::NullableTimestamp)]
+    completed_at: Option<Timestamp>,
 }
 
 impl TryFrom<UserRegistrationRow> for UserRegistration {
@@ -121,7 +124,8 @@ struct NewUserRegistration {
     user_agent: Option<String>,
     post_auth_action: Option<serde_json::Value>,
     username: String,
-    created_at: DateTime<Utc>,
+    #[diesel(serialize_as = jiff_diesel::Timestamp)]
+    created_at: Timestamp,
 }
 
 #[async_trait]
@@ -180,7 +184,7 @@ impl UserRegistrationRepository for PgUserRegistrationRepository<'_> {
         };
 
         diesel::insert_into(user_registrations::table)
-            .values(&new_registration)
+            .values(new_registration)
             .execute(self.conn)
             .await?;
 
@@ -484,7 +488,7 @@ impl UserRegistrationRepository for PgUserRegistrationRepository<'_> {
                 .find(Uuid::from(user_registration.id))
                 .filter(user_registrations::completed_at.is_null()),
         )
-        .set(user_registrations::completed_at.eq(Some(completed_at)))
+        .set(user_registrations::completed_at.eq(Some(completed_at).to_diesel()))
         .execute(self.conn)
         .await?;
 
@@ -551,6 +555,7 @@ mod tests {
     use std::net::{IpAddr, Ipv4Addr};
 
     use ipnetwork::IpNetwork;
+    use jiff::Timestamp;
     use oauth2_types::scope::Scope;
     use pasion_data::{
         Clock, RepositoryAccess as _, RepositoryFactory as _, UpstreamOAuthProviderClaimsImports,
@@ -704,7 +709,7 @@ mod tests {
             hashed_password: None,
             hashed_password_version: None,
             upstream_oauth_authorization_session_id: None,
-            created_at: chrono::Utc::now(),
+            created_at: Timestamp::now(),
             completed_at: None,
         };
 

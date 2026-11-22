@@ -11,6 +11,7 @@ use pasion_data::{
     user::UserEmailFilter,
 };
 use salvo::{http::StatusCode, prelude::*};
+use salvo_oapi::endpoint;
 use schemars::JsonSchema;
 use serde::Deserialize;
 use ulid::Ulid;
@@ -378,9 +379,9 @@ fn map_service_error(error: crate::services::user_admin::UserAdminServiceError) 
 
 #[cfg(test)]
 mod tests {
-    use chrono::Duration;
     use hyper::{Request, StatusCode};
     use insta::assert_json_snapshot;
+    use jiff::SignedDuration;
     use pasion_data::{
         RepositoryAccess,
         user::{UserEmailRepository, UserRepository},
@@ -1016,7 +1017,9 @@ mod tests {
         let pool = pasion_data::test_utils::setup_test_pool().await;
         let mut state = TestState::from_pool(pool.clone()).await.unwrap();
         let unique = unique_test_nonce();
-        state.clock.advance(Duration::seconds(unique as i64));
+        state
+            .clock
+            .advance(SignedDuration::from_secs(unique as i64));
         let token = state.token_with_scope("urn:pasion:admin").await;
         let mut rng = ChaChaRng::seed_from_u64(unique);
         let mut repo = state.repository().await.unwrap();

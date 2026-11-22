@@ -1,7 +1,8 @@
 use async_trait::async_trait;
-use chrono::{DateTime, Utc};
 use diesel::prelude::*;
 use diesel_async::RunQueryDsl;
+use jiff::Timestamp;
+use jiff_diesel::ToDiesel as _;
 use pasion_data::{
     Clock, Page, Pagination, UpstreamOAuthLink, UpstreamOAuthLinkPatch, UpstreamOAuthProvider,
     User, new_id,
@@ -39,8 +40,10 @@ struct LinkLookup {
     user_id: Option<Uuid>,
     subject: String,
     human_account_name: Option<String>,
-    created_at: DateTime<Utc>,
-    updated_at: DateTime<Utc>,
+    #[diesel(deserialize_as = jiff_diesel::Timestamp)]
+    created_at: Timestamp,
+    #[diesel(deserialize_as = jiff_diesel::Timestamp)]
+    updated_at: Timestamp,
 }
 
 impl Node<Ulid> for LinkLookup {
@@ -72,8 +75,10 @@ struct NewLink {
     user_id: Option<Uuid>,
     subject: String,
     human_account_name: Option<String>,
-    created_at: DateTime<Utc>,
-    updated_at: DateTime<Utc>,
+    #[diesel(serialize_as = jiff_diesel::Timestamp)]
+    created_at: Timestamp,
+    #[diesel(serialize_as = jiff_diesel::Timestamp)]
+    updated_at: Timestamp,
 }
 
 #[async_trait]
@@ -167,7 +172,7 @@ impl UpstreamOAuthLinkRepository for PgUpstreamOAuthLinkRepository<'_> {
         };
 
         diesel::insert_into(upstream_oauth_links::table)
-            .values(&new_link)
+            .values(new_link)
             .execute(self.conn)
             .await?;
 
@@ -205,7 +210,7 @@ impl UpstreamOAuthLinkRepository for PgUpstreamOAuthLinkRepository<'_> {
         diesel::update(upstream_oauth_links::table.find(Uuid::from(upstream_oauth_link.id)))
             .set((
                 upstream_oauth_links::user_id.eq(Some(Uuid::from(user.id))),
-                upstream_oauth_links::updated_at.eq(Utc::now()),
+                upstream_oauth_links::updated_at.eq(Timestamp::now().to_diesel()),
             ))
             .execute(self.conn)
             .await?;
@@ -265,7 +270,7 @@ impl UpstreamOAuthLinkRepository for PgUpstreamOAuthLinkRepository<'_> {
                     upstream_oauth_links::subject.eq(&upstream_oauth_link.subject),
                     upstream_oauth_links::human_account_name
                         .eq(upstream_oauth_link.human_account_name.as_deref()),
-                    upstream_oauth_links::updated_at.eq(upstream_oauth_link.updated_at),
+                    upstream_oauth_links::updated_at.eq(upstream_oauth_link.updated_at.to_diesel()),
                 ))
                 .execute(self.conn)
                 .await?;
@@ -413,7 +418,7 @@ impl UpstreamOAuthLinkRepository for PgUpstreamOAuthLinkRepository<'_> {
         )
         .set((
             upstream_oauth_authorization_sessions::upstream_oauth_link_id.eq(None::<Uuid>),
-            upstream_oauth_authorization_sessions::unlinked_at.eq(Some(clock.now())),
+            upstream_oauth_authorization_sessions::unlinked_at.eq(Some(clock.now().to_diesel())),
         ))
         .execute(self.conn)
         .await?;

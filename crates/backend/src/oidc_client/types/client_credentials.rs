@@ -17,7 +17,7 @@
 use std::{collections::HashMap, fmt};
 
 use base64ct::{Base64UrlUnpadded, Encoding};
-use chrono::{DateTime, Duration, Utc};
+use jiff::SignedDuration;
 use pasion_iana::{jose::JsonWebSignatureAlg, oauth::OAuthClientAuthenticationMethod};
 use pasion_jose::{
     claims::{self, ClaimError},
@@ -213,7 +213,7 @@ impl ClientCredentials {
         &self,
         request: reqwest::RequestBuilder,
         form: &T,
-        now: DateTime<Utc>,
+        now: jiff::Timestamp,
         rng: &mut impl Rng,
     ) -> Result<reqwest::RequestBuilder, CredentialsError> {
         let request = match self {
@@ -369,10 +369,7 @@ impl ClientCredentials {
                 claims::SUB.insert(&mut apple_claims, client_id)?;
                 claims::AUD.insert(&mut apple_claims, "https://appleid.apple.com".to_owned())?;
                 claims::IAT.insert(&mut apple_claims, now)?;
-                claims::EXP.insert(
-                    &mut apple_claims,
-                    now + Duration::microseconds(60 * 1000 * 1000),
-                )?;
+                claims::EXP.insert(&mut apple_claims, now + SignedDuration::from_secs(60))?;
 
                 let header =
                     JsonWebSignatureHeader::new(JsonWebSignatureAlg::Es256).with_kid(key_id);
@@ -477,7 +474,7 @@ struct JwtBearerClientAssertionType;
 fn prepare_jwt_bearer_claims(
     iss: String,
     aud: String,
-    now: DateTime<Utc>,
+    now: jiff::Timestamp,
     rng: &mut impl Rng,
 ) -> Result<HashMap<String, Value>, ClaimError> {
     let mut claims = HashMap::new();
@@ -486,10 +483,7 @@ fn prepare_jwt_bearer_claims(
     claims::SUB.insert(&mut claims, iss)?;
     claims::AUD.insert(&mut claims, aud)?;
     claims::IAT.insert(&mut claims, now)?;
-    claims::EXP.insert(
-        &mut claims,
-        now + Duration::microseconds(5 * 60 * 1000 * 1000),
-    )?;
+    claims::EXP.insert(&mut claims, now + SignedDuration::from_mins(5))?;
 
     let mut jti = [0u8; 16];
     rng.fill_bytes(&mut jti);

@@ -1,8 +1,8 @@
 use async_trait::async_trait;
-use chrono::{DateTime, Utc};
 use diesel::prelude::*;
 use diesel_async::RunQueryDsl;
 use ipnetwork::IpNetwork;
+use jiff_diesel::ToDiesel as _;
 use pasion_data::{
     Clock,
     audit::{
@@ -48,7 +48,8 @@ struct AdminOperationLogRow {
     details: serde_json::Value,
     ip_address: Option<IpNetwork>,
     user_agent: Option<String>,
-    created_at: DateTime<Utc>,
+    #[diesel(deserialize_as = jiff_diesel::Timestamp)]
+    created_at: jiff::Timestamp,
 }
 
 impl TryFrom<AdminOperationLogRow> for AdminOperationLog {
@@ -82,7 +83,8 @@ struct AccountSecurityEventRow {
     metadata: serde_json::Value,
     ip_address: Option<IpNetwork>,
     user_agent: Option<String>,
-    created_at: DateTime<Utc>,
+    #[diesel(deserialize_as = jiff_diesel::Timestamp)]
+    created_at: jiff::Timestamp,
 }
 
 impl TryFrom<AccountSecurityEventRow> for AccountSecurityEvent {
@@ -120,7 +122,7 @@ struct InsertableAdminOperationLog {
     details: serde_json::Value,
     ip_address: Option<IpNetwork>,
     user_agent: Option<String>,
-    created_at: DateTime<Utc>,
+    created_at: jiff_diesel::Timestamp,
 }
 
 #[derive(Insertable)]
@@ -132,7 +134,7 @@ struct InsertableAccountSecurityEvent {
     metadata: serde_json::Value,
     ip_address: Option<IpNetwork>,
     user_agent: Option<String>,
-    created_at: DateTime<Utc>,
+    created_at: jiff_diesel::Timestamp,
 }
 
 // ---------------------------------------------------------------------------
@@ -213,7 +215,7 @@ impl AuditRepository for PgAuditRepository<'_> {
             details: params.details().clone(),
             ip_address: ip_address.map(IpNetwork::from),
             user_agent: params.user_agent().map(ToOwned::to_owned),
-            created_at,
+            created_at: created_at.to_diesel(),
         };
 
         diesel::insert_into(admin_operation_logs::table)
@@ -267,11 +269,11 @@ impl AuditRepository for PgAuditRepository<'_> {
         }
 
         if let Some(created_after) = filter.created_after {
-            query = query.filter(admin_operation_logs::created_at.ge(created_after));
+            query = query.filter(admin_operation_logs::created_at.ge(created_after.to_diesel()));
         }
 
         if let Some(created_before) = filter.created_before {
-            query = query.filter(admin_operation_logs::created_at.le(created_before));
+            query = query.filter(admin_operation_logs::created_at.le(created_before.to_diesel()));
         }
 
         query
@@ -307,11 +309,11 @@ impl AuditRepository for PgAuditRepository<'_> {
         }
 
         if let Some(created_after) = filter.created_after {
-            query = query.filter(admin_operation_logs::created_at.ge(created_after));
+            query = query.filter(admin_operation_logs::created_at.ge(created_after.to_diesel()));
         }
 
         if let Some(created_before) = filter.created_before {
-            query = query.filter(admin_operation_logs::created_at.le(created_before));
+            query = query.filter(admin_operation_logs::created_at.le(created_before.to_diesel()));
         }
 
         let count: i64 = query.count().get_result(self.conn).await?;
@@ -348,7 +350,7 @@ impl AuditRepository for PgAuditRepository<'_> {
             metadata: params.metadata().clone(),
             ip_address: ip_address.map(IpNetwork::from),
             user_agent: params.user_agent().map(ToOwned::to_owned),
-            created_at,
+            created_at: created_at.to_diesel(),
         };
 
         diesel::insert_into(account_security_events::table)

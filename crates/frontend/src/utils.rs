@@ -30,23 +30,23 @@ pub fn use_redirect_url(when: bool, to: String) {
     reason = "relative browser display must compare with the viewer's current wall clock"
 )]
 pub fn format_last_active(datetime: &str) -> String {
-    if let Ok(dt) = chrono::DateTime::parse_from_rfc3339(datetime) {
-        let now = chrono::Utc::now();
-        let duration = now.signed_duration_since(dt);
+    if let Ok(dt) = datetime.parse::<jiff::Timestamp>() {
+        let now = jiff::Timestamp::now();
+        let duration = now.duration_since(dt);
 
-        if duration.num_minutes() < 3 {
+        if duration.as_mins() < 3 {
             return "Active now".to_owned();
         }
-        if duration.num_hours() < 1 {
-            let mins = duration.num_minutes();
+        if duration.as_hours() < 1 {
+            let mins = duration.as_mins();
             return format!("{mins} minutes ago");
         }
-        if duration.num_hours() < 24 {
-            let hours = duration.num_hours();
+        if duration.as_hours() < 24 {
+            let hours = duration.as_hours();
             return format!("{hours} hours ago");
         }
-        if duration.num_days() < 90 {
-            let days = duration.num_days();
+        if (duration.as_hours() / 24) < 90 {
+            let days = duration.as_hours() / 24;
             return format!("{days} days ago");
         }
         return "Inactive for 90+ days".to_owned();
@@ -56,8 +56,15 @@ pub fn format_last_active(datetime: &str) -> String {
 
 /// Format a datetime string to a readable date.
 pub fn format_date(datetime: &str) -> String {
-    if let Ok(dt) = chrono::DateTime::parse_from_rfc3339(datetime) {
-        return dt.format("%b %d, %Y %H:%M").to_string();
+    if let Ok(pieces) = jiff::fmt::temporal::Pieces::parse(datetime)
+        && let Some(time) = pieces.time()
+        && pieces.offset().is_some()
+    {
+        return pieces
+            .date()
+            .to_datetime(time)
+            .strftime("%b %d, %Y %H:%M")
+            .to_string();
     }
     datetime.to_owned()
 }

@@ -5,7 +5,6 @@
 
 use std::{collections::HashMap, net::IpAddr};
 
-use chrono::{DateTime, Utc};
 use opentelemetry::{
     Key, KeyValue,
     metrics::{Counter, Gauge, Histogram},
@@ -34,7 +33,7 @@ const RESULT: Key = Key::from_static_str("result");
 
 #[derive(Clone, Copy, Debug)]
 struct ActivityRecord {
-    end_time: DateTime<Utc>,
+    end_time: jiff::Timestamp,
     ip: Option<IpAddr>,
 }
 

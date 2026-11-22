@@ -1,4 +1,5 @@
-use salvo::{oapi::ToSchema, prelude::*};
+use salvo::prelude::*;
+use salvo_oapi::{ToSchema, endpoint};
 use serde::{Deserialize, Serialize};
 
 use super::{
@@ -92,11 +93,13 @@ pub async fn get_session(
                 display_name: None,
                 user_agent: session.user_agent.as_deref().map(parse_user_agent),
                 last_active_ip: session.last_active_ip.map(|ip| ip.to_string()),
-                last_active_at: session.last_active_at.map(|t| t.to_rfc3339()),
-                created_at: Some(session.created_at.to_rfc3339()),
+                last_active_at: session
+                    .last_active_at
+                    .map(pasion_data::clock::format_rfc3339),
+                created_at: Some(pasion_data::clock::format_rfc3339(session.created_at)),
                 last_authentication: detail.last_authentication.map(|a| AuthenticationData {
                     id: NodeType::Authentication.serialize(a.id),
-                    created_at: a.created_at.to_rfc3339(),
+                    created_at: pasion_data::clock::format_rfc3339(a.created_at),
                 }),
             })
         }
@@ -119,8 +122,10 @@ pub async fn get_session(
                 }),
                 user_agent: session.user_agent.as_deref().map(parse_user_agent),
                 last_active_ip: session.last_active_ip.map(|ip| ip.to_string()),
-                last_active_at: session.last_active_at.map(|t| t.to_rfc3339()),
-                created_at: Some(session.created_at.to_rfc3339()),
+                last_active_at: session
+                    .last_active_at
+                    .map(pasion_data::clock::format_rfc3339),
+                created_at: Some(pasion_data::clock::format_rfc3339(session.created_at)),
             })
         }
         _ => return Err(RouteError::BadRequest("not a session id".into())),

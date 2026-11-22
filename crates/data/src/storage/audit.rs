@@ -1,5 +1,5 @@
 use async_trait::async_trait;
-use chrono::{DateTime, Utc};
+use jiff::Timestamp;
 use pasion_data::{
     Clock,
     audit::{AccountSecurityEvent, AdminOperation, AdminOperationLog, SecurityEventType},
@@ -182,9 +182,9 @@ pub struct AdminOperationFilter {
     /// Only return operations on this resource type.
     pub resource_type: Option<String>,
     /// Only return operations created after this time.
-    pub created_after: Option<DateTime<Utc>>,
+    pub created_after: Option<Timestamp>,
     /// Only return operations created before this time.
-    pub created_before: Option<DateTime<Utc>>,
+    pub created_before: Option<Timestamp>,
     /// Maximum number of results to return.
     pub limit: Option<usize>,
 }
@@ -212,14 +212,14 @@ impl AdminOperationFilter {
 
     /// Filter by created-after timestamp.
     #[must_use]
-    pub fn created_after(mut self, after: DateTime<Utc>) -> Self {
+    pub fn created_after(mut self, after: Timestamp) -> Self {
         self.created_after = Some(after);
         self
     }
 
     /// Filter by created-before timestamp.
     #[must_use]
-    pub fn created_before(mut self, before: DateTime<Utc>) -> Self {
+    pub fn created_before(mut self, before: Timestamp) -> Self {
         self.created_before = Some(before);
         self
     }

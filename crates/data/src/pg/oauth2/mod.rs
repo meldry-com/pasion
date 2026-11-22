@@ -17,7 +17,7 @@ pub use self::{
 
 #[cfg(test)]
 mod tests {
-    use chrono::Duration;
+    use jiff::SignedDuration;
     use oauth2_types::{
         requests::{GrantType, ResponseMode},
         scope::{EMAIL, OPENID, PROFILE, Scope},
@@ -237,7 +237,7 @@ mod tests {
                 &clock,
                 &session,
                 "aabbcc".to_owned(),
-                Some(Duration::try_minutes(5).unwrap()),
+                Some(SignedDuration::from_mins(5)),
             )
             .await
             .unwrap();
@@ -308,11 +308,11 @@ mod tests {
         assert_eq!(refresh_token, refresh_token_lookup);
 
         assert!(access_token.is_valid(clock.now()));
-        clock.advance(Duration::try_minutes(6).unwrap());
+        clock.advance(SignedDuration::from_mins(6));
         assert!(!access_token.is_valid(clock.now()));
 
         // XXX: we might want to create a new access token
-        clock.advance(Duration::try_minutes(-6).unwrap()); // Go back in time
+        clock.advance(SignedDuration::from_mins(-6)); // Go back in time
         assert!(access_token.is_valid(clock.now()));
 
         // Create a new refresh token to be able to consume the old one
@@ -467,28 +467,28 @@ mod tests {
             .add_from_browser_session(&mut rng, &clock, &client1, &user1_session, scope.clone())
             .await
             .unwrap();
-        clock.advance(Duration::try_minutes(1).unwrap());
+        clock.advance(SignedDuration::from_mins(1));
 
         let session12 = repo
             .oauth2_session()
             .add_from_browser_session(&mut rng, &clock, &client1, &user2_session, scope.clone())
             .await
             .unwrap();
-        clock.advance(Duration::try_minutes(1).unwrap());
+        clock.advance(SignedDuration::from_mins(1));
 
         let session21 = repo
             .oauth2_session()
             .add_from_browser_session(&mut rng, &clock, &client2, &user1_session, scope2.clone())
             .await
             .unwrap();
-        clock.advance(Duration::try_minutes(1).unwrap());
+        clock.advance(SignedDuration::from_mins(1));
 
         let session22 = repo
             .oauth2_session()
             .add_from_browser_session(&mut rng, &clock, &client2, &user2_session, scope2.clone())
             .await
             .unwrap();
-        clock.advance(Duration::try_minutes(1).unwrap());
+        clock.advance(SignedDuration::from_mins(1));
 
         // We're also finishing two of the sessions
         let session11 = repo
@@ -789,7 +789,7 @@ mod tests {
                     scope: scope.clone(),
                     device_code: device_code.to_owned(),
                     user_code: user_code.to_owned(),
-                    expires_in: Duration::try_minutes(5).unwrap(),
+                    expires_in: SignedDuration::from_mins(5),
                     ip_address: None,
                     user_agent: None,
                 },
@@ -894,7 +894,7 @@ mod tests {
                     scope: scope.clone(),
                     device_code: "second_devicecode".to_owned(),
                     user_code: "second_usercode".to_owned(),
-                    expires_in: Duration::try_minutes(5).unwrap(),
+                    expires_in: SignedDuration::from_mins(5),
                     ip_address: None,
                     user_agent: None,
                 },

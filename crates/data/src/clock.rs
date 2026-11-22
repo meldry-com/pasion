@@ -9,26 +9,46 @@ use std::sync::{
     atomic::{AtomicI64, Ordering},
 };
 
-use chrono::{DateTime, Utc};
+use jiff::Timestamp;
+
+/// Format a UTC timestamp for text fields exposed by the account API and worker
+/// logs.
+#[must_use]
+pub fn format_rfc3339(timestamp: Timestamp) -> String {
+    let nanos = timestamp.subsec_nanosecond();
+    let precision = if nanos == 0 {
+        0
+    } else if nanos % 1_000_000 == 0 {
+        3
+    } else if nanos % 1_000 == 0 {
+        6
+    } else {
+        9
+    };
+    format!(
+        "{:.precision$}",
+        timestamp.display_with_offset(jiff::tz::Offset::UTC)
+    )
+}
 
 /// A source of "current" timestamps.
 ///
 /// Implementors must be safe to share across threads.
 pub trait Clock: Send + Sync {
     /// Return the current instant as a UTC datetime.
-    fn now(&self) -> DateTime<Utc>;
+    fn now(&self) -> Timestamp;
 }
 
 // Delegate through `Arc` so that cloned handles share the same clock.
 impl<C: Clock + Send + ?Sized> Clock for Arc<C> {
-    fn now(&self) -> DateTime<Utc> {
+    fn now(&self) -> Timestamp {
         (**self).now()
     }
 }
 
 // Delegate through `Box` so that trait-object holders can call `now()`.
 impl<C: Clock + ?Sized> Clock for Box<C> {
-    fn now(&self) -> DateTime<Utc> {
+    fn now(&self) -> Timestamp {
         (**self).now()
     }
 }
@@ -40,9 +60,9 @@ pub struct SystemClock {
 }
 
 impl Clock for SystemClock {
-    fn now(&self) -> DateTime<Utc> {
+    fn now(&self) -> Timestamp {
         #[allow(clippy::disallowed_methods)]
-        Utc::now()
+        Timestamp::now()
     }
 }
 
@@ -59,7 +79,7 @@ pub struct MockClock {
 impl Default for MockClock {
     /// Creates a mock clock pinned to 2022-01-16 14:40:00 UTC.
     fn default() -> Self {
-        let dt = chrono::TimeZone::with_ymd_and_hms(&Utc, 2022, 1, 16, 14, 40, 0).unwrap();
+        let dt = "2022-01-16T14:40:00Z".parse::<Timestamp>().unwrap();
         Self::new(dt)
     }
 }
@@ -67,9 +87,9 @@ impl Default for MockClock {
 impl MockClock {
     /// Build a mock clock starting at `start`.
     #[must_use]
-    pub fn new(start: DateTime<Utc>) -> Self {
+    pub fn new(start: Timestamp) -> Self {
         Self {
-            epoch_secs: AtomicI64::new(start.timestamp()),
+            epoch_secs: AtomicI64::new(start.as_second()),
         }
     }
 
@@ -77,22 +97,22 @@ impl MockClock {
     ///
     /// Negative durations are technically accepted by the underlying atomic
     /// add, but callers should treat this as moving time forward only.
-    pub fn advance(&self, delta: chrono::Duration) {
+    pub fn advance(&self, delta: jiff::SignedDuration) {
         self.epoch_secs
-            .fetch_add(delta.num_seconds(), Ordering::Relaxed);
+            .fetch_add(delta.as_secs(), Ordering::Relaxed);
     }
 }
 
 impl Clock for MockClock {
-    fn now(&self) -> DateTime<Utc> {
+    fn now(&self) -> Timestamp {
         let ts = self.epoch_secs.load(Ordering::Relaxed);
-        DateTime::from_timestamp(ts, 0).expect("stored timestamp is always valid")
+        Timestamp::new(ts, 0).expect("stored timestamp is always valid")
     }
 }
 
 #[cfg(test)]
 mod tests {
-    use chrono::Duration;
+    use jiff::SignedDuration;
 
     use super::*;
 
@@ -113,7 +133,7 @@ mod tests {
         let clk = MockClock::default();
         let before = clk.now();
 
-        let step = Duration::seconds(10);
+        let step = SignedDuration::from_secs(10);
         clk.advance(step);
 
         let after = clk.now();

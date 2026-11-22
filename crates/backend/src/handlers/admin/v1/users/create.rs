@@ -4,11 +4,12 @@
 
 //! Creation endpoints: `POST /users` and `POST /users/batch-invite`.
 
-use chrono::Duration;
+use jiff::SignedDuration;
 use pasion_data::audit::{AdminOperation, NewAdminOperationLog};
 use pasion_matrix::ProvisionRequest;
 use rand::distr::{Alphanumeric, SampleString};
-use salvo::{oapi::ToSchema, prelude::*};
+use salvo::prelude::*;
+use salvo_oapi::{ToSchema, endpoint};
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use tracing::warn;
@@ -157,8 +158,17 @@ pub async fn batch_invite(
 
     let expires_at = params
         .expires_in_hours
-        .and_then(|h| Duration::try_hours(h as i64))
-        .map(|d| clock.now() + d);
+        .map(|hours| {
+            let seconds = hours
+                .checked_mul(3600)
+                .and_then(|s| i64::try_from(s).ok())
+                .ok_or_else(|| AppError::bad_request("expires_in_hours is out of range"))?;
+            clock
+                .now()
+                .checked_add(SignedDuration::from_secs(seconds))
+                .map_err(|_| AppError::bad_request("expires_in_hours is out of range"))
+        })
+        .transpose()?;
 
     let mut tokens = Vec::with_capacity(params.count as usize);
 

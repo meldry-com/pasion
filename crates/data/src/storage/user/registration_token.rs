@@ -1,5 +1,5 @@
 use async_trait::async_trait;
-use chrono::{DateTime, Utc};
+use jiff::Timestamp;
 use pasion_data::{Clock, UserRegistrationToken};
 use rand_core::RngCore;
 use ulid::Ulid;
@@ -9,7 +9,7 @@ use crate::repository_impl;
 /// A filter to apply when listing [`UserRegistrationToken`]s
 #[derive(Debug, Clone, Copy)]
 pub struct UserRegistrationTokenFilter {
-    now: DateTime<Utc>,
+    now: Timestamp,
     has_been_used: Option<bool>,
     is_revoked: Option<bool>,
     is_expired: Option<bool>,
@@ -19,7 +19,7 @@ pub struct UserRegistrationTokenFilter {
 impl UserRegistrationTokenFilter {
     /// Create a new empty filter
     #[must_use]
-    pub fn new(now: DateTime<Utc>) -> Self {
+    pub fn new(now: Timestamp) -> Self {
         Self {
             now,
             has_been_used: None,
@@ -92,7 +92,7 @@ impl UserRegistrationTokenFilter {
 
     /// Get the current time for this filter evaluation
     #[must_use]
-    pub fn now(&self) -> DateTime<Utc> {
+    pub fn now(&self) -> Timestamp {
         self.now
     }
 }
@@ -154,7 +154,7 @@ pub trait UserRegistrationTokenRepository: Send + Sync {
         clock: &dyn Clock,
         token: String,
         usage_limit: Option<u32>,
-        expires_at: Option<DateTime<Utc>>,
+        expires_at: Option<Timestamp>,
     ) -> Result<UserRegistrationToken, Self::Error>;
 
     /// Increment the usage count of a [`UserRegistrationToken`]
@@ -219,7 +219,7 @@ pub trait UserRegistrationTokenRepository: Send + Sync {
     async fn set_expiry(
         &mut self,
         token: UserRegistrationToken,
-        expires_at: Option<DateTime<Utc>>,
+        expires_at: Option<Timestamp>,
     ) -> Result<UserRegistrationToken, Self::Error>;
 
     /// Set the usage limit of a [`UserRegistrationToken`]
@@ -279,7 +279,7 @@ repository_impl!(UserRegistrationTokenRepository:
         clock: &dyn Clock,
         token: String,
         usage_limit: Option<u32>,
-        expires_at: Option<DateTime<Utc>>,
+        expires_at: Option<Timestamp>,
     ) -> Result<UserRegistrationToken, Self::Error>;
     async fn use_token(
         &mut self,
@@ -298,7 +298,7 @@ repository_impl!(UserRegistrationTokenRepository:
     async fn set_expiry(
         &mut self,
         token: UserRegistrationToken,
-        expires_at: Option<DateTime<Utc>>,
+        expires_at: Option<Timestamp>,
     ) -> Result<UserRegistrationToken, Self::Error>;
     async fn set_usage_limit(
         &mut self,

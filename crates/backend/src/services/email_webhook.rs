@@ -2,7 +2,6 @@ use std::collections::{BTreeMap, BTreeSet};
 
 use anyhow::{Context, anyhow};
 use base64ct::{Base64, Encoding};
-use chrono::{TimeZone, Utc};
 use hmac::{Hmac, KeyInit, Mac};
 use http::HeaderMap;
 use p256::ecdsa::{
@@ -1209,13 +1208,12 @@ fn verify_resend_signature(
     let timestamp = timestamp
         .parse::<i64>()
         .map_err(|error| Error::Unauthorized(format!("invalid svix timestamp: {error}")))?;
-    let signed_at = Utc
-        .timestamp_opt(timestamp, 0)
-        .single()
+    let signed_at = jiff::Timestamp::from_second(timestamp)
+        .ok()
         .ok_or_else(|| Error::Unauthorized("invalid svix timestamp".to_owned()))?;
-    let age = Utc::now()
-        .signed_duration_since(signed_at)
-        .num_seconds()
+    let age = jiff::Timestamp::now()
+        .duration_since(signed_at)
+        .as_secs()
         .unsigned_abs();
     if age > max_age_seconds {
         return Err(Error::Unauthorized(

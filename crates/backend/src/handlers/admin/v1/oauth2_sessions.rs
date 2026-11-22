@@ -12,6 +12,7 @@ use pasion_data::{
     queue::{QueueJobRepositoryExt as _, SyncDevicesJob},
 };
 use salvo::prelude::*;
+use salvo_oapi::endpoint;
 use schemars::JsonSchema;
 use serde::Deserialize;
 use ulid::Ulid;
@@ -352,8 +353,8 @@ pub async fn list_sessions(
 
 #[cfg(test)]
 mod tests {
-    use chrono::Duration;
     use hyper::{Request, StatusCode};
+    use jiff::SignedDuration;
     use oauth2_types::requests::GrantType;
     use pasion_data::{Clock as _, RepositoryAccess as _};
     use ulid::Ulid;
@@ -465,7 +466,7 @@ mod tests {
         repo.save().await.unwrap();
 
         // Move the clock forward
-        state.clock.advance(Duration::try_minutes(1).unwrap());
+        state.clock.advance(SignedDuration::from_mins(1));
 
         let request = Request::post(format!(
             "/api/admin/v1/oauth2-sessions/{}/finish",

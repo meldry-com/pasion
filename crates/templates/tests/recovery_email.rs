@@ -36,7 +36,7 @@ async fn load_templates() -> Templates {
 
 fn context(lang: &str, username: &str) -> WithLanguage<EmailRecoveryContext> {
     #[allow(clippy::disallowed_methods)]
-    let now = chrono::Utc::now();
+    let now = jiff::Timestamp::now();
     let mut rng = rand_chacha::ChaCha8Rng::from_seed([3; 32]);
     let mut user = User::samples(now, &mut rng).remove(0);
     user.username = username.to_owned();

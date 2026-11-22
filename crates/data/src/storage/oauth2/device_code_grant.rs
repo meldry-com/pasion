@@ -1,7 +1,7 @@
 use std::net::IpAddr;
 
 use async_trait::async_trait;
-use chrono::Duration;
+use jiff::SignedDuration;
 use oauth2_types::scope::Scope;
 use pasion_data::{BrowserSession, Client, Clock, DeviceCodeGrant, Session};
 use rand_core::RngCore;
@@ -24,7 +24,7 @@ pub struct OAuth2DeviceCodeGrantParams<'a> {
     pub user_code: String,
 
     /// After how long the device code expires
-    pub expires_in: Duration,
+    pub expires_in: SignedDuration,
 
     /// IP address from which the request was made
     pub ip_address: Option<IpAddr>,

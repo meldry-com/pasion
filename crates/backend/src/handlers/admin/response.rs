@@ -6,7 +6,7 @@
 #![allow(clippy::module_name_repetitions)]
 
 use pasion_data::{Pagination, pagination::Edge};
-use salvo::oapi::ToSchema;
+use salvo_oapi::ToSchema;
 use schemars::JsonSchema;
 use serde::Serialize;
 use ulid::Ulid;
@@ -301,9 +301,9 @@ impl ErrorResponse {
 // Keep the real resource attributes and page item shape in the generated API.
 
 fn resource_schema<T: Resource + ToSchema>(
-    components: &mut salvo::oapi::Components,
-) -> salvo::oapi::RefOr<salvo::oapi::Schema> {
-    use salvo::oapi::*;
+    components: &mut salvo_oapi::Components,
+) -> salvo_oapi::RefOr<salvo_oapi::Schema> {
+    use salvo_oapi::*;
     Object::new()
         .property(
             "type",
@@ -332,18 +332,16 @@ fn resource_schema<T: Resource + ToSchema>(
         .into()
 }
 
-fn self_links_schema() -> salvo::oapi::Object {
-    use salvo::oapi::*;
+fn self_links_schema() -> salvo_oapi::Object {
+    use salvo_oapi::*;
     Object::new()
         .property("self", Object::new().schema_type(BasicType::String))
         .required("self")
 }
 
 impl<T: Resource + ToSchema> ToSchema for PaginatedResponse<T> {
-    fn to_schema(
-        components: &mut salvo::oapi::Components,
-    ) -> salvo::oapi::RefOr<salvo::oapi::Schema> {
-        use salvo::oapi::*;
+    fn to_schema(components: &mut salvo_oapi::Components) -> salvo_oapi::RefOr<salvo_oapi::Schema> {
+        use salvo_oapi::*;
         let mut links = self_links_schema();
         for field in ["first", "last", "next", "prev"] {
             links = links.property(field, Object::new().schema_type(BasicType::String));
@@ -363,10 +361,8 @@ impl<T: Resource + ToSchema> ToSchema for PaginatedResponse<T> {
 }
 
 impl<T: Resource + ToSchema> ToSchema for SingleResponse<T> {
-    fn to_schema(
-        components: &mut salvo::oapi::Components,
-    ) -> salvo::oapi::RefOr<salvo::oapi::Schema> {
-        use salvo::oapi::*;
+    fn to_schema(components: &mut salvo_oapi::Components) -> salvo_oapi::RefOr<salvo_oapi::Schema> {
+        use salvo_oapi::*;
         Object::new()
             .property("data", resource_schema::<T>(components))
             .property("links", self_links_schema())
@@ -391,7 +387,7 @@ mod schema_tests {
                         .post(personal_sessions::regenerate_session),
                 ),
         );
-        let doc = salvo::oapi::OpenApi::new("test", "1").merge_router(&router);
+        let doc = salvo_oapi::OpenApi::new("test", "1").merge_router(&router);
         let doc = serde_json::to_value(doc).unwrap();
         let create = &doc["paths"]["/api/admin/v1/personal-sessions"]["post"]["requestBody"];
         assert_eq!(create["required"], true);
@@ -420,7 +416,7 @@ mod schema_tests {
 
     #[test]
     fn personal_session_response_schema_preserves_attributes_and_page_array() {
-        let mut components = salvo::oapi::Components::new();
+        let mut components = salvo_oapi::Components::new();
         let single = serde_json::to_value(SingleResponse::<PersonalSession>::to_schema(
             &mut components,
         ))
@@ -450,7 +446,7 @@ mod schema_tests {
                 .iter()
                 .any(|v| v == "access_token")
         );
-        let mut components = salvo::oapi::Components::new();
+        let mut components = salvo_oapi::Components::new();
         let page = serde_json::to_value(PaginatedResponse::<PersonalSession>::to_schema(
             &mut components,
         ))

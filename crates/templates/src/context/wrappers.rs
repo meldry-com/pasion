@@ -1,6 +1,6 @@
 use std::collections::BTreeMap;
 
-use chrono::{DateTime, Utc};
+use jiff::Timestamp;
 use pasion_data::BrowserSession;
 use pasion_i18n::DataLocale;
 use rand_chacha::ChaCha8Rng;
@@ -70,7 +70,7 @@ pub trait TemplateContext: Serialize {
 
     /// Produce sample values for template validation.
     fn sample<R: Rng>(
-        now: DateTime<Utc>,
+        now: Timestamp,
         rng: &mut R,
         locales: &[DataLocale],
     ) -> BTreeMap<SampleIdentifier, Self>
@@ -110,7 +110,7 @@ pub(crate) fn sample_list<T: TemplateContext>(items: Vec<T>) -> BTreeMap<SampleI
 
 impl TemplateContext for () {
     fn sample<R: Rng>(
-        _now: DateTime<Utc>,
+        _now: Timestamp,
         _rng: &mut R,
         _locales: &[DataLocale],
     ) -> BTreeMap<SampleIdentifier, Self>
@@ -147,7 +147,7 @@ impl<T> std::ops::Deref for WithLanguage<T> {
 
 impl<T: TemplateContext> TemplateContext for WithLanguage<T> {
     fn sample<R: Rng>(
-        now: DateTime<Utc>,
+        now: Timestamp,
         rng: &mut R,
         locales: &[DataLocale],
     ) -> BTreeMap<SampleIdentifier, Self>
@@ -186,7 +186,7 @@ pub struct WithCsrf<T> {
 
 impl<T: TemplateContext> TemplateContext for WithCsrf<T> {
     fn sample<R: Rng>(
-        now: DateTime<Utc>,
+        now: Timestamp,
         rng: &mut R,
         locales: &[DataLocale],
     ) -> BTreeMap<SampleIdentifier, Self>
@@ -219,7 +219,7 @@ pub struct WithSession<T> {
 
 impl<T: TemplateContext> TemplateContext for WithSession<T> {
     fn sample<R: Rng>(
-        now: DateTime<Utc>,
+        now: Timestamp,
         rng: &mut R,
         locales: &[DataLocale],
     ) -> BTreeMap<SampleIdentifier, Self>
@@ -257,7 +257,7 @@ pub struct WithOptionalSession<T> {
 
 impl<T: TemplateContext> TemplateContext for WithOptionalSession<T> {
     fn sample<R: Rng>(
-        now: DateTime<Utc>,
+        now: Timestamp,
         rng: &mut R,
         locales: &[DataLocale],
     ) -> BTreeMap<SampleIdentifier, Self>
@@ -312,7 +312,7 @@ impl Serialize for EmptyContext {
 
 impl TemplateContext for EmptyContext {
     fn sample<R: Rng>(
-        _now: DateTime<Utc>,
+        _now: Timestamp,
         _rng: &mut R,
         _locales: &[DataLocale],
     ) -> BTreeMap<SampleIdentifier, Self>

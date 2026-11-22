@@ -70,8 +70,8 @@ non-constant-time comparison; no claim is made that a remote exploit was proven.
 YAML configuration and CLI export now use serde-saphyr, including its real
 Figment provider. Generated configuration is exported and reloaded through that
 provider in a regression test. Tokio SMTP and sendmail functionality remains
-enabled; the pinned lettre change removes an accidental inactive async-std
-feature path. The Prometheus exporter uses a maintained compact label buffer.
-Both temporary upstream pins reference exact tested commits, with upstream
-changes tracked in the pull request. Salvo and salvo_core are pinned together at
+enabled with the patched lettre 0.11.24 release. Cargo records its optional
+async-std dependencies in the lockfile. The dependency gate bans those crates
+from the build graph. The Prometheus exporter uses a maintained compact label
+buffer at a pinned upstream commit. Salvo and salvo_core are pinned together at
 1.2.1, with the path-encoding contract test guarding encoded Matrix paths.

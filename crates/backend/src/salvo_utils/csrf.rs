@@ -1,5 +1,5 @@
 use base64ct::{Base64UrlUnpadded, Encoding};
-use chrono::{DateTime, Duration, Utc};
+use jiff::{SignedDuration, Timestamp};
 use pasion_data::Clock;
 use rand_core::RngCore;
 use serde::{Deserialize, Serialize};
@@ -37,26 +37,26 @@ pub enum CsrfError {
 #[derive(Serialize, Deserialize, Debug)]
 pub struct CsrfToken {
     #[serde_as(as = "TimestampSeconds<i64>")]
-    expiration: DateTime<Utc>,
+    expiration: Timestamp,
     token: [u8; 32],
 }
 
 impl CsrfToken {
     /// Create a new token from a defined value valid for a specified duration
-    fn new(token: [u8; 32], now: DateTime<Utc>, ttl: Duration) -> Self {
+    fn new(token: [u8; 32], now: Timestamp, ttl: SignedDuration) -> Self {
         let expiration = now + ttl;
         Self { expiration, token }
     }
 
     /// Generate a new random token valid for a specified duration
-    fn generate(now: DateTime<Utc>, mut rng: impl RngCore, ttl: Duration) -> Self {
+    fn generate(now: Timestamp, mut rng: impl RngCore, ttl: SignedDuration) -> Self {
         let mut token = [0u8; 32];
         rng.fill_bytes(&mut token);
         Self::new(token, now, ttl)
     }
 
     /// Generate a new token with the same value but an up to date expiration
-    fn refresh(self, now: DateTime<Utc>, ttl: Duration) -> Self {
+    fn refresh(self, now: Timestamp, ttl: SignedDuration) -> Self {
         Self::new(self.token, now, ttl)
     }
 
@@ -80,7 +80,7 @@ impl CsrfToken {
         }
     }
 
-    fn verify_expiration(self, now: DateTime<Utc>) -> Result<Self, CsrfError> {
+    fn verify_expiration(self, now: Timestamp) -> Result<Self, CsrfError> {
         if now < self.expiration {
             Ok(self)
         } else {
@@ -140,8 +140,8 @@ impl CsrfExt for CookieJar {
         };
 
         let token = maybe_token.map_or_else(
-            || CsrfToken::generate(now, rng, Duration::try_hours(1).unwrap()),
-            |token| token.refresh(now, Duration::try_hours(1).unwrap()),
+            || CsrfToken::generate(now, rng, SignedDuration::from_hours(1)),
+            |token| token.refresh(now, SignedDuration::from_hours(1)),
         );
 
         let jar = self.save("csrf", &token, CookieExpiration::Session);

@@ -1,9 +1,9 @@
 //! PostgreSQL implementation of the notification template version repository.
 
 use async_trait::async_trait;
-use chrono::{DateTime, Utc};
 use diesel::prelude::*;
 use diesel_async::RunQueryDsl;
+use jiff::Timestamp;
 use pasion_data::{
     Clock, new_id,
     notification::{NotificationChannel, NotificationTemplateVersion},
@@ -40,8 +40,10 @@ struct TemplateVersionRow {
     locale: String,
     subject_template: Option<String>,
     body_template: String,
-    created_at: DateTime<Utc>,
-    published_at: Option<DateTime<Utc>>,
+    #[diesel(deserialize_as = jiff_diesel::Timestamp)]
+    created_at: Timestamp,
+    #[diesel(deserialize_as = jiff_diesel::NullableTimestamp)]
+    published_at: Option<Timestamp>,
 }
 
 fn channel_from_str(s: &str) -> NotificationChannel {
@@ -80,8 +82,9 @@ struct NewTemplateVersion {
     locale: String,
     subject_template: Option<String>,
     body_template: String,
-    created_at: DateTime<Utc>,
-    published_at: Option<DateTime<Utc>>,
+    #[diesel(serialize_as = jiff_diesel::Timestamp)]
+    created_at: Timestamp,
+    published_at: Option<jiff_diesel::Timestamp>,
 }
 
 #[async_trait]
@@ -174,11 +177,11 @@ impl NotificationTemplateRepository for PgNotificationTemplateRepository<'_> {
             subject_template: subject_template.clone(),
             body_template: body_template.clone(),
             created_at: now,
-            published_at: Some(now),
+            published_at: Some(now.into()),
         };
 
         diesel::insert_into(notification_template_versions::table)
-            .values(&new_row)
+            .values(new_row)
             .execute(self.conn)
             .await?;
 
@@ -284,7 +287,7 @@ mod tests {
             notification_template_versions::table
                 .filter(notification_template_versions::id.eq(Uuid::from(english.id))),
         )
-        .set(notification_template_versions::published_at.eq(None::<DateTime<Utc>>))
+        .set(notification_template_versions::published_at.eq(None::<jiff_diesel::Timestamp>))
         .execute(&mut *conn)
         .await
         .unwrap();

@@ -14,7 +14,7 @@ mod tests {
         reason = "test constants are kept next to the scenarios that use them"
     )]
 
-    use chrono::Duration;
+    use jiff::SignedDuration;
     use oauth2_types::scope::{OPENID, PROFILE, Scope};
     use pasion_data::{
         Clock, Pagination, RepositoryAccess as _, RepositoryFactory as _,
@@ -222,7 +222,7 @@ mod tests {
                 &clock,
                 &session1,
                 "mpt_hiss",
-                Some(Duration::days(42)),
+                Some(SignedDuration::from_hours(24 * 42)),
             )
             .await
             .unwrap();
@@ -336,7 +336,7 @@ mod tests {
                 &clock,
                 &session,
                 FIRST_TOKEN,
-                Some(Duration::try_minutes(1).unwrap()),
+                Some(SignedDuration::from_mins(1)),
             )
             .await
             .unwrap();
@@ -358,7 +358,7 @@ mod tests {
                         &clock,
                         &session,
                         FIRST_TOKEN,
-                        Some(Duration::try_minutes(1).unwrap()),
+                        Some(SignedDuration::from_mins(1)),
                     )
                     .await
                     .is_err()
@@ -395,7 +395,7 @@ mod tests {
         // Token is currently valid
         assert!(token.is_valid(clock.now()));
 
-        clock.advance(Duration::try_minutes(1).unwrap());
+        clock.advance(SignedDuration::from_mins(1));
         // Token should have expired
         assert!(!token.is_valid(clock.now()));
 

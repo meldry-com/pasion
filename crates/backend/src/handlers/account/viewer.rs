@@ -1,5 +1,6 @@
 use pasion_data::{RepositoryAccess, account::AccountSecuritySummary};
-use salvo::{oapi::ToSchema, prelude::*};
+use salvo::prelude::*;
+use salvo_oapi::{ToSchema, endpoint};
 use serde::Serialize;
 
 use super::{
@@ -141,7 +142,7 @@ pub async fn get_viewer(
                     node: EmailData {
                         id: NodeType::UserEmail.serialize(e.id),
                         email: e.email,
-                        confirmed_at: e.confirmed_at.map(|confirmed_at| confirmed_at.to_rfc3339()),
+                        confirmed_at: e.confirmed_at.map(pasion_data::clock::format_rfc3339),
                         is_primary: e.is_primary,
                     },
                 })
@@ -161,7 +162,7 @@ pub async fn get_viewer(
                     provider_brand: link.provider_brand,
                     subject: link.subject,
                     human_account_name: link.human_account_name,
-                    created_at: link.created_at.to_rfc3339(),
+                    created_at: pasion_data::clock::format_rfc3339(link.created_at),
                 })
                 .collect();
 
@@ -174,7 +175,7 @@ pub async fn get_viewer(
                     display_name: profile.profile.display_name,
                     avatar_url: profile.profile.avatar_url,
                     preferred_locale: profile.profile.preferred_locale,
-                    updated_at: profile.profile.updated_at.to_rfc3339(),
+                    updated_at: pasion_data::clock::format_rfc3339(profile.profile.updated_at),
                 },
                 matrix,
                 emails: Some(EmailListData {
@@ -189,8 +190,10 @@ pub async fn get_viewer(
                 user: None, // avoid duplication, user is in viewer
                 user_agent: session.user_agent.as_deref().map(parse_user_agent),
                 last_active_ip: session.last_active_ip.map(|ip| ip.to_string()),
-                last_active_at: session.last_active_at.map(|t| t.to_rfc3339()),
-                created_at: Some(session.created_at.to_rfc3339()),
+                last_active_at: session
+                    .last_active_at
+                    .map(pasion_data::clock::format_rfc3339),
+                created_at: Some(pasion_data::clock::format_rfc3339(session.created_at)),
             };
 
             (

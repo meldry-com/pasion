@@ -1,5 +1,5 @@
 use async_trait::async_trait;
-use chrono::{DateTime, Duration, Utc};
+use jiff::{SignedDuration, Timestamp};
 use pasion_data::{AccessToken, Clock, Session};
 use rand_core::RngCore;
 use ulid::Ulid;
@@ -64,7 +64,7 @@ pub trait OAuth2AccessTokenRepository: Send + Sync {
         clock: &dyn Clock,
         session: &Session,
         access_token: String,
-        expires_after: Option<Duration>,
+        expires_after: Option<SignedDuration>,
     ) -> Result<AccessToken, Self::Error>;
 
     /// Revoke an access token
@@ -118,10 +118,10 @@ pub trait OAuth2AccessTokenRepository: Send + Sync {
     /// Returns [`Self::Error`] if the underlying repository fails
     async fn cleanup_revoked(
         &mut self,
-        since: Option<DateTime<Utc>>,
-        until: DateTime<Utc>,
+        since: Option<Timestamp>,
+        until: Timestamp,
         limit: usize,
-    ) -> Result<(usize, Option<DateTime<Utc>>), Self::Error>;
+    ) -> Result<(usize, Option<Timestamp>), Self::Error>;
 
     /// Cleanup expired access tokens
     ///
@@ -140,10 +140,10 @@ pub trait OAuth2AccessTokenRepository: Send + Sync {
     /// Returns [`Self::Error`] if the underlying repository fails
     async fn cleanup_expired(
         &mut self,
-        since: Option<DateTime<Utc>>,
-        until: DateTime<Utc>,
+        since: Option<Timestamp>,
+        until: Timestamp,
         limit: usize,
-    ) -> Result<(usize, Option<DateTime<Utc>>), Self::Error>;
+    ) -> Result<(usize, Option<Timestamp>), Self::Error>;
 }
 
 repository_impl!(OAuth2AccessTokenRepository:
@@ -160,7 +160,7 @@ repository_impl!(OAuth2AccessTokenRepository:
         clock: &dyn Clock,
         session: &Session,
         access_token: String,
-        expires_after: Option<Duration>,
+        expires_after: Option<SignedDuration>,
     ) -> Result<AccessToken, Self::Error>;
 
     async fn revoke(
@@ -177,15 +177,15 @@ repository_impl!(OAuth2AccessTokenRepository:
 
     async fn cleanup_revoked(
         &mut self,
-        since: Option<DateTime<Utc>>,
-        until: DateTime<Utc>,
+        since: Option<Timestamp>,
+        until: Timestamp,
         limit: usize,
-    ) -> Result<(usize, Option<DateTime<Utc>>), Self::Error>;
+    ) -> Result<(usize, Option<Timestamp>), Self::Error>;
 
     async fn cleanup_expired(
         &mut self,
-        since: Option<DateTime<Utc>>,
-        until: DateTime<Utc>,
+        since: Option<Timestamp>,
+        until: Timestamp,
         limit: usize,
-    ) -> Result<(usize, Option<DateTime<Utc>>), Self::Error>;
+    ) -> Result<(usize, Option<Timestamp>), Self::Error>;
 );

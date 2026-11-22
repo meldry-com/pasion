@@ -15,6 +15,7 @@ use std::{
 use anyhow::Context as _;
 use arc_swap::ArcSwap;
 use camino::{Utf8Path, Utf8PathBuf};
+use jiff::Timestamp;
 use minijinja::{UndefinedBehavior, Value};
 use pasion_data::UrlBuilder;
 use pasion_i18n::Translator;
@@ -198,7 +199,7 @@ impl Templates {
     fn render_sample_set<C, R>(
         &self,
         template: &'static str,
-        now: chrono::DateTime<chrono::Utc>,
+        now: Timestamp,
         rng: &mut R,
     ) -> anyhow::Result<BTreeMap<SampleIdentifier, String>>
     where
@@ -469,7 +470,7 @@ impl Templates {
     /// Returns an error if any of the templates fails to render
     pub fn check_render<R: Rng + Clone>(
         &self,
-        now: chrono::DateTime<chrono::Utc>,
+        now: Timestamp,
         rng: &R,
     ) -> anyhow::Result<BTreeMap<(&'static str, SampleIdentifier), String>> {
         check::all(self, now, rng)
@@ -478,7 +479,7 @@ impl Templates {
 
 #[cfg(test)]
 mod tests {
-    use chrono::Duration;
+    use jiff::SignedDuration;
     use pasion_data::UserEmailAuthenticationCode;
     use rand_core::SeedableRng;
 
@@ -497,7 +498,7 @@ mod tests {
     #[tokio::test]
     async fn check_builtin_templates() {
         #[allow(clippy::disallowed_methods)]
-        let now = chrono::Utc::now();
+        let now = Timestamp::now();
         let rng = rand_chacha::ChaCha8Rng::from_seed([42; 32]);
 
         let path = Utf8Path::new(env!("CARGO_MANIFEST_DIR")).join("../../templates/");
@@ -534,7 +535,7 @@ mod tests {
     #[tokio::test]
     async fn verification_email_renders_instance_identifiers_in_english() {
         #[allow(clippy::disallowed_methods)]
-        let now = chrono::Utc::now();
+        let now = Timestamp::now();
         let mut rng = rand_chacha::ChaCha8Rng::from_seed([7; 32]);
 
         let path = Utf8Path::new(env!("CARGO_MANIFEST_DIR")).join("../../templates/");
@@ -567,8 +568,8 @@ mod tests {
                 id: pasion_data::new_id(now, &mut rng),
                 user_email_authentication_id: pasion_data::new_id(now, &mut rng),
                 code: "654321".to_owned(),
-                created_at: now - Duration::minutes(1),
-                expires_at: now + Duration::minutes(4),
+                created_at: now - SignedDuration::from_mins(1),
+                expires_at: now + SignedDuration::from_mins(4),
             },
             None,
             None,

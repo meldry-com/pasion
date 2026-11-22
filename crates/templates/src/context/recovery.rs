@@ -2,6 +2,7 @@
 
 use std::collections::BTreeMap;
 
+use jiff::Timestamp;
 use pasion_data::{User, UserRecoverySession};
 use rand_core::RngCore as Rng;
 use serde::{Deserialize, Serialize};
@@ -47,7 +48,7 @@ impl RecoveryStartContext {
 
 impl TemplateContext for RecoveryStartContext {
     fn sample<R: Rng>(
-        _now: chrono::DateTime<chrono::Utc>,
+        _now: Timestamp,
         _rng: &mut R,
         _locales: &[pasion_i18n::DataLocale],
     ) -> BTreeMap<SampleIdentifier, Self> {
@@ -88,7 +89,7 @@ impl RecoveryProgressContext {
 
 impl TemplateContext for RecoveryProgressContext {
     fn sample<R: Rng>(
-        now: chrono::DateTime<chrono::Utc>,
+        now: Timestamp,
         rng: &mut R,
         _locales: &[pasion_i18n::DataLocale],
     ) -> BTreeMap<SampleIdentifier, Self> {
@@ -133,7 +134,7 @@ impl RecoveryExpiredContext {
 
 impl TemplateContext for RecoveryExpiredContext {
     fn sample<R: Rng>(
-        now: chrono::DateTime<chrono::Utc>,
+        now: Timestamp,
         rng: &mut R,
         _locales: &[pasion_i18n::DataLocale],
     ) -> BTreeMap<SampleIdentifier, Self> {
@@ -195,7 +196,7 @@ impl RecoveryFinishContext {
 
 impl TemplateContext for RecoveryFinishContext {
     fn sample<R: Rng>(
-        now: chrono::DateTime<chrono::Utc>,
+        now: Timestamp,
         rng: &mut R,
         _locales: &[pasion_i18n::DataLocale],
     ) -> BTreeMap<SampleIdentifier, Self> {

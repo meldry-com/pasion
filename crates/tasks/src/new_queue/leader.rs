@@ -1,7 +1,7 @@
-use chrono::Duration;
-use cron::Schedule;
 use diesel::{sql_query, sql_types::Bool};
 use diesel_async::RunQueryDsl;
+use jiff::SignedDuration;
+use jiff_cron::Schedule;
 use pasion_data::{
     DatabaseError, PgRepository, RepositoryAccess, advisory_lock::advisory_lock_key,
     queue::InsertableJob,
@@ -64,7 +64,7 @@ async fn recover_abandoned_jobs(
 ) -> Result<(), QueueRunnerError> {
     let dead_workers = repo
         .queue_worker()
-        .shutdown_dead_workers(clock, Duration::minutes(2))
+        .shutdown_dead_workers(clock, SignedDuration::from_mins(2))
         .await?;
 
     match dead_workers.len() {
@@ -97,7 +97,7 @@ async fn recover_abandoned_jobs(
     for job in abandoned_jobs {
         if job.attempt < MAX_ATTEMPTS {
             repo.queue_job()
-                .retry(rng, clock, job.id, Duration::zero())
+                .retry(rng, clock, job.id, SignedDuration::ZERO)
                 .await?;
             recovered_jobs += 1;
 
@@ -198,7 +198,14 @@ pub(super) async fn run_leader_duties(
             }
         }
 
-        let next_tick = schedule.expression.after(&now).next().unwrap();
+        let Some(next) = schedule
+            .expression
+            .after(now.to_zoned(jiff::tz::TimeZone::UTC))
+            .next()
+        else {
+            continue;
+        };
+        let next_tick = next.timestamp();
 
         tracing::info!(
             "Scheduling job for {}, next run at {}",
@@ -235,7 +242,6 @@ pub(super) async fn run_leader_duties(
 
 #[cfg(test)]
 mod tests {
-    use chrono::Utc;
     use pasion_data::queue::ScheduleStatus;
 
     use super::{ScheduleDefinition, missing_schedule_names};
@@ -255,7 +261,7 @@ mod tests {
         let statuses = vec![
             ScheduleStatus {
                 schedule_name: "alpha".to_owned(),
-                last_scheduled_at: Some(Utc::now()),
+                last_scheduled_at: Some(jiff::Timestamp::now()),
                 last_scheduled_job_completed: Some(true),
             },
             ScheduleStatus {

@@ -109,7 +109,7 @@ pub fn may_hold_admin_scope(user: Option<&pasion_data::User>) -> bool {
 ///
 /// Drop-in replacement for `(StatusCode, Json<T>)` tuples that works with
 /// Salvo's `#[endpoint]` macro by implementing both [`Scribe`] and
-/// [`salvo::oapi::EndpointOutRegister`].
+/// [`salvo_oapi::EndpointOutRegister`].
 pub struct CreatedJson<T: Serialize + Send>(pub T);
 
 impl<T: Serialize + Send> Scribe for CreatedJson<T> {
@@ -119,16 +119,16 @@ impl<T: Serialize + Send> Scribe for CreatedJson<T> {
     }
 }
 
-impl<T: Serialize + Send + salvo::oapi::ToSchema + 'static> salvo::oapi::EndpointOutRegister
+impl<T: Serialize + Send + salvo_oapi::ToSchema + 'static> salvo_oapi::EndpointOutRegister
     for CreatedJson<T>
 {
-    fn register(components: &mut salvo::oapi::Components, operation: &mut salvo::oapi::Operation) {
+    fn register(components: &mut salvo_oapi::Components, operation: &mut salvo_oapi::Operation) {
         let schema = T::to_schema(components);
-        let response = salvo::oapi::Response::new("Created")
-            .add_content("application/json", salvo::oapi::Content::new(schema));
+        let response = salvo_oapi::Response::new("Created")
+            .add_content("application/json", salvo_oapi::Content::new(schema));
         operation
             .responses
-            .insert("201", salvo::oapi::RefOr::Type(response));
+            .insert("201", salvo_oapi::RefOr::Type(response));
     }
 }
 

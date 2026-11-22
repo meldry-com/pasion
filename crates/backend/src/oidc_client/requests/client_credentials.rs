@@ -16,7 +16,6 @@
 //!
 //! [Client Credentials flow]: https://www.rfc-editor.org/rfc/rfc6749#section-4.4
 
-use chrono::{DateTime, Utc};
 use oauth2_types::{
     requests::{AccessTokenRequest, AccessTokenResponse, ClientCredentialsGrant},
     scope::Scope,
@@ -55,7 +54,7 @@ pub async fn access_token_with_client_credentials(
     client_credentials: ClientCredentials,
     token_endpoint: &Url,
     scope: Option<Scope>,
-    now: DateTime<Utc>,
+    now: jiff::Timestamp,
     rng: &mut impl Rng,
 ) -> Result<AccessTokenResponse, TokenRequestError> {
     tracing::debug!("Requesting access token with client credentials...");

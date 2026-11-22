@@ -1,6 +1,6 @@
 pub mod session;
 
-use chrono::{DateTime, Utc};
+use jiff::Timestamp;
 use ulid::Ulid;
 
 /// A bearer token that grants access to a
@@ -12,18 +12,18 @@ pub struct PersonalAccessToken {
     /// The session this token authenticates.
     pub session_id: Ulid,
     /// When the token was issued.
-    pub created_at: DateTime<Utc>,
+    pub created_at: Timestamp,
     /// Optional hard expiry; `None` means the token lives until revoked.
-    pub expires_at: Option<DateTime<Utc>>,
+    pub expires_at: Option<Timestamp>,
     /// Set when the token is explicitly revoked; `None` while active.
-    pub revoked_at: Option<DateTime<Utc>>,
+    pub revoked_at: Option<Timestamp>,
 }
 
 impl PersonalAccessToken {
     /// A token is valid when it has not been revoked and, if it carries an
     /// expiry, that expiry has not yet passed.
     #[must_use]
-    pub fn is_valid(&self, now: DateTime<Utc>) -> bool {
+    pub fn is_valid(&self, now: Timestamp) -> bool {
         if self.revoked_at.is_some() {
             return false;
         }

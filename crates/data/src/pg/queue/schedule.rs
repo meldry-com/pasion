@@ -2,15 +2,11 @@
 //! [`QueueScheduleRepository`].
 
 use async_trait::async_trait;
-use chrono::{DateTime, Utc};
-use diesel::{
-    prelude::*,
-    sql_types::{Array, Bool, Nullable, Text, Timestamptz},
-};
+use diesel::sql_types::{Array, Text};
 use diesel_async::RunQueryDsl;
 use pasion_data::queue::{QueueScheduleRepository, ScheduleStatus};
 
-use crate::DatabaseError;
+use crate::{DatabaseError, pg::query_rows::ScheduleLookup};
 
 /// An implementation of [`QueueScheduleRepository`] for a PostgreSQL
 /// connection.
@@ -27,22 +23,11 @@ impl<'c> PgQueueScheduleRepository<'c> {
     }
 }
 
-/// Row returned from the schedule list query.
-#[derive(Debug, QueryableByName)]
-struct ScheduleLookup {
-    #[diesel(sql_type = Text)]
-    schedule_name: String,
-    #[diesel(sql_type = Nullable<Timestamptz>)]
-    last_scheduled_at: Option<DateTime<Utc>>,
-    #[diesel(sql_type = Nullable<Bool>)]
-    last_scheduled_job_completed: Option<bool>,
-}
-
 impl From<ScheduleLookup> for ScheduleStatus {
     fn from(value: ScheduleLookup) -> Self {
         ScheduleStatus {
             schedule_name: value.schedule_name,
-            last_scheduled_at: value.last_scheduled_at,
+            last_scheduled_at: value.last_scheduled_at.map(jiff_diesel::Timestamp::to_jiff),
             last_scheduled_job_completed: value.last_scheduled_job_completed,
         }
     }

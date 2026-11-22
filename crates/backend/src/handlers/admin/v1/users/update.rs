@@ -5,6 +5,7 @@
 //! Update endpoint: `PATCH /users/{id}`.
 
 use salvo::prelude::*;
+use salvo_oapi::endpoint;
 use schemars::JsonSchema;
 use serde::Deserialize;
 

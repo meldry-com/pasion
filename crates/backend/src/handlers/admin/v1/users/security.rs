@@ -9,7 +9,8 @@
 //! grouped here to keep the security-sensitive code paths together.
 
 use pasion_data::audit::{AdminOperation, NewAdminOperationLog};
-use salvo::{http::StatusCode, oapi::ToSchema, prelude::*};
+use salvo::{http::StatusCode, prelude::*};
+use salvo_oapi::{ToSchema, endpoint};
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use zeroize::Zeroizing;

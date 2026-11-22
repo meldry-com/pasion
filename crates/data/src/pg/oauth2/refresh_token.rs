@@ -1,13 +1,17 @@
 use async_trait::async_trait;
-use chrono::{DateTime, Utc};
 use diesel::prelude::*;
 use diesel_async::RunQueryDsl;
+use jiff::Timestamp;
+use jiff_diesel::ToDiesel as _;
 use pasion_data::{AccessToken, Clock, RefreshToken, RefreshTokenState, Session, new_id};
 use rand_core::RngCore;
 use ulid::Ulid;
 use uuid::Uuid;
 
-use crate::{DatabaseError, DatabaseInconsistencyError, schema::oauth2_refresh_tokens};
+use crate::{
+    DatabaseError, DatabaseInconsistencyError, pg::query_rows::CleanupResult,
+    schema::oauth2_refresh_tokens,
+};
 
 /// An implementation of [`OAuth2RefreshTokenRepository`] for a PostgreSQL
 /// connection
@@ -29,9 +33,12 @@ impl<'c> PgOAuth2RefreshTokenRepository<'c> {
 struct OAuth2RefreshTokenRow {
     id: Uuid,
     refresh_token: String,
-    created_at: DateTime<Utc>,
-    consumed_at: Option<DateTime<Utc>>,
-    revoked_at: Option<DateTime<Utc>>,
+    #[diesel(deserialize_as = jiff_diesel::Timestamp)]
+    created_at: Timestamp,
+    #[diesel(deserialize_as = jiff_diesel::NullableTimestamp)]
+    consumed_at: Option<Timestamp>,
+    #[diesel(deserialize_as = jiff_diesel::NullableTimestamp)]
+    revoked_at: Option<Timestamp>,
     oauth2_access_token_id: Option<Uuid>,
     oauth2_session_id: Uuid,
     next_oauth2_refresh_token_id: Option<Uuid>,
@@ -83,16 +90,8 @@ struct NewOAuth2RefreshToken {
     oauth2_session_id: Uuid,
     oauth2_access_token_id: Uuid,
     refresh_token: String,
-    created_at: DateTime<Utc>,
-}
-
-/// Row type for cleanup query results via raw SQL
-#[derive(Debug, QueryableByName)]
-struct CleanupResult {
-    #[diesel(sql_type = diesel::sql_types::BigInt)]
-    count: i64,
-    #[diesel(sql_type = diesel::sql_types::Nullable<diesel::sql_types::Timestamptz>)]
-    last_ts: Option<DateTime<Utc>>,
+    #[diesel(serialize_as = jiff_diesel::Timestamp)]
+    created_at: Timestamp,
 }
 
 #[async_trait]
@@ -166,7 +165,7 @@ impl pasion_data::oauth2::OAuth2RefreshTokenRepository for PgOAuth2RefreshTokenR
         };
 
         diesel::insert_into(oauth2_refresh_tokens::table)
-            .values(&new_row)
+            .values(new_row)
             .execute(self.conn)
             .await?;
 
@@ -199,7 +198,7 @@ impl pasion_data::oauth2::OAuth2RefreshTokenRepository for PgOAuth2RefreshTokenR
         let rows_affected =
             diesel::update(oauth2_refresh_tokens::table.find(Uuid::from(refresh_token.id)))
                 .set((
-                    oauth2_refresh_tokens::consumed_at.eq(Some(consumed_at)),
+                    oauth2_refresh_tokens::consumed_at.eq(Some(consumed_at).to_diesel()),
                     oauth2_refresh_tokens::next_oauth2_refresh_token_id
                         .eq(Some(Uuid::from(replaced_by.id))),
                 ))
@@ -230,7 +229,7 @@ impl pasion_data::oauth2::OAuth2RefreshTokenRepository for PgOAuth2RefreshTokenR
         let revoked_at = clock.now();
         let rows_affected =
             diesel::update(oauth2_refresh_tokens::table.find(Uuid::from(refresh_token.id)))
-                .set(oauth2_refresh_tokens::revoked_at.eq(Some(revoked_at)))
+                .set(oauth2_refresh_tokens::revoked_at.eq(Some(revoked_at).to_diesel()))
                 .execute(self.conn)
                 .await?;
 
@@ -244,10 +243,10 @@ impl pasion_data::oauth2::OAuth2RefreshTokenRepository for PgOAuth2RefreshTokenR
     #[tracing::instrument(name = "db.oauth2_refresh_token.cleanup_revoked", skip_all, err)]
     async fn cleanup_revoked(
         &mut self,
-        since: Option<DateTime<Utc>>,
-        until: DateTime<Utc>,
+        since: Option<Timestamp>,
+        until: Timestamp,
         limit: usize,
-    ) -> Result<(usize, Option<DateTime<Utc>>), Self::Error> {
+    ) -> Result<(usize, Option<Timestamp>), Self::Error> {
         let limit_i64 = i64::try_from(limit).unwrap_or(i64::MAX);
 
         let res: CleanupResult = diesel::sql_query(
@@ -277,22 +276,25 @@ impl pasion_data::oauth2::OAuth2RefreshTokenRepository for PgOAuth2RefreshTokenR
                 FROM deleted
             ",
         )
-        .bind::<diesel::sql_types::Nullable<diesel::sql_types::Timestamptz>, _>(since)
-        .bind::<diesel::sql_types::Timestamptz, _>(until)
+        .bind::<diesel::sql_types::Nullable<diesel::sql_types::Timestamptz>, _>(since.to_diesel())
+        .bind::<diesel::sql_types::Timestamptz, _>(until.to_diesel())
         .bind::<diesel::sql_types::BigInt, _>(limit_i64)
         .get_result(self.conn)
         .await?;
 
-        Ok((res.count.try_into().unwrap_or(usize::MAX), res.last_ts))
+        Ok((
+            res.count.try_into().unwrap_or(usize::MAX),
+            res.last_ts.map(jiff_diesel::Timestamp::to_jiff),
+        ))
     }
 
     #[tracing::instrument(name = "db.oauth2_refresh_token.cleanup_consumed", skip_all, err)]
     async fn cleanup_consumed(
         &mut self,
-        since: Option<DateTime<Utc>>,
-        until: DateTime<Utc>,
+        since: Option<Timestamp>,
+        until: Timestamp,
         limit: usize,
-    ) -> Result<(usize, Option<DateTime<Utc>>), Self::Error> {
+    ) -> Result<(usize, Option<Timestamp>), Self::Error> {
         let limit_i64 = i64::try_from(limit).unwrap_or(i64::MAX);
 
         let res: CleanupResult = diesel::sql_query(
@@ -324,12 +326,15 @@ impl pasion_data::oauth2::OAuth2RefreshTokenRepository for PgOAuth2RefreshTokenR
                 FROM deleted
             ",
         )
-        .bind::<diesel::sql_types::Nullable<diesel::sql_types::Timestamptz>, _>(since)
-        .bind::<diesel::sql_types::Timestamptz, _>(until)
+        .bind::<diesel::sql_types::Nullable<diesel::sql_types::Timestamptz>, _>(since.to_diesel())
+        .bind::<diesel::sql_types::Timestamptz, _>(until.to_diesel())
         .bind::<diesel::sql_types::BigInt, _>(limit_i64)
         .get_result(self.conn)
         .await?;
 
-        Ok((res.count.try_into().unwrap_or(usize::MAX), res.last_ts))
+        Ok((
+            res.count.try_into().unwrap_or(usize::MAX),
+            res.last_ts.map(jiff_diesel::Timestamp::to_jiff),
+        ))
     }
 }

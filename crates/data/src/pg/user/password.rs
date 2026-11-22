@@ -1,5 +1,4 @@
 use async_trait::async_trait;
-use chrono::{DateTime, Utc};
 use diesel::prelude::*;
 use diesel_async::RunQueryDsl;
 use pasion_data::{Clock, Password, User, new_id, user::UserPasswordRepository};
@@ -29,7 +28,8 @@ struct UserPasswordLookup {
     hashed_password: String,
     version: i32,
     upgraded_from_id: Option<Uuid>,
-    created_at: DateTime<Utc>,
+    #[diesel(deserialize_as = jiff_diesel::Timestamp)]
+    created_at: jiff::Timestamp,
 }
 
 #[derive(Insertable)]
@@ -40,7 +40,8 @@ struct NewUserPassword {
     hashed_password: String,
     version: i32,
     upgraded_from_id: Option<Uuid>,
-    created_at: DateTime<Utc>,
+    #[diesel(serialize_as = jiff_diesel::Timestamp)]
+    created_at: jiff::Timestamp,
 }
 
 #[async_trait]
@@ -125,7 +126,7 @@ impl UserPasswordRepository for PgUserPasswordRepository<'_> {
         };
 
         diesel::insert_into(user_passwords::table)
-            .values(&new_password)
+            .values(new_password)
             .execute(self.conn)
             .await?;
 

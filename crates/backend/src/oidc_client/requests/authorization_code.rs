@@ -19,7 +19,6 @@
 use std::{collections::HashSet, num::NonZeroU32};
 
 use base64ct::{Base64UrlUnpadded, Encoding};
-use chrono::{DateTime, Utc};
 use language_tags::LanguageTag;
 use oauth2_types::{
     pkce,
@@ -428,7 +427,7 @@ pub async fn access_token_with_authorization_code(
     code: String,
     validation_data: AuthorizationValidationData,
     id_token_verification_data: Option<JwtVerificationData<'_>>,
-    now: DateTime<Utc>,
+    now: jiff::Timestamp,
     rng: &mut impl Rng,
 ) -> Result<(AccessTokenResponse, Option<IdToken<'static>>), TokenAuthorizationCodeError> {
     tracing::debug!("Exchanging authorization code for access token...");

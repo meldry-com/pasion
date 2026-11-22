@@ -1,3 +1,5 @@
+mod stdout;
+
 use std::sync::{LazyLock, OnceLock};
 
 use anyhow::Context as _;
@@ -114,7 +116,7 @@ fn init_tracer(config: &TracingConfig) -> anyhow::Result<()> {
             .build(),
 
         TracingExporterKind::Stdout => {
-            let exporter = opentelemetry_stdout::SpanExporter::default();
+            let exporter = stdout::Exporter::default();
             tracer_provider_builder
                 .with_simple_exporter(exporter)
                 .build()
@@ -167,8 +169,8 @@ fn otlp_metric_reader(
     Ok(reader)
 }
 
-fn stdout_metric_reader() -> PeriodicReader<opentelemetry_stdout::MetricExporter> {
-    let exporter = opentelemetry_stdout::MetricExporter::builder().build();
+fn stdout_metric_reader() -> PeriodicReader<stdout::Exporter> {
+    let exporter = stdout::Exporter::default();
     PeriodicReader::builder(exporter, opentelemetry_sdk::runtime::Tokio).build()
 }
 

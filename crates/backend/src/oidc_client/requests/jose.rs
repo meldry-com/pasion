@@ -16,7 +16,6 @@
 
 use std::collections::HashMap;
 
-use chrono::{DateTime, Utc};
 use pasion_iana::jose::JsonWebSignatureAlg;
 use pasion_jose::{
     claims::{self, TimeOptions},
@@ -176,7 +175,7 @@ pub fn verify_id_token<'a>(
     id_token: &'a str,
     verification_data: JwtVerificationData<'_>,
     auth_id_token: Option<&IdToken<'_>>,
-    now: DateTime<Utc>,
+    now: jiff::Timestamp,
 ) -> Result<IdToken<'a>, IdTokenError> {
     let id_token = verify_signed_jwt(id_token, verification_data)?;
 

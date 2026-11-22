@@ -7,7 +7,8 @@ use pasion_data::{
     queue::{QueueJobRepositoryExt as _, SyncDevicesJob},
     user::UserRepository,
 };
-use salvo::{oapi::ToSchema, prelude::*};
+use salvo::prelude::*;
+use salvo_oapi::{ToSchema, endpoint};
 use serde::Serialize;
 
 use super::{

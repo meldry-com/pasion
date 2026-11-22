@@ -5,12 +5,6 @@ default_platform = "web"
 [web.app]
 title = "Pasion"
 
-[web.resource]
-style = ["assets/main.css"]
-
-[web.resource.dev]
-style = ["assets/main.css"]
-
 [web.watcher]
 reload_html = true
 watch_path = ["src", "assets"]

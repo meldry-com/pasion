@@ -8,7 +8,6 @@
 //! At runtime a [`FlowSession`] tracks the user's progress through the stages,
 //! accumulating context data that later stages can reference.
 
-use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
@@ -63,9 +62,9 @@ pub struct FlowDefinition {
     /// looks for templates under this key instead of the default.
     pub template_override: Option<String>,
     /// Timestamp when this definition was created.
-    pub created_at: DateTime<Utc>,
+    pub created_at: jiff::Timestamp,
     /// Timestamp when this definition was last modified.
-    pub updated_at: DateTime<Utc>,
+    pub updated_at: jiff::Timestamp,
 }
 
 // ---------------------------------------------------------------------------
@@ -214,7 +213,7 @@ pub struct FlowStageBinding {
     /// evaluates this to decide whether the stage should run.
     pub policy_expression: Option<Value>,
     /// Timestamp when this binding was created.
-    pub created_at: DateTime<Utc>,
+    pub created_at: jiff::Timestamp,
 }
 
 // ---------------------------------------------------------------------------
@@ -243,13 +242,13 @@ pub struct FlowSession {
     /// User agent string of the user's browser/client.
     pub user_agent: Option<String>,
     /// Timestamp when this session was created.
-    pub created_at: DateTime<Utc>,
+    pub created_at: jiff::Timestamp,
     /// Timestamp when this session was last updated.
-    pub updated_at: DateTime<Utc>,
+    pub updated_at: jiff::Timestamp,
     /// Timestamp when this session expires.
-    pub expires_at: DateTime<Utc>,
+    pub expires_at: jiff::Timestamp,
     /// Timestamp when the session reached a terminal status, if any.
-    pub completed_at: Option<DateTime<Utc>>,
+    pub completed_at: Option<jiff::Timestamp>,
 }
 
 /// Flow session lifecycle status.

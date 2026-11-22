@@ -126,7 +126,7 @@ pub trait UserPhoneRepository: Send + Sync {
         &mut self,
         rng: &mut (dyn RngCore + Send),
         clock: &dyn Clock,
-        duration: chrono::Duration,
+        duration: jiff::SignedDuration,
         authentication: &UserPhoneAuthentication,
         code: String,
     ) -> Result<UserPhoneAuthenticationCode, Self::Error>;
@@ -209,7 +209,7 @@ repository_impl!(UserPhoneRepository:
         &mut self,
         rng: &mut (dyn RngCore + Send),
         clock: &dyn Clock,
-        duration: chrono::Duration,
+        duration: jiff::SignedDuration,
         authentication: &UserPhoneAuthentication,
         code: String,
     ) -> Result<UserPhoneAuthenticationCode, Self::Error>;

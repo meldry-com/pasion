@@ -18,7 +18,7 @@ pub struct FormPostContext<T> {
 
 impl<T: TemplateContext> TemplateContext for FormPostContext<T> {
     fn sample<R: Rng>(
-        now: chrono::DateTime<chrono::Utc>,
+        now: jiff::Timestamp,
         rng: &mut R,
         locales: &[DataLocale],
     ) -> BTreeMap<SampleIdentifier, Self> {

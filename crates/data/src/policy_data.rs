@@ -1,4 +1,3 @@
-use chrono::{DateTime, Utc};
 use serde::Serialize;
 use ulid::Ulid;
 
@@ -10,7 +9,7 @@ pub struct PolicyData {
     /// Unique identifier for this policy data revision.
     pub id: Ulid,
     /// When this revision was persisted.
-    pub created_at: DateTime<Utc>,
+    pub created_at: jiff::Timestamp,
     /// Arbitrary policy payload consumed by the policy engine.
     pub data: serde_json::Value,
 }

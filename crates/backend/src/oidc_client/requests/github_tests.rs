@@ -3,7 +3,6 @@
 
 use std::collections::HashMap;
 
-use chrono::Utc;
 use oauth2_types::requests::{AccessTokenRequest, AuthorizationCodeGrant};
 use rand_core::SeedableRng;
 use serde_json::{Value, json};
@@ -150,7 +149,7 @@ async fn full_github_exchange_against_mock_provider() {
             redirect_uri: Some("http://localhost/cb".into()),
             code_verifier: None,
         }),
-        Utc::now(),
+        jiff::Timestamp::now(),
         &mut rng,
     )
     .await

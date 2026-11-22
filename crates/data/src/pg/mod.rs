@@ -37,6 +37,7 @@ mod errors;
 /// PostgreSQL notification template version repository.
 pub mod notification_template;
 pub mod policy_data;
+mod query_rows;
 pub(crate) mod repository;
 pub(crate) mod telemetry;
 /// Test utilities for creating temporary test databases.

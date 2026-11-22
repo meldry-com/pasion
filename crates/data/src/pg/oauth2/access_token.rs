@@ -1,13 +1,14 @@
 use async_trait::async_trait;
-use chrono::{DateTime, Duration, Utc};
 use diesel::prelude::*;
 use diesel_async::RunQueryDsl;
+use jiff::{SignedDuration, Timestamp};
+use jiff_diesel::ToDiesel as _;
 use pasion_data::{AccessToken, AccessTokenState, Clock, Session, new_id};
 use rand_core::RngCore;
 use ulid::Ulid;
 use uuid::Uuid;
 
-use crate::{DatabaseError, schema::oauth2_access_tokens};
+use crate::{DatabaseError, pg::query_rows::CleanupResult, schema::oauth2_access_tokens};
 
 /// An implementation of [`OAuth2AccessTokenRepository`] for a PostgreSQL
 /// connection
@@ -30,10 +31,14 @@ struct OAuth2AccessTokenRow {
     id: Uuid,
     oauth2_session_id: Uuid,
     access_token: String,
-    created_at: DateTime<Utc>,
-    expires_at: Option<DateTime<Utc>>,
-    revoked_at: Option<DateTime<Utc>>,
-    first_used_at: Option<DateTime<Utc>>,
+    #[diesel(deserialize_as = jiff_diesel::Timestamp)]
+    created_at: Timestamp,
+    #[diesel(deserialize_as = jiff_diesel::NullableTimestamp)]
+    expires_at: Option<Timestamp>,
+    #[diesel(deserialize_as = jiff_diesel::NullableTimestamp)]
+    revoked_at: Option<Timestamp>,
+    #[diesel(deserialize_as = jiff_diesel::NullableTimestamp)]
+    first_used_at: Option<Timestamp>,
 }
 
 impl From<OAuth2AccessTokenRow> for AccessToken {
@@ -62,17 +67,9 @@ struct NewOAuth2AccessToken {
     id: Uuid,
     oauth2_session_id: Uuid,
     access_token: String,
-    created_at: DateTime<Utc>,
-    expires_at: Option<DateTime<Utc>>,
-}
-
-/// Row type for cleanup query results via raw SQL
-#[derive(Debug, QueryableByName)]
-struct CleanupResult {
-    #[diesel(sql_type = diesel::sql_types::BigInt)]
-    count: i64,
-    #[diesel(sql_type = diesel::sql_types::Nullable<diesel::sql_types::Timestamptz>)]
-    last_ts: Option<DateTime<Utc>>,
+    #[diesel(serialize_as = jiff_diesel::Timestamp)]
+    created_at: Timestamp,
+    expires_at: Option<jiff_diesel::Timestamp>,
 }
 
 #[async_trait]
@@ -127,7 +124,7 @@ impl pasion_data::oauth2::OAuth2AccessTokenRepository for PgOAuth2AccessTokenRep
         clock: &dyn Clock,
         session: &Session,
         access_token: String,
-        expires_after: Option<Duration>,
+        expires_after: Option<SignedDuration>,
     ) -> Result<AccessToken, Self::Error> {
         let created_at = clock.now();
         let expires_at = expires_after.map(|d| created_at + d);
@@ -140,11 +137,11 @@ impl pasion_data::oauth2::OAuth2AccessTokenRepository for PgOAuth2AccessTokenRep
             oauth2_session_id: Uuid::from(session.id),
             access_token: access_token.clone(),
             created_at,
-            expires_at,
+            expires_at: expires_at.map(jiff_diesel::Timestamp::from),
         };
 
         diesel::insert_into(oauth2_access_tokens::table)
-            .values(&new_row)
+            .values(new_row)
             .execute(self.conn)
             .await?;
 
@@ -176,7 +173,7 @@ impl pasion_data::oauth2::OAuth2AccessTokenRepository for PgOAuth2AccessTokenRep
         let revoked_at = clock.now();
         let rows_affected =
             diesel::update(oauth2_access_tokens::table.find(Uuid::from(access_token.id)))
-                .set(oauth2_access_tokens::revoked_at.eq(Some(revoked_at)))
+                .set(oauth2_access_tokens::revoked_at.eq(Some(revoked_at).to_diesel()))
                 .execute(self.conn)
                 .await?;
 
@@ -204,7 +201,7 @@ impl pasion_data::oauth2::OAuth2AccessTokenRepository for PgOAuth2AccessTokenRep
         let now = clock.now();
         let rows_affected =
             diesel::update(oauth2_access_tokens::table.find(Uuid::from(access_token.id)))
-                .set(oauth2_access_tokens::first_used_at.eq(Some(now)))
+                .set(oauth2_access_tokens::first_used_at.eq(Some(now).to_diesel()))
                 .execute(self.conn)
                 .await?;
 
@@ -227,10 +224,10 @@ impl pasion_data::oauth2::OAuth2AccessTokenRepository for PgOAuth2AccessTokenRep
     )]
     async fn cleanup_revoked(
         &mut self,
-        since: Option<DateTime<Utc>>,
-        until: DateTime<Utc>,
+        since: Option<Timestamp>,
+        until: Timestamp,
         limit: usize,
-    ) -> Result<(usize, Option<DateTime<Utc>>), Self::Error> {
+    ) -> Result<(usize, Option<Timestamp>), Self::Error> {
         let limit_i64 = i64::try_from(limit).unwrap_or(i64::MAX);
 
         let res: CleanupResult = diesel::sql_query(
@@ -260,13 +257,16 @@ impl pasion_data::oauth2::OAuth2AccessTokenRepository for PgOAuth2AccessTokenRep
                 FROM deleted
             ",
         )
-        .bind::<diesel::sql_types::Nullable<diesel::sql_types::Timestamptz>, _>(since)
-        .bind::<diesel::sql_types::Timestamptz, _>(until)
+        .bind::<diesel::sql_types::Nullable<diesel::sql_types::Timestamptz>, _>(since.to_diesel())
+        .bind::<diesel::sql_types::Timestamptz, _>(until.to_diesel())
         .bind::<diesel::sql_types::BigInt, _>(limit_i64)
         .get_result(self.conn)
         .await?;
 
-        Ok((res.count.try_into().unwrap_or(usize::MAX), res.last_ts))
+        Ok((
+            res.count.try_into().unwrap_or(usize::MAX),
+            res.last_ts.map(jiff_diesel::Timestamp::to_jiff),
+        ))
     }
 
     #[tracing::instrument(
@@ -281,10 +281,10 @@ impl pasion_data::oauth2::OAuth2AccessTokenRepository for PgOAuth2AccessTokenRep
     )]
     async fn cleanup_expired(
         &mut self,
-        since: Option<DateTime<Utc>>,
-        until: DateTime<Utc>,
+        since: Option<Timestamp>,
+        until: Timestamp,
         limit: usize,
-    ) -> Result<(usize, Option<DateTime<Utc>>), Self::Error> {
+    ) -> Result<(usize, Option<Timestamp>), Self::Error> {
         let limit_i64 = i64::try_from(limit).unwrap_or(i64::MAX);
 
         let res: CleanupResult = diesel::sql_query(
@@ -314,12 +314,15 @@ impl pasion_data::oauth2::OAuth2AccessTokenRepository for PgOAuth2AccessTokenRep
                 FROM deleted
             ",
         )
-        .bind::<diesel::sql_types::Nullable<diesel::sql_types::Timestamptz>, _>(since)
-        .bind::<diesel::sql_types::Timestamptz, _>(until)
+        .bind::<diesel::sql_types::Nullable<diesel::sql_types::Timestamptz>, _>(since.to_diesel())
+        .bind::<diesel::sql_types::Timestamptz, _>(until.to_diesel())
         .bind::<diesel::sql_types::BigInt, _>(limit_i64)
         .get_result(self.conn)
         .await?;
 
-        Ok((res.count.try_into().unwrap_or(usize::MAX), res.last_ts))
+        Ok((
+            res.count.try_into().unwrap_or(usize::MAX),
+            res.last_ts.map(jiff_diesel::Timestamp::to_jiff),
+        ))
     }
 }

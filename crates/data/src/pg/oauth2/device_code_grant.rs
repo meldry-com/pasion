@@ -1,8 +1,9 @@
 use async_trait::async_trait;
-use chrono::{DateTime, Utc};
 use diesel::prelude::*;
 use diesel_async::RunQueryDsl;
 use ipnetwork::IpNetwork;
+use jiff::Timestamp;
+use jiff_diesel::ToDiesel as _;
 use oauth2_types::scope::Scope;
 use pasion_data::{
     BrowserSession, Clock, DeviceCodeGrant, DeviceCodeGrantState, Session, new_id,
@@ -38,11 +39,16 @@ struct OAuth2DeviceGrantLookup {
     scope: String,
     device_code: String,
     user_code: String,
-    created_at: DateTime<Utc>,
-    expires_at: DateTime<Utc>,
-    fulfilled_at: Option<DateTime<Utc>>,
-    rejected_at: Option<DateTime<Utc>>,
-    exchanged_at: Option<DateTime<Utc>>,
+    #[diesel(deserialize_as = jiff_diesel::Timestamp)]
+    created_at: Timestamp,
+    #[diesel(deserialize_as = jiff_diesel::Timestamp)]
+    expires_at: Timestamp,
+    #[diesel(deserialize_as = jiff_diesel::NullableTimestamp)]
+    fulfilled_at: Option<Timestamp>,
+    #[diesel(deserialize_as = jiff_diesel::NullableTimestamp)]
+    rejected_at: Option<Timestamp>,
+    #[diesel(deserialize_as = jiff_diesel::NullableTimestamp)]
+    exchanged_at: Option<Timestamp>,
     user_session_id: Option<Uuid>,
     oauth2_session_id: Option<Uuid>,
     ip_address: Option<IpNetwork>,
@@ -143,8 +149,10 @@ struct NewDeviceCodeGrant {
     scope: String,
     device_code: String,
     user_code: String,
-    created_at: DateTime<Utc>,
-    expires_at: DateTime<Utc>,
+    #[diesel(serialize_as = jiff_diesel::Timestamp)]
+    created_at: Timestamp,
+    #[diesel(serialize_as = jiff_diesel::Timestamp)]
+    expires_at: Timestamp,
     ip_address: Option<IpNetwork>,
     user_agent: Option<String>,
 }
@@ -190,7 +198,7 @@ impl OAuth2DeviceCodeGrantRepository for PgOAuth2DeviceCodeGrantRepository<'_> {
         };
 
         diesel::insert_into(oauth2_device_code_grant::table)
-            .values(&new_grant)
+            .values(new_grant)
             .execute(self.conn)
             .await?;
 
@@ -302,7 +310,7 @@ impl OAuth2DeviceCodeGrantRepository for PgOAuth2DeviceCodeGrantRepository<'_> {
         let rows_affected =
             diesel::update(oauth2_device_code_grant::table.find(Uuid::from(device_code_grant.id)))
                 .set((
-                    oauth2_device_code_grant::fulfilled_at.eq(Some(fulfilled_at)),
+                    oauth2_device_code_grant::fulfilled_at.eq(Some(fulfilled_at).to_diesel()),
                     oauth2_device_code_grant::user_session_id
                         .eq(Some(Uuid::from(browser_session.id))),
                 ))
@@ -339,7 +347,7 @@ impl OAuth2DeviceCodeGrantRepository for PgOAuth2DeviceCodeGrantRepository<'_> {
         let rows_affected =
             diesel::update(oauth2_device_code_grant::table.find(Uuid::from(device_code_grant.id)))
                 .set((
-                    oauth2_device_code_grant::rejected_at.eq(Some(fulfilled_at)),
+                    oauth2_device_code_grant::rejected_at.eq(Some(fulfilled_at).to_diesel()),
                     oauth2_device_code_grant::user_session_id
                         .eq(Some(Uuid::from(browser_session.id))),
                 ))
@@ -375,7 +383,7 @@ impl OAuth2DeviceCodeGrantRepository for PgOAuth2DeviceCodeGrantRepository<'_> {
         let rows_affected =
             diesel::update(oauth2_device_code_grant::table.find(Uuid::from(device_code_grant.id)))
                 .set((
-                    oauth2_device_code_grant::exchanged_at.eq(Some(exchanged_at)),
+                    oauth2_device_code_grant::exchanged_at.eq(Some(exchanged_at).to_diesel()),
                     oauth2_device_code_grant::oauth2_session_id.eq(Some(Uuid::from(session.id))),
                 ))
                 .execute(self.conn)

@@ -1,7 +1,7 @@
 use std::collections::HashSet;
 
 use async_trait::async_trait;
-use chrono::{DateTime, Duration, Utc};
+use jiff::{SignedDuration, Timestamp};
 use pasion_data::{
     BoxRepository, Clock,
     oauth2::OAuth2SessionFilter,
@@ -19,8 +19,8 @@ use crate::{
 };
 
 const SESSION_BATCH_SIZE: usize = 100;
-const INITIAL_DEVICE_SYNC_DELAY: Duration = Duration::minutes(1);
-const DEVICE_SYNC_SPACING: Duration = Duration::seconds(10);
+const INITIAL_DEVICE_SYNC_DELAY: SignedDuration = SignedDuration::from_mins(1);
+const DEVICE_SYNC_SPACING: SignedDuration = SignedDuration::from_secs(10);
 
 async fn schedule_job_now<J: InsertableJob>(
     repo: &mut BoxRepository,
@@ -56,7 +56,7 @@ async fn schedule_job_later<J: InsertableJob>(
     repo: &mut BoxRepository,
     rng: &mut ChaChaRng,
     clock: &dyn Clock,
-    when: DateTime<Utc>,
+    when: Timestamp,
     job: J,
 ) -> Result<(), JobError> {
     repo.queue_job()
@@ -69,7 +69,7 @@ async fn enqueue_expiration_children(
     state: &State,
     repo: &mut BoxRepository,
     rng: &mut ChaChaRng,
-    now: DateTime<Utc>,
+    now: Timestamp,
 ) -> Result<bool, JobError> {
     let Some(config) = state.site_config().session_expiration.as_ref() else {
         return Ok(false);
@@ -103,7 +103,7 @@ async fn enqueue_expiration_children(
     Ok(scheduled_any)
 }
 
-fn oauth_inactivity_filter(threshold: DateTime<Utc>) -> OAuth2SessionFilter<'static> {
+fn oauth_inactivity_filter(threshold: Timestamp) -> OAuth2SessionFilter<'static> {
     OAuth2SessionFilter::new()
         .with_last_active_before(threshold)
         .for_any_user()
@@ -111,7 +111,7 @@ fn oauth_inactivity_filter(threshold: DateTime<Utc>) -> OAuth2SessionFilter<'sta
         .active_only()
 }
 
-fn browser_inactivity_filter(threshold: DateTime<Utc>) -> BrowserSessionFilter<'static> {
+fn browser_inactivity_filter(threshold: Timestamp) -> BrowserSessionFilter<'static> {
     BrowserSessionFilter::new()
         .with_last_active_before(threshold)
         .active_only()

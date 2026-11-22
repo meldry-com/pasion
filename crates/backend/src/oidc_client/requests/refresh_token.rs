@@ -16,7 +16,6 @@
 //!
 //! [Refresh Tokens]: https://openid.net/specs/openid-connect-core-1_0.html#RefreshTokens
 
-use chrono::{DateTime, Utc};
 use oauth2_types::{
     requests::{AccessTokenRequest, AccessTokenResponse, RefreshTokenGrant},
     scope::Scope,
@@ -81,7 +80,7 @@ pub async fn refresh_access_token(
     scope: Option<Scope>,
     id_token_verification_data: Option<JwtVerificationData<'_>>,
     auth_id_token: Option<&IdToken<'_>>,
-    now: DateTime<Utc>,
+    now: jiff::Timestamp,
     rng: &mut impl Rng,
 ) -> Result<(AccessTokenResponse, Option<IdToken<'static>>), TokenRefreshError> {
     tracing::debug!("Refreshing access token...");

@@ -1347,7 +1347,7 @@
           "const": "none"
         },
         {
-          "description": "Write traces to stdout (debugging only)",
+          "description": "Write traces to stdout as OTLP JSON Lines (debugging only)",
           "type": "string",
           "const": "stdout"
         },
@@ -1406,7 +1406,7 @@
           "const": "none"
         },
         {
-          "description": "Dump metrics to stdout (debugging only)",
+          "description": "Write metrics to stdout as OTLP JSON Lines (debugging only)",
           "type": "string",
           "const": "stdout"
         },

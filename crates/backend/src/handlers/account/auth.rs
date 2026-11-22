@@ -6,7 +6,8 @@
 use std::sync::LazyLock;
 
 use opentelemetry::{Key, KeyValue, metrics::Counter};
-use salvo::{oapi::ToSchema, prelude::*};
+use salvo::prelude::*;
+use salvo_oapi::{ToSchema, endpoint};
 use serde::{Deserialize, Serialize};
 
 use super::{DepotExt, NodeType, RouteError, extract_bound_activity_tracker, make_clock, make_rng};
