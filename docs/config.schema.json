@@ -836,6 +836,10 @@
           "description": "REST API consumed by the frontend",
           "type": "object",
           "properties": {
+            "name": {
+              "type": "string",
+              "const": "restapi"
+            },
             "playground": {
               "description": "Deprecated -- no longer used",
               "type": "boolean"
@@ -843,10 +847,6 @@
             "undocumented_oauth2_access": {
               "description": "Deprecated -- no longer used",
               "type": "boolean"
-            },
-            "name": {
-              "type": "string",
-              "const": "restapi"
             }
           },
           "required": [
@@ -883,13 +883,13 @@
           "description": "Static frontend assets",
           "type": "object",
           "properties": {
-            "path": {
-              "description": "Directory from which to serve files",
-              "type": "string"
-            },
             "name": {
               "type": "string",
               "const": "assets"
+            },
+            "path": {
+              "description": "Directory from which to serve files",
+              "type": "string"
             }
           },
           "required": [
@@ -3805,14 +3805,14 @@
           "description": "Local filesystem storage.",
           "type": "object",
           "properties": {
+            "backend": {
+              "type": "string",
+              "const": "fs"
+            },
             "root": {
               "description": "Root directory for stored files.",
               "type": "string",
               "default": "./data/media"
-            },
-            "backend": {
-              "type": "string",
-              "const": "fs"
             }
           },
           "required": [
@@ -3823,6 +3823,10 @@
           "description": "S3-compatible object storage (AWS S3, Cloudflare R2, `MinIO`, etc.).",
           "type": "object",
           "properties": {
+            "backend": {
+              "type": "string",
+              "const": "s3"
+            },
             "bucket": {
               "description": "S3 bucket name.",
               "type": "string"
@@ -3874,10 +3878,6 @@
               "format": "uint64",
               "minimum": 0,
               "default": 300
-            },
-            "backend": {
-              "type": "string",
-              "const": "s3"
             }
           },
           "required": [
