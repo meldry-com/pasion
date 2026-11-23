@@ -3988,8 +3988,8 @@ version = "0.2.46"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "175dc66334db3b9ab9985bf8b61cfed50dc16d20964bb47f9e479adcae984a7f"
 dependencies = [
- "jiff-core",
- "jiff-static",
+ "jiff-core 0.1.8",
+ "jiff-static 0.2.46",
  "jiff-tzdb-platform",
  "js-sys",
  "log",
@@ -3998,6 +3998,20 @@ dependencies = [
  "serde_core",
  "wasm-bindgen",
  "windows-link",
+]
+
+[[package]]
+name = "jiff"
+version = "1.0.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "c5e77cbfb9fff4798e283c2d69dff39fc2c45e7da017e5ce95b654e46ea41236"
+dependencies = [
+ "jiff-core 1.0.1",
+ "jiff-static 1.0.2",
+ "log",
+ "portable-atomic",
+ "portable-atomic-util",
+ "serde_core",
 ]
 
 [[package]]
@@ -4010,24 +4024,33 @@ dependencies = [
 ]
 
 [[package]]
+name = "jiff-core"
+version = "1.0.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "b6b46a105a9874634dd96231021526bf24ca04955a5998c59a9c7666e634b7b8"
+dependencies = [
+ "log",
+]
+
+[[package]]
 name = "jiff-cron"
 version = "0.3.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "fa4804a5e6441082f7b8f2e840c639e489902aba5533c1e95c2fb7f0ab23d96c"
 dependencies = [
- "jiff",
+ "jiff 0.2.46",
  "phf",
  "winnow 1.0.1",
 ]
 
 [[package]]
 name = "jiff-diesel"
-version = "0.1.4"
+version = "1.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "450f5c44b6bc83e0e0fce91b22bd4ead6e371951e4e6e07c934d1c5d97f6661a"
+checksum = "e6b5ecd45a915436964f1bc65d62b1a32e9212dc10bf3af42ab051cfcfb5e0ee"
 dependencies = [
  "diesel",
- "jiff",
+ "jiff 1.0.2",
 ]
 
 [[package]]
@@ -4036,10 +4059,22 @@ version = "0.2.46"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "c7b1af7547d47354bc438d797e3854601bde8f8d185780c5ba4ab27afa54f1ba"
 dependencies = [
- "jiff-core",
+ "jiff-core 0.1.8",
  "proc-macro2",
  "quote",
  "syn 2.0.117",
+]
+
+[[package]]
+name = "jiff-static"
+version = "1.0.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "e9067a0b23e5be3147d56b2dcf652b18e6b1364caca93fb157653b6fbcab23a9"
+dependencies = [
+ "jiff-core 1.0.1",
+ "proc-macro2",
+ "quote",
+ "syn 3.0.6",
 ]
 
 [[package]]
@@ -4921,7 +4956,7 @@ dependencies = [
  "base64ct",
  "indexmap 2.14.0",
  "insta",
- "jiff",
+ "jiff 0.2.46",
  "language-tags",
  "pasion-iana",
  "pasion-jose",
@@ -5157,7 +5192,7 @@ dependencies = [
  "bytes",
  "futures",
  "http",
- "jiff",
+ "jiff 0.2.46",
  "log",
  "md-5",
  "percent-encoding",
@@ -5534,7 +5569,7 @@ dependencies = [
  "hyper",
  "ipnetwork",
  "itertools 0.15.0",
- "jiff",
+ "jiff 0.2.46",
  "listenfd",
  "opentelemetry",
  "opentelemetry-http",
@@ -5614,7 +5649,7 @@ dependencies = [
  "indexmap 2.14.0",
  "insta",
  "ipnetwork",
- "jiff",
+ "jiff 0.2.46",
  "language-tags",
  "lettre",
  "listenfd",
@@ -5704,7 +5739,7 @@ dependencies = [
  "hex",
  "indoc",
  "ipnetwork",
- "jiff",
+ "jiff 0.2.46",
  "lettre",
  "pasion-iana",
  "pasion-jose",
@@ -5739,7 +5774,7 @@ dependencies = [
  "diesel_migrations",
  "futures-util",
  "ipnetwork",
- "jiff",
+ "jiff 0.2.46",
  "jiff-diesel",
  "language-tags",
  "lettre",
@@ -5775,7 +5810,7 @@ dependencies = [
  "dioxus-history",
  "form_urlencoded",
  "gloo-timers 0.4.0",
- "jiff",
+ "jiff 0.2.46",
  "js-sys",
  "reqwest 0.13.4",
  "serde",
@@ -5838,7 +5873,7 @@ dependencies = [
  "elliptic-curve",
  "hmac 0.13.0",
  "insta",
- "jiff",
+ "jiff 0.2.46",
  "k256",
  "p256",
  "p384",
@@ -5923,7 +5958,7 @@ dependencies = [
  "camino",
  "hex",
  "hmac 0.13.0",
- "jiff",
+ "jiff 0.2.46",
  "lettre",
  "pasion-data",
  "pasion-templates",
@@ -5949,7 +5984,7 @@ dependencies = [
  "anyhow",
  "async-trait",
  "cedar-policy",
- "jiff",
+ "jiff 0.2.46",
  "oauth2-types",
  "pasion-data",
  "reqwest 0.13.4",
@@ -5970,7 +6005,7 @@ dependencies = [
  "async-trait",
  "diesel",
  "diesel-async",
- "jiff",
+ "jiff 0.2.46",
  "jiff-cron",
  "oauth2-types",
  "opentelemetry",
@@ -6003,7 +6038,7 @@ dependencies = [
  "camino",
  "fluent-bundle",
  "http",
- "jiff",
+ "jiff 0.2.46",
  "minijinja",
  "minijinja-contrib",
  "oauth2-types",
@@ -6349,7 +6384,7 @@ checksum = "851ca9db4932932d69f3ea811b1abe63087a0f740a47692619dd40d4899b68be"
 dependencies = [
  "bytes",
  "fallible-iterator",
- "jiff",
+ "jiff 0.2.46",
  "postgres-protocol",
  "serde_core",
  "serde_json",
@@ -6914,7 +6949,7 @@ dependencies = [
  "hex",
  "hmac 0.13.0",
  "http",
- "jiff",
+ "jiff 0.2.46",
  "log",
  "percent-encoding",
  "sha1 0.11.0",
@@ -7579,7 +7614,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "ab508826f74a77ca9d5aba6ff19b522583ee3eaf28a19384ff3d0e5835fadf6e"
 dependencies = [
  "dyn-clone",
- "jiff",
+ "jiff 0.2.46",
  "ref-cast",
  "schemars_derive",
  "serde",
@@ -7944,7 +7979,7 @@ dependencies = [
  "hex",
  "indexmap 1.9.3",
  "indexmap 2.14.0",
- "jiff",
+ "jiff 0.2.46",
  "schemars 0.9.0",
  "schemars 1.2.3",
  "serde_core",

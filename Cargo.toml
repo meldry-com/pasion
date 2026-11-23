@@ -90,7 +90,7 @@ cookie_store = { version = "0.22.1", default-features = false, features = [
     "serde_json",
 ] }
 jiff = { version = "0.2.37", features = ["serde"] }
-jiff-diesel = { version = "0.1.3", features = ["postgres"] }
+jiff-diesel = { version = "1.0.0", features = ["postgres"] }
 clap = { version = "4.6.1", features = ["derive"] }
 const-oid = "0.10.3"
 convert_case = "0.11.0"
